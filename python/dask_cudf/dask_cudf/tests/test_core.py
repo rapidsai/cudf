@@ -231,7 +231,6 @@ def test_set_index(nelem):
         dd.assert_eq(expect, got, check_index=False, check_divisions=False)
 
 
-@xfail_dask_expr("missing support for divisions='quantile'")
 @pytest.mark.parametrize("by", ["a", "b"])
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
@@ -241,7 +240,8 @@ def test_set_index_quantile(nelem, nparts, by):
     df["b"] = np.random.choice(cudf.datasets.names, size=nelem)
     ddf = dd.from_pandas(df, npartitions=nparts)
 
-    got = ddf.set_index(by, divisions="quantile")
+    with pytest.warns(FutureWarning, match="deprecated"):
+        got = ddf.set_index(by, divisions="quantile")
     expect = df.sort_values(by=by).set_index(by)
     dd.assert_eq(got, expect)
 
@@ -795,7 +795,7 @@ def test_dataframe_set_index():
         pddf = dd.from_pandas(pdf, npartitions=4)
         pddf = pddf.set_index("str")
 
-        from cudf.testing._utils import assert_eq
+        from cudf.testing import assert_eq
 
         assert_eq(ddf.compute(), pddf.compute())
 
@@ -971,3 +971,25 @@ def test_implicit_array_conversion_cupy_sparse():
     # NOTE: The calculation here doesn't need to make sense.
     # We just need to make sure we get the right type back.
     assert type(result) == type(expect)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3], [1.1, 2.3, 4.5]])
+@pytest.mark.parametrize("values", [[1, 5], [1.1, 2.4, 2.3]])
+def test_series_isin(data, values):
+    ser = cudf.Series(data)
+    pddf = dd.from_pandas(ser.to_pandas(), 1)
+    ddf = dask_cudf.from_cudf(ser, 1)
+
+    actual = ddf.isin(values)
+    expected = pddf.isin(values)
+
+    dd.assert_eq(actual, expected)
+
+
+def test_series_isin_error():
+    ser = cudf.Series([1, 2, 3])
+    ddf = dask_cudf.from_cudf(ser, 1)
+    with pytest.raises(TypeError):
+        ser.isin([1, 5, "a"])
+    with pytest.raises(TypeError):
+        ddf.isin([1, 5, "a"]).compute()

@@ -42,49 +42,6 @@
 namespace cudf {
 
 namespace detail {
-data_type arrow_to_cudf_type(const ArrowSchemaView* arrow_view)
-{
-  switch (arrow_view->type) {
-    case NANOARROW_TYPE_NA: return data_type(type_id::EMPTY);
-    case NANOARROW_TYPE_BOOL: return data_type(type_id::BOOL8);
-    case NANOARROW_TYPE_INT8: return data_type(type_id::INT8);
-    case NANOARROW_TYPE_INT16: return data_type(type_id::INT16);
-    case NANOARROW_TYPE_INT32: return data_type(type_id::INT32);
-    case NANOARROW_TYPE_INT64: return data_type(type_id::INT64);
-    case NANOARROW_TYPE_UINT8: return data_type(type_id::UINT8);
-    case NANOARROW_TYPE_UINT16: return data_type(type_id::UINT16);
-    case NANOARROW_TYPE_UINT32: return data_type(type_id::UINT32);
-    case NANOARROW_TYPE_UINT64: return data_type(type_id::UINT64);
-    case NANOARROW_TYPE_FLOAT: return data_type(type_id::FLOAT32);
-    case NANOARROW_TYPE_DOUBLE: return data_type(type_id::FLOAT64);
-    case NANOARROW_TYPE_DATE32: return data_type(type_id::TIMESTAMP_DAYS);
-    case NANOARROW_TYPE_STRING: return data_type(type_id::STRING);
-    case NANOARROW_TYPE_LIST: return data_type(type_id::LIST);
-    case NANOARROW_TYPE_DICTIONARY: return data_type(type_id::DICTIONARY32);
-    case NANOARROW_TYPE_STRUCT: return data_type(type_id::STRUCT);
-    case NANOARROW_TYPE_TIMESTAMP: {
-      switch (arrow_view->time_unit) {
-        case NANOARROW_TIME_UNIT_SECOND: return data_type(type_id::TIMESTAMP_SECONDS);
-        case NANOARROW_TIME_UNIT_MILLI: return data_type(type_id::TIMESTAMP_MILLISECONDS);
-        case NANOARROW_TIME_UNIT_MICRO: return data_type(type_id::TIMESTAMP_MICROSECONDS);
-        case NANOARROW_TIME_UNIT_NANO: return data_type(type_id::TIMESTAMP_NANOSECONDS);
-        default: CUDF_FAIL("Unsupported timestamp unit in arrow", cudf::data_type_error);
-      }
-    }
-    case NANOARROW_TYPE_DURATION: {
-      switch (arrow_view->time_unit) {
-        case NANOARROW_TIME_UNIT_SECOND: return data_type(type_id::DURATION_SECONDS);
-        case NANOARROW_TIME_UNIT_MILLI: return data_type(type_id::DURATION_MILLISECONDS);
-        case NANOARROW_TIME_UNIT_MICRO: return data_type(type_id::DURATION_MICROSECONDS);
-        case NANOARROW_TIME_UNIT_NANO: return data_type(type_id::DURATION_NANOSECONDS);
-        default: CUDF_FAIL("Unsupported duration unit in arrow", cudf::data_type_error);
-      }
-    }
-    case NANOARROW_TYPE_DECIMAL128:
-      return data_type{type_id::DECIMAL128, -arrow_view->decimal_scale};
-    default: CUDF_FAIL("Unsupported type_id conversion to cudf", cudf::data_type_error);
-  }
-}
 
 namespace {
 
@@ -379,11 +336,25 @@ dispatch_tuple_t get_column(ArrowSchemaView* schema,
 
 }  // namespace
 
-unique_table_view_t from_arrow_device(ArrowSchemaView* schema,
+unique_table_view_t from_arrow_device(ArrowSchema const* schema,
                                       ArrowDeviceArray const* input,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(schema != nullptr && input != nullptr,
+               "input ArrowSchema and ArrowDeviceArray must not be NULL",
+               std::invalid_argument);
+  CUDF_EXPECTS(input->device_type == ARROW_DEVICE_CUDA ||
+                 input->device_type == ARROW_DEVICE_CUDA_HOST ||
+                 input->device_type == ARROW_DEVICE_CUDA_MANAGED,
+               "ArrowDeviceArray memory must be accessible to CUDA",
+               std::invalid_argument);
+
+  rmm::cuda_set_device_raii dev(
+    rmm::cuda_device_id{static_cast<rmm::cuda_device_id::value_type>(input->device_id)});
+  ArrowSchemaView view;
+  NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema, nullptr));
+
   if (input->sync_event != nullptr) {
     CUDF_CUDA_TRY(
       cudaStreamWaitEvent(stream.value(), *reinterpret_cast<cudaEvent_t*>(input->sync_event)));
@@ -392,14 +363,14 @@ unique_table_view_t from_arrow_device(ArrowSchemaView* schema,
   std::vector<column_view> columns;
   owned_columns_t owned_mem;
 
-  auto type = arrow_to_cudf_type(schema);
+  auto type = arrow_to_cudf_type(&view);
   CUDF_EXPECTS(type == data_type(type_id::STRUCT),
                "Must pass a struct to `from_arrow_device`",
                cudf::data_type_error);
   std::transform(
     input->array.children,
     input->array.children + input->array.n_children,
-    schema->schema->children,
+    view.schema->children,
     std::back_inserter(columns),
     [&owned_mem, &stream, &mr](ArrowArray const* child, ArrowSchema const* child_schema) {
       ArrowSchemaView view;
@@ -420,18 +391,32 @@ unique_table_view_t from_arrow_device(ArrowSchemaView* schema,
                              custom_view_deleter<cudf::table_view>{std::move(owned_mem)}};
 }
 
-unique_column_view_t from_arrow_device_column(ArrowSchemaView* schema,
+unique_column_view_t from_arrow_device_column(ArrowSchema const* schema,
                                               ArrowDeviceArray const* input,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(schema != nullptr && input != nullptr,
+               "input ArrowSchema and ArrowDeviceArray must not be NULL",
+               std::invalid_argument);
+  CUDF_EXPECTS(input->device_type == ARROW_DEVICE_CUDA ||
+                 input->device_type == ARROW_DEVICE_CUDA_HOST ||
+                 input->device_type == ARROW_DEVICE_CUDA_MANAGED,
+               "ArrowDeviceArray must be accessible to CUDA",
+               std::invalid_argument);
+
+  rmm::cuda_set_device_raii dev(
+    rmm::cuda_device_id{static_cast<rmm::cuda_device_id::value_type>(input->device_id)});
+  ArrowSchemaView view;
+  NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema, nullptr));
+
   if (input->sync_event != nullptr) {
     CUDF_CUDA_TRY(
       cudaStreamWaitEvent(stream.value(), *reinterpret_cast<cudaEvent_t*>(input->sync_event)));
   }
 
-  auto type             = arrow_to_cudf_type(schema);
-  auto [colview, owned] = get_column(schema, &input->array, type, false, stream, mr);
+  auto type             = arrow_to_cudf_type(&view);
+  auto [colview, owned] = get_column(&view, &input->array, type, false, stream, mr);
   return unique_column_view_t{new column_view{colview},
                               custom_view_deleter<cudf::column_view>{std::move(owned)}};
 }
@@ -443,20 +428,9 @@ unique_table_view_t from_arrow_device(ArrowSchema const* schema,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(schema != nullptr && input != nullptr,
-               "input ArrowSchema and ArrowDeviceArray must not be NULL");
-  CUDF_EXPECTS(input->device_type == ARROW_DEVICE_CUDA ||
-                 input->device_type == ARROW_DEVICE_CUDA_HOST ||
-                 input->device_type == ARROW_DEVICE_CUDA_MANAGED,
-               "ArrowDeviceArray memory must be accessible to CUDA");
-
   CUDF_FUNC_RANGE();
 
-  rmm::cuda_set_device_raii dev(
-    rmm::cuda_device_id{static_cast<rmm::cuda_device_id::value_type>(input->device_id)});
-  ArrowSchemaView view;
-  NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema, nullptr));
-  return detail::from_arrow_device(&view, input, stream, mr);
+  return detail::from_arrow_device(schema, input, stream, mr);
 }
 
 unique_column_view_t from_arrow_device_column(ArrowSchema const* schema,
@@ -464,20 +438,9 @@ unique_column_view_t from_arrow_device_column(ArrowSchema const* schema,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(schema != nullptr && input != nullptr,
-               "input ArrowSchema and ArrowDeviceArray must not be NULL");
-  CUDF_EXPECTS(input->device_type == ARROW_DEVICE_CUDA ||
-                 input->device_type == ARROW_DEVICE_CUDA_HOST ||
-                 input->device_type == ARROW_DEVICE_CUDA_MANAGED,
-               "ArrowDeviceArray must be accessible to CUDA");
-
   CUDF_FUNC_RANGE();
 
-  rmm::cuda_set_device_raii dev(
-    rmm::cuda_device_id{static_cast<rmm::cuda_device_id::value_type>(input->device_id)});
-  ArrowSchemaView view;
-  NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema, nullptr));
-  return detail::from_arrow_device_column(&view, input, stream, mr);
+  return detail::from_arrow_device_column(schema, input, stream, mr);
 }
 
 }  // namespace cudf

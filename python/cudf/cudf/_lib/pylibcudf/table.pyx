@@ -5,9 +5,9 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
 
 from .column cimport Column
 
@@ -83,6 +83,8 @@ cdef class Table:
 
     cpdef int num_rows(self):
         """The number of rows in this table."""
+        if self.num_columns() == 0:
+            return 0
         return self._columns[0].size()
 
     cpdef list columns(self):

@@ -24,6 +24,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/utilities.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -152,6 +153,8 @@ TEST_F(StringsColumnTest, GatherZeroSizeStringsColumn)
 
 TEST_F(StringsColumnTest, GatherTooBig)
 {
+  if (cudf::strings::is_large_strings_enabled()) { return; }
+
   std::vector<int8_t> h_chars(3000000);
   cudf::test::fixed_width_column_wrapper<int8_t> chars(h_chars.begin(), h_chars.end());
   cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets({0, 3000000});

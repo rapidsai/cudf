@@ -23,7 +23,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -187,7 +187,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
 
   auto found_ranges = rmm::device_uvector<found_range>(d_progs.size() * input.size(), stream);
 
-  auto [offsets_column, chars] = experimental::make_strings_children(
+  auto [offsets_column, chars] = make_strings_children(
     replace_multi_regex_fn{*d_strings, d_progs, found_ranges.data(), *d_repls},
     input.size(),
     stream,

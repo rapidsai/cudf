@@ -21,6 +21,7 @@
 #include <cudf/interop.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/table/table_view.hpp>
 
 struct ArrowTest : public cudf::test::BaseFixture {};
 

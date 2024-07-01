@@ -17,27 +17,27 @@ from cudf._lib.types import LIBCUDF_TO_SUPPORTED_NUMPY_TYPES
 from cudf.core.dtypes import ListDtype, StructDtype
 from cudf.core.missing import NA, NaT
 
-cimport cudf._lib.cpp.types as libcudf_types
+cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
 # We currently need this cimport because some of the implementations here
 # access the c_obj of the scalar, and because we need to be able to call
 # pylibcudf.Scalar.from_libcudf. Both of those are temporarily acceptable until
 # DeviceScalar is phased out entirely from cuDF Cython (at which point
 # cudf.Scalar will be directly backed by pylibcudf.Scalar).
-from cudf._lib cimport pylibcudf
-from cudf._lib.cpp.scalar.scalar cimport (
+from cudf._lib.pylibcudf cimport Scalar as plc_Scalar
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport (
     duration_scalar,
     list_scalar,
     scalar,
     struct_scalar,
     timestamp_scalar,
 )
-from cudf._lib.cpp.wrappers.durations cimport (
+from cudf._lib.pylibcudf.libcudf.wrappers.durations cimport (
     duration_ms,
     duration_ns,
     duration_s,
     duration_us,
 )
-from cudf._lib.cpp.wrappers.timestamps cimport (
+from cudf._lib.pylibcudf.libcudf.wrappers.timestamps cimport (
     timestamp_ms,
     timestamp_ns,
     timestamp_s,
@@ -206,7 +206,7 @@ cdef class DeviceScalar:
         return self._to_host_scalar()
 
     cdef const scalar* get_raw_ptr(self) except *:
-        return (<pylibcudf.Scalar> self.c_value).c_obj.get()
+        return (<plc_Scalar> self.c_value).c_obj.get()
 
     cpdef bool is_valid(self):
         """
@@ -230,7 +230,7 @@ cdef class DeviceScalar:
         """
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
         # Note: This line requires pylibcudf to be cimported
-        s.c_value = pylibcudf.Scalar.from_libcudf(move(ptr))
+        s.c_value = plc_Scalar.from_libcudf(move(ptr))
         s._set_dtype(dtype)
         return s
 
@@ -369,11 +369,11 @@ def _create_proxy_nat_scalar(dtype):
         nat = dtype.type('NaT').astype(dtype)
         if dtype.type == np.datetime64:
             _set_datetime64_from_np_scalar(
-                (<pylibcudf.Scalar> result.c_value).c_obj, nat, dtype, True
+                (<plc_Scalar> result.c_value).c_obj, nat, dtype, True
             )
         elif dtype.type == np.timedelta64:
             _set_timedelta64_from_np_scalar(
-                (<pylibcudf.Scalar> result.c_value).c_obj, nat, dtype, True
+                (<plc_Scalar> result.c_value).c_obj, nat, dtype, True
             )
         return result
     else:

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint32_t
 
@@ -10,8 +10,8 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.nvtext.subword_tokenize cimport (
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.nvtext.subword_tokenize cimport (
     hashed_vocabulary as cpp_hashed_vocabulary,
     load_vocabulary_file as cpp_load_vocabulary_file,
     move as tr_move,

@@ -21,7 +21,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/slice.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -208,7 +208,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
   auto const d_stop  = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(stop));
   auto const d_step  = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(step));
 
-  auto [offsets, chars] = experimental::make_strings_children(
+  auto [offsets, chars] = make_strings_children(
     substring_fn{*d_column, d_start, d_stop, d_step}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),

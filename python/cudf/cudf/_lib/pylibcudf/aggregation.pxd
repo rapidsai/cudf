@@ -2,10 +2,11 @@
 
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.cpp.aggregation cimport (
+from cudf._lib.pylibcudf.libcudf.aggregation cimport (
     Kind as kind_t,
     aggregation,
     correlation_type,
+    ewm_history,
     groupby_aggregation,
     groupby_scan_aggregation,
     rank_method,
@@ -14,7 +15,7 @@ from cudf._lib.cpp.aggregation cimport (
     rolling_aggregation,
     scan_aggregation,
 )
-from cudf._lib.cpp.types cimport (
+from cudf._lib.pylibcudf.libcudf.types cimport (
     interpolation,
     nan_equality,
     null_equality,
@@ -79,6 +80,8 @@ cpdef Aggregation quantile(list quantiles, interpolation interp = *)
 cpdef Aggregation argmax()
 
 cpdef Aggregation argmin()
+
+cpdef Aggregation ewma(float center_of_mass, ewm_history history)
 
 cpdef Aggregation nunique(null_policy null_handling = *)
 

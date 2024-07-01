@@ -49,28 +49,28 @@ TYPED_TEST_SUITE(FromArrowDeviceTestDurationsTest, cudf::test::DurationTypes);
 TEST_F(FromArrowDeviceTest, FailConditions)
 {
   // can't pass null for schema or device array
-  EXPECT_THROW(cudf::from_arrow_device(nullptr, nullptr), cudf::logic_error);
+  EXPECT_THROW(cudf::from_arrow_device(nullptr, nullptr), std::invalid_argument);
   // can't pass null for device array
   ArrowSchema schema;
-  EXPECT_THROW(cudf::from_arrow_device(&schema, nullptr), cudf::logic_error);
+  EXPECT_THROW(cudf::from_arrow_device(&schema, nullptr), std::invalid_argument);
   // device_type must be CUDA/CUDA_HOST/CUDA_MANAGED
   // should fail with ARROW_DEVICE_CPU
   ArrowDeviceArray arr;
   arr.device_type = ARROW_DEVICE_CPU;
-  EXPECT_THROW(cudf::from_arrow_device(&schema, &arr), cudf::logic_error);
+  EXPECT_THROW(cudf::from_arrow_device(&schema, &arr), std::invalid_argument);
 
   // can't pass null for schema or device array
-  EXPECT_THROW(cudf::from_arrow_device_column(nullptr, nullptr), cudf::logic_error);
+  EXPECT_THROW(cudf::from_arrow_device_column(nullptr, nullptr), std::invalid_argument);
   // can't pass null for device array
-  EXPECT_THROW(cudf::from_arrow_device_column(&schema, nullptr), cudf::logic_error);
+  EXPECT_THROW(cudf::from_arrow_device_column(&schema, nullptr), std::invalid_argument);
   // device_type must be CUDA/CUDA_HOST/CUDA_MANAGED
   // should fail with ARROW_DEVICE_CPU
-  EXPECT_THROW(cudf::from_arrow_device_column(&schema, &arr), cudf::logic_error);
+  EXPECT_THROW(cudf::from_arrow_device_column(&schema, &arr), std::invalid_argument);
 }
 
 TEST_F(FromArrowDeviceTest, EmptyTable)
 {
-  const auto [table, schema, arr] = get_nanoarrow_tables(0);
+  auto const [table, schema, arr] = get_nanoarrow_tables(0);
 
   auto expected_cudf_table = table->view();
 
@@ -354,7 +354,7 @@ TEST_F(FromArrowDeviceTest, StructColumn)
 
   NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(array_a, 0), noop_alloc));
   ArrowArrayValidityBitmap(array_a)->buffer.data =
-    const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view_a.null_mask()));
+    const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(view_a.null_mask()));
 
   populate_from_col<cudf::string_view>(array_a->children[0], view_a.child(0));
   populate_from_col<int32_t>(array_a->children[1], view_a.child(1));
@@ -372,7 +372,7 @@ TEST_F(FromArrowDeviceTest, StructColumn)
 
   NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(array_struct, 0), noop_alloc));
   ArrowArrayValidityBitmap(array_struct)->buffer.data =
-    const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view_struct.null_mask()));
+    const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(view_struct.null_mask()));
 
   populate_from_col<cudf::string_view>(array_struct->children[0], view_struct.child(0));
   populate_from_col<int32_t>(array_struct->children[1], view_struct.child(1));
@@ -392,7 +392,7 @@ TEST_F(FromArrowDeviceTest, StructColumn)
   {
     // there's one boolean column so we should have one "owned_mem" column in the
     // returned unique_ptr's custom deleter
-    const cudf::custom_view_deleter<cudf::table_view>& deleter = got_cudf_table_view.get_deleter();
+    cudf::custom_view_deleter<cudf::table_view> const& deleter = got_cudf_table_view.get_deleter();
     EXPECT_EQ(deleter.owned_mem_.size(), 1);
   }
 
@@ -405,7 +405,7 @@ TEST_F(FromArrowDeviceTest, StructColumn)
   {
     // there's one boolean column so we should have one "owned_mem" column in the
     // returned unique_ptr's custom deleter
-    const cudf::custom_view_deleter<cudf::column_view>& deleter = got_cudf_col.get_deleter();
+    cudf::custom_view_deleter<cudf::column_view> const& deleter = got_cudf_col.get_deleter();
     EXPECT_EQ(deleter.owned_mem_.size(), 1);
   }
 }
@@ -479,7 +479,7 @@ TEST_F(FromArrowDeviceTest, DictionaryIndicesType)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, *got_cudf_table_view);
 
   {
-    const cudf::custom_view_deleter<cudf::table_view>& deleter = got_cudf_table_view.get_deleter();
+    cudf::custom_view_deleter<cudf::table_view> const& deleter = got_cudf_table_view.get_deleter();
     EXPECT_EQ(deleter.owned_mem_.size(), 0);
   }
 
@@ -490,7 +490,7 @@ TEST_F(FromArrowDeviceTest, DictionaryIndicesType)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*got_cudf_table_view, from_struct);
 
   {
-    const cudf::custom_view_deleter<cudf::column_view>& deleter = got_cudf_col.get_deleter();
+    cudf::custom_view_deleter<cudf::column_view> const& deleter = got_cudf_col.get_deleter();
     EXPECT_EQ(deleter.owned_mem_.size(), 0);
   }
 }

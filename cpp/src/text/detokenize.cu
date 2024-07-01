@@ -20,7 +20,7 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -158,7 +158,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
 
   cudf::string_view const d_separator(separator.data(), separator.size());
 
-  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     detokenizer_fn{*strings_column, d_row_map, tokens_offsets.data(), d_separator},
     output_count,
     stream,

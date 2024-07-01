@@ -23,7 +23,7 @@
 #include <cudf/strings/detail/convert/fixed_point.cuh>
 #include <cudf/strings/detail/convert/fixed_point_to_string.cuh>
 #include <cudf/strings/detail/converters.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -242,8 +242,8 @@ struct dispatch_from_fixed_point_fn {
 
     auto const d_column = column_device_view::create(input, stream);
 
-    auto [offsets, chars] = experimental::make_strings_children(
-      from_fixed_point_fn<DecimalType>{*d_column}, input.size(), stream, mr);
+    auto [offsets, chars] =
+      make_strings_children(from_fixed_point_fn<DecimalType>{*d_column}, input.size(), stream, mr);
 
     return make_strings_column(input.size(),
                                std::move(offsets),

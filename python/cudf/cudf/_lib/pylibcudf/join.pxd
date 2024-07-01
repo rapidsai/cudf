@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.types cimport null_equality
+from cudf._lib.pylibcudf.libcudf.types cimport null_equality
 
 from .column cimport Column
 from .table cimport Table
@@ -35,3 +35,5 @@ cpdef Column left_anti_join(
     Table right_keys,
     null_equality nulls_equal
 )
+
+cpdef Table cross_join(Table left, Table right)

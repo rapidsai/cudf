@@ -22,7 +22,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/convert/convert_urls.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -134,7 +134,7 @@ std::unique_ptr<column> url_encode(strings_column_view const& input,
   auto d_column = column_device_view::create(input.parent(), stream);
 
   auto [offsets_column, chars] =
-    experimental::make_strings_children(url_encoder_fn{*d_column}, input.size(), stream, mr);
+    make_strings_children(url_encoder_fn{*d_column}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),

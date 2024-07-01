@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/utilities.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -220,6 +221,8 @@ TEST_F(RepeatStringsTest, StringsColumnWithColumnRepeatTimesInvalidInput)
 
 TEST_F(RepeatStringsTest, StringsColumnWithColumnRepeatTimesOverflowOutput)
 {
+  if (cudf::strings::is_large_strings_enabled()) { return; }
+
   auto const strs    = strs_col{"1", "12", "123", "1234", "12345", "123456", "1234567"};
   auto const strs_cv = cudf::strings_column_view(strs);
 

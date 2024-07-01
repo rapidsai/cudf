@@ -6,7 +6,7 @@ import pytest
 
 import cudf
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 simple_test_data = [
     {},
@@ -293,3 +293,17 @@ def test_replace_level_values_MultiColumn():
 
     got = ca.rename_levels(mapper={"a": "f"}, level=0)
     check_ca_equal(expect, got)
+
+
+def test_clear_nrows_empty_before():
+    ca = ColumnAccessor({})
+    assert ca.nrows == 0
+    ca.insert("new", [1])
+    assert ca.nrows == 1
+
+
+def test_clear_nrows_empty_after():
+    ca = ColumnAccessor({"new": [1]})
+    assert ca.nrows == 1
+    del ca["new"]
+    assert ca.nrows == 0

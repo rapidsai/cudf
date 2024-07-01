@@ -192,6 +192,8 @@ include(cmake/thirdparty/get_cccl.cmake)
 include(cmake/thirdparty/get_rmm.cmake)
 # find arrow
 include(cmake/thirdparty/get_arrow.cmake)
+# find flatbuffers
+include(cmake/thirdparty/get_flatbuffers.cmake)
 # find dlpack
 include(cmake/thirdparty/get_dlpack.cmake)
 # find cuCollections, should come after including CCCL
@@ -262,6 +264,7 @@ add_library(
   src/binaryop/compiled/Mod.cu
   src/binaryop/compiled/Mul.cu
   src/binaryop/compiled/NullEquals.cu
+  src/binaryop/compiled/NullNotEquals.cu
   src/binaryop/compiled/NullLogicalAnd.cu
   src/binaryop/compiled/NullLogicalOr.cu
   src/binaryop/compiled/NullMax.cu
@@ -357,11 +360,12 @@ add_library(
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
+  src/interop/arrow_utilities.cpp
   src/interop/to_arrow.cu
   src/interop/to_arrow_device.cu
   src/interop/from_arrow_device.cu
+  src/interop/from_arrow_host.cu
   src/interop/to_arrow_schema.cpp
-  src/interop/to_arrow_utilities.cpp
   src/interop/detail/arrow_allocator.cpp
   src/io/avro/avro.cpp
   src/io/avro/avro_gpu.cu
@@ -387,8 +391,6 @@ add_library(
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
   src/io/json/read_json.cu
-  src/io/json/legacy/json_gpu.cu
-  src/io/json/legacy/reader_impl.cu
   src/io/json/parser_features.cpp
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
@@ -429,6 +431,7 @@ add_library(
   src/io/text/bgzip_utils.cpp
   src/io/text/multibyte_split.cu
   src/io/utilities/arrow_io_source.cpp
+  src/io/utilities/base64_utilities.cpp
   src/io/utilities/column_buffer.cpp
   src/io/utilities/column_buffer_strings.cu
   src/io/utilities/config_utils.cpp
@@ -436,7 +439,6 @@ add_library(
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
   src/io/utilities/file_io_utilities.cpp
-  src/io/utilities/parsing_utils.cu
   src/io/utilities/row_selection.cpp
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
@@ -500,6 +502,7 @@ add_library(
   src/reductions/product.cu
   src/reductions/reductions.cpp
   src/reductions/scan/rank_scan.cu
+  src/reductions/scan/ewm.cu
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
@@ -659,9 +662,11 @@ add_library(
   src/unary/math_ops.cu
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
+  src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
+  src/utilities/pinned_memory.cpp
   src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
@@ -742,6 +747,7 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
+          "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -789,8 +795,8 @@ add_dependencies(cudf jitify_preprocess_run)
 target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
-          $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
+          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
 )
 
 # Add Conda library, and include paths if specified

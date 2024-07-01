@@ -6,10 +6,12 @@ from libcpp.utility cimport move
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
-from cudf._lib.cpp.column.column cimport column, column_contents
-from cudf._lib.cpp.column.column_factories cimport make_column_from_scalar
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_contents
+from cudf._lib.pylibcudf.libcudf.column.column_factories cimport (
+    make_column_from_scalar,
+)
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
@@ -345,6 +347,15 @@ cdef class ListColumnView:
     cpdef offsets(self):
         """The offsets column of the underlying list column."""
         return self._column.child(1)
+
+    cdef lists_column_view view(self) nogil:
+        """Generate a libcudf lists_column_view to pass to libcudf algorithms.
+
+        This method is for pylibcudf's functions to use to generate inputs when
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
+        return lists_column_view(self._column.view())
 
 
 @functools.cache

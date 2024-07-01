@@ -153,7 +153,19 @@ std::unique_ptr<column> replace_slice(
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column
  */
-std::unique_ptr<column> replace(
+std::unique_ptr<column> replace_multiple(
+  strings_column_view const& input,
+  strings_column_view const& targets,
+  strings_column_view const& repls,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::strings::replace_multiple
+ *
+ * @deprecated since 24.08
+ */
+[[deprecated]] std::unique_ptr<column> replace(
   strings_column_view const& input,
   strings_column_view const& targets,
   strings_column_view const& repls,

@@ -306,6 +306,22 @@ force_nullable_schema : bool, default False.
     If True, writes all columns as `null` in schema.
     If False, columns are written as `null` if they contain null values,
     otherwise as `not null`.
+skip_compression : set, optional, default None
+    If a column name is present in the set, that column will not be compressed,
+    regardless of the ``compression`` setting.
+column_encoding : dict, optional, default None
+    Sets the page encoding to use on a per-column basis. The key is a column
+    name, and the value is one of: 'PLAIN', 'DICTIONARY', 'DELTA_BINARY_PACKED',
+    'DELTA_LENGTH_BYTE_ARRAY', 'DELTA_BYTE_ARRAY', 'BYTE_STREAM_SPLIT', or
+    'USE_DEFAULT'.
+column_type_length : dict, optional, default None
+    Specifies the width in bytes of ``FIXED_LEN_BYTE_ARRAY`` column elements.
+    The key is a column name and the value is an integer. The named column
+    will be output as unannotated binary (i.e. the column will behave as if
+    ``output_as_binary`` was set).
+output_as_binary : set, optional, default None
+    If a column name is present in the set, that column will be output as
+    unannotated binary, rather than the default 'UTF-8'.
 **kwargs
     Additional parameters will be passed to execution engines other
     than ``cudf``.
@@ -723,6 +739,11 @@ prune_columns : bool, default False
 
     If True, only return those columns mentioned in the dtype argument.
     If `False` dtype argument is used a type inference suggestion.
+on_bad_lines : {'error', 'recover'}, default 'error'
+    Specifies what to do upon encountering a bad line. Allowed values are :
+
+    - ``'error'``, raise an Exception when a bad line is encountered.
+    - ``'recover'``, fills the row with <NA> when a bad line is encountered.
 Returns
 -------
 result : Series or DataFrame, depending on the value of `typ`.
@@ -1718,10 +1739,32 @@ def get_reader_filepath_or_buffer(
         if _is_local_filesystem(fs):
             # Doing this as `read_json` accepts a json string
             # path_or_data need not be a filepath like string
+
+            # helper for checking if raw text looks like a json filename
+            compression_extensions = [
+                ".tar",
+                ".tar.gz",
+                ".tar.bz2",
+                ".tar.xz",
+                ".gz",
+                ".bz2",
+                ".zip",
+                ".xz",
+                ".zst",
+                "",
+            ]
+
             if len(paths):
                 if fs.exists(paths[0]):
                     path_or_data = paths if len(paths) > 1 else paths[0]
-                elif not allow_raw_text_input:
+
+                # raise FileNotFound if path looks like json
+                # following pandas
+                # see
+                # https://github.com/pandas-dev/pandas/pull/46718/files#diff-472ce5fe087e67387942e1e1c409a5bc58dde9eb8a2db6877f1a45ae4974f694R724-R729
+                elif not allow_raw_text_input or paths[0].lower().endswith(
+                    tuple(f".json{c}" for c in compression_extensions)
+                ):
                     raise FileNotFoundError(
                         f"{path_or_data} could not be resolved to any files"
                     )

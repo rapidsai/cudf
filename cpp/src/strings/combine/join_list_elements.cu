@@ -22,7 +22,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -209,7 +209,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                                     separate_nulls,
                                                     empty_list_policy};
 
-  auto [offsets_column, chars] = experimental::make_strings_children(comp_fn, num_rows, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(comp_fn, num_rows, stream, mr);
   auto [null_mask, null_count] =
     cudf::detail::valid_if(thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(num_rows),
@@ -284,7 +284,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                                     separate_nulls,
                                                     empty_list_policy};
 
-  auto [offsets_column, chars] = experimental::make_strings_children(comp_fn, num_rows, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(comp_fn, num_rows, stream, mr);
   auto [null_mask, null_count] =
     cudf::detail::valid_if(thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(num_rows),

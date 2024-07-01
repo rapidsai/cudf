@@ -4,18 +4,22 @@ from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move, pair
 
-from cudf._lib.cpp cimport reduce as cpp_reduce
-from cudf._lib.cpp.aggregation cimport reduce_aggregation, scan_aggregation
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.reduce cimport scan_type
-from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.pylibcudf.libcudf cimport reduce as cpp_reduce
+from cudf._lib.pylibcudf.libcudf.aggregation cimport (
+    reduce_aggregation,
+    scan_aggregation,
+)
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.reduce cimport scan_type
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 
 from .aggregation cimport Aggregation
 from .column cimport Column
 from .scalar cimport Scalar
 from .types cimport DataType
 
-from cudf._lib.cpp.reduce import scan_type as ScanType  # no-cython-lint
+from cudf._lib.pylibcudf.libcudf.reduce import \
+    scan_type as ScanType  # no-cython-lint
 
 
 cpdef Scalar reduce(Column col, Aggregation agg, DataType data_type):

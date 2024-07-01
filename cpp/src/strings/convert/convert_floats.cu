@@ -21,7 +21,7 @@
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/detail/convert/string_to_float.cuh>
 #include <cudf/strings/detail/converters.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -403,8 +403,8 @@ struct dispatch_from_floats_fn {
     // copy the null mask
     rmm::device_buffer null_mask = cudf::detail::copy_bitmask(floats, stream, mr);
 
-    auto [offsets, chars] = experimental::make_strings_children(
-      from_floats_fn<FloatType>{d_column}, strings_count, stream, mr);
+    auto [offsets, chars] =
+      make_strings_children(from_floats_fn<FloatType>{d_column}, strings_count, stream, mr);
 
     return make_strings_column(strings_count,
                                std::move(offsets),

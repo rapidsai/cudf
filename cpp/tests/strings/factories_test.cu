@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -96,18 +97,11 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
   EXPECT_EQ(strings_view.chars_size(cudf::get_default_stream()), memsize);
 
   // check string data
-  auto h_chars_data = cudf::detail::make_std_vector_sync(
-    cudf::device_span<char const>(strings_view.chars_begin(cudf::get_default_stream()),
-                                  strings_view.chars_size(cudf::get_default_stream())),
-    cudf::get_default_stream());
-  auto h_offsets_data = cudf::detail::make_std_vector_sync(
-    cudf::device_span<cudf::size_type const>(
-      strings_view.offsets().data<cudf::size_type>() + strings_view.offset(),
-      strings_view.size() + 1),
-    cudf::get_default_stream());
-  EXPECT_EQ(memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0);
-  EXPECT_EQ(
-    memcmp(h_offsets.data(), h_offsets_data.data(), h_offsets.size() * sizeof(cudf::size_type)), 0);
+  cudf::test::strings_column_wrapper expected(
+    h_test_strings.begin(),
+    h_test_strings.end(),
+    cudf::test::iterators::nulls_from_nullptrs(h_test_strings));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(column->view(), expected);
 }
 
 TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)

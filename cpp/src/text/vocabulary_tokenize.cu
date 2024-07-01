@@ -86,10 +86,18 @@ struct vocab_equal {
     return lhs == rhs;  // all rows are expected to be unique
   }
   // used by find
+  // suppress "function was declared but never referenced warning"
+#pragma nv_diagnostic push
+#pragma nv_diag_suppress 177
   __device__ bool operator()(cudf::size_type lhs, cudf::string_view const& rhs) const noexcept
   {
     return d_strings.element<cudf::string_view>(lhs) == rhs;
   }
+  __device__ bool operator()(cudf::string_view const& lhs, cudf::size_type rhs) const noexcept
+  {
+    return d_strings.element<cudf::string_view>(rhs) == lhs;
+  }
+#pragma nv_diagnostic pop
 };
 
 using probe_scheme        = cuco::linear_probing<1, vocab_hasher>;
@@ -240,10 +248,10 @@ CUDF_KERNEL void token_counts_fn(cudf::column_device_view const d_strings,
     return;
   }
 
-  auto const offsets =
-    d_strings.child(cudf::strings_column_view::offsets_column_index).data<cudf::size_type>();
-  auto const offset      = offsets[str_idx + d_strings.offset()] - offsets[d_strings.offset()];
-  auto const chars_begin = d_strings.data<char>() + offsets[d_strings.offset()];
+  auto const offsets     = d_strings.child(cudf::strings_column_view::offsets_column_index);
+  auto const offsets_itr = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+  auto const offset = offsets_itr[str_idx + d_strings.offset()] - offsets_itr[d_strings.offset()];
+  auto const chars_begin = d_strings.data<char>() + offsets_itr[d_strings.offset()];
 
   auto const begin        = d_str.data();
   auto const end          = begin + d_str.size_bytes();

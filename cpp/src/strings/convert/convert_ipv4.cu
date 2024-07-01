@@ -20,7 +20,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_ipv4.hpp>
 #include <cudf/strings/detail/convert/int_to_string.cuh>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -167,9 +167,9 @@ std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
 
   CUDF_EXPECTS(integers.type().id() == type_id::INT64, "Input column must be type_id::INT64 type");
 
-  auto d_column                = column_device_view::create(integers, stream);
-  auto [offsets_column, chars] = experimental::make_strings_children(
-    integers_to_ipv4_fn{*d_column}, integers.size(), stream, mr);
+  auto d_column = column_device_view::create(integers, stream);
+  auto [offsets_column, chars] =
+    make_strings_children(integers_to_ipv4_fn{*d_column}, integers.size(), stream, mr);
 
   return make_strings_column(integers.size(),
                              std::move(offsets_column),

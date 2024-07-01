@@ -361,14 +361,22 @@ CUDF_KERNEL void contains_warp_parallel_fn(column_device_view const d_strings,
   if (d_strings.is_null(str_idx)) { return; }
   // get the string for this warp
   auto const d_str = d_strings.element<string_view>(str_idx);
-  // each thread of the warp will check just part of the string
-  auto found = false;
-  for (auto i = static_cast<size_type>(idx % cudf::detail::warp_size);
+  // each warp processes 4 starting bytes
+  auto constexpr bytes_per_warp = 4;
+  auto found                    = false;
+  for (auto i = lane_idx * bytes_per_warp;
        !found && ((i + d_target.size_bytes()) <= d_str.size_bytes());
-       i += cudf::detail::warp_size) {
+       i += cudf::detail::warp_size * bytes_per_warp) {
     // check the target matches this part of the d_str data
-    if (d_target.compare(d_str.data() + i, d_target.size_bytes()) == 0) { found = true; }
+    // this is definitely faster for very long strings > 128B
+    for (auto j = 0; j < bytes_per_warp; j++) {
+      if (((i + j + d_target.size_bytes()) <= d_str.size_bytes()) &&
+          d_target.compare(d_str.data() + i + j, d_target.size_bytes()) == 0) {
+        found = true;
+      }
+    }
   }
+
   auto const result = warp_reduce(temp_storage).Reduce(found, cub::Max());
   if (lane_idx == 0) { d_results[str_idx] = result; }
 }
@@ -391,12 +399,10 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
 
   // fill the output with `false` unless the `d_target` is empty
   auto results_view = results->mutable_view();
-  thrust::fill(rmm::exec_policy(stream),
-               results_view.begin<bool>(),
-               results_view.end<bool>(),
-               d_target.empty());
-
-  if (!d_target.empty()) {
+  if (d_target.empty()) {
+    thrust::fill(
+      rmm::exec_policy_nosync(stream), results_view.begin<bool>(), results_view.end<bool>(), true);
+  } else {
     // launch warp per string
     auto const d_strings     = column_device_view::create(input.parent(), stream);
     constexpr int block_size = 256;
@@ -461,9 +467,8 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
                     [d_strings, pfn, d_target] __device__(size_type idx) {
-                      if (!d_strings.is_null(idx))
-                        return bool{pfn(d_strings.element<string_view>(idx), d_target)};
-                      return false;
+                      return !d_strings.is_null(idx) &&
+                             bool{pfn(d_strings.element<string_view>(idx), d_target)};
                     });
   results->set_null_count(strings.null_count());
   return results;

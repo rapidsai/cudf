@@ -22,7 +22,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/detail/converters.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -1109,7 +1109,7 @@ struct dispatch_from_timestamps_fn {
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr) const
   {
-    return experimental::make_strings_children(
+    return make_strings_children(
       datetime_formatter_fn<T>{d_timestamps, d_format_names, d_format_items},
       d_timestamps.size(),
       stream,

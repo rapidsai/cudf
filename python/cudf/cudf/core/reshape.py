@@ -1,23 +1,24 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import itertools
 import warnings
-from collections import abc
-from typing import Dict, Optional
+from typing import TYPE_CHECKING
 
-import cupy
 import numpy as np
 import pandas as pd
 
 import cudf
 from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
-from cudf._typing import Dtype
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.utils.dtypes import min_unsigned_type
+
+if TYPE_CHECKING:
+    from cudf._typing import Dtype
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -299,51 +300,31 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         obj = objs[0]
         if ignore_index:
             if axis == 1:
-                result = cudf.DataFrame._from_data(
-                    data=obj._data.copy(deep=True),
-                    index=obj.index.copy(deep=True),
-                )
-                # The DataFrame constructor for dict-like data (such as the
-                # ColumnAccessor given by obj._data here) will drop any columns
-                # in the data that are not in `columns`, so we have to rename
-                # after construction.
-                result.columns = pd.RangeIndex(len(obj._data.names))
-            else:
                 if isinstance(obj, cudf.Series):
-                    result = cudf.Series._from_data(
-                        data=obj._data.copy(deep=True),
-                        index=cudf.RangeIndex(len(obj)),
-                    )
-                elif isinstance(obj, pd.Series):
-                    result = cudf.Series(
-                        data=obj,
-                        index=cudf.RangeIndex(len(obj)),
-                    )
+                    result = obj.to_frame()
                 else:
-                    result = cudf.DataFrame._from_data(
-                        data=obj._data.copy(deep=True),
-                        index=cudf.RangeIndex(len(obj)),
-                    )
-        else:
-            if axis == 0:
-                result = obj.copy()
+                    result = obj.copy(deep=True)
+                result.columns = pd.RangeIndex(len(result._data))
             else:
-                data = obj._data.copy(deep=True)
-                if isinstance(obj, cudf.Series) and obj.name is None:
-                    # If the Series has no name, pandas renames it to 0.
-                    data[0] = data.pop(None)
-                result = cudf.DataFrame._from_data(
-                    data, index=obj.index.copy(deep=True)
+                result = type(obj)._from_data(
+                    data=obj._data.copy(deep=True),
+                    index=cudf.RangeIndex(len(obj)),
                 )
-                if keys is not None:
-                    if isinstance(result, cudf.DataFrame):
-                        k = keys[0]
-                        result.columns = cudf.MultiIndex.from_tuples(
-                            [
-                                (k, *c) if isinstance(c, tuple) else (k, c)
-                                for c in result._column_names
-                            ]
-                        )
+        elif axis == 0:
+            result = obj.copy(deep=True)
+        else:
+            if isinstance(obj, cudf.Series):
+                result = obj.to_frame()
+            else:
+                result = obj.copy(deep=True)
+            if keys is not None and isinstance(result, cudf.DataFrame):
+                k = keys[0]
+                result.columns = cudf.MultiIndex.from_tuples(
+                    [
+                        (k, *c) if isinstance(c, tuple) else (k, c)
+                        for c in result._column_names
+                    ]
+                )
 
         if isinstance(result, cudf.Series) and axis == 0:
             # sort has no effect for series concatted along axis 0
@@ -590,7 +571,7 @@ def melt(
 
     # id_vars
     if id_vars is not None:
-        if not isinstance(id_vars, abc.Sequence):
+        if cudf.api.types.is_scalar(id_vars):
             id_vars = [id_vars]
         id_vars = list(id_vars)
         missing = set(id_vars) - set(frame._column_names)
@@ -604,7 +585,7 @@ def melt(
 
     # value_vars
     if value_vars is not None:
-        if not isinstance(value_vars, abc.Sequence):
+        if cudf.api.types.is_scalar(value_vars):
             value_vars = [value_vars]
         value_vars = list(value_vars)
         missing = set(value_vars) - set(frame._column_names)
@@ -658,21 +639,22 @@ def melt(
     # Step 2: add variable
     nval = len(value_vars)
     dtype = min_unsigned_type(nval)
-    temp = cudf.Series(cupy.repeat(cupy.arange(nval, dtype=dtype), N))
 
     if not var_name:
         var_name = "variable"
 
-    mdata[var_name] = cudf.Series(
-        cudf.core.column.build_categorical_column(
-            categories=value_vars,
-            codes=temp._column,
-            mask=temp._column.base_mask,
-            size=temp._column.size,
-            offset=temp._column.offset,
-            ordered=False,
+    if not value_vars:
+        # TODO: Use frame._data.label_dtype when it's more consistently set
+        var_data = cudf.Series(
+            value_vars, dtype=frame._data.to_pandas_index().dtype
         )
-    )
+    else:
+        var_data = (
+            cudf.Series(value_vars)
+            .take(np.repeat(np.arange(nval, dtype=dtype), N))
+            .reset_index(drop=True)
+        )
+    mdata[var_name] = var_data
 
     # Step 3: add values
     mdata[value_name] = cudf.Series._concat(
@@ -837,7 +819,7 @@ def get_dummies(
                     dtype=dtype,
                 )
                 result_data.update(col_enc_data)
-            return cudf.DataFrame._from_data(result_data, index=df._index)
+            return cudf.DataFrame._from_data(result_data, index=df.index)
     else:
         ser = cudf.Series(df)
         unique = _get_unique(column=ser._column, dummy_na=dummy_na)
@@ -848,7 +830,7 @@ def get_dummies(
             prefix_sep=prefix_sep,
             dtype=dtype,
         )
-        return cudf.DataFrame._from_data(data, index=ser._index)
+        return cudf.DataFrame._from_data(data, index=ser.index)
 
 
 def _merge_sorted(
@@ -900,7 +882,7 @@ def _merge_sorted(
         raise ValueError("`by_index` and `ignore_index` cannot both be True")
 
     if by_index:
-        key_columns_indices = list(range(0, objs[0]._index.nlevels))
+        key_columns_indices = list(range(0, objs[0].index.nlevels))
     else:
         if keys is None:
             key_columns_indices = list(range(0, objs[0]._num_columns))
@@ -910,12 +892,12 @@ def _merge_sorted(
             ]
         if not ignore_index:
             key_columns_indices = [
-                idx + objs[0]._index.nlevels for idx in key_columns_indices
+                idx + objs[0].index.nlevels for idx in key_columns_indices
             ]
 
     columns = [
         [
-            *(obj._index._data.columns if not ignore_index else ()),
+            *(obj.index._data.columns if not ignore_index else ()),
             *obj._columns,
         ]
         for obj in objs
@@ -1177,7 +1159,6 @@ def unstack(df, level, fill_value=None):
     if pd.api.types.is_list_like(level):
         if not level:
             return df
-    df = df.copy(deep=False)
     if not isinstance(df.index, cudf.MultiIndex):
         dtype = df._columns[0].dtype
         for col in df._columns:
@@ -1193,6 +1174,7 @@ def unstack(df, level, fill_value=None):
         )
         return res
     else:
+        df = df.copy(deep=False)
         columns = df.index._poplevels(level)
         index = df.index
     result = _pivot(df, index, columns)
@@ -1211,19 +1193,17 @@ def _get_unique(column, dummy_na):
     else:
         unique = column.unique().sort_values()
     if not dummy_na:
-        if np.issubdtype(unique.dtype, np.floating):
-            unique = unique.nans_to_nulls()
-        unique = unique.dropna()
+        unique = unique.nans_to_nulls().dropna()
     return unique
 
 
 def _one_hot_encode_column(
     column: ColumnBase,
     categories: ColumnBase,
-    prefix: Optional[str],
-    prefix_sep: Optional[str],
-    dtype: Optional[Dtype],
-) -> Dict[str, ColumnBase]:
+    prefix: str | None,
+    prefix_sep: str | None,
+    dtype: Dtype | None,
+) -> dict[str, ColumnBase]:
     """Encode a single column with one hot encoding. The return dictionary
     contains pairs of (category, encodings). The keys may be prefixed with
     `prefix`, separated with category name with `prefix_sep`. The encoding

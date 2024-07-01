@@ -1,11 +1,14 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import os
 import textwrap
-from collections.abc import Container
 from contextlib import ContextDecorator
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from collections.abc import Container
 
 
 @dataclass
@@ -16,7 +19,7 @@ class Option:
     validator: Callable
 
 
-_OPTIONS: Dict[str, Option] = {}
+_OPTIONS: dict[str, Option] = {}
 
 
 def _env_get_int(name, default):
@@ -123,7 +126,7 @@ def _build_option_description(name, opt):
     )
 
 
-def describe_option(name: Optional[str] = None):
+def describe_option(name: str | None = None):
     """Prints the description of an option.
 
     If `name` is unspecified, prints the description of all available options.
@@ -302,6 +305,20 @@ _register_option(
         If set to `True`, enables pandas compatibility mode,
         which will try to match pandas API behaviors in case of
         any inconsistency.
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)
+
+_register_option(
+    "memory_profiling",
+    _env_get_bool("CUDF_MEMORY_PROFILING", False),
+    textwrap.dedent(
+        """
+        If set to `False`, disables memory profiling.
+        If set to `True`, enables memory profiling.
+        Read more at: :ref:`memory-profiling-user-doc`
         \tValid values are True or False. Default is False.
     """
     ),

@@ -15,7 +15,6 @@
  */
 
 #include "arrow_utilities.hpp"
-#include "to_arrow_utilities.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>

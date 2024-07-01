@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,8 +31,8 @@ struct common_type_functor {
   template <typename TypeLhs, typename TypeRhs>
   std::optional<data_type> operator()() const
   {
-    if constexpr (cudf::has_common_type_v<TypeLhs, TypeRhs>) {
-      using TypeCommon = std::common_type_t<TypeLhs, TypeRhs>;
+    if constexpr (binary_op_has_common_type_v<TypeLhs, TypeRhs>) {
+      using TypeCommon = binary_op_common_type_t<TypeLhs, TypeRhs>;
       return data_type{type_to_id<TypeCommon>()};
     }
 
@@ -85,8 +85,8 @@ struct is_binary_operation_supported {
   {
     if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
                   column_device_view::has_element_accessor<TypeRhs>()) {
-      if constexpr (has_common_type_v<TypeLhs, TypeRhs>) {
-        using common_t = std::common_type_t<TypeLhs, TypeRhs>;
+      if constexpr (binary_op_has_common_type_v<TypeLhs, TypeRhs>) {
+        using common_t = binary_op_common_type_t<TypeLhs, TypeRhs>;
         return std::is_invocable_v<BinaryOperator, common_t, common_t>;
       } else {
         return std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>;
@@ -102,8 +102,8 @@ struct is_binary_operation_supported {
     if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
                   column_device_view::has_element_accessor<TypeRhs>()) {
       if (has_mutable_element_accessor(out_type) or is_fixed_point(out_type)) {
-        if constexpr (has_common_type_v<TypeLhs, TypeRhs>) {
-          using common_t = std::common_type_t<TypeLhs, TypeRhs>;
+        if constexpr (binary_op_has_common_type_v<TypeLhs, TypeRhs>) {
+          using common_t = binary_op_common_type_t<TypeLhs, TypeRhs>;
           if constexpr (std::is_invocable_v<BinaryOperator, common_t, common_t>) {
             using ReturnType = std::invoke_result_t<BinaryOperator, common_t, common_t>;
             return is_constructible<ReturnType>(out_type) or
@@ -123,7 +123,7 @@ struct is_supported_operation_functor {
   template <typename TypeLhs, typename TypeRhs>
   struct nested_support_functor {
     template <typename BinaryOperator>
-    inline constexpr bool call(data_type out_type) const
+    [[nodiscard]] inline constexpr bool call(data_type out_type) const
     {
       return is_binary_operation_supported<BinaryOperator>{}.template operator()<TypeLhs, TypeRhs>(
         out_type);
@@ -163,7 +163,7 @@ struct is_supported_operation_functor {
   };
 
   template <typename BinaryOperator, typename TypeLhs, typename TypeRhs>
-  inline constexpr bool bool_op(data_type out) const
+  [[nodiscard]] inline constexpr bool bool_op(data_type out) const
   {
     return out.id() == type_id::BOOL8 and
            is_binary_operation_supported<BinaryOperator>{}.template operator()<TypeLhs, TypeRhs>();
@@ -182,6 +182,8 @@ struct is_supported_operation_functor {
       case binary_operator::LESS_EQUAL: return bool_op<ops::LessEqual, TypeLhs, TypeRhs>(out);
       case binary_operator::GREATER_EQUAL: return bool_op<ops::GreaterEqual, TypeLhs, TypeRhs>(out);
       case binary_operator::NULL_EQUALS: return bool_op<ops::NullEquals, TypeLhs, TypeRhs>(out);
+      case binary_operator::NULL_NOT_EQUALS:
+        return bool_op<ops::NullNotEquals, TypeLhs, TypeRhs>(out);
       case binary_operator::NULL_LOGICAL_AND:
         return bool_op<ops::NullLogicalAnd, TypeLhs, TypeRhs>(out);
       case binary_operator::NULL_LOGICAL_OR:

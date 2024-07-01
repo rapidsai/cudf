@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -10,10 +10,12 @@ import numpy
 import numpy.core.multiarray
 
 from ..fast_slow_proxy import (
+    _FastSlowAttribute,
     make_final_proxy_type,
     make_intermediate_proxy_type,
 )
 from .common import (
+    array_interface,
     array_method,
     arrow_array_method,
     cuda_array_interface,
@@ -114,6 +116,7 @@ ndarray = make_final_proxy_type(
         # So that pa.array(wrapped-numpy-array) works
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
+        "__array_interface__": array_interface,
         # ndarrays are unhashable
         "__hash__": None,
         # iter(cupy-array) produces an iterable of zero-dim device
@@ -122,8 +125,22 @@ ndarray = make_final_proxy_type(
         "__iter__": custom_iter,
         # Special wrapping to handle scalar values
         "_fsproxy_wrap": classmethod(wrap_ndarray),
+        "base": _FastSlowAttribute("base", private=True),
     },
 )
+
+
+flatiter = make_final_proxy_type(
+    "flatiter",
+    cupy.flatiter,
+    numpy.flatiter,
+    fast_to_slow=lambda fast: cupy.asnumpy(fast.base).flat,
+    slow_to_fast=lambda slow: cupy.asarray(slow).flat,
+    additional_attributes={
+        "__array__": array_method,
+    },
+)
+
 
 # Mapping flags between slow and fast types
 _ndarray_flags = make_intermediate_proxy_type(

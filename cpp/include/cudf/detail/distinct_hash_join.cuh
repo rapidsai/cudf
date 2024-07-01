@@ -42,9 +42,20 @@ template <typename Equal>
 struct comparator_adapter {
   comparator_adapter(Equal const& d_equal) : _d_equal{d_equal} {}
 
+  // suppress "function was declared but never referenced warning"
+#pragma nv_diagnostic push
+#pragma nv_diag_suppress 177
   __device__ constexpr auto operator()(
     cuco::pair<hash_value_type, lhs_index_type> const&,
     cuco::pair<hash_value_type, lhs_index_type> const&) const noexcept
+  {
+    // All build table keys are distinct thus `false` no matter what
+    return false;
+  }
+
+  __device__ constexpr auto operator()(
+    cuco::pair<hash_value_type, rhs_index_type> const&,
+    cuco::pair<hash_value_type, rhs_index_type> const&) const noexcept
   {
     // All build table keys are distinct thus `false` no matter what
     return false;
@@ -57,6 +68,15 @@ struct comparator_adapter {
     if (lhs.first != rhs.first) { return false; }
     return _d_equal(lhs.second, rhs.second);
   }
+
+  __device__ constexpr auto operator()(
+    cuco::pair<hash_value_type, rhs_index_type> const& lhs,
+    cuco::pair<hash_value_type, lhs_index_type> const& rhs) const noexcept
+  {
+    if (lhs.first != rhs.first) { return false; }
+    return _d_equal(lhs.second, rhs.second);
+  }
+#pragma nv_diagnostic pop
 
  private:
   Equal _d_equal;
@@ -94,7 +114,7 @@ struct distinct_hash_join {
   using cuco_storage_type   = cuco::storage<1>;
 
   /// Hash table type
-  using hash_table_type = cuco::static_set<cuco::pair<hash_value_type, lhs_index_type>,
+  using hash_table_type = cuco::static_set<cuco::pair<hash_value_type, rhs_index_type>,
                                            cuco::extent<size_type>,
                                            cuda::thread_scope_device,
                                            comparator_adapter<d_equal_type>,

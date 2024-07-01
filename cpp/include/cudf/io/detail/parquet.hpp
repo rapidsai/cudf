@@ -76,11 +76,9 @@ class reader {
   /**
    * @brief Reads the dataset as per given options.
    *
-   * @param options Settings for controlling reading behavior
-   *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(parquet_reader_options const& options);
+  table_with_metadata read();
 };
 
 /**
@@ -101,6 +99,13 @@ class chunked_reader : private reader {
    *    auto const chunk = reader.read_chunk();
    *    // Process chunk
    *  } while (reader.has_next());
+   *
+   * // Alternatively
+   *
+   *  while (reader.has_next()) {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  }
    *
    * ```
    *
@@ -155,7 +160,7 @@ class chunked_reader : private reader {
    * destructor needs to be defined in a separate source file which can access to that object's
    * declaration.
    */
-  ~chunked_reader();
+  ~chunked_reader() override;
 
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next

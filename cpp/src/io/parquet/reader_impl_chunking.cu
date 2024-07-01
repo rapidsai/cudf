@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "compact_protocol_reader.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/utilities/config_utils.hpp"
 #include "io/utilities/time_utils.cuh"
@@ -101,7 +102,7 @@ void print_cumulative_page_info(device_span<PageInfo const> d_pages,
       printf("\tP %s: {%lu, %lu, %lu}\n",
              is_list ? "(L)" : "",
              pidx,
-             c_info[pidx].row_index,
+             c_info[pidx].end_row_index,
              c_info[pidx].size_bytes);
     }
   }
@@ -121,16 +122,17 @@ void print_cumulative_row_info(host_span<cumulative_page_info const> sizes,
   printf("------------\nCumulative sizes %s (index, row_index, size_bytes, page_key)\n",
          label.c_str());
   for (size_t idx = 0; idx < sizes.size(); idx++) {
-    printf("{%lu, %lu, %lu, %d}", idx, sizes[idx].row_index, sizes[idx].size_bytes, sizes[idx].key);
+    printf(
+      "{%lu, %lu, %lu, %d}", idx, sizes[idx].end_row_index, sizes[idx].size_bytes, sizes[idx].key);
     if (splits.has_value()) {
       // if we have a split at this row count and this is the last instance of this row count
       auto start             = thrust::make_transform_iterator(splits->begin(),
                                                    [](row_range const& i) { return i.skip_rows; });
       auto end               = start + splits->size();
-      auto split             = std::find(start, end, sizes[idx].row_index);
+      auto split             = std::find(start, end, sizes[idx].end_row_index);
       auto const split_index = [&]() -> int {
-        if (split != end &&
-            ((idx == sizes.size() - 1) || (sizes[idx + 1].row_index > sizes[idx].row_index))) {
+        if (split != end && ((idx == sizes.size() - 1) ||
+                             (sizes[idx + 1].end_row_index > sizes[idx].end_row_index))) {
           return static_cast<int>(std::distance(start, split));
         }
         return idx == 0 ? 0 : -1;
@@ -259,8 +261,9 @@ struct set_row_index {
     auto const& page          = pages[i];
     auto const& chunk         = chunks[page.chunk_idx];
     size_t const page_end_row = chunk.start_row + page.chunk_row + page.num_rows;
-    // if we have been passed in a cap, apply it
-    c_info[i].end_row_index = max_row > 0 ? min(max_row, page_end_row) : page_end_row;
+    // this cap is necessary because in the chunked reader, we use estimations for the row
+    // counts for list columns, which can result in values > than the absolute number of rows.
+    c_info[i].end_row_index = min(max_row, page_end_row);
   }
 };
 
@@ -334,7 +337,8 @@ int64_t find_next_split(int64_t cur_pos,
                         size_t cur_row_index,
                         size_t cur_cumulative_size,
                         cudf::host_span<cumulative_page_info const> sizes,
-                        size_t size_limit)
+                        size_t size_limit,
+                        size_t min_row_count)
 {
   auto const start = thrust::make_transform_iterator(
     sizes.begin(),
@@ -354,7 +358,7 @@ int64_t find_next_split(int64_t cur_pos,
   // this guarantees that even if we cannot fit the set of rows represented by our where our cur_pos
   // is, we will still move forward instead of failing.
   while (split_pos < (static_cast<int64_t>(sizes.size()) - 1) &&
-         (sizes[split_pos].end_row_index == cur_row_index)) {
+         (sizes[split_pos].end_row_index - cur_row_index < min_row_count)) {
     split_pos++;
   }
 
@@ -461,6 +465,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                                                      thrust::make_discard_iterator(),
                                                      key_offsets.begin())
                                  .second;
+
   size_t const num_unique_keys = key_offsets_end - key_offsets.begin();
   thrust::exclusive_scan(
     rmm::exec_policy_nosync(stream), key_offsets.begin(), key_offsets.end(), key_offsets.begin());
@@ -653,8 +658,10 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto const start_index = find_start_index(h_aggregated_info, start_row);
   auto const cumulative_size =
     start_row == 0 || start_index == 0 ? 0 : h_aggregated_info[start_index - 1].size_bytes;
+  // when choosing subpasses, we need to guarantee at least 2 rows in the included pages so that all
+  // list columns have a clear start and end.
   auto const end_index =
-    find_next_split(start_index, start_row, cumulative_size, h_aggregated_info, size_limit);
+    find_next_split(start_index, start_row, cumulative_size, h_aggregated_info, size_limit, 2);
   auto const end_row = h_aggregated_info[end_index].end_row_index;
 
   // for each column, collect the set of pages that spans start_row / end_row
@@ -699,8 +706,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   size_t cur_cumulative_size = 0;
   auto const max_row         = min(skip_rows + num_rows, h_aggregated_info.back().end_row_index);
   while (cur_row_index < max_row) {
-    auto const split_pos =
-      find_next_split(cur_pos, cur_row_index, cur_cumulative_size, h_aggregated_info, size_limit);
+    auto const split_pos = find_next_split(
+      cur_pos, cur_row_index, cur_cumulative_size, h_aggregated_info, size_limit, 1);
 
     auto const start_row = cur_row_index;
     cur_row_index        = min(max_row, h_aggregated_info[split_pos].end_row_index);
@@ -1023,7 +1030,7 @@ struct decompression_info {
  *
  */
 struct get_decomp_info {
-  device_span<const ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
   __device__ decompression_info operator()(PageInfo const& p) const
   {
@@ -1144,12 +1151,12 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
 
 }  // anonymous namespace
 
-void reader::impl::handle_chunking(bool uses_custom_row_bounds)
+void reader::impl::handle_chunking(read_mode mode)
 {
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
     // setup the next pass
-    setup_next_pass(uses_custom_row_bounds);
+    setup_next_pass(mode);
   }
 
   auto& pass = *_pass_itm_data;
@@ -1177,15 +1184,15 @@ void reader::impl::handle_chunking(bool uses_custom_row_bounds)
       if (_file_itm_data._current_input_pass == _file_itm_data.num_passes()) { return; }
 
       // setup the next pass
-      setup_next_pass(uses_custom_row_bounds);
+      setup_next_pass(mode);
     }
   }
 
   // setup the next sub pass
-  setup_next_subpass(uses_custom_row_bounds);
+  setup_next_subpass(mode);
 }
 
-void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
+void reader::impl::setup_next_pass(read_mode mode)
 {
   auto const num_passes = _file_itm_data.num_passes();
 
@@ -1256,7 +1263,7 @@ void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
     detect_malformed_pages(
       pass.pages,
       pass.chunks,
-      uses_custom_row_bounds ? std::nullopt : std::make_optional(pass.num_rows),
+      uses_custom_row_bounds(mode) ? std::nullopt : std::make_optional(pass.num_rows),
       _stream);
 
     // decompress dictionary data if applicable.
@@ -1292,10 +1299,12 @@ void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
     printf("\tnum_rows: %'lu\n", pass.num_rows);
     printf("\tbase mem usage: %'lu\n", pass.base_mem_size);
     auto const num_columns = _input_columns.size();
+    std::vector<size_type> h_page_offsets =
+      cudf::detail::make_std_vector_sync(pass.page_offsets, _stream);
     for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
       printf("\t\tColumn %'lu: num_pages(%'d)\n",
              c_idx,
-             pass.page_offsets[c_idx + 1] - pass.page_offsets[c_idx]);
+             h_page_offsets[c_idx + 1] - h_page_offsets[c_idx]);
     }
 #endif
 
@@ -1303,7 +1312,7 @@ void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
   }
 }
 
-void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
+void reader::impl::setup_next_subpass(read_mode mode)
 {
   auto& pass    = *_pass_itm_data;
   pass.subpass  = std::make_unique<subpass_intermediate_data>();
@@ -1362,11 +1371,12 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
     // can be considerable.
     include_decompression_scratch_size(pass.chunks, pass.pages, c_info, _stream);
 
-    auto iter = thrust::make_counting_iterator(0);
+    auto iter               = thrust::make_counting_iterator(0);
+    auto const pass_max_row = pass.skip_rows + pass.num_rows;
     thrust::for_each(rmm::exec_policy_nosync(_stream),
                      iter,
                      iter + pass.pages.size(),
-                     set_row_index{pass.chunks, pass.pages, c_info, 0});
+                     set_row_index{pass.chunks, pass.pages, c_info, pass_max_row});
     // print_cumulative_page_info(pass.pages, pass.chunks, c_info, _stream);
 
     // get the next batch of pages
@@ -1437,7 +1447,7 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
 
   // preprocess pages (computes row counts for lists, computes output chunks and computes
   // the actual row counts we will be able load out of this subpass)
-  preprocess_subpass_pages(uses_custom_row_bounds, _output_chunk_read_limit);
+  preprocess_subpass_pages(mode, _output_chunk_read_limit);
 
 #if defined(PARQUET_CHUNK_LOGGING)
   printf("\tSubpass: skip_rows(%'lu), num_rows(%'lu), remaining read limit(%'lu)\n",
@@ -1448,11 +1458,12 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
   printf("\t\tTotal expected usage: %'lu\n",
          total_expected_size == 0 ? subpass.decomp_page_data.size() + pass.base_mem_size
                                   : total_expected_size + pass.base_mem_size);
+  std::vector<page_span> h_page_indices = cudf::detail::make_std_vector_sync(page_indices, _stream);
   for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
     printf("\t\tColumn %'lu: pages(%'lu - %'lu)\n",
            c_idx,
-           page_indices[c_idx].start,
-           page_indices[c_idx].end);
+           h_page_indices[c_idx].start,
+           h_page_indices[c_idx].end);
   }
   printf("\t\tOutput chunks:\n");
   for (size_t idx = 0; idx < subpass.output_chunk_read_info.size(); idx++) {
@@ -1511,8 +1522,8 @@ void reader::impl::create_global_chunk_info()
       auto& schema   = _metadata->get_schema(col.schema_idx);
 
       auto [clock_rate, logical_type] =
-        conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
-                        _timestamp_type.id(),
+        conversion_info(to_type_id(schema, _strings_to_categorical, _options.timestamp_type.id()),
+                        _options.timestamp_type.id(),
                         schema.type,
                         schema.logical_type);
 

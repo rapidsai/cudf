@@ -17,7 +17,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/convert/int_to_string.cuh>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -414,11 +414,11 @@ struct dispatch_from_durations_fn {
     // copy null mask
     rmm::device_buffer null_mask = cudf::detail::copy_bitmask(durations, stream, mr);
 
-    auto [offsets, chars] = experimental::make_strings_children(
-      from_durations_fn<T>{d_column, d_format_items, compiler.items_count()},
-      strings_count,
-      stream,
-      mr);
+    auto [offsets, chars] =
+      make_strings_children(from_durations_fn<T>{d_column, d_format_items, compiler.items_count()},
+                            strings_count,
+                            stream,
+                            mr);
 
     return make_strings_column(strings_count,
                                std::move(offsets),

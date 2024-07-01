@@ -19,7 +19,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -182,8 +182,8 @@ struct dispatch_integers_to_hex_fn {
   {
     auto const d_column = column_device_view::create(input, stream);
 
-    auto [offsets_column, chars] = experimental::make_strings_children(
-      integer_to_hex_fn<IntegerType>{*d_column}, input.size(), stream, mr);
+    auto [offsets_column, chars] =
+      make_strings_children(integer_to_hex_fn<IntegerType>{*d_column}, input.size(), stream, mr);
 
     return make_strings_column(input.size(),
                                std::move(offsets_column),

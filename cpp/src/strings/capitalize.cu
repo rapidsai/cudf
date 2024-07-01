@@ -20,7 +20,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/capitalize.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -231,8 +231,7 @@ std::unique_ptr<column> capitalizer(CapitalFn cfn,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr)
 {
-  auto [offsets_column, chars] =
-    cudf::strings::detail::experimental::make_strings_children(cfn, input.size(), stream, mr);
+  auto [offsets_column, chars] = make_strings_children(cfn, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),

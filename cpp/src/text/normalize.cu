@@ -26,7 +26,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -185,7 +185,7 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
   auto d_strings = cudf::column_device_view::create(strings.parent(), stream);
 
   // build offsets and children using the normalize_space_fn
-  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     normalize_spaces_fn{*d_strings}, strings.size(), stream, mr);
 
   return cudf::make_strings_column(strings.size(),
@@ -227,7 +227,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   auto d_strings = cudf::column_device_view::create(strings.parent(), stream);
 
   // build offsets and children using the codepoint_to_utf8_fn
-  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     codepoint_to_utf8_fn{*d_strings, cp_chars, cp_offsets}, strings.size(), stream, mr);
 
   return cudf::make_strings_column(strings.size(),

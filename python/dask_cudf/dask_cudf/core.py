@@ -22,7 +22,7 @@ from dask.utils import M, OperatorMethodMixin, apply, derived_from, funcname
 
 import cudf
 from cudf import _lib as libcudf
-from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
@@ -53,7 +53,7 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         s = "<dask_cudf.%s | %d tasks | %d npartitions>"
         return s % (type(self).__name__, len(self.dask), self.npartitions)
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def to_dask_dataframe(self, **kwargs):
         """Create a dask.dataframe object from a dask_cudf object
 
@@ -92,7 +92,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
     _partition_type = cudf.DataFrame
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def _assign_column(self, k, v):
         def assigner(df, k, v):
             out = df.copy()
@@ -102,7 +102,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         meta = assigner(self._meta, k, dask_make_meta(v))
         return self.map_partitions(assigner, k, v, meta=meta)
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def apply_rows(self, func, incols, outcols, kwargs=None, cache_key=None):
         import uuid
 
@@ -123,7 +123,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         )
 
     @_deprecate_shuffle_kwarg
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def merge(self, other, shuffle_method=None, **kwargs):
         on = kwargs.pop("on", None)
         if isinstance(on, tuple):
@@ -136,7 +136,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         )
 
     @_deprecate_shuffle_kwarg
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def join(self, other, shuffle_method=None, **kwargs):
         # CuDF doesn't support "right" join yet
         how = kwargs.pop("how", "left")
@@ -155,7 +155,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         )
 
     @_deprecate_shuffle_kwarg
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def set_index(
         self,
         other,
@@ -166,6 +166,14 @@ class DataFrame(_Frame, dd.core.DataFrame):
     ):
         pre_sorted = sorted
         del sorted
+
+        if divisions == "quantile":
+            warnings.warn(
+                "Using divisions='quantile' is now deprecated. "
+                "Please raise an issue on github if you believe "
+                "this feature is necessary.",
+                FutureWarning,
+            )
 
         if (
             divisions == "quantile"
@@ -229,7 +237,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         )
 
     @_deprecate_shuffle_kwarg
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def sort_values(
         self,
         by,
@@ -267,14 +275,14 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return df.reset_index(drop=True)
         return df
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def to_parquet(self, path, *args, **kwargs):
         """Calls dask.dataframe.io.to_parquet with CudfEngine backend"""
         from dask_cudf.io import to_parquet
 
         return to_parquet(self, path, *args, **kwargs)
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def to_orc(self, path, **kwargs):
         """Calls dask_cudf.io.to_orc"""
         from dask_cudf.io import to_orc
@@ -282,7 +290,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return to_orc(self, path, **kwargs)
 
     @derived_from(pd.DataFrame)
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def var(
         self,
         axis=None,
@@ -316,28 +324,28 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return _parallel_var(self, meta, skipna, split_every, out)
 
     @_deprecate_shuffle_kwarg
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def shuffle(self, *args, shuffle_method=None, **kwargs):
         """Wraps dask.dataframe DataFrame.shuffle method"""
         return super().shuffle(
             *args, shuffle_method=_get_shuffle_method(shuffle_method), **kwargs
         )
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def groupby(self, by=None, **kwargs):
         from .groupby import CudfDataFrameGroupBy
 
         return CudfDataFrameGroupBy(self, by=by, **kwargs)
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def sum_of_squares(x):
     x = x.astype("f8")._column
     outcol = libcudf.reduce.reduce("sum_of_squares", x)
     return cudf.Series(outcol)
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def var_aggregate(x2, x, n, ddof):
     try:
         with warnings.catch_warnings(record=True):
@@ -350,12 +358,12 @@ def var_aggregate(x2, x, n, ddof):
         return np.float64(np.nan)
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def nlargest_agg(x, **kwargs):
     return cudf.concat(x).nlargest(**kwargs)
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def nsmallest_agg(x, **kwargs):
     return cudf.concat(x).nsmallest(**kwargs)
 
@@ -363,7 +371,7 @@ def nsmallest_agg(x, **kwargs):
 class Series(_Frame, dd.core.Series):
     _partition_type = cudf.Series
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def count(self, split_every=False):
         return reduction(
             [self],
@@ -373,14 +381,14 @@ class Series(_Frame, dd.core.Series):
             meta="i8",
         )
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def mean(self, split_every=False):
         sum = self.sum(split_every=split_every)
         n = self.count(split_every=split_every)
         return sum / n
 
     @derived_from(pd.DataFrame)
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def var(
         self,
         axis=None,
@@ -409,19 +417,19 @@ class Series(_Frame, dd.core.Series):
         else:
             return _parallel_var(self, meta, skipna, split_every, out)
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def groupby(self, *args, **kwargs):
         from .groupby import CudfSeriesGroupBy
 
         return CudfSeriesGroupBy(self, *args, **kwargs)
 
     @property  # type: ignore
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def list(self):
         return ListMethods(self)
 
     @property  # type: ignore
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def struct(self):
         return StructMethods(self)
 
@@ -430,7 +438,7 @@ class Index(Series, dd.core.Index):
     _partition_type = cudf.Index  # type: ignore
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _naive_var(ddf, meta, skipna, ddof, split_every, out):
     num = ddf._get_numeric_data()
     x = 1.0 * num.sum(skipna=skipna, split_every=split_every)
@@ -445,7 +453,7 @@ def _naive_var(ddf, meta, skipna, ddof, split_every, out):
     return handle_out(out, result)
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _parallel_var(ddf, meta, skipna, split_every, out):
     def _local_var(x, skipna):
         if skipna:
@@ -512,7 +520,7 @@ def _parallel_var(ddf, meta, skipna, split_every, out):
     return handle_out(out, result)
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _extract_meta(x):
     """
     Extract internal cache data (``_meta``) from dask_cudf objects
@@ -528,7 +536,7 @@ def _extract_meta(x):
     return x
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _emulate(func, *args, **kwargs):
     """
     Apply a function using args / kwargs. If arguments contain dd.DataFrame /
@@ -538,7 +546,7 @@ def _emulate(func, *args, **kwargs):
         return func(*_extract_meta(args), **_extract_meta(kwargs))
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def align_partitions(args):
     """Align partitions between dask_cudf objects.
 
@@ -555,7 +563,7 @@ def align_partitions(args):
     return args
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def reduction(
     args,
     chunk=None,
@@ -694,7 +702,7 @@ def reduction(
     return dd.core.new_dd_object(graph, b, meta, (None, None))
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
     from dask_cudf import QUERY_PLANNING_ON
 
@@ -738,7 +746,7 @@ from_cudf.__doc__ = (
 )
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def from_dask_dataframe(df):
     """
     Convert a Dask :class:`dask.dataframe.DataFrame` to a Dask-cuDF

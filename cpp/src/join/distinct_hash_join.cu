@@ -54,7 +54,7 @@ auto prepare_device_equal(
   cudf::null_equality compare_nulls)
 {
   auto const two_table_equal =
-    cudf::experimental::row::equality::two_table_comparator(build, probe);
+    cudf::experimental::row::equality::two_table_comparator(probe, build);
   return comparator_adapter{two_table_equal.equal_to<HasNested == cudf::has_nested::YES>(
     nullate::DYNAMIC{has_nulls}, compare_nulls)};
 }
@@ -113,7 +113,7 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
     _hash_table{build.num_rows(),
                 CUCO_DESIRED_LOAD_FACTOR,
                 cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
-                                           lhs_index_type{JoinNoneValue}}},
+                                           rhs_index_type{JoinNoneValue}}},
                 prepare_device_equal<HasNested>(
                   _preprocessed_build, _preprocessed_probe, has_nulls, compare_nulls),
                 {},
@@ -131,7 +131,7 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
   auto const d_hasher   = row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
 
   auto const iter = cudf::detail::make_counting_transform_iterator(
-    0, build_keys_fn<decltype(d_hasher), lhs_index_type>{d_hasher});
+    0, build_keys_fn<decltype(d_hasher), rhs_index_type>{d_hasher});
 
   size_type const build_table_num_rows{build.num_rows()};
   if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(this->_build))) {
@@ -174,7 +174,7 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
     cudf::experimental::row::hash::row_hasher{this->_preprocessed_probe};
   auto const d_probe_hasher = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
   auto const iter           = cudf::detail::make_counting_transform_iterator(
-    0, build_keys_fn<decltype(d_probe_hasher), rhs_index_type>{d_probe_hasher});
+    0, build_keys_fn<decltype(d_probe_hasher), lhs_index_type>{d_probe_hasher});
 
   auto const build_indices_begin =
     thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});
@@ -182,7 +182,7 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
     thrust::make_transform_output_iterator(probe_indices->begin(), output_fn{});
 
   auto const [probe_indices_end, _] = this->_hash_table.retrieve(
-    iter, iter + probe_table_num_rows, probe_indices_begin, build_indices_begin, stream.value());
+    iter, iter + probe_table_num_rows, probe_indices_begin, build_indices_begin, {stream.value()});
 
   auto const actual_size = std::distance(probe_indices_begin, probe_indices_end);
   build_indices->resize(actual_size, stream);
@@ -216,7 +216,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<HasNested>::l
       cudf::experimental::row::hash::row_hasher{this->_preprocessed_probe};
     auto const d_probe_hasher = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
     auto const iter           = cudf::detail::make_counting_transform_iterator(
-      0, build_keys_fn<decltype(d_probe_hasher), rhs_index_type>{d_probe_hasher});
+      0, build_keys_fn<decltype(d_probe_hasher), lhs_index_type>{d_probe_hasher});
 
     auto const output_begin =
       thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});

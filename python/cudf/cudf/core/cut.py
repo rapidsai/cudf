@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from collections import abc
 
@@ -292,7 +292,7 @@ def cut(
     )
 
     # we return a categorical index, as we don't have a Categorical method
-    categorical_index = cudf.core.index.as_index(col)
+    categorical_index = cudf.CategoricalIndex._from_data({None: col})
 
     if isinstance(orig_x, (pd.Series, cudf.Series)):
         # if we have a series input we return a series output

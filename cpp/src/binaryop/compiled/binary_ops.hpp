@@ -194,7 +194,7 @@ void apply_binary_op(mutable_column_view& out,
  * @brief Deploys single type or double type dispatcher that runs equality operation on each element
  * of @p lhs and @p rhs columns.
  *
- * Comparison operators are EQUAL, NOT_EQUAL, NULL_EQUALS.
+ * Comparison operators are EQUAL, NOT_EQUAL, NULL_EQUALS, NULL_NOT_EQUALS.
  * @p out type is boolean.
  *
  * This template is instantiated for each binary operator.

@@ -5,9 +5,10 @@ from libcpp.cast cimport dynamic_cast
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp.aggregation cimport (
+from cudf._lib.pylibcudf.libcudf.aggregation cimport (
     aggregation,
     correlation_type,
+    ewm_history,
     groupby_aggregation,
     groupby_scan_aggregation,
     make_all_aggregation,
@@ -19,6 +20,7 @@ from cudf._lib.cpp.aggregation cimport (
     make_correlation_aggregation,
     make_count_aggregation,
     make_covariance_aggregation,
+    make_ewma_aggregation,
     make_max_aggregation,
     make_mean_aggregation,
     make_median_aggregation,
@@ -39,7 +41,7 @@ from cudf._lib.cpp.aggregation cimport (
     rolling_aggregation,
     scan_aggregation,
 )
-from cudf._lib.cpp.types cimport (
+from cudf._lib.pylibcudf.libcudf.types cimport (
     interpolation,
     nan_equality,
     null_equality,
@@ -49,14 +51,18 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 
-from cudf._lib.cpp.aggregation import Kind  # no-cython-lint
-from cudf._lib.cpp.aggregation import \
+from cudf._lib.pylibcudf.libcudf.aggregation import Kind  # no-cython-lint
+from cudf._lib.pylibcudf.libcudf.aggregation import \
     correlation_type as CorrelationType  # no-cython-lint
-from cudf._lib.cpp.aggregation import \
+from cudf._lib.pylibcudf.libcudf.aggregation import \
+    ewm_history as EWMHistory  # no-cython-lint
+from cudf._lib.pylibcudf.libcudf.aggregation import \
     rank_method as RankMethod  # no-cython-lint
-from cudf._lib.cpp.aggregation import \
+from cudf._lib.pylibcudf.libcudf.aggregation import \
     rank_percentage as RankPercentage  # no-cython-lint
-from cudf._lib.cpp.aggregation import udf_type as UdfType  # no-cython-lint
+from cudf._lib.pylibcudf.libcudf.aggregation import (  # no-cython-lint
+    udf_type as UdfType,
+)
 
 from .types cimport DataType
 
@@ -76,6 +82,14 @@ cdef class Aggregation:
         raise ValueError(
             "Aggregations should not be constructed directly. Use one of the factories."
         )
+
+    def __eq__(self, other):
+        return type(self) is type(other) and (
+            dereference(self.c_obj).is_equal(dereference((<Aggregation>other).c_obj))
+        )
+
+    def __hash__(self):
+        return dereference(self.c_obj).do_hash()
 
     # TODO: Ideally we would include the return type here, but we need to do so
     # in a way that Sphinx understands (currently have issues due to
@@ -190,6 +204,28 @@ cpdef Aggregation max():
         The max aggregation.
     """
     return Aggregation.from_libcudf(move(make_max_aggregation[aggregation]()))
+
+
+cpdef Aggregation ewma(float center_of_mass, ewm_history history):
+    """Create a EWMA aggregation.
+
+    For details, see :cpp:func:`make_ewma_aggregation`.
+
+    Parameters
+    ----------
+    center_of_mass : float
+        The decay in terms of the center of mass
+    history : ewm_history
+        Whether or not to treat the history as infinite.
+
+    Returns
+    -------
+    Aggregation
+        The EWMA aggregation.
+    """
+    return Aggregation.from_libcudf(
+        move(make_ewma_aggregation[aggregation](center_of_mass, history))
+    )
 
 
 cpdef Aggregation count(null_policy null_handling = null_policy.EXCLUDE):

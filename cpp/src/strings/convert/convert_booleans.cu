@@ -20,7 +20,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/detail/converters.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -140,8 +140,8 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
   // copy null mask
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(booleans, stream, mr);
 
-  auto [offsets, chars] = experimental::make_strings_children(
-    from_booleans_fn{d_column, d_true, d_false}, strings_count, stream, mr);
+  auto [offsets, chars] =
+    make_strings_children(from_booleans_fn{d_column, d_true, d_false}, strings_count, stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(offsets),

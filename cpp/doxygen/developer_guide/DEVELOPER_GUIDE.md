@@ -469,7 +469,7 @@ libcudf throws under different circumstances, see the [section on error handling
 
 # libcudf API and Implementation
 
-## Streams
+## Streams {#streams}
 
 libcudf is in the process of adding support for asynchronous execution using
 CUDA streams. In order to facilitate the usage of streams, all new libcudf APIs
@@ -486,33 +486,37 @@ use only asynchronous versions of CUDA APIs with the stream parameter.
 
 In order to make the `detail` API callable from other libcudf functions, it should be exposed in a
 header placed in the `cudf/cpp/include/detail/` directory.
+The declaration is not necessary if no other libcudf functions call the `detail` function.
 
 For example:
 
 ```c++
 // cpp/include/cudf/header.hpp
-void external_function(...);
+void external_function(...,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 // cpp/include/cudf/detail/header.hpp
 namespace detail{
-void external_function(..., rmm::cuda_stream_view stream)
+void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 } // namespace detail
 
 // cudf/src/implementation.cpp
 namespace detail{
-    // Use the stream parameter in the detail implementation.
-    void external_function(..., rmm::cuda_stream_view stream){
-        // Implementation uses the stream with async APIs.
-        rmm::device_buffer buff(...,stream);
-        CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
-        kernel<<<..., stream>>>(...);
-        thrust::algorithm(rmm::exec_policy(stream), ...);
-    }
+// Use the stream parameter in the detail implementation.
+void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr){
+  // Implementation uses the stream with async APIs.
+  rmm::device_buffer buff(..., stream, mr);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
+  kernel<<<..., stream>>>(...);
+  thrust::algorithm(rmm::exec_policy(stream), ...);
+}
 } // namespace detail
 
-void external_function(...){
-    CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
-    detail::external_function(..., cudf::get_default_stream());
+void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
+  detail::external_function(..., stream, mr);
 }
 ```
 
@@ -703,28 +707,28 @@ The preferred style for how inputs are passed in and outputs are returned is the
     - `column_view const&`
   - Tables:
     - `table_view const&`
-    - Scalar:
-        - `scalar const&`
-    - Everything else:
-       - Trivial or inexpensively copied types
-          - Pass by value
-       - Non-trivial or expensive to copy types
-          - Pass by `const&`
+  - Scalar:
+    - `scalar const&`
+  - Everything else:
+    - Trivial or inexpensively copied types
+      - Pass by value
+    - Non-trivial or expensive to copy types
+      - Pass by `const&`
 - In/Outs
   - Columns:
     - `mutable_column_view&`
   - Tables:
     - `mutable_table_view&`
-    - Everything else:
-        - Pass by via raw pointer
+  - Everything else:
+    - Pass by via raw pointer
 - Outputs
   - Outputs should be *returned*, i.e., no output parameters
   - Columns:
     - `std::unique_ptr<column>`
   - Tables:
     - `std::unique_ptr<table>`
-    - Scalars:
-        - `std::unique_ptr<scalar>`
+  - Scalars:
+    - `std::unique_ptr<scalar>`
 
 
 ### Multiple Return Values
@@ -828,7 +832,7 @@ This iterator returns the validity of the underlying element (`true` or `false`)
 
 The proliferation of data types supported by libcudf can result in long compile times. One area
 where compile time was a problem is in types used to store indices, which can be any integer type.
-The "Indexalator", or index-normalizing iterator (`include/cudf/detail/indexalator.cuh`), can be
+The "indexalator", or index-normalizing iterator (`include/cudf/detail/indexalator.cuh`), can be
 used for index types (integers) without requiring a type-specific instance. It can be used for any
 iterator interface for reading an array of integer values of type `int8`, `int16`, `int32`,
 `int64`, `uint8`, `uint16`, `uint32`, or `uint64`. Reading specific elements always returns a
@@ -856,6 +860,41 @@ thrust::lower_bound(rmm::exec_policy(stream),
                     thrust::less<Element>());
 ```
 
+### Offset-normalizing iterators
+
+Like the [indexalator](#index-normalizing-iterators),
+the "offsetalator", or offset-normalizing iterator (`include/cudf/detail/offsetalator.cuh`), can be
+used for offset column types (`INT32` or `INT64` only) without requiring a type-specific instance.
+This is helpful when reading or building [strings columns](#strings-columns).
+The normalized type is `int64` which means an `input_offsetsalator` will return `int64` type values
+for both `INT32` and `INT64` offsets columns.
+Likewise, an `output_offselator` can accept `int64` type values to store into either an
+`INT32` or `INT64` output offsets column created appropriately.
+
+Use the `cudf::detail::offsetalator_factory` to create an appropriate input or output iterator from an offsets column_view.
+Example input iterator usage:
+
+```c++
+  // convert the sizes to offsets
+  auto [offsets, char_bytes] = cudf::strings::detail::make_offsets_child_column(
+    output_sizes.begin(), output_sizes.end(), stream, mr);
+  auto d_offsets =
+    cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
+  // use d_offsets to address the output row bytes
+```
+
+Example output iterator usage:
+
+```c++
+    // create offsets column as either INT32 or INT64 depending on the number of bytes
+    auto offsets_column = cudf::strings::detail::create_offsets_child_column(total_bytes,
+                                                                             offsets_count,
+                                                                             stream, mr);
+    auto d_offsets =
+      cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
+    // write appropriate offset values to d_offsets
+```
+
 ## Namespaces
 
 ### External
@@ -872,6 +911,10 @@ group a broad set of functions, further namespaces may be used. For example, the
 functions that are specific to columns of Strings. These functions reside in the `cudf::strings::`
 namespace. Similarly, functionality used exclusively for unit testing is in the `cudf::test::`
 namespace.
+
+The public function is expected to contain a call to `CUDF_FUNC_RANGE()` followed by a call to
+a `detail` function with same name and parameters as the public function.
+See the [Streams](#streams) section for an example of this pattern.
 
 ### Internal
 
@@ -1241,17 +1284,19 @@ This is related to [Arrow's "Variable-Size List" memory layout](https://arrow.ap
 
 Strings are represented as a column with a data device buffer and a child offsets column.
 The parent column's type is `STRING` and its data holds all the characters across all the strings packed together
-but its size represents the number of strings in the column, and its null mask represents the
-validity of each string. To summarize, the strings column children are:
+but its size represents the number of strings in the column and its null mask represents the
+validity of each string.
 
-1. A non-nullable column of [`size_type`](#cudfsize_type) elements that indicates the offset to the beginning of each
-   string in a dense data buffer of all characters.
-
-With this representation, `data[offsets[i]]` is the first character of string `i`, and the
-size of string `i` is given by `offsets[i+1] - offsets[i]`. The following image shows an example of
-this compound column representation of strings.
+The strings column contains a single, non-nullable child column
+of offset elements that indicates the byte position offset to the beginning of each
+string in the dense data buffer of all characters. With this representation, `data[offsets[i]]` is the
+first character of string `i`, and the size of string `i` is given by `offsets[i+1] - offsets[i]`.
+The following image shows an example of this compound column representation of strings.
 
 ![strings](strings.png)
+
+The type of the offsets column is either `INT32` or `INT64` depending on the number of bytes in the data buffer.
+See [`cudf::strings_view`](#cudfstrings_column_view-and-cudfstring_view) for more information on processing individual string rows.
 
 ## Structs columns
 
@@ -1295,7 +1340,7 @@ struct column's layout is as follows. (Note that null masks should be read from 
 }
 ```
 
-The last struct row (index 3) is not null, but has a null value in the INT32 field. Also, row 2 of
+The last struct row (index 3) is not null, but has a null value in the `INT32` field. Also, row 2 of
 the struct column is null, making its corresponding fields also null. Therefore, bit 2 is unset in
 the null masks of both struct fields.
 
@@ -1351,18 +1396,27 @@ libcudf provides view types for nested column types as well as for the data elem
 
 ### cudf::strings_column_view and cudf::string_view
 
-`cudf::strings_column_view` is a view of a strings column, like `cudf::column_view` is a view of
-any `cudf::column`. `cudf::string_view` is a view of a single string, and therefore
-`cudf::string_view` is the data type of a `cudf::column` of type `STRING` just like `int32_t` is the
-data type for a `cudf::column` of type [`size_type`](#cudfsize_type). As its name implies, this is a
-read-only object instance that points to device memory inside the strings column. It's lifespan is
-the same (or less) as the column it views.
+A `cudf::strings_column_view` wraps a strings column and contains a parent
+`cudf::column_view` as a view of the strings column and an offsets `cudf::column_view`
+which is a child of the parent.
+The parent view contains the offset, size, and validity mask for the strings column.
+The offsets view is non-nullable with `offset()==0` and its own size.
+Since the offset column type can be either `INT32` or `INT64` it is useful to use the
+offset normalizing iterators [offsetalator](#offset-normalizing-iterators) to access individual offset values.
+
+A `cudf::string_view` is a view of a single string and therefore
+is the data type of a `cudf::column` of type `STRING` just like `int32_t` is the
+data type for a `cudf::column` of type `INT32`. As its name implies, this is a
+read-only object instance that points to device memory inside the strings column.
+Its lifespan is the same (or less) as the column it views.
+An individual strings column row and a `cudf::string_view` is limited to [`size_type`](#cudfsize_type) bytes.
 
 Use the `column_device_view::element` method to access an individual row element. Like any other
 column, do not call `element()` on a row that is null.
 
 ```c++
-   cudf::column_device_view d_strings;
+   cudf::strings_column_view scv;
+   auto d_strings = cudf::column_device_view::create(scv.parent(), stream);
    ...
    if( d_strings.is_valid(row_index) ) {
       string_view d_str = d_strings.element<string_view>(row_index);
@@ -1370,27 +1424,27 @@ column, do not call `element()` on a row that is null.
    }
 ```
 
-A null string is not the same as an empty string. Use the `string_scalar` class if you need an
+A null string is not the same as an empty string. Use the `cudf::string_scalar` class if you need an
 instance of a class object to represent a null string.
 
-The `string_view` contains comparison operators `<,>,==,<=,>=` that can be used in many cudf
-functions like `sort` without string-specific code. The data for a `string_view` instance is
+The `cudf::string_view` contains comparison operators `<,>,==,<=,>=` that can be used in many cudf
+functions like `sort` without string-specific code. The data for a `cudf::string_view` instance is
 required to be [UTF-8](#utf-8) and all operators and methods expect this encoding. Unless documented
 otherwise, position and length parameters are specified in characters and not bytes. The class also
-includes a `string_view::const_iterator` which can be used to navigate through individual characters
+includes a `cudf::string_view::const_iterator` which can be used to navigate through individual characters
 within the string.
 
-`cudf::type_dispatcher` dispatches to the `string_view` data type when invoked on a `STRING` column.
+`cudf::type_dispatcher` dispatches to the `cudf::string_view` data type when invoked on a `STRING` column.
 
 #### UTF-8
 
 The libcudf strings column only supports UTF-8 encoding for strings data.
 [UTF-8](https://en.wikipedia.org/wiki/UTF-8) is a variable-length character encoding wherein each
 character can be 1-4 bytes. This means the length of a string is not the same as its size in bytes.
-For this reason, it is recommended to use the `string_view` class to access these characters for
+For this reason, it is recommended to use the `cudf::string_view` class to access these characters for
 most operations.
 
-The `string_view.cuh` header also includes some utility methods for reading and writing
+The `cudf/strings/detail/utf8.hpp` header also includes some utility methods for reading and writing
 (`to_char_utf8/from_char_utf8`) individual UTF-8 characters to/from byte arrays.
 
 ### cudf::lists_column_view and cudf::lists_view

@@ -275,10 +275,10 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
 }  // namespace detail
 
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
-  column_view const& col, rmm::device_async_resource_ref mr)
+  column_view const& col, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::minmax(col, cudf::get_default_stream(), mr);
+  return detail::minmax(col, stream, mr);
 }
 
 }  // namespace cudf
