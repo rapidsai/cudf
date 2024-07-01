@@ -27,11 +27,12 @@ from polars.polars import _expr_nodes as pl_expr
 import cudf._lib.pylibcudf as plc
 
 from cudf_polars.containers import Column, NamedColumn
-from cudf_polars.utils import sorting
+from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    import polars.polars as plrs
     import polars.type_aliases as pl_types
 
     from cudf_polars.containers import DataFrame
@@ -367,6 +368,29 @@ class Literal(Expr):
         """Evaluate this expression given a dataframe for context."""
         # datatype of pyarrow scalar is correct by construction.
         return Column(plc.Column.from_scalar(plc.interop.from_arrow(self.value), 1))
+
+
+class LiteralColumn(Expr):
+    __slots__ = ("value",)
+    _non_child = ("dtype", "value")
+    value: pa.Array[Any, Any]
+    children: tuple[()]
+
+    def __init__(self, dtype: plc.DataType, value: plrs.PySeries) -> None:
+        super().__init__(dtype)
+        data = value.to_arrow()
+        self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        # datatype of pyarrow array is correct by construction.
+        return Column(plc.interop.from_arrow(self.value))
 
 
 class Col(Expr):
@@ -1156,6 +1180,12 @@ class BinOp(Expr):
         super().__init__(dtype)
         self.op = op
         self.children = (left, right)
+        if (
+            op in (plc.binaryop.BinaryOperator.ADD, plc.binaryop.BinaryOperator.SUB)
+            and ({left.dtype.id(), right.dtype.id()}.issubset(dtypes.TIMELIKE_TYPES))
+            and not dtypes.have_compatible_resolution(left.dtype.id(), right.dtype.id())
+        ):
+            raise NotImplementedError("Casting rules for timelike types")
 
     _MAPPING: ClassVar[dict[pl_expr.Operator, plc.binaryop.BinaryOperator]] = {
         pl_expr.Operator.Eq: plc.binaryop.BinaryOperator.EQUAL,

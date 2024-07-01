@@ -927,7 +927,7 @@ class Frame(BinaryOperand, Scannable):
                 # of column is 0 (i.e., empty) then we will have an
                 # int8 column in result._data[name] returned by libcudf,
                 # which needs to be type-casted to 'category' dtype.
-                result[name] = result[name].as_categorical_column("category")
+                result[name] = result[name].astype("category")
             elif (
                 pandas_dtypes.get(name) == "empty"
                 and np_dtypes.get(name) == "object"
@@ -936,7 +936,7 @@ class Frame(BinaryOperand, Scannable):
                 # is specified as 'empty' and np_dtypes as 'object',
                 # hence handling this special case to type-cast the empty
                 # float column to str column.
-                result[name] = result[name].as_string_column(cudf.dtype("str"))
+                result[name] = result[name].astype(cudf.dtype("str"))
             elif name in data.column_names and isinstance(
                 data[name].type,
                 (

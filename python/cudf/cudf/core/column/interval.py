@@ -4,7 +4,7 @@ import pyarrow as pa
 
 import cudf
 from cudf.core.column import StructColumn
-from cudf.core.dtypes import CategoricalDtype, IntervalDtype
+from cudf.core.dtypes import IntervalDtype
 
 
 class IntervalColumn(StructColumn):
@@ -87,20 +87,16 @@ class IntervalColumn(StructColumn):
 
     def as_interval_column(self, dtype):
         if isinstance(dtype, IntervalDtype):
-            if isinstance(self.dtype, CategoricalDtype):
-                new_struct = self._get_decategorized_column()
-                return IntervalColumn.from_struct_column(new_struct)
-            else:
-                return IntervalColumn(
-                    size=self.size,
-                    dtype=dtype,
-                    mask=self.mask,
-                    offset=self.offset,
-                    null_count=self.null_count,
-                    children=tuple(
-                        child.astype(dtype.subtype) for child in self.children
-                    ),
-                )
+            return IntervalColumn(
+                size=self.size,
+                dtype=dtype,
+                mask=self.mask,
+                offset=self.offset,
+                null_count=self.null_count,
+                children=tuple(
+                    child.astype(dtype.subtype) for child in self.children
+                ),
+            )
         else:
             raise ValueError("dtype must be IntervalDtype")
 
