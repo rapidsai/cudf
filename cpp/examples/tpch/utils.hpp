@@ -34,46 +34,6 @@
 
 const std::string BASE_DATASET_DIR = "/home/jayjeetc/tpch_sf1/";
 
-std::unique_ptr<cudf::table> join_and_gather(
-    cudf::table_view left_input,
-    cudf::table_view right_input,
-    std::vector<cudf::size_type> left_on,
-    std::vector<cudf::size_type> right_on,
-    cudf::null_equality compare_nulls,
-    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) {
-
-    auto oob_policy = cudf::out_of_bounds_policy::DONT_CHECK;
-    auto left_selected  = left_input.select(left_on);
-    auto right_selected = right_input.select(right_on);
-    auto const [left_join_indices, right_join_indices] = 
-        cudf::inner_join(left_selected, right_selected, compare_nulls, mr);
-
-    auto left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
-    auto right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
-
-    auto left_indices_col  = cudf::column_view{left_indices_span};
-    auto right_indices_col = cudf::column_view{right_indices_span};
-
-    auto left_result  = cudf::gather(left_input, left_indices_col, oob_policy);
-    auto right_result = cudf::gather(right_input, right_indices_col, oob_policy);
-
-    auto joined_cols = left_result->release();
-    auto right_cols  = right_result->release();
-    joined_cols.insert(joined_cols.end(),
-                        std::make_move_iterator(right_cols.begin()),
-                        std::make_move_iterator(right_cols.end()));
-    return std::make_unique<cudf::table>(std::move(joined_cols));
-}
-
-template <typename T>
-std::vector<T> concat(const std::vector<T>& lhs, const std::vector<T>& rhs) {
-    std::vector<T> result;
-    result.reserve(lhs.size() + rhs.size());
-    std::copy(lhs.begin(), lhs.end(), std::back_inserter(result));
-    std::copy(rhs.begin(), rhs.end(), std::back_inserter(result));
-    return result;
-}
-
 class table_with_cols {
     public:
         table_with_cols(
@@ -133,6 +93,46 @@ class table_with_cols {
         std::vector<std::string> col_names;
 };
 
+template <typename T>
+std::vector<T> concat(const std::vector<T>& lhs, const std::vector<T>& rhs) {
+    std::vector<T> result;
+    result.reserve(lhs.size() + rhs.size());
+    std::copy(lhs.begin(), lhs.end(), std::back_inserter(result));
+    std::copy(rhs.begin(), rhs.end(), std::back_inserter(result));
+    return result;
+}
+
+std::unique_ptr<cudf::table> join_and_gather(
+    cudf::table_view left_input,
+    cudf::table_view right_input,
+    std::vector<cudf::size_type> left_on,
+    std::vector<cudf::size_type> right_on,
+    cudf::null_equality compare_nulls,
+    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) {
+
+    auto oob_policy = cudf::out_of_bounds_policy::DONT_CHECK;
+    auto left_selected  = left_input.select(left_on);
+    auto right_selected = right_input.select(right_on);
+    auto const [left_join_indices, right_join_indices] = 
+        cudf::inner_join(left_selected, right_selected, compare_nulls, mr);
+
+    auto left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
+    auto right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
+
+    auto left_indices_col  = cudf::column_view{left_indices_span};
+    auto right_indices_col = cudf::column_view{right_indices_span};
+
+    auto left_result  = cudf::gather(left_input, left_indices_col, oob_policy);
+    auto right_result = cudf::gather(right_input, right_indices_col, oob_policy);
+
+    auto joined_cols = left_result->release();
+    auto right_cols  = right_result->release();
+    joined_cols.insert(joined_cols.end(),
+                        std::make_move_iterator(right_cols.begin()),
+                        std::make_move_iterator(right_cols.end()));
+    return std::make_unique<cudf::table>(std::move(joined_cols));
+}
+
 std::unique_ptr<table_with_cols> apply_inner_join(
   std::unique_ptr<table_with_cols>& left_input,
   std::unique_ptr<table_with_cols>& right_input,
@@ -153,27 +153,6 @@ std::unique_ptr<table_with_cols> apply_inner_join(
     );
     return std::make_unique<table_with_cols>(std::move(table), 
         concat(left_input->columns(), right_input->columns()));
-}
-
-std::unique_ptr<table_with_cols> read_parquet(
-    std::string filename, std::vector<std::string> columns = {}, std::unique_ptr<cudf::ast::operation> predicate = nullptr) {
-    auto source = cudf::io::source_info(filename);
-    auto builder = cudf::io::parquet_reader_options_builder(source);    
-    if (columns.size()) {
-        builder.columns(columns);
-    }
-    if (predicate) {
-        builder.filter(*predicate);
-    }
-    auto options = builder.build();
-    auto table_with_metadata = cudf::io::read_parquet(options);
-    auto schema_info = table_with_metadata.metadata.schema_info;
-    std::vector<std::string> column_names;
-    for (auto &col_info : schema_info) {
-        column_names.push_back(col_info.name);
-    }
-    return std::make_unique<table_with_cols>(
-        std::move(table_with_metadata.tbl), column_names);
 }
 
 std::unique_ptr<table_with_cols> apply_filter(
@@ -234,23 +213,6 @@ std::unique_ptr<table_with_cols> apply_groupby(
         std::move(result_table), result_column_names);
 }
 
-std::tm make_tm(int year, int month, int day) {
-    std::tm tm = {0};
-    tm.tm_year = year - 1900;
-    tm.tm_mon = month - 1;
-    tm.tm_mday = day;
-    return tm;
-}
-
-int32_t days_since_epoch(int year, int month, int day) {
-    std::tm tm = make_tm(year, month, day);
-    std::tm epoch = make_tm(1970, 1, 1);
-    std::time_t time = std::mktime(&tm);
-    std::time_t epoch_time = std::mktime(&epoch);
-    double diff = std::difftime(time, epoch_time) / (60*60*24);
-    return static_cast<int32_t>(diff);
-}
-
 std::unique_ptr<table_with_cols> apply_orderby(
     std::unique_ptr<table_with_cols>& table, 
     std::vector<std::string> sort_keys,
@@ -281,4 +243,42 @@ std::unique_ptr<table_with_cols> apply_reduction(
     return std::make_unique<table_with_cols>(
         std::move(result_table), col_names
     );
+}
+
+std::unique_ptr<table_with_cols> read_parquet(
+    std::string filename, std::vector<std::string> columns = {}, std::unique_ptr<cudf::ast::operation> predicate = nullptr) {
+    auto source = cudf::io::source_info(filename);
+    auto builder = cudf::io::parquet_reader_options_builder(source);    
+    if (columns.size()) {
+        builder.columns(columns);
+    }
+    if (predicate) {
+        builder.filter(*predicate);
+    }
+    auto options = builder.build();
+    auto table_with_metadata = cudf::io::read_parquet(options);
+    auto schema_info = table_with_metadata.metadata.schema_info;
+    std::vector<std::string> column_names;
+    for (auto &col_info : schema_info) {
+        column_names.push_back(col_info.name);
+    }
+    return std::make_unique<table_with_cols>(
+        std::move(table_with_metadata.tbl), column_names);
+}
+
+std::tm make_tm(int year, int month, int day) {
+    std::tm tm = {0};
+    tm.tm_year = year - 1900;
+    tm.tm_mon = month - 1;
+    tm.tm_mday = day;
+    return tm;
+}
+
+int32_t days_since_epoch(int year, int month, int day) {
+    std::tm tm = make_tm(year, month, day);
+    std::tm epoch = make_tm(1970, 1, 1);
+    std::time_t time = std::mktime(&tm);
+    std::time_t epoch_time = std::mktime(&epoch);
+    double diff = std::difftime(time, epoch_time) / (60*60*24);
+    return static_cast<int32_t>(diff);
 }
