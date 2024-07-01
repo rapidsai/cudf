@@ -79,17 +79,7 @@ class table_view_base {
    *
    * @param cols The vector of columns to construct the table from
    */
-  explicit table_view_base(std::vector<ColumnView> const& cols) : _columns{cols}
-  {
-    if (num_columns() > 0) {
-      std::for_each(_columns.begin(), _columns.end(), [this](ColumnView col) {
-        CUDF_EXPECTS(col.size() == _columns.front().size(), "Column size mismatch.");
-      });
-      _num_rows = _columns.front().size();
-    } else {
-      _num_rows = 0;
-    }
-  }
+  explicit table_view_base(std::vector<ColumnView> const& cols);
 
   /**
    * @brief Returns an iterator to the first view in the `table`.
