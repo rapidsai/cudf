@@ -149,7 +149,7 @@ repos:
       - id: ruff-format
         files: python/.*$
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v0.0.3
+    rev: v0.2.0
     hooks:
       - id: verify-copyright
         exclude: |
@@ -158,6 +158,7 @@ repos:
             cpp/src/io/parquet/ipc/Message_generated[.]h$|
             cpp/src/io/parquet/ipc/Schema_generated[.]h$
           )
+      - id: verify-alpha-spec
 
 default_language_version:
       python: python3
