@@ -719,7 +719,6 @@ class StringFunction(Expr):
         elif self.name == pl_expr.StringFunction.Slice:
             child, expr_offset, expr_length = self.children
             column = child.evaluate(df, context=context, mapping=mapping)
-            # Case 1 - both are literals
             if isinstance(expr_offset, Literal) and isinstance(expr_length, Literal):
                 # libcudf slices via [start,stop).
                 # polars slices with offset + length where start == offset
@@ -730,8 +729,8 @@ class StringFunction(Expr):
                 if length == 0:
                     stop = start
                 else:
-                    # -1 is not inclusive of the end element in libcudf
-                    # However a null scalar scans to the end
+                    # No length indicates a scan to the end
+                    # The libcudf equivalent is a null stop
                     stop = start + length if length else None
                 return Column(
                     plc.strings.slice.slice_strings(
