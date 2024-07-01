@@ -214,10 +214,14 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
 cpdef Column count_elements(Column input):
     """Count the number of rows in each
     list element in the given lists column.
+
+    For details, see :cpp:func:`count_elements`.
+
     Parameters
     ----------
     input : Column
         The input column
+
     Returns
     -------
     Column
