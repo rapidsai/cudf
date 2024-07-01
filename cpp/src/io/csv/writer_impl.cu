@@ -25,6 +25,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/fill.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/csv.hpp>
@@ -372,15 +373,26 @@ void write_chunked(data_sink* out_sink,
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
   cudf::string_scalar newline{options.get_line_terminator(), true, stream};
-  auto p_str_col_w_nl = cudf::strings::detail::join_strings(str_column_view,
-                                                            newline,
-                                                            string_scalar{"", false, stream},
-                                                            stream,
-                                                            rmm::mr::get_current_device_resource());
-  strings_column_view strings_column{p_str_col_w_nl->view()};
 
-  auto total_num_bytes      = strings_column.chars_size(stream);
-  char const* ptr_all_bytes = strings_column.chars_begin(stream);
+  // use strings concatenate to build the final CSV output in device memory
+  auto contents_w_nl = [&] {
+    auto nl_col = cudf::make_column_from_scalar(newline, str_column_view.size(), stream);
+    // convert the last element into an empty string but resetting the last offset value
+    auto& offsets     = nl_col->child(strings_column_view::offsets_column_index);
+    auto offsets_view = offsets.mutable_view();
+    cudf::fill_in_place(offsets_view,
+                        offsets.size() - 1,  // set the last element with
+                        offsets.size(),      // the value from 2nd to last element
+                        *cudf::detail::get_element(offsets.view(), offsets.size() - 2, stream, mr),
+                        stream);
+    auto const nl_tbl    = cudf::table_view({str_column_view.parent(), nl_col->view()});
+    auto const empty_str = string_scalar("", true, stream);
+    return cudf::strings::detail::concatenate(
+             nl_tbl, empty_str, empty_str, strings::separator_on_nulls::NO, stream, mr)
+      ->release();
+  }();
+  auto const total_num_bytes = contents_w_nl.data->size();
+  auto const ptr_all_bytes   = static_cast<char const*>(contents_w_nl.data->data());
 
   if (out_sink->is_device_write_preferred(total_num_bytes)) {
     // Direct write from device memory
