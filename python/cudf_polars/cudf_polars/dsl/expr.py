@@ -960,6 +960,13 @@ class Cast(Expr):
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
         super().__init__(dtype)
         self.children = (value,)
+        if (
+            self.dtype.id() == plc.TypeId.STRING
+            or value.dtype.id() == plc.TypeId.STRING
+        ):
+            raise NotImplementedError(
+                "Need to implement cast to/from string separately."
+            )
 
     def do_evaluate(
         self,
