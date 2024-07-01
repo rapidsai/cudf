@@ -149,11 +149,25 @@ def _test_binaryop_inner(test, columns, pyop, cuop):
     rhs = columns[binop_rhs_ty]
     pylibcudf_outty = dtype_to_pylibcudf_type(binop_out_ty)
     if not fail:
-        expect_data = pyop(
-            plc.interop.to_arrow(lhs).to_numpy(),
-            plc.interop.to_arrow(rhs).to_numpy(),
-        ).astype(binop_out_ty)
-        expect = pa.array(expect_data)
+
+        def op(x, y, dtype):
+            result = pyop(x, y)
+            if result is None:
+                return result
+            else:
+                if hasattr(result, "to_numpy"):
+                    return result.to_numpy().astype(dtype)
+                else:
+                    return np.dtype(dtype).type(result).astype(dtype)
+
+        expect_data = [
+            op(x, y, binop_out_ty)
+            for x, y in zip(
+                plc.interop.to_arrow(lhs).to_pylist(),
+                plc.interop.to_arrow(rhs).to_pylist(),
+            )
+        ]
+        expect = pa.array(expect_data, type=pa.from_numpy_dtype(binop_out_ty))
         got = plc.binaryop.binary_operation(lhs, rhs, cuop, pylibcudf_outty)
         assert_column_eq(got, expect)
     else:
@@ -488,26 +502,46 @@ def invalid_binary_tests(binop_lhs_ty, binop_rhs_ty, binop_out_ty):
 
 
 def test_add(add_tests, columns):
+    def add(x, y):
+        if x is None or y is None:
+            return None
+        return x + y
+
     _test_binaryop_inner(
-        add_tests, columns, np.add, plc.binaryop.BinaryOperator.ADD
+        add_tests, columns, add, plc.binaryop.BinaryOperator.ADD
     )
 
 
 def test_sub(sub_tests, columns):
+    def sub(x, y):
+        if x is None or y is None:
+            return None
+        return x - y
+
     _test_binaryop_inner(
-        sub_tests, columns, np.subtract, plc.binaryop.BinaryOperator.SUB
+        sub_tests, columns, sub, plc.binaryop.BinaryOperator.SUB
     )
 
 
 def test_mul(mul_tests, columns):
+    def mul(x, y):
+        if x is None or y is None:
+            return None
+        return x * y
+
     _test_binaryop_inner(
-        mul_tests, columns, np.multiply, plc.binaryop.BinaryOperator.MUL
+        mul_tests, columns, mul, plc.binaryop.BinaryOperator.MUL
     )
 
 
 def test_div(div_tests, columns):
+    def div(x, y):
+        if x is None or y is None:
+            return None
+        return x / y
+
     _test_binaryop_inner(
-        div_tests, columns, np.divide, plc.binaryop.BinaryOperator.DIV
+        div_tests, columns, div, plc.binaryop.BinaryOperator.DIV
     )
 
 

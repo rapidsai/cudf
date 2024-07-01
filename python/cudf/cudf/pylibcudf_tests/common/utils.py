@@ -49,7 +49,6 @@ def assert_column_eq(
         lhs = lhs.combine_chunks()
     if isinstance(rhs, pa.ChunkedArray):
         rhs = rhs.combine_chunks()
-
     assert lhs.equals(rhs)
 
 
