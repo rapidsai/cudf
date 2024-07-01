@@ -79,6 +79,10 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         KENDALL
         SPEARMAN
 
+    cpdef enum class ewm_history(int32_t):
+        INFINITE
+        FINITE
+
     cpdef enum class rank_method(int32_t):
         FIRST
         AVERAGE
@@ -142,6 +146,10 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         udf_type type,
         string user_defined_aggregator,
         data_type output_type) except +
+
+    cdef unique_ptr[T] make_ewma_aggregation[T](
+        double com, ewm_history adjust
+    ) except +
 
     cdef unique_ptr[T] make_correlation_aggregation[T](
         correlation_type type, size_type min_periods) except +

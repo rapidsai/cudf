@@ -9,8 +9,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing import _utils as utils
-from cudf.testing._utils import assert_eq
+from cudf.testing import _utils as utils, assert_eq
 
 
 @pytest.mark.parametrize(

@@ -17,11 +17,11 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.errors import MixedTypeError
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     SERIES_OR_INDEX_NAMES,
     TIMEDELTA_TYPES,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
     gen_rand,
@@ -1052,6 +1052,18 @@ def test_fillna_with_nan(data, nan_as_null, fill_value):
     actual = gs.fillna(fill_value)
 
     assert_eq(expected, actual)
+
+
+def test_fillna_categorical_with_non_categorical_raises():
+    ser = cudf.Series([1, None], dtype="category")
+    with pytest.raises(TypeError):
+        ser.fillna(cudf.Series([1, 2]))
+
+
+def test_fillna_categorical_with_different_categories_raises():
+    ser = cudf.Series([1, None], dtype="category")
+    with pytest.raises(TypeError):
+        ser.fillna(cudf.Series([1, 2]), dtype="category")
 
 
 def test_series_mask_mixed_dtypes_error():
@@ -2861,3 +2873,42 @@ def test_nunique_all_null(dropna):
     result = pd_ser.nunique(dropna=dropna)
     expected = cudf_ser.nunique(dropna=dropna)
     assert result == expected
+
+
+@pytest.mark.parametrize(
+    "type1",
+    [
+        "category",
+        "interval[int64, right]",
+        "int64",
+        "float64",
+        "str",
+        "datetime64[ns]",
+        "timedelta64[ns]",
+    ],
+)
+@pytest.mark.parametrize(
+    "type2",
+    [
+        "category",
+        "interval[int64, right]",
+        "int64",
+        "float64",
+        "str",
+        "datetime64[ns]",
+        "timedelta64[ns]",
+    ],
+)
+@pytest.mark.parametrize(
+    "as_dtype", [lambda x: x, cudf.dtype], ids=["string", "object"]
+)
+@pytest.mark.parametrize("copy", [True, False])
+def test_empty_astype_always_castable(type1, type2, as_dtype, copy):
+    ser = cudf.Series([], dtype=as_dtype(type1))
+    result = ser.astype(as_dtype(type2), copy=copy)
+    expected = cudf.Series([], dtype=as_dtype(type2))
+    assert_eq(result, expected)
+    if not copy and cudf.dtype(type1) == cudf.dtype(type2):
+        assert ser._column is result._column
+    else:
+        assert ser._column is not result._column

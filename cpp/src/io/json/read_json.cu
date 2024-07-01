@@ -18,7 +18,9 @@
 #include "io/json/nested_json.hpp"
 #include "read_json.hpp"
 
+#include <cudf/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/detail/json.hpp>
@@ -76,7 +78,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   auto constexpr num_delimiter_chars = 1;
 
   if (compression == compression_type::NONE) {
-    std::vector<size_type> delimiter_map{};
+    std::vector<size_t> delimiter_map{};
     std::vector<size_t> prefsum_source_sizes(sources.size());
     std::vector<std::unique_ptr<datasource::buffer>> h_buffers;
     delimiter_map.reserve(sources.size());
@@ -84,7 +86,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     std::transform_inclusive_scan(sources.begin(),
                                   sources.end(),
                                   prefsum_source_sizes.begin(),
-                                  std::plus<int>{},
+                                  std::plus<size_t>{},
                                   [](std::unique_ptr<datasource> const& s) { return s->size(); });
     auto upper =
       std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
@@ -259,25 +261,12 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
     readbufspan.size() - first_delim_pos - shift_for_nonzero_offset);
 }
 
-table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
-                              json_reader_options const& reader_opts,
-                              rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
+                               json_reader_options const& reader_opts,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-
-  if (reader_opts.get_byte_range_offset() != 0 or reader_opts.get_byte_range_size() != 0) {
-    CUDF_EXPECTS(reader_opts.is_enabled_lines(),
-                 "Specifying a byte range is supported only for JSON Lines");
-  }
-
-  if (sources.size() > 1) {
-    CUDF_EXPECTS(reader_opts.get_compression() == compression_type::NONE,
-                 "Multiple compressed inputs are not supported");
-    CUDF_EXPECTS(reader_opts.is_enabled_lines(),
-                 "Multiple inputs are supported only for JSON Lines format");
-  }
-
   datasource::owning_buffer<rmm::device_uvector<char>> bufview =
     get_record_range_raw_input(sources, reader_opts, stream);
 
@@ -297,6 +286,106 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     cudf::device_span<char const>(reinterpret_cast<char const*>(bufview.data()), bufview.size());
   stream.synchronize();
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
+}
+
+table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
+                              json_reader_options const& reader_opts,
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  if (reader_opts.get_byte_range_offset() != 0 or reader_opts.get_byte_range_size() != 0) {
+    CUDF_EXPECTS(reader_opts.is_enabled_lines(),
+                 "Specifying a byte range is supported only for JSON Lines");
+  }
+
+  if (sources.size() > 1) {
+    CUDF_EXPECTS(reader_opts.get_compression() == compression_type::NONE,
+                 "Multiple compressed inputs are not supported");
+    CUDF_EXPECTS(reader_opts.is_enabled_lines(),
+                 "Multiple inputs are supported only for JSON Lines format");
+  }
+
+  std::for_each(sources.begin(), sources.end(), [](auto const& source) {
+    CUDF_EXPECTS(source->size() < std::numeric_limits<int>::max(),
+                 "The size of each source file must be less than INT_MAX bytes");
+  });
+
+  constexpr size_t batch_size_ub = std::numeric_limits<int>::max();
+  size_t const chunk_offset      = reader_opts.get_byte_range_offset();
+  size_t chunk_size              = reader_opts.get_byte_range_size();
+  chunk_size                     = !chunk_size ? sources_size(sources, 0, 0) : chunk_size;
+
+  // Identify the position of starting source file from which to begin batching based on
+  // byte range offset. If the offset is larger than the sum of all source
+  // sizes, then start_source is total number of source files i.e. no file is read
+  size_t const start_source = [&]() {
+    size_t sum = 0;
+    for (size_t src_idx = 0; src_idx < sources.size(); ++src_idx) {
+      if (sum + sources[src_idx]->size() > chunk_offset) return src_idx;
+      sum += sources[src_idx]->size();
+    }
+    return sources.size();
+  }();
+
+  // Construct batches of source files, with starting position of batches indicated by
+  // batch_positions. The size of each batch i.e. the sum of sizes of the source files in the batch
+  // is capped at INT_MAX bytes.
+  size_t cur_size = 0;
+  std::vector<size_t> batch_positions;
+  std::vector<size_t> batch_sizes;
+  batch_positions.push_back(0);
+  for (size_t i = start_source; i < sources.size(); i++) {
+    cur_size += sources[i]->size();
+    if (cur_size >= batch_size_ub) {
+      batch_positions.push_back(i);
+      batch_sizes.push_back(cur_size - sources[i]->size());
+      cur_size = sources[i]->size();
+    }
+  }
+  batch_positions.push_back(sources.size());
+  batch_sizes.push_back(cur_size);
+
+  // If there is a single batch, then we can directly return the table without the
+  // unnecessary concatenate
+  if (batch_sizes.size() == 1) return read_batch(sources, reader_opts, stream, mr);
+
+  std::vector<cudf::io::table_with_metadata> partial_tables;
+  json_reader_options batched_reader_opts{reader_opts};
+
+  // Dispatch individual batches to read_batch and push the resulting table into
+  // partial_tables array. Note that the reader options need to be updated for each
+  // batch to adjust byte range offset and byte range size.
+  for (size_t i = 0; i < batch_sizes.size(); i++) {
+    batched_reader_opts.set_byte_range_size(std::min(batch_sizes[i], chunk_size));
+    partial_tables.emplace_back(read_batch(
+      host_span<std::unique_ptr<datasource>>(sources.begin() + batch_positions[i],
+                                             batch_positions[i + 1] - batch_positions[i]),
+      batched_reader_opts,
+      stream,
+      rmm::mr::get_current_device_resource()));
+    if (chunk_size <= batch_sizes[i]) break;
+    chunk_size -= batch_sizes[i];
+    batched_reader_opts.set_byte_range_offset(0);
+  }
+
+  auto expects_schema_equality =
+    std::all_of(partial_tables.begin() + 1,
+                partial_tables.end(),
+                [&gt = partial_tables[0].metadata.schema_info](auto& ptbl) {
+                  return ptbl.metadata.schema_info == gt;
+                });
+  CUDF_EXPECTS(expects_schema_equality,
+               "Mismatch in JSON schema across batches in multi-source multi-batch reading");
+
+  auto partial_table_views = std::vector<cudf::table_view>(partial_tables.size());
+  std::transform(partial_tables.begin(),
+                 partial_tables.end(),
+                 partial_table_views.begin(),
+                 [](auto const& table) { return table.tbl->view(); });
+  return table_with_metadata{cudf::concatenate(partial_table_views, stream, mr),
+                             {partial_tables[0].metadata.schema_info}};
 }
 
 }  // namespace cudf::io::json::detail
