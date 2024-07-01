@@ -2,11 +2,8 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cython.operator import dereference
-
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.column.column_factories cimport (
-    make_column_from_scalar as cpp_make_column_from_scalar,
     make_duration_column as cpp_make_duration_column,
     make_empty_column as cpp_make_empty_column,
     make_fixed_point_column as cpp_make_fixed_point_column,
@@ -16,7 +13,6 @@ from cudf._lib.pylibcudf.libcudf.column.column_factories cimport (
 )
 from cudf._lib.pylibcudf.libcudf.types cimport mask_state, size_type
 
-from .scalar cimport Scalar
 from .types cimport DataType, type_id
 
 from .types import MaskState, TypeId
@@ -206,15 +202,4 @@ cpdef Column make_fixed_width_column(
             )
         )
 
-    return Column.from_libcudf(move(result))
-
-cpdef Column make_column_from_scalar(Scalar input, size_type size):
-    cdef unique_ptr[column] result
-    with nogil:
-        result = move(
-            cpp_make_column_from_scalar(
-                dereference(input.c_obj),
-                size
-            )
-        )
     return Column.from_libcudf(move(result))
