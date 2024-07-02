@@ -532,6 +532,23 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
   }
 }
 
+TEST_F(StringsReplaceTest, EmptyTarget)
+{
+  auto const input = cudf::test::strings_column_wrapper({"hello", "world", "", "accénted"});
+  auto const sv    = cudf::strings_column_view(input);
+
+  auto const targets = cudf::test::strings_column_wrapper({"e", "", "d"});
+  auto const tv      = cudf::strings_column_view(targets);
+
+  auto const repls = cudf::test::strings_column_wrapper({"E", "_", "D"});
+  auto const rv    = cudf::strings_column_view(repls);
+
+  // empty target should be ignored
+  auto results  = cudf::strings::replace_multiple(sv, tv, rv);
+  auto expected = cudf::test::strings_column_wrapper({"hEllo", "worlD", "", "accéntED"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+}
+
 TEST_F(StringsReplaceTest, EmptyStringsColumn)
 {
   auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
