@@ -1850,13 +1850,6 @@ def get_reader_filepath_or_buffer(
 ):
     """{docstring}"""
 
-    if use_python_file_object:
-        warnings.warn(
-            "The 'use_python_file_object' parameter is deprecated and "
-            "will be removed in a future version of cudf.",
-            FutureWarning,
-        )
-
     path_or_data = stringify_pathlike(path_or_data)
 
     if isinstance(path_or_data, str):
