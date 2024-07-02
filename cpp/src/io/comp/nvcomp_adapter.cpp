@@ -13,11 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include "nvcomp_adapter.hpp"
 
-#include "io/utilities/config_utils.hpp"
 #include "nvcomp_adapter.cuh"
 
+#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/io/config_utils.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <nvcomp/lz4.h>
@@ -472,8 +474,8 @@ feature_status_parameters::feature_status_parameters()
   : lib_major_version{NVCOMP_MAJOR_VERSION},
     lib_minor_version{NVCOMP_MINOR_VERSION},
     lib_patch_version{NVCOMP_PATCH_VERSION},
-    are_all_integrations_enabled{detail::nvcomp_integration::is_all_enabled()},
-    are_stable_integrations_enabled{detail::nvcomp_integration::is_stable_enabled()}
+    are_all_integrations_enabled{nvcomp_integration::is_all_enabled()},
+    are_stable_integrations_enabled{nvcomp_integration::is_stable_enabled()}
 {
   int device;
   CUDF_CUDA_TRY(cudaGetDevice(&device));

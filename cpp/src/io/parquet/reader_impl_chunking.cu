@@ -16,7 +16,6 @@
 
 #include "compact_protocol_reader.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
-#include "io/utilities/config_utils.hpp"
 #include "io/utilities/time_utils.cuh"
 #include "reader_impl.hpp"
 #include "reader_impl_chunking.hpp"
@@ -25,6 +24,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/config_utils.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -862,7 +862,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
         gpuinflate(d_comp_in, d_comp_out, d_comp_res_view, gzip_header_included::YES, stream);
         break;
       case SNAPPY:
-        if (cudf::io::detail::nvcomp_integration::is_stable_enabled()) {
+        if (cudf::io::nvcomp_integration::is_stable_enabled()) {
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                      d_comp_in,
                                      d_comp_out,
@@ -1071,7 +1071,7 @@ struct get_decomp_scratch {
       case BROTLI: return get_gpu_debrotli_scratch_size(di.num_pages);
 
       case SNAPPY:
-        if (cudf::io::detail::nvcomp_integration::is_stable_enabled()) {
+        if (cudf::io::nvcomp_integration::is_stable_enabled()) {
           return cudf::io::nvcomp::batched_decompress_temp_size(
             cudf::io::nvcomp::compression_type::SNAPPY,
             di.num_pages,
