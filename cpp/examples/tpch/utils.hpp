@@ -33,6 +33,17 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 
+#include <rmm/cuda_device.hpp>
+#include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
+
+
+void use_memory_pool() {
+    rmm::mr::cuda_memory_resource cuda_mr{};
+    rmm::mr::pool_memory_resource mr{&cuda_mr, rmm::percent_of_free_device_memory(100)};
+    rmm::mr::set_current_device_resource(&mr);
+}
 
 /**
  * @brief A class to represent a table with column names attached
