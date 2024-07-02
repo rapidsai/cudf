@@ -31,12 +31,8 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/column/column_factories.hpp>
-
 #include <cudf/detail/nvtx/ranges.hpp>
 
-
-// The base directory for the TPC-H dataset
-const std::string BASE_DATASET_DIR = "/home/jayjeetc/tpch_sf1/";
 
 /**
  * @brief A class to represent a table with column names attached
@@ -376,4 +372,11 @@ int32_t days_since_epoch(int year, int month, int day) {
     std::time_t epoch_time = std::mktime(&epoch);
     double diff = std::difftime(time, epoch_time) / (60*60*24);
     return static_cast<int32_t>(diff);
+}
+
+void check_args(int argc, char const** argv) {
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <base_dataset_path>" << std::endl;
+        exit(1);
+    }
 }

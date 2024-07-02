@@ -79,8 +79,9 @@ std::unique_ptr<cudf::column> calc_amount(std::unique_ptr<table_with_cols>& tabl
     return amount;
 }
 
-int main() {
-    std::string dataset_dir = BASE_DATASET_DIR;
+int main(int argc, char const** argv) {
+    check_args(argc, argv);
+    std::string dataset_dir = argv[1];
 
     // 1. Read out the table from parquet files
     auto lineitem = read_parquet(dataset_dir + "lineitem/part-0.parquet", {"l_suppkey", "l_partkey", "l_orderkey", "l_extendedprice", "l_discount", "l_quantity"});

@@ -46,8 +46,9 @@ std::unique_ptr<cudf::column> calc_revenue(std::unique_ptr<table_with_cols>& tab
     return extendedprice_mul_discount;
 }
 
-int main() {
-    std::string dataset_dir = BASE_DATASET_DIR;
+int main(int argc, char const** argv) {
+    check_args(argc, argv);
+    std::string dataset_dir = argv[1];
 
     // 1. Read out the `lineitem` table from parquet file
     auto shipdate_ref = cudf::ast::column_reference(2);

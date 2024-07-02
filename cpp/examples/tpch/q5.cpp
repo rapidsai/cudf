@@ -65,9 +65,10 @@ std::unique_ptr<cudf::column> calc_revenue(std::unique_ptr<table_with_cols>& tab
     return disc_price;
 }
 
-int main() {
-    std::string dataset_dir = BASE_DATASET_DIR;
-    
+int main(int argc, char const** argv) {
+    check_args(argc, argv);
+    std::string dataset_dir = argv[1];
+
     // 1. Read out the tables from parquet files
     auto customer = read_parquet(dataset_dir + "customer/part-0.parquet", {"c_custkey", "c_nationkey"});
     auto orders = read_parquet(dataset_dir + "orders/part-0.parquet", {"o_custkey", "o_orderkey", "o_orderdate"});
