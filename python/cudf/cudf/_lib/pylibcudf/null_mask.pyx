@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport make_unique
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 
@@ -14,6 +14,10 @@ from cudf._lib.pylibcudf.libcudf.types import \
 
 from .column cimport Column
 from .table cimport Table
+
+
+cdef DeviceBuffer buffer_to_python(device_buffer buf):
+    return DeviceBuffer.c_from_unique_ptr(make_unique[device_buffer](move(buf)))
 
 
 cpdef DeviceBuffer copy_bitmask(Column col):
@@ -33,14 +37,11 @@ cpdef DeviceBuffer copy_bitmask(Column col):
         if ``col`` is not nullable
     """
     cdef device_buffer db
-    cdef unique_ptr[device_buffer] up_db
 
     with nogil:
         db = move(cpp_null_mask.copy_bitmask(col.view()))
-        up_db = move(make_unique[device_buffer](move(db)))
 
-    return DeviceBuffer.c_from_unique_ptr(move(up_db))
-
+    return buffer_to_python(move(db))
 
 cpdef size_t bitmask_allocation_size_bytes(size_type number_of_bits):
     """
@@ -59,12 +60,8 @@ cpdef size_t bitmask_allocation_size_bytes(size_type number_of_bits):
     size_t
         The necessary number of bytes
     """
-    cdef size_t output_size
-
     with nogil:
-        output_size = cpp_null_mask.bitmask_allocation_size_bytes(number_of_bits)
-
-    return output_size
+        return cpp_null_mask.bitmask_allocation_size_bytes(number_of_bits)
 
 
 cpdef DeviceBuffer create_null_mask(
@@ -92,13 +89,11 @@ cpdef DeviceBuffer create_null_mask(
         state
     """
     cdef device_buffer db
-    cdef unique_ptr[device_buffer] up_db
 
     with nogil:
         db = move(cpp_null_mask.create_null_mask(size, state))
-        up_db = move(make_unique[device_buffer](move(db)))
 
-    return DeviceBuffer.c_from_unique_ptr(move(up_db))
+    return buffer_to_python(move(db))
 
 
 cpdef tuple bitmask_and(list columns):
@@ -118,15 +113,11 @@ cpdef tuple bitmask_and(list columns):
     """
     cdef Table c_table = Table(columns)
     cdef pair[device_buffer, size_type] c_result
-    cdef unique_ptr[device_buffer] up_db
 
     with nogil:
         c_result = move(cpp_null_mask.bitmask_and(c_table.view()))
-        up_db = move(make_unique[device_buffer](move(c_result.first)))
 
-    dbuf = DeviceBuffer.c_from_unique_ptr(move(up_db))
-
-    return dbuf, c_result.second
+    return buffer_to_python(move(c_result.first)), c_result.second
 
 
 cpdef tuple bitmask_or(list columns):
@@ -146,12 +137,8 @@ cpdef tuple bitmask_or(list columns):
     """
     cdef Table c_table = Table(columns)
     cdef pair[device_buffer, size_type] c_result
-    cdef unique_ptr[device_buffer] up_db
 
     with nogil:
         c_result = move(cpp_null_mask.bitmask_or(c_table.view()))
-        up_db = move(make_unique[device_buffer](move(c_result.first)))
 
-    dbuf = DeviceBuffer.c_from_unique_ptr(move(up_db))
-
-    return dbuf, c_result.second
+    return buffer_to_python(move(c_result.first)), c_result.second
