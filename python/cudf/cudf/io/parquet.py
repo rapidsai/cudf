@@ -331,8 +331,15 @@ def read_parquet_metadata(filepath_or_buffer):
         path_or_data=filepath_or_buffer, storage_options=None
     )
 
-    # Check if filepath or buffer
-    filepath_or_buffer = paths if paths else filepath_or_buffer
+    if paths and not ioutils._is_local_filesystem(fs):
+        filepath_or_buffer = ioutils._get_remote_bytes_parquet(
+            paths,
+            fs,
+            columns=[],
+            row_groups=[],
+        )
+    else:
+        filepath_or_buffer = paths if paths else filepath_or_buffer
 
     # List of filepaths or buffers
     filepaths_or_buffers = []
@@ -342,7 +349,6 @@ def read_parquet_metadata(filepath_or_buffer):
             path_or_data=source,
             compression=None,
             fs=fs,
-            use_python_file_object=True,
             open_file_options=None,
             storage_options=None,
             bytes_per_thread=None,
@@ -524,7 +530,7 @@ def read_parquet(
     filters=None,
     row_groups=None,
     use_pandas_metadata=True,
-    use_python_file_object=True,
+    use_python_file_object=False,
     categorical_partitions=True,
     open_file_options=None,
     bytes_per_thread=None,
@@ -597,7 +603,23 @@ def read_parquet(
             categorical_partitions=categorical_partitions,
             dataset_kwargs=dataset_kwargs,
         )
-    filepath_or_buffer = paths if paths else filepath_or_buffer
+
+    # For remote data, we can transfer the necessary
+    # bytes directly into host memory
+    if (
+        fs
+        and paths
+        and not (ioutils._is_local_filesystem(fs) or use_python_file_object)
+    ):
+        filepath_or_buffer = ioutils._get_remote_bytes_parquet(
+            paths,
+            fs,
+            bytes_per_thread=bytes_per_thread,
+            columns=columns,
+            row_groups=row_groups,
+        )
+    else:
+        filepath_or_buffer = paths if paths else filepath_or_buffer
 
     filepaths_or_buffers = []
     if use_python_file_object:

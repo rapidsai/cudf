@@ -30,6 +30,7 @@ from cudf.io.parquet import (
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
 from cudf.utils.ioutils import (
     _ROW_GROUP_SIZE_BYTES_DEFAULT,
+    _get_remote_bytes_parquet,
     _is_local_filesystem,
     _open_remote_files,
 )
@@ -101,14 +102,25 @@ class CudfEngine(ArrowDatasetEngine):
             # Non-local filesystem handling
             paths_or_fobs = paths
             if not _is_local_filesystem(fs):
-                paths_or_fobs = _open_remote_files(
-                    paths_or_fobs,
-                    fs,
-                    context_stack=stack,
-                    **_default_open_file_options(
-                        open_file_options, columns, row_groups
-                    ),
-                )
+                if kwargs.get("use_python_file_object", False):
+                    # Use deprecated NativeFile code path in cudf
+                    paths_or_fobs = _open_remote_files(
+                        paths_or_fobs,
+                        fs,
+                        context_stack=stack,
+                        **_default_open_file_options(
+                            open_file_options, columns, row_groups
+                        ),
+                    )
+                else:
+                    # Use fsspec to collect byte ranges for all
+                    # files ahead of time
+                    paths_or_fobs = _get_remote_bytes_parquet(
+                        paths,
+                        fs,
+                        columns=columns,
+                        row_groups=row_groups[0],
+                    )
 
             # Use cudf to read in data
             try:

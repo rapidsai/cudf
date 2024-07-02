@@ -50,7 +50,7 @@ def read_csv(
     comment=None,
     delim_whitespace=False,
     byte_range=None,
-    use_python_file_object=True,
+    use_python_file_object=False,
     storage_options=None,
     bytes_per_thread=None,
 ):
@@ -81,9 +81,28 @@ def read_csv(
             "`read_csv` does not yet support reading multiple files"
         )
 
+    # Check if this is a remote file
+    fs, paths = ioutils._get_filesystem_and_paths(
+        path_or_data=filepath_or_buffer, storage_options=storage_options
+    )
+    if (
+        fs
+        and paths
+        and not (ioutils._is_local_filesystem(fs) or use_python_file_object)
+    ):
+        filepath_or_buffer, byte_range = ioutils._get_remote_bytes_lines(
+            paths,
+            fs,
+            byte_range=byte_range,
+            bytes_per_thread=bytes_per_thread,
+        )
+        assert len(filepath_or_buffer) == 1
+        filepath_or_buffer = filepath_or_buffer[0]
+
     filepath_or_buffer, compression = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         compression=compression,
+        fs=fs,
         iotypes=(BytesIO, StringIO, NativeFile),
         use_python_file_object=use_python_file_object,
         storage_options=storage_options,
