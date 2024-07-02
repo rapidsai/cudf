@@ -46,6 +46,7 @@ using index_vector = rmm::device_uvector<index_type>;
  *            std::vector<cudf::size_type> const& key_cols,
  *            std::vector<cudf::order> const& column_order,
  *            std::vector<cudf::null_order> const& null_precedence,
+ *            rmm::cuda_stream_view stream,
  *            rmm::device_async_resource_ref mr)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
