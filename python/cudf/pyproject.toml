@@ -131,7 +131,7 @@ dependencies-file = "../../dependencies.yaml"
 # Setting matrix selector "cuda_suffixed=true" here tells rapids-build-backend that by default,
 # it should produce wheels for redistribution which have CUDA-suffixed dependency names.
 #
-# This is intended to be overriden with --config-settings passed to 'pip wheel' or 'build'
+# This is intended to be overridden with --config-settings passed to 'pip wheel' or 'build'
 # in environments which prefer all CUDA-suffix-less dependency names.
 #
 matrix-entry = "cuda_suffixed=true"
