@@ -363,19 +363,16 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointInterleave)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
+  using RepType   = typename decimalXX::rep;
 
   for (int i = 0; i > -4; --i) {
-    auto const ONE  = decimalXX{1, scale_type{i}};
-    auto const TWO  = decimalXX{2, scale_type{i}};
-    auto const FOUR = decimalXX{4, scale_type{i}};
-    auto const FIVE = decimalXX{5, scale_type{i}};
+    auto const a = cudf::test::fixed_point_column_wrapper<RepType>({1, 4}, scale_type{i});
+    auto const b = cudf::test::fixed_point_column_wrapper<RepType>({2, 5}, scale_type{i});
 
-    auto const a = cudf::test::fixed_width_column_wrapper<decimalXX>({ONE, FOUR});
-    auto const b = cudf::test::fixed_width_column_wrapper<decimalXX>({TWO, FIVE});
-
-    auto const input    = cudf::table_view{std::vector<cudf::column_view>{a, b}};
-    auto const expected = cudf::test::fixed_width_column_wrapper<decimalXX>({ONE, TWO, FOUR, FIVE});
-    auto const actual   = cudf::interleave_columns(input);
+    auto const input = cudf::table_view{std::vector<cudf::column_view>{a, b}};
+    auto const expected =
+      cudf::test::fixed_point_column_wrapper<RepType>({1, 2, 4, 5}, scale_type{i});
+    auto const actual = cudf::interleave_columns(input);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, actual->view());
   }
