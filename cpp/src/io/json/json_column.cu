@@ -16,6 +16,7 @@
 
 #include "io/utilities/parsing_utils.cuh"
 #include "io/utilities/string_parsing.hpp"
+#include "json_utils.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/column/column_factories.hpp>
@@ -39,6 +40,7 @@
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/gather.h>
+#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
