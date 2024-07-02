@@ -109,10 +109,6 @@ def assert_column_eq(
         lhs_type = _make_fields_nullable(lhs.type)
         lhs = rhs.cast(lhs_type)
 
-    print(lhs)
-    print(rhs)
-    print(lhs.type)
-    print(rhs.type)
     assert lhs.equals(rhs)
 
 
@@ -135,30 +131,15 @@ def assert_table_and_meta_eq(
     plc_table = plc_table_w_meta.tbl
 
     plc_shape = (plc_table.num_rows(), plc_table.num_columns())
-    assert plc_shape == pa_table.shape
+    assert (
+        plc_shape == pa_table.shape
+    ), f"{plc_shape} is not equal to {pa_table.shape}"
 
     for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
         assert_column_eq(pa_col, plc_col, check_field_nullability)
 
     # Check column name equality
-    assert plc_table_w_meta.column_names == pa_table.column_names
-
-
-def assert_table_and_metas_eq(
-    exp: plc.io.types.TableWithMetadata, res: plc.io.types.TableWithMetadata
-) -> None:
-    """Verify that two pylibcudf TableWithMetadatas are equal"""
-
-    res_shape = (res.tbl.num_rows(), res.tbl.num_columns())
-    exp_shape = (exp.tbl.num_rows(), exp.tbl.num_columns())
-
-    assert res_shape == exp_shape
-
-    for exp_col, res_col in zip(exp.tbl.columns(), res.tbl.columns()):
-        assert_column_eq(exp_col, res_col)
-
-    # Check column name equality
-    assert res.column_names == exp.column_names
+    assert plc_table_w_meta.column_names() == pa_table.column_names
 
 
 def cudf_raises(expected_exception: BaseException, *args, **kwargs):

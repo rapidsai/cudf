@@ -74,14 +74,27 @@ cdef class TableWithMetadata:
         """
         return self.tbl.columns()
 
-    @property
-    def column_names(self):
+    cdef list _make_columns_list(self, dict child_dict):
+        cdef list names = []
+        for child in child_dict:
+            grandchildren = self._make_columns_list(child_dict[child])
+            names.append((child, grandchildren))
+        return names
+
+    def column_names(self, include_children=False):
         """
         Return a list containing the column names of the table
         """
         cdef list names = []
+        cdef str name
+        cdef dict child_names = self.child_names
         for col_info in self.metadata.schema_info:
-            names.append(col_info.name.decode())
+            name = col_info.name.decode()
+            if include_children:
+                children = self._make_columns_list(child_names[name])
+                names.append((name, children))
+            else:
+                names.append(name)
         return names
 
     @property

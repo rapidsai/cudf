@@ -28,6 +28,8 @@ cdef class TableWithMetadata:
 
     cdef vector[column_name_info] _make_column_info(self, list column_names)
 
+    cdef list _make_columns_list(self, dict child_dict)
+
     @staticmethod
     cdef dict _parse_col_names(vector[column_name_info] infos)
 

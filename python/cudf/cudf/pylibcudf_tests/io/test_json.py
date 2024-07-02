@@ -32,12 +32,17 @@ def make_json_source(path_or_buf, pa_table, **kwargs):
     return path_or_buf
 
 
-def write_json_bytes(source, json_bytes):
+def write_json_bytes(source, json_str):
+    """
+    Write a JSON string to the source
+    """
     if not isinstance(source, io.IOBase):
-        with open(source, "wb") as source_f:
-            source_f.write(json_bytes)
+        with open(source, "w") as source_f:
+            source_f.write(json_str)
     else:
-        source.write(json_bytes)
+        if isinstance(source, io.BytesIO):
+            json_str = json_str.encode("utf-8")
+        source.write(json_str)
         source.seek(0)
 
 
@@ -172,11 +177,11 @@ def test_read_json_basic(
         compression_type = CompressionType.NONE
 
     _, pa_table = table_data
+
     source = make_json_source(
         source_or_sink, pa_table, lines=lines, compression=compression_type
     )
 
-    # TODO: create a MRE
     request.applymarker(
         pytest.mark.xfail(
             condition=(
@@ -184,7 +189,10 @@ def test_read_json_basic(
                 and compression_type
                 not in {CompressionType.NONE, CompressionType.AUTO}
             ),
-            reason="libcudf json reader crashse on non empty table_data",
+            # note: wasn't able to narrow down the specific types that were failing
+            # seems to be a little non-deterministic, but always fails with
+            # cudaErrorInvalidValue invalid argument
+            reason="libcudf json reader crashes on compressed non empty table_data",
         )
     )
 
@@ -284,13 +292,13 @@ def test_read_json_dtypes(table_data, source_or_sink):
 def test_read_json_lines_byte_range(source_or_sink, chunk_size):
     source = source_or_sink
     if isinstance(source_or_sink, io.StringIO):
-        pytest.skip("skip StringIO since it is only a valid sink")
+        pytest.skip("byte_range doesn't work on StringIO")
 
-    json_bytes = "[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9]\n".encode("utf-8")
-    write_json_bytes(source, json_bytes)
+    json_str = "[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9]\n"
+    write_json_bytes(source, json_str)
 
     tbls_w_meta = []
-    for chunk_start in range(0, len(json_bytes), chunk_size):
+    for chunk_start in range(0, len(json_str.encode("utf-8")), chunk_size):
         tbls_w_meta.append(
             plc.io.json.read_json(
                 plc.io.SourceInfo([source]),
@@ -311,21 +319,18 @@ def test_read_json_lines_byte_range(source_or_sink, chunk_size):
             tbls.append(plc.interop.to_arrow(tbl_w_meta.tbl))
     full_tbl = pa.concat_tables(tbls)
 
-    # Clobber the first table, since we don't have a way to transfer metadata
-    # between tables
-    # TODO: this can be better! maybe TableWithMetadata.metadata_like?
-    first_tbl = tbls_w_meta[0]
-    first_tbl.tbl = plc.interop.from_arrow(full_tbl)
-    assert_table_and_meta_eq(pa.Table.from_pandas(exp), first_tbl)
+    full_tbl_plc = plc.io.TableWithMetadata(
+        plc.interop.from_arrow(full_tbl),
+        tbls_w_meta[0].column_names(include_children=True),
+    )
+    assert_table_and_meta_eq(pa.Table.from_pandas(exp), full_tbl_plc)
 
 
 @pytest.mark.parametrize("keep_quotes", [True, False])
 def test_read_json_lines_keep_quotes(keep_quotes, source_or_sink):
     source = source_or_sink
-    if isinstance(source_or_sink, io.StringIO):
-        pytest.skip("skip StringIO since it is only a valid sink")
 
-    json_bytes = '["a", "b", "c"]\n'.encode("utf-8")
+    json_bytes = '["a", "b", "c"]\n'
     write_json_bytes(source, json_bytes)
 
     tbl_w_meta = plc.io.json.read_json(
@@ -353,12 +358,8 @@ def test_read_json_lines_keep_quotes(keep_quotes, source_or_sink):
 )
 def test_read_json_lines_recovery_mode(recovery_mode, source_or_sink):
     source = source_or_sink
-    if isinstance(source_or_sink, io.StringIO):
-        pytest.skip("skip StringIO since it is only a valid sink")
 
-    json_bytes = (
-        '{"a":1,"b":10}\n{"a":2,"b":11}\nabc\n{"a":3,"b":12}\n'.encode("utf-8")
-    )
+    json_bytes = '{"a":1,"b":10}\n{"a":2,"b":11}\nabc\n{"a":3,"b":12}\n'
     write_json_bytes(source, json_bytes)
 
     if recovery_mode == plc.io.types.JSONRecoveryMode.FAIL:
