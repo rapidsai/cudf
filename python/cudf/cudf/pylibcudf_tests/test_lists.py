@@ -134,3 +134,17 @@ def test_index_of_list_column(test_data, column):
     expect = pa.array(column[1], type=pa.int32())
 
     assert_column_eq(expect, res)
+
+
+def test_segmented_gather(test_data):
+    list_column1 = test_data[0][0]
+    list_column2 = test_data[0][1]
+
+    plc_column1 = plc.interop.from_arrow(pa.array(list_column1))
+    plc_column2 = plc.interop.from_arrow(pa.array(list_column2))
+
+    res = plc.lists.segmented_gather(plc_column2, plc_column1)
+
+    expect = pa.array([[8, 9], [14], [0], [0, 0]])
+
+    assert_column_eq(expect, res)
