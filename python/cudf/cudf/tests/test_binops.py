@@ -785,7 +785,7 @@ def test_operator_func_series_and_scalar(
     )
     pdf_series_result = getattr(pdf_series, func)(
         np.array(scalar)[()] if use_cudf_scalar else scalar,
-        fill_value=fill_value
+        fill_value=fill_value,
     )
 
     assert_eq(pdf_series_result, gdf_series_result)
