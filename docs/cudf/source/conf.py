@@ -372,7 +372,7 @@ def _generate_namespaces(namespaces):
 _all_namespaces = _generate_namespaces(
     {
         # Note that io::datasource is actually a nested class
-        "cudf": {"io", "io::datasource", "strings", "ast", "ast::expression"},
+        "cudf": {"io", "io::datasource", "strings", "ast", "ast::expression", "io::text"},
         "numeric": {},
         "nvtext": {},
     }

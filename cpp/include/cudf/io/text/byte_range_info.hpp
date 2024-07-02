@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,17 +24,22 @@
 namespace cudf {
 namespace io {
 namespace text {
+/**
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
 
 /**
  * @brief stores offset and size used to indicate a byte range
  */
 class byte_range_info {
  private:
-  int64_t _offset;  ///< offset in bytes
-  int64_t _size;    ///< size in bytes
+  int64_t _offset{};  ///< offset in bytes
+  int64_t _size{};    ///< size in bytes
 
  public:
-  constexpr byte_range_info() noexcept : _offset(0), _size(0) {}
+  constexpr byte_range_info() = default;
   /**
    * @brief Constructs a byte_range_info object
    *
@@ -103,6 +108,8 @@ std::vector<byte_range_info> create_byte_range_infos_consecutive(int64_t total_b
  * @return Byte range info of size ``[0, numeric_limits<int64_t>:\:max())``
  */
 byte_range_info create_byte_range_info_max();
+
+/** @} */  // end of group
 
 }  // namespace text
 }  // namespace io

@@ -937,7 +937,7 @@ class IntervalDtype(StructDtype):
     def __eq__(self, other):
         if isinstance(other, str):
             # This means equality isn't transitive but mimics pandas
-            return other == self.name
+            return other in (self.name, str(self))
         return (
             type(self) == type(other)
             and self.subtype == other.subtype

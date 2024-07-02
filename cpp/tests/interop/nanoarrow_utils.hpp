@@ -375,3 +375,6 @@ nanoarrow::UniqueArray get_nanoarrow_list_array(std::initializer_list<T> data,
 
 std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, generated_test_data>
 get_nanoarrow_cudf_table(cudf::size_type length);
+
+std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, nanoarrow::UniqueArray>
+get_nanoarrow_host_tables(cudf::size_type length);

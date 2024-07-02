@@ -1,5 +1,6 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
+from cpython cimport pycapsule
 from cython.operator cimport dereference
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.utility cimport move
@@ -11,9 +12,15 @@ from functools import singledispatch
 
 from pyarrow import lib as pa
 
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.interop cimport (
+    ArrowArray,
+    ArrowArrayStream,
+    ArrowSchema,
     column_metadata,
     from_arrow as cpp_from_arrow,
+    from_arrow_column as cpp_from_arrow_column,
+    from_arrow_stream as cpp_from_arrow_stream,
     to_arrow as cpp_to_arrow,
 )
 from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport (
@@ -124,11 +131,15 @@ def _from_arrow_datatype(pyarrow_object):
 def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
     if data_type is not None:
         raise ValueError("data_type may not be passed for tables")
-    cdef shared_ptr[pa.CTable] arrow_table = pa.pyarrow_unwrap_table(pyarrow_object)
+    stream = pyarrow_object.__arrow_c_stream__()
+    cdef ArrowArrayStream* c_stream = (
+        <ArrowArrayStream*>pycapsule.PyCapsule_GetPointer(stream, "arrow_array_stream")
+    )
 
     cdef unique_ptr[table] c_result
     with nogil:
-        c_result = move(cpp_from_arrow(dereference(arrow_table)))
+        # The libcudf function here will release the stream.
+        c_result = move(cpp_from_arrow_stream(c_stream))
 
     return Table.from_libcudf(move(c_result))
 
@@ -190,8 +201,25 @@ def _from_arrow_scalar(pyarrow_object, *, DataType data_type=None):
 def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
     if data_type is not None:
         raise ValueError("data_type may not be passed for arrays")
-    pa_table = pa.table([pyarrow_object], [""])
-    return from_arrow(pa_table).columns()[0]
+
+    schema, array = pyarrow_object.__arrow_c_array__()
+    cdef ArrowSchema* c_schema = (
+        <ArrowSchema*>pycapsule.PyCapsule_GetPointer(schema, "arrow_schema")
+    )
+    cdef ArrowArray* c_array = (
+        <ArrowArray*>pycapsule.PyCapsule_GetPointer(array, "arrow_array")
+    )
+
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(cpp_from_arrow_column(c_schema, c_array))
+
+    # The capsule destructors should release automatically for us, but we
+    # choose to do it explicitly here for clarity.
+    c_schema.release(c_schema)
+    c_array.release(c_array)
+
+    return Column.from_libcudf(move(c_result))
 
 
 @singledispatch

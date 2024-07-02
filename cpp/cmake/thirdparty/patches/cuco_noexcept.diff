@@ -1,0 +1,227 @@
+diff --git a/include/cuco/aow_storage.cuh b/include/cuco/aow_storage.cuh
+index 7f9de01..5228193 100644
+--- a/include/cuco/aow_storage.cuh
++++ b/include/cuco/aow_storage.cuh
+@@ -81,7 +81,7 @@ class aow_storage : public detail::aow_storage_base<T, WindowSize, Extent> {
+    * @param size Number of windows to (de)allocate
+    * @param allocator Allocator used for (de)allocating device storage
+    */
+-  explicit constexpr aow_storage(Extent size, Allocator const& allocator = {}) noexcept;
++  explicit constexpr aow_storage(Extent size, Allocator const& allocator = {});
+ 
+   aow_storage(aow_storage&&) = default;  ///< Move constructor
+   /**
+@@ -122,7 +122,7 @@ class aow_storage : public detail::aow_storage_base<T, WindowSize, Extent> {
+    * @param key Key to which all keys in `slots` are initialized
+    * @param stream Stream used for executing the kernel
+    */
+-  void initialize(value_type key, cuda_stream_ref stream = {}) noexcept;
++  void initialize(value_type key, cuda_stream_ref stream = {});
+ 
+   /**
+    * @brief Asynchronously initializes each slot in the AoW storage to contain `key`.
+diff --git a/include/cuco/detail/open_addressing/open_addressing_impl.cuh b/include/cuco/detail/open_addressing/open_addressing_impl.cuh
+index c2c9c14..8ac4236 100644
+--- a/include/cuco/detail/open_addressing/open_addressing_impl.cuh
++++ b/include/cuco/detail/open_addressing/open_addressing_impl.cuh
+@@ -125,7 +125,7 @@ class open_addressing_impl {
+                                  KeyEqual const& pred,
+                                  ProbingScheme const& probing_scheme,
+                                  Allocator const& alloc,
+-                                 cuda_stream_ref stream) noexcept
++                                 cuda_stream_ref stream)
+     : empty_slot_sentinel_{empty_slot_sentinel},
+       erased_key_sentinel_{this->extract_key(empty_slot_sentinel)},
+       predicate_{pred},
+@@ -233,7 +233,7 @@ class open_addressing_impl {
+    *
+    * @param stream CUDA stream this operation is executed in
+    */
+-  void clear(cuda_stream_ref stream) noexcept { storage_.initialize(empty_slot_sentinel_, stream); }
++  void clear(cuda_stream_ref stream) { storage_.initialize(empty_slot_sentinel_, stream); }
+ 
+   /**
+    * @brief Asynchronously erases all elements from the container. After this call, `size()` returns
+@@ -599,7 +599,7 @@ class open_addressing_impl {
+    *
+    * @return The number of elements in the container
+    */
+-  [[nodiscard]] size_type size(cuda_stream_ref stream) const noexcept
++  [[nodiscard]] size_type size(cuda_stream_ref stream) const
+   {
+     auto counter =
+       detail::counter_storage<size_type, thread_scope, allocator_type>{this->allocator()};
+diff --git a/include/cuco/detail/static_map/static_map.inl b/include/cuco/detail/static_map/static_map.inl
+index e17a145..3fa1d02 100644
+--- a/include/cuco/detail/static_map/static_map.inl
++++ b/include/cuco/detail/static_map/static_map.inl
+@@ -123,7 +123,7 @@ template <class Key,
+           class Allocator,
+           class Storage>
+ void static_map<Key, T, Extent, Scope, KeyEqual, ProbingScheme, Allocator, Storage>::clear(
+-  cuda_stream_ref stream) noexcept
++  cuda_stream_ref stream)
+ {
+   impl_->clear(stream);
+ }
+@@ -215,7 +215,7 @@ template <class Key,
+           class Storage>
+ template <typename InputIt>
+ void static_map<Key, T, Extent, Scope, KeyEqual, ProbingScheme, Allocator, Storage>::
+-  insert_or_assign(InputIt first, InputIt last, cuda_stream_ref stream) noexcept
++  insert_or_assign(InputIt first, InputIt last, cuda_stream_ref stream)
+ {
+   return this->insert_or_assign_async(first, last, stream);
+   stream.synchronize();
+@@ -465,7 +465,7 @@ template <class Key,
+           class Storage>
+ static_map<Key, T, Extent, Scope, KeyEqual, ProbingScheme, Allocator, Storage>::size_type
+ static_map<Key, T, Extent, Scope, KeyEqual, ProbingScheme, Allocator, Storage>::size(
+-  cuda_stream_ref stream) const noexcept
++  cuda_stream_ref stream) const
+ {
+   return impl_->size(stream);
+ }
+diff --git a/include/cuco/detail/static_multiset/static_multiset.inl b/include/cuco/detail/static_multiset/static_multiset.inl
+index 174f9bc..582926b 100644
+--- a/include/cuco/detail/static_multiset/static_multiset.inl
++++ b/include/cuco/detail/static_multiset/static_multiset.inl
+@@ -97,7 +97,7 @@ template <class Key,
+           class Allocator,
+           class Storage>
+ void static_multiset<Key, Extent, Scope, KeyEqual, ProbingScheme, Allocator, Storage>::clear(
+-  cuda_stream_ref stream) noexcept
++  cuda_stream_ref stream)
+ {
+   impl_->clear(stream);
+ }
+@@ -183,7 +183,7 @@ template <class Key,
+           class Storage>
+ static_multiset<Key, Extent, Scope, KeyEqual, ProbingScheme, Allocator, Storage>::size_type
+ static_multiset<Key, Extent, Scope, KeyEqual, ProbingScheme, Allocator, Storage>::size(
+-  cuda_stream_ref stream) const noexcept
++  cuda_stream_ref stream) const
+ {
+   return impl_->size(stream);
+ }
+diff --git a/include/cuco/detail/static_set/static_set.inl b/include/cuco/detail/static_set/static_set.inl
+index 645013f..d3cece0 100644
+--- a/include/cuco/detail/static_set/static_set.inl
++++ b/include/cuco/detail/static_set/static_set.inl
+@@ -98,7 +98,7 @@ template <class Key,
+           class Allocator,
+           class Storage>
+ void static_set<Key, Extent, Scope, KeyEqual, ProbingScheme, Allocator, Storage>::clear(
+-  cuda_stream_ref stream) noexcept
++  cuda_stream_ref stream)
+ {
+   impl_->clear(stream);
+ }
+@@ -429,7 +429,7 @@ template <class Key,
+           class Storage>
+ static_set<Key, Extent, Scope, KeyEqual, ProbingScheme, Allocator, Storage>::size_type
+ static_set<Key, Extent, Scope, KeyEqual, ProbingScheme, Allocator, Storage>::size(
+-  cuda_stream_ref stream) const noexcept
++  cuda_stream_ref stream) const
+ {
+   return impl_->size(stream);
+ }
+diff --git a/include/cuco/detail/storage/aow_storage.inl b/include/cuco/detail/storage/aow_storage.inl
+index 3547f4c..94b7f98 100644
+--- a/include/cuco/detail/storage/aow_storage.inl
++++ b/include/cuco/detail/storage/aow_storage.inl
+@@ -32,8 +32,8 @@
+ namespace cuco {
+ 
+ template <typename T, int32_t WindowSize, typename Extent, typename Allocator>
+-constexpr aow_storage<T, WindowSize, Extent, Allocator>::aow_storage(
+-  Extent size, Allocator const& allocator) noexcept
++constexpr aow_storage<T, WindowSize, Extent, Allocator>::aow_storage(Extent size,
++                                                                     Allocator const& allocator)
+   : detail::aow_storage_base<T, WindowSize, Extent>{size},
+     allocator_{allocator},
+     window_deleter_{capacity(), allocator_},
+@@ -64,7 +64,7 @@ aow_storage<T, WindowSize, Extent, Allocator>::ref() const noexcept
+ 
+ template <typename T, int32_t WindowSize, typename Extent, typename Allocator>
+ void aow_storage<T, WindowSize, Extent, Allocator>::initialize(value_type key,
+-                                                               cuda_stream_ref stream) noexcept
++                                                               cuda_stream_ref stream)
+ {
+   this->initialize_async(key, stream);
+   stream.synchronize();
+diff --git a/include/cuco/static_map.cuh b/include/cuco/static_map.cuh
+index c86e90c..95da423 100644
+--- a/include/cuco/static_map.cuh
++++ b/include/cuco/static_map.cuh
+@@ -269,7 +269,7 @@ class static_map {
+    *
+    * @param stream CUDA stream this operation is executed in
+    */
+-  void clear(cuda_stream_ref stream = {}) noexcept;
++  void clear(cuda_stream_ref stream = {});
+ 
+   /**
+    * @brief Asynchronously erases all elements from the container. After this call, `size()` returns
+@@ -387,7 +387,7 @@ class static_map {
+    * @param stream CUDA stream used for insert
+    */
+   template <typename InputIt>
+-  void insert_or_assign(InputIt first, InputIt last, cuda_stream_ref stream = {}) noexcept;
++  void insert_or_assign(InputIt first, InputIt last, cuda_stream_ref stream = {});
+ 
+   /**
+    * @brief For any key-value pair `{k, v}` in the range `[first, last)`, if a key equivalent to `k`
+@@ -690,7 +690,7 @@ class static_map {
+    * @param stream CUDA stream used to get the number of inserted elements
+    * @return The number of elements in the container
+    */
+-  [[nodiscard]] size_type size(cuda_stream_ref stream = {}) const noexcept;
++  [[nodiscard]] size_type size(cuda_stream_ref stream = {}) const;
+ 
+   /**
+    * @brief Gets the maximum number of elements the hash map can hold.
+diff --git a/include/cuco/static_multiset.cuh b/include/cuco/static_multiset.cuh
+index 0daf103..fbcbc9c 100644
+--- a/include/cuco/static_multiset.cuh
++++ b/include/cuco/static_multiset.cuh
+@@ -235,7 +235,7 @@ class static_multiset {
+    *
+    * @param stream CUDA stream this operation is executed in
+    */
+-  void clear(cuda_stream_ref stream = {}) noexcept;
++  void clear(cuda_stream_ref stream = {});
+ 
+   /**
+    * @brief Asynchronously erases all elements from the container. After this call, `size()` returns
+@@ -339,7 +339,7 @@ class static_multiset {
+    * @param stream CUDA stream used to get the number of inserted elements
+    * @return The number of elements in the container
+    */
+-  [[nodiscard]] size_type size(cuda_stream_ref stream = {}) const noexcept;
++  [[nodiscard]] size_type size(cuda_stream_ref stream = {}) const;
+ 
+   /**
+    * @brief Gets the maximum number of elements the multiset can hold.
+diff --git a/include/cuco/static_set.cuh b/include/cuco/static_set.cuh
+index a069939..3517f84 100644
+--- a/include/cuco/static_set.cuh
++++ b/include/cuco/static_set.cuh
+@@ -240,7 +240,7 @@ class static_set {
+    *
+    * @param stream CUDA stream this operation is executed in
+    */
+-  void clear(cuda_stream_ref stream = {}) noexcept;
++  void clear(cuda_stream_ref stream = {});
+ 
+   /**
+    * @brief Asynchronously erases all elements from the container. After this call, `size()` returns
+@@ -687,7 +687,7 @@ class static_set {
+    * @param stream CUDA stream used to get the number of inserted elements
+    * @return The number of elements in the container
+    */
+-  [[nodiscard]] size_type size(cuda_stream_ref stream = {}) const noexcept;
++  [[nodiscard]] size_type size(cuda_stream_ref stream = {}) const;
+ 
+   /**
+    * @brief Gets the maximum number of elements the hash set can hold.
