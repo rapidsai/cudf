@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,11 @@ namespace cudf {
  *
  * @return spdlog::logger& The logger.
  */
-spdlog::logger& logger();
+// This is a workaround for Doxygen not being able to parse the `visibility` attribute
+/// \cond DOXYGEN_IGNORE
+// We need this symbol to be visible because this TU is marked as having all
+// symbols hidden by default in cpp/CMakelists.txt.
+__attribute__((visibility("default"))) spdlog::logger& logger();
+/// \endcond
 
 }  // namespace cudf
