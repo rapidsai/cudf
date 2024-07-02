@@ -41,3 +41,22 @@ def test_scan_drop_nulls(subset, predicate_pushdown):
     assert_gpu_result_equal(
         q, collect_kwargs={"predicate_pushdown": predicate_pushdown}
     )
+
+
+def test_can_convert_lists():
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series([[1, 2], [3]], dtype=pl.List(pl.Int8())),
+            "b": pl.Series([[1], [2]], dtype=pl.List(pl.UInt16())),
+            "c": pl.Series(
+                [
+                    [["1", "2", "3"], ["4", "567"]],
+                    [["8", "9"], []],
+                ],
+                dtype=pl.List(pl.List(pl.String())),
+            ),
+            "d": pl.Series([[[1, 2]], []], dtype=pl.List(pl.List(pl.UInt16()))),
+        }
+    )
+
+    assert_gpu_result_equal(df)

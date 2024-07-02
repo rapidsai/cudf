@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import json
 import types
 from functools import cache
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
@@ -29,7 +30,7 @@ import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import DataFrame, NamedColumn
-from cudf_polars.utils import sorting
+from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -130,6 +131,11 @@ class IR:
     schema: Schema
     """Mapping from column names to their data types."""
 
+    def __post_init__(self):
+        """Validate preconditions."""
+        if any(dtype.id() == plc.TypeId.EMPTY for dtype in self.schema.values()):
+            raise NotImplementedError("Cannot make empty columns.")
+
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """
         Evaluate the node and return a dataframe.
@@ -175,8 +181,10 @@ class PythonScan(IR):
 class Scan(IR):
     """Input from files."""
 
-    typ: Any
+    typ: str
     """What type of file are we reading? Parquet, CSV, etc..."""
+    options: tuple[Any, ...]
+    """Type specific options, as json-encoded strings."""
     paths: list[str]
     """List of paths to read from."""
     file_options: Any
@@ -206,17 +214,21 @@ class Scan(IR):
         with_columns = options.with_columns
         row_index = options.row_index
         if self.typ == "csv":
+            opts, cloud_opts = map(json.loads, self.options)
             df = DataFrame.from_cudf(
                 cudf.concat(
                     [cudf.read_csv(p, usecols=with_columns) for p in self.paths]
                 )
             )
         elif self.typ == "parquet":
+            opts, cloud_opts = map(json.loads, self.options)
             cdf = cudf.read_parquet(self.paths, columns=with_columns)
             assert isinstance(cdf, cudf.DataFrame)
             df = DataFrame.from_cudf(cdf)
         else:
-            assert_never(self.typ)
+            raise NotImplementedError(
+                f"Unhandled scan type: {self.typ}"
+            )  # pragma: no cover; post init trips first
         if row_index is not None:
             name, offset = row_index
             dtype = self.schema[name]
@@ -292,15 +304,10 @@ class DataFrameScan(IR):
         table = pdf.to_arrow()
         schema = table.schema
         for i, field in enumerate(schema):
-            # TODO: Nested types
-            if field.type == pa.large_string():
-                # TODO: goes away when libcudf supports large strings
-                schema = schema.set(i, pa.field(field.name, pa.string()))
-            elif isinstance(field.type, pa.LargeListType):
-                # TODO: goes away when libcudf supports large lists
-                schema = schema.set(
-                    i, pa.field(field.name, pa.list_(field.type.field(0)))
-                )
+            schema = schema.set(
+                i, pa.field(field.name, dtypes.downcast_arrow_lists(field.type))
+            )
+        # No-op if the schema is unchanged.
         table = table.cast(schema)
         df = DataFrame.from_table(
             plc.interop.from_arrow(table), list(self.schema.keys())
