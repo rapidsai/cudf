@@ -6,7 +6,6 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.pylibcudf.io.csv cimport dtypes_t
 from cudf._lib.pylibcudf.io.types cimport SourceInfo, TableWithMetadata
 from cudf._lib.pylibcudf.libcudf.io.csv cimport (
     csv_reader_options,
@@ -37,7 +36,7 @@ cpdef TableWithMetadata read_csv(
     str lineterminator = "\n",
     str delimiter = None,
     str thousands = None,
-    str decimal = None,
+    str decimal = ".",
     str comment = None,
     bool delim_whitespace = False,
     bool skipinitialspace = False,
@@ -48,7 +47,9 @@ cpdef TableWithMetadata read_csv(
     bool detect_whitespace_around_quotes = False,
     list parse_dates = None,
     list parse_hex = None,
-    dtypes_t dtypes = None,
+    # Technically this should be dict/list
+    # but using a fused type prevents using None as default
+    object dtypes = None,
     list true_values = None,
     list false_values = None,
     list na_values = None,
@@ -158,23 +159,24 @@ cpdef TableWithMetadata read_csv(
         options.set_parse_hex(c_parse_hex_indexes)
 
     cdef string k_str
-    if dtypes is not None:
-        if dtypes_t is list:
-            for dtype in dtypes:
-                if not isinstance(dtype, DataType):
-                    raise TypeError("If passing list to read_csv, "
-                                    "all elements must be of type `DataType`!")
-                c_dtypes_list.push_back((<DataType>dtype).c_obj)
-            options.set_dtypes(c_dtypes_list)
-        else:
-            # dtypes_t is dict
-            for k, v in dtypes.items():
-                k_str = str(k).encode()
-                if not isinstance(v, DataType):
-                    raise TypeError("If passing dict to read_csv, "
-                                    "all values must be of type `DataType`!")
-                c_dtypes_map[k_str] = (<DataType>v).c_obj
-            options.set_dtypes(c_dtypes_map)
+    if isinstance(dtypes, list):
+        for dtype in dtypes:
+            if not isinstance(dtype, DataType):
+                raise TypeError("If passing list to read_csv, "
+                                "all elements must be of type `DataType`!")
+            c_dtypes_list.push_back((<DataType>dtype).c_obj)
+        options.set_dtypes(c_dtypes_list)
+    elif isinstance(dtypes, dict):
+        # dtypes_t is dict
+        for k, v in dtypes.items():
+            k_str = str(k).encode()
+            if not isinstance(v, DataType):
+                raise TypeError("If passing dict to read_csv, "
+                                "all values must be of type `DataType`!")
+            c_dtypes_map[k_str] = (<DataType>v).c_obj
+        options.set_dtypes(c_dtypes_map)
+    elif dtypes is not None:
+        raise TypeError("dtypes must either by a list/dict")
 
     if true_values is not None:
         c_true_values.reserve(len(true_values))

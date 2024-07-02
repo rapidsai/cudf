@@ -7,9 +7,6 @@ from cudf._lib.pylibcudf.libcudf.io.types cimport compression_type, quote_style
 from cudf._lib.pylibcudf.libcudf.types cimport size_type, type_id
 from cudf._lib.pylibcudf.types cimport DataType
 
-ctypedef fused dtypes_t:
-    dict
-    list
 
 cpdef TableWithMetadata read_csv(
     SourceInfo source_info,
@@ -38,7 +35,7 @@ cpdef TableWithMetadata read_csv(
     bool detect_whitespace_around_quotes = *,
     list parse_dates = *,
     list parse_hex = *,
-    dtypes_t dtypes = *,
+    object dtypes = *,
     list true_values = *,
     list false_values = *,
     list na_values = *,

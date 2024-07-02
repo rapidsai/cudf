@@ -22,6 +22,9 @@ import errno
 import io
 import os
 
+from cudf._lib.pylibcudf.libcudf.io.types import \
+    compression_type as CompressionType  # no-cython-lint
+
 
 cdef class TableWithMetadata:
     """A container holding a table and its associated metadata
@@ -137,6 +140,15 @@ cdef class SourceInfo:
         cdef vector[host_buffer] c_host_buffers
         cdef const unsigned char[::1] c_buffer
         cdef bint empty_buffer = False
+        cdef list new_sources = []
+
+        if isinstance(sources[0], io.StringIO):
+            for buffer in sources:
+                if not isinstance(buffer, io.StringIO):
+                    raise ValueError("All sources must be of the same type!")
+                new_sources.append(buffer.read().encode())
+            sources = new_sources
+
         if isinstance(sources[0], bytes):
             empty_buffer = True
             for buffer in sources:
