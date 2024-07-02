@@ -378,9 +378,10 @@ void write_chunked(data_sink* out_sink,
   auto contents_w_nl = [&] {
     auto const total_size =
       str_column_view.chars_size(stream) + (newline.size() * str_column_view.size());
+    auto const empty_str = string_scalar("", true, stream);
+    // use join_strings when the output will be less than 2GB
     if (total_size < static_cast<int64_t>(std::numeric_limits<size_type>::max())) {
-      return cudf::strings::detail::join_strings(
-               str_column_view, newline, string_scalar{"", false, stream}, stream, mr)
+      return cudf::strings::detail::join_strings(str_column_view, newline, empty_str, stream, mr)
         ->release();
     }
     auto nl_col = cudf::make_column_from_scalar(newline, str_column_view.size(), stream);
@@ -392,8 +393,7 @@ void write_chunked(data_sink* out_sink,
                         offsets.size(),      // the value from 2nd to last element
                         *cudf::detail::get_element(offsets.view(), offsets.size() - 2, stream, mr),
                         stream);
-    auto const nl_tbl    = cudf::table_view({str_column_view.parent(), nl_col->view()});
-    auto const empty_str = string_scalar("", true, stream);
+    auto const nl_tbl = cudf::table_view({str_column_view.parent(), nl_col->view()});
     return cudf::strings::detail::concatenate(
              nl_tbl, empty_str, empty_str, strings::separator_on_nulls::NO, stream, mr)
       ->release();
