@@ -1566,3 +1566,14 @@ def test_arrow_string_arrays():
     )
 
     tm.assert_equal(cu_arr, pd_arr)
+
+
+@pytest.mark.parametrize("indexer", ["at", "iat"])
+def test_at_iat(indexer):
+    df = xpd.DataFrame(range(3))
+    result = getattr(df, indexer)[0, 0]
+    assert result == 0
+
+    getattr(df, indexer)[0, 0] = 1
+    expected = pd.DataFrame([1, 1, 2])
+    tm.assert_frame_equal(df, expected)

@@ -775,6 +775,24 @@ _DataFrameLocIndexer = make_intermediate_proxy_type(
     pd.core.indexing._LocIndexer,
 )
 
+_SeriesLocIndexer = make_intermediate_proxy_type(
+    "_SeriesLocIndexer",
+    cudf.core.series._SeriesLocIndexer,
+    pd.core.indexing._LocIndexer,
+)
+
+_AtIndexer = make_intermediate_proxy_type(
+    "_AtIndexer",
+    _Unusable(),
+    pd.core.indexing._AtIndexer,
+)
+
+_iAtIndexer = make_intermediate_proxy_type(
+    "_iAtIndexer",
+    _Unusable(),
+    pd.core.indexing._iAtIndexer,
+)
+
 FixedForwardWindowIndexer = make_final_proxy_type(
     "FixedForwardWindowIndexer",
     _Unusable,
