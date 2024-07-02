@@ -5,7 +5,6 @@ from cudf._lib.pylibcudf.null_mask import MaskState
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 
 from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 
 @acquire_spill_lock()
@@ -22,7 +21,7 @@ def copy_bitmask(Column col):
     return buf
 
 
-def bitmask_allocation_size_bytes(size_type num_bits):
+def bitmask_allocation_size_bytes(num_bits):
     """
     Given a size, calculates the number of bytes that should be allocated for a
     column validity mask
@@ -30,7 +29,7 @@ def bitmask_allocation_size_bytes(size_type num_bits):
     return pylibcudf.null_mask.bitmask_allocation_size_bytes(num_bits)
 
 
-def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
+def create_null_mask(size, state=MaskState.UNINITIALIZED):
     """
     Given a size and a mask state, allocate a mask that can properly represent
     the given size with the given mask state
