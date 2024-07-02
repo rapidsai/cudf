@@ -261,7 +261,7 @@ def test_scalar_out_of_bounds_pyint_fails(value, dtype):
     # Test that we align with NumPy on scalar creation behavior from
     # Python integers.
     np_ver = np.lib.NumpyVersion(np.__version__)
-    if np_ver >= "2.0":
+    if np_ver >= "2.0.0":
         with pytest.raises(OverflowError):
             cudf.Scalar(value, dtype)
     else:
