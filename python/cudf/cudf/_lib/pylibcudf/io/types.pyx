@@ -228,7 +228,7 @@ cdef class SinkInfo:
                         unique_ptr[data_sink](new iobase_data_sink(s.buffer))
                     )
             data_sinks.push_back(self.sink_storage.back().get())
-        elif isinstance(sinks[0], str):
+        elif initial_sink_cls is str:
             paths.reserve(len(sinks))
             for s in sinks:
                 paths.push_back(<string> s.encode())
