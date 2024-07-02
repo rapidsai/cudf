@@ -792,7 +792,7 @@ DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
       gpuDecodePageDataGeneric<uint8_t,
                                decode_block_size,
                                decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED,
-                               true,
+                               false,
                                true,
                                decode_fixed_width_split_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
@@ -801,7 +801,7 @@ DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
       gpuDecodePageDataGeneric<uint8_t,
                                decode_block_size,
                                decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT,
-                               true,
+                               false,
                                false,
                                decode_fixed_width_split_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
@@ -812,7 +812,7 @@ DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
       gpuDecodePageDataGeneric<uint16_t,
                                decode_block_size,
                                decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED,
-                               true,
+                               false,
                                true,
                                decode_fixed_width_split_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
@@ -821,7 +821,7 @@ DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
       gpuDecodePageDataGeneric<uint16_t,
                                decode_block_size,
                                decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT,
-                               true,
+                               false,
                                false,
                                decode_fixed_width_split_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
