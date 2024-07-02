@@ -96,6 +96,14 @@ struct bpe_equal {
     auto const right = d_strings.element<cudf::string_view>(lhs + 1);
     return (left == rhs.first) && (right == rhs.second);
   }
+  // used by find
+  __device__ bool operator()(merge_pair_type const& lhs, cudf::size_type rhs) const noexcept
+  {
+    rhs *= 2;
+    auto const left  = d_strings.element<cudf::string_view>(rhs);
+    auto const right = d_strings.element<cudf::string_view>(rhs + 1);
+    return (left == lhs.first) && (right == lhs.second);
+  }
 };
 
 using bpe_probe_scheme = cuco::linear_probing<1, bpe_hasher>;
@@ -153,6 +161,11 @@ struct mp_equal {
   {
     auto const left = d_strings.element<cudf::string_view>(lhs);
     return left == rhs;
+  }
+  __device__ bool operator()(cudf::string_view const& lhs, cudf::size_type rhs) const noexcept
+  {
+    auto const right = d_strings.element<cudf::string_view>(rhs);
+    return lhs == right;
   }
 };
 

@@ -9,7 +9,8 @@ import pytest
 
 import cudf
 from cudf import concat
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 # most tests are similar to pandas drop_duplicates
 

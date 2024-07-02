@@ -365,6 +365,7 @@ add_library(
   src/interop/to_arrow_device.cu
   src/interop/from_arrow_device.cu
   src/interop/from_arrow_host.cu
+  src/interop/from_arrow_stream.cu
   src/interop/to_arrow_schema.cpp
   src/interop/detail/arrow_allocator.cpp
   src/io/avro/avro.cpp
@@ -502,6 +503,7 @@ add_library(
   src/reductions/product.cu
   src/reductions/reductions.cpp
   src/reductions/scan/rank_scan.cu
+  src/reductions/scan/ewm.cu
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
@@ -661,6 +663,7 @@ add_library(
   src/unary/math_ops.cu
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
+  src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp

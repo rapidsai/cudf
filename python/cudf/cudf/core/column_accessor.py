@@ -6,16 +6,7 @@ import itertools
 import sys
 from collections import abc
 from functools import cached_property, reduce
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Mapping,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 import numpy as np
 import pandas as pd
@@ -98,13 +89,13 @@ class ColumnAccessor(abc.MutableMapping):
         column length and type
     """
 
-    _data: "Dict[Any, ColumnBase]"
+    _data: "dict[Any, ColumnBase]"
     multiindex: bool
-    _level_names: Tuple[Any, ...]
+    _level_names: tuple[Any, ...]
 
     def __init__(
         self,
-        data: Union[abc.MutableMapping, ColumnAccessor, None] = None,
+        data: abc.MutableMapping | ColumnAccessor | None = None,
         multiindex: bool = False,
         level_names=None,
         rangeindex: bool = False,
@@ -210,7 +201,7 @@ class ColumnAccessor(abc.MutableMapping):
         )
 
     @property
-    def level_names(self) -> Tuple[Any, ...]:
+    def level_names(self) -> tuple[Any, ...]:
         if self._level_names is None or len(self._level_names) == 0:
             return tuple((None,) * max(1, self.nlevels))
         else:
@@ -237,11 +228,11 @@ class ColumnAccessor(abc.MutableMapping):
             return len(next(iter(self.values())))
 
     @cached_property
-    def names(self) -> Tuple[Any, ...]:
+    def names(self) -> tuple[Any, ...]:
         return tuple(self.keys())
 
     @cached_property
-    def columns(self) -> Tuple[ColumnBase, ...]:
+    def columns(self) -> tuple[ColumnBase, ...]:
         return tuple(self.values())
 
     @cached_property
@@ -481,6 +472,7 @@ class ColumnAccessor(abc.MutableMapping):
             new_keys[n][i], new_keys[n][j] = row[j], row[i]
             new_dict.update({row: tuple(new_keys[n])})
 
+        # TODO: Change to deep=False when copy-on-write is default
         new_data = {new_dict[k]: v.copy(deep=True) for k, v in self.items()}
 
         # swap level_names for i and j
@@ -610,7 +602,7 @@ class ColumnAccessor(abc.MutableMapping):
         return key + (pad_value,) * (self.nlevels - len(key))
 
     def rename_levels(
-        self, mapper: Union[Mapping[Any, Any], Callable], level: Optional[int]
+        self, mapper: Mapping[Any, Any] | Callable, level: int | None
     ) -> ColumnAccessor:
         """
         Rename the specified levels of the given ColumnAccessor
@@ -678,10 +670,11 @@ class ColumnAccessor(abc.MutableMapping):
                 raise ValueError("Duplicate column names are not allowed")
 
         data = dict(zip(new_col_names, self.values()))
-        return self.__class__(
+        return type(self)(
             data=data,
             level_names=self.level_names,
             multiindex=self.multiindex,
+            label_dtype=self.label_dtype,
             verify=False,
         )
 

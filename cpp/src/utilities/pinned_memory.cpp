@@ -43,9 +43,11 @@ class fixed_pinned_pool_memory_resource {
 
  public:
   fixed_pinned_pool_memory_resource(size_t size)
-    : pool_size_{size}, pool_{new host_pooled_mr(upstream_mr_, size, size)}
+    :  // rmm requires the pool size to be a multiple of 256 bytes
+      pool_size_{rmm::align_up(size, rmm::CUDA_ALLOCATION_ALIGNMENT)},
+      pool_{new host_pooled_mr(upstream_mr_, pool_size_, pool_size_)}
   {
-    if (pool_size_ == 0) { return; }
+    CUDF_LOG_INFO("Pinned pool size = {}", pool_size_);
 
     // Allocate full size from the pinned pool to figure out the beginning and end address
     pool_begin_ = pool_->allocate_async(pool_size_, stream_);
@@ -145,12 +147,8 @@ CUDF_EXPORT rmm::host_device_async_resource_ref& make_default_pinned_mr(
       return std::min(total / 200, size_t{100} * 1024 * 1024);
     }();
 
-    // rmm requires the pool size to be a multiple of 256 bytes
-    auto const aligned_size = rmm::align_up(size, rmm::RMM_DEFAULT_HOST_ALIGNMENT);
-    CUDF_LOG_INFO("Pinned pool size = {}", aligned_size);
-
     // make the pool with max size equal to the initial size
-    return fixed_pinned_pool_memory_resource{aligned_size};
+    return fixed_pinned_pool_memory_resource{size};
   }();
 
   static rmm::host_device_async_resource_ref mr_ref{mr};
@@ -212,5 +210,19 @@ bool config_default_pinned_memory_resource(pinned_mr_options const& opts)
   make_host_mr(opts, &did_configure);
   return did_configure;
 }
+
+CUDF_EXPORT auto& kernel_pinned_copy_threshold()
+{
+  // use cudaMemcpyAsync for all pinned copies
+  static std::atomic<size_t> threshold = 0;
+  return threshold;
+}
+
+void set_kernel_pinned_copy_threshold(size_t threshold)
+{
+  kernel_pinned_copy_threshold() = threshold;
+}
+
+size_t get_kernel_pinned_copy_threshold() { return kernel_pinned_copy_threshold(); }
 
 }  // namespace cudf

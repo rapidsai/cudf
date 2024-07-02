@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import json
 import types
 from functools import cache
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, NoReturn
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import pyarrow as pa
 from typing_extensions import assert_never
@@ -29,7 +30,7 @@ import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import DataFrame, NamedColumn
-from cudf_polars.utils import sorting
+from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -56,7 +57,6 @@ __all__ = [
     "MapFunction",
     "Union",
     "HConcat",
-    "ExtContext",
 ]
 
 
@@ -124,12 +124,17 @@ def broadcast(
     ]
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class IR:
     """Abstract plan node, representing an unevaluated dataframe."""
 
     schema: Schema
     """Mapping from column names to their data types."""
+
+    def __post_init__(self):
+        """Validate preconditions."""
+        if any(dtype.id() == plc.TypeId.EMPTY for dtype in self.schema.values()):
+            raise NotImplementedError("Cannot make empty columns.")
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """
@@ -153,10 +158,12 @@ class IR:
             since the translation phase should pick up things that we
             cannot handle.
         """
-        raise NotImplementedError
+        raise NotImplementedError(
+            f"Evaluation of plan {type(self).__name__}"
+        )  # pragma: no cover
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class PythonScan(IR):
     """Representation of input from a python function."""
 
@@ -170,12 +177,14 @@ class PythonScan(IR):
         raise NotImplementedError("PythonScan not implemented")
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Scan(IR):
     """Input from files."""
 
-    typ: Any
+    typ: str
     """What type of file are we reading? Parquet, CSV, etc..."""
+    options: tuple[Any, ...]
+    """Type specific options, as json-encoded strings."""
     paths: list[str]
     """List of paths to read from."""
     file_options: Any
@@ -195,7 +204,9 @@ class Scan(IR):
         if self.file_options.n_rows is not None:
             raise NotImplementedError("row limit in scan")
         if self.typ not in ("csv", "parquet"):
-            raise NotImplementedError(f"Unhandled scan type: {self.typ}")
+            raise NotImplementedError(
+                f"Unhandled scan type: {self.typ}"
+            )  # pragma: no cover; polars raises on the rust side for now
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -203,17 +214,21 @@ class Scan(IR):
         with_columns = options.with_columns
         row_index = options.row_index
         if self.typ == "csv":
+            opts, cloud_opts = map(json.loads, self.options)
             df = DataFrame.from_cudf(
                 cudf.concat(
                     [cudf.read_csv(p, usecols=with_columns) for p in self.paths]
                 )
             )
         elif self.typ == "parquet":
+            opts, cloud_opts = map(json.loads, self.options)
             cdf = cudf.read_parquet(self.paths, columns=with_columns)
             assert isinstance(cdf, cudf.DataFrame)
             df = DataFrame.from_cudf(cdf)
         else:
-            assert_never(self.typ)
+            raise NotImplementedError(
+                f"Unhandled scan type: {self.typ}"
+            )  # pragma: no cover; post init trips first
         if row_index is not None:
             name, offset = row_index
             dtype = self.schema[name]
@@ -245,7 +260,7 @@ class Scan(IR):
             return df.filter(mask)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Cache(IR):
     """
     Return a cached plan node.
@@ -266,7 +281,7 @@ class Cache(IR):
             return cache.setdefault(self.key, self.value.evaluate(cache=cache))
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class DataFrameScan(IR):
     """
     Input from an existing polars DataFrame.
@@ -286,13 +301,13 @@ class DataFrameScan(IR):
         pdf = pl.DataFrame._from_pydf(self.df)
         if self.projection is not None:
             pdf = pdf.select(self.projection)
-        # TODO: goes away when libcudf supports large strings
         table = pdf.to_arrow()
         schema = table.schema
         for i, field in enumerate(schema):
-            if field.type == pa.large_string():
-                # TODO: Nested types
-                schema = schema.set(i, pa.field(field.name, pa.string()))
+            schema = schema.set(
+                i, pa.field(field.name, dtypes.downcast_arrow_lists(field.type))
+            )
+        # No-op if the schema is unchanged.
         table = table.cast(schema)
         df = DataFrame.from_table(
             plc.interop.from_arrow(table), list(self.schema.keys())
@@ -307,7 +322,7 @@ class DataFrameScan(IR):
             return df
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Select(IR):
     """Produce a new dataframe selecting given expressions from an input."""
 
@@ -328,7 +343,7 @@ class Select(IR):
         return DataFrame(columns)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Reduce(IR):
     """
     Produce a new dataframe selecting given expressions from an input.
@@ -341,7 +356,9 @@ class Reduce(IR):
     expr: list[expr.NamedExpr]
     """List of expressions to evaluate to form the new dataframe."""
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame]
+    ) -> DataFrame:  # pragma: no cover; polars doesn't emit this node yet
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         columns = broadcast(*(e.evaluate(df) for e in self.expr))
@@ -379,7 +396,7 @@ def placeholder_column(n: int) -> plc.Column:
     )
 
 
-@dataclasses.dataclass(slots=False)
+@dataclasses.dataclass
 class GroupBy(IR):
     """Perform a groupby."""
 
@@ -417,8 +434,6 @@ class GroupBy(IR):
         if isinstance(agg, (expr.BinOp, expr.Cast)):
             return max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, expr.Agg):
-            if agg.name == "implode":
-                raise NotImplementedError("implode in groupby")
             return 1 + max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, (expr.Len, expr.Col, expr.Literal)):
             return 0
@@ -430,7 +445,9 @@ class GroupBy(IR):
         if self.options.rolling is None and self.maintain_order:
             raise NotImplementedError("Maintaining order in groupby")
         if self.options.rolling:
-            raise NotImplementedError("rolling window/groupby")
+            raise NotImplementedError(
+                "rolling window/groupby"
+            )  # pragma: no cover; rollingwindow constructor has already raised
         if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
             raise NotImplementedError("Nested aggregations in groupby")
         self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
@@ -480,7 +497,7 @@ class GroupBy(IR):
         return DataFrame([*result_keys, *results]).slice(self.options.slice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Join(IR):
     """A join of two dataframes."""
 
@@ -493,7 +510,7 @@ class Join(IR):
     right_on: list[expr.NamedExpr]
     """List of expressions used as keys in the right frame."""
     options: tuple[
-        Literal["inner", "left", "full", "leftsemi", "leftanti"],
+        Literal["inner", "left", "full", "leftsemi", "leftanti", "cross"],
         bool,
         tuple[int, int] | None,
         str | None,
@@ -510,11 +527,14 @@ class Join(IR):
 
     def __post_init__(self) -> None:
         """Validate preconditions."""
-        if self.options[0] == "cross":
-            raise NotImplementedError("cross join not implemented")
+        if any(
+            isinstance(e.value, expr.Literal)
+            for e in itertools.chain(self.left_on, self.right_on)
+        ):
+            raise NotImplementedError("Join with literal as join key.")
 
-    @cache
     @staticmethod
+    @cache
     def _joiners(
         how: Literal["inner", "left", "full", "leftsemi", "leftanti"],
     ) -> tuple[
@@ -557,35 +577,42 @@ class Join(IR):
         """Evaluate and return a dataframe."""
         left = self.left.evaluate(cache=cache)
         right = self.right.evaluate(cache=cache)
-        left_on = DataFrame(
-            broadcast(
-                *(e.evaluate(left) for e in self.left_on), target_length=left.num_rows
-            )
-        )
-        right_on = DataFrame(
-            broadcast(
-                *(e.evaluate(right) for e in self.right_on),
-                target_length=right.num_rows,
-            )
-        )
         how, join_nulls, zlice, suffix, coalesce = self.options
+        suffix = "_right" if suffix is None else suffix
+        if how == "cross":
+            # Separate implementation, since cross_join returns the
+            # result, not the gather maps
+            columns = plc.join.cross_join(left.table, right.table).columns()
+            left_cols = [
+                NamedColumn(new, old.name).sorted_like(old)
+                for new, old in zip(columns[: left.num_columns], left.columns)
+            ]
+            right_cols = [
+                NamedColumn(
+                    new,
+                    old.name
+                    if old.name not in left.column_names_set
+                    else f"{old.name}{suffix}",
+                )
+                for new, old in zip(columns[left.num_columns :], right.columns)
+            ]
+            return DataFrame([*left_cols, *right_cols])
+        # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
+        left_on = DataFrame(broadcast(*(e.evaluate(left) for e in self.left_on)))
+        right_on = DataFrame(broadcast(*(e.evaluate(right) for e in self.right_on)))
         null_equality = (
             plc.types.NullEquality.EQUAL
             if join_nulls
             else plc.types.NullEquality.UNEQUAL
         )
-        suffix = "_right" if suffix is None else suffix
         join_fn, left_policy, right_policy = Join._joiners(how)
         if right_policy is None:
             # Semi join
             lg = join_fn(left_on.table, right_on.table, null_equality)
-            left = left.replace_columns(*left_on.columns)
             table = plc.copying.gather(left.table, lg, left_policy)
             result = DataFrame.from_table(table, left.column_names)
         else:
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
-            left = left.replace_columns(*left_on.columns)
-            right = right.replace_columns(*right_on.columns)
             if coalesce and how == "inner":
                 right = right.discard_columns(right_on.column_names_set)
             left = DataFrame.from_table(
@@ -619,7 +646,7 @@ class Join(IR):
         return result.slice(zlice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class HStack(IR):
     """Add new columns to a dataframe."""
 
@@ -648,7 +675,7 @@ class HStack(IR):
         return df.with_columns(columns)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Distinct(IR):
     """Produce a new dataframe with distinct rows."""
 
@@ -718,7 +745,7 @@ class Distinct(IR):
         return result.slice(self.zlice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Sort(IR):
     """Sort a dataframe."""
 
@@ -787,7 +814,7 @@ class Sort(IR):
         return DataFrame(columns).slice(self.zlice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Slice(IR):
     """Slice a dataframe."""
 
@@ -804,7 +831,7 @@ class Slice(IR):
         return df.slice((self.offset, self.length))
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Filter(IR):
     """Filter a dataframe with a boolean mask."""
 
@@ -820,7 +847,7 @@ class Filter(IR):
         return df.filter(mask)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Projection(IR):
     """Select a subset of columns from a dataframe."""
 
@@ -837,7 +864,7 @@ class Projection(IR):
         return DataFrame(columns)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class MapFunction(IR):
     """Apply some function to a dataframe."""
 
@@ -850,9 +877,11 @@ class MapFunction(IR):
 
     _NAMES: ClassVar[frozenset[str]] = frozenset(
         [
-            "drop_nulls",
             "rechunk",
-            "merge_sorted",
+            # libcudf merge is not stable wrt order of inputs, since
+            # it uses a priority queue to manage the tables it produces.
+            # See: https://github.com/rapidsai/cudf/issues/16010
+            # "merge_sorted",
             "rename",
             "explode",
         ]
@@ -869,46 +898,20 @@ class MapFunction(IR):
                 # polars requires that all to-explode columns have the
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
-        elif self.name == "merge_sorted":
-            assert isinstance(self.df, Union)
-            (key_column,) = self.options
-            if key_column not in self.df.dfs[0].schema:
-                raise ValueError(f"Key column {key_column} not found")
+        elif self.name == "rename":
+            old, new, _ = self.options
+            # TODO: perhaps polars should validate renaming in the IR?
+            if len(new) != len(set(new)) or (
+                set(new) & (set(self.df.schema.keys() - set(old)))
+            ):
+                raise NotImplementedError("Duplicate new names in rename.")
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
-        if self.name == "merge_sorted":
-            # merge_sorted operates on Union inputs
-            # but if we evaluate the Union then we can't unpick the
-            # pieces, so we dive inside and evaluate the pieces by hand
-            assert isinstance(self.df, Union)
-            first, *rest = (c.evaluate(cache=cache) for c in self.df.dfs)
-            (key_column,) = self.options
-            if not all(first.column_names == r.column_names for r in rest):
-                raise ValueError("DataFrame shapes/column names don't match")
-            # Already validated that key_column is in column names
-            index = first.column_names.index(key_column)
-            return DataFrame.from_table(
-                plc.merge.merge_sorted(
-                    [first.table, *(df.table for df in rest)],
-                    [index],
-                    [plc.types.Order.ASCENDING],
-                    [plc.types.NullOrder.BEFORE],
-                ),
-                first.column_names,
-            ).sorted_like(first, subset={key_column})
-        elif self.name == "rechunk":
+        if self.name == "rechunk":
             # No-op in our data model
-            return self.df.evaluate(cache=cache)
-        elif self.name == "drop_nulls":
-            df = self.df.evaluate(cache=cache)
-            (subset,) = self.options
-            subset = set(subset)
-            indices = [i for i, name in enumerate(df.column_names) if name in subset]
-            return DataFrame.from_table(
-                plc.stream_compaction.drop_nulls(df.table, indices, len(indices)),
-                df.column_names,
-            ).sorted_like(df)
+            # Don't think this appears in a plan tree from python
+            return self.df.evaluate(cache=cache)  # pragma: no cover
         elif self.name == "rename":
             df = self.df.evaluate(cache=cache)
             # final tag is "swapping" which is useful for the
@@ -924,10 +927,10 @@ class MapFunction(IR):
                 plc.lists.explode_outer(df.table, index), df.column_names
             ).sorted_like(df, subset=subset)
         else:
-            raise AssertionError("Should never be reached")
+            raise AssertionError("Should never be reached")  # pragma: no cover
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Union(IR):
     """Concatenate dataframes vertically."""
 
@@ -951,7 +954,7 @@ class Union(IR):
         ).slice(self.zlice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class HConcat(IR):
     """Concatenate dataframes horizontally."""
 
@@ -963,24 +966,4 @@ class HConcat(IR):
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
         return DataFrame(
             list(itertools.chain.from_iterable(df.columns for df in dfs)),
-        )
-
-
-@dataclasses.dataclass(slots=True)
-class ExtContext(IR):
-    """
-    Concatenate dataframes horizontally.
-
-    Prefer HConcat, since this is going to be deprecated on the polars side.
-    """
-
-    df: IR
-    """Input."""
-    extra: list[IR]
-    """List of extra inputs."""
-
-    def __post_init__(self) -> NoReturn:
-        """Validate preconditions."""
-        raise NotImplementedError(
-            "ExtContext will be deprecated, use horizontal concat instead."
         )

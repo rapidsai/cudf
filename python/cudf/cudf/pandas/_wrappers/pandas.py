@@ -522,6 +522,22 @@ StringArray = make_final_proxy_type(
     },
 )
 
+ArrowStringArrayNumpySemantics = make_final_proxy_type(
+    "ArrowStringArrayNumpySemantics",
+    _Unusable,
+    pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+)
+
+ArrowStringArray = make_final_proxy_type(
+    "ArrowStringArray",
+    _Unusable,
+    pd.core.arrays.string_arrow.ArrowStringArray,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+)
+
 StringDtype = make_final_proxy_type(
     "StringDtype",
     _Unusable,
@@ -789,7 +805,7 @@ Rolling = make_intermediate_proxy_type(
 
 ExponentialMovingWindow = make_intermediate_proxy_type(
     "ExponentialMovingWindow",
-    _Unusable,
+    cudf.core.window.ewm.ExponentialMovingWindow,
     pd.core.window.ewm.ExponentialMovingWindow,
 )
 
