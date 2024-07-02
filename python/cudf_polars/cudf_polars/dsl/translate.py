@@ -87,9 +87,11 @@ def _(
 def _(
     node: pl_ir.Scan, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
+    typ, *options = node.scan_type
     return ir.Scan(
         schema,
-        node.scan_type,
+        typ,
+        tuple(options),
         node.paths,
         node.file_options,
         translate_named_expr(visitor, n=node.predicate)
@@ -445,7 +447,17 @@ def _(node: pl_expr.Agg, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Ex
         dtype,
         node.name,
         node.options,
-        translate_expr(visitor, n=node.arguments),
+        *(translate_expr(visitor, n=n) for n in node.arguments),
+    )
+
+
+@_translate_expr.register
+def _(node: pl_expr.Ternary, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
+    return expr.Ternary(
+        dtype,
+        translate_expr(visitor, n=node.predicate),
+        translate_expr(visitor, n=node.truthy),
+        translate_expr(visitor, n=node.falsy),
     )
 
 
