@@ -16,9 +16,65 @@ from typing import Any, Callable, Literal, Mapping
 
 import numpy as np
 
+from rmm import RMMError
+
 from ..options import _env_get_bool
 from ..testing import assert_eq
 from .annotation import nvtx
+
+
+class CudfPandasWarning(UserWarning):
+    """Base warning for an incorrect result in cuDF or Pandas. Or the Pandas result was uncomputable"""
+
+    pass
+
+
+class ResultsDifferentWarning(CudfPandasWarning):
+    """Warns when the results from cuDF and Pandas were different"""
+
+    pass
+
+
+class PandasErrorWarning(CudfPandasWarning):
+    """Warns when the results from Pandas could not be computed"""
+
+    pass
+
+
+class DebuggingFailedWarning(CudfPandasWarning):
+    """Warns when the cuDF-Pandas debugging fails"""
+
+    pass
+
+
+class FallbackWarning(CudfPandasWarning):
+    """Base warning for when fallback occurs"""
+
+    pass
+
+
+class OOMWarning(FallbackWarning):
+    """Warns when cuDF produces a MemoryError or an rmm.RMMError"""
+
+    pass
+
+
+class NotImplementedErrorWarning(FallbackWarning):
+    """Warns cuDF produces a NotImplementedError"""
+
+    pass
+
+
+class AttributeErrorWarning(FallbackWarning):
+    """Warns when cuDF produces an AttributeError"""
+
+    pass
+
+
+class TypeErrorWarning(FallbackWarning):
+    """Warns when cuDF produces a TypeError"""
+
+    pass
 
 
 def call_operator(fn, args, kwargs):
@@ -915,22 +971,50 @@ def _fast_slow_function_call(
                 except Exception as e:
                     warnings.warn(
                         "The result from pandas could not be computed. "
-                        f"The exception was {e}."
+                        f"The exception was {e}.",
+                        PandasErrorWarning,
                     )
                 else:
                     try:
-                        _assert_fast_slow_eq(result, slow_result)
+                        _assert_fast_slow_eq(result, slow_result, **kwargs)
                     except AssertionError as e:
                         warnings.warn(
                             "The results from cudf and pandas were different. "
-                            f"The exception was {e}."
+                            f"The exception was {e}.",
+                            ResultsDifferentWarning,
                         )
                     except Exception as e:
                         warnings.warn(
-                            "Pandas debugging mode failed. "
-                            f"The exception was {e}."
+                            "cuDF-Pandas debugging failed. "
+                            f"The exception was {e}.",
+                            DebuggingFailedWarning,
                         )
-    except Exception:
+    except Exception as e:
+        if _env_get_bool("CUDF_PANDAS_FALLBACK_DEBUGGING", False):
+            if isinstance(e, (RMMError, MemoryError)):
+                warnings.warn(
+                    "Out of Memory Error. Falling back to the slow path. "
+                    f"The exception was {e}.",
+                    OOMWarning,
+                )
+            elif isinstance(e, NotImplementedError):
+                warnings.warn(
+                    "NotImplementedError. Falling back to the slow path. "
+                    f"The exception was {e}.",
+                    NotImplementedErrorWarning,
+                )
+            elif isinstance(e, AttributeError):
+                warnings.warn(
+                    "AttributeError. Falling back to the slow path. "
+                    f"The exception was {e}.",
+                    AttributeErrorWarning,
+                )
+            elif isinstance(e, TypeError):
+                warnings.warn(
+                    "TypeError. Falling back to the slow path. "
+                    f"The exception was {e}.",
+                    TypeErrorWarning,
+                )
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
