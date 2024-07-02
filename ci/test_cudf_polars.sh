@@ -25,15 +25,13 @@ RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from
 rapids-logger "Install cudf wheel"
 python -m pip install --find-links $(pwd)/dist $(echo ./dist/cudf*.whl)[test]
 
+rapids-logger "Install cudf_polars"
+python -m pip install 'polars>=1.0.0a0'
+python -m pip install --no-deps python/cudf_polars
+
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
-
-rapids-logger "Install polars (allow pre-release versions)"
-python -m pip install 'polars>=1.0.0a0'
-
-rapids-logger "Install cudf_polars"
-python -m pip install --no-deps python/cudf_polars
 
 rapids-logger "Run cudf_polars tests"
 
