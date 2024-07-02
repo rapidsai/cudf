@@ -65,7 +65,7 @@ markers = [
 ]
 log_format = %(asctime)s %(levelname)s %(message)s
 log_date_format = %Y-%m-%d %H:%M:%S
-log_file = pandas-tests.log
+log_file = cudf_pandas_unit_tests_debug.log
 log_file_level = INFO
 log_cli = true
 EOF
