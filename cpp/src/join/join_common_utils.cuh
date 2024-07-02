@@ -177,23 +177,37 @@ void build_join_hash_table(
   CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty");
   CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows");
 
+  std::unordered_set<cudf::type_id> build_column_types;
+  for (auto col : build) {
+    build_column_types.insert(col.type().id());
+  }
+
   auto const row_hash   = experimental::row::hash::row_hasher{preprocessed_build};
-  auto const hash_build = row_hash.device_hasher(nullate::DYNAMIC{has_nulls});
+  auto const hash_build = row_hash.device_hasher(build_column_types, nullate::DYNAMIC{has_nulls});
 
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
-  make_pair_function pair_func{hash_build, empty_key_sentinel};
-
-  auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
   size_type const build_table_num_rows{build.num_rows()};
   if (nulls_equal == cudf::null_equality::EQUAL or (not nullable(build))) {
-    hash_table.insert(iter, iter + build_table_num_rows, stream.value());
+    std::visit(
+      [&](auto&& hasher) {
+        make_pair_function pair_func{hasher, empty_key_sentinel};
+        auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
+        hash_table.insert(iter, iter + build_table_num_rows, stream.value());
+      },
+      hash_build);
   } else {
     thrust::counting_iterator<size_type> stencil(0);
     row_is_valid pred{bitmask};
 
-    // insert valid rows
-    hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
+    std::visit(
+      [&](auto&& hasher) {
+        make_pair_function pair_func{hasher, empty_key_sentinel};
+        auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
+        // insert valid rows
+        hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
+      },
+      hash_build);
   }
 }
 
