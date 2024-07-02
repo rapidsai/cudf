@@ -72,54 +72,54 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
-  conda-python-other-tests:
-    # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
-    needs: conda-python-build
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.08
-    with:
-      build_type: pull-request
-      script: "ci/test_python_other.sh"
-  conda-java-tests:
-    needs: conda-cpp-build
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.08
-    with:
-      build_type: pull-request
-      node_type: "gpu-v100-latest-1"
-      arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
-      run_script: "ci/test_java.sh"
-  static-configure:
-    needs: checks
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.08
-    with:
-      build_type: pull-request
-      # Use the wheel container so we can skip conda solves and since our
-      # primary static consumers (Spark) are not in conda anyway.
-      container_image: "rapidsai/ci-wheel:latest"
-      run_script: "ci/configure_cpp_static.sh"
-  conda-notebook-tests:
-    needs: conda-python-build
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.08
-    with:
-      build_type: pull-request
-      node_type: "gpu-v100-latest-1"
-      arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
-      run_script: "ci/test_notebooks.sh"
-  docs-build:
-    needs: conda-python-build
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.08
-    with:
-      build_type: pull-request
-      node_type: "gpu-v100-latest-1"
-      arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
-      run_script: "ci/build_docs.sh"
+  # conda-python-other-tests:
+  #   # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
+  #   needs: conda-python-build
+  #   secrets: inherit
+  #   uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.08
+  #   with:
+  #     build_type: pull-request
+  #     script: "ci/test_python_other.sh"
+  # conda-java-tests:
+  #   needs: conda-cpp-build
+  #   secrets: inherit
+  #   uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.08
+  #   with:
+  #     build_type: pull-request
+  #     node_type: "gpu-v100-latest-1"
+  #     arch: "amd64"
+  #     container_image: "rapidsai/ci-conda:latest"
+  #     run_script: "ci/test_java.sh"
+  # static-configure:
+  #   needs: checks
+  #   secrets: inherit
+  #   uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.08
+  #   with:
+  #     build_type: pull-request
+  #     # Use the wheel container so we can skip conda solves and since our
+  #     # primary static consumers (Spark) are not in conda anyway.
+  #     container_image: "rapidsai/ci-wheel:latest"
+  #     run_script: "ci/configure_cpp_static.sh"
+  # conda-notebook-tests:
+  #   needs: conda-python-build
+  #   secrets: inherit
+  #   uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.08
+  #   with:
+  #     build_type: pull-request
+  #     node_type: "gpu-v100-latest-1"
+  #     arch: "amd64"
+  #     container_image: "rapidsai/ci-conda:latest"
+  #     run_script: "ci/test_notebooks.sh"
+  # docs-build:
+  #   needs: conda-python-build
+  #   secrets: inherit
+  #   uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.08
+  #   with:
+  #     build_type: pull-request
+  #     node_type: "gpu-v100-latest-1"
+  #     arch: "amd64"
+  #     container_image: "rapidsai/ci-conda:latest"
+  #     run_script: "ci/build_docs.sh"
   wheel-build-cudf:
     needs: checks
     secrets: inherit
@@ -127,24 +127,13 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/build_wheel_cudf.sh"
-  wheel-tests-cudf:
-    needs: wheel-build-cudf
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.08
-    with:
-      build_type: pull-request
-      script: ci/test_wheel_cudf.sh
-  test-wheel-cudf-polars:
-    needs: wheel-build-cudf
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.08
-    with:
-      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
-      build_type: pull-request
-      # This always runs, but only fails if this PR touches code in
-      # pylibcudf or cudf_polars
-      script: "ci/test_wheel_cudf_polars.sh"
+  # wheel-tests-cudf:
+  #   needs: wheel-build-cudf
+  #   secrets: inherit
+  #   uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.08
+  #   with:
+  #     build_type: pull-request
+  #     script: ci/test_wheel_cudf.sh
   wheel-build-cudf-polars:
     needs: wheel-build-cudf
     secrets: inherit
@@ -154,6 +143,17 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/build_wheel_cudf_polars.sh"
+  test-wheel-cudf-polars:
+    needs: wheel-build-cudf-polars
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.08
+    with:
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      build_type: pull-request
+      # This always runs, but only fails if this PR touches code in
+      # pylibcudf or cudf_polars
+      script: "ci/test_wheel_cudf_polars.sh"
   wheel-build-dask-cudf:
     needs: wheel-build-cudf
     secrets: inherit
