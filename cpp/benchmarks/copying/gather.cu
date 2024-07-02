@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,5 +71,5 @@ void BM_gather(benchmark::State& state)
     ->Ranges({{1 << 10, 1 << 26}, {1, 8}})                     \
     ->UseManualTime();
 
-GBM_BENCHMARK_DEFINE(double_coalesce_x, double, true);
-GBM_BENCHMARK_DEFINE(double_coalesce_o, double, false);
+GBM_BENCHMARK_DEFINE(double_coalesced, double, true);
+GBM_BENCHMARK_DEFINE(double_shuffled, double, false);
