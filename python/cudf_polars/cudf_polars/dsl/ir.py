@@ -233,21 +233,23 @@ class Scan(IR):
             )  # pragma: no cover; post init trips first
         if row_index is not None:
             name, offset = row_index
-            dtype = self.schema[name]
-            step = plc.interop.from_arrow(
-                pa.scalar(1, type=plc.interop.to_arrow(dtype))
-            )
-            init = plc.interop.from_arrow(
-                pa.scalar(offset, type=plc.interop.to_arrow(dtype))
-            )
-            index = NamedColumn(
-                plc.filling.sequence(df.num_rows, init, step),
-                name,
-                is_sorted=plc.types.Sorted.YES,
-                order=plc.types.Order.ASCENDING,
-                null_order=plc.types.NullOrder.AFTER,
-            )
-            df = DataFrame([index, *df.columns])
+            # Only make row index if the schema demands it
+            if name in self.schema:
+                dtype = self.schema[name]
+                step = plc.interop.from_arrow(
+                    pa.scalar(1, type=plc.interop.to_arrow(dtype))
+                )
+                init = plc.interop.from_arrow(
+                    pa.scalar(offset, type=plc.interop.to_arrow(dtype))
+                )
+                index = NamedColumn(
+                    plc.filling.sequence(df.num_rows, init, step),
+                    name,
+                    is_sorted=plc.types.Sorted.YES,
+                    order=plc.types.Order.ASCENDING,
+                    null_order=plc.types.NullOrder.AFTER,
+                )
+                df = DataFrame([index, *df.columns])
         # TODO: should be true, but not the case until we get
         # cudf-classic out of the loop for IO since it converts date32
         # to datetime.

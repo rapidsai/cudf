@@ -97,3 +97,14 @@ def test_scan_unsupported_raises(tmp_path):
     df.write_ndjson(tmp_path / "df.json")
     q = pl.scan_ndjson(tmp_path / "df.json")
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.xfail(reason="https://github.com/pola-rs/polars/pull/17363")
+def test_scan_row_index_projected_out(tmp_path):
+    df = pl.DataFrame({"a": [1, 2, 3]})
+
+    df.write_parquet(tmp_path / "df.pq")
+
+    q = pl.scan_parquet(tmp_path / "df.pq").with_row_index().select(pl.col("a"))
+
+    assert_gpu_result_equal(q)
