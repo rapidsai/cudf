@@ -32,8 +32,13 @@
 #include <cudf/reduction.hpp>
 #include <cudf/column/column_factories.hpp>
 
+
+// The base directory for the TPC-H dataset
 const std::string BASE_DATASET_DIR = "/home/jayjeetc/tpch_sf1/";
 
+/**
+ * @brief A class to represent a table with column names attached
+ */
 class table_with_cols {
     public:
         table_with_cols(
@@ -42,12 +47,25 @@ class table_with_cols {
         cudf::table_view table() {
             return tbl->view();
         }
+        /**
+         * @brief Return the column view for a given column name
+         *
+         * @param col_name The name of the column
+         */
         cudf::column_view column(std::string col_name) {
             return tbl->view().column(col_id(col_name));
         }
+        /**
+         * @param Return the column names of the table
+         */
         std::vector<std::string> columns() {
             return col_names;
         }
+        /**
+         * @brief Translate a column name to a column index
+         *
+         * @param col_name The name of the column
+         */
         cudf::size_type col_id(std::string col_name) {
             auto it = std::find(col_names.begin(), col_names.end(), col_name);
             if (it == col_names.end()) {
@@ -55,6 +73,12 @@ class table_with_cols {
             }
             return std::distance(col_names.begin(), it);
         }
+        /**
+         * @brief Append a column to the table
+         *
+         * @param col The column to append
+         * @param col_name The name of the appended column
+         */
         std::unique_ptr<table_with_cols> append(std::unique_ptr<cudf::column>& col, std::string col_name) {
             std::vector<std::unique_ptr<cudf::column>> updated_cols;
             std::vector<std::string> updated_col_names;
@@ -67,6 +91,11 @@ class table_with_cols {
             auto updated_table = std::make_unique<cudf::table>(std::move(updated_cols));
             return std::make_unique<table_with_cols>(std::move(updated_table), updated_col_names);
         }
+        /**
+         * @brief Select a subset of columns from the table
+         *
+         * @param col_names The names of the columns to select
+         */
         cudf::table_view select(std::vector<std::string> col_names) {
             std::vector<cudf::size_type> col_indices;
             for (auto &col_name : col_names) {
@@ -74,6 +103,11 @@ class table_with_cols {
             }
             return tbl->select(col_indices);
         }
+        /**
+         * @brief Write the table to a parquet file
+         *
+         * @param filepath The path to the parquet file
+         */
         void to_parquet(std::string filepath) {
             auto sink_info = cudf::io::sink_info(filepath);
             cudf::io::table_metadata metadata;
@@ -133,6 +167,15 @@ std::unique_ptr<cudf::table> join_and_gather(
     return std::make_unique<cudf::table>(std::move(joined_cols));
 }
 
+/**
+ * @brief Apply an inner join operation to two tables
+ *
+ * @param left_input The left input table
+ * @param right_input The right input table
+ * @param left_on The columns to join on in the left table
+ * @param right_on The columns to join on in the right table
+ * @param compare_nulls The null equality policy
+ */
 std::unique_ptr<table_with_cols> apply_inner_join(
   std::unique_ptr<table_with_cols>& left_input,
   std::unique_ptr<table_with_cols>& right_input,
@@ -155,6 +198,12 @@ std::unique_ptr<table_with_cols> apply_inner_join(
         concat(left_input->columns(), right_input->columns()));
 }
 
+/**
+ * @brief Apply a filter predicated to a table
+ *
+ * @param table The input table
+ * @param predicate The filter predicate
+ */
 std::unique_ptr<table_with_cols> apply_filter(
     std::unique_ptr<table_with_cols>& table, cudf::ast::operation& predicate) {
     auto boolean_mask = cudf::compute_column(table->table(), predicate);
@@ -162,6 +211,12 @@ std::unique_ptr<table_with_cols> apply_filter(
     return std::make_unique<table_with_cols>(std::move(result_table), table->columns());
 }
 
+/**
+ * @brief Apply a boolean mask to a table
+ *
+ * @param table The input table
+ * @param mask The boolean mask
+ */
 std::unique_ptr<table_with_cols> apply_mask(
     std::unique_ptr<table_with_cols>& table, std::unique_ptr<cudf::column>& mask) {
     auto result_table = cudf::apply_boolean_mask(table->table(), mask->view());
@@ -173,6 +228,12 @@ struct groupby_context {
     std::unordered_map<std::string, std::vector<std::pair<cudf::aggregation::Kind, std::string>>> values;
 };
 
+/**
+ * @brief Apply a groupby operation to a table
+ *
+ * @param table The input table
+ * @param ctx The groupby context
+ */
 std::unique_ptr<table_with_cols> apply_groupby(
     std::unique_ptr<table_with_cols>& table, groupby_context ctx) {
     auto keys = table->select(ctx.keys);
@@ -213,6 +274,13 @@ std::unique_ptr<table_with_cols> apply_groupby(
         std::move(result_table), result_column_names);
 }
 
+/**
+ * @brief Apply an order by operation to a table
+ *
+ * @param table The input table
+ * @param sort_keys The sort keys
+ * @param sort_key_orders The sort key orders
+ */
 std::unique_ptr<table_with_cols> apply_orderby(
     std::unique_ptr<table_with_cols>& table, 
     std::vector<std::string> sort_keys,
@@ -230,6 +298,13 @@ std::unique_ptr<table_with_cols> apply_orderby(
         std::move(result_table), table->columns());
 }
 
+/**
+ * @brief Apply a reduction operation to a column
+ *
+ * @param column The input column
+ * @param agg_kind The aggregation kind
+ * @param col_name The name of the output column
+ */
 std::unique_ptr<table_with_cols> apply_reduction(
     cudf::column_view& column, cudf::aggregation::Kind agg_kind, std::string col_name) {
     auto agg = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
@@ -245,6 +320,13 @@ std::unique_ptr<table_with_cols> apply_reduction(
     );
 }
 
+/**
+ * @brief Read a parquet file into a table
+ *
+ * @param filename The path to the parquet file
+ * @param columns The columns to read
+ * @param predicate The filter predicate to pushdown
+ */
 std::unique_ptr<table_with_cols> read_parquet(
     std::string filename, std::vector<std::string> columns = {}, std::unique_ptr<cudf::ast::operation> predicate = nullptr) {
     auto source = cudf::io::source_info(filename);
