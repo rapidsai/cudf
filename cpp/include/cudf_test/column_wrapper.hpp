@@ -314,7 +314,12 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end, Validity
   for (auto str = begin; str < end; ++str) {
     std::string tmp = (*v++) ? std::string(*str) : std::string{};
     chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
-    offsets.push_back(offsets.back() + tmp.length());
+    auto const last_offset = static_cast<std::size_t>(offsets.back());
+    auto const next_offset = last_offset + tmp.length();
+    CUDF_EXPECTS(
+      next_offset < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+      "Cannot use strings_column_wrapper to build a large strings column");
+    offsets.push_back(static_cast<cudf::size_type>(next_offset));
   }
   return std::pair(std::move(chars), std::move(offsets));
 };

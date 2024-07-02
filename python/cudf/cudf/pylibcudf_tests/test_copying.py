@@ -5,19 +5,24 @@ import pyarrow.compute as pc
 import pytest
 from utils import (
     DEFAULT_STRUCT_TESTING_TYPE,
+    NESTED_STRUCT_TESTING_TYPE,
     assert_column_eq,
     assert_table_eq,
     cudf_raises,
     is_fixed_width,
     is_floating,
     is_integer,
+    is_nested_list,
+    is_nested_struct,
     is_string,
-    metadata_from_arrow_array,
+    metadata_from_arrow_type,
 )
 
 from cudf._lib import pylibcudf as plc
 
 
+# TODO: consider moving this to conftest and "pairing"
+# it with pa_type, so that they don't get out of sync
 # TODO: Test nullable data
 @pytest.fixture(scope="module")
 def input_column(pa_type):
@@ -28,10 +33,27 @@ def input_column(pa_type):
     elif pa.types.is_boolean(pa_type):
         pa_array = pa.array([True, True, False], type=pa_type)
     elif pa.types.is_list(pa_type):
-        # TODO: Add heterogenous sizes
-        pa_array = pa.array([[1], [2], [3]], type=pa_type)
+        if pa_type.value_type == pa.int64():
+            pa_array = pa.array([[1], [2, 3], [3]], type=pa_type)
+        elif (
+            isinstance(pa_type.value_type, pa.ListType)
+            and pa_type.value_type.value_type == pa.int64()
+        ):
+            pa_array = pa.array([[[1]], [[2, 3]], [[3]]], type=pa_type)
+        else:
+            raise ValueError("Unsupported type " + pa_type.value_type)
     elif pa.types.is_struct(pa_type):
-        pa_array = pa.array([{"v": 1}, {"v": 2}, {"v": 3}], type=pa_type)
+        if not is_nested_struct(pa_type):
+            pa_array = pa.array([{"v": 1}, {"v": 2}, {"v": 3}], type=pa_type)
+        else:
+            pa_array = pa.array(
+                [
+                    {"a": 1, "b_struct": {"b": 1.0}},
+                    {"a": 2, "b_struct": {"b": 2.0}},
+                    {"a": 3, "b_struct": {"b": 3.0}},
+                ],
+                type=pa_type,
+            )
     else:
         raise ValueError("Unsupported type")
     return pa_array, plc.interop.from_arrow(pa_array)
@@ -55,13 +77,37 @@ def target_column(pa_type):
             [False, True, True, False, True, False], type=pa_type
         )
     elif pa.types.is_list(pa_type):
-        # TODO: Add heterogenous sizes
-        pa_array = pa.array([[4], [5], [6], [7], [8], [9]], type=pa_type)
+        if pa_type.value_type == pa.int64():
+            pa_array = pa.array(
+                [[4], [5, 6], [7], [8], [9], [10]], type=pa_type
+            )
+        elif (
+            isinstance(pa_type.value_type, pa.ListType)
+            and pa_type.value_type.value_type == pa.int64()
+        ):
+            pa_array = pa.array(
+                [[[4]], [[5, 6]], [[7]], [[8]], [[9]], [[10]]], type=pa_type
+            )
+        else:
+            raise ValueError("Unsupported type")
     elif pa.types.is_struct(pa_type):
-        pa_array = pa.array(
-            [{"v": 4}, {"v": 5}, {"v": 6}, {"v": 7}, {"v": 8}, {"v": 9}],
-            type=pa_type,
-        )
+        if not is_nested_struct(pa_type):
+            pa_array = pa.array(
+                [{"v": 4}, {"v": 5}, {"v": 6}, {"v": 7}, {"v": 8}, {"v": 9}],
+                type=pa_type,
+            )
+        else:
+            pa_array = pa.array(
+                [
+                    {"a": 4, "b_struct": {"b": 4.0}},
+                    {"a": 5, "b_struct": {"b": 5.0}},
+                    {"a": 6, "b_struct": {"b": 6.0}},
+                    {"a": 7, "b_struct": {"b": 7.0}},
+                    {"a": 8, "b_struct": {"b": 8.0}},
+                    {"a": 9, "b_struct": {"b": 9.0}},
+                ],
+                type=pa_type,
+            )
     else:
         raise ValueError("Unsupported type")
     return pa_array, plc.interop.from_arrow(pa_array)
@@ -96,10 +142,22 @@ def source_scalar(pa_type):
     elif pa.types.is_boolean(pa_type):
         pa_scalar = pa.scalar(False, type=pa_type)
     elif pa.types.is_list(pa_type):
-        # TODO: Longer list?
-        pa_scalar = pa.scalar([1], type=pa_type)
+        if pa_type.value_type == pa.int64():
+            pa_scalar = pa.scalar([1, 2, 3, 4], type=pa_type)
+        elif (
+            isinstance(pa_type.value_type, pa.ListType)
+            and pa_type.value_type.value_type == pa.int64()
+        ):
+            pa_scalar = pa.scalar([[1, 2, 3, 4]], type=pa_type)
+        else:
+            raise ValueError("Unsupported type")
     elif pa.types.is_struct(pa_type):
-        pa_scalar = pa.scalar({"v": 1}, type=pa_type)
+        if not is_nested_struct(pa_type):
+            pa_scalar = pa.scalar({"v": 1}, type=pa_type)
+        else:
+            pa_scalar = pa.scalar(
+                {"a": 1, "b_struct": {"b": 1.0}}, type=pa_type
+            )
     else:
         raise ValueError("Unsupported type")
     return pa_scalar, plc.interop.from_arrow(pa_scalar)
@@ -196,27 +254,54 @@ def test_scatter_table(
             )
 
         if pa.types.is_list(dtype := pa_target_table[0].type):
-            expected = pa.table(
-                [pa.array([[4], [1], [2], [3], [8], [9]])] * 3, [""] * 3
-            )
+            if is_nested_list(dtype):
+                expected = pa.table(
+                    [pa.array([[[4]], [[1]], [[2, 3]], [[3]], [[9]], [[10]]])]
+                    * 3,
+                    [""] * 3,
+                )
+            else:
+                expected = pa.table(
+                    [pa.array([[4], [1], [2, 3], [3], [9], [10]])] * 3,
+                    [""] * 3,
+                )
         elif pa.types.is_struct(dtype):
-            expected = pa.table(
-                [
-                    pa.array(
-                        [
-                            {"v": 4},
-                            {"v": 1},
-                            {"v": 2},
-                            {"v": 3},
-                            {"v": 8},
-                            {"v": 9},
-                        ],
-                        type=DEFAULT_STRUCT_TESTING_TYPE,
-                    )
-                ]
-                * 3,
-                [""] * 3,
-            )
+            if is_nested_struct(dtype):
+                expected = pa.table(
+                    [
+                        pa.array(
+                            [
+                                {"a": 4, "b_struct": {"b": 4.0}},
+                                {"a": 1, "b_struct": {"b": 1.0}},
+                                {"a": 2, "b_struct": {"b": 2.0}},
+                                {"a": 3, "b_struct": {"b": 3.0}},
+                                {"a": 8, "b_struct": {"b": 8.0}},
+                                {"a": 9, "b_struct": {"b": 9.0}},
+                            ],
+                            type=NESTED_STRUCT_TESTING_TYPE,
+                        )
+                    ]
+                    * 3,
+                    [""] * 3,
+                )
+            else:
+                expected = pa.table(
+                    [
+                        pa.array(
+                            [
+                                {"v": 4},
+                                {"v": 1},
+                                {"v": 2},
+                                {"v": 3},
+                                {"v": 8},
+                                {"v": 9},
+                            ],
+                            type=DEFAULT_STRUCT_TESTING_TYPE,
+                        )
+                    ]
+                    * 3,
+                    [""] * 3,
+                )
     else:
         expected = _pyarrow_boolean_mask_scatter_table(
             pa_source_table,
@@ -627,6 +712,7 @@ def test_split_column_out_of_bounds(target_column):
 
 def test_split_table(target_table):
     pa_target_table, plc_target_table = target_table
+
     upper_bounds = [1, 3, 5]
     lower_bounds = [0] + upper_bounds[:-1]
     result = plc.copying.split(plc_target_table, upper_bounds)
@@ -718,6 +804,7 @@ def test_copy_if_else_column_scalar(
     pa_target_column, plc_target_column = target_column
     pa_source_scalar, plc_source_scalar = source_scalar
     pa_mask, plc_mask = mask
+
     args = (
         (plc_target_column, plc_source_scalar)
         if array_left
@@ -766,27 +853,58 @@ def test_boolean_mask_scatter_from_table(
             )
 
         if pa.types.is_list(dtype := pa_target_table[0].type):
-            expected = pa.table(
-                [pa.array([[1], [5], [2], [7], [3], [9]])] * 3, [""] * 3
-            )
+            if is_nested_list(dtype):
+                expected = pa.table(
+                    [
+                        pa.array(
+                            [[[1]], [[5, 6]], [[2, 3]], [[8]], [[3]], [[10]]]
+                        )
+                    ]
+                    * 3,
+                    [""] * 3,
+                )
+            else:
+                expected = pa.table(
+                    [pa.array([[1], [5, 6], [2, 3], [8], [3], [10]])] * 3,
+                    [""] * 3,
+                )
         elif pa.types.is_struct(dtype):
-            expected = pa.table(
-                [
-                    pa.array(
-                        [
-                            {"v": 1},
-                            {"v": 5},
-                            {"v": 2},
-                            {"v": 7},
-                            {"v": 3},
-                            {"v": 9},
-                        ],
-                        type=DEFAULT_STRUCT_TESTING_TYPE,
-                    )
-                ]
-                * 3,
-                [""] * 3,
-            )
+            if is_nested_struct(dtype):
+                expected = pa.table(
+                    [
+                        pa.array(
+                            [
+                                {"a": 1, "b_struct": {"b": 1.0}},
+                                {"a": 5, "b_struct": {"b": 5.0}},
+                                {"a": 2, "b_struct": {"b": 2.0}},
+                                {"a": 7, "b_struct": {"b": 7.0}},
+                                {"a": 3, "b_struct": {"b": 3.0}},
+                                {"a": 9, "b_struct": {"b": 9.0}},
+                            ],
+                            type=NESTED_STRUCT_TESTING_TYPE,
+                        )
+                    ]
+                    * 3,
+                    [""] * 3,
+                )
+            else:
+                expected = pa.table(
+                    [
+                        pa.array(
+                            [
+                                {"v": 1},
+                                {"v": 5},
+                                {"v": 2},
+                                {"v": 7},
+                                {"v": 3},
+                                {"v": 9},
+                            ],
+                            type=DEFAULT_STRUCT_TESTING_TYPE,
+                        )
+                    ]
+                    * 3,
+                    [""] * 3,
+                )
     else:
         expected = _pyarrow_boolean_mask_scatter_table(
             pa_source_table, pa_mask, pa_target_table
@@ -887,7 +1005,7 @@ def test_get_element(input_column):
 
     assert (
         plc.interop.to_arrow(
-            result, metadata_from_arrow_array(pa_input_column)
+            result, metadata_from_arrow_type(pa_input_column.type)
         ).as_py()
         == pa_input_column[index].as_py()
     )

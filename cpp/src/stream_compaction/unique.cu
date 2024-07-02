@@ -15,7 +15,6 @@
  */
 
 #include "stream_compaction_common.cuh"
-#include "stream_compaction_common.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
