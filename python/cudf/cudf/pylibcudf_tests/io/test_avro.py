@@ -120,4 +120,4 @@ def test_read_avro(avro_dtypes, avro_dtype_data, row_opts, columns, nullable):
     if columns != []:
         expected = expected.select(columns)
 
-    assert_table_and_meta_eq(res, expected)
+    assert_table_and_meta_eq(expected, res)

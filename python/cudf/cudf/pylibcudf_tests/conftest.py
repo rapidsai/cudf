@@ -121,6 +121,11 @@ def source_or_sink(request, tmp_path):
         return fp_or_buf()
 
 
+@pytest.fixture(params=[opt for opt in plc.io.types.CompressionType])
+def compression_type(request):
+    return request.param
+
+
 @pytest.fixture(
     scope="session", params=[opt for opt in plc.types.Interpolation]
 )

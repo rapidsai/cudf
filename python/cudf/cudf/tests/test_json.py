@@ -1077,8 +1077,13 @@ def test_json_dtypes_nested_data():
     )
 
     pdf = pd.read_json(
-        StringIO(expected_json_str), orient="records", lines=True
+        StringIO(expected_json_str),
+        orient="records",
+        lines=True,
     )
+
+    assert_eq(df, pdf)
+
     pdf.columns = pdf.columns.astype("str")
     pa_table_pdf = pa.Table.from_pandas(
         pdf, schema=df.to_arrow().schema, safe=False
