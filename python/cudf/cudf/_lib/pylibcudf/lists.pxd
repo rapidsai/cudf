@@ -23,3 +23,7 @@ cpdef Column contains(Column, ColumnOrScalar)
 cpdef Column contains_nulls(Column)
 
 cpdef Column index_of(Column, ColumnOrScalar, bool)
+
+cpdef Column apply_boolean_mask(Column, Column)
+
+cpdef Column distinct(Column, bool, bool)

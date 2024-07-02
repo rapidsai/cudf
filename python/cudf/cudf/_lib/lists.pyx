@@ -19,16 +19,7 @@ from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
 from cudf._lib.pylibcudf.libcudf.lists.sorting cimport (
     sort_lists as cpp_sort_lists,
 )
-from cudf._lib.pylibcudf.libcudf.lists.stream_compaction cimport (
-    distinct as cpp_distinct,
-)
-from cudf._lib.pylibcudf.libcudf.types cimport (
-    nan_equality,
-    null_equality,
-    null_order,
-    order,
-    size_type,
-)
+from cudf._lib.pylibcudf.libcudf.types cimport null_order, order, size_type
 from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 from cudf._lib import pylibcudf
@@ -65,31 +56,13 @@ def explode_outer(list source_columns, int explode_column_idx):
 
 @acquire_spill_lock()
 def distinct(Column col, bool nulls_equal, bool nans_all_equal):
-    """
-    nulls_equal == True indicates that libcudf should treat any two nulls as
-    equal, and as unequal otherwise.
-    nans_all_equal == True indicates that libcudf should treat any two
-    elements from {-nan, +nan} as equal, and as unequal otherwise.
-    """
-    cdef shared_ptr[lists_column_view] list_view = (
-        make_shared[lists_column_view](col.view())
-    )
-    cdef null_equality c_nulls_equal = (
-        null_equality.EQUAL if nulls_equal else null_equality.UNEQUAL
-    )
-    cdef nan_equality c_nans_equal = (
-        nan_equality.ALL_EQUAL if nans_all_equal else nan_equality.UNEQUAL
-    )
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_distinct(list_view.get()[0],
-                         c_nulls_equal,
-                         c_nans_equal)
+    return Column.from_pylibcudf(
+        pylibcudf.lists.distinct(
+            col.to_pylibcudf(mode="read"),
+            nulls_equal,
+            nans_all_equal,
         )
-    return Column.from_unique_ptr(move(c_result))
+    )
 
 
 @acquire_spill_lock()

@@ -22,6 +22,11 @@ def column():
     return pa.array([3, 2, 5, 6]), pa.array([-1, 0, 0, 0], type=pa.int32())
 
 
+@pytest.fixture
+def bool_column():
+    return pa.array([[False, True], [True], [True], [True, True]])
+
+
 def test_concatenate_rows(test_data):
     arrow_tbl = pa.Table.from_arrays(test_data[0], names=["a", "b"])
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
@@ -132,5 +137,30 @@ def test_index_of_list_column(test_data, column):
     res = plc.lists.index_of(plc_column1, plc_column2, True)
 
     expect = pa.array(column[1], type=pa.int32())
+
+    assert_column_eq(expect, res)
+
+
+def test_apply_boolean_mask(test_data, bool_column):
+    list_column = test_data[0][0]
+    arr = pa.array(list_column)
+    plc_column = plc.interop.from_arrow(arr)
+    plc_bool_column = plc.interop.from_arrow(bool_column)
+
+    res = plc.lists.apply_boolean_mask(plc_column, plc_bool_column)
+
+    expect = pa.array([[1], [2], [5], [6, 7]])
+
+    assert_column_eq(expect, res)
+
+
+def test_distinct():
+    list_column = [[0, 1, 2, 3, 2], [3, 1, 2], None, [4, None, None, 5]]
+    arr = pa.array(list_column)
+    plc_column = plc.interop.from_arrow(arr)
+
+    res = plc.lists.distinct(plc_column, True, True)
+
+    expect = pa.array([[0, 1, 2, 3], [3, 1, 2], None, [4, None, 5]])
 
     assert_column_eq(expect, res)

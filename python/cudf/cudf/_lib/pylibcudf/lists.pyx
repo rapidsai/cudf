@@ -15,8 +15,16 @@ from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_null_policy,
     concatenate_rows as cpp_concatenate_rows,
 )
+from cudf._lib.pylibcudf.libcudf.lists.stream_compaction cimport (
+    apply_boolean_mask as cpp_apply_boolean_mask,
+    distinct as cpp_distinct,
+)
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.types cimport (
+    nan_equality,
+    null_equality,
+    size_type,
+)
 from cudf._lib.pylibcudf.lists cimport ColumnOrScalar
 
 from .column cimport Column, ListColumnView
@@ -204,5 +212,72 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
                 search_key.get()
             ),
             find_option,
+        ))
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column apply_boolean_mask(Column input, Column boolean_mask):
+    """Filters elements in each row of the input lists column using a boolean mask
+
+    For details, see :cpp:func:`apply_boolean_mask`.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+    boolean_mask : Column
+        The boolean mask.
+
+    Returns
+    -------
+    Column
+        A Column of filtered elements based upon the boolean mask.
+    """
+    cdef unique_ptr[column] c_result
+    cdef ListColumnView list_view1 = input.list_view()
+    cdef ListColumnView list_view2 = boolean_mask.list_view()
+    with nogil:
+        c_result = move(cpp_apply_boolean_mask(
+            list_view1.view(),
+            list_view2.view(),
+        ))
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column distinct(Column input, bool nulls_equal, bool nans_equal):
+    """Create a new list column without duplicate elements in each list.
+
+    For details, see :cpp:func:`distinct`.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+    nulls_equal : bool
+        If true, null elements are considered equal. Otherwise, unequal.
+    nans_equal : bool
+        If true, libcudf will treat nan elements from {-nan, +nan}
+        as equal. Otherwise, unequal. Otherwise, unequal.
+
+    Returns
+    -------
+    Column
+        A new list column without duplicate elements in each list.
+    """
+    cdef unique_ptr[column] c_result
+    cdef ListColumnView list_view = input.list_view()
+
+    cdef null_equality c_nulls_equal = (
+        null_equality.EQUAL if nulls_equal else null_equality.UNEQUAL
+    )
+    cdef nan_equality c_nans_equal = (
+        nan_equality.ALL_EQUAL if nans_equal else nan_equality.UNEQUAL
+    )
+
+    with nogil:
+        c_result = move(cpp_distinct(
+            list_view.view(),
+            c_nulls_equal,
+            c_nans_equal,
         ))
     return Column.from_libcudf(move(c_result))
