@@ -280,8 +280,8 @@ class DatetimeColumn(column.ColumnBase):
             return False
         elif ts.tzinfo is not None:
             ts = ts.tz_convert(None)
-        return ts.to_numpy().astype("int64") in self.as_numerical_column(
-            "int64"
+        return ts.to_numpy().astype("int64") in cast(
+            "cudf.core.column.NumericalColumn", self.astype("int64")
         )
 
     @functools.cached_property
@@ -503,9 +503,9 @@ class DatetimeColumn(column.ColumnBase):
         self, skipna=None, min_count: int = 0, dtype=np.float64
     ) -> ScalarLike:
         return pd.Timestamp(
-            self.as_numerical_column("int64").mean(
-                skipna=skipna, min_count=min_count, dtype=dtype
-            ),
+            cast(
+                "cudf.core.column.NumericalColumn", self.astype("int64")
+            ).mean(skipna=skipna, min_count=min_count, dtype=dtype),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
@@ -517,7 +517,7 @@ class DatetimeColumn(column.ColumnBase):
         ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical_column("int64").std(
+            cast("cudf.core.column.NumericalColumn", self.astype("int64")).std(
                 skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
             )
             * _unit_to_nanoseconds_conversion[self.time_unit],
@@ -525,7 +525,9 @@ class DatetimeColumn(column.ColumnBase):
 
     def median(self, skipna: bool | None = None) -> pd.Timestamp:
         return pd.Timestamp(
-            self.as_numerical_column("int64").median(skipna=skipna),
+            cast(
+                "cudf.core.column.NumericalColumn", self.astype("int64")
+            ).median(skipna=skipna),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
@@ -534,18 +536,18 @@ class DatetimeColumn(column.ColumnBase):
             raise TypeError(
                 f"cannot perform cov with types {self.dtype}, {other.dtype}"
             )
-        return self.as_numerical_column("int64").cov(
-            other.as_numerical_column("int64")
-        )
+        return cast(
+            "cudf.core.column.NumericalColumn", self.astype("int64")
+        ).cov(cast("cudf.core.column.NumericalColumn", other.astype("int64")))
 
     def corr(self, other: DatetimeColumn) -> float:
         if not isinstance(other, DatetimeColumn):
             raise TypeError(
                 f"cannot perform corr with types {self.dtype}, {other.dtype}"
             )
-        return self.as_numerical_column("int64").corr(
-            other.as_numerical_column("int64")
-        )
+        return cast(
+            "cudf.core.column.NumericalColumn", self.astype("int64")
+        ).corr(cast("cudf.core.column.NumericalColumn", other.astype("int64")))
 
     def quantile(
         self,
@@ -554,7 +556,7 @@ class DatetimeColumn(column.ColumnBase):
         exact: bool,
         return_scalar: bool,
     ) -> ColumnBase:
-        result = self.as_numerical_column("int64").quantile(
+        result = self.astype("int64").quantile(
             q=q,
             interpolation=interpolation,
             exact=exact,
@@ -645,12 +647,12 @@ class DatetimeColumn(column.ColumnBase):
     ) -> cudf.core.column.NumericalColumn:
         value = column.as_column(
             pd.to_datetime(value), dtype=self.dtype
-        ).as_numerical_column("int64")
-        return self.as_numerical_column("int64").indices_of(value)
+        ).astype("int64")
+        return self.astype("int64").indices_of(value)
 
     @property
     def is_unique(self) -> bool:
-        return self.as_numerical_column("int64").is_unique
+        return self.astype("int64").is_unique
 
     def isin(self, values: Sequence) -> ColumnBase:
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)

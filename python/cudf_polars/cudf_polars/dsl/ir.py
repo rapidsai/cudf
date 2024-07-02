@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import json
 import types
 from functools import cache
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
@@ -180,8 +181,10 @@ class PythonScan(IR):
 class Scan(IR):
     """Input from files."""
 
-    typ: Any
+    typ: str
     """What type of file are we reading? Parquet, CSV, etc..."""
+    options: tuple[Any, ...]
+    """Type specific options, as json-encoded strings."""
     paths: list[str]
     """List of paths to read from."""
     file_options: Any
@@ -211,17 +214,21 @@ class Scan(IR):
         with_columns = options.with_columns
         row_index = options.row_index
         if self.typ == "csv":
+            opts, cloud_opts = map(json.loads, self.options)
             df = DataFrame.from_cudf(
                 cudf.concat(
                     [cudf.read_csv(p, usecols=with_columns) for p in self.paths]
                 )
             )
         elif self.typ == "parquet":
+            opts, cloud_opts = map(json.loads, self.options)
             cdf = cudf.read_parquet(self.paths, columns=with_columns)
             assert isinstance(cdf, cudf.DataFrame)
             df = DataFrame.from_cudf(cdf)
         else:
-            assert_never(self.typ)
+            raise NotImplementedError(
+                f"Unhandled scan type: {self.typ}"
+            )  # pragma: no cover; post init trips first
         if row_index is not None:
             name, offset = row_index
             dtype = self.schema[name]

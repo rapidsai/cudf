@@ -959,6 +959,15 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         raise NotImplementedError()
 
     def astype(self, dtype: Dtype, copy: bool = False) -> ColumnBase:
+        if len(self) == 0:
+            dtype = cudf.dtype(dtype)
+            if self.dtype == dtype:
+                if copy:
+                    return self.copy()
+                else:
+                    return self
+            else:
+                return column_empty(0, dtype=dtype, masked=self.nullable)
         if copy:
             col = self.copy()
         else:
