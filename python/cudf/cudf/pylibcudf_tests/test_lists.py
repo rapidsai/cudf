@@ -22,6 +22,11 @@ def column():
     return pa.array([3, 2, 5, 6]), pa.array([-1, 0, 0, 0], type=pa.int32())
 
 
+@pytest.fixture
+def lists_column():
+    return [[4, 2, 3, 1], [1, 2, None, 4], [-10, 10, 0]]
+
+
 def test_concatenate_rows(test_data):
     arrow_tbl = pa.Table.from_arrays(test_data[0], names=["a", "b"])
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
@@ -134,3 +139,39 @@ def test_index_of_list_column(test_data, column):
     expect = pa.array(column[1], type=pa.int32())
 
     assert_column_eq(expect, res)
+
+
+@pytest.mark.parametrize(
+    "ascending,na_position,expected",
+    [
+        (
+            True,
+            "first",
+            [[1, 2, 3, 4], [None, 1, 2, 4], [-10, 0, 10]],
+        ),
+        (
+            True,
+            "second",
+            [[1, 2, 3, 4], [1, 2, 4, None], [-10, 0, 10]],
+        ),
+        (
+            False,
+            "first",
+            [[4, 3, 2, 1], [4, 2, 1, None], [10, 0, -10]],
+        ),
+        (
+            False,
+            "second",
+            [[4, 3, 2, 1], [None, 4, 2, 1], [10, 0, -10]],
+        ),
+    ],
+)
+def test_sort_lists(lists_column, ascending, na_position, expected):
+    plc_column = plc.interop.from_arrow(pa.array(lists_column))
+    res = plc.lists.sort_lists(plc_column, ascending, na_position, False)
+    res_stable = plc.lists.sort_lists(plc_column, ascending, na_position, True)
+
+    expect = pa.array(expected)
+
+    assert_column_eq(expect, res)
+    assert_column_eq(expect, res_stable)

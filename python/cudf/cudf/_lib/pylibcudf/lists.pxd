@@ -23,3 +23,5 @@ cpdef Column contains(Column, ColumnOrScalar)
 cpdef Column contains_nulls(Column)
 
 cpdef Column index_of(Column, ColumnOrScalar, bool)
+
+cpdef Column sort_lists(Column, bool, str, bool)

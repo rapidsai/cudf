@@ -15,8 +15,12 @@ from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_null_policy,
     concatenate_rows as cpp_concatenate_rows,
 )
+from cudf._lib.pylibcudf.libcudf.lists.sorting cimport (
+    sort_lists as cpp_sort_lists,
+    stable_sort_lists as cpp_stable_sort_lists,
+)
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.types cimport null_order, order, size_type
 from cudf._lib.pylibcudf.lists cimport ColumnOrScalar
 
 from .column cimport Column, ListColumnView
@@ -205,4 +209,53 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
             ),
             find_option,
         ))
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column sort_lists(Column input, bool ascending, str na_position, bool stable):
+    """Sort the elements within a list in each row of a list column.
+
+    For details, see :cpp:func:`sort_lists`.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+    ascending : bool
+        If true, the sort order is ascending. Otherwise, the sort order is descending.
+    na_position : str
+        If na_position equals "first", then the null values in the output
+        column are placed first. Otherwise, they are be placed after.
+    stable: bool
+        If true :cpp:func:`stable_sort_lists` is used, Otherwise,
+        :cpp:func:`sort_lists` is used.
+
+    Returns
+    -------
+    Column
+        A new Column with elements in each list sorted.
+    """
+    cdef unique_ptr[column] c_result
+    cdef ListColumnView list_view = input.list_view()
+
+    cdef order c_sort_order = (
+        order.ASCENDING if ascending else order.DESCENDING
+    )
+    cdef null_order c_null_prec = (
+        null_order.BEFORE if na_position == "first" else null_order.AFTER
+    )
+
+    with nogil:
+        if stable:
+            c_result = move(cpp_stable_sort_lists(
+                    list_view.view(),
+                    c_sort_order,
+                    c_null_prec,
+            ))
+        else:
+            c_result = move(cpp_sort_lists(
+                    list_view.view(),
+                    c_sort_order,
+                    c_null_prec,
+            ))
     return Column.from_libcudf(move(c_result))
