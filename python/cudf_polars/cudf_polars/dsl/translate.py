@@ -462,16 +462,6 @@ def _(node: pl_expr.Ternary, visitor: NodeTraverser, dtype: plc.DataType) -> exp
 
 
 @_translate_expr.register
-def _(node: pl_expr.Ternary, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
-    return expr.Ternary(
-        dtype,
-        translate_expr(visitor, n=node.predicate),
-        translate_expr(visitor, n=node.truthy),
-        translate_expr(visitor, n=node.falsy),
-    )
-
-
-@_translate_expr.register
 def _(
     node: pl_expr.BinaryExpr, visitor: NodeTraverser, dtype: plc.DataType
 ) -> expr.Expr:
