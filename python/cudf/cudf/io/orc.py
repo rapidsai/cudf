@@ -325,7 +325,7 @@ def read_orc(
     )
 
     # Prefetch remote data if possible
-    if not use_python_file_object:
+    if fs and paths and not use_python_file_object:
         # TODO: Add prefetcher="orc"
         filepath_or_buffer, _ = ioutils.prefetch_remote_buffers(
             paths,

@@ -331,7 +331,7 @@ def read_parquet_metadata(filepath_or_buffer):
         path_or_data=filepath_or_buffer, storage_options=None
     )
 
-    if paths and not ioutils._is_local_filesystem(fs):
+    if fs and paths:
         filepath_or_buffer, _ = ioutils.prefetch_remote_buffers(
             paths,
             fs,
@@ -608,7 +608,7 @@ def read_parquet(
         )
 
     # Prefetch remote data if possible
-    if not use_python_file_object:
+    if fs and paths and not use_python_file_object:
         filepath_or_buffer, _ = ioutils.prefetch_remote_buffers(
             paths,
             fs,

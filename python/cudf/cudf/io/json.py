@@ -73,17 +73,19 @@ def read_json(
             path_or_data=path_or_buf, storage_options=storage_options
         )
 
-        # # Prefetch remote data if possible
-        # path_or_buf, byte_range = ioutils.prefetch_remote_buffers(
-        #     paths,
-        #     fs,
-        #     expand_paths="*.json",
-        #     prefetcher="contiguous",
-        #     prefetcher_options={
-        #         "byte_range": byte_range,
-        #         "read_ahead": prefetch_read_ahead,
-        #     },
-        # )
+        # Prefetch remote data if possible
+        if fs and paths:
+            path_or_buf, info = ioutils.prefetch_remote_buffers(
+                paths,
+                fs,
+                expand_paths="*.json",
+                prefetcher="contiguous",
+                prefetcher_options={
+                    "byte_range": byte_range,
+                    "read_ahead": prefetch_read_ahead,
+                },
+            )
+            byte_range = info.get("byte_range", byte_range)
 
         filepaths_or_buffers = []
         for source in path_or_buf:

@@ -1614,7 +1614,7 @@ def _get_remote_bytes_parquet(
     if fsspec_parquet is None or (columns is None and row_groups is None):
         return _get_remote_bytes(
             remote_paths, fs, bytes_per_thread=bytes_per_thread
-        ), None
+        ), {}
 
     sizes = fs.sizes(remote_paths)
     data = fsspec_parquet._get_parquet_byte_ranges(
@@ -1634,7 +1634,7 @@ def _get_remote_bytes_parquet(
                 chunk, dtype="b"
             )
         buffers.append(buf.tobytes())
-    return buffers, None
+    return buffers, {}
 
 
 def _get_remote_bytes_contiguous(
@@ -1678,7 +1678,7 @@ def _get_remote_bytes_contiguous(
     if offset:
         byte_range = (offset, byte_range[1])
 
-    return buffers, byte_range
+    return buffers, {"byte_range": byte_range}
 
 
 def _get_remote_bytes(
@@ -1879,7 +1879,7 @@ def prefetch_remote_buffers(
             **(prefetcher_options or {}),
         )
     else:
-        return paths, None
+        return paths, {}
 
 
 @doc_get_reader_filepath_or_buffer()

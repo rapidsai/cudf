@@ -88,8 +88,8 @@ def read_csv(
     )
 
     # Prefetch remote data if possible
-    if not use_python_file_object:
-        filepath_or_buffer, byte_range = ioutils.prefetch_remote_buffers(
+    if fs and paths and not use_python_file_object:
+        filepath_or_buffer, info = ioutils.prefetch_remote_buffers(
             paths,
             fs,
             bytes_per_thread=bytes_per_thread,
@@ -101,6 +101,7 @@ def read_csv(
         )
         assert len(filepath_or_buffer) == 1
         filepath_or_buffer = filepath_or_buffer[0]
+        byte_range = info.get("byte_range", byte_range)
 
     filepath_or_buffer, compression = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
