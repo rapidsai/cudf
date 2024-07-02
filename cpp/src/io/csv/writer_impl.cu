@@ -510,7 +510,8 @@ void write_csv(data_sink* out_sink,
           str_table_view.column(0), options_narep, stream, rmm::mr::get_current_device_resource());
       }();
 
-      write_chunked(out_sink, str_concat_col->view(), options, stream, mr);
+      write_chunked(
+        out_sink, str_concat_col->view(), options, stream, rmm::mr::get_current_device_resource());
     }
   }
 }
