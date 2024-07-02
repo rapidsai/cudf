@@ -1085,8 +1085,9 @@ def test_csv_reader_arrow_nativefile(path_or_buf):
     # Arrow FileSystem interface
     expect = cudf.read_csv(path_or_buf("filepath"))
     fs, path = pa_fs.FileSystem.from_uri(path_or_buf("filepath"))
-    with fs.open_input_file(path) as fil:
-        got = cudf.read_csv(fil)
+    with pytest.warns(FutureWarning):
+        with fs.open_input_file(path) as fil:
+            got = cudf.read_csv(fil)
 
     assert_eq(expect, got)
 

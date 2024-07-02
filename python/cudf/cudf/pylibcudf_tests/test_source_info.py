@@ -2,44 +2,20 @@
 
 import io
 
-import pyarrow as pa
 import pytest
 
 import cudf._lib.pylibcudf as plc
-from cudf._lib.pylibcudf.io.datasource import NativeFileDatasource
-
-
-@pytest.mark.parametrize(
-    "source",
-    [
-        "a.txt",
-        b"hello world",
-        io.BytesIO(b"hello world"),
-        NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
-    ],
-)
-def test_source_info_ctor(source, tmp_path):
-    if isinstance(source, str):
-        file = tmp_path / source
-        file.write_bytes("hello world".encode("utf-8"))
-        source = str(file)
-
-    plc.io.SourceInfo([source])
-
-    # TODO: test contents of source_info buffer is correct
-    # once buffers are exposed on python side
 
 
 @pytest.mark.parametrize(
     "sources",
     [
+        ["a.txt"],
+        [b"hello world"],
+        [io.BytesIO(b"hello world")],
         ["a.txt", "a.txt"],
         [b"hello world", b"hello there"],
         [io.BytesIO(b"hello world"), io.BytesIO(b"hello there")],
-        [
-            NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
-            NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
-        ],
     ],
 )
 def test_source_info_ctor_multiple(sources, tmp_path):
@@ -64,11 +40,6 @@ def test_source_info_ctor_multiple(sources, tmp_path):
         [
             io.BytesIO(b"hello world"),
             io.BytesIO(b"hello there"),
-            b"hello world",
-        ],
-        [
-            NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
-            "awef.txt",
             b"hello world",
         ],
     ],
