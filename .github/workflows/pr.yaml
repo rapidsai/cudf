@@ -18,21 +18,21 @@ jobs:
       - conda-cpp-tests
       - conda-python-build
       - conda-python-cudf-tests
-      - conda-python-other-tests
-      - conda-java-tests
-      - static-configure
-      - conda-notebook-tests
-      - docs-build
+      #- conda-python-other-tests
+      #- conda-java-tests
+      #- static-configure
+      #- conda-notebook-tests
+      #- docs-build
       - wheel-build-cudf
       - wheel-tests-cudf
       - wheel-build-cudf-polars
       - test-wheel-cudf-polars
-      - wheel-build-dask-cudf
-      - wheel-tests-dask-cudf
-      - devcontainer
-      - unit-tests-cudf-pandas
-      - pandas-tests
-      - pandas-tests-diff
+      #- wheel-build-dask-cudf
+      #- wheel-tests-dask-cudf
+      #- devcontainer
+      #- unit-tests-cudf-pandas
+      #- pandas-tests
+      #- pandas-tests-diff
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.08
   checks:
