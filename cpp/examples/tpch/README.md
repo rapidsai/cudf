@@ -1,0 +1,56 @@
+# TPC-H Inspired Examples
+
+Implementing the TPC-H queries using `libcudf`. 
+
+## Data Generation
+
+We leverage the data generator (wrapper around official TPC-H datagen) from [Apache Datafusion](https://github.com/apache/datafusion) for generating data in the form of Parquet files. 
+
+### Requirements 
+
+- Rust
+
+### Steps
+
+1. Clone the datafusion repository.
+```bash
+git clone git@github.com:apache/datafusion.git
+```
+
+2. Run the data generator. The data will be placed in a `data/` subdirectory.
+```bash
+cd datafusion/benchmarks/
+./bench.sh data tpch
+
+# for scale factor 10,
+./bench.sh data tpch10
+```
+
+## Executing Queries
+
+### Steps
+
+1. Clone the cudf repository.
+```bash
+git clone git@github.com:JayjeetAtGithub/cudf.git
+git checkout tpch-bench
+```
+
+2. Build `libcudf`.
+```bash
+cd cudf/
+./build.sh libcudf
+```
+
+3. Build the examples.
+```bash
+cd cpp/examples
+./build.sh
+```
+The TPC-H query binaries would be built inside `examples/tpch/build`.
+
+4. Execute the queries.
+```bash
+./tpch/build/tpch_q1
+```
+A parquet file named `q1.parquet` would be generated holding the results of the query.
