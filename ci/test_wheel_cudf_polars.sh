@@ -18,18 +18,14 @@ else
 fi
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
-RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./dist
+RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-s3 ./dist
 
-RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
-RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
-mkdir -p "${RAPIDS_TESTS_DIR}"
-
-rapids-logger "Install cudf wheel"
-# echo to expand wildcard before adding `[extra]` requires for pip
-python -m pip install $(echo ./dist/cudf*.whl)[test]
+# Download the cudf built in the previous step
+RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
+python -m pip install --no-deps ./local-cudf-dep/cudf*.whl
 
 rapids-logger "Install cudf_polars"
-python -m pip install python/cudf_polars
+python -m pip install $(echo ./dist/cudf_polars*.whl)
 
 rapids-logger "Run cudf_polars tests"
 
