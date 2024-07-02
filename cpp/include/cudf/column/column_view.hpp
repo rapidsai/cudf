@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,15 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/prefetch.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <limits>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -72,6 +75,11 @@ class column_view_base {
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   T const* head() const noexcept
   {
+    // Only prefetch numerical types for now
+    if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
+      cudf::experimental::prefetch::detail::prefetch(
+        "column_view_base::head", _data, size() * sizeof(T));
+    }
     return static_cast<T const*>(_data);
   }
 
@@ -550,7 +558,17 @@ class mutable_column_view : public detail::column_view_base {
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   T* head() const noexcept
   {
-    return const_cast<T*>(detail::column_view_base::head<T>());
+    // Only prefetch numerical types for now
+    if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
+      cudf::experimental::prefetch::detail::prefetch(
+        "mutable_column_view::head", _data, size() * sizeof(T));
+    }
+    // Reusing the parent head method is preferred and should be reverted to
+    // once we standardize on a prefetching strategy. For now the two are
+    // separated to avoid multiple prefetches when this method is called and to
+    // allow independent control over prefetching.
+    // return const_cast<T*>(detail::column_view_base::head<T>());
+    return const_cast<T*>(static_cast<T const*>(_data));
   }
 
   /**
