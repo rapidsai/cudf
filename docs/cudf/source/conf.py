@@ -384,6 +384,7 @@ _names_to_skip_in_pylibcudf = {
     # Cython types that don't alias cleanly because of
     # https://github.com/cython/cython/issues/5609
     "size_type",
+    "size_t",
     "type_id",
     # Unknown base types
     "int32_t",
