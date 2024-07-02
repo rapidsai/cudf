@@ -32,6 +32,8 @@
 #include <cudf/reduction.hpp>
 #include <cudf/column/column_factories.hpp>
 
+#include <cudf/detail/nvtx/ranges.hpp>
+
 
 // The base directory for the TPC-H dataset
 const std::string BASE_DATASET_DIR = "/home/jayjeetc/tpch_sf1/";
@@ -143,7 +145,7 @@ std::unique_ptr<cudf::table> join_and_gather(
     std::vector<cudf::size_type> right_on,
     cudf::null_equality compare_nulls,
     rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) {
-
+    CUDF_FUNC_RANGE();
     auto oob_policy = cudf::out_of_bounds_policy::DONT_CHECK;
     auto left_selected  = left_input.select(left_on);
     auto right_selected = right_input.select(right_on);
@@ -182,6 +184,7 @@ std::unique_ptr<table_with_cols> apply_inner_join(
   std::vector<std::string> left_on,
   std::vector<std::string> right_on,
   cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) {
+    CUDF_FUNC_RANGE();
     std::vector<cudf::size_type> left_on_indices;
     std::vector<cudf::size_type> right_on_indices;
     for (auto &col_name : left_on) {
@@ -206,6 +209,7 @@ std::unique_ptr<table_with_cols> apply_inner_join(
  */
 std::unique_ptr<table_with_cols> apply_filter(
     std::unique_ptr<table_with_cols>& table, cudf::ast::operation& predicate) {
+    CUDF_FUNC_RANGE();
     auto boolean_mask = cudf::compute_column(table->table(), predicate);
     auto result_table = cudf::apply_boolean_mask(table->table(), boolean_mask->view());    
     return std::make_unique<table_with_cols>(std::move(result_table), table->columns());
@@ -219,6 +223,7 @@ std::unique_ptr<table_with_cols> apply_filter(
  */
 std::unique_ptr<table_with_cols> apply_mask(
     std::unique_ptr<table_with_cols>& table, std::unique_ptr<cudf::column>& mask) {
+    CUDF_FUNC_RANGE();
     auto result_table = cudf::apply_boolean_mask(table->table(), mask->view());
     return std::make_unique<table_with_cols>(std::move(result_table), table->columns());
 }
@@ -236,6 +241,7 @@ struct groupby_context {
  */
 std::unique_ptr<table_with_cols> apply_groupby(
     std::unique_ptr<table_with_cols>& table, groupby_context ctx) {
+    CUDF_FUNC_RANGE();
     auto keys = table->select(ctx.keys);
     cudf::groupby::groupby groupby_obj(keys);
     std::vector<std::string> result_column_names;
@@ -285,6 +291,7 @@ std::unique_ptr<table_with_cols> apply_orderby(
     std::unique_ptr<table_with_cols>& table, 
     std::vector<std::string> sort_keys,
     std::vector<cudf::order> sort_key_orders) {
+    CUDF_FUNC_RANGE();
     std::vector<cudf::column_view> column_views;
     for (auto& key : sort_keys) {
         column_views.push_back(table->column(key));
@@ -307,6 +314,7 @@ std::unique_ptr<table_with_cols> apply_orderby(
  */
 std::unique_ptr<table_with_cols> apply_reduction(
     cudf::column_view& column, cudf::aggregation::Kind agg_kind, std::string col_name) {
+    CUDF_FUNC_RANGE();
     auto agg = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
     auto result = cudf::reduce(column, *agg, column.type());
     cudf::size_type len = 1;
@@ -329,6 +337,7 @@ std::unique_ptr<table_with_cols> apply_reduction(
  */
 std::unique_ptr<table_with_cols> read_parquet(
     std::string filename, std::vector<std::string> columns = {}, std::unique_ptr<cudf::ast::operation> predicate = nullptr) {
+    CUDF_FUNC_RANGE();
     auto source = cudf::io::source_info(filename);
     auto builder = cudf::io::parquet_reader_options_builder(source);    
     if (columns.size()) {
