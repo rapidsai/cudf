@@ -42,13 +42,11 @@ EXITCODE=0
 trap set_exitcode ERR
 set +e
 
-python -m pytest \
-       --cache-clear \
+./ci/run_cudf_polars_pytests.sh \
        --cov cudf_polars \
        --cov-fail-under=100 \
        --cov-config=python/cudf_polars/pyproject.toml \
-       --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf_polars.xml" \
-       python/cudf_polars/tests
+       --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf_polars.xml"
 
 trap ERR
 set -e
