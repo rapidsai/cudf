@@ -51,6 +51,8 @@ struct ArrowSchema;
 
 struct ArrowArray;
 
+struct ArrowArrayStream;
+
 namespace cudf {
 /**
  * @addtogroup interop_dlpack
@@ -414,6 +416,24 @@ std::unique_ptr<cudf::column> from_arrow_column(
 std::unique_ptr<table> from_arrow_host(
   ArrowSchema const* schema,
   ArrowDeviceArray const* input,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Create `cudf::table` from given ArrowArrayStream input
+ *
+ * @throws std::invalid_argument if input is NULL
+ *
+ * The conversion WILL release the input ArrayArrayStream and its constituent
+ * arrays or schema since Arrow streams are not suitable for multiple reads.
+ *
+ * @param input `ArrowArrayStream` pointer to object that will produce ArrowArray data
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to perform cuda allocation
+ * @return cudf table generated from the given Arrow data
+ */
+std::unique_ptr<table> from_arrow_stream(
+  ArrowArrayStream* input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 

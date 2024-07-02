@@ -144,6 +144,9 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(schema->type != NANOARROW_TYPE_LARGE_STRING,
+               "Large strings are not yet supported in from_arrow_device",
+               cudf::data_type_error);
   if (input->length == 0) {
     return std::make_tuple<column_view, owned_columns_t>(
       {type,
