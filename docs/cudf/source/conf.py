@@ -342,6 +342,7 @@ _reftarget_aliases = {
     "cudf.Series": ("cudf.core.series.Series", "cudf.Series"),
     "cudf.Index": ("cudf.core.index.Index", "cudf.Index"),
     "cupy.core.core.ndarray": ("cupy.ndarray", "cupy.ndarray"),
+    "DeviceBuffer": ("rmm._lib.device_buffer.DeviceBuffer", "rmm.DeviceBuffer"),
 }
 
 
