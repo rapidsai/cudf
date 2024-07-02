@@ -69,6 +69,9 @@ int main(int argc, char const** argv) {
     check_args(argc, argv);
     std::string dataset_dir = argv[1];
 
+    auto resource = create_memory_resource(true);
+    rmm::mr::set_current_device_resource(resource.get());
+
     // 1. Read out the tables from parquet files
     auto customer = read_parquet(dataset_dir + "customer/part-0.parquet", {"c_custkey", "c_nationkey"});
     auto orders = read_parquet(dataset_dir + "orders/part-0.parquet", {"o_custkey", "o_orderkey", "o_orderdate"});

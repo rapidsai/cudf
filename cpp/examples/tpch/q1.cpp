@@ -65,9 +65,10 @@ std::unique_ptr<cudf::column> calc_charge(std::unique_ptr<table_with_cols>& tabl
 
 int main(int argc, char const** argv) {
     check_args(argc, argv);
-    use_memory_pool();
-
     std::string dataset_dir = argv[1];
+
+    auto resource = create_memory_resource(true);
+    rmm::mr::set_current_device_resource(resource.get());
 
     // 1. Read out the `lineitem` table from parquet file
     auto shipdate_ref = cudf::ast::column_reference(5);
