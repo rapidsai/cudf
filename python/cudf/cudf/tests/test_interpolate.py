@@ -135,3 +135,9 @@ def test_interpolate_dataframe_error_cases(data, kwargs):
         lfunc_args_and_kwargs=([], kwargs),
         rfunc_args_and_kwargs=([], kwargs),
     )
+
+
+def test_interpolate_noop_new_column():
+    ser = cudf.Series([1.0, 2.0, 3.0])
+    result = ser.interpolate()
+    assert ser._column is not result._column
