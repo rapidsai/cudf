@@ -46,7 +46,8 @@ void prefetch(std::string_view key, void const* ptr, std::size_t size)
 {
   if (PrefetchConfig::instance().get(key)) {
     if (PrefetchConfig::instance().debug) {
-      std::cerr << "Prefetching " << key << " at location " << ptr << std::endl;
+      std::cerr << "Prefetching " << size << " bytes for key " << key << " at location " << ptr
+                << std::endl;
     }
     auto result = cudaMemPrefetchAsync(
       ptr, size, rmm::get_current_cuda_device().value(), cudf::get_default_stream().value());
