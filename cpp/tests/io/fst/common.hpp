@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,6 +69,8 @@ std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const pda_s
    /* TT_ESC    */ {{TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR}}}};
 
 // Translation table (i.e., for each transition, what are the symbols that we output)
+static constexpr auto min_translated_out = 1;
+static constexpr auto max_translated_out = 1;
 std::array<std::array<std::vector<char>, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const pda_out_tt{
   {/* IN_STATE         {      [      }      ]      "      \    OTHER */
    /* TT_OOS    */ {{{'{'}, {'['}, {'}'}, {']'}, {'x'}, {'x'}, {'x'}}},
