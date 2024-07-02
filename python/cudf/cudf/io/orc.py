@@ -326,7 +326,7 @@ def read_orc(
 
     # Prefetch remote data if possible
     if fs and paths and not use_python_file_object:
-        # TODO: Add prefetcher="orc"
+        # TODO: Add prefetcher for partial IO
         filepath_or_buffer, _ = ioutils.prefetch_remote_buffers(
             paths,
             fs,
@@ -338,7 +338,7 @@ def read_orc(
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
         if ioutils.is_directory(
-            path_or_data=source, storage_options=storage_options
+            path_or_data=source, storage_options=storage_options, fs=fs
         ):
             source = stringify_path(source)
             source = fs.sep.join([source, "*.orc"])
