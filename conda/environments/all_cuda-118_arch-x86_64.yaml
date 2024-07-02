@@ -48,6 +48,7 @@ dependencies:
 - librdkafka>=1.9.0,<1.10.0a0
 - librmm==24.6.*
 - make
+- mmh3
 - moto>=4.0.8
 - msgpack-python
 - myst-nb
@@ -74,6 +75,7 @@ dependencies:
 - pytest-xdist
 - pytest<8
 - python-confluent-kafka>=1.9.0,<1.10.0a0
+- python-xxhash
 - python>=3.9,<3.12
 - pytorch>=2.1.0
 - rapids-dask-dependency==24.6.*

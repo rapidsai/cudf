@@ -513,7 +513,8 @@ std::unique_ptr<column> sha_hash(table_view const& input,
   CUDF_EXPECTS(
     std::all_of(
       input.begin(), input.end(), [](auto const& col) { return sha_leaf_type_check(col.type()); }),
-    "Unsupported column type for hash function.");
+    "Unsupported column type for hash function.",
+    cudf::data_type_error);
 
   // Result column allocation and creation
   auto begin = thrust::make_constant_iterator(Hasher::digest_size);

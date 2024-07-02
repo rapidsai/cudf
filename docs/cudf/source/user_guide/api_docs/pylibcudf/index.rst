@@ -16,6 +16,7 @@ This page provides API documentation for pylibcudf.
     filling
     gpumemoryview
     groupby
+    hashing
     join
     lists
     merge

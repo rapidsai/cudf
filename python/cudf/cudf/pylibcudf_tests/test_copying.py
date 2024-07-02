@@ -19,7 +19,7 @@ from cudf._lib import pylibcudf as plc
 
 
 # TODO: Test nullable data
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def pa_input_column(pa_type):
     if pa.types.is_integer(pa_type) or pa.types.is_floating(pa_type):
         return pa.array([1, 2, 3], type=pa_type)
@@ -35,7 +35,7 @@ def pa_input_column(pa_type):
     raise ValueError("Unsupported type")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def input_column(pa_input_column):
     return plc.interop.from_arrow(pa_input_column)
 

@@ -302,7 +302,8 @@ std::unique_ptr<column> md5(table_view const& input,
                              }
                              return md5_leaf_type_check(col.type());
                            }),
-               "Unsupported column type for hash function.");
+               "Unsupported column type for hash function.",
+               cudf::data_type_error);
 
   // Digest size in bytes
   auto constexpr digest_size = 32;
