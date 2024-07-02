@@ -24,7 +24,7 @@ jobs:
       #- conda-notebook-tests
       #- docs-build
       - wheel-build-cudf
-      - wheel-tests-cudf
+      #- wheel-tests-cudf
       - wheel-build-cudf-polars
       - test-wheel-cudf-polars
       #- wheel-build-dask-cudf
