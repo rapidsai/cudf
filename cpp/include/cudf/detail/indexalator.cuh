@@ -20,6 +20,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/normalizing_iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/prefetch.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
@@ -221,6 +222,9 @@ struct indexalator_factory {
     template <typename IndexType, CUDF_ENABLE_IF(is_index_type<IndexType>())>
     input_indexalator operator()(column_view const& indices)
     {
+      cudf::experimental::prefetch::detail::prefetch("indexalator_factor::input_indexalator_fn",
+                                                     indices.head(),
+                                                     indices.size() * size_of(indices.type()));
       return input_indexalator(indices.data<IndexType>(), indices.type());
     }
     template <typename IndexType, typename... Args, CUDF_ENABLE_IF(not is_index_type<IndexType>())>
