@@ -53,6 +53,7 @@ def read_csv(
     use_python_file_object=False,
     storage_options=None,
     bytes_per_thread=None,
+    prefetch_read_ahead=None,
 ):
     """{docstring}"""
 
@@ -81,20 +82,22 @@ def read_csv(
             "`read_csv` does not yet support reading multiple files"
         )
 
-    # Check if this is a remote file
+    # Extract filesystem up front
     fs, paths = ioutils._get_filesystem_and_paths(
         path_or_data=filepath_or_buffer, storage_options=storage_options
     )
-    if (
-        fs
-        and paths
-        and not (ioutils._is_local_filesystem(fs) or use_python_file_object)
-    ):
-        filepath_or_buffer, byte_range = ioutils._get_remote_bytes_lines(
+
+    # Prefetch remote data if possible
+    if not use_python_file_object:
+        filepath_or_buffer, byte_range = ioutils.prefetch_remote_buffers(
             paths,
             fs,
-            byte_range=byte_range,
             bytes_per_thread=bytes_per_thread,
+            prefetcher="contiguous",
+            prefetcher_options={
+                "byte_range": byte_range,
+                "read_ahead": prefetch_read_ahead,
+            },
         )
         assert len(filepath_or_buffer) == 1
         filepath_or_buffer = filepath_or_buffer[0]

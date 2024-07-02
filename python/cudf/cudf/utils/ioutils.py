@@ -27,7 +27,7 @@ except ImportError:
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
 _ROW_GROUP_SIZE_BYTES_DEFAULT = 128 * 1024 * 1024
-_OVER_READ_DEFAULT = 1024 * 1024
+_READ_AHEAD_DEFAULT = 1024 * 1024
 
 _docstring_remote_sources = """
 - cuDF supports local and remote data stores. See configuration details for
@@ -1614,7 +1614,7 @@ def _get_remote_bytes_parquet(
     if fsspec_parquet is None or (columns is None and row_groups is None):
         return _get_remote_bytes(
             remote_paths, fs, bytes_per_thread=bytes_per_thread
-        )
+        ), None
 
     sizes = fs.sizes(remote_paths)
     data = fsspec_parquet._get_parquet_byte_ranges(
@@ -1634,15 +1634,15 @@ def _get_remote_bytes_parquet(
                 chunk, dtype="b"
             )
         buffers.append(buf.tobytes())
-    return buffers
+    return buffers, None
 
 
-def _get_remote_bytes_lines(
+def _get_remote_bytes_contiguous(
     remote_paths,
     fs,
     *,
     byte_range=None,
-    over_read=_OVER_READ_DEFAULT,
+    read_ahead=None,
     bytes_per_thread=None,
 ):
     # Use byte_range to set remote_starts and remote_ends
@@ -1664,7 +1664,7 @@ def _get_remote_bytes_lines(
         fs,
         remote_starts=remote_starts,
         remote_ends=remote_ends,
-        over_read=over_read,
+        read_ahead=read_ahead,
         bytes_per_thread=bytes_per_thread,
         use_proxy_files=False,
         offset=offset,
@@ -1673,7 +1673,8 @@ def _get_remote_bytes_lines(
     # Adjust byte_range to trim unnecessary bytes.
     # Note that we keep the byte-range shifted by one
     # byte so that the libcudf reader still follows the
-    # correct code path
+    # correct code path.
+    # TODO: Get rid of this strange workaround!
     if offset:
         byte_range = (offset, byte_range[1])
 
@@ -1686,13 +1687,16 @@ def _get_remote_bytes(
     *,
     remote_starts=None,
     remote_ends=None,
-    over_read=_OVER_READ_DEFAULT,
+    read_ahead=None,
     bytes_per_thread=None,
     use_proxy_files=True,
     offset=0,
 ):
     if isinstance(remote_paths, str):
         remote_paths = [remote_paths]
+
+    if read_ahead is None:
+        read_ahead = _READ_AHEAD_DEFAULT
 
     if remote_starts:
         assert len(remote_starts) == len(remote_paths)
@@ -1703,7 +1707,7 @@ def _get_remote_bytes(
     if remote_ends:
         assert len(remote_ends) == len(remote_paths)
         for i in range(len(remote_ends)):
-            remote_ends[i] = min(remote_ends[i] + over_read, sizes[i])
+            remote_ends[i] = min(remote_ends[i] + read_ahead, sizes[i])
     else:
         remote_ends = sizes
 
@@ -1831,6 +1835,51 @@ def _open_remote_files(
         _set_context(pa_fs.open_input_file(fpath), context_stack)
         for fpath in paths
     ]
+
+
+def prefetch_remote_buffers(
+    paths,
+    fs,
+    *,
+    expand_paths=False,
+    bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
+    prefetcher=None,
+    prefetcher_options=None,
+):
+    # TODO: Add Docstring
+    # Gather bytes ahead of time for remote filesystems
+    if fs and paths and not _is_local_filesystem(fs):
+        prefetchers = {
+            "parquet": _get_remote_bytes_parquet,
+            "contiguous": _get_remote_bytes_contiguous,
+        }
+        if prefetcher not in prefetchers:
+            raise NotImplementedError(
+                f"{prefetcher} is not a supported remote-data prefetcher"
+            )
+
+        if expand_paths:
+            expanded_paths = []
+            if expand_paths is True:
+                expand_paths = "*"
+            for path in paths:
+                if is_directory(path_or_data=path, fs=fs):
+                    expanded_paths.extend(
+                        fs.glob(fs.sep.join([path, expand_paths]))
+                    )
+                else:
+                    expanded_paths.append(path)
+        else:
+            expanded_paths = paths
+
+        return prefetchers.get(prefetcher)(
+            expanded_paths,
+            fs,
+            bytes_per_thread=bytes_per_thread,
+            **(prefetcher_options or {}),
+        )
+    else:
+        return paths, None
 
 
 @doc_get_reader_filepath_or_buffer()

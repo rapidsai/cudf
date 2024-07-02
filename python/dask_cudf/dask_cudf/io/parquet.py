@@ -30,9 +30,9 @@ from cudf.io.parquet import (
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
 from cudf.utils.ioutils import (
     _ROW_GROUP_SIZE_BYTES_DEFAULT,
-    _get_remote_bytes_parquet,
     _is_local_filesystem,
     _open_remote_files,
+    prefetch_remote_buffers,
 )
 
 
@@ -115,11 +115,17 @@ class CudfEngine(ArrowDatasetEngine):
                 else:
                     # Use fsspec to collect byte ranges for all
                     # files ahead of time
-                    paths_or_fobs = _get_remote_bytes_parquet(
+                    paths_or_fobs, _ = prefetch_remote_buffers(
                         paths,
                         fs,
-                        columns=columns,
-                        row_groups=row_groups[0],
+                        prefetcher="parquet",
+                        prefetcher_options={
+                            "columns": columns,
+                            # All paths must have the same row-group selection
+                            "row_groups": row_groups[0]
+                            if row_groups
+                            else None,
+                        },
                     )
 
             # Use cudf to read in data

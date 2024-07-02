@@ -604,19 +604,18 @@ def read_parquet(
             dataset_kwargs=dataset_kwargs,
         )
 
-    # For remote data, we can transfer the necessary
-    # bytes directly into host memory
-    if (
-        fs
-        and paths
-        and not (ioutils._is_local_filesystem(fs) or use_python_file_object)
-    ):
-        filepath_or_buffer = ioutils._get_remote_bytes_parquet(
+    # Prefetch remote data if possible
+    if not use_python_file_object:
+        filepath_or_buffer, _ = ioutils.prefetch_remote_buffers(
             paths,
             fs,
             bytes_per_thread=bytes_per_thread,
-            columns=columns,
-            row_groups=row_groups,
+            prefetcher="parquet",
+            prefetcher_options={
+                "columns": columns,
+                # All paths must have the same row-group selection
+                "row_groups": row_groups[0] if row_groups else None,
+            },
         )
     else:
         filepath_or_buffer = paths if paths else filepath_or_buffer

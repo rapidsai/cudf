@@ -28,6 +28,7 @@ def read_json(
     mixed_types_as_string=False,
     prune_columns=False,
     on_bad_lines="error",
+    prefetch_read_ahead=None,
     *args,
     **kwargs,
 ):
@@ -67,35 +68,28 @@ def read_json(
         if not is_list_like(path_or_buf):
             path_or_buf = [path_or_buf]
 
-        # Check if this is remote data
+        # Extract filesystem up front
         fs, paths = ioutils._get_filesystem_and_paths(
             path_or_data=path_or_buf, storage_options=storage_options
         )
-        if fs and paths and not ioutils._is_local_filesystem(fs):
-            expanded_paths = []
-            for path in paths:
-                if ioutils.is_directory(path_or_data=path, fs=fs):
-                    expanded_paths.extend(
-                        fs.glob(fs.sep.join([path, "*.json"]))
-                    )
-                else:
-                    expanded_paths.append(path)
-            path_or_buf, byte_range = ioutils._get_remote_bytes_lines(
-                expanded_paths,
-                fs,
-                byte_range=byte_range,
-            )
+
+        # Prefetch remote data if possible
+        path_or_buf, byte_range = ioutils.prefetch_remote_buffers(
+            paths,
+            fs,
+            expand_paths="*.json",
+            prefetcher="contiguous",
+            prefetcher_options={
+                "byte_range": byte_range,
+                "read_ahead": prefetch_read_ahead,
+            },
+        )
 
         filepaths_or_buffers = []
         for source in path_or_buf:
             if ioutils.is_directory(
                 path_or_data=source, storage_options=storage_options
             ):
-                fs = ioutils._ensure_filesystem(
-                    passed_filesystem=None,
-                    path=source,
-                    storage_options=storage_options,
-                )
                 source = ioutils.stringify_pathlike(source)
                 source = fs.sep.join([source, "*.json"])
 
