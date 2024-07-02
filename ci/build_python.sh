@@ -17,6 +17,8 @@ rapids-generate-version > ./VERSION
 
 rapids-logger "Begin py build"
 
+conda config --set path_conflict prevent
+
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 
 # TODO: Remove `--no-test` flag once importing on a CPU
