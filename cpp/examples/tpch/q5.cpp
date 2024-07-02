@@ -69,12 +69,12 @@ int main() {
     std::string dataset_dir = BASE_DATASET_DIR;
     
     // 1. Read out the tables from parquet files
-    auto customer = read_parquet(dataset_dir + "customer/part-0.parquet");
-    auto orders = read_parquet(dataset_dir + "orders/part-0.parquet");
-    auto lineitem = read_parquet(dataset_dir + "lineitem/part-0.parquet");
-    auto supplier = read_parquet(dataset_dir + "supplier/part-0.parquet");
-    auto nation = read_parquet(dataset_dir + "nation/part-0.parquet");
-    auto region = read_parquet(dataset_dir + "region/part-0.parquet");
+    auto customer = read_parquet(dataset_dir + "customer/part-0.parquet", {"c_custkey", "c_nationkey"});
+    auto orders = read_parquet(dataset_dir + "orders/part-0.parquet", {"o_custkey", "o_orderkey", "o_orderdate"});
+    auto lineitem = read_parquet(dataset_dir + "lineitem/part-0.parquet", {"l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"});
+    auto supplier = read_parquet(dataset_dir + "supplier/part-0.parquet", {"s_suppkey", "s_nationkey"});
+    auto nation = read_parquet(dataset_dir + "nation/part-0.parquet", {"n_nationkey", "n_regionkey", "n_name"});
+    auto region = read_parquet(dataset_dir + "region/part-0.parquet", {"r_regionkey", "r_name"});
 
     // 2. Perform the joins
     auto join_a = apply_inner_join(
