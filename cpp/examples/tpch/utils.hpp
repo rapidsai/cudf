@@ -69,6 +69,7 @@ class table_with_cols {
          * @param col_name The name of the column
          */
         cudf::size_type col_id(std::string col_name) {
+            CUDF_FUNC_RANGE();
             auto it = std::find(col_names.begin(), col_names.end(), col_name);
             if (it == col_names.end()) {
                 throw std::runtime_error("Column not found");
@@ -82,6 +83,7 @@ class table_with_cols {
          * @param col_name The name of the appended column
          */
         std::unique_ptr<table_with_cols> append(std::unique_ptr<cudf::column>& col, std::string col_name) {
+            CUDF_FUNC_RANGE();
             std::vector<std::unique_ptr<cudf::column>> updated_cols;
             std::vector<std::string> updated_col_names;
             for (size_t i = 0; i < tbl->num_columns(); i++) {
@@ -99,6 +101,7 @@ class table_with_cols {
          * @param col_names The names of the columns to select
          */
         cudf::table_view select(std::vector<std::string> col_names) {
+            CUDF_FUNC_RANGE();
             std::vector<cudf::size_type> col_indices;
             for (auto &col_name : col_names) {
                 col_indices.push_back(col_id(col_name));
@@ -111,6 +114,7 @@ class table_with_cols {
          * @param filepath The path to the parquet file
          */
         void to_parquet(std::string filepath) {
+            CUDF_FUNC_RANGE();
             auto sink_info = cudf::io::sink_info(filepath);
             cudf::io::table_metadata metadata;
             std::vector<cudf::io::column_name_info> col_name_infos;
