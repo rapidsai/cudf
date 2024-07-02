@@ -752,27 +752,34 @@ class StringFunction(Expr):
             return Column(plc.strings.contains.contains_re(column.obj, prog))
         elif self.name == pl_expr.StringFunction.Slice:
             child, expr_offset, expr_length = self.children
-            column = child.evaluate(df, context=context, mapping=mapping)
-            if isinstance(expr_offset, Literal) and isinstance(expr_length, Literal):
-                # libcudf slices via [start,stop).
-                # polars slices with offset + length where start == offset
-                # stop = start + length. Do this maths on the host
-                start = expr_offset.value.as_py()
-                length = expr_length.value.as_py()
+            assert isinstance(expr_offset, Literal)
+            assert isinstance(expr_length, Literal)
 
-                if length == 0:
-                    stop = start
-                else:
-                    # No length indicates a scan to the end
-                    # The libcudf equivalent is a null stop
-                    stop = start + length if length else None
-                return Column(
-                    plc.strings.slice.slice_strings(
-                        column.obj,
-                        plc.interop.from_arrow(pa.scalar(start, type=pa.int32())),
-                        plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
-                    )
+            column = child.evaluate(df, context=context, mapping=mapping)
+            # libcudf slices via [start,stop).
+            # polars slices with offset + length where start == offset
+            # stop = start + length. Negative values for start look backward
+            # from the last element of the string. If the end index would be
+            # below zero, an empty string is returned.
+            # Do this maths on the host
+            start = expr_offset.value.as_py()
+            length = expr_length.value.as_py()
+
+            if length == 0:
+                stop = start
+            else:
+                # No length indicates a scan to the end
+                # The libcudf equivalent is a null stop
+                stop = start + length if length else None
+                if start < 0 and length > -start:
+                    stop = None
+            return Column(
+                plc.strings.slice.slice_strings(
+                    column.obj,
+                    plc.interop.from_arrow(pa.scalar(start, type=pa.int32())),
+                    plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
                 )
+            )
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
