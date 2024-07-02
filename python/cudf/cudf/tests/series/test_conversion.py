@@ -31,5 +31,18 @@ def test_convert_dtypes(data, dtype):
     assert_eq(expect, got)
 
 
+def test_convert_integer_false_convert_floating_true():
+    data = [1.000000000000000000000000001, 1]
+    expected = pd.Series(data).convert_dtypes(
+        convert_integer=False, convert_floating=True
+    )
+    result = (
+        cudf.Series(data)
+        .convert_dtypes(convert_integer=False, convert_floating=True)
+        .to_pandas(nullable=True)
+    )
+    assert_eq(result, expected)
+
+
 # Now write the same test, but construct a DataFrame
 # as input instead of parametrizing:
