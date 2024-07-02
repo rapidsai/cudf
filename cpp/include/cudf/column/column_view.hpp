@@ -75,11 +75,6 @@ class column_view_base {
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   T const* head() const noexcept
   {
-    // Only prefetch numerical types for now
-    if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
-      cudf::experimental::prefetch::detail::prefetch(
-        "column_view_base::head", _data, size() * sizeof(T));
-    }
     return static_cast<T const*>(_data);
   }
 
@@ -291,11 +286,27 @@ class column_view_base {
                    size_type null_count,
                    size_type offset = 0);
 };
+}  // namespace detail
 
-class mutable_column_view_base : public column_view_base {
- public:
- protected:
-};
+class column_view;
+class mutable_column_view;
+
+namespace detail {
+/**
+ * @brief Prefetches the specified column view's data.
+ *
+ * @param col The column view to prefetch
+ * @param data_ptr The pointer to the data to prefetch
+ */
+void prefetch_column_view(column_view const& col, void const* data_ptr);
+
+/**
+ * @brief Prefetches the specified mutable column view's data.
+ *
+ * @param col The column view to prefetch
+ * @param data_ptr The pointer to the data to prefetch
+ */
+void prefetch_column_view(mutable_column_view const& col, void* data_ptr);
 }  // namespace detail
 
 /**
@@ -455,6 +466,82 @@ class column_view : public detail::column_view_base {
     return device_span<T const>(data<T>(), size());
   }
 
+  // TODO May have to make head virtual eventually to make this override work
+  // everywhere, but for now just copy-pasting in the relevant other functions
+  // (data/begin/end).
+  /**
+   * @brief Returns pointer to the base device memory allocation casted to
+   * the specified type.
+   *
+   * This function will only participate in overload resolution if `is_rep_layout_compatible<T>()`
+   * or `std::is_same_v<T,void>` are true.
+   *
+   * @note If `offset() == 0`, then `head<T>() == data<T>()`
+   *
+   * @note It should be rare to need to access the `head<T>()` allocation of a
+   * column, and instead, accessing the elements should be done via `data<T>()`.
+   *
+   * @tparam The type to cast to
+   * @return Typed pointer to underlying data
+   */
+  template <typename T = void,
+            CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
+  T const* head() const noexcept
+  {
+    detail::prefetch_column_view(*this, _data);
+    return static_cast<T const*>(_data);
+  }
+
+  /**
+   * @brief Returns the underlying data casted to the specified type, plus the
+   * offset.
+   *
+   * @note If `offset() == 0`, then `head<T>() == data<T>()`
+   *
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
+   *
+   * @tparam T The type to cast to
+   * @return Typed pointer to underlying data, including the offset
+   */
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  T const* data() const noexcept
+  {
+    return head<T>() + _offset;
+  }
+
+  /**
+   * @brief Return first element (accounting for offset) after underlying data
+   * is casted to the specified type.
+   *
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
+   *
+   * @tparam T The desired type
+   * @return Pointer to the first element after casting
+   */
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  T const* begin() const noexcept
+  {
+    return data<T>();
+  }
+
+  /**
+   * @brief Return one past the last element after underlying data is casted to
+   * the specified type.
+   *
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
+   *
+   * @tparam T The desired type
+   * @return Pointer to one past the last element after casting
+   */
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  T const* end() const noexcept
+  {
+    return begin<T>() + size();
+  }
+
  private:
   friend column_view bit_cast(column_view const& input, data_type type);
 
@@ -558,11 +645,7 @@ class mutable_column_view : public detail::column_view_base {
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   T* head() const noexcept
   {
-    // Only prefetch numerical types for now
-    if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
-      cudf::experimental::prefetch::detail::prefetch(
-        "mutable_column_view::head", _data, size() * sizeof(T));
-    }
+    detail::prefetch_column_view(*this, _data);
     // Reusing the parent head method is preferred and should be reverted to
     // once we standardize on a prefetching strategy. For now the two are
     // separated to avoid multiple prefetches when this method is called and to
@@ -575,10 +658,10 @@ class mutable_column_view : public detail::column_view_base {
    * @brief Returns the underlying data casted to the specified type, plus the
    * offset.
    *
+   * @note If `offset() == 0`, then `head<T>() == data<T>()`
+   *
    * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
    * false.
-   *
-   * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
    * @tparam T The type to cast to
    * @return Typed pointer to underlying data, including the offset
@@ -586,12 +669,12 @@ class mutable_column_view : public detail::column_view_base {
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* data() const noexcept
   {
-    return const_cast<T*>(detail::column_view_base::data<T>());
+    return head<T>() + _offset;
   }
 
   /**
-   * @brief Return first element (accounting for offset) when underlying data is
-   * casted to the specified type.
+   * @brief Return first element (accounting for offset) after underlying data
+   * is casted to the specified type.
    *
    * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
    * false.
@@ -602,7 +685,7 @@ class mutable_column_view : public detail::column_view_base {
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* begin() const noexcept
   {
-    return const_cast<T*>(detail::column_view_base::begin<T>());
+    return data<T>();
   }
 
   /**
@@ -618,7 +701,7 @@ class mutable_column_view : public detail::column_view_base {
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* end() const noexcept
   {
-    return const_cast<T*>(detail::column_view_base::end<T>());
+    return begin<T>() + size();
   }
 
   /**

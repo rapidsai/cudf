@@ -15,8 +15,10 @@
  */
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -126,6 +128,45 @@ bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs)
 {
   return shallow_equivalent_impl(lhs, rhs);
 }
+
+void prefetch_column_view(column_view const& col, void const* data_ptr)
+{
+  std::string key{"column_view::head"};
+  if (cudf::experimental::prefetch::detail::PrefetchConfig::instance().get(key)) {
+    if (cudf::is_fixed_width(col.type())) {
+      cudf::experimental::prefetch::detail::prefetch(
+        key, data_ptr, col.size() * size_of(col.type()));
+    } else if (col.type().id() == type_id::STRING) {
+      strings_column_view scv{col};
+
+      cudf::experimental::prefetch::detail::prefetch(
+        key, data_ptr, scv.chars_size(cudf::get_default_stream()) * sizeof(char));
+    } else {
+      std::cout << "prefetch_column_view: Unsupported type: "
+                << static_cast<int32_t>(col.type().id()) << std::endl;
+    }
+  }
+}
+
+void prefetch_column_view(mutable_column_view const& col, void* data_ptr)
+{
+  std::string key{"mutable_column_view::head"};
+  if (cudf::experimental::prefetch::detail::PrefetchConfig::instance().get(key)) {
+    if (cudf::is_fixed_width(col.type())) {
+      cudf::experimental::prefetch::detail::prefetch(
+        key, data_ptr, col.size() * size_of(col.type()));
+    } else if (col.type().id() == type_id::STRING) {
+      strings_column_view scv{col};
+
+      cudf::experimental::prefetch::detail::prefetch(
+        key, data_ptr, scv.chars_size(cudf::get_default_stream()) * sizeof(char));
+    } else {
+      std::cout << "prefetch_column_view (mutable): Unsupported type: "
+                << static_cast<int32_t>(col.type().id()) << std::endl;
+    }
+  }
+}
+
 }  // namespace detail
 
 // Immutable view constructor
