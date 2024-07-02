@@ -18,7 +18,6 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/offsets_iterator.cuh>
-#include <cudf/utilities/prefetch.hpp>
 
 namespace cudf {
 namespace detail {
@@ -35,16 +34,7 @@ struct offsetalator_factory {
    */
   static input_offsetalator make_input_iterator(column_view const& offsets, size_type offset = 0)
   {
-    if (offsets.type().id() == type_id::INT32) {
-      cudf::experimental::prefetch::detail::prefetch("offsetalator_factory::make_input_iterator",
-                                                     offsets.head(),
-                                                     offsets.size() * sizeof(int32_t));
-    } else if (offsets.type().id() == type_id::INT64) {
-      cudf::experimental::prefetch::detail::prefetch("offsetalator_factory::make_input_iterator",
-                                                     offsets.head(),
-                                                     offsets.size() * sizeof(int64_t));
-    }
-    return {offsets.head(), offsets.type(), offset};
+    return input_offsetalator(offsets.head(), offsets.type(), offset);
   }
 
   /**
