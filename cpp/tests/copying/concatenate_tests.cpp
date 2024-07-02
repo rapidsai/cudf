@@ -1667,3 +1667,63 @@ TEST_F(DictionaryConcatTest, ErrorsTest)
   std::vector<cudf::column_view> empty;
   EXPECT_THROW(cudf::concatenate(empty), cudf::logic_error);
 }
+
+struct EmptyColumnTest : public cudf::test::BaseFixture {};
+
+TEST_F(EmptyColumnTest, SimpleTest)
+{
+  std::vector<cudf::column> columns;
+  constexpr auto num_copies = 10;
+  constexpr auto num_rows   = 10;
+  for (auto i = 0; i < num_copies; ++i) {
+    columns.emplace_back(cudf::data_type(cudf::type_id::EMPTY),
+                         num_rows,
+                         rmm::device_buffer{},
+                         rmm::device_buffer{},
+                         0);
+  }
+
+  // Create views from columns
+  std::vector<cudf::column_view> views;
+  for (auto& col : columns) {
+    views.push_back(col.view());
+  }
+  auto result = cudf::concatenate(views);
+
+  ASSERT_EQ(result->size(), num_copies * num_rows);
+  ASSERT_EQ(result->type().id(), cudf::type_id::EMPTY);
+}
+
+struct TableOfEmptyColumnsTest : public cudf::test::BaseFixture {};
+
+TEST_F(TableOfEmptyColumnsTest, SimpleTest)
+{
+  std::vector<cudf::table> tables;
+  constexpr auto num_copies  = 10;
+  constexpr auto num_rows    = 10;
+  constexpr auto num_columns = 10;
+  for (auto i = 0; i < num_copies; ++i) {
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    for (auto j = 0; j < num_columns; ++j) {
+      columns.push_back(std::make_unique<cudf::column>(cudf::data_type(cudf::type_id::EMPTY),
+                                                       num_rows,
+                                                       rmm::device_buffer{},
+                                                       rmm::device_buffer{},
+                                                       0));
+    }
+    tables.emplace_back(std::move(columns));
+  }
+
+  // Create views from columns
+  std::vector<cudf::table_view> views;
+  for (auto& tbl : tables) {
+    views.push_back(tbl.view());
+  }
+  auto result = cudf::concatenate(views);
+
+  ASSERT_EQ(result->num_rows(), num_copies * num_rows);
+  ASSERT_EQ(result->num_columns(), num_columns);
+  for (auto i = 0; i < num_columns; ++i) {
+    ASSERT_EQ(result->get_column(i).type().id(), cudf::type_id::EMPTY);
+  }
+}
