@@ -363,8 +363,7 @@ def test_read_parquet_arrow_nativefile(s3_base, s3so, pdf, columns):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("precache", [None, "parquet"])
-def test_read_parquet_filters(s3_base, s3so, pdf_ext, precache):
+def test_read_parquet_filters(s3_base, s3so, pdf_ext):
     fname = "test_parquet_reader_filters.parquet"
     bucket = "parquet"
     buffer = BytesIO()
@@ -376,7 +375,6 @@ def test_read_parquet_filters(s3_base, s3so, pdf_ext, precache):
             f"s3://{bucket}/{fname}",
             storage_options=s3so,
             filters=filters,
-            open_file_options={"precache_options": {"method": precache}},
         )
 
     # All row-groups should be filtered out
