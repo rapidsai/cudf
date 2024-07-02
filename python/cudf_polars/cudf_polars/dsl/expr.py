@@ -978,15 +978,15 @@ class Cast(Expr):
 class Agg(Expr):
     __slots__ = ("name", "options", "op", "request", "children")
     _non_child = ("dtype", "name", "options")
-    children: tuple[Expr]
+    children: tuple[Expr, ...]
 
     def __init__(
-        self, dtype: plc.DataType, name: str, options: Any, value: Expr
+        self, dtype: plc.DataType, name: str, options: Any, *children: Expr
     ) -> None:
         super().__init__(dtype)
         self.name = name
         self.options = options
-        self.children = (value,)
+        self.children = children
         if name not in Agg._SUPPORTED:
             raise NotImplementedError(
                 f"Unsupported aggregation {name=}"
