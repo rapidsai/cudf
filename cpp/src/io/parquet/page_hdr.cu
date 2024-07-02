@@ -145,6 +145,11 @@ __device__ inline bool is_nested(ColumnChunkDesc const& chunk)
   return chunk.max_nesting_depth > 1;
 }
 
+__device__ inline bool is_list(ColumnChunkDesc const& chunk)
+{
+  return chunk.max_level[level_type::REPETITION] > 0;
+}
+
 __device__ inline bool is_byte_array(ColumnChunkDesc const& chunk)
 {
   return chunk.physical_type == BYTE_ARRAY;
@@ -178,14 +183,17 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
     return decode_kernel_mask::STRING;
   }
 
-  if (!is_nested(chunk) && !is_byte_array(chunk) && !is_boolean(chunk)) {
+  if (!is_list(chunk) && !is_byte_array(chunk) && !is_boolean(chunk)) {
     if (page.encoding == Encoding::PLAIN) {
-      return decode_kernel_mask::FIXED_WIDTH_NO_DICT;
+      return is_nested(chunk) ? decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED
+                              : decode_kernel_mask::FIXED_WIDTH_NO_DICT;
     } else if (page.encoding == Encoding::PLAIN_DICTIONARY ||
                page.encoding == Encoding::RLE_DICTIONARY) {
-      return decode_kernel_mask::FIXED_WIDTH_DICT;
+      return is_nested(chunk) ? decode_kernel_mask::FIXED_WIDTH_DICT_NESTED
+                              : decode_kernel_mask::FIXED_WIDTH_DICT;
     } else if (page.encoding == Encoding::BYTE_STREAM_SPLIT) {
-      return decode_kernel_mask::BYTE_STREAM_SPLIT_FLAT;
+      return is_nested(chunk) ? decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED
+                              : decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT;
     }
   }
 

@@ -2,16 +2,19 @@
 from __future__ import annotations
 
 from functools import cached_property
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf._typing import Dtype
 from cudf.core.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
 from cudf.core.missing import NA
+
+if TYPE_CHECKING:
+    from cudf._typing import Dtype
 
 
 class StructColumn(ColumnBase):

@@ -647,7 +647,7 @@ constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
 
 struct set_str_dict_index_count {
   device_span<size_t> str_dict_index_count;
-  device_span<const ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
   __device__ void operator()(PageInfo const& page)
   {
@@ -662,7 +662,7 @@ struct set_str_dict_index_count {
 
 struct set_str_dict_index_ptr {
   string_index_pair* const base;
-  device_span<const size_t> str_dict_index_offsets;
+  device_span<size_t const> str_dict_index_offsets;
   device_span<ColumnChunkDesc> chunks;
 
   __device__ void operator()(size_t i)
@@ -679,7 +679,7 @@ struct set_str_dict_index_ptr {
  *
  */
 struct set_list_row_count_estimate {
-  device_span<const ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
   __device__ void operator()(PageInfo& page)
   {
@@ -708,7 +708,7 @@ struct set_list_row_count_estimate {
  */
 struct set_final_row_count {
   device_span<PageInfo> pages;
-  device_span<const ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
   __device__ void operator()(size_t i)
   {
@@ -1436,7 +1436,8 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
     // subpass since we know that will safely completed.
     bool const is_list = chunk.max_level[level_type::REPETITION] > 0;
     if (is_list && max_col_row < last_pass_row) {
-      size_t const min_col_row = static_cast<size_t>(chunk.start_row + last_page.chunk_row);
+      auto const& first_page   = subpass.pages[page_index];
+      size_t const min_col_row = static_cast<size_t>(chunk.start_row + first_page.chunk_row);
       CUDF_EXPECTS((max_col_row - min_col_row) > 1, "Unexpected short subpass");
       max_col_row--;
     }

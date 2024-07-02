@@ -4,19 +4,17 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import Any, Optional, Sequence, Union, cast
+from typing import TYPE_CHECKING, Sequence, cast
 
 import cupy as cp
 import numpy as np
 import pyarrow as pa
-from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
-from cudf._typing import ColumnBinaryOperand, Dtype
 from cudf.api.types import is_integer_dtype, is_scalar
 from cudf.core.buffer import as_buffer
 from cudf.core.column import ColumnBase
@@ -30,6 +28,9 @@ from cudf.core.mixins import BinaryOperand
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 from .numerical_base import NumericalBaseColumn
+
+if TYPE_CHECKING:
+    from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 
 
 class DecimalBaseColumn(NumericalBaseColumn):
@@ -47,7 +48,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def as_decimal_column(
         self,
         dtype: Dtype,
-    ) -> Union["DecimalBaseColumn"]:
+    ) -> "DecimalBaseColumn":
         if (
             isinstance(dtype, cudf.core.dtypes.DecimalDtype)
             and dtype.scale < self.dtype.scale
@@ -133,30 +134,20 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
         return result
 
-    def fillna(
-        self,
-        fill_value: Any = None,
-        method: Optional[str] = None,
-    ) -> Self:
-        """Fill null values with ``value``.
-
-        Returns a copy with null filled.
-        """
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> cudf.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
         if isinstance(fill_value, (int, Decimal)):
-            fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
-        elif (
-            isinstance(fill_value, DecimalBaseColumn)
-            or isinstance(fill_value, cudf.core.column.NumericalColumn)
-            and is_integer_dtype(fill_value.dtype)
+            return cudf.Scalar(fill_value, dtype=self.dtype)
+        elif isinstance(fill_value, ColumnBase) and (
+            isinstance(self.dtype, DecimalDtype) or self.dtype.kind in "iu"
         ):
-            fill_value = fill_value.astype(self.dtype)
-        else:
-            raise TypeError(
-                "Decimal columns only support using fillna with decimal and "
-                "integer values"
-            )
-
-        return super().fillna(fill_value, method=method)
+            return fill_value.astype(self.dtype)
+        raise TypeError(
+            "Decimal columns only support using fillna with decimal and "
+            "integer values"
+        )
 
     def normalize_binop_value(self, other):
         if isinstance(other, ColumnBase):
@@ -166,7 +157,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                         "Decimal columns only support binary operations with "
                         "integer numerical columns."
                     )
-                other = other.as_decimal_column(
+                other = other.astype(
                     self.dtype.__class__(self.dtype.__class__.MAX_PRECISION, 0)
                 )
             elif not isinstance(other, DecimalBaseColumn):
@@ -197,7 +188,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return NotImplemented
 
     def _decimal_quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self, q: float | Sequence[float], interpolation: str, exact: bool
     ) -> ColumnBase:
         quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls

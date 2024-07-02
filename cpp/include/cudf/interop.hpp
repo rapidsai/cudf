@@ -40,6 +40,8 @@
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <utility>
+
 struct DLManagedTensor;
 
 struct ArrowDeviceArray;
@@ -47,6 +49,8 @@ struct ArrowDeviceArray;
 struct ArrowSchema;
 
 struct ArrowArray;
+
+struct ArrowArrayStream;
 
 namespace cudf {
 /**
@@ -121,7 +125,7 @@ struct column_metadata {
    *
    * @param _name Name of the column
    */
-  column_metadata(std::string const& _name) : name(_name) {}
+  column_metadata(std::string _name) : name(std::move(_name)) {}
   column_metadata() = default;
 };
 
@@ -365,10 +369,11 @@ std::unique_ptr<cudf::scalar> from_arrow(
  * @param mr Device memory resource used to allocate `cudf::table`
  * @return cudf table generated from given arrow data
  */
-std::unique_ptr<cudf::table> from_arrow(ArrowSchema const* schema,
-                                        ArrowArray const* input,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr);
+std::unique_ptr<cudf::table> from_arrow(
+  ArrowSchema const* schema,
+  ArrowArray const* input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create `cudf::column` from a given ArrowArray and ArrowSchema input
@@ -383,10 +388,11 @@ std::unique_ptr<cudf::table> from_arrow(ArrowSchema const* schema,
  * @param mr Device memory resource used to allocate `cudf::column`
  * @return cudf column generated from given arrow data
  */
-std::unique_ptr<cudf::column> from_arrow_column(ArrowSchema const* schema,
-                                                ArrowArray const* input,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr);
+std::unique_ptr<cudf::column> from_arrow_column(
+  ArrowSchema const* schema,
+  ArrowArray const* input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create `cudf::table` from given ArrowDeviceArray input
@@ -409,6 +415,24 @@ std::unique_ptr<cudf::column> from_arrow_column(ArrowSchema const* schema,
 std::unique_ptr<table> from_arrow_host(
   ArrowSchema const* schema,
   ArrowDeviceArray const* input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Create `cudf::table` from given ArrowArrayStream input
+ *
+ * @throws std::invalid_argument if input is NULL
+ *
+ * The conversion WILL release the input ArrayArrayStream and its constituent
+ * arrays or schema since Arrow streams are not suitable for multiple reads.
+ *
+ * @param input `ArrowArrayStream` pointer to object that will produce ArrowArray data
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to perform cuda allocation
+ * @return cudf table generated from the given Arrow data
+ */
+std::unique_ptr<table> from_arrow_stream(
+  ArrowArrayStream* input,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

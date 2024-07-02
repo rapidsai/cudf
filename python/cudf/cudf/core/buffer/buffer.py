@@ -6,7 +6,7 @@ import math
 import pickle
 import weakref
 from types import SimpleNamespace
-from typing import Any, Dict, Literal, Mapping, Optional, Tuple
+from typing import Any, Literal, Mapping
 
 import numpy
 from typing_extensions import Self
@@ -42,7 +42,7 @@ def host_memory_allocation(nbytes: int) -> memoryview:
 def cuda_array_interface_wrapper(
     ptr: int,
     size: int,
-    owner: Optional[object] = None,
+    owner: object | None = None,
     readonly=False,
     typestr="|u1",
     version=0,
@@ -278,7 +278,7 @@ class BufferOwner(Serializable):
         return self._ptr
 
     def memoryview(
-        self, *, offset: int = 0, size: Optional[int] = None
+        self, *, offset: int = 0, size: int | None = None
     ) -> memoryview:
         """Read-only access to the buffer through host memory."""
         size = self._size if size is None else size
@@ -319,7 +319,7 @@ class Buffer(Serializable):
         *,
         owner: BufferOwner,
         offset: int = 0,
-        size: Optional[int] = None,
+        size: int | None = None,
     ) -> None:
         size = owner.size if size is None else size
         if size < 0:
@@ -414,7 +414,7 @@ class Buffer(Serializable):
             "version": 0,
         }
 
-    def serialize(self) -> Tuple[dict, list]:
+    def serialize(self) -> tuple[dict, list]:
         """Serialize the buffer into header and frames.
 
         The frames can be a mixture of memoryview, Buffer, and BufferOwner
@@ -427,7 +427,7 @@ class Buffer(Serializable):
             serializable metadata required to reconstruct the object. The
             second element is a list containing single frame.
         """
-        header: Dict[str, Any] = {}
+        header: dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
         header["owner-type-serialized"] = pickle.dumps(type(self._owner))
         header["frame_count"] = 1
@@ -480,7 +480,7 @@ class Buffer(Serializable):
         )
 
 
-def get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
+def get_ptr_and_size(array_interface: Mapping) -> tuple[int, int]:
     """Retrieve the pointer and size from an array interface.
 
     Raises ValueError if array isn't C-contiguous.

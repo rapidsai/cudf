@@ -14,10 +14,12 @@ This page provides API documentation for pylibcudf.
     column_factories
     concatenate
     copying
+    datetime
     filling
     gpumemoryview
     groupby
     io/index.rst
+    interop
     join
     lists
     merge

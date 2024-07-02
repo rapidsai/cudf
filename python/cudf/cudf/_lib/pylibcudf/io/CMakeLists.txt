@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-set(cython_sources avro.pyx csv.pyx datasource.pyx types.pyx)
+set(cython_sources avro.pyx csv.pyx datasource.pyx json.pyx types.pyx)
 
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
@@ -22,6 +22,6 @@ rapids_cython_create_modules(
 )
 
 set(targets_using_arrow_headers pylibcudf_io_avro pylibcudf_io_csv pylibcudf_io_datasource
-                                pylibcudf_io_types
+                                pylibcudf_io_json pylibcudf_io_types
 )
 link_to_pyarrow_headers("${targets_using_arrow_headers}")

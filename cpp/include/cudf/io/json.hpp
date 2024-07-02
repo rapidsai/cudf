@@ -26,6 +26,7 @@
 
 #include <map>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -166,9 +167,9 @@ class json_reader_options {
    *
    * @returns Data types of the columns
    */
-  std::variant<std::vector<data_type>,
-               std::map<std::string, data_type>,
-               std::map<std::string, schema_element>> const&
+  [[nodiscard]] std::variant<std::vector<data_type>,
+                             std::map<std::string, data_type>,
+                             std::map<std::string, schema_element>> const&
   get_dtypes() const
   {
     return _dtypes;
@@ -179,28 +180,28 @@ class json_reader_options {
    *
    * @return Compression format of the source
    */
-  compression_type get_compression() const { return _compression; }
+  [[nodiscard]] compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Returns number of bytes to skip from source start.
    *
    * @return Number of bytes to skip from source start
    */
-  size_t get_byte_range_offset() const { return _byte_range_offset; }
+  [[nodiscard]] size_t get_byte_range_offset() const { return _byte_range_offset; }
 
   /**
    * @brief Returns number of bytes to read.
    *
    * @return Number of bytes to read
    */
-  size_t get_byte_range_size() const { return _byte_range_size; }
+  [[nodiscard]] size_t get_byte_range_size() const { return _byte_range_size; }
 
   /**
    * @brief Returns number of bytes to read with padding.
    *
    * @return Number of bytes to read with padding
    */
-  size_t get_byte_range_size_with_padding() const
+  [[nodiscard]] size_t get_byte_range_size_with_padding() const
   {
     if (_byte_range_size == 0) {
       return 0;
@@ -214,7 +215,7 @@ class json_reader_options {
    *
    * @return Number of bytes to pad
    */
-  size_t get_byte_range_padding() const
+  [[nodiscard]] size_t get_byte_range_padding() const
   {
     auto const num_columns = std::visit([](auto const& dtypes) { return dtypes.size(); }, _dtypes);
 
@@ -236,67 +237,68 @@ class json_reader_options {
    *
    * @return Delimiter separating records in JSON lines
    */
-  char get_delimiter() const { return _delimiter; }
+  [[nodiscard]] char get_delimiter() const { return _delimiter; }
 
   /**
    * @brief Whether to read the file as a json object per line.
    *
    * @return `true` if reading the file as a json object per line
    */
-  bool is_enabled_lines() const { return _lines; }
+  [[nodiscard]] bool is_enabled_lines() const { return _lines; }
 
   /**
    * @brief Whether to parse mixed types as a string column.
    *
    * @return `true` if mixed types are parsed as a string column
    */
-  bool is_enabled_mixed_types_as_string() const { return _mixed_types_as_string; }
+  [[nodiscard]] bool is_enabled_mixed_types_as_string() const { return _mixed_types_as_string; }
 
   /**
    * @brief Whether to prune columns on read, selected based on the @ref set_dtypes option.
    *
    * When set as true, if the reader options include @ref set_dtypes, then
    * the reader will only return those columns which are mentioned in @ref set_dtypes.
-   * If false, then all columns are returned, independent of the @ref set_dtypes setting.
+   * If false, then all columns are returned, independent of the @ref set_dtypes
+   * setting.
    *
    * @return True if column pruning is enabled
    */
-  bool is_enabled_prune_columns() const { return _prune_columns; }
+  [[nodiscard]] bool is_enabled_prune_columns() const { return _prune_columns; }
 
   /**
    * @brief Whether to parse dates as DD/MM versus MM/DD.
    *
    * @returns true if dates are parsed as DD/MM, false if MM/DD
    */
-  bool is_enabled_dayfirst() const { return _dayfirst; }
+  [[nodiscard]] bool is_enabled_dayfirst() const { return _dayfirst; }
 
   /**
    * @brief Whether the reader should keep quotes of string values.
    *
    * @returns true if the reader should keep quotes, false otherwise
    */
-  bool is_enabled_keep_quotes() const { return _keep_quotes; }
+  [[nodiscard]] bool is_enabled_keep_quotes() const { return _keep_quotes; }
 
   /**
    * @brief Whether the reader should normalize single quotes around strings
    *
    * @returns true if the reader should normalize single quotes, false otherwise
    */
-  bool is_enabled_normalize_single_quotes() const { return _normalize_single_quotes; }
+  [[nodiscard]] bool is_enabled_normalize_single_quotes() const { return _normalize_single_quotes; }
 
   /**
    * @brief Whether the reader should normalize unquoted whitespace characters
    *
    * @returns true if the reader should normalize whitespace, false otherwise
    */
-  bool is_enabled_normalize_whitespace() const { return _normalize_whitespace; }
+  [[nodiscard]] bool is_enabled_normalize_whitespace() const { return _normalize_whitespace; }
 
   /**
    * @brief Queries the JSON reader's behavior on invalid JSON lines.
    *
    * @returns An enum that specifies the JSON reader's behavior on invalid JSON lines.
    */
-  json_recovery_mode_t recovery_mode() const { return _recovery_mode; }
+  [[nodiscard]] json_recovery_mode_t recovery_mode() const { return _recovery_mode; }
 
   /**
    * @brief Set data types for columns to be read.
@@ -717,8 +719,8 @@ class json_writer_options {
    * @param sink The sink used for writer output
    * @param table Table to be written to output
    */
-  explicit json_writer_options(sink_info const& sink, table_view const& table)
-    : _sink(sink), _table(table), _rows_per_chunk(table.num_rows())
+  explicit json_writer_options(sink_info sink, table_view table)
+    : _sink(std::move(sink)), _table(std::move(table)), _rows_per_chunk(table.num_rows())
   {
   }
 

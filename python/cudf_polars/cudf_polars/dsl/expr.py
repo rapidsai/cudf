@@ -27,11 +27,12 @@ from polars.polars import _expr_nodes as pl_expr
 import cudf._lib.pylibcudf as plc
 
 from cudf_polars.containers import Column, NamedColumn
-from cudf_polars.utils import sorting
+from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    import polars.polars as plrs
     import polars.type_aliases as pl_types
 
     from cudf_polars.containers import DataFrame
@@ -51,6 +52,7 @@ __all__ = [
     "GroupedRollingWindow",
     "Cast",
     "Agg",
+    "Ternary",
     "BinOp",
 ]
 
@@ -134,14 +136,14 @@ class Expr:
         True if the two expressions are equal, false otherwise.
         """
         if type(self) is not type(other):
-            return False
+            return False  # pragma: no cover; __eq__ trips first
         return self._ctor_arguments(self.children) == other._ctor_arguments(
             other.children
         )
 
     def __eq__(self, other: Any) -> bool:
         """Equality of expressions."""
-        if type(self) != type(other) or hash(self) != hash(other):
+        if type(self) is not type(other) or hash(self) != hash(other):
             return False
         else:
             return self.is_equal(other)
@@ -196,7 +198,9 @@ class Expr:
             are returned during translation to the IR, but for now we
             are not perfect.
         """
-        raise NotImplementedError(f"Evaluation of {type(self).__name__}")
+        raise NotImplementedError(
+            f"Evaluation of expression {type(self).__name__}"
+        )  # pragma: no cover; translation of unimplemented nodes trips first
 
     def evaluate(
         self,
@@ -266,7 +270,7 @@ class Expr:
         """
         raise NotImplementedError(
             f"Collecting aggregation info for {type(self).__name__}"
-        )
+        )  # pragma: no cover; check_agg trips first
 
 
 class NamedExpr:
@@ -287,7 +291,7 @@ class NamedExpr:
 
     def __repr__(self) -> str:
         """Repr of the expression."""
-        return f"NamedExpr({self.name}, {self.value}"
+        return f"NamedExpr({self.name}, {self.value})"
 
     def __eq__(self, other: Any) -> bool:
         """Equality of two expressions."""
@@ -366,6 +370,29 @@ class Literal(Expr):
         return Column(plc.Column.from_scalar(plc.interop.from_arrow(self.value), 1))
 
 
+class LiteralColumn(Expr):
+    __slots__ = ("value",)
+    _non_child = ("dtype", "value")
+    value: pa.Array[Any, Any]
+    children: tuple[()]
+
+    def __init__(self, dtype: plc.DataType, value: plrs.PySeries) -> None:
+        super().__init__(dtype)
+        data = value.to_arrow()
+        self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        # datatype of pyarrow array is correct by construction.
+        return Column(plc.interop.from_arrow(self.value))
+
+
 class Col(Expr):
     __slots__ = ("name",)
     _non_child = ("dtype", "name")
@@ -441,12 +468,12 @@ class BooleanFunction(Expr):
         ):
             # With ignore_nulls == False, polars uses Kleene logic
             raise NotImplementedError(f"Kleene logic for {self.name}")
-        if self.name in (
-            pl_expr.BooleanFunction.IsFinite,
-            pl_expr.BooleanFunction.IsInfinite,
-            pl_expr.BooleanFunction.IsIn,
+        if self.name == pl_expr.BooleanFunction.IsIn and not all(
+            c.dtype == self.children[0].dtype for c in self.children
         ):
-            raise NotImplementedError(f"{self.name}")
+            # TODO: If polars IR doesn't put the casts in, we need to
+            # mimic the supertype promotion rules.
+            raise NotImplementedError("IsIn doesn't support supertype casting")
 
     @staticmethod
     def _distinct(
@@ -504,19 +531,50 @@ class BooleanFunction(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
+        if self.name in (
+            pl_expr.BooleanFunction.IsFinite,
+            pl_expr.BooleanFunction.IsInfinite,
+        ):
+            # Avoid evaluating the child if the dtype tells us it's unnecessary.
+            (child,) = self.children
+            is_finite = self.name == pl_expr.BooleanFunction.IsFinite
+            if child.dtype.id() not in (plc.TypeId.FLOAT32, plc.TypeId.FLOAT64):
+                value = plc.interop.from_arrow(
+                    pa.scalar(value=is_finite, type=plc.interop.to_arrow(self.dtype))
+                )
+                return Column(plc.Column.from_scalar(value, df.num_rows))
+            needles = child.evaluate(df, context=context, mapping=mapping)
+            to_search = [-float("inf"), float("inf")]
+            if is_finite:
+                # NaN is neither finite not infinite
+                to_search.append(float("nan"))
+            haystack = plc.interop.from_arrow(
+                pa.array(
+                    to_search,
+                    type=plc.interop.to_arrow(needles.obj.type()),
+                )
+            )
+            result = plc.search.contains(haystack, needles.obj)
+            if is_finite:
+                result = plc.unary.unary_operation(result, plc.unary.UnaryOperator.NOT)
+            return Column(result)
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
         ]
         if self.name == pl_expr.BooleanFunction.Any:
             (column,) = columns
-            return plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, plc.aggregation.any(), self.dtype), 1
+            return Column(
+                plc.Column.from_scalar(
+                    plc.reduce.reduce(column.obj, plc.aggregation.any(), self.dtype), 1
+                )
             )
         elif self.name == pl_expr.BooleanFunction.All:
             (column,) = columns
-            return plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, plc.aggregation.all(), self.dtype), 1
+            return Column(
+                plc.Column.from_scalar(
+                    plc.reduce.reduce(column.obj, plc.aggregation.all(), self.dtype), 1
+                )
             )
         if self.name == pl_expr.BooleanFunction.IsNull:
             (column,) = columns
@@ -606,24 +664,18 @@ class BooleanFunction(Expr):
                     (c.obj for c in columns),
                 )
             )
-        elif self.name == pl_expr.BooleanFunction.IsBetween:
-            column, lo, hi = columns
-            (closed,) = self.options
-            lop, rop = self._BETWEEN_OPS[closed]
+        elif self.name == pl_expr.BooleanFunction.IsIn:
+            needles, haystack = columns
+            return Column(plc.search.contains(haystack.obj, needles.obj))
+        elif self.name == pl_expr.BooleanFunction.Not:
+            (column,) = columns
             return Column(
-                plc.binaryop.binary_operation(
-                    plc.binaryop.binary_operation(
-                        column.obj, lo.obj, lop, output_type=self.dtype
-                    ),
-                    plc.binaryop.binary_operation(
-                        column.obj, hi.obj, rop, output_type=self.dtype
-                    ),
-                    plc.binaryop.BinaryOperator.LOGICAL_AND,
-                    self.dtype,
-                )
+                plc.unary.unary_operation(column.obj, plc.unary.UnaryOperator.NOT)
             )
         else:
-            raise NotImplementedError(f"BooleanFunction {self.name}")
+            raise NotImplementedError(
+                f"BooleanFunction {self.name}"
+            )  # pragma: no cover; handled by init raising
 
 
 class StringFunction(Expr):
@@ -642,13 +694,28 @@ class StringFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
+        self._validate_input()
+
+    def _validate_input(self):
         if self.name not in (
             pl_expr.StringFunction.Lowercase,
             pl_expr.StringFunction.Uppercase,
             pl_expr.StringFunction.EndsWith,
             pl_expr.StringFunction.StartsWith,
+            pl_expr.StringFunction.Contains,
         ):
             raise NotImplementedError(f"String function {self.name}")
+        if self.name == pl_expr.StringFunction.Contains:
+            literal, strict = self.options
+            if not literal:
+                if not strict:
+                    raise NotImplementedError(
+                        "f{strict=} is not supported for regex contains"
+                    )
+                if not isinstance(self.children[1], Literal):
+                    raise NotImplementedError(
+                        "Regex contains only supports a scalar pattern"
+                    )
 
     def do_evaluate(
         self,
@@ -658,6 +725,25 @@ class StringFunction(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
+        if self.name == pl_expr.StringFunction.Contains:
+            child, arg = self.children
+            column = child.evaluate(df, context=context, mapping=mapping)
+
+            literal, _ = self.options
+            if literal:
+                pat = arg.evaluate(df, context=context, mapping=mapping)
+                pattern = (
+                    pat.obj_scalar
+                    if pat.is_scalar and pat.obj.size() != column.obj.size()
+                    else pat.obj
+                )
+                return Column(plc.strings.find.contains(column.obj, pattern))
+            assert isinstance(arg, Literal)
+            prog = plc.strings.regex_program.RegexProgram.create(
+                arg.value.as_py(),
+                flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
+            )
+            return Column(plc.strings.contains.contains_re(column.obj, prog))
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
@@ -688,8 +774,9 @@ class StringFunction(Expr):
                     else prefix.obj,
                 )
             )
-        else:
-            raise NotImplementedError(f"StringFunction {self.name}")
+        raise NotImplementedError(
+            f"StringFunction {self.name}"
+        )  # pragma: no cover; handled by init raising
 
 
 class Sort(Expr):
@@ -799,7 +886,7 @@ class Gather(Expr):
             obj = plc.replace.replace_nulls(
                 indices.obj,
                 plc.interop.from_arrow(
-                    pa.scalar(n, type=plc.interop.to_arrow(indices.obj.data_type()))
+                    pa.scalar(n, type=plc.interop.to_arrow(indices.obj.type()))
                 ),
             )
         else:
@@ -845,6 +932,7 @@ class RollingWindow(Expr):
         super().__init__(dtype)
         self.options = options
         self.children = (agg,)
+        raise NotImplementedError("Rolling window not implemented")
 
 
 class GroupedRollingWindow(Expr):
@@ -856,6 +944,7 @@ class GroupedRollingWindow(Expr):
         super().__init__(dtype)
         self.options = options
         self.children = (agg, *by)
+        raise NotImplementedError("Grouped rolling window not implemented")
 
 
 class Cast(Expr):
@@ -889,17 +978,19 @@ class Cast(Expr):
 class Agg(Expr):
     __slots__ = ("name", "options", "op", "request", "children")
     _non_child = ("dtype", "name", "options")
-    children: tuple[Expr]
+    children: tuple[Expr, ...]
 
     def __init__(
-        self, dtype: plc.DataType, name: str, options: Any, value: Expr
+        self, dtype: plc.DataType, name: str, options: Any, *children: Expr
     ) -> None:
         super().__init__(dtype)
         self.name = name
         self.options = options
-        self.children = (value,)
+        self.children = children
         if name not in Agg._SUPPORTED:
-            raise NotImplementedError(f"Unsupported aggregation {name=}")
+            raise NotImplementedError(
+                f"Unsupported aggregation {name=}"
+            )  # pragma: no cover; all valid aggs are supported
         # TODO: nan handling in groupby case
         if name == "min":
             req = plc.aggregation.min()
@@ -925,7 +1016,9 @@ class Agg(Expr):
         elif name == "count":
             req = plc.aggregation.count(null_handling=plc.types.NullPolicy.EXCLUDE)
         else:
-            raise NotImplementedError
+            raise NotImplementedError(
+                f"Unreachable, {name=} is incorrectly listed in _SUPPORTED"
+            )  # pragma: no cover
         self.request = req
         op = getattr(self, f"_{name}", None)
         if op is None:
@@ -935,7 +1028,9 @@ class Agg(Expr):
         elif name in {"count", "first", "last"}:
             pass
         else:
-            raise AssertionError
+            raise NotImplementedError(
+                f"Unreachable, supported agg {name=} has no implementation"
+            )  # pragma: no cover
         self.op = op
 
     _SUPPORTED: ClassVar[frozenset[str]] = frozenset(
@@ -957,11 +1052,15 @@ class Agg(Expr):
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
         if depth >= 1:
-            raise NotImplementedError("Nested aggregations in groupby")
+            raise NotImplementedError(
+                "Nested aggregations in groupby"
+            )  # pragma: no cover; check_agg trips first
         (child,) = self.children
         ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
         if self.request is None:
-            raise NotImplementedError(f"Aggregation {self.name} in groupby")
+            raise NotImplementedError(
+                f"Aggregation {self.name} in groupby"
+            )  # pragma: no cover; __init__ trips first
         return AggInfo([(expr, self.request, self)])
 
     def _reduce(
@@ -971,10 +1070,7 @@ class Agg(Expr):
             plc.Column.from_scalar(
                 plc.reduce.reduce(column.obj, request, self.dtype),
                 1,
-            ),
-            is_sorted=plc.types.Sorted.YES,
-            order=plc.types.Order.ASCENDING,
-            null_order=plc.types.NullOrder.BEFORE,
+            )
         )
 
     def _count(self, column: Column) -> Column:
@@ -987,10 +1083,7 @@ class Agg(Expr):
                     ),
                 ),
                 1,
-            ),
-            is_sorted=plc.types.Sorted.YES,
-            order=plc.types.Order.ASCENDING,
-            null_order=plc.types.NullOrder.BEFORE,
+            )
         )
 
     def _min(self, column: Column, *, propagate_nans: bool) -> Column:
@@ -1001,10 +1094,7 @@ class Agg(Expr):
                         pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
                     ),
                     1,
-                ),
-                is_sorted=plc.types.Sorted.YES,
-                order=plc.types.Order.ASCENDING,
-                null_order=plc.types.NullOrder.BEFORE,
+                )
             )
         if column.nan_count > 0:
             column = column.mask_nans()
@@ -1018,31 +1108,18 @@ class Agg(Expr):
                         pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
                     ),
                     1,
-                ),
-                is_sorted=plc.types.Sorted.YES,
-                order=plc.types.Order.ASCENDING,
-                null_order=plc.types.NullOrder.BEFORE,
+                )
             )
         if column.nan_count > 0:
             column = column.mask_nans()
         return self._reduce(column, request=plc.aggregation.max())
 
     def _first(self, column: Column) -> Column:
-        return Column(
-            plc.copying.slice(column.obj, [0, 1])[0],
-            is_sorted=plc.types.Sorted.YES,
-            order=plc.types.Order.ASCENDING,
-            null_order=plc.types.NullOrder.BEFORE,
-        )
+        return Column(plc.copying.slice(column.obj, [0, 1])[0])
 
     def _last(self, column: Column) -> Column:
         n = column.obj.size()
-        return Column(
-            plc.copying.slice(column.obj, [n - 1, n])[0],
-            is_sorted=plc.types.Sorted.YES,
-            order=plc.types.Order.ASCENDING,
-            null_order=plc.types.NullOrder.BEFORE,
-        )
+        return Column(plc.copying.slice(column.obj, [n - 1, n])[0])
 
     def do_evaluate(
         self,
@@ -1053,9 +1130,39 @@ class Agg(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         if context is not ExecutionContext.FRAME:
-            raise NotImplementedError(f"Agg in context {context}")
+            raise NotImplementedError(
+                f"Agg in context {context}"
+            )  # pragma: no cover; unreachable
         (child,) = self.children
         return self.op(child.evaluate(df, context=context, mapping=mapping))
+
+
+class Ternary(Expr):
+    __slots__ = ("children",)
+    _non_child = ("dtype",)
+    children: tuple[Expr, Expr, Expr]
+
+    def __init__(
+        self, dtype: plc.DataType, when: Expr, then: Expr, otherwise: Expr
+    ) -> None:
+        super().__init__(dtype)
+        self.children = (when, then, otherwise)
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        when, then, otherwise = (
+            child.evaluate(df, context=context, mapping=mapping)
+            for child in self.children
+        )
+        then_obj = then.obj_scalar if then.is_scalar else then.obj
+        otherwise_obj = otherwise.obj_scalar if otherwise.is_scalar else otherwise.obj
+        return Column(plc.copying.copy_if_else(then_obj, otherwise_obj, when.obj))
 
 
 class BinOp(Expr):
@@ -1073,6 +1180,12 @@ class BinOp(Expr):
         super().__init__(dtype)
         self.op = op
         self.children = (left, right)
+        if (
+            op in (plc.binaryop.BinaryOperator.ADD, plc.binaryop.BinaryOperator.SUB)
+            and ({left.dtype.id(), right.dtype.id()}.issubset(dtypes.TIMELIKE_TYPES))
+            and not dtypes.have_compatible_resolution(left.dtype.id(), right.dtype.id())
+        ):
+            raise NotImplementedError("Casting rules for timelike types")
 
     _MAPPING: ClassVar[dict[pl_expr.Operator, plc.binaryop.BinaryOperator]] = {
         pl_expr.Operator.Eq: plc.binaryop.BinaryOperator.EQUAL,
