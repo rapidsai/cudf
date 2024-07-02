@@ -28,10 +28,8 @@ rapids-logger "Install cudf wheel"
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install $(echo ./dist/cudf*.whl)[test]
 
-rapids-logger "Install polars (allow pre-release versions)"
-python -m pip install 'polars>=1.0.0a0'
-
 rapids-logger "Install cudf_polars"
+python -m pip install 'polars>=1.0'
 python -m pip install --no-deps python/cudf_polars
 
 rapids-logger "Run cudf_polars tests"
