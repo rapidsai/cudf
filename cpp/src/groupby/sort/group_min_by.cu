@@ -34,7 +34,7 @@ std::unique_ptr<column> group_min_by(column_view const& structs_column,
                                      rmm::device_async_resource_ref mr)
 {
   auto structs_view = cudf::structs_column_view{structs_column};
-  auto const orders     = structs_view.get_sliced_child(1);
+  auto const orders = structs_view.get_sliced_child(1);
 
   auto indices = type_dispatcher(orders.type(),
                                  group_reduction_dispatcher<aggregation::ARGMIN>{},
@@ -47,11 +47,11 @@ std::unique_ptr<column> group_min_by(column_view const& structs_column,
   auto indices_view = indices->mutable_view();
 
   auto res = cudf::detail::gather(table_view{{structs_column}},
-                                           indices_view,
-                                           out_of_bounds_policy::NULLIFY,
-                                           cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                           stream,
-                                           mr);
+                                  indices_view,
+                                  out_of_bounds_policy::NULLIFY,
+                                  cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                  stream,
+                                  mr);
 
   return std::move(res->release()[0]);
 }

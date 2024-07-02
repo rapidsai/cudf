@@ -644,7 +644,7 @@ template std::unique_ptr<rolling_aggregation> make_argmin_aggregation<rolling_ag
 template std::unique_ptr<groupby_aggregation> make_argmin_aggregation<groupby_aggregation>();
 
 /// Factory to create a MIN_BY aggregation
-template <typename Base> 
+template <typename Base>
 std::unique_ptr<Base> make_min_by_aggregation()
 {
   return std::make_unique<detail::min_by_aggregation>();

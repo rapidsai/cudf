@@ -203,13 +203,11 @@ void aggregate_result_functor::operator()<aggregation::MIN_BY>(aggregation const
 {
   if (cache.has_result(values, agg)) return;
 
-  cache.add_result(values,
-                  agg,
-                  detail::group_min_by(get_grouped_values(),
-                                       helper.group_labels(stream),
-                                       helper.num_groups(stream),
-                                       stream,
-                                       mr));
+  cache.add_result(
+    values,
+    agg,
+    detail::group_min_by(
+      get_grouped_values(), helper.group_labels(stream), helper.num_groups(stream), stream, mr));
 }
 
 template <>

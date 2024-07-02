@@ -42,7 +42,7 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
                                                           class product_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class min_aggregation const& agg);
-  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type, 
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class min_by_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class max_aggregation const& agg);
@@ -237,7 +237,6 @@ class min_by_aggregation final : public groupby_aggregation, public reduce_aggre
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
-
 
 /**
  * @brief Derived class for specifying a max aggregation

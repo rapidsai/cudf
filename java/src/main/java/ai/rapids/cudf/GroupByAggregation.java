@@ -121,7 +121,7 @@ public final class GroupByAggregation {
   public static GroupByAggregation minBy() {
     return new GroupByAggregation(Aggregation.minBy());
   }
-  
+
   /**
    * Max Aggregation
    */
