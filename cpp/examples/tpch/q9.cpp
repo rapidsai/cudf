@@ -83,12 +83,12 @@ int main() {
     std::string dataset_dir = BASE_DATASET_DIR;
 
     // 1. Read out the table from parquet files
-    auto lineitem = read_parquet(dataset_dir + "lineitem/part-0.parquet");
-    auto nation = read_parquet(dataset_dir + "nation/part-0.parquet");
-    auto orders = read_parquet(dataset_dir + "orders/part-0.parquet");
-    auto part = read_parquet(dataset_dir + "part/part-0.parquet");
-    auto partsupp = read_parquet(dataset_dir + "partsupp/part-0.parquet");
-    auto supplier = read_parquet(dataset_dir + "supplier/part-0.parquet");
+    auto lineitem = read_parquet(dataset_dir + "lineitem/part-0.parquet", {"l_suppkey", "l_partkey", "l_orderkey", "l_extendedprice", "l_discount", "l_quantity"});
+    auto nation = read_parquet(dataset_dir + "nation/part-0.parquet", {"n_nationkey", "n_name"});
+    auto orders = read_parquet(dataset_dir + "orders/part-0.parquet", {"o_orderkey", "o_orderdate"});
+    auto part = read_parquet(dataset_dir + "part/part-0.parquet", {"p_partkey", "p_name"});
+    auto partsupp = read_parquet(dataset_dir + "partsupp/part-0.parquet", {"ps_suppkey", "ps_partkey", "ps_supplycost"});
+    auto supplier = read_parquet(dataset_dir + "supplier/part-0.parquet", {"s_suppkey", "s_nationkey"});
 
     // 2. Generating the `profit` table
     // 2.1 Filter the part table using `p_name like '%green%'`
