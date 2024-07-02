@@ -46,7 +46,8 @@ struct VectorOfArrays {
   static int get_schema(ArrowArrayStream* stream, ArrowSchema* out_schema)
   {
     auto private_data = static_cast<VectorOfArrays*>(stream->private_data);
-    ArrowSchemaDeepCopy(private_data->schema.get(), out_schema);
+
+    [[maybe_unused]] auto rc = ArrowSchemaDeepCopy(private_data->schema.get(), out_schema);
     return 0;
   }
 
