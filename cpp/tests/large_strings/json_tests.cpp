@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-#include "large_strings_fixture.hpp"
 #include "io/json/read_json.hpp"
-
-#include <cudf/concatenate.hpp>
-#include <cudf/io/json.hpp>
-#include <cudf/io/datasource.hpp>
-#include <cudf/utilities/span.hpp>
+#include "large_strings_fixture.hpp"
 
 #include <cudf_test/table_utilities.hpp>
+
+#include <cudf/concatenate.hpp>
+#include <cudf/io/datasource.hpp>
+#include <cudf/io/json.hpp>
+#include <cudf/utilities/span.hpp>
 
 struct JsonLargeReaderTest : public cudf::test::StringsLargeTest {};
 
@@ -41,7 +41,7 @@ std::vector<cudf::io::table_with_metadata> skeleton_for_parellel_chunk_reader(
   for (auto const& source : sources) {
     total_source_size += source->size();
   }
-  size_t num_chunks                = (total_source_size + chunk_size - 1) / chunk_size;
+  size_t num_chunks              = (total_source_size + chunk_size - 1) / chunk_size;
   constexpr int64_t no_min_value = -1;
 
   // Get the first delimiter in each chunk.
@@ -91,7 +91,7 @@ TEST_F(JsonLargeReaderTest, MultiBatch)
     { "a": { "y" : 6}, "b" : [4, 5   ], "c": 12 }
     { "a": { "y" : 6}, "b" : [6      ], "c": 13 }
     { "a": { "y" : 6}, "b" : [7      ], "c": 14 })";
-  constexpr size_t batch_size_ub = std::numeric_limits<int>::max();
+  constexpr size_t batch_size_ub      = std::numeric_limits<int>::max();
   constexpr size_t expected_file_size = 1.5 * static_cast<double>(batch_size_ub);
   std::size_t const log_repetitions =
     static_cast<std::size_t>(std::ceil(std::log2(expected_file_size / json_string.size())));
@@ -103,7 +103,9 @@ TEST_F(JsonLargeReaderTest, MultiBatch)
 
   constexpr int num_sources = 2;
   std::vector<cudf::host_span<std::byte>> hostbufs(
-    num_sources, cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(json_string.data()), json_string.size()));
+    num_sources,
+    cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(json_string.data()),
+                               json_string.size()));
 
   // Initialize parsing options (reading json lines)
   cudf::io::json_reader_options json_lines_options =
@@ -116,14 +118,16 @@ TEST_F(JsonLargeReaderTest, MultiBatch)
 
   // Read full test data via existing, nested JSON lines reader
   cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(json_lines_options);
-  
+
   std::vector<std::unique_ptr<cudf::io::datasource>> datasources;
   for (auto& hb : hostbufs) {
     datasources.emplace_back(cudf::io::datasource::create(hb));
   }
   // Test for different chunk sizes
-  //std::vector<size_t> chunk_sizes {5000, 10000, 20000, batch_size_ub, static_cast<size_t>(batch_size_ub * 2)};
-  std::vector<size_t> chunk_sizes {batch_size_ub / 4, batch_size_ub / 2, batch_size_ub, static_cast<size_t>(batch_size_ub * 2)};
+  // std::vector<size_t> chunk_sizes {5000, 10000, 20000, batch_size_ub,
+  // static_cast<size_t>(batch_size_ub * 2)};
+  std::vector<size_t> chunk_sizes{
+    batch_size_ub / 4, batch_size_ub / 2, batch_size_ub, static_cast<size_t>(batch_size_ub * 2)};
   for (auto chunk_size : chunk_sizes) {
     auto const tables = skeleton_for_parellel_chunk_reader(datasources,
                                                            json_lines_options,

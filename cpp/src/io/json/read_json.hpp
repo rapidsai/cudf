@@ -33,7 +33,7 @@ namespace cudf::io::json::detail {
 constexpr int num_subchunks               = 10;  // per chunk_size
 constexpr size_t min_subchunk_size        = 10000;
 constexpr int estimated_compression_ratio = 4;
-constexpr int max_subchunks_prealloced = 3;
+constexpr int max_subchunks_prealloced    = 3;
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& reader_opts,
