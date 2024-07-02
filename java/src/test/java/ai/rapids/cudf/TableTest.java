@@ -7427,6 +7427,25 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByMinBy() {
+    StructType inputType = new StructType(false,
+        new BasicType(true, DType.INT32),
+        new BasicType(true, DType.INT64));
+    try (Table t1 = new Table.TestBuilder()
+        .column(inputType, new StructData(6, 1L), new StructData(5, 2L), new StructData(4, 3L),
+            new StructData(3, 1L), new StructData(2, 2L), new StructData(1, 3L))
+        .column(1, 2, 3, 1, 2, 3).build();
+         Table other = t1.groupBy(1).aggregate(GroupByAggregation.minBy().onColumn(0));
+         Table ordered = other.orderBy(OrderByArg.asc(0));
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3)
+             .column(inputType, new StructData(3, 1L), new StructData(2, 2L), new StructData(1, 3L))
+             .build()) {
+      assertTablesAreEqual(expected, ordered);
+    }
+  }
+
+  @Test
   void testGroupByDuplicateAggregates() {
     try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
                                            .column(   1,    3,    3,    5,    5,    0)

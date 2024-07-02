@@ -53,6 +53,12 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 }
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, min_by_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, max_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
@@ -636,6 +642,15 @@ std::unique_ptr<Base> make_argmin_aggregation()
 template std::unique_ptr<aggregation> make_argmin_aggregation<aggregation>();
 template std::unique_ptr<rolling_aggregation> make_argmin_aggregation<rolling_aggregation>();
 template std::unique_ptr<groupby_aggregation> make_argmin_aggregation<groupby_aggregation>();
+
+/// Factory to create a MIN_BY aggregation
+template <typename Base>
+std::unique_ptr<Base> make_min_by_aggregation()
+{
+  return std::make_unique<detail::min_by_aggregation>();
+}
+template std::unique_ptr<aggregation> make_min_by_aggregation<aggregation>();
+template std::unique_ptr<groupby_aggregation> make_min_by_aggregation<groupby_aggregation>();
 
 /// Factory to create an NUNIQUE aggregation
 template <typename Base>
