@@ -322,6 +322,9 @@ column_type_length : dict, optional, default None
 output_as_binary : set, optional, default None
     If a column name is present in the set, that column will be output as
     unannotated binary, rather than the default 'UTF-8'.
+store_schema : bool, default False
+    If ``True``, enable computing and writing arrow schema to Parquet
+    file footer's key-value metadata section for faithful round-tripping.
 **kwargs
     Additional parameters will be passed to execution engines other
     than ``cudf``.

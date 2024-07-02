@@ -597,6 +597,8 @@ class parquet_writer_options_base {
   // Parquet writer can write timestamps as UTC
   // Defaults to true because libcudf timestamps are implicitly UTC
   bool _write_timestamps_as_UTC = true;
+  // Whether to write ARROW schema
+  bool _write_arrow_schema = false;
   // Maximum size of each row group (unless smaller than a single page)
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
@@ -688,6 +690,13 @@ class parquet_writer_options_base {
    * @return `true` if timestamps will be written as UTC
    */
   [[nodiscard]] auto is_enabled_utc_timestamps() const { return _write_timestamps_as_UTC; }
+
+  /**
+   * @brief Returns `true` if arrow schema will be written
+   *
+   * @return `true` if arrow schema will be written
+   */
+  [[nodiscard]] auto is_enabled_write_arrow_schema() const { return _write_arrow_schema; }
 
   /**
    * @brief Returns maximum row group size, in bytes.
@@ -823,6 +832,13 @@ class parquet_writer_options_base {
    * @param val Boolean value to enable/disable writing of timestamps as UTC.
    */
   void enable_utc_timestamps(bool val);
+
+  /**
+   * @brief Sets preference for writing arrow schema. Write arrow schema if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of arrow schema.
+   */
+  void enable_write_arrow_schema(bool val);
 
   /**
    * @brief Sets the maximum row group size, in bytes.
@@ -1084,6 +1100,15 @@ class parquet_writer_options_builder_base {
    * @return this for chaining
    */
   BuilderT& utc_timestamps(bool enabled);
+
+  /**
+   * @brief Set to true if arrow schema is to be written
+   *
+   * @param enabled Boolean value to enable/disable writing of arrow schema
+   * @return this for chaining
+   */
+  BuilderT& write_arrow_schema(bool enabled);
+
   /**
    * @brief Set to true if V2 page headers are to be written.
    *
