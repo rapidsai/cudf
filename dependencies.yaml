@@ -342,13 +342,27 @@ dependencies:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.*"}
-            packages: &build_python_packages_cu12
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
               - rmm-cu12==24.8.*,>=0.0.0a0
-          - matrix: {cuda: "11.*"}
-            packages: &build_python_packages_cu11
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "false"
+            packages: &build_python_cudf_cu12_unsuffixed
+              - *rmm_conda
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
               - rmm-cu11==24.8.*,>=0.0.0a0
-          - {matrix: null, packages: [*rmm_conda] }
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "false"
+            packages:
+              - *rmm_conda
+          - {matrix: null, packages: *build_python_cudf_cu12_unsuffixed}
   libarrow_build:
     common:
       - output_types: conda
@@ -582,23 +596,42 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - pynvjitlink>=0.0.0a0
+              - &pynvjitlink_conda pynvjitlink>=0.0.0a0
           - matrix: {cuda: "11.*"}
             packages:
-              - cubinlinker
-              - ptxcompiler
+              - &cubinlinker_conda cubinlinker
+              - &ptxcompiler_conda ptxcompiler
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.*"}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
             packages:
               - rmm-cu12==24.8.*,>=0.0.0a0
               - pynvjitlink-cu12>=0.0.0a0
-          - matrix: {cuda: "11.*"}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "false"
+            packages: &run_cudf_cu12_unsuffixed
+              - *rmm_conda
+              - *pynvjitlink_conda
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
             packages:
               - rmm-cu11==24.8.*,>=0.0.0a0
               - cubinlinker-cu11
               - ptxcompiler-cu11
-          - {matrix: null, packages: [cubinlinker, ptxcompiler, *rmm_conda]}
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "false"
+            packages:
+              - *cubinlinker_conda
+              - *ptxcompiler_conda
+              - *rmm_conda
+          # when no CUDA version is specified, fall back to
+          # CUDA 12 dependencies (but without -cuXY suffixes)
+          - {matrix: null, packages: *run_cudf_cu12_unsuffixed}
   run_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -710,13 +743,27 @@ dependencies:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.*"}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
             packages:
               - cudf-cu12==24.8.*,>=0.0.0a0
-          - matrix: {cuda: "11.*"}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "false"
+            packages: &depends_on_cudf_cu12_unsuffixed
+              - *cudf_conda
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
             packages:
               - cudf-cu11==24.8.*,>=0.0.0a0
-          - {matrix: null, packages: [*cudf_conda]}
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "false"
+            packages:
+              - *cudf_conda
+          - {matrix: null, packages: *depends_on_cudf_cu12_unsuffixed}
   depends_on_cudf_kafka:
     common:
       - output_types: conda
@@ -731,12 +778,26 @@ dependencies:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.*"}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
             packages:
               - cudf_kafka-cu12==24.8.*,>=0.0.0a0
-          - matrix: {cuda: "11.*"}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "false"
+            packages:
+              - *cudf_conda
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
             packages:
               - cudf_kafka-cu11==24.8.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "false"
+            packages:
+              - *cudf_kafka_conda
           - {matrix: null, packages: [*cudf_kafka_conda]}
   depends_on_cupy:
     common:

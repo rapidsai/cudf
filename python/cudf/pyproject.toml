@@ -19,7 +19,6 @@ license = { text = "Apache 2.0" }
 requires-python = ">=3.9"
 dependencies = [
     "cachetools",
-    "cubinlinker",
     "cuda-python>=11.7.1,<12.0a0",
     "cupy-cuda11x>=12.0.0",
     "fsspec>=0.6.0",
@@ -28,8 +27,8 @@ dependencies = [
     "nvtx>=0.2.1",
     "packaging",
     "pandas>=2.0,<2.2.3dev0",
-    "ptxcompiler",
     "pyarrow>=16.1.0,<16.2.0a0",
+    "pynvjitlink>=0.0.0a0",
     "rich",
     "rmm==24.8.*,>=0.0.0a0",
     "typing_extensions>=4.0.0",
@@ -120,6 +119,22 @@ skip = [
 [tool.rapids-build-backend]
 build-backend = "scikit_build_core.build"
 dependencies-file = "../../dependencies.yaml"
+# This project's dependencies.yaml separates CUDA-suffixed dependencies into 2 lists,
+# like this:
+#
+#   rmm-cu12 [cuda_suffixed = "true"]
+#   rmm      [cuda_suffixed = "false"]
+#
+# So it's possible to separate the choices "use CUDA-suffixed names in wheel metadata"
+# and "depend on different sets of libraries based on CUDA version".
+#
+# Setting matrix selector "cuda_suffixed=true" here tells rapids-build-backend that by default,
+# it should produce wheels for redistribution which have CUDA-suffixed dependency names.
+#
+# This is intended to be overriden with --config-settings passed to 'pip wheel' or 'build'
+# in environments which prefer all CUDA-suffix-less dependency names.
+#
+matrix-entry = "cuda_suffixed=true"
 requires = [
     "cmake>=3.26.4",
     "cython>=3.0.3",
