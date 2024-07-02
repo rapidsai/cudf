@@ -15,9 +15,12 @@ from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_null_policy,
     concatenate_rows as cpp_concatenate_rows,
 )
+from cudf._lib.pylibcudf.libcudf.lists.extract cimport (
+    extract_list_element as cpp_extract_list_element,
+)
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
-from cudf._lib.pylibcudf.lists cimport ColumnOrScalar
+from cudf._lib.pylibcudf.lists cimport ColumnOrScalar, ColumnOrSizeType
 
 from .column cimport Column, ListColumnView
 from .scalar cimport Scalar
@@ -204,5 +207,31 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
                 search_key.get()
             ),
             find_option,
+        ))
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column extract_list_element(Column input, ColumnOrSizeType index):
+    """Create a column of extracted list elements.
+
+        Parameters
+        ----------
+        input : Column
+            The input column.
+        index : Union[Column, size_type]
+            The selection index or indices.
+
+        Returns
+        -------
+        Column
+            A new Column with elements extracted.
+    """
+    cdef unique_ptr[column] c_result
+    cdef ListColumnView list_view = input.list_view()
+
+    with nogil:
+        c_result = move(cpp_extract_list_element(
+            list_view.view(),
+            index.view() if ColumnOrSizeType is Column else index,
         ))
     return Column.from_libcudf(move(c_result))

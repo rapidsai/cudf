@@ -11,10 +11,10 @@ from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 cdef extern from "cudf/lists/extract.hpp" namespace "cudf::lists" nogil:
     cdef unique_ptr[column] extract_list_element(
-        const lists_column_view,
+        const lists_column_view&,
         size_type
     ) except +
     cdef unique_ptr[column] extract_list_element(
-        const lists_column_view,
-        column_view
+        const lists_column_view&,
+        const column_view&
     ) except +
