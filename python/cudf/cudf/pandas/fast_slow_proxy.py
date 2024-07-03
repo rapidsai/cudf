@@ -960,9 +960,12 @@ def _fast_slow_function_call(
                         for kwarg, value in slow_args[2].items()
                     )
                     called_args = ",".join((called_args, fmt_kwargs))
-                    passed_kwargs = dict(slow_args[2].items())
+                    passed_kwargs = {
+                        kwarg: reprify(value)
+                        for kwarg, value in slow_args[2].items()
+                    }
                 else:
-                    passed_kwargs = None
+                    passed_kwargs = {}
                 message = StructuredMessage(
                     "CUDF_PANDAS_SLOW_LOG",
                     failed_call=f"{slow_object}({called_args})",
