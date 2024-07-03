@@ -80,7 +80,7 @@ int main(int argc, char const** argv) {
     
     auto o_orderdate_lower = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
     auto o_orderdate_lower_limit = cudf::ast::literal(o_orderdate_lower);
-    auto o_orderdate_pred_a = cudf::ast::operation(
+    auto o_orderdate_pred_lower = cudf::ast::operation(
         cudf::ast::ast_operator::GREATER_EQUAL,
         o_orderdate_ref,
         o_orderdate_lower_limit
@@ -88,7 +88,7 @@ int main(int argc, char const** argv) {
     
     auto o_orderdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 1, 1), true);
     auto o_orderdate_upper_limit = cudf::ast::literal(o_orderdate_upper);
-    auto o_orderdate_pred_b = cudf::ast::operation(
+    auto o_orderdate_pred_upper = cudf::ast::operation(
         cudf::ast::ast_operator::LESS,
         o_orderdate_ref,
         o_orderdate_upper_limit
@@ -96,8 +96,8 @@ int main(int argc, char const** argv) {
 
     auto o_orderdate_pred = std::make_unique<cudf::ast::operation>(
         cudf::ast::ast_operator::LOGICAL_AND,
-        o_orderdate_pred_a,
-        o_orderdate_pred_b
+        o_orderdate_pred_lower,
+        o_orderdate_pred_upper
     );
 
     auto r_name_ref = cudf::ast::column_reference(1); 
@@ -164,7 +164,7 @@ int main(int argc, char const** argv) {
         {"l_suppkey", "n_nationkey"}
     );
 
-    // 3. Calcute and append the `revenue` column
+    // 3. Calculate and append the `revenue` column
     auto revenue = calc_revenue(joined_table);
     auto appended_table = joined_table->append(revenue, "revenue");
 
