@@ -74,8 +74,8 @@ int main(int argc, char const** argv) {
 
     Timer timer;
 
-    // 1. Read out the tables from parquet files
-    //    while pushing down column projections and filter predicates
+    // Read out the tables from parquet files
+    // while pushing down column projections and filter predicates
     auto o_orderdate_ref = cudf::ast::column_reference(2);
     
     auto o_orderdate_lower = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
@@ -132,7 +132,7 @@ int main(int argc, char const** argv) {
         std::move(r_name_pred)
     );
 
-    // 2. Perform the joins
+    // Perform the joins
     auto join_a = apply_inner_join(
         region,
         nation,
@@ -164,11 +164,11 @@ int main(int argc, char const** argv) {
         {"l_suppkey", "n_nationkey"}
     );
 
-    // 3. Calculate and append the `revenue` column
+    // Calculate and append the `revenue` column
     auto revenue = calc_revenue(joined_table);
     auto appended_table = joined_table->append(revenue, "revenue");
 
-    // 4. Perform the groupby operation
+    // Perform the groupby operation
     auto groupedby_table = apply_groupby(
         appended_table, 
         groupby_context_t {
@@ -178,13 +178,13 @@ int main(int argc, char const** argv) {
             }
         });
 
-    // 5. Perform the order by operation
+    // Perform the order by operation
     auto orderedby_table = apply_orderby(
         groupedby_table, {"revenue"}, {cudf::order::DESCENDING});
 
     timer.print_elapsed_millis();
 
-    // 6. Write query result to a parquet file
+    // Write query result to a parquet file
     orderedby_table->to_parquet("q5.parquet");
     return 0;
 }

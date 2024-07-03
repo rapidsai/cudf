@@ -88,7 +88,7 @@ int main(int argc, char const** argv) {
 
     Timer timer;
 
-    // 1. Read out the table from parquet files
+    // Read out the table from parquet files
     auto lineitem = read_parquet(
         args.dataset_dir + "lineitem/part-0.parquet", 
         {"l_suppkey", "l_partkey", "l_orderkey", "l_extendedprice", "l_discount", "l_quantity"});
@@ -99,14 +99,14 @@ int main(int argc, char const** argv) {
         {"ps_suppkey", "ps_partkey", "ps_supplycost"});
     auto supplier = read_parquet(args.dataset_dir + "supplier/part-0.parquet", {"s_suppkey", "s_nationkey"});
 
-    // 2. Generating the `profit` table
-    // 2.1 Filter the part table using `p_name like '%green%'`
+    // Generating the `profit` table
+    // Filter the part table using `p_name like '%green%'`
     auto p_name = part->table().column(1);
     auto mask = cudf::strings::like(
         cudf::strings_column_view(p_name), cudf::string_scalar("%green%"));
     auto part_filtered = apply_mask(part, mask);
     
-    // 2.2 Perform the joins
+    // Perform the joins
     auto join_a = apply_inner_join(
         lineitem,
         supplier,
@@ -138,12 +138,12 @@ int main(int argc, char const** argv) {
         {"n_nationkey"}
     );
 
-    // 2.3 Calculate the `nation`, `o_year`, and `amount` columns
+    // Calculate the `nation`, `o_year`, and `amount` columns
     auto n_name = std::make_unique<cudf::column>(joined_table->column("n_name"));
     auto o_year = cudf::datetime::extract_year(joined_table->column("o_orderdate"));
     auto amount = calc_amount(joined_table);
 
-    // 2.4 Put together the `profit` table
+    // Put together the `profit` table
     std::vector<std::unique_ptr<cudf::column>> profit_columns;
     profit_columns.push_back(std::move(n_name));
     profit_columns.push_back(std::move(o_year));
@@ -155,7 +155,7 @@ int main(int argc, char const** argv) {
         std::vector<std::string>{"nation", "o_year", "amount"} 
     );
 
-    // 3. Perform the groupby operation
+    // Perform the groupby operation
     auto groupedby_table = apply_groupby(
         profit,
         groupby_context_t {
@@ -166,7 +166,7 @@ int main(int argc, char const** argv) {
         }
     );
 
-    // 4. Perform the orderby operation
+    // Perform the orderby operation
     auto orderedby_table = apply_orderby(
         groupedby_table,
         {"nation", "o_year"},
@@ -175,6 +175,6 @@ int main(int argc, char const** argv) {
 
     timer.print_elapsed_millis();
 
-    // 5. Write query result to a parquet file
+    // Write query result to a parquet file
     orderedby_table->to_parquet("q9.parquet");
 }

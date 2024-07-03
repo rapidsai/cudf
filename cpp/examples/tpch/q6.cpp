@@ -57,7 +57,7 @@ int main(int argc, char const** argv) {
 
     Timer timer;
 
-    // 1. Read out the `lineitem` table from parquet file
+    // Read out the `lineitem` table from parquet file
     auto shipdate_ref = cudf::ast::column_reference(2);
     auto shipdate_lower = cudf::timestamp_scalar<cudf::timestamp_D>(
         days_since_epoch(1994, 1, 1), true);
@@ -86,7 +86,7 @@ int main(int argc, char const** argv) {
         std::move(shipdate_pred)
     );
 
-    // 2. Cast the discount and quantity columns to float32 and append to lineitem table
+    // Cast the discount and quantity columns to float32 and append to lineitem table
     auto discout_float = cudf::cast(
         lineitem->column("l_discount"), cudf::data_type{cudf::type_id::FLOAT32});
     auto quantity_float = cudf::cast(
@@ -95,7 +95,7 @@ int main(int argc, char const** argv) {
         ->append(discout_float, "l_discount_float")
         ->append(quantity_float, "l_quantity_float");
     
-    // 3. Apply the filters
+    // Apply the filters
     auto discount_ref = cudf::ast::column_reference(
         appended_table->col_id("l_discount_float"));
     auto quantity_ref = cudf::ast::column_reference(
@@ -135,10 +135,10 @@ int main(int argc, char const** argv) {
     );
     auto filtered_table = apply_filter(appended_table, discount_quantity_pred);
 
-    // 4. Calculate the `revenue` column
+    // Calculate the `revenue` column
     auto revenue = calc_revenue(filtered_table);
 
-    // 5. Sum the `revenue` column
+    // Sum the `revenue` column
     auto revenue_view = revenue->view();
     auto result_table = apply_reduction(
         revenue_view,
@@ -148,7 +148,7 @@ int main(int argc, char const** argv) {
 
     timer.print_elapsed_millis();
 
-    // 6. Write query result to a parquet file
+    // Write query result to a parquet file
     result_table->to_parquet("q6.parquet");
     return 0;
 }

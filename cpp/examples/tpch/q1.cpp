@@ -74,7 +74,7 @@ int main(int argc, char const** argv) {
 
     Timer timer;
 
-    // 1. Read out the `lineitem` table from parquet file
+    // Read out the `lineitem` table from parquet file
     auto shipdate_ref = cudf::ast::column_reference(5);
     auto shipdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1998, 9, 2), true);
     auto shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
@@ -89,12 +89,12 @@ int main(int argc, char const** argv) {
         std::move(shipdate_pred)
     );
 
-    // 2. Calculate the discount price and charge columns and append to lineitem table
+    // Calculate the discount price and charge columns and append to lineitem table
     auto disc_price = calc_disc_price(lineitem);
     auto charge = calc_charge(lineitem, disc_price);
     auto appended_table = lineitem->append(disc_price, "disc_price")->append(charge, "charge");
 
-    // 3. Perform the group by operation
+    // Perform the group by operation
     auto groupedby_table = apply_groupby(
         appended_table, 
         groupby_context_t {
@@ -137,12 +137,12 @@ int main(int argc, char const** argv) {
         }
     );
 
-    // 4. Perform the order by operation
+    // Perform the order by operation
     auto orderedby_table = apply_orderby(groupedby_table, {"l_returnflag", "l_linestatus"}, {cudf::order::ASCENDING, cudf::order::ASCENDING});
 
     timer.print_elapsed_millis();
     
-    // 5. Write query result to a parquet file
+    // Write query result to a parquet file
     orderedby_table->to_parquet("q1.parquet");
     return 0;
 }
