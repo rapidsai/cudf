@@ -1186,6 +1186,28 @@ class BinOp(Expr):
             and not dtypes.have_compatible_resolution(left.dtype.id(), right.dtype.id())
         ):
             raise NotImplementedError("Casting rules for timelike types")
+        if op in (
+            plc.binaryop.BinaryOperator.MUL,
+            plc.binaryop.BinaryOperator.DIV,
+            plc.binaryop.BinaryOperator.TRUE_DIV,
+            plc.binaryop.BinaryOperator.FLOOR_DIV,
+        ):
+            if (
+                left.dtype.id() in dtypes.TIMELIKE_TYPES
+                and right.dtype.id() in dtypes.FLOATING_TYPES
+            ) or (
+                right.dtype.id() in dtypes.TIMELIKE_TYPES
+                and left.dtype.id() in dtypes.FLOATING_TYPES
+            ):
+                raise NotImplementedError(
+                    "No multiplying or dividing durations by floats"
+                )
+            if (
+                left.dtype.id() in dtypes.TIMELIKE_TYPES
+                and right.dtype.id() in dtypes.TIMELIKE_TYPES
+                and dtype.id() in dtypes.FLOATING_TYPES
+            ):
+                raise NotImplementedError("No dividing durations by durations")
 
     _MAPPING: ClassVar[dict[pl_expr.Operator, plc.binaryop.BinaryOperator]] = {
         pl_expr.Operator.Eq: plc.binaryop.BinaryOperator.EQUAL,
@@ -1229,6 +1251,7 @@ class BinOp(Expr):
                 lop = left.obj_scalar
             elif right.is_scalar:
                 rop = right.obj_scalar
+        breakpoint()
         return Column(
             plc.binaryop.binary_operation(lop, rop, self.op, self.dtype),
         )

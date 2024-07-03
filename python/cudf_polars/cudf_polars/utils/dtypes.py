@@ -29,6 +29,13 @@ TIMELIKE_TYPES: frozenset[plc.TypeId] = frozenset(
     ]
 )
 
+FLOATING_TYPES = frozenset(
+    [
+        plc.TypeId.FLOAT32,
+        plc.TypeId.FLOAT64,
+    ]
+)
+
 
 def have_compatible_resolution(lid: plc.TypeId, rid: plc.TypeId):
     """
