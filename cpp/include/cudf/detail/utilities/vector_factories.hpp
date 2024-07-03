@@ -181,6 +181,21 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
     device_span<typename Container::value_type const>{c}, stream, mr);
 }
 
+template <typename T>
+rmm::device_uvector<T> make_device_uvector_async(host_vector<T> const& v,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::device_async_resource_ref mr)
+{
+  rmm::device_uvector<T> ret(v.size(), stream, mr);
+  auto const is_pinned = v.get_allocator().is_device_accessible();
+  cuda_memcpy_async(ret.data(),
+                    v.data(),
+                    v.size() * sizeof(T),
+                    is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
+                    stream);
+  return ret;
+}
+
 /**
  * @brief Synchronously construct a `device_uvector` containing a deep copy of data from a
  * `host_span`
@@ -361,6 +376,20 @@ std::vector<typename Container::value_type> make_std_vector_sync(Container const
   return make_std_vector_sync(device_span<typename Container::value_type const>{c}, stream);
 }
 
+template <typename T>
+host_vector<T> make_host_vector(size_t size, rmm::cuda_stream_view stream)
+{
+  return host_vector<T>(size, get_host_allocator<T>(size, stream));
+}
+
+template <typename T>
+host_vector<T> make_empty_host_vector(size_t capacity, rmm::cuda_stream_view stream)
+{
+  auto result = host_vector<T>(0, get_host_allocator<T>(capacity, stream));
+  result.reserve(capacity);
+  return result;
+}
+
 /**
  * @brief Asynchronously construct a `thrust::host_vector` containing a copy of data from a
  * `device_span`
@@ -375,7 +404,7 @@ std::vector<typename Container::value_type> make_std_vector_sync(Container const
 template <typename T>
 host_vector<T> make_host_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
 {
-  auto result          = host_vector<T>(v.size(), get_host_allocator<T>(v.size(), stream));
+  auto result          = make_host_vector<T>(v.size(), stream);
   auto const is_pinned = result.get_allocator().is_device_accessible();
   cuda_memcpy_async(result.data(),
                     v.data(),
