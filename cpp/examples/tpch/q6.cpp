@@ -50,8 +50,11 @@ int main(int argc, char const** argv) {
     check_args(argc, argv);
     std::string dataset_dir = argv[1];
 
+    // Use a memory pool
     auto resource = create_memory_resource(true);
     rmm::mr::set_current_device_resource(resource.get());
+
+    Timer timer;
 
     // 1. Read out the `lineitem` table from parquet file
     auto shipdate_ref = cudf::ast::column_reference(2);
@@ -141,6 +144,8 @@ int main(int argc, char const** argv) {
         cudf::aggregation::Kind::SUM,
         "revenue"
     );
+
+    timer.print_elapsed_millis();
 
     // 6. Write query result to a parquet file
     result_table->to_parquet("q6.parquet");

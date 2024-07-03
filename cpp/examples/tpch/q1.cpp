@@ -67,8 +67,11 @@ int main(int argc, char const** argv) {
     check_args(argc, argv);
     std::string dataset_dir = argv[1];
 
+    // Use a memory pool
     auto resource = create_memory_resource(true);
     rmm::mr::set_current_device_resource(resource.get());
+
+    Timer timer;
 
     // 1. Read out the `lineitem` table from parquet file
     auto shipdate_ref = cudf::ast::column_reference(5);
@@ -135,6 +138,8 @@ int main(int argc, char const** argv) {
 
     // 4. Perform the order by operation
     auto orderedby_table = apply_orderby(groupedby_table, {"l_returnflag", "l_linestatus"}, {cudf::order::ASCENDING, cudf::order::ASCENDING});
+
+    timer.print_elapsed_millis();
     
     // 5. Write query result to a parquet file
     orderedby_table->to_parquet("q1.parquet");

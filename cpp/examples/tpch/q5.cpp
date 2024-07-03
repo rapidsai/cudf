@@ -69,8 +69,11 @@ int main(int argc, char const** argv) {
     check_args(argc, argv);
     std::string dataset_dir = argv[1];
 
+    // Use a memory pool
     auto resource = create_memory_resource(true);
     rmm::mr::set_current_device_resource(resource.get());
+
+    Timer timer;
 
     // 1. Read out the tables from parquet files
     auto customer = read_parquet(dataset_dir + "customer/part-0.parquet", {"c_custkey", "c_nationkey"});
@@ -167,7 +170,9 @@ int main(int argc, char const** argv) {
     auto groupedby_table = apply_groupby(appended_table, ctx);
     auto orderedby_table = apply_orderby(
         groupedby_table, {"revenue"}, {cudf::order::DESCENDING});
-    
+
+    timer.print_elapsed_millis();
+
     // 6. Write query result to a parquet file
     orderedby_table->to_parquet("q5.parquet");
     return 0;

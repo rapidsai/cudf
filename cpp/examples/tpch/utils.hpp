@@ -405,3 +405,34 @@ void check_args(int argc, char const** argv) {
         exit(1);
     }
 }
+
+/**
+ * @brief Light-weight timer for parquet reader and writer instrumentation
+ *
+ * Timer object constructed from std::chrono, instrumenting at microseconds
+ * precision. Can display elapsed durations at milli and micro second
+ * scales. Timer starts at object construction.
+ */
+class Timer {
+ public:
+  using micros = std::chrono::microseconds;
+  using millis = std::chrono::milliseconds;
+
+  Timer() { reset(); }
+  void reset() { start_time = std::chrono::high_resolution_clock::now(); }
+  auto elapsed() { return (std::chrono::high_resolution_clock::now() - start_time); }
+  void print_elapsed_micros()
+  {
+    std::cout << "Elapsed Time: " << std::chrono::duration_cast<micros>(elapsed()).count()
+              << "us\n\n";
+  }
+  void print_elapsed_millis()
+  {
+    std::cout << "Elapsed Time: " << std::chrono::duration_cast<millis>(elapsed()).count()
+              << "ms\n\n";
+  }
+
+ private:
+  using time_point_t = std::chrono::time_point<std::chrono::high_resolution_clock>;
+  time_point_t start_time;
+};
