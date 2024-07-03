@@ -109,7 +109,7 @@ void bench_groupby_max_multithreaded_cardinality(nvbench::state& state, nvbench:
 }
 
 NVBENCH_BENCH_TYPES(bench_groupby_max_multithreaded,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, float>))
+                    NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, int64_t, float, double>))
   .set_name("groupby_max_multithreaded")
   .add_int64_axis("cardinality", {0})
   .add_int64_power_of_two_axis("num_rows", {12, 18})
