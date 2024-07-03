@@ -43,6 +43,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class min_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class min_by_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class max_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class count_aggregation const& agg);
@@ -208,6 +210,25 @@ class min_aggregation final : public rolling_aggregation,
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<min_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived class for specifying a min_by aggregation
+ */
+class min_by_aggregation final : public groupby_aggregation, public reduce_aggregation {
+ public:
+  min_by_aggregation() : aggregation(MIN_BY) {}
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<min_by_aggregation>(*this);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
@@ -1219,6 +1240,12 @@ struct target_type_impl<Source, aggregation::MIN> {
   using type = Source;
 };
 
+// Computing MIN_BY of Source, use Source accumulator
+template <typename Source>
+struct target_type_impl<Source, aggregation::MIN_BY> {
+  using type = struct_view;
+};
+
 // Computing MAX of Source, use Source accumulator
 template <typename Source>
 struct target_type_impl<Source, aggregation::MAX> {
@@ -1517,6 +1544,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::PRODUCT>(std::forward<Ts>(args)...);
     case aggregation::MIN:
       return f.template operator()<aggregation::MIN>(std::forward<Ts>(args)...);
+    case aggregation::MIN_BY:
+      return f.template operator()<aggregation::MIN_BY>(std::forward<Ts>(args)...);
     case aggregation::MAX:
       return f.template operator()<aggregation::MAX>(std::forward<Ts>(args)...);
     case aggregation::COUNT_VALID:
