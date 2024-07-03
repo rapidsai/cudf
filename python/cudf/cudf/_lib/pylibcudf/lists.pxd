@@ -23,3 +23,11 @@ cpdef Column contains(Column, ColumnOrScalar)
 cpdef Column contains_nulls(Column)
 
 cpdef Column index_of(Column, ColumnOrScalar, bool)
+
+cpdef Column difference_distinct(Column, Column, bool nulls_equal=*, bool nans_equal=*)
+
+cpdef Column have_overlap(Column, Column, bool nulls_equal=*, bool nans_equal=*)
+
+cpdef Column intersect_distinct(Column, Column, bool nulls_equal=*, bool nans_equal=*)
+
+cpdef Column union_distinct(Column, Column, bool nulls_equal=*, bool nans_equal=*)

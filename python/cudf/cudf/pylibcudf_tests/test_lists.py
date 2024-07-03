@@ -22,6 +22,13 @@ def column():
     return pa.array([3, 2, 5, 6]), pa.array([-1, 0, 0, 0], type=pa.int32())
 
 
+@pytest.fixture
+def set_lists_column():
+    lhs = [[2, 1, 2], [1, 2, 3], None, [4, None, 5]]
+    rhs = [[1, 2, 3], [4, 5], [None, 7, 8], [None, None]]
+    return lhs, rhs
+
+
 def test_concatenate_rows(test_data):
     arrow_tbl = pa.Table.from_arrays(test_data[0], names=["a", "b"])
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
@@ -133,4 +140,36 @@ def test_index_of_list_column(test_data, column):
 
     expect = pa.array(column[1], type=pa.int32())
 
+    assert_column_eq(expect, res)
+
+
+def test_set_operations(set_lists_column):
+    lhs, rhs = set_lists_column
+
+    res = plc.lists.difference_distinct(
+        plc.interop.from_arrow(pa.array(lhs)),
+        plc.interop.from_arrow(pa.array(rhs)),
+    )
+    expect = pa.array([[], [1, 2, 3], None, [4, 5]])
+    assert_column_eq(expect, res)
+
+    res = plc.lists.have_overlap(
+        plc.interop.from_arrow(pa.array(lhs)),
+        plc.interop.from_arrow(pa.array(rhs)),
+    )
+    expect = pa.array([True, False, None, True])
+    assert_column_eq(expect, res)
+
+    res = plc.lists.intersect_distinct(
+        plc.interop.from_arrow(pa.array(lhs)),
+        plc.interop.from_arrow(pa.array(rhs)),
+    )
+    expect = pa.array([[1, 2], [], None, [None]])
+    assert_column_eq(expect, res)
+
+    res = plc.lists.union_distinct(
+        plc.interop.from_arrow(pa.array(lhs)),
+        plc.interop.from_arrow(pa.array(rhs)),
+    )
+    expect = pa.array([[2, 1, 3], [1, 2, 3, 4, 5], None, [4, None, 5]])
     assert_column_eq(expect, res)
