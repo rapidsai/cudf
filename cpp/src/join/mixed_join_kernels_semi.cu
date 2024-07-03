@@ -41,7 +41,7 @@ __attribute__((visibility("hidden"))) __launch_bounds__(block_size) __global__
                        table_device_view build,
                        row_hash const hash_probe,
                        row_equality const equality_probe,
-                       cudf::detail::semi_map_type::device_view hash_table_view,
+                       hash_set_ref_type set_ref,
                        cudf::device_span<bool> left_table_keep_mask,
                        cudf::ast::detail::expression_device_view device_expression_data)
 {
@@ -69,8 +69,8 @@ __attribute__((visibility("hidden"))) __launch_bounds__(block_size) __global__
     auto equality = single_expression_equality<has_nulls>{
       evaluator, thread_intermediate_storage, false, equality_probe};
 
-    left_table_keep_mask[outer_row_index] =
-      hash_table_view.contains(outer_row_index, hash_probe, equality);
+    auto set_ref_ = set_ref.with_hash_function(hash_probe).with_key_eq(equality);
+    left_table_keep_mask[outer_row_index] = set_ref_.contains(outer_row_index);
   }
 }
 
@@ -81,7 +81,7 @@ template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>(
   table_device_view build,
   row_hash const hash_probe,
   row_equality const equality_probe,
-  cudf::detail::semi_map_type::device_view hash_table_view,
+  hash_set_ref_type set_ref,
   cudf::device_span<bool> left_table_keep_mask,
   cudf::ast::detail::expression_device_view device_expression_data);
 
@@ -92,7 +92,7 @@ template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>(
   table_device_view build,
   row_hash const hash_probe,
   row_equality const equality_probe,
-  cudf::detail::semi_map_type::device_view hash_table_view,
+  hash_set_ref_type set_ref,
   cudf::device_span<bool> left_table_keep_mask,
   cudf::ast::detail::expression_device_view device_expression_data);
 

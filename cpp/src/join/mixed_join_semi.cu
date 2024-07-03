@@ -46,45 +46,6 @@
 namespace cudf {
 namespace detail {
 
-namespace {
-/**
- * @brief Device functor to create a pair of hash value and index for a given row.
- */
-struct make_pair_function_semi {
-  __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
-  {
-    // The value is irrelevant since we only ever use the hash map to check for
-    // membership of a particular row index.
-    return cuco::make_pair(static_cast<hash_value_type>(i), 0);
-  }
-};
-
-/**
- * @brief Equality comparator that composes two row_equality comparators.
- */
-class double_row_equality {
- public:
-  double_row_equality(row_equality equality_comparator, row_equality conditional_comparator)
-    : _equality_comparator{equality_comparator}, _conditional_comparator{conditional_comparator}
-  {
-  }
-
-  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
-  {
-    using experimental::row::lhs_index_type;
-    using experimental::row::rhs_index_type;
-
-    return _equality_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index}) &&
-           _conditional_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index});
-  }
-
- private:
-  row_equality _equality_comparator;
-  row_equality _conditional_comparator;
-};
-
-}  // namespace
-
 std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   table_view const& left_equality,
   table_view const& right_equality,
@@ -163,19 +124,13 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
-  semi_map_type hash_table{compute_hash_table_size(build.num_rows()),
-                           cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-                           cuco::empty_value{cudf::detail::JoinNoneValue},
-                           cudf::detail::cuco_allocator{stream},
-                           stream.value()};
-
   // Create hash table containing all keys found in right table
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
   auto const build_nulls    = cudf::nullate::DYNAMIC{cudf::has_nulls(build)};
   auto const row_hash_build = cudf::experimental::row::hash::row_hasher{preprocessed_build};
-  auto const hash_build     = row_hash_build.device_hasher(build_nulls);
+
   // Since we may see multiple rows that are identical in the equality tables
   // but differ in the conditional tables, the equality comparator used for
   // insertion must account for both sets of tables. An alternative solution
@@ -197,13 +152,22 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const equality_build_conditional =
     row_comparator_conditional_build.equal_to<false>(build_nulls, compare_nulls);
   double_row_equality equality_build{equality_build_equality, equality_build_conditional};
-  make_pair_function_semi pair_func_build{};
 
-  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
+  hash_set_type set{compute_hash_table_size(build.num_rows()),
+                    0.5,
+                    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+                    equality_build,
+                    {row_hash_build.device_hasher(build_nulls)},
+                    {},
+                    {},
+                    cudf::detail::cuco_allocator{stream},
+                    stream.value()};
+
+  auto iter = thrust::make_counting_iterator(0);
 
   // skip rows that are null here.
   if ((compare_nulls == null_equality::EQUAL) or (not nullable(build))) {
-    hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
+    set.insert(iter, iter + right_num_rows, stream.value());
   } else {
     thrust::counting_iterator<cudf::size_type> stencil(0);
     auto const [row_bitmask, _] =
@@ -211,11 +175,10 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
     // insert valid rows
-    hash_table.insert_if(
-      iter, iter + right_num_rows, stencil, pred, hash_build, equality_build, stream.value());
+    set.insert_if(iter, iter + right_num_rows, stencil, pred, stream.value());
   }
 
-  auto hash_table_view = hash_table.get_device_view();
+  hash_set_ref_type set_ref = set.ref(cuco::contains);
 
   detail::grid_1d const config(outer_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
@@ -235,7 +198,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
         *build_view,
         hash_probe,
         equality_probe,
-        hash_table_view,
+        set_ref,
         cudf::device_span<bool>(left_table_keep_mask),
         parser.device_expression_data);
   } else {
@@ -247,7 +210,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
         *build_view,
         hash_probe,
         equality_probe,
-        hash_table_view,
+        set_ref,
         cudf::device_span<bool>(left_table_keep_mask),
         parser.device_expression_data);
   }
