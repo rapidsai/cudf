@@ -98,16 +98,6 @@ void bench_groupby_max_multithreaded(nvbench::state& state, nvbench::type_list<T
   groupby_max_multithreaded_helper<Type>(state, num_rows, cardinality, null_probability);
 }
 
-template <typename Type>
-void bench_groupby_max_multithreaded_cardinality(nvbench::state& state, nvbench::type_list<Type>)
-{
-  auto constexpr num_rows         = 20'000'000;
-  auto constexpr null_probability = 0.;
-  auto const cardinality          = static_cast<cudf::size_type>(state.get_int64("cardinality"));
-
-  groupby_max_multithreaded_helper<Type>(state, num_rows, cardinality, null_probability);
-}
-
 NVBENCH_BENCH_TYPES(bench_groupby_max_multithreaded,
                     NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, int64_t, float, double>))
   .set_name("groupby_max_multithreaded")
