@@ -35,6 +35,7 @@
 
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
@@ -46,14 +47,20 @@
  * @param pool Whether to use a pool memory resource.
  * @return Memory resource instance
  */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool pool)
-{
-  auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
-  if (pool) {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      cuda_mr, rmm::percent_of_free_device_memory(50));
-  }
-  return cuda_mr;
+std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
+    bool pool, bool use_managed) {
+    std::shared_ptr<rmm::mr::device_memory_resource> cuda_mr;
+    if (use_managed) {
+        cuda_mr = std::make_shared<rmm::mr::managed_memory_resource>();
+    } else {
+        cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
+    }
+
+    if (pool) {
+        return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+            cuda_mr, rmm::percent_of_free_device_memory(50));
+    }
+    return cuda_mr;
 }
 
 /**
@@ -399,6 +406,7 @@ int32_t days_since_epoch(int year, int month, int day) {
 struct tpch_args_t {
     std::string dataset_dir;
     bool use_memory_pool;
+    bool use_managed_memory;
 };
 
 /**
@@ -408,8 +416,8 @@ struct tpch_args_t {
  * @param argv The command line arguments
  */
 tpch_args_t parse_args(int argc, char const **argv) {
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <dataset_dir> <use_memory_pool>" << std::endl;
+    if (argc < 4) {
+        std::cerr << "Usage: " << argv[0] << " <dataset_dir> <use_memory_pool> <use_managed_memory>" << std::endl;
         std::cerr << std::endl;
         std::cerr << "The query result will be saved to a parquet file named " << 
                      "q{query_no}.parquet in the current working directory." << std::endl;
@@ -418,6 +426,7 @@ tpch_args_t parse_args(int argc, char const **argv) {
     tpch_args_t args;
     args.dataset_dir = argv[1];
     args.use_memory_pool = std::stoi(argv[2]);
+    args.use_managed_memory = std::stoi(argv[3]);
     return args;
 
 }
