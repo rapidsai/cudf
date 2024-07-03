@@ -26,7 +26,7 @@ jobs:
       - wheel-build-cudf
       - wheel-tests-cudf
       - wheel-build-cudf-polars
-      - test-wheel-cudf-polars
+      - wheel-tests-cudf-polars
       - wheel-build-dask-cudf
       - wheel-tests-dask-cudf
       - devcontainer
@@ -143,7 +143,7 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/build_wheel_cudf_polars.sh"
-  test-wheel-cudf-polars:
+  wheel-tests-cudf-polars:
     needs: wheel-build-cudf-polars
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.08
