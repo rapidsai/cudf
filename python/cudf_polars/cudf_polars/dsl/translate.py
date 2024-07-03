@@ -10,7 +10,9 @@ from functools import singledispatch
 from typing import Any
 
 import pyarrow as pa
+from typing_extensions import assert_never
 
+import polars.polars as plrs
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 import cudf._lib.pylibcudf as plc
@@ -85,9 +87,11 @@ def _(
 def _(
     node: pl_ir.Scan, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
+    typ, *options = node.scan_type
     return ir.Scan(
         schema,
-        node.scan_type,
+        typ,
+        tuple(options),
         node.paths,
         node.file_options,
         translate_named_expr(visitor, n=node.predicate)
@@ -341,6 +345,16 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
             *(translate_expr(visitor, n=n) for n in node.input),
         )
     elif isinstance(name, pl_expr.BooleanFunction):
+        if name == pl_expr.BooleanFunction.IsBetween:
+            column, lo, hi = (translate_expr(visitor, n=n) for n in node.input)
+            (closed,) = options
+            lop, rop = expr.BooleanFunction._BETWEEN_OPS[closed]
+            return expr.BinOp(
+                dtype,
+                plc.binaryop.BinaryOperator.LOGICAL_AND,
+                expr.BinOp(dtype, lop, column, lo),
+                expr.BinOp(dtype, rop, column, hi),
+            )
         return expr.BooleanFunction(
             dtype,
             name,
@@ -354,21 +368,26 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
 @_translate_expr.register
 def _(node: pl_expr.Window, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
     # TODO: raise in groupby?
-    if node.partition_by is None:
+    if isinstance(node.options, pl_expr.RollingGroupOptions):
+        # pl.col("a").rolling(...)
         return expr.RollingWindow(
             dtype, node.options, translate_expr(visitor, n=node.function)
         )
-    else:
+    elif isinstance(node.options, pl_expr.WindowMapping):
+        # pl.col("a").over(...)
         return expr.GroupedRollingWindow(
             dtype,
             node.options,
             translate_expr(visitor, n=node.function),
             *(translate_expr(visitor, n=n) for n in node.partition_by),
         )
+    assert_never(node.options)
 
 
 @_translate_expr.register
 def _(node: pl_expr.Literal, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
+    if isinstance(node.value, plrs.PySeries):
+        return expr.LiteralColumn(dtype, node.value)
     value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
     return expr.Literal(dtype, value)
 
@@ -428,7 +447,17 @@ def _(node: pl_expr.Agg, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Ex
         dtype,
         node.name,
         node.options,
-        translate_expr(visitor, n=node.arguments),
+        *(translate_expr(visitor, n=n) for n in node.arguments),
+    )
+
+
+@_translate_expr.register
+def _(node: pl_expr.Ternary, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
+    return expr.Ternary(
+        dtype,
+        translate_expr(visitor, n=node.predicate),
+        translate_expr(visitor, n=node.truthy),
+        translate_expr(visitor, n=node.falsy),
     )
 
 

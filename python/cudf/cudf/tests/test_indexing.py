@@ -11,10 +11,9 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
-from cudf.testing import _utils as utils
+from cudf.testing import _utils as utils, assert_eq
 from cudf.testing._utils import (
     INTEGER_TYPES,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
 )

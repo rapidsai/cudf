@@ -20,6 +20,7 @@ from cudf.api.types import is_list_like
 
 from cudf._lib.utils cimport data_from_unique_ptr
 
+from cudf._lib import pylibcudf
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
 from libc.stdint cimport uint8_t
@@ -36,13 +37,13 @@ cimport cudf._lib.pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
 cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
 cimport cudf._lib.pylibcudf.libcudf.types as cudf_types
 from cudf._lib.column cimport Column
-from cudf._lib.io.datasource cimport NativeFileDatasource
 from cudf._lib.io.utils cimport (
     make_sinks_info,
     make_source_info,
     update_struct_field_names,
 )
 from cudf._lib.pylibcudf.expressions cimport Expression
+from cudf._lib.pylibcudf.io.datasource cimport NativeFileDatasource
 from cudf._lib.pylibcudf.libcudf.expressions cimport expression
 from cudf._lib.pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_reader as cpp_chunked_parquet_reader,
@@ -70,7 +71,10 @@ from cudf._lib.utils cimport table_view_from_table
 
 from pyarrow.lib import NativeFile
 
+from cudf._lib.concat import concat_columns
 from cudf.utils.ioutils import _ROW_GROUP_SIZE_BYTES_DEFAULT
+
+from cudf._lib.utils cimport data_from_pylibcudf_table
 
 
 cdef class BufferArrayFromVector:
@@ -878,14 +882,32 @@ cdef class ParquetReader:
         return df
 
     def read(self):
-        dfs = []
+        dfs = self._read_chunk()
+        column_names = dfs._column_names
+        concatenated_columns = list(dfs._columns)
+        del dfs
         while self._has_next():
-            dfs.append(self._read_chunk())
-        df = cudf.concat(dfs)
-        df = _process_metadata(df, self.result_meta, self.names, self.row_groups,
-                               self.filepaths_or_buffers, self.pa_buffers,
-                               self.allow_range_index, self.cpp_use_pandas_metadata)
-        return df
+            new_chunk = list(self._read_chunk()._columns)
+            for i in range(len(column_names)):
+                concatenated_columns[i] = concat_columns(
+                    [concatenated_columns[i], new_chunk[i]]
+                )
+                # Must drop any residual GPU columns to save memory
+                new_chunk[i] = None
+
+        dfs = cudf.DataFrame._from_data(
+            *data_from_pylibcudf_table(
+                pylibcudf.Table(
+                    [col.to_pylibcudf(mode="read") for col in concatenated_columns]
+                ),
+                column_names=column_names,
+                index_names=None
+                )
+            )
+
+        return _process_metadata(dfs, self.result_meta, self.names, self.row_groups,
+                                 self.filepaths_or_buffers, self.pa_buffers,
+                                 self.allow_range_index, self.cpp_use_pandas_metadata)
 
 cpdef merge_filemetadata(object filemetadata_list):
     """
