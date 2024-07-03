@@ -184,3 +184,4 @@ build-backend = "setuptools.build_meta"
 dependencies-file = "../../dependencies.yaml"
 # Pure python
 disable-cuda = true
+matrix-entry = "cuda_suffixed=true"
