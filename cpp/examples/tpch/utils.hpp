@@ -41,26 +41,32 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 
 
-/**
- * @brief Create memory resource for libcudf functions
- *
- * @param pool Whether to use a pool memory resource.
- * @return Memory resource instance
- */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
-    bool pool, bool use_managed) {
-    std::shared_ptr<rmm::mr::device_memory_resource> cuda_mr;
-    if (use_managed) {
-        cuda_mr = std::make_shared<rmm::mr::managed_memory_resource>();
-    } else {
-        cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
-    }
+inline auto make_unmanaged() { 
+    return std::make_shared<rmm::mr::cuda_memory_resource>(); 
+}
 
-    if (pool) {
-        return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-            cuda_mr, rmm::percent_of_free_device_memory(50));
-    }
-    return cuda_mr;
+inline auto make_unmanaged_pool() {
+    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+        make_unmanaged(), rmm::percent_of_free_device_memory(50));
+}
+
+inline auto make_managed() { 
+    return std::make_shared<rmm::mr::managed_memory_resource>(); 
+}
+
+inline auto make_managed_pool() {
+    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+        make_managed(), rmm::percent_of_free_device_memory(50));
+}
+
+inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
+    std::string const& mode) {
+    if (mode == "unmanaged") return make_unmanaged();
+    if (mode == "unmanaged_pool") return make_unmanaged_pool();
+    if (mode == "managed") return make_managed();
+    if (mode == "managed_pool") return make_managed_pool();
+    CUDF_FAIL("Unknown rmm_mode parameter: " + mode +
+                "\nExpecting: 'unmanaged', 'unmanaged_pool', 'managed', 'managed_pool'");
 }
 
 /**
@@ -405,8 +411,7 @@ int32_t days_since_epoch(int year, int month, int day) {
 
 struct tpch_args_t {
     std::string dataset_dir;
-    bool use_memory_pool;
-    bool use_managed_memory;
+    std::string memory_resource_type;
 };
 
 /**
@@ -416,8 +421,8 @@ struct tpch_args_t {
  * @param argv The command line arguments
  */
 tpch_args_t parse_args(int argc, char const **argv) {
-    if (argc < 4) {
-        std::cerr << "Usage: " << argv[0] << " <dataset_dir> <use_memory_pool> <use_managed_memory>" << std::endl;
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0] << " <dataset_dir> <memory_resource_type>" << std::endl;
         std::cerr << std::endl;
         std::cerr << "The query result will be saved to a parquet file named " << 
                      "q{query_no}.parquet in the current working directory." << std::endl;
@@ -425,10 +430,8 @@ tpch_args_t parse_args(int argc, char const **argv) {
     }
     tpch_args_t args;
     args.dataset_dir = argv[1];
-    args.use_memory_pool = std::stoi(argv[2]);
-    args.use_managed_memory = std::stoi(argv[3]);
+    args.memory_resource_type = argv[2];
     return args;
-
 }
 
 /**
