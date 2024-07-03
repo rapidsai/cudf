@@ -21,6 +21,8 @@
 #include "utils.hpp"
 
 /*
+create view lineitem as select * from '~/tpch_sf1/lineitem/part-0.parquet';
+
 select
     l_returnflag,
     l_linestatus,
@@ -33,7 +35,7 @@ select
     avg(l_discount) as avg_disc,
     count(*) as count_order
 from
-    '~/tpch_sf1/lineitem/part-0.parquet'
+    lineitem
 where
         l_shipdate <= date '1998-09-02'
 group by
