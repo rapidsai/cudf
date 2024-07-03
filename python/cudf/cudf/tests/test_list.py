@@ -952,5 +952,4 @@ def test_empty_nested_list_uninitialized_offsets_memory_usage():
         children=(column_empty(0, col.children[0].dtype), empty_inner),
     )
     ser = cudf.Series._from_data({None: col_empty_offset})
-    breakpoint()
     assert ser.memory_usage() == 8

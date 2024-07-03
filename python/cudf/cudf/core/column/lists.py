@@ -69,7 +69,6 @@ class ListColumn(ColumnBase):
         current_base_child = self.base_children[1]
         current_offset = self.offset
         n += child0_size
-        breakpoint()
         while type(current_base_child) is ListColumn:
             child0_size = (
                 current_base_child.size + 1 - current_offset
