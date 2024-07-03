@@ -143,33 +143,33 @@ def test_index_of_list_column(test_data, column):
     assert_column_eq(expect, res)
 
 
-def test_set_operations(set_lists_column):
+@pytest.mark.parametrize(
+    "set_operation,expected",
+    [
+        (
+            plc.lists.difference_distinct,
+            [[], [1, 2, 3], None, [4, 5]],
+        ),
+        (
+            plc.lists.have_overlap,
+            [True, False, None, True],
+        ),
+        (
+            plc.lists.intersect_distinct,
+            [[1, 2], [], None, [None]],
+        ),
+        (
+            plc.lists.union_distinct,
+            [[2, 1, 3], [1, 2, 3, 4, 5], None, [4, None, 5]],
+        ),
+    ],
+)
+def test_set_operations(set_lists_column, set_operation, expected):
     lhs, rhs = set_lists_column
 
-    res = plc.lists.difference_distinct(
+    res = set_operation(
         plc.interop.from_arrow(pa.array(lhs)),
         plc.interop.from_arrow(pa.array(rhs)),
     )
-    expect = pa.array([[], [1, 2, 3], None, [4, 5]])
-    assert_column_eq(expect, res)
-
-    res = plc.lists.have_overlap(
-        plc.interop.from_arrow(pa.array(lhs)),
-        plc.interop.from_arrow(pa.array(rhs)),
-    )
-    expect = pa.array([True, False, None, True])
-    assert_column_eq(expect, res)
-
-    res = plc.lists.intersect_distinct(
-        plc.interop.from_arrow(pa.array(lhs)),
-        plc.interop.from_arrow(pa.array(rhs)),
-    )
-    expect = pa.array([[1, 2], [], None, [None]])
-    assert_column_eq(expect, res)
-
-    res = plc.lists.union_distinct(
-        plc.interop.from_arrow(pa.array(lhs)),
-        plc.interop.from_arrow(pa.array(rhs)),
-    )
-    expect = pa.array([[2, 1, 3], [1, 2, 3, 4, 5], None, [4, None, 5]])
+    expect = pa.array(expected)
     assert_column_eq(expect, res)
