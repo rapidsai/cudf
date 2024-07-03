@@ -596,7 +596,7 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - &pynvjitlink_conda pynvjitlink>=0.0.0a0
+              - pynvjitlink>=0.0.0a0
           - matrix: {cuda: "11.*"}
             packages:
               - &cubinlinker_conda cubinlinker
@@ -608,13 +608,16 @@ dependencies:
               cuda_suffixed: "true"
             packages:
               - rmm-cu12==24.8.*,>=0.0.0a0
-              - pynvjitlink-cu12>=0.0.0a0
+              - &pynvjitlink_cu12 pynvjitlink-cu12>=0.0.0a0
           - matrix:
               cuda: "12.*"
               cuda_suffixed: "false"
             packages: &run_cudf_cu12_unsuffixed
               - *rmm_conda
-              - *pynvjitlink_conda
+              # for as long as 'pynvjitlink' is not built from source in
+              # RAPIDS devcontainers / DLFW, it needs to be the fully-suffixed name
+              # here so it'll be found from package indices
+              - *pynvjitlink_cu12
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
