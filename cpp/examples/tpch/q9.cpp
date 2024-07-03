@@ -82,9 +82,10 @@ std::unique_ptr<cudf::column> calc_amount(std::unique_ptr<table_with_cols>& tabl
 int main(int argc, char const** argv) {
     check_args(argc, argv);
     std::string dataset_dir = argv[1];
+    bool use_memory_pool = std::stoi(argv[2]);
 
     // Use a memory pool
-    auto resource = create_memory_resource(true);
+    auto resource = create_memory_resource(use_memory_pool);
     rmm::mr::set_current_device_resource(resource.get());
 
     Timer timer;

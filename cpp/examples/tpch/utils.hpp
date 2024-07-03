@@ -397,8 +397,8 @@ int32_t days_since_epoch(int year, int month, int day) {
 }
 
 void check_args(int argc, char const** argv) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <base_dataset_path>" << std::endl;
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0] << " <dataset_dir> <use_memory_pool>" << std::endl;
         std::cerr << std::endl;
         std::cerr << "The query result will be saved to a parquet file named " << 
                      "q{query_no}.parquet in the current working directory." << std::endl;
