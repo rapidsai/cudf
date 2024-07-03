@@ -77,12 +77,62 @@ int main(int argc, char const** argv) {
     Timer timer;
 
     // 1. Read out the tables from parquet files
-    auto customer = read_parquet(dataset_dir + "customer/part-0.parquet", {"c_custkey", "c_nationkey"});
-    auto orders = read_parquet(dataset_dir + "orders/part-0.parquet", {"o_custkey", "o_orderkey", "o_orderdate"});
-    auto lineitem = read_parquet(dataset_dir + "lineitem/part-0.parquet", {"l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"});
-    auto supplier = read_parquet(dataset_dir + "supplier/part-0.parquet", {"s_suppkey", "s_nationkey"});
-    auto nation = read_parquet(dataset_dir + "nation/part-0.parquet", {"n_nationkey", "n_regionkey", "n_name"});
-    auto region = read_parquet(dataset_dir + "region/part-0.parquet", {"r_regionkey", "r_name"});
+    //    while pushing down column projections and filter predicates
+    auto o_orderdate_ref = cudf::ast::column_reference(2);
+    
+    auto o_orderdate_lower = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
+    auto o_orderdate_lower_limit = cudf::ast::literal(o_orderdate_lower);
+    auto o_orderdate_pred_a = cudf::ast::operation(
+        cudf::ast::ast_operator::GREATER_EQUAL,
+        o_orderdate_ref,
+        o_orderdate_lower_limit
+    );
+    
+    auto o_orderdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 1, 1), true);
+    auto o_orderdate_upper_limit = cudf::ast::literal(o_orderdate_upper);
+    auto o_orderdate_pred_b = cudf::ast::operation(
+        cudf::ast::ast_operator::LESS,
+        o_orderdate_ref,
+        o_orderdate_upper_limit
+    );
+
+    auto o_orderdate_pred = std::make_unique<cudf::ast::operation>(
+        cudf::ast::ast_operator::LOGICAL_AND,
+        o_orderdate_pred_a,
+        o_orderdate_pred_b
+    );
+
+    auto r_name_ref = cudf::ast::column_reference(1); 
+    auto r_name_value = cudf::string_scalar("ASIA");
+    auto r_name_literal = cudf::ast::literal(r_name_value);
+    auto r_name_pred = std::make_unique<cudf::ast::operation>(
+        cudf::ast::ast_operator::EQUAL,
+        r_name_ref,
+        r_name_literal
+    );
+
+    auto customer = read_parquet(
+        dataset_dir + "customer/part-0.parquet", {"c_custkey", "c_nationkey"});
+    auto orders = read_parquet(
+        dataset_dir + "orders/part-0.parquet", 
+        {"o_custkey", "o_orderkey", "o_orderdate"},
+        std::move(o_orderdate_pred)
+    );
+    auto lineitem = read_parquet(
+        dataset_dir + "lineitem/part-0.parquet", 
+        {"l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"}
+    );
+    auto supplier = read_parquet(
+        dataset_dir + "supplier/part-0.parquet", {"s_suppkey", "s_nationkey"}
+    );
+    auto nation = read_parquet(
+        dataset_dir + "nation/part-0.parquet", {"n_nationkey", "n_regionkey", "n_name"}
+    );
+    auto region = read_parquet(
+        dataset_dir + "region/part-0.parquet", 
+        {"r_regionkey", "r_name"},
+        std::move(r_name_pred)
+    );
 
     // 2. Perform the joins
     auto join_a = apply_inner_join(
@@ -116,52 +166,11 @@ int main(int argc, char const** argv) {
         {"l_suppkey", "n_nationkey"}
     );
 
-    // 3. Apply the filter predicates
-    auto o_orderdate_ref = cudf::ast::column_reference(joined_table->col_id("o_orderdate"));
-    
-    auto o_orderdate_lower = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
-    auto o_orderdate_lower_limit = cudf::ast::literal(o_orderdate_lower);
-    auto o_orderdate_pred_a = cudf::ast::operation(
-        cudf::ast::ast_operator::GREATER_EQUAL,
-        o_orderdate_ref,
-        o_orderdate_lower_limit
-    );
-    
-    auto o_orderdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 1, 1), true);
-    auto o_orderdate_upper_limit = cudf::ast::literal(o_orderdate_upper);
-    auto o_orderdate_pred_b = cudf::ast::operation(
-        cudf::ast::ast_operator::LESS,
-        o_orderdate_ref,
-        o_orderdate_upper_limit
-    );
-    
-    auto r_name_ref = cudf::ast::column_reference(joined_table->col_id("r_name")); 
-    auto r_name_value = cudf::string_scalar("ASIA");
-    auto r_name_literal = cudf::ast::literal(r_name_value);
-    auto r_name_pred = cudf::ast::operation(
-        cudf::ast::ast_operator::EQUAL,
-        r_name_ref,
-        r_name_literal
-    );
+    // 3. Calcute and append the `revenue` column
+    auto revenue = calc_revenue(joined_table);
+    auto appended_table = joined_table->append(revenue, "revenue");
 
-    auto o_orderdate_pred = cudf::ast::operation(
-        cudf::ast::ast_operator::LOGICAL_AND,
-        o_orderdate_pred_a,
-        o_orderdate_pred_b
-    );
-
-    auto final_pred = cudf::ast::operation(
-        cudf::ast::ast_operator::LOGICAL_AND,
-        o_orderdate_pred,
-        r_name_pred
-    );
-    auto filtered_table = apply_filter(joined_table, final_pred);
-
-    // 4. Calcute and append the `revenue` column
-    auto revenue = calc_revenue(filtered_table);
-    auto appended_table = filtered_table->append(revenue, "revenue");
-
-    // 5. Perform groupby and orderby operations
+    // 4. Perform groupby and orderby operations
     groupby_context ctx{
         {"n_name"}, 
         {
