@@ -168,14 +168,17 @@ int main(int argc, char const** argv) {
     auto revenue = calc_revenue(joined_table);
     auto appended_table = joined_table->append(revenue, "revenue");
 
-    // 4. Perform groupby and orderby operations
-    groupby_context ctx{
-        {"n_name"}, 
-        {
-            {"revenue", {{cudf::aggregation::Kind::SUM, "revenue"}}},
-        }
-    };
-    auto groupedby_table = apply_groupby(appended_table, ctx);
+    // 4. Perform the groupby operation
+    auto groupedby_table = apply_groupby(
+        appended_table, 
+        groupby_context_t {
+            {"n_name"}, 
+            {
+                {"revenue", {{cudf::aggregation::Kind::SUM, "revenue"}}},
+            }
+        });
+
+    // 5. Perform the order by operation
     auto orderedby_table = apply_orderby(
         groupedby_table, {"revenue"}, {cudf::order::DESCENDING});
 

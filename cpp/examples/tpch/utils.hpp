@@ -250,7 +250,7 @@ std::unique_ptr<table_with_cols> apply_mask(
     return std::make_unique<table_with_cols>(std::move(result_table), table->columns());
 }
 
-struct groupby_context {
+struct groupby_context_t {
     std::vector<std::string> keys;
     std::unordered_map<std::string, std::vector<std::pair<cudf::aggregation::Kind, std::string>>> values;
 };
@@ -262,7 +262,7 @@ struct groupby_context {
  * @param ctx The groupby context
  */
 std::unique_ptr<table_with_cols> apply_groupby(
-    std::unique_ptr<table_with_cols>& table, groupby_context ctx) {
+    std::unique_ptr<table_with_cols>& table, groupby_context_t ctx) {
     CUDF_FUNC_RANGE();
     auto keys = table->select(ctx.keys);
     cudf::groupby::groupby groupby_obj(keys);

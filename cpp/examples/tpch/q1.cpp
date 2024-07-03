@@ -97,7 +97,7 @@ int main(int argc, char const** argv) {
     // 3. Perform the group by operation
     auto groupedby_table = apply_groupby(
         appended_table, 
-        groupby_context{
+        groupby_context_t {
             {"l_returnflag", "l_linestatus"},
             {
                 {

@@ -155,10 +155,10 @@ int main(int argc, char const** argv) {
         std::vector<std::string>{"nation", "o_year", "amount"} 
     );
 
-    // 3. Perform the group by operation
+    // 3. Perform the groupby operation
     auto groupedby_table = apply_groupby(
         profit,
-        groupby_context{
+        groupby_context_t {
             {"nation", "o_year"},
             {
                 {"amount", {{cudf::groupby_aggregation::SUM, "sum_profit"}}}
