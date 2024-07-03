@@ -703,6 +703,7 @@ class StringFunction(Expr):
             pl_expr.StringFunction.EndsWith,
             pl_expr.StringFunction.StartsWith,
             pl_expr.StringFunction.Contains,
+            pl_expr.StringFunction.Slice,
         ):
             raise NotImplementedError(f"String function {self.name}")
         if self.name == pl_expr.StringFunction.Contains:
@@ -716,6 +717,11 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
+        elif self.name == pl_expr.StringFunction.Slice:
+            if not all(isinstance(child, Literal) for child in self.children[1:]):
+                raise NotImplementedError(
+                    "Slice only supports literal start and stop values"
+                )
 
     def do_evaluate(
         self,
@@ -744,6 +750,36 @@ class StringFunction(Expr):
                 flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
             )
             return Column(plc.strings.contains.contains_re(column.obj, prog))
+        elif self.name == pl_expr.StringFunction.Slice:
+            child, expr_offset, expr_length = self.children
+            assert isinstance(expr_offset, Literal)
+            assert isinstance(expr_length, Literal)
+
+            column = child.evaluate(df, context=context, mapping=mapping)
+            # libcudf slices via [start,stop).
+            # polars slices with offset + length where start == offset
+            # stop = start + length. Negative values for start look backward
+            # from the last element of the string. If the end index would be
+            # below zero, an empty string is returned.
+            # Do this maths on the host
+            start = expr_offset.value.as_py()
+            length = expr_length.value.as_py()
+
+            if length == 0:
+                stop = start
+            else:
+                # No length indicates a scan to the end
+                # The libcudf equivalent is a null stop
+                stop = start + length if length else None
+                if length and start < 0 and length >= -start:
+                    stop = None
+            return Column(
+                plc.strings.slice.slice_strings(
+                    column.obj,
+                    plc.interop.from_arrow(pa.scalar(start, type=pa.int32())),
+                    plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
+                )
+            )
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
