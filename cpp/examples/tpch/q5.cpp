@@ -66,12 +66,10 @@ std::unique_ptr<cudf::column> calc_revenue(std::unique_ptr<table_with_cols>& tab
 }
 
 int main(int argc, char const** argv) {
-    check_args(argc, argv);
-    std::string dataset_dir = argv[1];
-    bool use_memory_pool = std::stoi(argv[2]);
+    auto args = parse_args(argc, argv);
 
     // Use a memory pool
-    auto resource = create_memory_resource(use_memory_pool);
+    auto resource = create_memory_resource(args.use_memory_pool);
     rmm::mr::set_current_device_resource(resource.get());
 
     Timer timer;
@@ -112,24 +110,24 @@ int main(int argc, char const** argv) {
     );
 
     auto customer = read_parquet(
-        dataset_dir + "customer/part-0.parquet", {"c_custkey", "c_nationkey"});
+        args.dataset_dir + "customer/part-0.parquet", {"c_custkey", "c_nationkey"});
     auto orders = read_parquet(
-        dataset_dir + "orders/part-0.parquet", 
+        args.dataset_dir + "orders/part-0.parquet", 
         {"o_custkey", "o_orderkey", "o_orderdate"},
         std::move(o_orderdate_pred)
     );
     auto lineitem = read_parquet(
-        dataset_dir + "lineitem/part-0.parquet", 
+        args.dataset_dir + "lineitem/part-0.parquet", 
         {"l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"}
     );
     auto supplier = read_parquet(
-        dataset_dir + "supplier/part-0.parquet", {"s_suppkey", "s_nationkey"}
+        args.dataset_dir + "supplier/part-0.parquet", {"s_suppkey", "s_nationkey"}
     );
     auto nation = read_parquet(
-        dataset_dir + "nation/part-0.parquet", {"n_nationkey", "n_regionkey", "n_name"}
+        args.dataset_dir + "nation/part-0.parquet", {"n_nationkey", "n_regionkey", "n_name"}
     );
     auto region = read_parquet(
-        dataset_dir + "region/part-0.parquet", 
+        args.dataset_dir + "region/part-0.parquet", 
         {"r_regionkey", "r_name"},
         std::move(r_name_pred)
     );

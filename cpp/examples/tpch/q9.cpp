@@ -80,23 +80,24 @@ std::unique_ptr<cudf::column> calc_amount(std::unique_ptr<table_with_cols>& tabl
 }
 
 int main(int argc, char const** argv) {
-    check_args(argc, argv);
-    std::string dataset_dir = argv[1];
-    bool use_memory_pool = std::stoi(argv[2]);
+    auto args = parse_args(argc, argv);
 
     // Use a memory pool
-    auto resource = create_memory_resource(use_memory_pool);
+    auto resource = create_memory_resource(args.use_memory_pool);
     rmm::mr::set_current_device_resource(resource.get());
 
     Timer timer;
 
     // 1. Read out the table from parquet files
-    auto lineitem = read_parquet(dataset_dir + "lineitem/part-0.parquet", {"l_suppkey", "l_partkey", "l_orderkey", "l_extendedprice", "l_discount", "l_quantity"});
-    auto nation = read_parquet(dataset_dir + "nation/part-0.parquet", {"n_nationkey", "n_name"});
-    auto orders = read_parquet(dataset_dir + "orders/part-0.parquet", {"o_orderkey", "o_orderdate"});
-    auto part = read_parquet(dataset_dir + "part/part-0.parquet", {"p_partkey", "p_name"});
-    auto partsupp = read_parquet(dataset_dir + "partsupp/part-0.parquet", {"ps_suppkey", "ps_partkey", "ps_supplycost"});
-    auto supplier = read_parquet(dataset_dir + "supplier/part-0.parquet", {"s_suppkey", "s_nationkey"});
+    auto lineitem = read_parquet(
+        args.dataset_dir + "lineitem/part-0.parquet", 
+        {"l_suppkey", "l_partkey", "l_orderkey", "l_extendedprice", "l_discount", "l_quantity"});
+    auto nation = read_parquet(args.dataset_dir + "nation/part-0.parquet", {"n_nationkey", "n_name"});
+    auto orders = read_parquet(args.dataset_dir + "orders/part-0.parquet", {"o_orderkey", "o_orderdate"});
+    auto part = read_parquet(args.dataset_dir + "part/part-0.parquet", {"p_partkey", "p_name"});
+    auto partsupp = read_parquet(args.dataset_dir + "partsupp/part-0.parquet", 
+        {"ps_suppkey", "ps_partkey", "ps_supplycost"});
+    auto supplier = read_parquet(args.dataset_dir + "supplier/part-0.parquet", {"s_suppkey", "s_nationkey"});
 
     // 2. Generating the `profit` table
     // 2.1 Filter the part table using `p_name like '%green%'`

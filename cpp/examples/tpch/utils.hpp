@@ -396,7 +396,18 @@ int32_t days_since_epoch(int year, int month, int day) {
     return static_cast<int32_t>(diff);
 }
 
-void check_args(int argc, char const** argv) {
+struct tpch_args_t {
+    std::string dataset_dir;
+    bool use_memory_pool;
+};
+
+/**
+ * @brief Parse command line arguments into a struct
+ * 
+ * @param argc The number of command line arguments
+ * @param argv The command line arguments
+ */
+tpch_args_t parse_args(int argc, char const **argv) {
     if (argc < 3) {
         std::cerr << "Usage: " << argv[0] << " <dataset_dir> <use_memory_pool>" << std::endl;
         std::cerr << std::endl;
@@ -404,6 +415,11 @@ void check_args(int argc, char const** argv) {
                      "q{query_no}.parquet in the current working directory." << std::endl;
         exit(1);
     }
+    tpch_args_t args;
+    args.dataset_dir = argv[1];
+    args.use_memory_pool = std::stoi(argv[2]);
+    return args;
+
 }
 
 /**

@@ -49,12 +49,10 @@ std::unique_ptr<cudf::column> calc_revenue(std::unique_ptr<table_with_cols>& tab
 }
 
 int main(int argc, char const** argv) {
-    check_args(argc, argv);
-    std::string dataset_dir = argv[1];
-    bool use_memory_pool = std::stoi(argv[2]);
+    auto args = parse_args(argc, argv);
 
     // Use a memory pool
-    auto resource = create_memory_resource(use_memory_pool);
+    auto resource = create_memory_resource(args.use_memory_pool);
     rmm::mr::set_current_device_resource(resource.get());
 
     Timer timer;
@@ -83,7 +81,7 @@ int main(int argc, char const** argv) {
         shipdate_pred_b
     );
     auto lineitem = read_parquet(
-        dataset_dir + "lineitem/part-0.parquet", 
+        args.dataset_dir + "lineitem/part-0.parquet", 
         {"l_extendedprice", "l_discount", "l_shipdate", "l_quantity"},
         std::move(shipdate_pred)
     );
