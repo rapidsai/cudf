@@ -577,7 +577,7 @@ void gather_bitmask(table_view const& source,
   }
 
   // Make device array of target bitmask pointers
-  std::vector<bitmask_type*> target_masks(target.size());
+  auto target_masks = cudf::detail::make_host_vector<bitmask_type*>(target.size(), stream);
   std::transform(target.begin(), target.end(), target_masks.begin(), [](auto const& col) {
     return col->mutable_view().null_mask();
   });
