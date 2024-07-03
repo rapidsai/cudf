@@ -37,7 +37,17 @@ def ldf(with_nulls):
     return pl.LazyFrame({"a": a, "b": range(len(a))})
 
 
-slice_cases = [(1, 3), (0, 3), (0, 0), (-3, 1), (-100, 5), (1, 1), (100, 100), (-3, 4), (-3, 3)]
+slice_cases = [
+    (1, 3),
+    (0, 3),
+    (0, 0),
+    (-3, 1),
+    (-100, 5),
+    (1, 1),
+    (100, 100),
+    (-3, 4),
+    (-3, 3),
+]
 
 
 @pytest.fixture(params=slice_cases)
