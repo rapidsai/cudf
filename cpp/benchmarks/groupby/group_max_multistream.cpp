@@ -20,17 +20,17 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/pinned_memory.hpp>
-#include <cudf/utilities/thread_pool.hpp>
 
 #include <nvbench/nvbench.cuh>
 
 template <typename Type>
-void groupby_max_multistream_helper(nvbench::state& state,
-                                    cudf::size_type num_rows,
-                                    cudf::size_type cardinality,
-                                    double null_probability)
+void bench_groupby_max_multistream(nvbench::state& state, nvbench::type_list<Type>)
 {
+  auto const cardinality      = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto const num_rows         = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const null_probability = state.get_float64("null_probability");
+  auto const num_streams      = state.get_int64("num_streams");
+
   auto const keys = [&] {
     data_profile const profile =
       data_profile_builder()
@@ -55,8 +55,6 @@ void groupby_max_multistream_helper(nvbench::state& state,
   auto keys_view = keys->view();
   auto gb_obj    = cudf::groupby::groupby(cudf::table_view({keys_view, keys_view, keys_view}));
 
-  auto const num_streams = state.get_int64("num_streams");
-
   auto streams = cudf::detail::fork_streams(cudf::get_default_stream(), num_streams);
 
   std::vector<std::vector<cudf::groupby::aggregation_request>> requests(num_streams);
@@ -69,9 +67,9 @@ void groupby_max_multistream_helper(nvbench::state& state,
   auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      auto perform_agg = [&](int index) { gb_obj.aggregate(requests[index], streams[index]); };
+      auto perform_agg = [&](int64_t index) { gb_obj.aggregate(requests[index], streams[index]); };
       timer.start();
-      for (int i = 0; i < num_streams; i++) {
+      for (int64_t i = 0; i < num_streams; i++) {
         perform_agg(i);
       }
       cudf::detail::join_streams(streams, cudf::get_default_stream());
@@ -82,16 +80,6 @@ void groupby_max_multistream_helper(nvbench::state& state,
   state.add_element_count(static_cast<double>(num_rows) / elapsed_time / 1'000'000., "Mrows/s");
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
-}
-
-template <typename Type>
-void bench_groupby_max_multistream(nvbench::state& state, nvbench::type_list<Type>)
-{
-  auto const cardinality      = static_cast<cudf::size_type>(state.get_int64("cardinality"));
-  auto const num_rows         = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const null_probability = state.get_float64("null_probability");
-
-  groupby_max_multistream_helper<Type>(state, num_rows, cardinality, null_probability);
 }
 
 NVBENCH_BENCH_TYPES(bench_groupby_max_multistream,
