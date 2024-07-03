@@ -1251,7 +1251,6 @@ class BinOp(Expr):
                 lop = left.obj_scalar
             elif right.is_scalar:
                 rop = right.obj_scalar
-        breakpoint()
         return Column(
             plc.binaryop.binary_operation(lop, rop, self.op, self.dtype),
         )
