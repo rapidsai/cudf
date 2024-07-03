@@ -1577,3 +1577,11 @@ def test_at_iat(indexer):
     getattr(df, indexer)[0, 0] = 1
     expected = pd.DataFrame([1, 1, 2])
     tm.assert_frame_equal(df, expected)
+
+
+def test_at_setitem_empty():
+    df = xpd.DataFrame({"name": []})
+    df.at[0, "name"] = 1.0
+    df.at[0, "new"] = 2.0
+    expected = pd.DataFrame({"name": [1.0], "new": [2.0]})
+    tm.assert_frame_equal(df, expected)
