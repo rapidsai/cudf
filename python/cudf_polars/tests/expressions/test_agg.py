@@ -6,6 +6,7 @@ import pytest
 
 import polars as pl
 
+from cudf_polars.callback import execute_with_cudf
 from cudf_polars.dsl import expr
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
@@ -135,9 +136,11 @@ def test_quantile(df, q, interp):
 def test_quantile_invalid_q(df):
     expr = pl.col("a").quantile(pl.col("a"))
     q = df.select(expr)
-    with pytest.raises(pl.exceptions.ComputeError, match="cudf-polars only supports expressions that evaluate to a scalar as the quantile argument"):
+    with pytest.raises(
+        pl.exceptions.ComputeError,
+        match="cudf-polars only supports expressions that evaluate to a scalar as the quantile argument",
+    ):
         q.collect(post_opt_callback=execute_with_cudf)
-
 
 
 @pytest.mark.parametrize(

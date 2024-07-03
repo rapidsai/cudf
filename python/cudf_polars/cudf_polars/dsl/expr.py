@@ -1477,6 +1477,14 @@ class Agg(Expr):
         ]
     )
 
+    interp_mapping: ClassVar[dict[str, plc.types.Interpolation]] = {
+        "nearest": plc.types.Interpolation.NEAREST,
+        "higher": plc.types.Interpolation.HIGHER,
+        "lower": plc.types.Interpolation.LOWER,
+        "midpoint": plc.types.Interpolation.MIDPOINT,
+        "linear": plc.types.Interpolation.LINEAR,
+    }
+
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
         if depth >= 1:
@@ -1556,24 +1564,19 @@ class Agg(Expr):
         n = column.obj.size()
         return Column(plc.copying.slice(column.obj, [n - 1, n])[0])
 
-    def _quantile(self, column: Column, quantile: Column, *, interp: str) -> Column:
-        interp_mapping = {
-            "nearest": plc.types.Interpolation.NEAREST,
-            "higher": plc.types.Interpolation.HIGHER,
-            "lower": plc.types.Interpolation.LOWER,
-            "midpoint": plc.types.Interpolation.MIDPOINT,
-            "linear": plc.types.Interpolation.LINEAR,
-        }
-        if not quantile.is_scalar:
-            raise ValueError(
+    def _quantile(
+        self, column: Column, quantile: Column | pa.Scalar, *, interp: str
+    ) -> Column:
+        # do_evaluate should have evaluated our quantile Column to a pyarrow scalar
+        if not isinstance(quantile, pa.Scalar):
+            raise ValueError(  # noqa: TRY004
                 "cudf-polars only supports expressions that evaluate to a scalar as the quantile argument"
             )
         return self._reduce(
             column,
             request=plc.aggregation.quantile(
-                # TODO: eww! accept pylibcudf Scalar in quantiles?
-                quantiles=[plc.interop.to_arrow(quantile.obj_scalar).as_py()],
-                interp=interp_mapping[interp],
+                quantiles=[quantile.as_py()],
+                interp=Agg.interp_mapping[interp],
             ),
         )
 
@@ -1589,12 +1592,25 @@ class Agg(Expr):
             raise NotImplementedError(
                 f"Agg in context {context}"
             )  # pragma: no cover; unreachable
-        return self.op(
-            *(
+
+        # Don't convert scalar literals to pylibcudf column
+        # for quantile (AggInfo takes in Python scalars not pylibcudf ones)
+        if self.name == "quantile":
+            evaled_children = []
+            for child in self.children:
+                if isinstance(child, Literal):
+                    evaled_children.append(child.value)
+                else:
+                    evaled_children.append(
+                        child.evaluate(df, context=context, mapping=mapping)
+                    )
+        else:
+            evaled_children = [
                 child.evaluate(df, context=context, mapping=mapping)
                 for child in self.children
-            )
-        )
+            ]
+
+        return self.op(*evaled_children)
 
 
 class Ternary(Expr):
