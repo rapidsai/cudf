@@ -24,7 +24,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <limits>
-#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -75,7 +74,7 @@ class column_view_base {
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   T const* head() const noexcept
   {
-    return static_cast<T const*>(_data);
+    return static_cast<T const*>(get_data());
   }
 
   /**
@@ -228,6 +227,17 @@ class column_view_base {
   [[nodiscard]] size_type offset() const noexcept { return _offset; }
 
  protected:
+  /**
+   * @brief Returns pointer to the base device memory allocation.
+   *
+   * The primary purpose of this function is to allow derived classes to
+   * override the fundamental properties of memory accesses without needing to
+   * change all of the different accessors for the underlying pointer.
+   *
+   * @return Typed pointer to underlying data
+   */
+  virtual void const* get_data() const noexcept { return _data; }
+
   data_type _type{type_id::EMPTY};   ///< Element type
   size_type _size{};                 ///< Number of elements
   void const* _data{};               ///< Pointer to device memory containing elements
@@ -239,7 +249,7 @@ class column_view_base {
                                      ///< Enables zero-copy slicing
 
   column_view_base()                        = default;
-  ~column_view_base()                       = default;
+  virtual ~column_view_base()               = default;
   column_view_base(column_view_base const&) = default;  ///< Copy constructor
   column_view_base(column_view_base&&)      = default;  ///< Move constructor
   /**
@@ -288,27 +298,6 @@ class column_view_base {
 };
 }  // namespace detail
 
-class column_view;
-class mutable_column_view;
-
-namespace detail {
-/**
- * @brief Prefetches the specified column view's data.
- *
- * @param col The column view to prefetch
- * @param data_ptr The pointer to the data to prefetch
- */
-void prefetch_column_view(column_view const& col, void const* data_ptr);
-
-/**
- * @brief Prefetches the specified mutable column view's data.
- *
- * @param col The column view to prefetch
- * @param data_ptr The pointer to the data to prefetch
- */
-void prefetch_column_view(mutable_column_view const& col, void* data_ptr);
-}  // namespace detail
-
 /**
  * @brief A non-owning, immutable view of device data as a column of elements,
  * some of which may be null as indicated by a bitmask.
@@ -342,7 +331,7 @@ class column_view : public detail::column_view_base {
 #ifdef __CUDACC__
 #pragma nv_exec_check_disable
 #endif
-  ~column_view() = default;
+  ~column_view() override = default;
 #ifdef __CUDACC__
 #pragma nv_exec_check_disable
 #endif
@@ -466,81 +455,18 @@ class column_view : public detail::column_view_base {
     return device_span<T const>(data<T>(), size());
   }
 
-  // TODO May have to make head virtual eventually to make this override work
-  // everywhere, but for now just copy-pasting in the relevant other functions
-  // (data/begin/end).
+ protected:
+  // TODO: Fix noexcept, see notes in prefetch.hpp
   /**
-   * @brief Returns pointer to the base device memory allocation casted to
-   * the specified type.
+   * @brief Returns pointer to the base device memory allocation.
    *
-   * This function will only participate in overload resolution if `is_rep_layout_compatible<T>()`
-   * or `std::is_same_v<T,void>` are true.
+   * The primary purpose of this function is to allow derived classes to
+   * override the fundamental properties of memory accesses without needing to
+   * change all of the different accessors for the underlying pointer.
    *
-   * @note If `offset() == 0`, then `head<T>() == data<T>()`
-   *
-   * @note It should be rare to need to access the `head<T>()` allocation of a
-   * column, and instead, accessing the elements should be done via `data<T>()`.
-   *
-   * @tparam The type to cast to
    * @return Typed pointer to underlying data
    */
-  template <typename T = void,
-            CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
-  T const* head() const noexcept
-  {
-    detail::prefetch_column_view(*this, _data);
-    return static_cast<T const*>(_data);
-  }
-
-  /**
-   * @brief Returns the underlying data casted to the specified type, plus the
-   * offset.
-   *
-   * @note If `offset() == 0`, then `head<T>() == data<T>()`
-   *
-   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
-   * false.
-   *
-   * @tparam T The type to cast to
-   * @return Typed pointer to underlying data, including the offset
-   */
-  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  T const* data() const noexcept
-  {
-    return head<T>() + _offset;
-  }
-
-  /**
-   * @brief Return first element (accounting for offset) after underlying data
-   * is casted to the specified type.
-   *
-   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
-   * false.
-   *
-   * @tparam T The desired type
-   * @return Pointer to the first element after casting
-   */
-  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  T const* begin() const noexcept
-  {
-    return data<T>();
-  }
-
-  /**
-   * @brief Return one past the last element after underlying data is casted to
-   * the specified type.
-   *
-   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
-   * false.
-   *
-   * @tparam T The desired type
-   * @return Pointer to one past the last element after casting
-   */
-  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  T const* end() const noexcept
-  {
-    return begin<T>() + size();
-  }
+  void const* get_data() const noexcept override;
 
  private:
   friend column_view bit_cast(column_view const& input, data_type type);
@@ -573,7 +499,7 @@ class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
 
-  ~mutable_column_view(){
+  ~mutable_column_view() override{
     // Needed so that the first instance of the implicit destructor for any TU isn't 'constructed'
     // from a host+device function marking the implicit version also as host+device
   };
@@ -645,23 +571,17 @@ class mutable_column_view : public detail::column_view_base {
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   T* head() const noexcept
   {
-    detail::prefetch_column_view(*this, _data);
-    // Reusing the parent head method is preferred and should be reverted to
-    // once we standardize on a prefetching strategy. For now the two are
-    // separated to avoid multiple prefetches when this method is called and to
-    // allow independent control over prefetching.
-    // return const_cast<T*>(detail::column_view_base::head<T>());
-    return const_cast<T*>(static_cast<T const*>(_data));
+    return const_cast<T*>(detail::column_view_base::head<T>());
   }
 
   /**
    * @brief Returns the underlying data casted to the specified type, plus the
    * offset.
    *
-   * @note If `offset() == 0`, then `head<T>() == data<T>()`
-   *
    * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
    * false.
+   *
+   * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
    * @tparam T The type to cast to
    * @return Typed pointer to underlying data, including the offset
@@ -669,12 +589,12 @@ class mutable_column_view : public detail::column_view_base {
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* data() const noexcept
   {
-    return head<T>() + _offset;
+    return const_cast<T*>(detail::column_view_base::data<T>());
   }
 
   /**
-   * @brief Return first element (accounting for offset) after underlying data
-   * is casted to the specified type.
+   * @brief Return first element (accounting for offset) after underlying data is
+   * casted to the specified type.
    *
    * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
    * false.
@@ -685,7 +605,7 @@ class mutable_column_view : public detail::column_view_base {
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* begin() const noexcept
   {
-    return data<T>();
+    return const_cast<T*>(detail::column_view_base::begin<T>());
   }
 
   /**
@@ -701,7 +621,7 @@ class mutable_column_view : public detail::column_view_base {
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* end() const noexcept
   {
-    return begin<T>() + size();
+    return const_cast<T*>(detail::column_view_base::end<T>());
   }
 
   /**
@@ -765,6 +685,19 @@ class mutable_column_view : public detail::column_view_base {
    * @return An immutable view of the mutable view's elements
    */
   operator column_view() const;
+
+ protected:
+  // TODO: Fix noexcept, see info in prefetch.hpp
+  /**
+   * @brief Returns pointer to the base device memory allocation.
+   *
+   * The primary purpose of this function is to allow derived classes to
+   * override the fundamental properties of memory accesses without needing to
+   * change all of the different accessors for the underlying pointer.
+   *
+   * @return Typed pointer to underlying data
+   */
+  void const* get_data() const noexcept override;
 
  private:
   friend mutable_column_view bit_cast(mutable_column_view const& input, data_type type);

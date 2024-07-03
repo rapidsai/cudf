@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <exception>
 #include <numeric>
+#include <string>
 #include <vector>
 
 namespace cudf {
@@ -129,44 +130,6 @@ bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs)
   return shallow_equivalent_impl(lhs, rhs);
 }
 
-void prefetch_column_view(column_view const& col, void const* data_ptr)
-{
-  std::string key{"column_view::head"};
-  if (cudf::experimental::prefetch::detail::PrefetchConfig::instance().get(key)) {
-    if (cudf::is_fixed_width(col.type())) {
-      cudf::experimental::prefetch::detail::prefetch(
-        key, data_ptr, col.size() * size_of(col.type()));
-    } else if (col.type().id() == type_id::STRING) {
-      strings_column_view scv{col};
-
-      cudf::experimental::prefetch::detail::prefetch(
-        key, data_ptr, scv.chars_size(cudf::get_default_stream()) * sizeof(char));
-    } else {
-      std::cout << "prefetch_column_view: Unsupported type: "
-                << static_cast<int32_t>(col.type().id()) << std::endl;
-    }
-  }
-}
-
-void prefetch_column_view(mutable_column_view const& col, void* data_ptr)
-{
-  std::string key{"mutable_column_view::head"};
-  if (cudf::experimental::prefetch::detail::PrefetchConfig::instance().get(key)) {
-    if (cudf::is_fixed_width(col.type())) {
-      cudf::experimental::prefetch::detail::prefetch(
-        key, data_ptr, col.size() * size_of(col.type()));
-    } else if (col.type().id() == type_id::STRING) {
-      strings_column_view scv{col};
-
-      cudf::experimental::prefetch::detail::prefetch(
-        key, data_ptr, scv.chars_size(cudf::get_default_stream()) * sizeof(char));
-    } else {
-      std::cout << "prefetch_column_view (mutable): Unsupported type: "
-                << static_cast<int32_t>(col.type().id()) << std::endl;
-    }
-  }
-}
-
 }  // namespace detail
 
 // Immutable view constructor
@@ -214,6 +177,44 @@ mutable_column_view::operator column_view() const
   std::vector<column_view> child_views(num_children());
   std::copy(std::cbegin(mutable_children), std::cend(mutable_children), std::begin(child_views));
   return column_view{_type, _size, _data, _null_mask, _null_count, _offset, std::move(child_views)};
+}
+
+void const* column_view::get_data() const noexcept
+{
+  std::string key{"column_view::get_data"};
+  if (cudf::experimental::prefetch::detail::PrefetchConfig::instance().get(key)) {
+    if (cudf::is_fixed_width(type())) {
+      cudf::experimental::prefetch::detail::prefetch(key, _data, size() * size_of(type()));
+    } else if (type().id() == type_id::STRING) {
+      strings_column_view scv{*this};
+
+      cudf::experimental::prefetch::detail::prefetch(
+        key, _data, scv.chars_size(cudf::get_default_stream()) * sizeof(char));
+    } else {
+      std::cout << "column_view::get_data: Unsupported type: " << static_cast<int32_t>(type().id())
+                << std::endl;
+    }
+  }
+  return _data;
+}
+
+void const* mutable_column_view::get_data() const noexcept
+{
+  std::string key{"mutable_column_view::get_data"};
+  if (cudf::experimental::prefetch::detail::PrefetchConfig::instance().get(key)) {
+    if (cudf::is_fixed_width(type())) {
+      cudf::experimental::prefetch::detail::prefetch(key, _data, size() * size_of(type()));
+    } else if (type().id() == type_id::STRING) {
+      strings_column_view scv{*this};
+
+      cudf::experimental::prefetch::detail::prefetch(
+        key, _data, scv.chars_size(cudf::get_default_stream()) * sizeof(char));
+    } else {
+      std::cout << "mutable_column_view::get_data: Unsupported type: "
+                << static_cast<int32_t>(type().id()) << std::endl;
+    }
+  }
+  return _data;
 }
 
 size_type count_descendants(column_view parent)

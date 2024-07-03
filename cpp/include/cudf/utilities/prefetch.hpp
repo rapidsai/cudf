@@ -65,6 +65,11 @@ class PrefetchConfig {
   std::map<std::string, bool> config_values;  //< Map of configuration keys to values
 };
 
+// TODO: This function is currently called in noexcept contexts, so it should
+// not throw exceptions, but currently it can. We need to decide what the
+// appropriate behavior is: either we make those contexts (e.g. the data
+// accessors in column_view) not noexcept, or we make this function noexcept
+// and have it silently allow failures to prefetch.
 /**
  * @brief Enable prefetching for a particular structure or algorithm.
  *
