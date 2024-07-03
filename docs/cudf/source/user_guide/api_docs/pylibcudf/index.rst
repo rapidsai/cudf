@@ -20,6 +20,7 @@ This page provides API documentation for pylibcudf.
     groupby
     hashing
     io/index.rst
+    interop
     join
     lists
     merge
