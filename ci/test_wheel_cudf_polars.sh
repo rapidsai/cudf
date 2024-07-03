@@ -25,7 +25,7 @@ RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from
 python -m pip install --no-deps ./local-cudf-dep/cudf*.whl
 
 rapids-logger "Install cudf_polars"
-python -m pip install $(echo ./dist/cudf_polars*.whl)
+python -m pip install $(echo ./dist/cudf_polars*.whl)[test]
 
 rapids-logger "Run cudf_polars tests"
 
@@ -42,7 +42,7 @@ python -m pytest \
        --cov cudf_polars \
        --cov-fail-under=100 \
        --cov-config=python/cudf_polars/pyproject.toml \
-       --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf_polars.xml" \
+       --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
        python/cudf_polars/tests
 
 trap ERR
