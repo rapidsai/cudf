@@ -28,7 +28,7 @@ select
 from
     lineitem
 where
-        l_shipdate >= date '1994-01-01'
+    l_shipdate >= date '1994-01-01'
     and l_shipdate < date '1995-01-01'
     and l_discount >= 0.05 
     and l_discount <= 0.07
