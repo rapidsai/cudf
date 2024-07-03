@@ -24,6 +24,8 @@
 
 #include <iostream>
 
+namespace cudf::test {
+
 /**
  * @brief Resource that verifies that the default stream is not used in any allocation.
  */
@@ -165,3 +167,5 @@ inline stream_checking_resource_adaptor make_stream_checking_resource_adaptor(
 {
   return stream_checking_resource_adaptor{upstream, error_on_invalid_stream, check_default_stream};
 }
+
+}  // namespace cudf::test
