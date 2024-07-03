@@ -771,7 +771,7 @@ class StringFunction(Expr):
                 # No length indicates a scan to the end
                 # The libcudf equivalent is a null stop
                 stop = start + length if length else None
-                if length and start < 0 and length > -start:
+                if length and start < 0 and length >= -start:
                     stop = None
             return Column(
                 plc.strings.slice.slice_strings(
