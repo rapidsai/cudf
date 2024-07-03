@@ -9,6 +9,7 @@ from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.lists cimport (
     contains as cpp_contains,
     explode as cpp_explode,
+    filling as cpp_filling,
 )
 from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_list_elements as cpp_concatenate_list_elements,
@@ -205,4 +206,43 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
             ),
             find_option,
         ))
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column sequences(Column starts, Column sizes, Column steps = None):
+    """Create a lists column in which each row contains a sequence of
+    values specified by a tuple of (start, step, size) parameters.
+
+
+    For details, see :cpp:func:`sequences`.
+
+    Parameters
+    ----------
+    starts : Column
+        First values in the result sequences.
+    steps : Optional[Column]
+        Increment values for the result sequences.
+    sizes : Column
+        Numbers of values in the result sequences.
+
+    Returns
+    -------
+    Column
+        The result column containing generated sequences.
+    """
+    cdef unique_ptr[column] c_result
+
+    if (steps):
+        with nogil:
+            c_result = move(cpp_filling.sequences(
+                starts.view(),
+                steps.view(),
+                sizes.view(),
+            ))
+    else:
+        with nogil:
+            c_result = move(cpp_filling.sequences(
+                starts.view(),
+                sizes.view(),
+            ))
     return Column.from_libcudf(move(c_result))
