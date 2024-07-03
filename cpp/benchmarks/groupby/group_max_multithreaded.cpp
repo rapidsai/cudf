@@ -115,9 +115,3 @@ NVBENCH_BENCH_TYPES(bench_groupby_max_multithreaded,
   .add_int64_power_of_two_axis("num_rows", {12, 18})
   .add_float64_axis("null_probability", {0, 0.1, 0.9})
   .add_int64_axis("num_threads", {1, 2, 4, 8});
-
-NVBENCH_BENCH_TYPES(bench_groupby_max_multithreaded_cardinality,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<int32_t>))
-  .set_name("groupby_max_multithreaded_cardinality")
-  .add_int64_axis("cardinality", {1'000, 10'000, 100'000})
-  .add_int64_axis("num_threads", {1, 2, 4, 8});
