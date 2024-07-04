@@ -38,7 +38,6 @@ from .types cimport DataType, type_id
 __all__ = [
     "Column",
     "DataType",
-    "MaskState",
     "Scalar",
     "Table",
     "aggregation",
