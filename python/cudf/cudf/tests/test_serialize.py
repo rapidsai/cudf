@@ -299,6 +299,7 @@ def test_serialize_string():
     assert_eq(recreated, df)
 
 
+# todo
 @pytest.mark.parametrize(
     "frames",
     [
@@ -401,6 +402,7 @@ def test_serialize_sliced_string():
     assert_eq(recreated.to_pandas(nullable=True), pd_series)
 
 
+# todo
 @pytest.mark.parametrize(
     "columns",
     [
