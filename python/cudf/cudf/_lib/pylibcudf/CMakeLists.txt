@@ -38,8 +38,8 @@ set(cython_sources
     stream_compaction.pyx
     sorting.pyx
     table.pyx
-    types.pyx
     traits.pyx
+    types.pyx
     unary.pyx
     utils.pyx
 )

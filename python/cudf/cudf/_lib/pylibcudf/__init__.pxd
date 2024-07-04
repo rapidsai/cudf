@@ -63,7 +63,7 @@ __all__ = [
     "stream_compaction",
     "strings",
     "sorting",
-    "types",
     "traits",
+    "types",
     "unary",
 ]
