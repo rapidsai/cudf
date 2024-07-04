@@ -38,14 +38,20 @@ where
 std::unique_ptr<cudf::column> calc_revenue(std::unique_ptr<table_with_cols>& table) {
     auto extendedprice = table->column("l_extendedprice");
     auto discount = table->column("l_discount");
-    auto extendedprice_mul_discount_type = cudf::data_type{cudf::type_id::DECIMAL64, -4};
-    auto extendedprice_mul_discount = cudf::binary_operation(
+    auto revenue_scale = cudf::binary_operation_fixed_point_scale(
+        cudf::binary_operator::MUL,
+        table->column_type("l_extendedprice").scale(),
+        table->column_type("l_discount").scale()
+    );
+    auto revenue_type = cudf::data_type{
+        cudf::type_id::DECIMAL64, revenue_scale};
+    auto revenue = cudf::binary_operation(
         extendedprice,
         discount,
         cudf::binary_operator::MUL,
-        extendedprice_mul_discount_type
+        revenue_type
     );
-    return extendedprice_mul_discount;
+    return revenue;
 }
 
 int main(int argc, char const** argv) {

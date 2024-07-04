@@ -51,7 +51,12 @@ std::unique_ptr<cudf::column> calc_disc_price(std::unique_ptr<table_with_cols>& 
     auto discount = table->column("l_discount");
     auto one_minus_discount = cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type());
     auto extended_price = table->column("l_extendedprice");
-    auto disc_price_type = cudf::data_type{cudf::type_id::DECIMAL64, -4};
+    auto disc_price_scale = cudf::binary_operation_fixed_point_scale(
+        cudf::binary_operator::MUL,
+        table->column_type("l_extendedprice").scale(),
+        one_minus_discount->type().scale()
+    );
+    auto disc_price_type = cudf::data_type{cudf::type_id::DECIMAL64, disc_price_scale};
     auto disc_price = cudf::binary_operation(extended_price, one_minus_discount->view(), cudf::binary_operator::MUL, disc_price_type);
     return disc_price;
 }
@@ -60,7 +65,12 @@ std::unique_ptr<cudf::column> calc_charge(std::unique_ptr<table_with_cols>& tabl
     auto one = cudf::fixed_point_scalar<numeric::decimal64>(1);
     auto tax = table->column("l_tax");
     auto one_plus_tax = cudf::binary_operation(one, tax, cudf::binary_operator::ADD, tax.type());
-    auto charge_type = cudf::data_type{cudf::type_id::DECIMAL64, -6};
+    auto charge_scale = cudf::binary_operation_fixed_point_scale(
+        cudf::binary_operator::MUL,
+        disc_price->type().scale(),
+        one_plus_tax->type().scale()
+    );
+    auto charge_type = cudf::data_type{cudf::type_id::DECIMAL64, charge_scale};
     auto charge = cudf::binary_operation(disc_price->view(), one_plus_tax->view(), cudf::binary_operator::MUL, charge_type);
     return charge;
 }

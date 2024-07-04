@@ -89,6 +89,14 @@ class table_with_cols {
             return tbl->view().column(col_id(col_name));
         }
         /**
+         * @brief Return the data type of a column
+         * 
+         * @param col_name The name of the column
+         */
+        cudf::data_type column_type(std::string col_name) {
+            return tbl->view().column(col_id(col_name)).type();
+        }
+        /**
          * @param Return the column names of the table
          */
         std::vector<std::string> columns() {

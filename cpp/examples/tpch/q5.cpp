@@ -59,8 +59,12 @@ std::unique_ptr<cudf::column> calc_revenue(std::unique_ptr<table_with_cols>& tab
     auto disc = table->column("l_discount");
     auto one_minus_disc = cudf::binary_operation(one, disc, cudf::binary_operator::SUB, disc.type());
     auto extended_price = table->column("l_extendedprice");
-
-    auto disc_price_type = cudf::data_type{cudf::type_id::DECIMAL64, -4};
+    auto disc_price_scale = cudf::binary_operation_fixed_point_scale(
+        cudf::binary_operator::MUL,
+        table->column_type("l_extendedprice").scale(),
+        one_minus_disc->type().scale()
+    );
+    auto disc_price_type = cudf::data_type{cudf::type_id::DECIMAL64, disc_price_scale};
     auto disc_price = cudf::binary_operation(extended_price, one_minus_disc->view(), cudf::binary_operator::MUL, disc_price_type);
     return disc_price;
 }
