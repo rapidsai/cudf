@@ -28,10 +28,8 @@ rapids-logger "Install cudf wheel"
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install $(echo ./dist/cudf*.whl)[test]
 
-rapids-logger "Install polars (allow pre-release versions)"
-python -m pip install 'polars>=1.0.0a0'
-
 rapids-logger "Install cudf_polars"
+python -m pip install 'polars>=1.0'
 python -m pip install --no-deps python/cudf_polars
 
 rapids-logger "Run cudf_polars tests"
@@ -44,13 +42,11 @@ EXITCODE=0
 trap set_exitcode ERR
 set +e
 
-python -m pytest \
-       --cache-clear \
+./ci/run_cudf_polars_pytests.sh \
        --cov cudf_polars \
        --cov-fail-under=100 \
        --cov-config=python/cudf_polars/pyproject.toml \
-       --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf_polars.xml" \
-       python/cudf_polars/tests
+       --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf_polars.xml"
 
 trap ERR
 set -e
