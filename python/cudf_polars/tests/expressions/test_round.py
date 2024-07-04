@@ -16,11 +16,6 @@ def dtype(request):
     return request.param
 
 
-@pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"])
-def with_nulls(request):
-    return request.param
-
-
 @pytest.fixture
 def df(dtype, with_nulls):
     a = [-math.e, 10, 22.5, 1.5, 2.5, -1.5, math.pi, 8]
