@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,22 +33,55 @@ std::unique_ptr<column> group_min_by(column_view const& structs_column,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
 {
-  auto structs_view = cudf::structs_column_view{structs_column};
-  auto const orders = structs_view.get_sliced_child(1);
+  auto const values = structs_column.child(0);
+  auto const orders = structs_column.child(1);
 
-  auto indices = type_dispatcher(orders.type(),
+  // Nulls in orders column should be excluded, so we need to create a new bitmask
+  // that is the combination of the nulls in both values and orders columns.
+  auto const new_mask_buffer_cnt = bitmask_and(table_view{{values, orders}});
+
+  std::vector<column_view> struct_children(values.num_children());
+  for (size_type i = 0; i < values.num_children(); i++) {
+    struct_children[i] = values.child(i);
+  }
+  
+  column_view const values_null_excluded(
+      values.type(),
+      values.size(),
+      values.head(),
+      static_cast<bitmask_type const*>(new_mask_buffer_cnt.first.data()),
+      new_mask_buffer_cnt.second,
+      values.offset(),
+      struct_children);
+
+  column_view const structs_column_null_excluded(
+      structs_column.type(),
+      structs_column.size(),
+      structs_column.head(),
+      nullptr,
+      0,
+      structs_column.offset(),
+      {values_null_excluded, orders});
+
+  auto const indices = type_dispatcher(orders.type(),
                                  group_reduction_dispatcher<aggregation::ARGMIN>{},
                                  orders,
                                  num_groups,
                                  group_labels,
                                  stream,
                                  mr);
+  
+  column_view const null_removed_map(
+      data_type(type_to_id<size_type>()),
+      indices->size(),
+      static_cast<void const*>(indices->view().template data<size_type>()),
+      nullptr,
+      0);
 
-  auto indices_view = indices->mutable_view();
-
-  auto res = cudf::detail::gather(table_view{{structs_column}},
-                                  indices_view,
-                                  out_of_bounds_policy::NULLIFY,
+  auto res = cudf::detail::gather(table_view{{structs_column_null_excluded}},
+                                  null_removed_map,
+                                  indices->nullable() ? cudf::out_of_bounds_policy::NULLIFY
+                                                  : cudf::out_of_bounds_policy::DONT_CHECK,
                                   cudf::detail::negative_index_policy::NOT_ALLOWED,
                                   stream,
                                   mr);
