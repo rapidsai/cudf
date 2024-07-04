@@ -173,7 +173,7 @@ class table_with_cols {
 };
 
 template <typename T>
-std::vector<T> concat(const std::vector<T>& lhs, const std::vector<T>& rhs) {
+std::vector<T> concat(std::vector<T> const& lhs, std::vector<T> const& rhs) {
     std::vector<T> result;
     result.reserve(lhs.size() + rhs.size());
     std::copy(lhs.begin(), lhs.end(), std::back_inserter(result));
