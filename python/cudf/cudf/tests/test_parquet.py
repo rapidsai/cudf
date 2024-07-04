@@ -1617,12 +1617,10 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
     assert_eq(pdf, gdf)
 
     # Write out the gdf using the GPU accelerated writer with INT96 timestamps
-    # TODO: store_schema must be false when working with INT96 timestamps
     gdf.to_parquet(
         gdf_fname.strpath,
         index=None,
         int96_timestamps=True,
-        store_schema=False,
     )
 
     assert os.path.exists(gdf_fname)
@@ -3625,6 +3623,24 @@ def test_parquet_writer_roundtrip_with_arrow_schema(index):
     assert_eq(expected, got)
     assert_eq(expected, got2)
     assert_eq(expected, got3)
+
+
+def test_parquet_writer_int96_timestamps_and_arrow_schema(index):
+    df = cudf.DataFrame(
+        {
+            "timestamp": cudf.Series(
+                [1234, 123, 4123], dtype="datetime64[ms]"
+            ),
+        }
+    )
+
+    # Output buffer
+    buffer = BytesIO()
+
+    # Writing out parquet with both INT96 timestamps and arrow_schema
+    # enabled should throw an exception.
+    with pytest.raises(RuntimeError):
+        df.to_parquet(buffer, int96_timestamps=True, store_schema=True)
 
 
 @pytest.mark.parametrize(
