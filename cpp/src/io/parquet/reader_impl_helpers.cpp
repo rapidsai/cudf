@@ -952,7 +952,7 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   return names;
 }
 
-std::tuple<int64_t, size_type, std::vector<row_group_info>>
+std::tuple<int64_t, size_type, std::vector<row_group_info>, std::vector<size_t>>
 aggregate_reader_metadata::select_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
@@ -983,6 +983,9 @@ aggregate_reader_metadata::select_row_groups(
                      static_cast<size_type>(from_opts.second)};
   }();
 
+  // Get number of rows in each data source
+  std::vector<size_t> num_rows_per_source(per_file_metadata.size(), 0);
+
   if (!row_group_indices.empty()) {
     CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
                  "Must specify row groups for each source");
@@ -996,28 +999,40 @@ aggregate_reader_metadata::select_row_groups(
         selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
         // if page-level indexes are present, then collect extra chunk and page info.
         column_info_for_row_group(selection.back(), 0);
-        rows_to_read += get_row_group(rowgroup_idx, src_idx).num_rows;
+        auto const rows_this_rg = get_row_group(rowgroup_idx, src_idx).num_rows;
+        rows_to_read += rows_this_rg;
+        num_rows_per_source[src_idx] += rows_this_rg;
       }
     }
   } else {
     size_type count = 0;
     for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
       auto const& fmd = per_file_metadata[src_idx];
-      for (size_t rg_idx = 0; rg_idx < fmd.row_groups.size(); ++rg_idx) {
+      for (size_t rg_idx = 0;
+           rg_idx < fmd.row_groups.size() and count < rows_to_skip + rows_to_read;
+           ++rg_idx) {
         auto const& rg             = fmd.row_groups[rg_idx];
         auto const chunk_start_row = count;
         count += rg.num_rows;
         if (count > rows_to_skip || count == 0) {
+          num_rows_per_source[src_idx] += count;
+          num_rows_per_source[src_idx] -= (chunk_start_row < rows_to_skip and count > rows_to_skip)
+                                            ? rows_to_skip
+                                            : chunk_start_row;
+
           selection.emplace_back(rg_idx, chunk_start_row, src_idx);
           // if page-level indexes are present, then collect extra chunk and page info.
           column_info_for_row_group(selection.back(), chunk_start_row);
         }
-        if (count >= rows_to_skip + rows_to_read) { break; }
+        // Adjust the number of rows for the last source file.
+        if (count >= rows_to_skip + rows_to_read) {
+          num_rows_per_source[src_idx] -= count - rows_to_skip - rows_to_read;
+        }
       }
     }
   }
 
-  return {rows_to_skip, rows_to_read, std::move(selection)};
+  return {rows_to_skip, rows_to_read, std::move(selection), std::move(num_rows_per_source)};
 }
 
 std::tuple<std::vector<input_column_info>,

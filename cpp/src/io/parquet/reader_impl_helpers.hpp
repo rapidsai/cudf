@@ -279,17 +279,17 @@ class aggregate_reader_metadata {
    * @param output_column_schemas schema indices of output columns
    * @param filter Optional AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return A tuple of corrected row_start, row_count and list of row group indexes and its
-   *         starting row
+   * @return A tuple of corrected row_start, row_count, list of row group indexes and its
+   *         starting row, and list of number of rows per source.
    */
-  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>> select_row_groups(
-    host_span<std::vector<size_type> const> row_group_indices,
-    int64_t row_start,
-    std::optional<size_type> const& row_count,
-    host_span<data_type const> output_dtypes,
-    host_span<int const> output_column_schemas,
-    std::optional<std::reference_wrapper<ast::expression const>> filter,
-    rmm::cuda_stream_view stream) const;
+  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>, std::vector<size_t>>
+  select_row_groups(host_span<std::vector<size_type> const> row_group_indices,
+                    int64_t row_start,
+                    std::optional<size_type> const& row_count,
+                    host_span<data_type const> output_dtypes,
+                    host_span<int const> output_column_schemas,
+                    std::optional<std::reference_wrapper<ast::expression const>> filter,
+                    rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Filters and reduces down to a selection of columns
