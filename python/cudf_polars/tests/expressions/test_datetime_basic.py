@@ -55,6 +55,8 @@ def test_datetime_extract(field):
 
     with pytest.raises(AssertionError):
         # polars produces int32, libcudf produces int16 for the year extraction
+        # libcudf can lose data here.
+        # https://github.com/rapidsai/cudf/issues/16196
         assert_gpu_result_equal(q)
 
     assert_gpu_result_equal(q, check_dtypes=False)
