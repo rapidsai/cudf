@@ -23,6 +23,7 @@ from . cimport (
     sorting,
     stream_compaction,
     strings,
+    traits,
     types,
     unary,
 )
@@ -37,6 +38,7 @@ from .types cimport DataType, type_id
 __all__ = [
     "Column",
     "DataType",
+    "MaskState",
     "Scalar",
     "Table",
     "aggregation",
@@ -54,6 +56,7 @@ __all__ = [
     "quantiles",
     "reduce",
     "replace",
+    "reshape",
     "rolling",
     "round",
     "search",
@@ -61,5 +64,6 @@ __all__ = [
     "strings",
     "sorting",
     "types",
+    "traits",
     "unary",
 ]

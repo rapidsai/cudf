@@ -23,6 +23,7 @@ from . import (
     sorting,
     stream_compaction,
     strings,
+    traits,
     types,
     unary,
 )
@@ -35,6 +36,7 @@ from .types import DataType, MaskState, TypeId
 __all__ = [
     "Column",
     "DataType",
+    "MaskState",
     "Scalar",
     "Table",
     "TypeId",
@@ -53,6 +55,7 @@ __all__ = [
     "merge",
     "quantiles",
     "reduce",
+    "reshape",
     "replace",
     "rolling",
     "round",
@@ -60,6 +63,7 @@ __all__ = [
     "stream_compaction",
     "strings",
     "sorting",
+    "traits",
     "types",
     "unary",
 ]

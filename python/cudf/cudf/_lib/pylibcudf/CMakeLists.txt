@@ -39,6 +39,7 @@ set(cython_sources
     sorting.pyx
     table.pyx
     types.pyx
+    traits.pyx
     unary.pyx
     utils.pyx
 )
