@@ -9,26 +9,52 @@ import dask
 from dask.utils import parse_bytes
 
 import cudf
+from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.ioutils import _is_local_filesystem
 
 from dask_cudf.backends import _default_backend
 
 
-def _read_json_partition(paths, fs=None, **kwargs):
-    if fs is None:
-        # Pass list of paths directly to cudf
-        return cudf.read_json(paths, **kwargs)
-    else:
-        # Use fs to copy the bytes into host memory.
-        # It only makes sense to do this for remote data.
-        return cudf.read_json(
-            fs.cat_ranges(
-                paths,
-                [0] * len(paths),
-                fs.sizes(paths),
-            ),
-            **kwargs,
+def _read_json_partition(
+    paths,
+    fs=None,
+    include_path_column=None,
+    path_converter=None,
+    **kwargs,
+):
+    # Transfer all data up front for remote storage
+    sources = (
+        paths
+        if fs is None
+        else fs.cat_ranges(
+            paths,
+            [0] * len(paths),
+            fs.sizes(paths),
         )
+    )
+
+    if include_path_column:
+        # Add "path" column.
+        # Must iterate over sources sequentially
+        converted_paths = [
+            path_converter(path) if path_converter else path for path in paths
+        ]
+        dfs = []
+        for i, source in enumerate(sources):
+            df = cudf.read_json(source, **kwargs)
+            codes = as_column(i, length=len(df))
+            df["path"] = build_categorical_column(
+                categories=converted_paths,
+                codes=codes,
+                size=codes.size,
+                offset=codes.offset,
+                ordered=False,
+            )
+            dfs.append(df)
+        return cudf.concat(dfs)
+    else:
+        # Pass sources directly to cudf
+        return cudf.read_json(sources, **kwargs)
 
 
 def read_json(
@@ -144,13 +170,6 @@ def read_json(
         # Inputs were successfully populated.
         # Use custom _read_json_partition function
         # to generate each partition.
-
-        if kwargs.get("include_path_column"):
-            # TODO: Support include_path_column
-            raise NotImplementedError(
-                "aggregate_files is not currently supported with "
-                "include_path_column. Please specify"
-            )
 
         compression = get_compression(
             url_path[0] if isinstance(url_path, list) else url_path,

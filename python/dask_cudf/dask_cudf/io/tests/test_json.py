@@ -115,3 +115,12 @@ def test_read_json_aggregate_files(tmp_path):
     )
     assert df2.npartitions == 1
     dd.assert_eq(df1, df2, check_index=False)
+
+    df2 = dask_cudf.read_json(
+        json_path,
+        aggregate_files=True,
+        blocksize="1GiB",
+        include_path_column=True,
+    )
+    assert "path" in df2.columns
+    dd.assert_eq(df1, df2.drop(columns=["path"]), check_index=False)
