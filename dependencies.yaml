@@ -603,7 +603,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=0.20.30
+          - polars>=1.0
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -755,7 +755,7 @@ dependencies:
           - {matrix: null, packages: *cupy_packages_cu11}
   test_python_pandas_cudf:
     common:
-      - output_types: pyproject
+      - output_types: [requirements, pyproject]
         packages:
           # dependencies to run pandas tests
           # https://github.com/pandas-dev/pandas/blob/main/environment.yml
@@ -766,7 +766,7 @@ dependencies:
           - pytest-reportlog
   test_python_cudf_pandas:
     common:
-      - output_types: pyproject
+      - output_types: [requirements, pyproject]
         packages:
           - ipython
           - openpyxl
