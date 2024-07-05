@@ -150,47 +150,8 @@ def cudf_raises(expected_exception: BaseException, *args, **kwargs):
     return pytest.raises(expected_exception, *args, **kwargs)
 
 
-# TODO: Consider moving these type utilities into pylibcudf.types itself.
-def is_signed_integer(plc_dtype: plc.DataType):
-    return (
-        plc.TypeId.INT8.value <= plc_dtype.id().value <= plc.TypeId.INT64.value
-    )
-
-
-def is_integer(plc_dtype: plc.DataType):
-    return plc_dtype.id() in (
-        plc.TypeId.INT8,
-        plc.TypeId.INT16,
-        plc.TypeId.INT32,
-        plc.TypeId.INT64,
-        plc.TypeId.UINT8,
-        plc.TypeId.UINT16,
-        plc.TypeId.UINT32,
-        plc.TypeId.UINT64,
-    )
-
-
-def is_floating(plc_dtype: plc.DataType):
-    return plc_dtype.id() in (
-        plc.TypeId.FLOAT32,
-        plc.TypeId.FLOAT64,
-    )
-
-
-def is_boolean(plc_dtype: plc.DataType):
-    return plc_dtype.id() == plc.TypeId.BOOL8
-
-
 def is_string(plc_dtype: plc.DataType):
     return plc_dtype.id() == plc.TypeId.STRING
-
-
-def is_fixed_width(plc_dtype: plc.DataType):
-    return (
-        is_integer(plc_dtype)
-        or is_floating(plc_dtype)
-        or is_boolean(plc_dtype)
-    )
 
 
 def nesting_level(typ) -> tuple[int, int]:
