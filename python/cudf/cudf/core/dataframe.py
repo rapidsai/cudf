@@ -462,7 +462,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                             self._frame[col].loc[key[0]] = value[i]
 
 
-_DataFrameAtIndexer = _DataFrameLocIndexer
+class _DataFrameAtIndexer(_DataFrameLocIndexer):
+    pass
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
@@ -587,7 +588,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                         self._frame[col].iloc[key[0]] = value[i]
 
 
-_DataFrameiAtIndexer = _DataFrameIlocIndexer
+class _DataFrameiAtIndexer(_DataFrameIlocIndexer):
+    pass
 
 
 class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):

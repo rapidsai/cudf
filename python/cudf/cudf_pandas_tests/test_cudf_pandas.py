@@ -1580,7 +1580,7 @@ def test_at_iat(indexer):
 
 
 def test_at_setitem_empty():
-    df = xpd.DataFrame({"name": []})
+    df = xpd.DataFrame({"name": []}, dtype="float64")
     df.at[0, "name"] = 1.0
     df.at[0, "new"] = 2.0
     expected = pd.DataFrame({"name": [1.0], "new": [2.0]})
