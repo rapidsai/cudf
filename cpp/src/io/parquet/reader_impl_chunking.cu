@@ -810,10 +810,10 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
 
   // vectors to save v2 def and rep level data, if any
-  std::vector<device_span<uint8_t const>> copy_in;
-  copy_in.reserve(num_comp_pages);
-  std::vector<device_span<uint8_t>> copy_out;
-  copy_out.reserve(num_comp_pages);
+  auto copy_in =
+    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+  auto copy_out =
+    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
 
   rmm::device_uvector<compression_result> comp_res(num_comp_pages, stream);
   thrust::fill(rmm::exec_policy_nosync(stream),
@@ -835,8 +835,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
       // input and output buffers. otherwise we'd have to keep both the compressed
       // and decompressed data.
       if (offset != 0) {
-        copy_in.emplace_back(page.page_data, offset);
-        copy_out.emplace_back(dst_base, offset);
+        copy_in.push_back({page.page_data, static_cast<size_t>(offset)});
+        copy_out.push_back({dst_base, static_cast<size_t>(offset)});
       }
       comp_in.push_back(
         {page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)});
@@ -1134,9 +1134,8 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
                                 decomp_sum{});
 
   // retrieve to host so we can call nvcomp to get compression scratch sizes
-  std::vector<decompression_info> h_decomp_info =
-    cudf::detail::make_std_vector_sync(decomp_info, stream);
-  std::vector<size_t> temp_cost(pages.size());
+  auto h_decomp_info = cudf::detail::make_host_vector_sync(decomp_info, stream);
+  auto temp_cost     = cudf::detail::make_host_vector<size_t>(pages.size(), stream);
   thrust::transform(thrust::host,
                     h_decomp_info.begin(),
                     h_decomp_info.end(),

@@ -370,7 +370,7 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
                        rmm::cuda_stream_view stream)
 {
   auto const num_pages = pages.size();
-  std::vector<page_index_info> page_indexes(num_pages);
+  auto page_indexes    = cudf::detail::make_host_vector<page_index_info>(num_pages, stream);
 
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     auto const& chunk = chunks[c];
@@ -1031,8 +1031,8 @@ struct get_page_num_rows {
 };
 
 struct input_col_info {
-  int const schema_idx;
-  size_type const nesting_depth;
+  int schema_idx;
+  size_type nesting_depth;
 };
 
 /**
@@ -1512,8 +1512,8 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
 
   // compute output column sizes by examining the pages of the -input- columns
   if (has_lists) {
-    std::vector<input_col_info> h_cols_info;
-    h_cols_info.reserve(_input_columns.size());
+    auto h_cols_info =
+      cudf::detail::make_empty_host_vector<input_col_info>(_input_columns.size(), _stream);
     std::transform(_input_columns.cbegin(),
                    _input_columns.cend(),
                    std::back_inserter(h_cols_info),
