@@ -351,7 +351,7 @@ class NamedExpr:
 class Literal(Expr):
     __slots__ = ("value",)
     _non_child = ("dtype", "value")
-    value: pa.Scalar[Any] | pa.Array[Any]
+    value: pa.Scalar[Any]
     children: tuple[()]
 
     def __init__(self, dtype: plc.DataType, value: pa.Scalar[Any]) -> None:
@@ -368,10 +368,7 @@ class Literal(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         # datatype of pyarrow scalar is correct by construction.
-        plc_val = plc.interop.from_arrow(self.value)
-        if isinstance(plc_val, plc.Scalar):
-            plc_val = plc.Column.from_scalar(plc_val, 1)
-        return Column(plc_val)
+        return Column(plc.Column.from_scalar(plc.interop.from_arrow(self.value), 1))
 
 
 class LiteralColumn(Expr):
