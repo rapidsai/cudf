@@ -10,6 +10,7 @@ import cudf
 from cudf._lib import orc as liborc
 from cudf.api.types import is_list_like
 from cudf.utils import ioutils
+from cudf.utils.utils import filtered_deprecation
 
 
 def _make_empty_df(filepath_or_buffer, columns):
@@ -320,10 +321,10 @@ def read_orc(
             )
 
     filepaths_or_buffers = []
-    saw_nativefile = False
+    have_nativefile = any(
+        isinstance(source, pa.NativeFile) for source in filepath_or_buffer
+    )
     for source in filepath_or_buffer:
-        if isinstance(source, pa.NativeFile):
-            saw_nativefile = True
         if ioutils.is_directory(
             path_or_data=source, storage_options=storage_options
         ):
@@ -363,15 +364,13 @@ def read_orc(
             stripes = selected_stripes
 
     if engine == "cudf":
-        with warnings.catch_warnings():
-            # Don't want to warn if use_python_file_object causes us to get
-            # a NativeFile (there is a separate deprecation warning for that)
-            if not saw_nativefile:
-                warnings.filterwarnings(
-                    action="ignore",
-                    message="Support for reading pyarrow's NativeFile is deprecated",
-                    category=FutureWarning,
-                )
+        # Don't want to warn if use_python_file_object causes us to get
+        # a NativeFile (there is a separate deprecation warning for that)
+        with filtered_deprecation(
+            not have_nativefile,
+            message="Support for reading pyarrow's NativeFile is deprecated",
+            category=FutureWarning,
+        ):
             return DataFrame._from_data(
                 *liborc.read_orc(
                     filepaths_or_buffers,

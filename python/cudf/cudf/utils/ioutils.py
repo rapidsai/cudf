@@ -6,6 +6,7 @@ import urllib
 import warnings
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
+from typing import Callable
 
 import fsspec
 import fsspec.implementations.local
@@ -15,6 +16,7 @@ from fsspec.core import get_fs_token_paths
 from pyarrow import PythonFile as ArrowPythonFile
 from pyarrow.lib import NativeFile
 
+from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
 
@@ -23,7 +25,6 @@ try:
 
 except ImportError:
     fsspec_parquet = None
-
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
 _ROW_GROUP_SIZE_BYTES_DEFAULT = 128 * 1024 * 1024
@@ -86,7 +87,7 @@ Examples
 1       20  rapids
 2       30      ai
 """.format(remote_data_sources=_docstring_remote_sources)
-doc_read_avro = docfmt_partial(docstring=_docstring_read_avro)
+doc_read_avro: Callable = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
 Read a Parquet file's metadata and schema
@@ -174,9 +175,12 @@ use_pandas_metadata : boolean, default True
     columns are also loaded.
 use_python_file_object : boolean, default True
     If True, Arrow-backed PythonFile objects will be used in place of fsspec
-    AbstractBufferedFile objects at IO time. Setting this argument to `False`
-    will require the entire file to be copied to host memory, and is highly
-    discouraged.
+    AbstractBufferedFile objects at IO time.
+
+    .. deprecated:: 24.08
+        `use_python_file_object` is deprecated and will be removed in a future
+        version of cudf, as PyArrow NativeFiles will no longer be accepted as
+        input/output in cudf readers/writers in the future.
 open_file_options : dict, optional
     Dictionary of key-value pairs to pass to the function used to open remote
     files. By default, this will be `fsspec.parquet.open_parquet_file`. To
@@ -462,8 +466,12 @@ use_index : bool, default True
     If True, use row index if available for faster seeking.
 use_python_file_object : boolean, default True
     If True, Arrow-backed PythonFile objects will be used in place of fsspec
-    AbstractBufferedFile objects at IO time. This option is likely to improve
-    performance when making small reads from larger ORC files.
+    AbstractBufferedFile objects at IO time.
+
+    .. deprecated:: 24.08
+        `use_python_file_object` is deprecated and will be removed in a future
+        version of cudf, as PyArrow NativeFiles will no longer be accepted as
+        input/output in cudf readers/writers in the future.
 storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
@@ -928,7 +936,7 @@ See Also
 --------
 cudf.DataFrame.to_hdf : Write a HDF file from a DataFrame.
 """
-doc_read_hdf = docfmt_partial(docstring=_docstring_read_hdf)
+doc_read_hdf: Callable = docfmt_partial(docstring=_docstring_read_hdf)
 
 _docstring_to_hdf = """
 Write the contained data to an HDF5 file using HDFStore.
@@ -1000,7 +1008,7 @@ cudf.read_hdf : Read from HDF file.
 cudf.DataFrame.to_parquet : Write a DataFrame to the binary parquet format.
 cudf.DataFrame.to_feather : Write out feather-format for DataFrames.
 """
-doc_to_hdf = docfmt_partial(docstring=_docstring_to_hdf)
+doc_to_hdf: Callable = docfmt_partial(docstring=_docstring_to_hdf)
 
 _docstring_read_feather = """
 Load an feather object from the file path, returning a DataFrame.
@@ -1182,8 +1190,12 @@ byte_range : list or tuple, default None
     the end of the range.
 use_python_file_object : boolean, default True
     If True, Arrow-backed PythonFile objects will be used in place of fsspec
-    AbstractBufferedFile objects at IO time. This option is likely to improve
-    performance when making small reads from larger CSV files.
+    AbstractBufferedFile objects at IO time.
+
+    .. deprecated:: 24.08
+        `use_python_file_object` is deprecated and will be removed in a future
+        version of cudf, as PyArrow NativeFiles will no longer be accepted as
+        input/output in cudf readers/writers in the future.
 storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
@@ -1403,7 +1415,7 @@ Returns
 result : Series
 
 """
-doc_read_text = docfmt_partial(docstring=_docstring_text_datasource)
+doc_read_text: Callable = docfmt_partial(docstring=_docstring_text_datasource)
 
 
 _docstring_get_reader_filepath_or_buffer = """
@@ -1424,6 +1436,11 @@ iotypes : (), default (BytesIO)
 use_python_file_object : boolean, default False
     If True, Arrow-backed PythonFile objects will be used in place
     of fsspec AbstractBufferedFile objects.
+
+    .. deprecated:: 24.08
+        `use_python_file_object` is deprecated and will be removed in a future
+        version of cudf, as PyArrow NativeFiles will no longer be accepted as
+        input/output in cudf readers/writers.
 open_file_options : dict, optional
     Optional dictionary of keyword arguments to pass to
     `_open_remote_files` (used for remote storage only).
@@ -1702,9 +1719,8 @@ def get_reader_filepath_or_buffer(
     mode="rb",
     fs=None,
     iotypes=(BytesIO, NativeFile),
-    # Use cudf_false to minimize risk of collisions
-    # with user typos
-    use_python_file_object="cudf_false",
+    # no_default aliases to False
+    use_python_file_object=no_default,
     open_file_options=None,
     allow_raw_text_input=False,
     storage_options=None,
@@ -1716,7 +1732,7 @@ def get_reader_filepath_or_buffer(
 
     path_or_data = stringify_pathlike(path_or_data)
 
-    if use_python_file_object == "cudf_false":
+    if use_python_file_object == no_default:
         use_python_file_object = False
     elif use_python_file_object is not None:
         warnings.warn(

@@ -24,6 +24,7 @@ from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
+from cudf.utils.utils import filtered_deprecation
 
 BYTE_SIZES = {
     "kb": 1000,
@@ -609,10 +610,10 @@ def read_parquet(
             row_groups=row_groups,
             fs=fs,
         )
-    saw_nativefile = False
+    have_nativefile = any(
+        isinstance(source, pa.NativeFile) for source in filepath_or_buffer
+    )
     for source in filepath_or_buffer:
-        if isinstance(source, pa.NativeFile):
-            saw_nativefile = True
         tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
             compression=None,
@@ -659,15 +660,14 @@ def read_parquet(
         )
 
     # Convert parquet data to a cudf.DataFrame
-    with warnings.catch_warnings():
-        # Don't want to warn if use_python_file_object causes us to get
-        # a NativeFile (there is a separate deprecation warning for that)
-        if not saw_nativefile:
-            warnings.filterwarnings(
-                action="ignore",
-                message="Support for reading pyarrow's NativeFile is deprecated",
-                category=FutureWarning,
-            )
+
+    # Don't want to warn if use_python_file_object causes us to get
+    # a NativeFile (there is a separate deprecation warning for that)
+    with filtered_deprecation(
+        not have_nativefile,
+        message="Support for reading pyarrow's NativeFile is deprecated",
+        category=FutureWarning,
+    ):
         df = _parquet_to_frame(
             filepaths_or_buffers,
             engine,
