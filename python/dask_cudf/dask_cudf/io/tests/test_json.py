@@ -118,9 +118,9 @@ def test_read_json_aggregate_files(tmp_path):
 
     df2 = dask_cudf.read_json(
         json_path,
-        aggregate_files=True,
-        blocksize="1GiB",
+        aggregate_files=2,
         include_path_column=True,
     )
     assert "path" in df2.columns
+    assert len(df2["path"].compute().unique()) == df1.npartitions
     dd.assert_eq(df1, df2.drop(columns=["path"]), check_index=False)

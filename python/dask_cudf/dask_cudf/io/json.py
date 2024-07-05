@@ -9,7 +9,7 @@ import dask
 from dask.utils import parse_bytes
 
 import cudf
-from cudf.core.column import as_column, build_categorical_column
+from cudf.core.column import as_column
 from cudf.utils.ioutils import _is_local_filesystem
 
 from dask_cudf.backends import _default_backend
@@ -36,20 +36,15 @@ def _read_json_partition(
     if include_path_column:
         # Add "path" column.
         # Must iterate over sources sequentially
-        converted_paths = [
-            path_converter(path) if path_converter else path for path in paths
-        ]
+        converted_paths = (
+            paths
+            if path_converter is None
+            else [path_converter(path) for path in paths]
+        )
         dfs = []
         for i, source in enumerate(sources):
             df = cudf.read_json(source, **kwargs)
-            codes = as_column(i, length=len(df))
-            df["path"] = build_categorical_column(
-                categories=converted_paths,
-                codes=codes,
-                size=codes.size,
-                offset=codes.offset,
-                ordered=False,
-            )
+            df["path"] = as_column(converted_paths[i], length=len(df))
             dfs.append(df)
         return cudf.concat(dfs)
     else:
@@ -179,6 +174,8 @@ def read_json(
             orient=orient,
             lines=lines,
             compression=compression,
+            include_path_column=kwargs.get("include_path_column"),
+            path_converter=kwargs.get("path_converter"),
         )
         if not _is_local_filesystem(fs):
             _kwargs["fs"] = fs
