@@ -80,8 +80,10 @@ int main(int argc, char const** argv) {
 
     // Read out the tables from parquet files
     // while pushing down column projections and filter predicates
-    auto o_orderdate_ref = cudf::ast::column_reference(2);
-    
+    std::vector<std::string> orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
+    auto o_orderdate_ref = cudf::ast::column_reference(
+        std::distance(orders_cols.begin(), std::find(orders_cols.begin(), orders_cols.end(), "o_orderdate"))
+    );
     auto o_orderdate_lower = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
     auto o_orderdate_lower_limit = cudf::ast::literal(o_orderdate_lower);
     auto o_orderdate_pred_lower = cudf::ast::operation(
@@ -89,7 +91,6 @@ int main(int argc, char const** argv) {
         o_orderdate_ref,
         o_orderdate_lower_limit
     );
-    
     auto o_orderdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 1, 1), true);
     auto o_orderdate_upper_limit = cudf::ast::literal(o_orderdate_upper);
     auto o_orderdate_pred_upper = cudf::ast::operation(
@@ -97,17 +98,18 @@ int main(int argc, char const** argv) {
         o_orderdate_ref,
         o_orderdate_upper_limit
     );
-
-    auto o_orderdate_pred = std::make_unique<cudf::ast::operation>(
+    auto orders_pred = std::make_unique<cudf::ast::operation>(
         cudf::ast::ast_operator::LOGICAL_AND,
         o_orderdate_pred_lower,
         o_orderdate_pred_upper
     );
 
-    auto r_name_ref = cudf::ast::column_reference(1); 
+    std::vector<std::string> region_cols = {"r_regionkey", "r_name"};
+    auto r_name_ref = cudf::ast::column_reference(
+        std::distance(region_cols.begin(), std::find(region_cols.begin(), region_cols.end(), "r_name"))); 
     auto r_name_value = cudf::string_scalar("ASIA");
     auto r_name_literal = cudf::ast::literal(r_name_value);
-    auto r_name_pred = std::make_unique<cudf::ast::operation>(
+    auto region_pred = std::make_unique<cudf::ast::operation>(
         cudf::ast::ast_operator::EQUAL,
         r_name_ref,
         r_name_literal
@@ -117,8 +119,8 @@ int main(int argc, char const** argv) {
         args.dataset_dir + "customer/part-0.parquet", {"c_custkey", "c_nationkey"});
     auto orders = read_parquet(
         args.dataset_dir + "orders/part-0.parquet", 
-        {"o_custkey", "o_orderkey", "o_orderdate"},
-        std::move(o_orderdate_pred)
+        orders_cols,
+        std::move(orders_pred)
     );
     auto lineitem = read_parquet(
         args.dataset_dir + "lineitem/part-0.parquet", 
@@ -132,8 +134,8 @@ int main(int argc, char const** argv) {
     );
     auto region = read_parquet(
         args.dataset_dir + "region/part-0.parquet", 
-        {"r_regionkey", "r_name"},
-        std::move(r_name_pred)
+        region_cols,
+        std::move(region_pred)
     );
 
     // Perform the joins
