@@ -41,32 +41,25 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 
 
-inline auto make_unmanaged() { 
-    return std::make_shared<rmm::mr::cuda_memory_resource>(); 
-}
-
-inline auto make_unmanaged_pool() {
+// RMM memory resource creation utilities
+inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
+inline auto make_pool() {
     return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-        make_unmanaged(), rmm::percent_of_free_device_memory(50));
+        make_cuda(), rmm::percent_of_free_device_memory(50));
 }
-
-inline auto make_managed() { 
-    return std::make_shared<rmm::mr::managed_memory_resource>(); 
-}
-
+inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
 inline auto make_managed_pool() {
     return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
         make_managed(), rmm::percent_of_free_device_memory(50));
 }
-
 inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
     std::string const& mode) {
-    if (mode == "unmanaged") return make_unmanaged();
-    if (mode == "unmanaged_pool") return make_unmanaged_pool();
+    if (mode == "cuda") return make_cuda();
+    if (mode == "pool") return make_pool();
     if (mode == "managed") return make_managed();
     if (mode == "managed_pool") return make_managed_pool();
     CUDF_FAIL("Unknown rmm_mode parameter: " + mode +
-                "\nExpecting: 'unmanaged', 'unmanaged_pool', 'managed', 'managed_pool'");
+              "\nExpecting: cuda, pool, managed, or managed_pool");
 }
 
 /**
