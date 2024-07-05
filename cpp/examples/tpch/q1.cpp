@@ -85,18 +85,21 @@ int main(int argc, char const** argv) {
     Timer timer;
 
     // Read out the `lineitem` table from parquet file
-    auto shipdate_ref = cudf::ast::column_reference(5);
+    std::vector<std::string> lineitem_cols = {
+        "l_returnflag", "l_linestatus", "l_quantity", "l_extendedprice", "l_discount", "l_shipdate", "l_orderkey", "l_tax"};
+    auto shipdate_ref = cudf::ast::column_reference(
+        std::distance(lineitem_cols.begin(), std::find(lineitem_cols.begin(), lineitem_cols.end(), "l_shipdate")));
     auto shipdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1998, 9, 2), true);
     auto shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
-    auto shipdate_pred = std::make_unique<cudf::ast::operation>(
+    auto lineitem_pred = std::make_unique<cudf::ast::operation>(
         cudf::ast::ast_operator::LESS_EQUAL,
         shipdate_ref,
         shipdate_upper_literal
     );
     auto lineitem = read_parquet(
         args.dataset_dir + "lineitem/part-0.parquet", 
-        {"l_returnflag", "l_linestatus", "l_quantity", "l_extendedprice", "l_discount", "l_shipdate", "l_orderkey", "l_tax"},
-        std::move(shipdate_pred)
+        lineitem_cols,
+        std::move(lineitem_pred)
     );
 
     // Calculate the discount price and charge columns and append to lineitem table
