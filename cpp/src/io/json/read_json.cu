@@ -78,10 +78,9 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   auto constexpr num_delimiter_chars = 1;
 
   if (compression == compression_type::NONE) {
-    std::vector<size_t> delimiter_map{};
+    auto delimiter_map = cudf::detail::make_empty_host_vector<size_t>(sources.size(), stream);
     std::vector<size_t> prefsum_source_sizes(sources.size());
     std::vector<std::unique_ptr<datasource::buffer>> h_buffers;
-    delimiter_map.reserve(sources.size());
     size_t bytes_read = 0;
     std::transform_inclusive_scan(sources.begin(),
                                   sources.end(),
