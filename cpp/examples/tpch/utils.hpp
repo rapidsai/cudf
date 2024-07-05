@@ -70,6 +70,9 @@ class table_with_cols {
         table_with_cols(
             std::unique_ptr<cudf::table> tbl, std::vector<std::string> col_names) 
                 : tbl(std::move(tbl)), col_names(col_names) {}
+        /**
+         * @brief Return the table view
+         */
         cudf::table_view table() {
             return tbl->view();
         }
@@ -80,14 +83,6 @@ class table_with_cols {
          */
         cudf::column_view column(std::string col_name) {
             return tbl->view().column(col_id(col_name));
-        }
-        /**
-         * @brief Return the data type of a column
-         * 
-         * @param col_name The name of the column
-         */
-        cudf::data_type column_type(std::string col_name) {
-            return tbl->view().column(col_id(col_name)).type();
         }
         /**
          * @param Return the column names of the table

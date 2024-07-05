@@ -46,32 +46,33 @@ order by
     l_linestatus;
 */
 
-std::unique_ptr<cudf::column> calc_disc_price(std::unique_ptr<table_with_cols>& table) {
+std::unique_ptr<cudf::column> calc_disc_price(
+    cudf::column_view discount, cudf::column_view extendedprice) {
     auto one = cudf::fixed_point_scalar<numeric::decimal64>(1);
-    auto discount = table->column("l_discount");
-    auto one_minus_discount = cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type());
-    auto extended_price = table->column("l_extendedprice");
+    auto one_minus_discount = cudf::binary_operation(
+        one, discount, cudf::binary_operator::SUB, discount.type());
     auto disc_price_scale = cudf::binary_operation_fixed_point_scale(
         cudf::binary_operator::MUL,
-        table->column_type("l_extendedprice").scale(),
+        extendedprice.type().scale(),
         one_minus_discount->type().scale()
     );
     auto disc_price_type = cudf::data_type{cudf::type_id::DECIMAL64, disc_price_scale};
-    auto disc_price = cudf::binary_operation(extended_price, one_minus_discount->view(), cudf::binary_operator::MUL, disc_price_type);
+    auto disc_price = cudf::binary_operation(
+        extendedprice, one_minus_discount->view(), cudf::binary_operator::MUL, disc_price_type);
     return disc_price;
 }
 
-std::unique_ptr<cudf::column> calc_charge(std::unique_ptr<table_with_cols>& table, std::unique_ptr<cudf::column>& disc_price) {
+std::unique_ptr<cudf::column> calc_charge(cudf::column_view tax, cudf::column_view disc_price) {
     auto one = cudf::fixed_point_scalar<numeric::decimal64>(1);
-    auto tax = table->column("l_tax");
     auto one_plus_tax = cudf::binary_operation(one, tax, cudf::binary_operator::ADD, tax.type());
     auto charge_scale = cudf::binary_operation_fixed_point_scale(
         cudf::binary_operator::MUL,
-        disc_price->type().scale(),
+        disc_price.type().scale(),
         one_plus_tax->type().scale()
     );
     auto charge_type = cudf::data_type{cudf::type_id::DECIMAL64, charge_scale};
-    auto charge = cudf::binary_operation(disc_price->view(), one_plus_tax->view(), cudf::binary_operator::MUL, charge_type);
+    auto charge = cudf::binary_operation(
+        disc_price, one_plus_tax->view(), cudf::binary_operator::MUL, charge_type);
     return charge;
 }
 
@@ -105,8 +106,10 @@ int main(int argc, char const** argv) {
     );
 
     // Calculate the discount price and charge columns and append to lineitem table
-    auto disc_price = calc_disc_price(lineitem);
-    auto charge = calc_charge(lineitem, disc_price);
+    auto disc_price = calc_disc_price(
+        lineitem->column("l_discount"), lineitem->column("l_extendedprice"));
+    auto charge = calc_charge(
+        lineitem->column("l_tax"), disc_price->view());
     auto appended_table = lineitem->append(disc_price, "disc_price")->append(charge, "charge");
 
     // Perform the group by operation

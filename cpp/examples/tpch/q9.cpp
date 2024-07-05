@@ -64,28 +64,31 @@ order by
     o_year desc;
 */
 
-std::unique_ptr<cudf::column> calc_amount(std::unique_ptr<table_with_cols>& table) {
+std::unique_ptr<cudf::column> calc_amount(
+    cudf::column_view discount, cudf::column_view extendedprice, 
+    cudf::column_view supplycost, cudf::column_view quantity) {
     auto one = cudf::fixed_point_scalar<numeric::decimal64>(1);
-    auto discount = table->column("l_discount");
-    auto one_minus_discount = cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type());
-    auto extended_price = table->column("l_extendedprice");
-    auto extended_price_discounted_scale = cudf::binary_operation_fixed_point_scale(
+    auto one_minus_discount = cudf::binary_operation(
+        one, discount, cudf::binary_operator::SUB, discount.type());
+    auto extendedprice_discounted_scale = cudf::binary_operation_fixed_point_scale(
         cudf::binary_operator::MUL,
-        table->column_type("l_extendedprice").scale(),
+        extendedprice.type().scale(),
         one_minus_discount->type().scale()
     );
-    auto extended_price_discounted_type = cudf::data_type{cudf::type_id::DECIMAL64, extended_price_discounted_scale};
-    auto extended_price_discounted = cudf::binary_operation(extended_price, one_minus_discount->view(), cudf::binary_operator::MUL, extended_price_discounted_type);
-    auto supply_cost = table->column("ps_supplycost");
-    auto quantity = table->column("l_quantity");
-    auto supply_cost_quantity_scale = cudf::binary_operation_fixed_point_scale(
+    auto extendedprice_discounted_type = cudf::data_type{
+        cudf::type_id::DECIMAL64, extendedprice_discounted_scale};
+    auto extendedprice_discounted = cudf::binary_operation(
+        extendedprice, one_minus_discount->view(), cudf::binary_operator::MUL, extendedprice_discounted_type);
+    auto supplycost_quantity_scale = cudf::binary_operation_fixed_point_scale(
         cudf::binary_operator::MUL,
-        table->column_type("ps_supplycost").scale(),
-        table->column_type("l_quantity").scale()
+        supplycost.type().scale(),
+        quantity.type().scale()
     );
-    auto supply_cost_quantity_type = cudf::data_type{cudf::type_id::DECIMAL64, supply_cost_quantity_scale};
-    auto supply_cost_quantity = cudf::binary_operation(supply_cost, quantity, cudf::binary_operator::MUL, supply_cost_quantity_type);
-    auto amount = cudf::binary_operation(extended_price_discounted->view(), supply_cost_quantity->view(), cudf::binary_operator::SUB, extended_price_discounted->type());
+    auto supplycost_quantity_type = cudf::data_type{cudf::type_id::DECIMAL64, supplycost_quantity_scale};
+    auto supplycost_quantity = cudf::binary_operation(
+        supplycost, quantity, cudf::binary_operator::MUL, supplycost_quantity_type);
+    auto amount = cudf::binary_operation(
+        extendedprice_discounted->view(), supplycost_quantity->view(), cudf::binary_operator::SUB, extendedprice_discounted->type());
     return amount;
 }
 
@@ -151,7 +154,12 @@ int main(int argc, char const** argv) {
     // Calculate the `nation`, `o_year`, and `amount` columns
     auto n_name = std::make_unique<cudf::column>(joined_table->column("n_name"));
     auto o_year = cudf::datetime::extract_year(joined_table->column("o_orderdate"));
-    auto amount = calc_amount(joined_table);
+    auto amount = calc_amount(
+        joined_table->column("l_discount"), 
+        joined_table->column("l_extendedprice"), 
+        joined_table->column("ps_supplycost"), 
+        joined_table->column("l_quantity")
+    );
 
     // Put together the `profit` table
     std::vector<std::unique_ptr<cudf::column>> profit_columns;

@@ -35,13 +35,12 @@ where
     and l_quantity < 24;
 */
 
-std::unique_ptr<cudf::column> calc_revenue(std::unique_ptr<table_with_cols>& table) {
-    auto extendedprice = table->column("l_extendedprice");
-    auto discount = table->column("l_discount");
+std::unique_ptr<cudf::column> calc_revenue(
+    cudf::column_view extendedprice, cudf::column_view discount) {
     auto revenue_scale = cudf::binary_operation_fixed_point_scale(
         cudf::binary_operator::MUL,
-        table->column_type("l_extendedprice").scale(),
-        table->column_type("l_discount").scale()
+        extendedprice.type().scale(),
+        discount.type().scale()
     );
     auto revenue_type = cudf::data_type{
         cudf::type_id::DECIMAL64, revenue_scale};
@@ -145,7 +144,9 @@ int main(int argc, char const** argv) {
     auto filtered_table = apply_filter(appended_table, discount_quantity_pred);
 
     // Calculate the `revenue` column
-    auto revenue = calc_revenue(filtered_table);
+    auto revenue = calc_revenue(
+        filtered_table->column("l_extendedprice"), 
+        filtered_table->column("l_discount"));
 
     // Sum the `revenue` column
     auto revenue_view = revenue->view();

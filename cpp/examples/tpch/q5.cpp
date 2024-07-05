@@ -54,19 +54,20 @@ order by
     revenue desc;
 */
 
-std::unique_ptr<cudf::column> calc_revenue(std::unique_ptr<table_with_cols>& table) {
+std::unique_ptr<cudf::column> calc_revenue(
+    cudf::column_view extendedprice, cudf::column_view discount) {
     auto one = cudf::fixed_point_scalar<numeric::decimal64>(1, -2);
-    auto disc = table->column("l_discount");
-    auto one_minus_disc = cudf::binary_operation(one, disc, cudf::binary_operator::SUB, disc.type());
-    auto extended_price = table->column("l_extendedprice");
-    auto disc_price_scale = cudf::binary_operation_fixed_point_scale(
+    auto one_minus_discount = cudf::binary_operation(
+        one, discount, cudf::binary_operator::SUB, discount.type());
+    auto revenue_scale = cudf::binary_operation_fixed_point_scale(
         cudf::binary_operator::MUL,
-        table->column_type("l_extendedprice").scale(),
-        one_minus_disc->type().scale()
+        extendedprice.type().scale(),
+        one_minus_discount->type().scale()
     );
-    auto disc_price_type = cudf::data_type{cudf::type_id::DECIMAL64, disc_price_scale};
-    auto disc_price = cudf::binary_operation(extended_price, one_minus_disc->view(), cudf::binary_operator::MUL, disc_price_type);
-    return disc_price;
+    auto revenue_type = cudf::data_type{cudf::type_id::DECIMAL64, revenue_scale};
+    auto revenue = cudf::binary_operation(
+        extendedprice, one_minus_discount->view(), cudf::binary_operator::MUL, revenue_type);
+    return revenue;
 }
 
 int main(int argc, char const** argv) {
@@ -173,7 +174,8 @@ int main(int argc, char const** argv) {
     );
 
     // Calculate and append the `revenue` column
-    auto revenue = calc_revenue(joined_table);
+    auto revenue = calc_revenue(
+        joined_table->column("l_extendedprice"), joined_table->column("l_discount"));
     auto appended_table = joined_table->append(revenue, "revenue");
 
     // Perform the groupby operation
