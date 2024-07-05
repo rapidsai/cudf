@@ -1194,7 +1194,8 @@ class BinOp(Expr):
         self.children = (left, right)
         if (
             op in (plc.binaryop.BinaryOperator.ADD, plc.binaryop.BinaryOperator.SUB)
-            and ({left.dtype.id(), right.dtype.id()}.issubset(dtypes.TIMELIKE_TYPES))
+            and plc.traits.is_chrono(left.dtype)
+            and plc.traits.is_chrono(right.dtype)
             and not dtypes.have_compatible_resolution(left.dtype.id(), right.dtype.id())
         ):
             raise NotImplementedError("Casting rules for timelike types")
