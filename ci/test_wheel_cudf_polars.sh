@@ -24,11 +24,11 @@ RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE
 
 # echo to expand wildcard before adding `[extra]` requires for pip
 rapids-logger "Install cudf wheel"
-python -m pip install --find-links $(pwd)/dist $(echo ./dist/cudf_polars*.whl)[test]
+python -m pip install "$(echo ./dist/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
+python -m pip install "$(echo ./dist/cudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
 
 rapids-logger "Install cudf_polars"
-python -m pip install 'polars>=1.0.0a0'
-python -m pip install --no-deps python/cudf_polars
+python -m pip install --find-links $(pwd)/dist "$(echo ./dist/cudf_polars*.whl)[test]"
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
