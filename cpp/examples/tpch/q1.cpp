@@ -84,7 +84,7 @@ int main(int argc, char const** argv) {
 
     Timer timer;
 
-    // Read out the `lineitem` table from parquet file
+    // Define the column projections and filter predicate for `lineitem` table
     std::vector<std::string> lineitem_cols = {
         "l_returnflag", "l_linestatus", "l_quantity", "l_extendedprice", "l_discount", "l_shipdate", "l_orderkey", "l_tax"};
     auto shipdate_ref = cudf::ast::column_reference(
@@ -96,6 +96,8 @@ int main(int argc, char const** argv) {
         shipdate_ref,
         shipdate_upper_literal
     );
+
+    // Read out the `lineitem` table from parquet file
     auto lineitem = read_parquet(
         args.dataset_dir + "lineitem/part-0.parquet", 
         lineitem_cols,

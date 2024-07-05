@@ -78,8 +78,7 @@ int main(int argc, char const** argv) {
 
     Timer timer;
 
-    // Read out the tables from parquet files
-    // while pushing down column projections and filter predicates
+    // Define the column projection and filter predicate for the `orders` table
     std::vector<std::string> orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
     auto o_orderdate_ref = cudf::ast::column_reference(
         std::distance(orders_cols.begin(), std::find(orders_cols.begin(), orders_cols.end(), "o_orderdate"))
@@ -104,6 +103,7 @@ int main(int argc, char const** argv) {
         o_orderdate_pred_upper
     );
 
+    // Define the column projection and filter predicate for the `region` table
     std::vector<std::string> region_cols = {"r_regionkey", "r_name"};
     auto r_name_ref = cudf::ast::column_reference(
         std::distance(region_cols.begin(), std::find(region_cols.begin(), region_cols.end(), "r_name"))); 
@@ -115,6 +115,8 @@ int main(int argc, char const** argv) {
         r_name_literal
     );
 
+    // Read out the tables from parquet files
+    // while pushing down the column projections and filter predicates
     auto customer = read_parquet(
         args.dataset_dir + "customer/part-0.parquet", {"c_custkey", "c_nationkey"});
     auto orders = read_parquet(
