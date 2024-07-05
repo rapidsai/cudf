@@ -40,7 +40,15 @@ from cudf._lib.pylibcudf.libcudf.io.types cimport (
 from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
 from cudf._lib.pylibcudf.libcudf.types cimport data_type, size_type
 from cudf._lib.types cimport dtype_to_data_type
-from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
+from cudf._lib.utils cimport (
+    columns_from_unique_ptr,
+    data_from_pylibcudf_table,
+    data_from_unique_ptr,
+    table_view_from_table,
+)
+
+from cudf._lib import pylibcudf
+from cudf._lib.concat import concat_columns
 
 
 cdef json_recovery_mode_t _get_json_recovery_mode(object on_bad_lines):
@@ -51,25 +59,17 @@ cdef json_recovery_mode_t _get_json_recovery_mode(object on_bad_lines):
     else:
         raise TypeError(f"Invalid parameter for {on_bad_lines=}")
 
-
-cpdef read_json(object filepaths_or_buffers,
-                object dtype,
-                bool lines,
-                object compression,
-                object byte_range,
-                bool keep_quotes,
-                bool mixed_types_as_string,
-                bool prune_columns,
-                object on_bad_lines):
-    """
-    Cython function to call into libcudf API, see `read_json`.
-
-    See Also
-    --------
-    cudf.io.json.read_json
-    cudf.io.json.to_json
-    """
-
+cdef json_reader_options _setup_json_reader_options(
+        object filepaths_or_buffers,
+        object dtype,
+        object compression,
+        bool keep_quotes,
+        bool mixed_types_as_string,
+        bool prune_columns,
+        object on_bad_lines,
+        bool lines,
+        size_type byte_range_offset,
+        size_type byte_range_size):
     # If input data is a JSON string (or StringIO), hold a reference to
     # the encoded memoryview externally to ensure the encoded buffer
     # isn't destroyed before calling libcudf `read_json()`
@@ -85,14 +85,6 @@ cpdef read_json(object filepaths_or_buffers,
     cdef vector[data_type] c_dtypes_list
     cdef map[string, schema_element] c_dtypes_schema_map
     cdef cudf_io_types.compression_type c_compression
-    # Determine byte read offsets if applicable
-    cdef size_type c_range_offset = (
-        byte_range[0] if byte_range is not None else 0
-    )
-    cdef size_type c_range_size = (
-        byte_range[1] if byte_range is not None else 0
-    )
-    cdef bool c_lines = lines
 
     if compression is not None:
         if compression == 'gzip':
@@ -126,9 +118,9 @@ cpdef read_json(object filepaths_or_buffers,
     cdef json_reader_options opts = move(
         json_reader_options.builder(make_source_info(filepaths_or_buffers))
         .compression(c_compression)
-        .lines(c_lines)
-        .byte_range_offset(c_range_offset)
-        .byte_range_size(c_range_size)
+        .lines(lines)
+        .byte_range_offset(byte_range_offset)
+        .byte_range_size(byte_range_size)
         .recovery_mode(_get_json_recovery_mode(on_bad_lines))
         .build()
     )
@@ -140,6 +132,38 @@ cpdef read_json(object filepaths_or_buffers,
     opts.enable_keep_quotes(keep_quotes)
     opts.enable_mixed_types_as_string(mixed_types_as_string)
     opts.enable_prune_columns(prune_columns)
+
+    return opts
+
+cpdef read_json(object filepaths_or_buffers,
+                object dtype,
+                bool lines,
+                object compression,
+                object byte_range,
+                bool keep_quotes,
+                bool mixed_types_as_string,
+                bool prune_columns,
+                object on_bad_lines):
+    """
+    Cython function to call into libcudf API, see `read_json`.
+
+    See Also
+    --------
+    cudf.io.json.read_json
+    cudf.io.json.to_json
+    """
+    # Determine byte read offsets if applicable
+    cdef size_type c_range_offset = (
+        byte_range[0] if byte_range is not None else 0
+    )
+    cdef size_type c_range_size = (
+        byte_range[1] if byte_range is not None else 0
+    )
+    cdef json_reader_options opts = _setup_json_reader_options(
+        filepaths_or_buffers, dtype, compression, keep_quotes,
+        mixed_types_as_string, prune_columns, on_bad_lines,
+        lines, c_range_offset, c_range_size
+    )
 
     # Read JSON
     cdef cudf_io_types.table_with_metadata c_result
@@ -153,6 +177,71 @@ cpdef read_json(object filepaths_or_buffers,
         column_names=meta_names
     ))
 
+    update_struct_field_names(df, c_result.metadata.schema_info)
+
+    return df
+
+cpdef chunked_read_json(object filepaths_or_buffers,
+                        object dtype,
+                        object compression,
+                        bool keep_quotes,
+                        bool mixed_types_as_string,
+                        bool prune_columns,
+                        object on_bad_lines,
+                        int chunk_size=100_000_000):
+    """
+    Cython function to call into libcudf API, see `read_json`.
+
+    See Also
+    --------
+    cudf.io.json.read_json
+    cudf.io.json.to_json
+    """
+    cdef size_type c_range_size = (
+        chunk_size if chunk_size is not None else 0
+    )
+    cdef json_reader_options opts = _setup_json_reader_options(
+        filepaths_or_buffers, dtype, compression, keep_quotes,
+        mixed_types_as_string, prune_columns, on_bad_lines,
+        True, 0, c_range_size
+    )
+
+    # Read JSON
+    cdef cudf_io_types.table_with_metadata c_result
+    final_columns = []
+    meta_names = None
+    i = 0
+    while True:
+        opts.set_byte_range_offset(c_range_size * i)
+        opts.set_byte_range_size(c_range_size)
+
+        try:
+            with nogil:
+                c_result = move(libcudf_read_json(opts))
+        except OverflowError:
+            break
+        if meta_names is None:
+            meta_names = [info.name.decode() for info in c_result.metadata.schema_info]
+        new_chunk = columns_from_unique_ptr(move(c_result.tbl))
+        if len(final_columns) == 0:
+            final_columns = new_chunk
+        else:
+            for col_idx in range(len(meta_names)):
+                final_columns[col_idx] = concat_columns(
+                    [final_columns[col_idx], new_chunk[col_idx]]
+                )
+                # Must drop any residual GPU columns to save memory
+                new_chunk[col_idx] = None
+        i += 1
+    df = cudf.DataFrame._from_data(
+            *data_from_pylibcudf_table(
+                pylibcudf.Table(
+                    [col.to_pylibcudf(mode="read") for col in final_columns]
+                ),
+                column_names=meta_names,
+                index_names=None
+            )
+        )
     update_struct_field_names(df, c_result.metadata.schema_info)
 
     return df

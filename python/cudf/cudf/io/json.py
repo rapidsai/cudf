@@ -94,17 +94,28 @@ def read_json(
             else:
                 filepaths_or_buffers.append(tmp_source)
 
-        df = libjson.read_json(
-            filepaths_or_buffers=filepaths_or_buffers,
-            dtype=dtype,
-            lines=lines,
-            compression=compression,
-            byte_range=byte_range,
-            keep_quotes=keep_quotes,
-            mixed_types_as_string=mixed_types_as_string,
-            prune_columns=prune_columns,
-            on_bad_lines=on_bad_lines,
-        )
+        if cudf.get_option("mode.pandas_compatible") and lines:
+            df = libjson.chunked_read_json(
+                filepaths_or_buffers=filepaths_or_buffers,
+                dtype=dtype,
+                compression=compression,
+                keep_quotes=keep_quotes,
+                mixed_types_as_string=mixed_types_as_string,
+                prune_columns=prune_columns,
+                on_bad_lines=on_bad_lines,
+            )
+        else:
+            df = libjson.read_json(
+                filepaths_or_buffers=filepaths_or_buffers,
+                dtype=dtype,
+                lines=lines,
+                compression=compression,
+                byte_range=byte_range,
+                keep_quotes=keep_quotes,
+                mixed_types_as_string=mixed_types_as_string,
+                prune_columns=prune_columns,
+                on_bad_lines=on_bad_lines,
+            )
     else:
         warnings.warn(
             "Using CPU via Pandas to read JSON dataset, this may "
