@@ -3625,7 +3625,7 @@ def test_parquet_writer_roundtrip_with_arrow_schema(index):
     assert_eq(expected, got3)
 
 
-def test_parquet_writer_int96_timestamps_and_arrow_schema(index):
+def test_parquet_writer_int96_timestamps_and_arrow_schema():
     df = cudf.DataFrame(
         {
             "timestamp": cudf.Series(
