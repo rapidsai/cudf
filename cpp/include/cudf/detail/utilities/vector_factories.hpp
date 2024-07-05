@@ -385,7 +385,7 @@ host_vector<T> make_host_vector(size_t size, rmm::cuda_stream_view stream)
 template <typename T>
 host_vector<T> make_empty_host_vector(size_t capacity, rmm::cuda_stream_view stream)
 {
-  auto result = host_vector<T>(0, get_host_allocator<T>(capacity, stream));
+  auto result = host_vector<T>(get_host_allocator<T>(capacity, stream));
   result.reserve(capacity);
   return result;
 }

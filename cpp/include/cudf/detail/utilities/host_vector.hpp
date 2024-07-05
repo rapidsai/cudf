@@ -194,6 +194,9 @@ template <typename T>
 class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
  public:
   using base = thrust::host_vector<T, rmm_host_allocator<T>>;
+
+  host_vector(rmm_host_allocator<T> const& alloc) : base(alloc) {}
+
   host_vector(size_t size, rmm_host_allocator<T> const& alloc) : base(size, alloc) {}
 };
 
