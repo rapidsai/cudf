@@ -443,14 +443,15 @@ namespace {
  */
 file_segmentation calculate_segmentation(host_span<orc_column_view const> columns,
                                          hostdevice_2dvector<rowgroup_rows>&& rowgroup_bounds,
-                                         stripe_size_limits max_stripe_size)
+                                         stripe_size_limits max_stripe_size,
+                                         rmm::cuda_stream_view stream)
 {
-  std::vector<stripe_rowgroups> infos;
-  auto const num_rowgroups = rowgroup_bounds.size().first;
-  size_t stripe_start      = 0;
-  size_t stripe_bytes      = 0;
-  size_type stripe_rows    = 0;
-  for (size_t rg_idx = 0; rg_idx < num_rowgroups; ++rg_idx) {
+  auto infos                    = cudf::detail::make_empty_host_vector<stripe_rowgroups>(1, stream);
+  size_type const num_rowgroups = rowgroup_bounds.size().first;
+  size_type stripe_start        = 0;
+  size_t stripe_bytes           = 0;
+  size_type stripe_rows         = 0;
+  for (size_type rg_idx = 0; rg_idx < num_rowgroups; ++rg_idx) {
     auto const rowgroup_total_bytes =
       std::accumulate(columns.begin(), columns.end(), 0ul, [&](size_t total_size, auto const& col) {
         auto const rows = rowgroup_bounds[rg_idx][col.index()].size();
@@ -469,7 +470,9 @@ file_segmentation calculate_segmentation(host_span<orc_column_view const> column
     // Check if adding the current rowgroup to the stripe will make the stripe too large or long
     if ((rg_idx > stripe_start) && (stripe_bytes + rowgroup_total_bytes > max_stripe_size.bytes ||
                                     stripe_rows + rowgroup_rows_max > max_stripe_size.rows)) {
-      infos.emplace_back(infos.size(), stripe_start, rg_idx - stripe_start);
+      infos.push_back(stripe_rowgroups{static_cast<size_type>(infos.size()),
+                                       stripe_start,
+                                       static_cast<size_type>(rg_idx - stripe_start)});
       stripe_start = rg_idx;
       stripe_bytes = 0;
       stripe_rows  = 0;
@@ -478,7 +481,9 @@ file_segmentation calculate_segmentation(host_span<orc_column_view const> column
     stripe_bytes += rowgroup_total_bytes;
     stripe_rows += rowgroup_rows_max;
     if (rg_idx + 1 == num_rowgroups) {
-      infos.emplace_back(infos.size(), stripe_start, num_rowgroups - stripe_start);
+      infos.push_back(stripe_rowgroups{static_cast<size_type>(infos.size()),
+                                       stripe_start,
+                                       static_cast<size_type>(num_rowgroups - stripe_start)});
     }
   }
 
@@ -2297,7 +2302,7 @@ auto convert_table_to_orc_data(table_view const& input,
 
   // Decide stripe boundaries based on rowgroups and char counts
   auto segmentation =
-    calculate_segmentation(orc_table.columns, std::move(rowgroup_bounds), max_stripe_size);
+    calculate_segmentation(orc_table.columns, std::move(rowgroup_bounds), max_stripe_size, stream);
 
   auto stripe_dicts    = build_dictionaries(orc_table, segmentation, sort_dictionaries, stream);
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
