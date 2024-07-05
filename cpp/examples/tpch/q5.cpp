@@ -57,12 +57,10 @@ order by
 std::unique_ptr<cudf::column> calc_revenue(cudf::column_view extendedprice,
                                            cudf::column_view discount)
 {
-  auto one = cudf::fixed_point_scalar<numeric::decimal64>(1, -2);
+  auto one = cudf::numeric_scalar<double>(1);
   auto one_minus_discount =
     cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type());
-  auto revenue_scale = cudf::binary_operation_fixed_point_scale(
-    cudf::binary_operator::MUL, extendedprice.type().scale(), one_minus_discount->type().scale());
-  auto revenue_type = cudf::data_type{cudf::type_id::DECIMAL64, revenue_scale};
+  auto revenue_type = cudf::data_type{cudf::type_id::FLOAT64};
   auto revenue      = cudf::binary_operation(
     extendedprice, one_minus_discount->view(), cudf::binary_operator::MUL, revenue_type);
   return revenue;
@@ -107,17 +105,17 @@ int main(int argc, char const** argv)
   // Read out the tables from parquet files
   // while pushing down the column projections and filter predicates
   auto customer =
-    read_parquet(args.dataset_dir + "customer/part-0.parquet", {"c_custkey", "c_nationkey"});
+    read_parquet(args.dataset_dir + "customer.parquet", {"c_custkey", "c_nationkey"});
   auto orders =
-    read_parquet(args.dataset_dir + "orders/part-0.parquet", orders_cols, std::move(orders_pred));
-  auto lineitem = read_parquet(args.dataset_dir + "lineitem/part-0.parquet",
+    read_parquet(args.dataset_dir + "orders.parquet", orders_cols, std::move(orders_pred));
+  auto lineitem = read_parquet(args.dataset_dir + "lineitem.parquet",
                                {"l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"});
   auto supplier =
-    read_parquet(args.dataset_dir + "supplier/part-0.parquet", {"s_suppkey", "s_nationkey"});
+    read_parquet(args.dataset_dir + "supplier.parquet", {"s_suppkey", "s_nationkey"});
   auto nation = read_parquet(args.dataset_dir + "nation/part-0.parquet",
                              {"n_nationkey", "n_regionkey", "n_name"});
   auto region =
-    read_parquet(args.dataset_dir + "region/part-0.parquet", region_cols, std::move(region_pred));
+    read_parquet(args.dataset_dir + "region.parquet", region_cols, std::move(region_pred));
 
   // Perform the joins
   auto join_a = apply_inner_join(region, nation, {"r_regionkey"}, {"n_regionkey"});
