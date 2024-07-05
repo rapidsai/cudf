@@ -777,13 +777,13 @@ _DataFrameLocIndexer = make_intermediate_proxy_type(
 
 _AtIndexer = make_intermediate_proxy_type(
     "_AtIndexer",
-    _Unusable(),
+    cudf.core.dataframe._DataFrameAtIndexer,
     pd.core.indexing._AtIndexer,
 )
 
 _iAtIndexer = make_intermediate_proxy_type(
     "_iAtIndexer",
-    _Unusable(),
+    cudf.core.dataframe._DataFrameiAtIndexer,
     pd.core.indexing._iAtIndexer,
 )
 
