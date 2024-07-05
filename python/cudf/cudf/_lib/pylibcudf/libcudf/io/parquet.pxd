@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint8_t
+from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.functional cimport reference_wrapper
 from libcpp.map cimport map
@@ -28,7 +28,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         # setter
 
         void set_columns(vector[string] col_names) except +
+        void set_num_rows(size_type val) except +
         void set_row_groups(vector[vector[size_type]] row_grp) except +
+        void set_skip_rows(int64_t val) except +
         void enable_use_arrow_schema(bool val) except +
         void enable_use_pandas_metadata(bool val) except +
         void set_timestamp_type(data_type type) except +

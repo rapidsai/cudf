@@ -23,7 +23,7 @@ from cudf._lib.utils cimport data_from_unique_ptr
 from cudf._lib import pylibcudf
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
-from libc.stdint cimport uint8_t
+from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
@@ -138,7 +138,9 @@ cdef pair[parquet_reader_options, bool] _setup_parquet_reader_options(
      vector[vector[size_type]] row_groups,
      bool use_pandas_metadata,
      Expression filters,
-     object columns):
+     object columns,
+     size_type num_rows,
+     int64_t skip_rows):
 
     cdef parquet_reader_options args
     cdef parquet_reader_options_builder builder
@@ -164,6 +166,12 @@ cdef pair[parquet_reader_options, bool] _setup_parquet_reader_options(
         for col in columns:
             cpp_columns.push_back(str(col).encode())
         args.set_columns(cpp_columns)
+
+    if num_rows != -1:
+        args.set_num_rows(num_rows)
+    if skip_rows != 0:
+        args.set_skip_rows(skip_rows)
+
     allow_range_index &= filters is None
 
     return pair[parquet_reader_options, bool](args, allow_range_index)
@@ -299,7 +307,9 @@ cdef object _process_metadata(object df,
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                    use_pandas_metadata=True,
-                   Expression filters=None):
+                   Expression filters=None,
+                   size_type nrows=-1,
+                   int64_t skip_rows=0):
     """
     Cython function to call into libcudf API, see `read_parquet`.
 
@@ -332,7 +342,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     # Setup parquet reader arguments
     cdef parquet_reader_options args
     cdef pair[parquet_reader_options, bool] c_res = _setup_parquet_reader_options(
-            source, cpp_row_groups, use_pandas_metadata, filters, columns)
+            source, cpp_row_groups, use_pandas_metadata, filters, columns,
+            nrows, skip_rows)
     args, allow_range_index = c_res.first, c_res.second
 
     # Read Parquet
@@ -818,7 +829,9 @@ cdef class ParquetReader:
     def __cinit__(self, filepaths_or_buffers, columns=None, row_groups=None,
                   use_pandas_metadata=True,
                   size_t chunk_read_limit=0,
-                  size_t pass_read_limit=1024000000):
+                  size_t pass_read_limit=1024000000,
+                  size_type num_rows=-1,
+                  int64_t skip_rows=0):
 
         # Convert NativeFile buffers to NativeFileDatasource,
         # but save original buffers in case we need to use
@@ -841,7 +854,8 @@ cdef class ParquetReader:
             cpp_row_groups = row_groups
         cdef parquet_reader_options args
         cdef pair[parquet_reader_options, bool] c_res = _setup_parquet_reader_options(
-            source, cpp_row_groups, use_pandas_metadata, None, columns)
+            source, cpp_row_groups, use_pandas_metadata,
+            None, columns, num_rows, skip_rows)
         args, self.allow_range_index = c_res.first, c_res.second
 
         with nogil:

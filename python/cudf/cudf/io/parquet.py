@@ -529,6 +529,8 @@ def read_parquet(
     open_file_options=None,
     bytes_per_thread=None,
     dataset_kwargs=None,
+    nrows=None,
+    skip_rows=None,
     *args,
     **kwargs,
 ):
@@ -664,6 +666,8 @@ def read_parquet(
         partition_keys=partition_keys,
         partition_categories=partition_categories,
         dataset_kwargs=dataset_kwargs,
+        nrows=nrows,
+        skip_rows=skip_rows,
         **kwargs,
     )
 
@@ -793,6 +797,8 @@ def _parquet_to_frame(
     partition_keys=None,
     partition_categories=None,
     dataset_kwargs=None,
+    nrows=None,
+    skip_rows=None,
     **kwargs,
 ):
     # If this is not a partitioned read, only need
@@ -800,6 +806,8 @@ def _parquet_to_frame(
     if not partition_keys:
         return _read_parquet(
             paths_or_buffers,
+            nrows=nrows,
+            skip_rows=skip_rows,
             *args,
             row_groups=row_groups,
             **kwargs,
@@ -834,6 +842,12 @@ def _parquet_to_frame(
                 key_paths,
                 *args,
                 row_groups=key_row_groups,
+                # TODO: is this still right?
+                # Also, do we still care?
+                # partition_keys uses pyarrow dataset
+                # (which we can't use anymore after pyarrow is gone)
+                nrows=nrows,
+                skip_rows=skip_rows,
                 **kwargs,
             )
         )
@@ -892,9 +906,15 @@ def _read_parquet(
     columns=None,
     row_groups=None,
     use_pandas_metadata=None,
+    nrows=None,
+    skip_rows=None,
     *args,
     **kwargs,
 ):
+    if nrows is None:
+        nrows = -1
+    if skip_rows is None:
+        skip_rows = 0
     # Simple helper function to dispatch between
     # cudf and pyarrow to read parquet data
     if engine == "cudf":
@@ -914,6 +934,8 @@ def _read_parquet(
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
+                nrows=nrows,
+                skip_rows=skip_rows,
             ).read()
         else:
             return libparquet.read_parquet(
@@ -921,6 +943,8 @@ def _read_parquet(
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
+                nrows=nrows,
+                skip_rows=skip_rows,
             )
     else:
         if (

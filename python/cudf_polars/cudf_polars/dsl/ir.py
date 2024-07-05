@@ -203,8 +203,9 @@ class Scan(IR):
 
     def __post_init__(self) -> None:
         """Validate preconditions."""
-        if self.file_options.n_rows is not None:
-            raise NotImplementedError("row limit in scan")
+        self.opts, self.cloud_opts = map(json.loads, self.options)
+        if self.opts["skip_rows_after_header"] > 0:
+            raise NotImplementedError("skip_rows_after_header=False")
         if self.typ not in ("csv", "parquet"):
             raise NotImplementedError(
                 f"Unhandled scan type: {self.typ}"
@@ -216,15 +217,35 @@ class Scan(IR):
         with_columns = options.with_columns
         row_index = options.row_index
         if self.typ == "csv":
-            opts, cloud_opts = map(json.loads, self.options)
-            df = DataFrame.from_cudf(
-                cudf.concat(
-                    [cudf.read_csv(p, usecols=with_columns) for p in self.paths]
-                )
+            # TODO: verify multi-file nrow behavior
+            skip_rows = self.opts["skip_rows"]
+            header = 0 if self.opts["has_header"] else None
+            gdf = cudf.concat(
+                [
+                    cudf.read_csv(
+                        p,
+                        header=header,
+                        skiprows=skip_rows,
+                        nrows=self.file_options.n_rows,
+                        usecols=with_columns,
+                    )
+                    for p in self.paths
+                ]
             )
+            if not self.opts["has_header"]:
+                # Rename columns to use column_x format (where x starts from 1)
+                # if there is no header following polars
+                print(list(gdf.columns))
+                gdf = gdf.rename(
+                    columns={
+                        col: f"column_{i + 1}" for i, col in enumerate(gdf.columns)
+                    }
+                )
+            df = DataFrame.from_cudf(gdf)
         elif self.typ == "parquet":
-            opts, cloud_opts = map(json.loads, self.options)
-            cdf = cudf.read_parquet(self.paths, columns=with_columns)
+            cdf = cudf.read_parquet(
+                self.paths, nrows=self.file_options.n_rows, columns=with_columns
+            )
             assert isinstance(cdf, cudf.DataFrame)
             df = DataFrame.from_cudf(cdf)
         else:
