@@ -112,7 +112,7 @@ int main(int argc, char const** argv)
                                {"l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"});
   auto supplier =
     read_parquet(args.dataset_dir + "supplier.parquet", {"s_suppkey", "s_nationkey"});
-  auto nation = read_parquet(args.dataset_dir + "nation/part-0.parquet",
+  auto nation = read_parquet(args.dataset_dir + "nation.parquet",
                              {"n_nationkey", "n_regionkey", "n_name"});
   auto region =
     read_parquet(args.dataset_dir + "region.parquet", region_cols, std::move(region_pred));
