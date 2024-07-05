@@ -49,12 +49,10 @@ order by
 std::unique_ptr<cudf::column> calc_disc_price(cudf::column_view discount,
                                               cudf::column_view extendedprice)
 {
-  auto one = cudf::fixed_point_scalar<numeric::decimal64>(1);
+  auto one = cudf::numeric_scalar<double>(1);
   auto one_minus_discount =
     cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type());
-  auto disc_price_scale = cudf::binary_operation_fixed_point_scale(
-    cudf::binary_operator::MUL, extendedprice.type().scale(), one_minus_discount->type().scale());
-  auto disc_price_type = cudf::data_type{cudf::type_id::DECIMAL64, disc_price_scale};
+  auto disc_price_type = cudf::data_type{cudf::type_id::FLOAT64};
   auto disc_price      = cudf::binary_operation(
     extendedprice, one_minus_discount->view(), cudf::binary_operator::MUL, disc_price_type);
   return disc_price;
@@ -62,12 +60,10 @@ std::unique_ptr<cudf::column> calc_disc_price(cudf::column_view discount,
 
 std::unique_ptr<cudf::column> calc_charge(cudf::column_view tax, cudf::column_view disc_price)
 {
-  auto one          = cudf::fixed_point_scalar<numeric::decimal64>(1);
+  auto one          = cudf::numeric_scalar<double>(1);
   auto one_plus_tax = cudf::binary_operation(one, tax, cudf::binary_operator::ADD, tax.type());
-  auto charge_scale = cudf::binary_operation_fixed_point_scale(
-    cudf::binary_operator::MUL, disc_price.type().scale(), one_plus_tax->type().scale());
-  auto charge_type = cudf::data_type{cudf::type_id::DECIMAL64, charge_scale};
-  auto charge      = cudf::binary_operation(
+  auto charge_type  = cudf::data_type{cudf::type_id::FLOAT64};
+  auto charge       = cudf::binary_operation(
     disc_price, one_plus_tax->view(), cudf::binary_operator::MUL, charge_type);
   return charge;
 }
@@ -100,8 +96,8 @@ int main(int argc, char const** argv)
     cudf::ast::ast_operator::LESS_EQUAL, shipdate_ref, shipdate_upper_literal);
 
   // Read out the `lineitem` table from parquet file
-  auto lineitem = read_parquet(
-    args.dataset_dir + "lineitem/part-0.parquet", lineitem_cols, std::move(lineitem_pred));
+  auto lineitem =
+    read_parquet(args.dataset_dir + "/lineitem.parquet", lineitem_cols, std::move(lineitem_pred));
 
   // Calculate the discount price and charge columns and append to lineitem table
   auto disc_price =

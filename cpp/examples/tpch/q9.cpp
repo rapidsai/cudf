@@ -69,22 +69,16 @@ std::unique_ptr<cudf::column> calc_amount(cudf::column_view discount,
                                           cudf::column_view supplycost,
                                           cudf::column_view quantity)
 {
-  auto one = cudf::fixed_point_scalar<numeric::decimal64>(1);
+  auto one = cudf::numeric_scalar<double>(1);
   auto one_minus_discount =
     cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type());
-  auto extendedprice_discounted_scale = cudf::binary_operation_fixed_point_scale(
-    cudf::binary_operator::MUL, extendedprice.type().scale(), one_minus_discount->type().scale());
-  auto extendedprice_discounted_type =
-    cudf::data_type{cudf::type_id::DECIMAL64, extendedprice_discounted_scale};
-  auto extendedprice_discounted  = cudf::binary_operation(extendedprice,
+  auto extendedprice_discounted_type = cudf::data_type{cudf::type_id::FLOAT64};
+  auto extendedprice_discounted      = cudf::binary_operation(extendedprice,
                                                          one_minus_discount->view(),
                                                          cudf::binary_operator::MUL,
                                                          extendedprice_discounted_type);
-  auto supplycost_quantity_scale = cudf::binary_operation_fixed_point_scale(
-    cudf::binary_operator::MUL, supplycost.type().scale(), quantity.type().scale());
-  auto supplycost_quantity_type =
-    cudf::data_type{cudf::type_id::DECIMAL64, supplycost_quantity_scale};
-  auto supplycost_quantity = cudf::binary_operation(
+  auto supplycost_quantity_type      = cudf::data_type{cudf::type_id::FLOAT64};
+  auto supplycost_quantity           = cudf::binary_operation(
     supplycost, quantity, cudf::binary_operator::MUL, supplycost_quantity_type);
   auto amount = cudf::binary_operation(extendedprice_discounted->view(),
                                        supplycost_quantity->view(),
@@ -105,16 +99,15 @@ int main(int argc, char const** argv)
 
   // Read out the table from parquet files
   auto lineitem = read_parquet(
-    args.dataset_dir + "lineitem/part-0.parquet",
+    args.dataset_dir + "/lineitem.parquet",
     {"l_suppkey", "l_partkey", "l_orderkey", "l_extendedprice", "l_discount", "l_quantity"});
-  auto nation = read_parquet(args.dataset_dir + "nation/part-0.parquet", {"n_nationkey", "n_name"});
-  auto orders =
-    read_parquet(args.dataset_dir + "orders/part-0.parquet", {"o_orderkey", "o_orderdate"});
-  auto part     = read_parquet(args.dataset_dir + "part/part-0.parquet", {"p_partkey", "p_name"});
-  auto partsupp = read_parquet(args.dataset_dir + "partsupp/part-0.parquet",
+  auto nation   = read_parquet(args.dataset_dir + "/nation.parquet", {"n_nationkey", "n_name"});
+  auto orders   = read_parquet(args.dataset_dir + "/orders.parquet", {"o_orderkey", "o_orderdate"});
+  auto part     = read_parquet(args.dataset_dir + "/part.parquet", {"p_partkey", "p_name"});
+  auto partsupp = read_parquet(args.dataset_dir + "/partsupp.parquet",
                                {"ps_suppkey", "ps_partkey", "ps_supplycost"});
   auto supplier =
-    read_parquet(args.dataset_dir + "supplier/part-0.parquet", {"s_suppkey", "s_nationkey"});
+    read_parquet(args.dataset_dir + "/supplier.parquet", {"s_suppkey", "s_nationkey"});
 
   // Generating the `profit` table
   // Filter the part table using `p_name like '%green%'`

@@ -105,17 +105,17 @@ int main(int argc, char const** argv)
   // Read out the tables from parquet files
   // while pushing down the column projections and filter predicates
   auto customer =
-    read_parquet(args.dataset_dir + "customer.parquet", {"c_custkey", "c_nationkey"});
+    read_parquet(args.dataset_dir + "/customer.parquet", {"c_custkey", "c_nationkey"});
   auto orders =
-    read_parquet(args.dataset_dir + "orders.parquet", orders_cols, std::move(orders_pred));
-  auto lineitem = read_parquet(args.dataset_dir + "lineitem.parquet",
+    read_parquet(args.dataset_dir + "/orders.parquet", orders_cols, std::move(orders_pred));
+  auto lineitem = read_parquet(args.dataset_dir + "/lineitem.parquet",
                                {"l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"});
   auto supplier =
-    read_parquet(args.dataset_dir + "supplier.parquet", {"s_suppkey", "s_nationkey"});
-  auto nation = read_parquet(args.dataset_dir + "nation.parquet",
-                             {"n_nationkey", "n_regionkey", "n_name"});
+    read_parquet(args.dataset_dir + "/supplier.parquet", {"s_suppkey", "s_nationkey"});
+  auto nation =
+    read_parquet(args.dataset_dir + "/nation.parquet", {"n_nationkey", "n_regionkey", "n_name"});
   auto region =
-    read_parquet(args.dataset_dir + "region.parquet", region_cols, std::move(region_pred));
+    read_parquet(args.dataset_dir + "/region.parquet", region_cols, std::move(region_pred));
 
   // Perform the joins
   auto join_a = apply_inner_join(region, nation, {"r_regionkey"}, {"n_regionkey"});

@@ -38,9 +38,7 @@ where
 std::unique_ptr<cudf::column> calc_revenue(cudf::column_view extendedprice,
                                            cudf::column_view discount)
 {
-  auto revenue_scale = cudf::binary_operation_fixed_point_scale(
-    cudf::binary_operator::MUL, extendedprice.type().scale(), discount.type().scale());
-  auto revenue_type = cudf::data_type{cudf::type_id::DECIMAL64, revenue_scale};
+  auto revenue_type = cudf::data_type{cudf::type_id::FLOAT64};
   auto revenue =
     cudf::binary_operation(extendedprice, discount, cudf::binary_operator::MUL, revenue_type);
   return revenue;
@@ -73,8 +71,8 @@ int main(int argc, char const** argv)
     cudf::ast::operation(cudf::ast::ast_operator::LESS, shipdate_ref, shipdate_upper_literal);
   auto lineitem_pred = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LOGICAL_AND, shipdate_pred_a, shipdate_pred_b);
-  auto lineitem = read_parquet(
-    args.dataset_dir + "lineitem/part-0.parquet", lineitem_cols, std::move(lineitem_pred));
+  auto lineitem =
+    read_parquet(args.dataset_dir + "/lineitem.parquet", lineitem_cols, std::move(lineitem_pred));
 
   // Cast the discount and quantity columns to float32 and append to lineitem table
   auto discout_float =
