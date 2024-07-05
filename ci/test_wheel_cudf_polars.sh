@@ -20,10 +20,11 @@ fi
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp ./dist
 RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./dist
+RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-s3 ./dist
 
 # echo to expand wildcard before adding `[extra]` requires for pip
 rapids-logger "Install cudf wheel"
-python -m pip install --find-links $(pwd)/dist $(echo ./dist/cudf*.whl)[test]
+python -m pip install --find-links $(pwd)/dist $(echo ./dist/cudf_polars*.whl)[test]
 
 rapids-logger "Install cudf_polars"
 python -m pip install 'polars>=1.0.0a0'
@@ -43,13 +44,11 @@ EXITCODE=0
 trap set_exitcode ERR
 set +e
 
-python -m pytest \
-       --cache-clear \
+./ci/run_cudf_polars_pytests.sh \
        --cov cudf_polars \
        --cov-fail-under=100 \
-       --cov-config=python/cudf_polars/pyproject.toml \
-       --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf_polars.xml" \
-       python/cudf_polars/tests
+       --cov-config=./pyproject.toml \
+       --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml"
 
 trap ERR
 set -e
