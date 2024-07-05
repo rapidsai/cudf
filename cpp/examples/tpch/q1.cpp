@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
+#include "utils.hpp"
+
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
-
-#include "utils.hpp"
 
 /*
 create view lineitem as select * from '~/tpch_sf1/lineitem/part-0.parquet';
@@ -46,121 +46,101 @@ order by
     l_linestatus;
 */
 
-std::unique_ptr<cudf::column> calc_disc_price(
-    cudf::column_view discount, cudf::column_view extendedprice) {
-    auto one = cudf::fixed_point_scalar<numeric::decimal64>(1);
-    auto one_minus_discount = cudf::binary_operation(
-        one, discount, cudf::binary_operator::SUB, discount.type());
-    auto disc_price_scale = cudf::binary_operation_fixed_point_scale(
-        cudf::binary_operator::MUL,
-        extendedprice.type().scale(),
-        one_minus_discount->type().scale()
-    );
-    auto disc_price_type = cudf::data_type{cudf::type_id::DECIMAL64, disc_price_scale};
-    auto disc_price = cudf::binary_operation(
-        extendedprice, one_minus_discount->view(), cudf::binary_operator::MUL, disc_price_type);
-    return disc_price;
+std::unique_ptr<cudf::column> calc_disc_price(cudf::column_view discount,
+                                              cudf::column_view extendedprice)
+{
+  auto one = cudf::fixed_point_scalar<numeric::decimal64>(1);
+  auto one_minus_discount =
+    cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type());
+  auto disc_price_scale = cudf::binary_operation_fixed_point_scale(
+    cudf::binary_operator::MUL, extendedprice.type().scale(), one_minus_discount->type().scale());
+  auto disc_price_type = cudf::data_type{cudf::type_id::DECIMAL64, disc_price_scale};
+  auto disc_price      = cudf::binary_operation(
+    extendedprice, one_minus_discount->view(), cudf::binary_operator::MUL, disc_price_type);
+  return disc_price;
 }
 
-std::unique_ptr<cudf::column> calc_charge(cudf::column_view tax, cudf::column_view disc_price) {
-    auto one = cudf::fixed_point_scalar<numeric::decimal64>(1);
-    auto one_plus_tax = cudf::binary_operation(one, tax, cudf::binary_operator::ADD, tax.type());
-    auto charge_scale = cudf::binary_operation_fixed_point_scale(
-        cudf::binary_operator::MUL,
-        disc_price.type().scale(),
-        one_plus_tax->type().scale()
-    );
-    auto charge_type = cudf::data_type{cudf::type_id::DECIMAL64, charge_scale};
-    auto charge = cudf::binary_operation(
-        disc_price, one_plus_tax->view(), cudf::binary_operator::MUL, charge_type);
-    return charge;
+std::unique_ptr<cudf::column> calc_charge(cudf::column_view tax, cudf::column_view disc_price)
+{
+  auto one          = cudf::fixed_point_scalar<numeric::decimal64>(1);
+  auto one_plus_tax = cudf::binary_operation(one, tax, cudf::binary_operator::ADD, tax.type());
+  auto charge_scale = cudf::binary_operation_fixed_point_scale(
+    cudf::binary_operator::MUL, disc_price.type().scale(), one_plus_tax->type().scale());
+  auto charge_type = cudf::data_type{cudf::type_id::DECIMAL64, charge_scale};
+  auto charge      = cudf::binary_operation(
+    disc_price, one_plus_tax->view(), cudf::binary_operator::MUL, charge_type);
+  return charge;
 }
 
-int main(int argc, char const** argv) {
-    auto args = parse_args(argc, argv);
+int main(int argc, char const** argv)
+{
+  auto args = parse_args(argc, argv);
 
-    // Use a memory pool
-    auto resource = create_memory_resource(args.memory_resource_type);
-    rmm::mr::set_current_device_resource(resource.get());
+  // Use a memory pool
+  auto resource = create_memory_resource(args.memory_resource_type);
+  rmm::mr::set_current_device_resource(resource.get());
 
-    Timer timer;
+  Timer timer;
 
-    // Define the column projections and filter predicate for `lineitem` table
-    std::vector<std::string> lineitem_cols = {
-        "l_returnflag", "l_linestatus", "l_quantity", "l_extendedprice", "l_discount", "l_shipdate", "l_orderkey", "l_tax"};
-    auto shipdate_ref = cudf::ast::column_reference(
-        std::distance(lineitem_cols.begin(), std::find(lineitem_cols.begin(), lineitem_cols.end(), "l_shipdate")));
-    auto shipdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1998, 9, 2), true);
-    auto shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
-    auto lineitem_pred = std::make_unique<cudf::ast::operation>(
-        cudf::ast::ast_operator::LESS_EQUAL,
-        shipdate_ref,
-        shipdate_upper_literal
-    );
+  // Define the column projections and filter predicate for `lineitem` table
+  std::vector<std::string> lineitem_cols = {"l_returnflag",
+                                            "l_linestatus",
+                                            "l_quantity",
+                                            "l_extendedprice",
+                                            "l_discount",
+                                            "l_shipdate",
+                                            "l_orderkey",
+                                            "l_tax"};
+  auto shipdate_ref                      = cudf::ast::column_reference(std::distance(
+    lineitem_cols.begin(), std::find(lineitem_cols.begin(), lineitem_cols.end(), "l_shipdate")));
+  auto shipdate_upper =
+    cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1998, 9, 2), true);
+  auto shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
+  auto lineitem_pred          = std::make_unique<cudf::ast::operation>(
+    cudf::ast::ast_operator::LESS_EQUAL, shipdate_ref, shipdate_upper_literal);
 
-    // Read out the `lineitem` table from parquet file
-    auto lineitem = read_parquet(
-        args.dataset_dir + "lineitem/part-0.parquet", 
-        lineitem_cols,
-        std::move(lineitem_pred)
-    );
+  // Read out the `lineitem` table from parquet file
+  auto lineitem = read_parquet(
+    args.dataset_dir + "lineitem/part-0.parquet", lineitem_cols, std::move(lineitem_pred));
 
-    // Calculate the discount price and charge columns and append to lineitem table
-    auto disc_price = calc_disc_price(
-        lineitem->column("l_discount"), lineitem->column("l_extendedprice"));
-    auto charge = calc_charge(
-        lineitem->column("l_tax"), disc_price->view());
-    auto appended_table = lineitem->append(disc_price, "disc_price")->append(charge, "charge");
+  // Calculate the discount price and charge columns and append to lineitem table
+  auto disc_price =
+    calc_disc_price(lineitem->column("l_discount"), lineitem->column("l_extendedprice"));
+  auto charge         = calc_charge(lineitem->column("l_tax"), disc_price->view());
+  auto appended_table = lineitem->append(disc_price, "disc_price")->append(charge, "charge");
 
-    // Perform the group by operation
-    auto groupedby_table = apply_groupby(
-        appended_table, 
-        groupby_context_t {
-            {"l_returnflag", "l_linestatus"},
-            {
-                {
-                    "l_extendedprice", 
-                    {
-                        {cudf::aggregation::Kind::SUM, "sum_base_price"}, 
-                        {cudf::aggregation::Kind::MEAN, "avg_price"}    
-                    }
-                },
-                {
-                    "l_quantity", 
-                    {
-                        {cudf::aggregation::Kind::SUM, "sum_qty"},
-                        {cudf::aggregation::Kind::MEAN, "avg_qty"}
-                    }
-                },
-                {
-                    "l_discount", 
-                    {
-                        {cudf::aggregation::Kind::MEAN, "avg_disc"},
-                    }
-                },
-                {
-                    "disc_price", 
-                    {
-                        {cudf::aggregation::Kind::SUM, "sum_disc_price"},
-                    }
-                },
-                {
-                    "charge", 
-                    {
-                        {cudf::aggregation::Kind::SUM, "sum_charge"}, 
-                        {cudf::aggregation::Kind::COUNT_ALL, "count_order"}
-                    }
-                },
-            }
-        }
-    );
+  // Perform the group by operation
+  auto groupedby_table = apply_groupby(
+    appended_table,
+    groupby_context_t{
+      {"l_returnflag", "l_linestatus"},
+      {
+        {"l_extendedprice",
+         {{cudf::aggregation::Kind::SUM, "sum_base_price"},
+          {cudf::aggregation::Kind::MEAN, "avg_price"}}},
+        {"l_quantity",
+         {{cudf::aggregation::Kind::SUM, "sum_qty"}, {cudf::aggregation::Kind::MEAN, "avg_qty"}}},
+        {"l_discount",
+         {
+           {cudf::aggregation::Kind::MEAN, "avg_disc"},
+         }},
+        {"disc_price",
+         {
+           {cudf::aggregation::Kind::SUM, "sum_disc_price"},
+         }},
+        {"charge",
+         {{cudf::aggregation::Kind::SUM, "sum_charge"},
+          {cudf::aggregation::Kind::COUNT_ALL, "count_order"}}},
+      }});
 
-    // Perform the order by operation
-    auto orderedby_table = apply_orderby(groupedby_table, {"l_returnflag", "l_linestatus"}, {cudf::order::ASCENDING, cudf::order::ASCENDING});
+  // Perform the order by operation
+  auto orderedby_table = apply_orderby(groupedby_table,
+                                       {"l_returnflag", "l_linestatus"},
+                                       {cudf::order::ASCENDING, cudf::order::ASCENDING});
 
-    timer.print_elapsed_millis();
-    
-    // Write query result to a parquet file
-    orderedby_table->to_parquet("q1.parquet");
-    return 0;
+  timer.print_elapsed_millis();
+
+  // Write query result to a parquet file
+  orderedby_table->to_parquet("q1.parquet");
+  return 0;
 }

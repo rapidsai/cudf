@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
+#include "utils.hpp"
+
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
-
-#include "utils.hpp"
 
 /*
 create view customer as select * from '~/tpch_sf1/customer/part-0.parquet';
@@ -54,147 +54,98 @@ order by
     revenue desc;
 */
 
-std::unique_ptr<cudf::column> calc_revenue(
-    cudf::column_view extendedprice, cudf::column_view discount) {
-    auto one = cudf::fixed_point_scalar<numeric::decimal64>(1, -2);
-    auto one_minus_discount = cudf::binary_operation(
-        one, discount, cudf::binary_operator::SUB, discount.type());
-    auto revenue_scale = cudf::binary_operation_fixed_point_scale(
-        cudf::binary_operator::MUL,
-        extendedprice.type().scale(),
-        one_minus_discount->type().scale()
-    );
-    auto revenue_type = cudf::data_type{cudf::type_id::DECIMAL64, revenue_scale};
-    auto revenue = cudf::binary_operation(
-        extendedprice, one_minus_discount->view(), cudf::binary_operator::MUL, revenue_type);
-    return revenue;
+std::unique_ptr<cudf::column> calc_revenue(cudf::column_view extendedprice,
+                                           cudf::column_view discount)
+{
+  auto one = cudf::fixed_point_scalar<numeric::decimal64>(1, -2);
+  auto one_minus_discount =
+    cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type());
+  auto revenue_scale = cudf::binary_operation_fixed_point_scale(
+    cudf::binary_operator::MUL, extendedprice.type().scale(), one_minus_discount->type().scale());
+  auto revenue_type = cudf::data_type{cudf::type_id::DECIMAL64, revenue_scale};
+  auto revenue      = cudf::binary_operation(
+    extendedprice, one_minus_discount->view(), cudf::binary_operator::MUL, revenue_type);
+  return revenue;
 }
 
-int main(int argc, char const** argv) {
-    auto args = parse_args(argc, argv);
+int main(int argc, char const** argv)
+{
+  auto args = parse_args(argc, argv);
 
-    // Use a memory pool
-    auto resource = create_memory_resource(args.memory_resource_type);
-    rmm::mr::set_current_device_resource(resource.get());
+  // Use a memory pool
+  auto resource = create_memory_resource(args.memory_resource_type);
+  rmm::mr::set_current_device_resource(resource.get());
 
-    Timer timer;
+  Timer timer;
 
-    // Define the column projection and filter predicate for the `orders` table
-    std::vector<std::string> orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
-    auto o_orderdate_ref = cudf::ast::column_reference(
-        std::distance(orders_cols.begin(), std::find(orders_cols.begin(), orders_cols.end(), "o_orderdate"))
-    );
-    auto o_orderdate_lower = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
-    auto o_orderdate_lower_limit = cudf::ast::literal(o_orderdate_lower);
-    auto o_orderdate_pred_lower = cudf::ast::operation(
-        cudf::ast::ast_operator::GREATER_EQUAL,
-        o_orderdate_ref,
-        o_orderdate_lower_limit
-    );
-    auto o_orderdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 1, 1), true);
-    auto o_orderdate_upper_limit = cudf::ast::literal(o_orderdate_upper);
-    auto o_orderdate_pred_upper = cudf::ast::operation(
-        cudf::ast::ast_operator::LESS,
-        o_orderdate_ref,
-        o_orderdate_upper_limit
-    );
-    auto orders_pred = std::make_unique<cudf::ast::operation>(
-        cudf::ast::ast_operator::LOGICAL_AND,
-        o_orderdate_pred_lower,
-        o_orderdate_pred_upper
-    );
+  // Define the column projection and filter predicate for the `orders` table
+  std::vector<std::string> orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
+  auto o_orderdate_ref                 = cudf::ast::column_reference(std::distance(
+    orders_cols.begin(), std::find(orders_cols.begin(), orders_cols.end(), "o_orderdate")));
+  auto o_orderdate_lower =
+    cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
+  auto o_orderdate_lower_limit = cudf::ast::literal(o_orderdate_lower);
+  auto o_orderdate_pred_lower  = cudf::ast::operation(
+    cudf::ast::ast_operator::GREATER_EQUAL, o_orderdate_ref, o_orderdate_lower_limit);
+  auto o_orderdate_upper =
+    cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 1, 1), true);
+  auto o_orderdate_upper_limit = cudf::ast::literal(o_orderdate_upper);
+  auto o_orderdate_pred_upper =
+    cudf::ast::operation(cudf::ast::ast_operator::LESS, o_orderdate_ref, o_orderdate_upper_limit);
+  auto orders_pred = std::make_unique<cudf::ast::operation>(
+    cudf::ast::ast_operator::LOGICAL_AND, o_orderdate_pred_lower, o_orderdate_pred_upper);
 
-    // Define the column projection and filter predicate for the `region` table
-    std::vector<std::string> region_cols = {"r_regionkey", "r_name"};
-    auto r_name_ref = cudf::ast::column_reference(
-        std::distance(region_cols.begin(), std::find(region_cols.begin(), region_cols.end(), "r_name"))); 
-    auto r_name_value = cudf::string_scalar("ASIA");
-    auto r_name_literal = cudf::ast::literal(r_name_value);
-    auto region_pred = std::make_unique<cudf::ast::operation>(
-        cudf::ast::ast_operator::EQUAL,
-        r_name_ref,
-        r_name_literal
-    );
+  // Define the column projection and filter predicate for the `region` table
+  std::vector<std::string> region_cols = {"r_regionkey", "r_name"};
+  auto r_name_ref                      = cudf::ast::column_reference(std::distance(
+    region_cols.begin(), std::find(region_cols.begin(), region_cols.end(), "r_name")));
+  auto r_name_value                    = cudf::string_scalar("ASIA");
+  auto r_name_literal                  = cudf::ast::literal(r_name_value);
+  auto region_pred                     = std::make_unique<cudf::ast::operation>(
+    cudf::ast::ast_operator::EQUAL, r_name_ref, r_name_literal);
 
-    // Read out the tables from parquet files
-    // while pushing down the column projections and filter predicates
-    auto customer = read_parquet(
-        args.dataset_dir + "customer/part-0.parquet", {"c_custkey", "c_nationkey"});
-    auto orders = read_parquet(
-        args.dataset_dir + "orders/part-0.parquet", 
-        orders_cols,
-        std::move(orders_pred)
-    );
-    auto lineitem = read_parquet(
-        args.dataset_dir + "lineitem/part-0.parquet", 
-        {"l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"}
-    );
-    auto supplier = read_parquet(
-        args.dataset_dir + "supplier/part-0.parquet", {"s_suppkey", "s_nationkey"}
-    );
-    auto nation = read_parquet(
-        args.dataset_dir + "nation/part-0.parquet", {"n_nationkey", "n_regionkey", "n_name"}
-    );
-    auto region = read_parquet(
-        args.dataset_dir + "region/part-0.parquet", 
-        region_cols,
-        std::move(region_pred)
-    );
+  // Read out the tables from parquet files
+  // while pushing down the column projections and filter predicates
+  auto customer =
+    read_parquet(args.dataset_dir + "customer/part-0.parquet", {"c_custkey", "c_nationkey"});
+  auto orders =
+    read_parquet(args.dataset_dir + "orders/part-0.parquet", orders_cols, std::move(orders_pred));
+  auto lineitem = read_parquet(args.dataset_dir + "lineitem/part-0.parquet",
+                               {"l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"});
+  auto supplier =
+    read_parquet(args.dataset_dir + "supplier/part-0.parquet", {"s_suppkey", "s_nationkey"});
+  auto nation = read_parquet(args.dataset_dir + "nation/part-0.parquet",
+                             {"n_nationkey", "n_regionkey", "n_name"});
+  auto region =
+    read_parquet(args.dataset_dir + "region/part-0.parquet", region_cols, std::move(region_pred));
 
-    // Perform the joins
-    auto join_a = apply_inner_join(
-        region,
-        nation,
-        {"r_regionkey"},
-        {"n_regionkey"}
-    );
-    auto join_b = apply_inner_join(
-        join_a,
-        customer,
-        {"n_nationkey"},
-        {"c_nationkey"}
-    );
-    auto join_c = apply_inner_join(
-        join_b,
-        orders,
-        {"c_custkey"},
-        {"o_custkey"}
-    );
-    auto join_d = apply_inner_join(
-        join_c,
-        lineitem,
-        {"o_orderkey"},
-        {"l_orderkey"}
-    );
-    auto joined_table = apply_inner_join(
-        supplier,
-        join_d,
-        {"s_suppkey", "s_nationkey"},
-        {"l_suppkey", "n_nationkey"}
-    );
+  // Perform the joins
+  auto join_a = apply_inner_join(region, nation, {"r_regionkey"}, {"n_regionkey"});
+  auto join_b = apply_inner_join(join_a, customer, {"n_nationkey"}, {"c_nationkey"});
+  auto join_c = apply_inner_join(join_b, orders, {"c_custkey"}, {"o_custkey"});
+  auto join_d = apply_inner_join(join_c, lineitem, {"o_orderkey"}, {"l_orderkey"});
+  auto joined_table =
+    apply_inner_join(supplier, join_d, {"s_suppkey", "s_nationkey"}, {"l_suppkey", "n_nationkey"});
 
-    // Calculate and append the `revenue` column
-    auto revenue = calc_revenue(
-        joined_table->column("l_extendedprice"), joined_table->column("l_discount"));
-    auto appended_table = joined_table->append(revenue, "revenue");
+  // Calculate and append the `revenue` column
+  auto revenue =
+    calc_revenue(joined_table->column("l_extendedprice"), joined_table->column("l_discount"));
+  auto appended_table = joined_table->append(revenue, "revenue");
 
-    // Perform the groupby operation
-    auto groupedby_table = apply_groupby(
-        appended_table, 
-        groupby_context_t {
-            {"n_name"}, 
-            {
-                {"revenue", {{cudf::aggregation::Kind::SUM, "revenue"}}},
-            }
-        });
+  // Perform the groupby operation
+  auto groupedby_table =
+    apply_groupby(appended_table,
+                  groupby_context_t{{"n_name"},
+                                    {
+                                      {"revenue", {{cudf::aggregation::Kind::SUM, "revenue"}}},
+                                    }});
 
-    // Perform the order by operation
-    auto orderedby_table = apply_orderby(
-        groupedby_table, {"revenue"}, {cudf::order::DESCENDING});
+  // Perform the order by operation
+  auto orderedby_table = apply_orderby(groupedby_table, {"revenue"}, {cudf::order::DESCENDING});
 
-    timer.print_elapsed_millis();
+  timer.print_elapsed_millis();
 
-    // Write query result to a parquet file
-    orderedby_table->to_parquet("q5.parquet");
-    return 0;
+  // Write query result to a parquet file
+  orderedby_table->to_parquet("q5.parquet");
+  return 0;
 }
