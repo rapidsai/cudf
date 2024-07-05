@@ -7050,12 +7050,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # Assemble the final index
         new_index_columns = [*repeated_index._columns, *tiled_index]
         index_names = [*self.index.names, *unique_named_levels.names]
-        new_index = MultiIndex.from_frame(
-            DataFrame._from_data(
-                dict(zip(range(0, len(new_index_columns)), new_index_columns))
-            ),
-            names=index_names,
-        )
+        new_index = MultiIndex._from_data(dict(enumerate(new_index_columns)))
+        new_index.names = index_names
 
         # Compute the column indices that serves as the input for
         # `interleave_columns`

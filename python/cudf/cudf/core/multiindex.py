@@ -175,6 +175,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 )
 
         levels = [ensure_index(level) for level in levels]
+        if names is not None:
+            levels = [idx.rename(name) for idx, name in zip(levels, names)]
 
         if len(levels) != len(codes._data):
             raise ValueError(
