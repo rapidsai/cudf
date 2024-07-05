@@ -114,18 +114,14 @@ class table_with_cols {
          * @param col The column to append
          * @param col_name The name of the appended column
          */
-        std::unique_ptr<table_with_cols> append(std::unique_ptr<cudf::column>& col, std::string col_name) {
+        std::unique_ptr<table_with_cols> append(
+            std::unique_ptr<cudf::column>& col, std::string col_name) {
             CUDF_FUNC_RANGE();
-            std::vector<std::unique_ptr<cudf::column>> updated_cols;
-            std::vector<std::string> updated_col_names;
-            for (size_t i = 0; i < tbl->num_columns(); i++) {
-                updated_cols.push_back(std::make_unique<cudf::column>(tbl->get_column(i)));
-                updated_col_names.push_back(col_names[i]);
-            }
-            updated_cols.push_back(std::move(col));
-            updated_col_names.push_back(col_name);
-            auto updated_table = std::make_unique<cudf::table>(std::move(updated_cols));
-            return std::make_unique<table_with_cols>(std::move(updated_table), updated_col_names);
+            auto cols = tbl->release();
+            cols.push_back(std::move(col));
+            col_names.push_back(col_name);
+            auto appended_table = std::make_unique<cudf::table>(std::move(cols));
+            return std::make_unique<table_with_cols>(std::move(appended_table), col_names);
         }
         /**
          * @brief Select a subset of columns from the table
