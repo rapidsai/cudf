@@ -166,18 +166,16 @@ def test_replace_re(ldf):
     "target,repl",
     [
         (["A", "de", "kLm", "awef"], "a"),
-        # TODO: this hangs on newest polars, investigate whether
-        # it is a polars or cudf problem
         (["A", "de", "kLm", "awef"], ["a", "b", "c", "d"]),
-        (pl.col("a"), pl.col("a")),
+        (pl.col("a").drop_nulls(), pl.col("a").drop_nulls()),
     ],
 )
 def test_replace_many(ldf, target, repl):
     if isinstance(target, pl.Expr):
-        # libcudf cannot handle nulls in target column
+        # drop nulls since this will raise in both cudf/polars
+        #
         # TODO: refactor so that drop_nulls happens on the pl.col call
-        # (not possible right now since the dropnull Expr function is not
-        # implemented)
+        # (once the dropnull unary function is implemented)
         ldf = ldf.drop_nulls()
     query = ldf.select(pl.col("a").str.replace_many(target, repl))
 
