@@ -47,42 +47,10 @@ struct tree_meta_t {
   rmm::device_uvector<SymbolOffsetT> node_range_end;
 };
 
-struct column_tree_csr {
-  // position of nnzs
-  rmm::device_uvector<NodeIndexT> rowidx;
-  rmm::device_uvector<NodeIndexT> colidx;
-  // node properties
-  rmm::device_uvector<NodeIndexT> column_ids;
-  rmm::device_uvector<NodeT> categories;
-  rmm::device_uvector<SymbolOffsetT> range_begin;
-  rmm::device_uvector<SymbolOffsetT> range_end;
-  std::vector<uint8_t> ignore_vals;
-  std::vector<uint8_t> is_mixed_type_column;
-  std::vector<uint8_t> is_pruned;
-};
-
 /**
  * @brief A column type
  */
 enum class json_col_t : char { ListColumn, StructColumn, StringColumn, Unknown };
-
-/**
- * @brief Enum class to specify whether we just push onto and pop from the stack or whether we also
- * reset to an empty stack on a newline character.
- */
-enum class stack_behavior_t : char {
-  /// Opening brackets and braces, [, {, push onto the stack, closing brackets and braces, ], }, pop
-  /// from the stack
-  PushPopWithoutReset,
-
-  /// Opening brackets and braces, [, {, push onto the stack, closing brackets and braces, ], }, pop
-  /// from the stack. Delimiter characters are passed when the stack context is constructed to
-  /// reset to an empty stack.
-  ResetOnDelimiter
-};
-
-// Default name for a list's child column
-constexpr auto list_child_name{"element"};
 
 /**
  * @brief Intermediate representation of data from a nested JSON input
@@ -199,6 +167,63 @@ struct device_json_column {
   {
   }
 };
+
+/**
+ * @brief Holds member data pointers of `d_json_column`
+ *
+ */
+struct json_column_data {
+  using row_offset_t = json_column::row_offset_t;
+  row_offset_t* string_offsets;
+  row_offset_t* string_lengths;
+  row_offset_t* child_offsets;
+  bitmask_type* validity;
+};
+
+
+struct column_tree_csr {
+  // position of nnzs
+  rmm::device_uvector<NodeIndexT> rowidx;
+  rmm::device_uvector<NodeIndexT> colidx;
+  // node properties
+  rmm::device_uvector<NodeIndexT> column_ids;
+  rmm::device_uvector<NodeT> categories;
+  rmm::device_uvector<SymbolOffsetT> range_begin;
+  rmm::device_uvector<SymbolOffsetT> range_end;
+  std::vector<uint8_t> ignore_vals;
+  std::vector<uint8_t> is_mixed_type_column;
+  std::vector<uint8_t> is_pruned;
+  // device_json_column properties
+  // Type used to count number of rows
+  using row_offset_t = size_type;
+  // The inferred type of this column (list, struct, or value/string column)
+  std::vector<json_col_t> types;
+  rmm::device_uvector<row_offset_t> string_offsets;
+  rmm::device_uvector<row_offset_t> string_lengths;
+  // Row offsets
+  rmm::device_uvector<row_offset_t> child_offsets;
+  // Validity bitmap
+  rmm::device_buffer validity;
+  std::vector<row_offset_t> num_rows;
+};
+
+/**
+ * @brief Enum class to specify whether we just push onto and pop from the stack or whether we also
+ * reset to an empty stack on a newline character.
+ */
+enum class stack_behavior_t : char {
+  /// Opening brackets and braces, [, {, push onto the stack, closing brackets and braces, ], }, pop
+  /// from the stack
+  PushPopWithoutReset,
+
+  /// Opening brackets and braces, [, {, push onto the stack, closing brackets and braces, ], }, pop
+  /// from the stack. Delimiter characters are passed when the stack context is constructed to
+  /// reset to an empty stack.
+  ResetOnDelimiter
+};
+
+// Default name for a list's child column
+constexpr auto list_child_name{"element"};
 
 namespace detail {
 
@@ -341,6 +366,17 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
   bool is_array_of_arrays,
   NodeIndexT const row_array_parent_col_id,
   rmm::cuda_stream_view stream);
+
+void make_device_json_column_csr(device_span<SymbolT const> input,
+                             tree_meta_t& tree,
+                             device_span<NodeIndexT> col_ids,
+                             device_span<size_type> row_offsets,
+                             device_json_column& root,
+                             bool is_array_of_arrays,
+                             cudf::io::json_reader_options const& options,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr);
+
 
 /**
  * @brief Retrieves the parse_options to be used for type inference and type casting
