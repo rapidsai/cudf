@@ -64,7 +64,10 @@ int main(int argc, char const** argv) {
     Timer timer;
 
     // Read out the `lineitem` table from parquet file
-    auto shipdate_ref = cudf::ast::column_reference(2);
+    std::vector<std::string> lineitem_cols = {"l_extendedprice", "l_discount", "l_shipdate", "l_quantity"};
+    auto shipdate_ref = cudf::ast::column_reference(
+        std::distance(lineitem_cols.begin(), std::find(lineitem_cols.begin(), lineitem_cols.end(), "l_shipdate"))
+    );
     auto shipdate_lower = cudf::timestamp_scalar<cudf::timestamp_D>(
         days_since_epoch(1994, 1, 1), true);
     auto shipdate_lower_literal = cudf::ast::literal(shipdate_lower);
@@ -81,15 +84,15 @@ int main(int argc, char const** argv) {
         shipdate_ref,
         shipdate_upper_literal
     );
-    auto shipdate_pred = std::make_unique<cudf::ast::operation>(
+    auto lineitem_pred = std::make_unique<cudf::ast::operation>(
         cudf::ast::ast_operator::LOGICAL_AND,
         shipdate_pred_a,
         shipdate_pred_b
     );
     auto lineitem = read_parquet(
         args.dataset_dir + "lineitem/part-0.parquet", 
-        {"l_extendedprice", "l_discount", "l_shipdate", "l_quantity"},
-        std::move(shipdate_pred)
+        lineitem_cols,
+        std::move(lineitem_pred)
     );
 
     // Cast the discount and quantity columns to float32 and append to lineitem table
