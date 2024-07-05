@@ -40,7 +40,7 @@ set +e
 ./ci/run_cudf_polars_pytests.sh \
        --cov cudf_polars \
        --cov-fail-under=100 \
-       --cov-config=python/cudf_polars/pyproject.toml \
+       --cov-config=./pyproject.toml \
        --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml"
 
 trap ERR
