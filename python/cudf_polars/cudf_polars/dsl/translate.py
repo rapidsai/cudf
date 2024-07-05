@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
 from typing import Any
@@ -89,10 +90,16 @@ def _(
     node: pl_ir.Scan, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
     typ, *options = node.scan_type
+    if typ == "ndjson":
+        (reader_options,) = map(json.loads, options)
+        cloud_options = None
+    else:
+        reader_options, cloud_options = map(json.loads, options)
     return ir.Scan(
         schema,
         typ,
-        tuple(options),
+        reader_options,
+        cloud_options,
         node.paths,
         node.file_options,
         translate_named_expr(visitor, n=node.predicate)
