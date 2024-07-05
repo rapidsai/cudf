@@ -108,3 +108,20 @@ def test_scan_row_index_projected_out(tmp_path):
     q = pl.scan_parquet(tmp_path / "df.pq").with_row_index().select(pl.col("a"))
 
     assert_gpu_result_equal(q)
+
+
+def test_scan_csv_column_renames_projection_schema(tmp_path):
+    with (tmp_path / "test.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2,\n3,4,5""")
+
+    q = pl.scan_csv(
+        tmp_path / "test.csv",
+        with_column_names=lambda names: [f"{n}_suffix" for n in names],
+        schema_overrides={
+            "foo_suffix": pl.String(),
+            "bar_suffix": pl.Int8(),
+            "baz_suffix": pl.UInt16(),
+        },
+    )
+
+    assert_gpu_result_equal(q)
