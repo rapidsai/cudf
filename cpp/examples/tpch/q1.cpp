@@ -46,25 +46,37 @@ order by
     l_linestatus;
 */
 
-std::unique_ptr<cudf::column> calc_disc_price(cudf::column_view discount,
-                                              cudf::column_view extendedprice)
+std::unique_ptr<cudf::column> calc_disc_price(
+  cudf::column_view discount,
+  cudf::column_view extendedprice,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   auto one = cudf::numeric_scalar<double>(1);
   auto one_minus_discount =
-    cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type());
+    cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type(), stream, mr);
   auto disc_price_type = cudf::data_type{cudf::type_id::FLOAT64};
-  auto disc_price      = cudf::binary_operation(
-    extendedprice, one_minus_discount->view(), cudf::binary_operator::MUL, disc_price_type);
+  auto disc_price      = cudf::binary_operation(extendedprice,
+                                           one_minus_discount->view(),
+                                           cudf::binary_operator::MUL,
+                                           disc_price_type,
+                                           stream,
+                                           mr);
   return disc_price;
 }
 
-std::unique_ptr<cudf::column> calc_charge(cudf::column_view tax, cudf::column_view disc_price)
+std::unique_ptr<cudf::column> calc_charge(
+  cudf::column_view tax,
+  cudf::column_view disc_price,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
-  auto one          = cudf::numeric_scalar<double>(1);
-  auto one_plus_tax = cudf::binary_operation(one, tax, cudf::binary_operator::ADD, tax.type());
-  auto charge_type  = cudf::data_type{cudf::type_id::FLOAT64};
-  auto charge       = cudf::binary_operation(
-    disc_price, one_plus_tax->view(), cudf::binary_operator::MUL, charge_type);
+  auto one = cudf::numeric_scalar<double>(1);
+  auto one_plus_tax =
+    cudf::binary_operation(one, tax, cudf::binary_operator::ADD, tax.type(), stream, mr);
+  auto charge_type = cudf::data_type{cudf::type_id::FLOAT64};
+  auto charge      = cudf::binary_operation(
+    disc_price, one_plus_tax->view(), cudf::binary_operator::MUL, charge_type, stream, mr);
   return charge;
 }
 
