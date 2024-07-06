@@ -9,6 +9,7 @@ from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.lists cimport (
     contains as cpp_contains,
     explode as cpp_explode,
+    reverse as cpp_reverse,
 )
 from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_list_elements as cpp_concatenate_list_elements,
@@ -204,5 +205,30 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
                 search_key.get()
             ),
             find_option,
+        ))
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column reverse(Column input):
+    """Reverse the element order within each list of the input column.
+
+    For details, see :cpp:func:`reverse`.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+
+    Returns
+    -------
+    Column
+        A new Column with reversed lists.
+    """
+    cdef unique_ptr[column] c_result
+    cdef ListColumnView list_view = input.list_view()
+
+    with nogil:
+        c_result = move(cpp_reverse.reverse(
+            list_view.view(),
         ))
     return Column.from_libcudf(move(c_result))
