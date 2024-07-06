@@ -124,12 +124,12 @@ int main(int argc, char const** argv)
   auto part_filtered = apply_mask(part, mask);
 
   // Perform the joins
-  auto join_a = apply_inner_join(lineitem, supplier, {"l_suppkey"}, {"s_suppkey"});
-  auto join_b =
-    apply_inner_join(join_a, partsupp, {"l_suppkey", "l_partkey"}, {"ps_suppkey", "ps_partkey"});
-  auto join_c       = apply_inner_join(join_b, part_filtered, {"l_partkey"}, {"p_partkey"});
-  auto join_d       = apply_inner_join(join_c, orders, {"l_orderkey"}, {"o_orderkey"});
-  auto joined_table = apply_inner_join(join_d, nation, {"s_nationkey"}, {"n_nationkey"});
+  auto join_a = apply_inner_join(supplier, nation, {"s_nationkey"}, {"n_nationkey"});
+  auto join_b = apply_inner_join(partsupp, join_a, {"ps_suppkey"}, {"s_suppkey"});
+  auto join_c = apply_inner_join(lineitem, part_filtered, {"l_partkey"}, {"p_partkey"});
+  auto join_d = apply_inner_join(orders, join_c, {"o_orderkey"}, {"l_orderkey"});
+  auto joined_table =
+    apply_inner_join(join_d, join_b, {"l_suppkey", "l_partkey"}, {"s_suppkey", "ps_partkey"});
 
   // Calculate the `nation`, `o_year`, and `amount` columns
   auto n_name = std::make_unique<cudf::column>(joined_table->column("n_name"));
