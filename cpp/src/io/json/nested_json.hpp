@@ -180,7 +180,6 @@ struct json_column_data {
   bitmask_type* validity;
 };
 
-
 struct column_tree_csr {
   // position of nnzs
   rmm::device_uvector<NodeIndexT> rowidx;
@@ -195,6 +194,7 @@ struct column_tree_csr {
   std::vector<uint8_t> is_pruned;
   // device_json_column properties
   // Type used to count number of rows
+  /*
   using row_offset_t = size_type;
   // The inferred type of this column (list, struct, or value/string column)
   std::vector<json_col_t> types;
@@ -205,6 +205,7 @@ struct column_tree_csr {
   // Validity bitmap
   rmm::device_buffer validity;
   std::vector<row_offset_t> num_rows;
+  */
 };
 
 /**
@@ -368,15 +369,14 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
   rmm::cuda_stream_view stream);
 
 void make_device_json_column_csr(device_span<SymbolT const> input,
-                             tree_meta_t& tree,
-                             device_span<NodeIndexT> col_ids,
-                             device_span<size_type> row_offsets,
-                             device_json_column& root,
-                             bool is_array_of_arrays,
-                             cudf::io::json_reader_options const& options,
-                             rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr);
-
+                                 tree_meta_t& tree,
+                                 device_span<NodeIndexT> col_ids,
+                                 device_span<size_type> row_offsets,
+                                 device_json_column& root,
+                                 bool is_array_of_arrays,
+                                 cudf::io::json_reader_options const& options,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr);
 
 /**
  * @brief Retrieves the parse_options to be used for type inference and type casting

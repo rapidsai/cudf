@@ -379,18 +379,18 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
  * of child_offets and validity members of `d_json_column`
  */
 void make_device_json_column_csr(device_span<SymbolT const> input,
-                             tree_meta_t& tree,
-                             device_span<NodeIndexT> col_ids,
-                             device_span<size_type> row_offsets,
-                             device_json_column& root,
-                             bool is_array_of_arrays,
-                             cudf::io::json_reader_options const& options,
-                             rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                                 tree_meta_t& tree,
+                                 device_span<NodeIndexT> col_ids,
+                                 device_span<size_type> row_offsets,
+                                 device_json_column& root,
+                                 bool is_array_of_arrays,
+                                 cudf::io::json_reader_options const& options,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  bool const is_enabled_lines                 = options.is_enabled_lines();
-  auto const num_nodes                        = col_ids.size();
+  bool const is_enabled_lines = options.is_enabled_lines();
+  auto const num_nodes        = col_ids.size();
   rmm::device_uvector<NodeIndexT> sorted_col_ids(col_ids.size(), stream);  // make a copy
   thrust::copy(rmm::exec_policy(stream), col_ids.begin(), col_ids.end(), sorted_col_ids.begin());
 
@@ -415,19 +415,20 @@ void make_device_json_column_csr(device_span<SymbolT const> input,
   }();
 
   // 1. gather column information.
-  auto [d_column_tree, d_max_row_offsets] =
-    reduce_to_column_tree_csr(tree,
-                          col_ids,
-                          sorted_col_ids,
-                          node_ids,
-                          row_offsets,
-                          is_array_of_arrays,
-                          row_array_parent_col_id,
-                          stream);
+  auto [d_column_tree, d_max_row_offsets] = reduce_to_column_tree_csr(tree,
+                                                                      col_ids,
+                                                                      sorted_col_ids,
+                                                                      node_ids,
+                                                                      row_offsets,
+                                                                      is_array_of_arrays,
+                                                                      row_array_parent_col_id,
+                                                                      stream);
 
   CUDF_EXPECTS(is_array_of_arrays == false, "array of arrays has not yet been implemented");
-  CUDF_EXPECTS(options.is_enabled_mixed_types_as_string() == false, "mixed type as string has not yet been implemented");
-  CUDF_EXPECTS(options.is_enabled_prune_columns() == false, "column pruning has not yet been implemented");
+  CUDF_EXPECTS(options.is_enabled_mixed_types_as_string() == false,
+               "mixed type as string has not yet been implemented");
+  CUDF_EXPECTS(options.is_enabled_prune_columns() == false,
+               "column pruning has not yet been implemented");
 
   // traverse the column tree
   auto num_columns = d_column_tree.rowidx.size() - 1;
@@ -438,46 +439,64 @@ void make_device_json_column_csr(device_span<SymbolT const> input,
   // i.e. we need to ignore leaf nodes at level above the last level
   // idea: leaf nodes have adjacency 1. So if there is an adjacency 1 inbetween non-one
   // adjacencies, then found the leaf node. Corner case: consider the last set of consecutive
-  // ones. If the leftmost of those ones (say node u) has a non-leaf sibling 
-  // (can be found by looking at the adjacencies of the siblings 
-  // (which are in turn found from the colidx of the parent u), then this leaf node should be 
+  // ones. If the leftmost of those ones (say node u) has a non-leaf sibling
+  // (can be found by looking at the adjacencies of the siblings
+  // (which are in turn found from the colidx of the parent u), then this leaf node should be
   // ignored, otherwise all good.
-  rmm::device_uvector<NodeIndexT> adjacency(num_columns + 1, stream); // since adjacent_difference requires that the output have the same length as input
-  thrust::adjacent_difference(rmm::exec_policy(stream), d_column_tree.rowidx.begin(), d_column_tree.rowidx.end(), adjacency.begin());
-  auto num_leaf_nodes = thrust::count_if(rmm::exec_policy(stream), adjacency.begin() + 1, adjacency.end(), 
-      [] __device__ (auto const adj) {
-        return adj == 1;
-  });
+  rmm::device_uvector<NodeIndexT> adjacency(
+    num_columns + 1,
+    stream);  // since adjacent_difference requires that the output have the same length as input
+  thrust::adjacent_difference(rmm::exec_policy(stream),
+                              d_column_tree.rowidx.begin(),
+                              d_column_tree.rowidx.end(),
+                              adjacency.begin());
+  auto num_leaf_nodes = thrust::count_if(rmm::exec_policy(stream),
+                                         adjacency.begin() + 1,
+                                         adjacency.end(),
+                                         [] __device__(auto const adj) { return adj == 1; });
   rmm::device_uvector<NodeIndexT> leaf_nodes(num_leaf_nodes, stream);
-  thrust::copy_if(rmm::exec_policy(stream), thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + num_columns, leaf_nodes, 
-      [adjacency = adjacency.begin()] __device__ (size_t node) {
-        return adjacency[node] == 1;
-  });
+  thrust::copy_if(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(0) + num_columns,
+    leaf_nodes.begin(),
+    [adjacency = adjacency.begin()] __device__(size_t node) { return adjacency[node] == 1; });
 
   auto rev_node_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(0) + num_columns);
   auto rev_leaf_nodes_it = thrust::make_reverse_iterator(leaf_nodes.begin());
-  auto is_leftmost_leaf = thrust::mismatch(rmm::exec_policy(stream), rev_node_it, rev_node_it + num_columns, rev_leaf_nodes_it);
-  // the node number that could be the leftmost leaf node is given by u = *(is_leftmost_leaf.second - 1)
-  NodeIndexT leftmost_leaf_node = leaf_nodes.element(num_leaf_nodes - thrust::distance(rev_leaf_nodes_it, is_leftmost_leaf.second - 1) - 1, stream);
+  auto is_leftmost_leaf  = thrust::mismatch(
+    rmm::exec_policy(stream), rev_node_it, rev_node_it + num_columns, rev_leaf_nodes_it);
+  // the node number that could be the leftmost leaf node is given by u = *(is_leftmost_leaf.second
+  // - 1)
+  NodeIndexT leftmost_leaf_node = leaf_nodes.element(
+    num_leaf_nodes - thrust::distance(rev_leaf_nodes_it, is_leftmost_leaf.second - 1) - 1, stream);
 
-  // upper_bound search for u in rowidx for parent node v. Now check if any of the other child nodes of v are non-leaf i.e
-  // check if u is the first child of v. If yes, then leafmost_leaf_node is the leftmost leaf node. Otherwise, discard all
-  // children of v after and including u
-  auto parent_it = thrust::upper_bound(rmm::exec_policy(stream), d_column_tree.rowidx.begin(), d_column_tree.rowidx.end(), leftmost_leaf_node);
-  NodeIndexT parent = thrust::distance(d_column_tree.rowidx.begin(), parent_it - 1);
+  // upper_bound search for u in rowidx for parent node v. Now check if any of the other child nodes
+  // of v are non-leaf i.e check if u is the first child of v. If yes, then leafmost_leaf_node is
+  // the leftmost leaf node. Otherwise, discard all children of v after and including u
+  auto parent_it              = thrust::upper_bound(rmm::exec_policy(stream),
+                                       d_column_tree.rowidx.begin(),
+                                       d_column_tree.rowidx.end(),
+                                       leftmost_leaf_node);
+  NodeIndexT parent           = thrust::distance(d_column_tree.rowidx.begin(), parent_it - 1);
   NodeIndexT parent_adj_start = d_column_tree.rowidx.element(parent, stream);
-  NodeIndexT parent_adj_end = d_column_tree.rowidx.element(parent + 1, stream);
-  auto childnum_it = thrust::lower_bound(rmm::exec_policy(stream), d_column_tree.colidx.begin() + parent_adj_start, d_column_tree.colidx.begin() + parent_adj_end, leftmost_leaf_node);
+  NodeIndexT parent_adj_end   = d_column_tree.rowidx.element(parent + 1, stream);
+  auto childnum_it            = thrust::lower_bound(rmm::exec_policy(stream),
+                                         d_column_tree.colidx.begin() + parent_adj_start,
+                                         d_column_tree.colidx.begin() + parent_adj_end,
+                                         leftmost_leaf_node);
 
-  auto retained_leaf_nodes_it = leaf_nodes.begin() + num_leaf_nodes - thrust::distance(rev_leaf_nodes_it, is_leftmost_leaf.second - 1) - 1;
-  if(childnum_it != d_column_tree.colidx.begin() + parent_adj_start + 1) {
+  auto retained_leaf_nodes_it = leaf_nodes.begin() + num_leaf_nodes -
+                                thrust::distance(rev_leaf_nodes_it, is_leftmost_leaf.second - 1) -
+                                1;
+  if (childnum_it != d_column_tree.colidx.begin() + parent_adj_start + 1) {
     // discarding from u to last child of parent
-    retained_leaf_nodes_it += thrust::distance(childnum_it, d_column_tree.colidx.begin() + parent_adj_end);
+    retained_leaf_nodes_it +=
+      thrust::distance(childnum_it, d_column_tree.colidx.begin() + parent_adj_end);
   }
 
-  // now, all nodes from leaf_nodes.begin() to retained_leaf_nodes_it need to be discarded i.e. they are part of ignore_vals
-  // but we cannot resize a device_uvector, what else can we do?
-
+  // now, all nodes from leaf_nodes.begin() to retained_leaf_nodes_it need to be discarded i.e. they
+  // are part of ignore_vals
 }
 
 }  // namespace cudf::io::json::detail
