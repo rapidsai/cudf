@@ -64,10 +64,13 @@ order by
     o_year desc;
 */
 
-std::unique_ptr<cudf::column> calc_amount(cudf::column_view discount,
-                                          cudf::column_view extendedprice,
-                                          cudf::column_view supplycost,
-                                          cudf::column_view quantity)
+std::unique_ptr<cudf::column> calc_amount(
+  cudf::column_view discount,
+  cudf::column_view extendedprice,
+  cudf::column_view supplycost,
+  cudf::column_view quantity,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   auto one = cudf::numeric_scalar<double>(1);
   auto one_minus_discount =
@@ -76,14 +79,18 @@ std::unique_ptr<cudf::column> calc_amount(cudf::column_view discount,
   auto extendedprice_discounted      = cudf::binary_operation(extendedprice,
                                                          one_minus_discount->view(),
                                                          cudf::binary_operator::MUL,
-                                                         extendedprice_discounted_type);
+                                                         extendedprice_discounted_type,
+                                                         stream,
+                                                         mr);
   auto supplycost_quantity_type      = cudf::data_type{cudf::type_id::FLOAT64};
   auto supplycost_quantity           = cudf::binary_operation(
     supplycost, quantity, cudf::binary_operator::MUL, supplycost_quantity_type);
   auto amount = cudf::binary_operation(extendedprice_discounted->view(),
                                        supplycost_quantity->view(),
                                        cudf::binary_operator::SUB,
-                                       extendedprice_discounted->type());
+                                       extendedprice_discounted->type(),
+                                       stream,
+                                       mr);
   return amount;
 }
 

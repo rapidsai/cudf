@@ -35,12 +35,15 @@ where
     and l_quantity < 24;
 */
 
-std::unique_ptr<cudf::column> calc_revenue(cudf::column_view extendedprice,
-                                           cudf::column_view discount)
+std::unique_ptr<cudf::column> calc_revenue(
+  cudf::column_view extendedprice,
+  cudf::column_view discount,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   auto revenue_type = cudf::data_type{cudf::type_id::FLOAT64};
-  auto revenue =
-    cudf::binary_operation(extendedprice, discount, cudf::binary_operator::MUL, revenue_type);
+  auto revenue      = cudf::binary_operation(
+    extendedprice, discount, cudf::binary_operator::MUL, revenue_type, stream, mr);
   return revenue;
 }
 
