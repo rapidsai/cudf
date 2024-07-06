@@ -23,12 +23,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 /*
-create view part as select * from '~/tpch_sf1/part/part-0.parquet';
-create view supplier as select * from '~/tpch_sf1/supplier/part-0.parquet';
-create view lineitem as select * from '~/tpch_sf1/lineitem/part-0.parquet';
-create view partsupp as select * from '~/tpch_sf1/partsupp/part-0.parquet';
-create view orders as select * from '~/tpch_sf1/orders/part-0.parquet';
-create view nation as select * from '~/tpch_sf1/nation/part-0.parquet';
+create view part as select * from '/tables/scale-1/part.parquet';
+create view supplier as select * from '/tables/scale-1/supplier.parquet';
+create view lineitem as select * from '/tables/scale-1/lineitem.parquet';
+create view partsupp as select * from '/tables/scale-1/partsupp.parquet';
+create view orders as select * from '/tables/scale-1/orders.parquet';
+create view nation as select * from '/tables/scale-1/nation.parquet';
 
 select
     nation,

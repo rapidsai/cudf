@@ -21,7 +21,7 @@
 #include <cudf/scalar/scalar.hpp>
 
 /*
-create view lineitem as select * from '~/tpch_sf1/lineitem/part-0.parquet';
+create view lineitem as select * from '/tables/scale-1/lineitem.parquet';
 
 select
     sum(l_extendedprice * l_discount) as revenue

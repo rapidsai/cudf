@@ -21,12 +21,12 @@
 #include <cudf/scalar/scalar.hpp>
 
 /*
-create view customer as select * from '~/tpch_sf1/customer/part-0.parquet';
-create view orders as select * from '~/tpch_sf1/orders/part-0.parquet';
-create view lineitem as select * from '~/tpch_sf1/lineitem/part-0.parquet';
-create view supplier as select * from '~/tpch_sf1/supplier/part-0.parquet';
-create view nation as select * from '~/tpch_sf1/nation/part-0.parquet';
-create view region as select * from '~/tpch_sf1/region/part-0.parquet';
+create view customer as select * from '/tables/scale-1/customer.parquet';
+create view orders as select * from '/tables/scale-1/orders.parquet';
+create view lineitem as select * from '/tables/scale-1/lineitem.parquet';
+create view supplier as select * from '/tables/scale-1/supplier.parquet';
+create view nation as select * from '/tables/scale-1/nation.parquet';
+create view region as select * from '/tables/scale-1/region.parquet';
 
 select
     n_name,
