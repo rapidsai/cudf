@@ -204,7 +204,7 @@ cpdef chunked_read_json(object filepaths_or_buffers,
         try:
             with nogil:
                 c_result = move(libcudf_read_json(opts))
-        except OverflowError:
+        except (ValueError, OverflowError):
             break
         if meta_names is None:
             meta_names = [info.name.decode() for info in c_result.metadata.schema_info]
