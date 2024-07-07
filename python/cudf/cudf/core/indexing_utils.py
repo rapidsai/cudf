@@ -1,9 +1,9 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Tuple, Union
+from typing import Any, List, Union
 
 from typing_extensions import TypeAlias
 
@@ -59,7 +59,7 @@ ColumnLabels: TypeAlias = List[str]
 
 
 def destructure_iloc_key(
-    key: Any, frame: Union[cudf.Series, cudf.DataFrame]
+    key: Any, frame: cudf.Series | cudf.DataFrame
 ) -> tuple[Any, ...]:
     """
     Destructure a potentially tuple-typed key into row and column indexers.
@@ -124,7 +124,7 @@ def destructure_iloc_key(
 
 def destructure_dataframe_iloc_indexer(
     key: Any, frame: cudf.DataFrame
-) -> Tuple[Any, Tuple[bool, ColumnLabels]]:
+) -> tuple[Any, tuple[bool, ColumnLabels]]:
     """Destructure an index key for DataFrame iloc getitem.
 
     Parameters
@@ -229,7 +229,7 @@ def parse_row_iloc_indexer(key: Any, n: int) -> IndexingSpec:
     else:
         key = cudf.core.column.as_column(key)
         if isinstance(key, cudf.core.column.CategoricalColumn):
-            key = key.as_numerical_column(key.codes.dtype)
+            key = key.astype(key.codes.dtype)
         if is_bool_dtype(key.dtype):
             return MaskIndexer(BooleanMask(key, n))
         elif len(key) == 0:

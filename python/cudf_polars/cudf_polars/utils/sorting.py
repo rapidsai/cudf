@@ -30,7 +30,7 @@ def sort_order(
 
     Returns
     -------
-    tuple of column_order and null_precendence
+    tuple of column_order and null_precedence
     suitable for passing to sort routines
     """
     # Mimicking polars broadcast handling of descending
@@ -43,8 +43,8 @@ def sort_order(
         for d in descending
     ]
     null_precedence = []
-    # TODO: use strict=True when we drop py39
-    assert len(descending) == len(nulls_last)
+    if len(descending) != len(nulls_last) or len(descending) != num_keys:
+        raise ValueError("Mismatching length of arguments in sort_order")
     for asc, null_last in zip(column_order, nulls_last):
         if (asc == plc.types.Order.ASCENDING) ^ (not null_last):
             null_precedence.append(plc.types.NullOrder.AFTER)

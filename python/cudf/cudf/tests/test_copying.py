@@ -8,7 +8,8 @@ import pytest
 import cudf
 from cudf import Series
 from cudf.core.buffer.spill_manager import get_global_manager
-from cudf.testing._utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
+from cudf.testing import assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, OTHER_TYPES
 
 pytestmark = pytest.mark.spilling
 

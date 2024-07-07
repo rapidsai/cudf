@@ -115,11 +115,11 @@ def to_numeric(arg, errors="raise", downcast=None):
     dtype = col.dtype
 
     if is_datetime_dtype(dtype) or is_timedelta_dtype(dtype):
-        col = col.as_numerical_column(cudf.dtype("int64"))
+        col = col.astype(cudf.dtype("int64"))
     elif isinstance(dtype, CategoricalDtype):
         cat_dtype = col.dtype.type
         if _is_non_decimal_numeric_dtype(cat_dtype):
-            col = col.as_numerical_column(cat_dtype)
+            col = col.astype(cat_dtype)
         else:
             try:
                 col = _convert_str_col(
@@ -146,8 +146,8 @@ def to_numeric(arg, errors="raise", downcast=None):
         raise ValueError("Unrecognized datatype")
 
     # str->float conversion may require lower precision
-    if col.dtype == cudf.dtype("f"):
-        col = col.as_numerical_column("d")
+    if col.dtype == cudf.dtype("float32"):
+        col = col.astype("float64")
 
     if downcast:
         if downcast == "float":
@@ -205,7 +205,7 @@ def _convert_str_col(col, errors, _downcast=None):
 
     is_integer = libstrings.is_integer(col)
     if is_integer.all():
-        return col.as_numerical_column(dtype=cudf.dtype("i8"))
+        return col.astype(dtype=cudf.dtype("i8"))
 
     col = _proc_inf_empty_strings(col)
 
@@ -218,9 +218,9 @@ def _convert_str_col(col, errors, _downcast=None):
                     "limited by float32 precision."
                 )
             )
-            return col.as_numerical_column(dtype=cudf.dtype("f"))
+            return col.astype(dtype=cudf.dtype("float32"))
         else:
-            return col.as_numerical_column(dtype=cudf.dtype("d"))
+            return col.astype(dtype=cudf.dtype("float64"))
     else:
         if errors == "coerce":
             col = libcudf.string_casting.stod(col)
