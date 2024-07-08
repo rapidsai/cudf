@@ -18,7 +18,6 @@ This page provides API documentation for pylibcudf.
     filling
     gpumemoryview
     groupby
-    io/index.rst
     interop
     join
     lists
@@ -26,15 +25,16 @@ This page provides API documentation for pylibcudf.
     null_mask
     quantiles
     reduce
+    replace
     reshape
     rolling
     round
     scalar
     search
-    stream_compaction
     sorting
-    replace
+    stream_compaction
     table
+    traits
     types
     unary
 
@@ -42,4 +42,5 @@ This page provides API documentation for pylibcudf.
     :maxdepth: 2
     :caption: Subpackages
 
+    io/index.rst
     strings/index.rst
