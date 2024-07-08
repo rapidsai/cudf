@@ -221,7 +221,6 @@ cufile_input_impl::cufile_input_impl(std::string const& filepath)
     // The benefit from multithreaded read plateaus around 16 threads
     pool(getenv_or("LIBCUDF_CUFILE_THREAD_COUNT", 16))
 {
-  pool.sleep_duration = 10;
 }
 
 namespace {
@@ -237,7 +236,8 @@ std::vector<std::future<ResultT>> make_sliced_tasks(
   auto const slices                = make_file_io_slices(size, max_slice_size);
   std::vector<std::future<ResultT>> slice_tasks;
   std::transform(slices.cbegin(), slices.cend(), std::back_inserter(slice_tasks), [&](auto& slice) {
-    return pool.submit(function, ptr + slice.offset, slice.size, offset + slice.offset);
+    return pool.submit_task(
+      [&] { return function(ptr + slice.offset, slice.size, offset + slice.offset); });
   });
   return slice_tasks;
 }

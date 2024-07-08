@@ -112,13 +112,11 @@ void BM_orc_multithreaded_read_common(nvbench::state& state,
                    cudf::io::read_orc(read_opts, stream, rmm::mr::get_current_device_resource());
                  };
 
-                 threads.paused = true;
-                 for (size_t i = 0; i < num_files; ++i) {
-                   threads.submit(read_func, i);
-                 }
+                 threads.pause();
+                 threads.detach_sequence(decltype(num_files){0}, num_files, read_func);
                  timer.start();
-                 threads.paused = false;
-                 threads.wait_for_tasks();
+                 threads.unpause();
+                 threads.wait();
                  cudf::detail::join_streams(streams, cudf::get_default_stream());
                  timer.stop();
                });
@@ -203,13 +201,11 @@ void BM_orc_multithreaded_read_chunked_common(nvbench::state& state,
                    } while (reader.has_next());
                  };
 
-                 threads.paused = true;
-                 for (size_t i = 0; i < num_files; ++i) {
-                   threads.submit(read_func, i);
-                 }
+                 threads.pause();
+                 threads.detach_sequence(decltype(num_files){0}, num_files, read_func);
                  timer.start();
-                 threads.paused = false;
-                 threads.wait_for_tasks();
+                 threads.unpause();
+                 threads.wait();
                  cudf::detail::join_streams(streams, cudf::get_default_stream());
                  timer.stop();
                });
