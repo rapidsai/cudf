@@ -12,6 +12,7 @@ from typing import Any
 import pyarrow as pa
 from typing_extensions import assert_never
 
+import polars as pl
 import polars.polars as plrs
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
@@ -402,7 +403,7 @@ def _(node: pl_expr.Window, visitor: NodeTraverser, dtype: plc.DataType) -> expr
 @_translate_expr.register
 def _(node: pl_expr.Literal, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
     if isinstance(node.value, plrs.PySeries):
-        return expr.LiteralColumn(dtype, node.value)
+        return expr.LiteralColumn(dtype, pl.Series._from_pyseries(node.value))
     value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
     return expr.Literal(dtype, value)
 
