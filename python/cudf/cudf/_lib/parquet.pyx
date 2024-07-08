@@ -852,8 +852,7 @@ cdef class ParquetReader:
             cpp_row_groups = row_groups
         cdef parquet_reader_options args
         cdef pair[parquet_reader_options, bool] c_res = _setup_parquet_reader_options(
-            source, cpp_row_groups, use_pandas_metadata,
-            None, columns)
+            source, cpp_row_groups, use_pandas_metadata, None, columns)
         args, self.allow_range_index = c_res.first, c_res.second
 
         with nogil:
