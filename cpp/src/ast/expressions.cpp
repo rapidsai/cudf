@@ -48,7 +48,7 @@ cudf::size_type column_reference::accept(expression_parser& visitor) const
 cudf::size_type operation::accept(expression_parser& visitor) const { return visitor.visit(*this); }
 cudf::size_type column_name_reference::accept(expression_parser& visitor) const
 {
-  return visitor.visit(*this)
+  return visitor.visit(*this);
 }
 
 auto literal::accept(expression_transformer& visitor) const -> decltype(visitor.visit(*this))
