@@ -175,6 +175,32 @@ cdef class Column:
             children,
         )
 
+    cpdef Column with_mask(self, gpumemoryview mask, size_type null_count):
+        """Augment this column with a new null mask.
+
+        Parameters
+        ----------
+        mask
+            New mask (or None to unset the mask)
+        null_count
+            New null count. If this is incorrect, bad things happen.
+
+        Returns
+        -------
+        New Column object sharing data with self (except for the mask which is new).
+        """
+        if mask is None and null_count > 0:
+            raise ValueError("Empty mask must have null count of zero")
+        return Column(
+            self._data_type,
+            self._size,
+            self._data,
+            mask,
+            null_count,
+            self._offset,
+            self._children,
+        )
+
     @staticmethod
     cdef Column from_column_view(const column_view& cv, Column owner):
         """Create a Column from a libcudf column_view.
