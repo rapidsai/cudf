@@ -41,15 +41,22 @@ operation::operation(ast_operator op, expression const& left, expression const& 
 }
 
 cudf::size_type literal::accept(expression_parser& visitor) const { return visitor.visit(*this); }
-cudf::size_type column_reference::accept(expression_parser& visitor) const { return visitor.visit(*this); }
+cudf::size_type column_reference::accept(expression_parser& visitor) const
+{
+  return visitor.visit(*this);
+}
 cudf::size_type operation::accept(expression_parser& visitor) const { return visitor.visit(*this); }
-cudf::size_type column_name_reference::accept(expression_parser& visitor) const { return visitor.visit(*this) }
+cudf::size_type column_name_reference::accept(expression_parser& visitor) const
+{
+  return visitor.visit(*this)
+}
 
 auto literal::accept(expression_transformer& visitor) const -> decltype(visitor.visit(*this))
 {
   return visitor.visit(*this);
 }
-auto column_reference::accept(expression_transformer& visitor) const -> decltype(visitor.visit(*this))
+auto column_reference::accept(expression_transformer& visitor) const
+  -> decltype(visitor.visit(*this))
 {
   return visitor.visit(*this);
 }
@@ -57,7 +64,8 @@ auto operation::accept(expression_transformer& visitor) const -> decltype(visito
 {
   return visitor.visit(*this);
 }
-auto column_name_reference::accept(expression_transformer& visitor) const -> decltype(visitor.visit(*this))
+auto column_name_reference::accept(expression_transformer& visitor) const
+  -> decltype(visitor.visit(*this))
 {
   return visitor.visit(*this);
 }
