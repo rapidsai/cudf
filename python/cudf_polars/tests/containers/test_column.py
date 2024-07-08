@@ -3,12 +3,14 @@
 
 from __future__ import annotations
 
+from functools import partial
+
 import pyarrow
 import pytest
 
 import cudf._lib.pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, NamedColumn
 
 
 def test_non_scalar_access_raises():
@@ -54,10 +56,11 @@ def test_shallow_copy():
 
 
 @pytest.mark.parametrize("typeid", [plc.TypeId.INT8, plc.TypeId.FLOAT32])
-def test_mask_nans(typeid):
+@pytest.mark.parametrize("constructor", [Column, partial(NamedColumn, name="name")])
+def test_mask_nans(typeid, constructor):
     dtype = plc.DataType(typeid)
     values = pyarrow.array([0, 0, 0], type=plc.interop.to_arrow(dtype))
-    column = Column(plc.interop.from_arrow(values))
+    column = constructor(plc.interop.from_arrow(values))
     masked = column.mask_nans()
     assert column.obj is masked.obj
 
