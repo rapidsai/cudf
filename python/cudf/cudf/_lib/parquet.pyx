@@ -139,8 +139,8 @@ cdef pair[parquet_reader_options, bool] _setup_parquet_reader_options(
      bool use_pandas_metadata,
      Expression filters,
      object columns,
-     size_type num_rows,
-     int64_t skip_rows):
+     size_type num_rows=-1,
+     int64_t skip_rows=0):
 
     cdef parquet_reader_options args
     cdef parquet_reader_options_builder builder
@@ -829,9 +829,7 @@ cdef class ParquetReader:
     def __cinit__(self, filepaths_or_buffers, columns=None, row_groups=None,
                   use_pandas_metadata=True,
                   size_t chunk_read_limit=0,
-                  size_t pass_read_limit=1024000000,
-                  size_type nrows=-1,
-                  int64_t skip_rows=0):
+                  size_t pass_read_limit=1024000000):
 
         # Convert NativeFile buffers to NativeFileDatasource,
         # but save original buffers in case we need to use
@@ -855,7 +853,7 @@ cdef class ParquetReader:
         cdef parquet_reader_options args
         cdef pair[parquet_reader_options, bool] c_res = _setup_parquet_reader_options(
             source, cpp_row_groups, use_pandas_metadata,
-            None, columns, nrows, skip_rows)
+            None, columns)
         args, self.allow_range_index = c_res.first, c_res.second
 
         with nogil:

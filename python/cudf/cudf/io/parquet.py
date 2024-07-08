@@ -929,13 +929,15 @@ def _read_parquet(
                 f"following positional arguments: {list(args)}"
             )
         if cudf.get_option("mode.pandas_compatible"):
+            # TODO: consider plumbing nrows/skiprows through to parquet reader
+            # (It's not super important now since pandas doesn't support it ATM,
+            # but may be relevant in the future)
+            # xref https://github.com/pandas-dev/pandas/issues/51830
             return libparquet.ParquetReader(
                 filepaths_or_buffers,
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
-                nrows=nrows,
-                skip_rows=skip_rows,
             ).read()
         else:
             return libparquet.read_parquet(
