@@ -40,13 +40,13 @@ struct memset_task {
 } typedef memset_task;
 
 // 1 task == 1 block
-__global__ void memset_kernel(memset_task * tasks, int8_t value)
+__global__ void memset_kernel(memset_task * tasks, int8_t const value)
 {
   auto task = tasks[blockIdx.x];
 
   // block stride over task.begin, task.end
   auto buf = task.data;
-  uint64_t end = task.size;
+  uint64_t const end = task.size;
   uint64_t memsets_left = (task.size + blockDim.x - 1) / blockDim.x;
   uint64_t t = threadIdx.x;
   while(memsets_left > 0){
@@ -59,7 +59,7 @@ __global__ void memset_kernel(memset_task * tasks, int8_t value)
 }
 
 void multibuffer_memset(std::vector<cudf::device_span<uint8_t>> & bufs, 
-                        int8_t value,
+                        int8_t const value,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref temp_mr
                         )
@@ -67,7 +67,7 @@ void multibuffer_memset(std::vector<cudf::device_span<uint8_t>> & bufs,
   // define task and bytes paramters
   constexpr uint64_t bytes_per_task = 128 * 1024;
   constexpr uint64_t threads_per_block = 256;
-  auto num_bufs = bufs.size();
+  auto const num_bufs = bufs.size();
 
   // declare offsets vector which stores for each buffer at which task in the task lists it starts at 
   rmm::device_uvector<std::size_t> offsets(bufs.size() + 1, stream, temp_mr); 
@@ -90,7 +90,7 @@ void multibuffer_memset(std::vector<cudf::device_span<uint8_t>> & bufs,
   thrust::exclusive_scan(rmm::exec_policy(stream, temp_mr), buf_count_iter, buf_count_iter + bufs.size() + 1, offsets.begin(), 0);
 
   // the total number of tasks is the last number in the offsets vector
-  size_t total_tasks = offsets.back_element(stream);
+  size_t const total_tasks = offsets.back_element(stream);
 
   // declaring list of tasks to pass onto cuda kernel
   rmm::device_uvector<memset_task> tasks(total_tasks, stream, temp_mr); 
