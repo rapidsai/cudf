@@ -52,8 +52,8 @@ include(cmake/Modules/WheelHelpers.cmake)
 
 # TODO: This install is currently overzealous. We should only install the libraries that are
 # downloaded by CPM during the build, not libraries that were found on the system.  However, in
-# practice this would only be a problem if libcudf was not found but some of the
-# dependencies were, and we have no real use cases where that happens.
+# practice this would only be a problem if libcudf was not found but some of the dependencies were,
+# and we have no real use cases where that happens.
 install_aliased_imported_targets(
   TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp
   DESTINATION ${cython_lib_dir}
