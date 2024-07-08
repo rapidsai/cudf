@@ -230,7 +230,7 @@ template <typename DataT,
           typename F,
           typename ResultT = std::invoke_result_t<F, DataT*, size_t, size_t>>
 std::vector<std::future<ResultT>> make_sliced_tasks(
-  F function, DataT* ptr, size_t offset, size_t size, cudf::detail::thread_pool& pool)
+  F function, DataT* ptr, size_t offset, size_t size, BS::thread_pool& pool)
 {
   constexpr size_t default_max_slice_size = 4 * 1024 * 1024;
   static auto const max_slice_size = getenv_or("LIBCUDF_CUFILE_SLICE_SIZE", default_max_slice_size);

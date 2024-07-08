@@ -23,10 +23,10 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
-#include <cudf/utilities/thread_pool.hpp>
 
 #include <nvtx3/nvtx3.hpp>
 
+#include <BS_thread_pool.hpp>
 #include <nvbench/nvbench.cuh>
 
 #include <vector>
@@ -93,7 +93,7 @@ void BM_parquet_multithreaded_read_common(nvbench::state& state,
   auto const num_threads = state.get_int64("num_threads");
 
   auto streams = cudf::detail::fork_streams(cudf::get_default_stream(), num_threads);
-  cudf::detail::thread_pool threads(num_threads);
+  BS::thread_pool threads(num_threads);
 
   auto [source_sink_vector, total_file_size, num_files] = write_file_data(state, d_types);
   std::vector<cudf::io::source_info> source_info_vector;
@@ -176,7 +176,7 @@ void BM_parquet_multithreaded_read_chunked_common(nvbench::state& state,
   size_t const output_limit = state.get_int64("output_limit");
 
   auto streams = cudf::detail::fork_streams(cudf::get_default_stream(), num_threads);
-  cudf::detail::thread_pool threads(num_threads);
+  BS::thread_pool threads(num_threads);
   auto [source_sink_vector, total_file_size, num_files] = write_file_data(state, d_types);
   std::vector<cudf::io::source_info> source_info_vector;
   std::transform(source_sink_vector.begin(),

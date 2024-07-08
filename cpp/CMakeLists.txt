@@ -216,6 +216,8 @@ include(cmake/thirdparty/get_fmt.cmake)
 include(cmake/thirdparty/get_spdlog.cmake)
 # find nanoarrow
 include(cmake/thirdparty/get_nanoarrow.cmake)
+# find thread_pool
+include(cmake/thirdparty/get_thread_pool.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
@@ -796,6 +798,9 @@ target_compile_definitions(cudf PRIVATE "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL
 # Define spdlog level
 target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}")
 
+# Enable pause functions in thread_pool implementation
+target_compile_definitions(cudf PRIVATE "BS_THREAD_POOL_ENABLE_PAUSE=1")
+
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
 
@@ -804,7 +809,7 @@ target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
+          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow BS_thread_pool
 )
 
 # Add Conda library, and include paths if specified
