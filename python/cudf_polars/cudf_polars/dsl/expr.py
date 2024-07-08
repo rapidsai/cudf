@@ -370,6 +370,10 @@ class Literal(Expr):
         # datatype of pyarrow scalar is correct by construction.
         return Column(plc.Column.from_scalar(plc.interop.from_arrow(self.value), 1))
 
+    def collect_agg(self, *, depth: int) -> AggInfo:
+        """Collect information about aggregations in groupbys."""
+        return AggInfo([])
+
 
 class LiteralColumn(Expr):
     __slots__ = ("value",)
@@ -392,6 +396,10 @@ class LiteralColumn(Expr):
         """Evaluate this expression given a dataframe for context."""
         # datatype of pyarrow array is correct by construction.
         return Column(plc.interop.from_arrow(self.value))
+
+    def collect_agg(self, *, depth: int) -> AggInfo:
+        """Collect information about aggregations in groupbys."""
+        return AggInfo([])
 
 
 class Col(Expr):
