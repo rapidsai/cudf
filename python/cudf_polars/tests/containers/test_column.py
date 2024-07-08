@@ -62,12 +62,15 @@ def test_mask_nans(typeid, constructor):
     values = pyarrow.array([0, 0, 0], type=plc.interop.to_arrow(dtype))
     column = constructor(plc.interop.from_arrow(values))
     masked = column.mask_nans()
-    assert column.obj is masked.obj
+    assert column.obj.null_count() == masked.obj.null_count()
 
 
-def test_mask_nans_float_with_nan_notimplemented():
+def test_mask_nans_float():
     dtype = plc.DataType(plc.TypeId.FLOAT32)
     values = pyarrow.array([0, 0, float("nan")], type=plc.interop.to_arrow(dtype))
     column = Column(plc.interop.from_arrow(values))
-    with pytest.raises(NotImplementedError):
-        _ = column.mask_nans()
+    masked = column.mask_nans()
+    expect = pyarrow.array([0, 0, None], type=plc.interop.to_arrow(dtype))
+    got = pyarrow.array(plc.interop.to_arrow(masked.obj))
+
+    assert expect == got
