@@ -39,6 +39,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <utility>
 
@@ -372,8 +373,8 @@ std::unique_ptr<cudf::scalar> from_arrow(
 std::unique_ptr<cudf::table> from_arrow(
   ArrowSchema const* schema,
   ArrowArray const* input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create `cudf::column` from a given ArrowArray and ArrowSchema input
@@ -391,8 +392,8 @@ std::unique_ptr<cudf::table> from_arrow(
 std::unique_ptr<cudf::column> from_arrow_column(
   ArrowSchema const* schema,
   ArrowArray const* input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create `cudf::table` from given ArrowDeviceArray input
@@ -415,8 +416,8 @@ std::unique_ptr<cudf::column> from_arrow_column(
 std::unique_ptr<table> from_arrow_host(
   ArrowSchema const* schema,
   ArrowDeviceArray const* input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create `cudf::table` from given ArrowArrayStream input
@@ -433,8 +434,8 @@ std::unique_ptr<table> from_arrow_host(
  */
 std::unique_ptr<table> from_arrow_stream(
   ArrowArrayStream* input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create `cudf::column` from given ArrowDeviceArray input
@@ -456,8 +457,8 @@ std::unique_ptr<table> from_arrow_stream(
 std::unique_ptr<column> from_arrow_host_column(
   ArrowSchema const* schema,
   ArrowDeviceArray const* input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief typedef for a vector of owning columns, used for conversion from ArrowDeviceArray
@@ -537,8 +538,8 @@ using unique_table_view_t =
 unique_table_view_t from_arrow_device(
   ArrowSchema const* schema,
   ArrowDeviceArray const* input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief typedef for a unique_ptr to a `cudf::column_view` with custom deleter
@@ -580,8 +581,8 @@ using unique_column_view_t =
 unique_column_view_t from_arrow_device_column(
   ArrowSchema const* schema,
   ArrowDeviceArray const* input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

@@ -2,7 +2,6 @@
 
 from libcpp cimport bool
 
-from cudf._lib.pylibcudf.libcudf.copying cimport out_of_bounds_policy
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 from .column cimport Column
@@ -24,5 +23,7 @@ cpdef Column contains(Column, ColumnOrScalar)
 cpdef Column contains_nulls(Column)
 
 cpdef Column index_of(Column, ColumnOrScalar, bool)
+
+cpdef Column reverse(Column)
 
 cpdef Column segmented_gather(Column, Column)

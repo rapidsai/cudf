@@ -136,6 +136,18 @@ def test_index_of_list_column(test_data, column):
     assert_column_eq(expect, res)
 
 
+def test_reverse(test_data):
+    list_column = test_data[0][0]
+    arr = pa.array(list_column)
+    plc_column = plc.interop.from_arrow(arr)
+
+    res = plc.lists.reverse(plc_column)
+
+    expect = pa.array([lst[::-1] for lst in list_column])
+
+    assert_column_eq(expect, res)
+
+
 def test_segmented_gather(test_data):
     list_column1 = test_data[0][0]
     list_column2 = test_data[0][1]
