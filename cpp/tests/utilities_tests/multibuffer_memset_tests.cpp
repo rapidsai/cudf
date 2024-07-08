@@ -9,21 +9,34 @@
 template <typename T>
 struct MultiBufferTestIntegral : public cudf::test::BaseFixture {};
 
-void memset_test()
-{
-  std::vector<std::string> filenames;
-  filenames.push_back({"/home/raprabhu/Downloads/part-09000-f1533775-48e7-498f-b06c-b3bb7baa2b7d-c000.zstd.parquet"});
+// void memset_test()
+// {
+// //   std::vector<std::string> filenames;
+// //   filenames.push_back({"/home/raprabhu/Downloads/part-09000-f1533775-48e7-498f-b06c-b3bb7baa2b7d-c000.zstd.parquet"});
 
-  //auto result = load_parquet_files(filenames);
-  auto in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filenames}).build();
-  auto result = cudf::io::read_parquet(in_opts);
-}
+// //   //auto result = load_parquet_files(filenames);
+// //   auto in_opts =
+// //     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filenames}).build();
+// //   auto result = cudf::io::read_parquet(in_opts);
+//     srand(31337);
+//     auto expected = create_random_fixed_table<int>(2000, 500000, true);
 
-TEST(MultiBufferTestIntegral, Baseline) 
-{
-    memset_test();
-}
+//     auto filepath = temp_env->get_temp_filepath("memset.parquet");
+//     cudf::io::parquet_writer_options args =
+//       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected);
+//     cudf::io::write_parquet(args);
+
+//     // attempt to read more rows than there actually are
+//     cudf::io::parquet_reader_options read_opts =
+//       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
+//     auto result = cudf::io::read_parquet(read_opts);
+
+// }
+
+// TEST(MultiBufferTestIntegral, Baseline) 
+// {
+//     memset_test();
+// }
 
 TEST(MultiBufferTestIntegral, BasicTest)
 {
