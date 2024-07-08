@@ -250,7 +250,7 @@ cdef class Column:
         column is in use.
         """
         data = gpumemoryview(obj)
-        iface = data.__cuda_array_interface__()
+        iface = data.__cuda_array_interface__
         if iface.get('mask') is not None:
             raise ValueError("mask not yet supported.")
 
