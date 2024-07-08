@@ -162,6 +162,8 @@ def test_extract_list_element_column(test_data):
     arr = pa.array(test_data[0][0])
     plc_column = plc.interop.from_arrow(arr)
     indices = plc.interop.from_arrow(pa.array([0, 1, -4, -1]))
-    expect = pa.array([0, None, None, 7])
 
     res = plc.lists.extract_list_element(plc_column, indices)
+    expect = pa.array([0, None, None, 7])
+
+    assert_column_eq(expect, res)
