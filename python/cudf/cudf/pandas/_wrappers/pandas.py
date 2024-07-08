@@ -46,6 +46,7 @@ from .common import (
     cuda_array_interface,
     custom_iter,
 )
+from ..pickle import to_pickle, read_pickle
 
 from pandas.io.sas.sas7bdat import (  # isort: skip
     SAS7BDATReader as pd_SAS7BDATReader,
@@ -907,28 +908,9 @@ except ImportError:
 
 _eval_func = _FunctionProxy(_Unusable(), pd.eval)
 
-_read_pickle_func = _FunctionProxy(_Unusable(), pd.read_pickle)
+register_proxy_func(pd.read_pickle)(_FunctionProxy(_Unusable(), read_pickle))
 
-_to_pickle_func = _FunctionProxy(_Unusable(), pd.to_pickle)
-
-@register_proxy_func(pd.read_pickle)
-def _read_pickle(
-    filepath_or_buffer,
-    compression = "infer",
-    storage_options = None,
-):
-    return _read_pickle_func(filepath_or_buffer, compression, storage_options)
-
-
-@register_proxy_func(pd.to_pickle)
-def _to_pickle(
-    *args,
-    **kwargs,
-):
-    return _to_pickle_func(
-        *args,
-        **kwargs,
-    )
+register_proxy_func(pd.to_pickle)(_FunctionProxy(_Unusable(), to_pickle))
 
 def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
     frame = sys._getframe(level + 3)
