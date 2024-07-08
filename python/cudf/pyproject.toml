@@ -122,7 +122,7 @@ skip = [
 build-backend = "scikit_build_core.build"
 dependencies-file = "../../dependencies.yaml"
 requires = [
-    "cmake>=3.26.4",
+    "cmake>=3.26.4,!=3.30.0",
     "cython>=3.0.3",
     "libcudf==24.8.*,>=0.0.0a0",
     "ninja",
