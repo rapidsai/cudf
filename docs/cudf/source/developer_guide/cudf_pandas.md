@@ -3,8 +3,16 @@ The use of the cuDF pandas accelerator mode (`cudf.pandas`) is explained [in the
 The purpose of this document is to explain how the fast-slow proxy mechanism works and document internal environment variables that can be used to debug `cudf.pandas` itself.
 
 ## fast-slow proxy mechanism
-`cudf.pandas` works by wrapping each Pandas type and its corresponding cuDF type in a new proxy type also known as a fast-slow proxy type.
-The purpose of proxy types is to attempt computations on the fast (cuDF) object first, and then fall back to running on the slow (Pandas) object if the fast version fails.
+The core of `cudf.pandas` is implemented through proxy types defined in [`fast_slow_proxy.py`](https://github.com/rapidsai/cudf/blob/5f45803b2a68b49d330d94e2f701791a7590612a/python/cudf/cudf/pandas/fast_slow_proxy.py), which link a pair of "fast" and "slow" libraries.
+`cudf.pandas` works by wrapping each "slow" type and its corresponding "fast" type in a new proxy type, also known as a fast-slow proxy type.
+The purpose of these proxy types is so we can first attempt computations on the fast object, and then fall back to the slow object if the fast version fails.
+While the core wrapping functionality is generic, the current usage mainly involves providing a proxy pair using cuDF and Pandas.
+In the rest of this document, to maintain a concrete pair of libraries in mind, we use cuDF and Pandas interchangeably as names for the "fast" and "slow" libraries, respectively, with the understanding that any pair of API-matching libraries could be used.
+For example, future support could include pairs such as CuPy (as the "fast" library) and NumPy (as the "slow" library).
+
+```{note}
+We currently do not wrap the entire NumPy library because it exposes a C API. But we do wrap NumPy's `numpy.ndarray` and CuPy's `cupy.ndarray` in a proxy type.
+```
 
 ### Types:
 #### Wrapped Types and Proxy Types
@@ -12,6 +20,7 @@ The "wrapped" types/classes are the Pandas and cuDF specific types that have bee
 Wrapped objects and proxy objects are instances of wrapped types and proxy types, respectively.
 In the snippet below `s1` and `s2` are wrapped objects and `s3` is a fast-slow proxy object.
 Also note that the module `xpd` is a wrapped module and contains cuDF and Pandas modules as attributes.
+To check if an object is a proxy type, we can use `cudf.pandas.is_proxy_object`.
   ```python
   import cudf.pandas
   cudf.pandas.install()
@@ -23,6 +32,14 @@ Also note that the module `xpd` is a wrapped module and contains cuDF and Pandas
   s1 = cudf.Series([1,2])
   s2 = pd.Series([1,2])
   s3 = xpd.Series([1,2])
+
+  from cudf.pandas import is_proxy_object
+
+  is_proxy_object(s1) # returns False
+
+  is_proxy_object(s2) # returns False
+
+  is_proxy_object(s3) # returns True
   ```
 
 ```{note}

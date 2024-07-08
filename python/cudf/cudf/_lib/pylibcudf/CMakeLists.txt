@@ -19,6 +19,7 @@ set(cython_sources
     column_factories.pyx
     concatenate.pyx
     copying.pyx
+    datetime.pyx
     filling.pyx
     gpumemoryview.pyx
     groupby.pyx
@@ -26,6 +27,7 @@ set(cython_sources
     join.pyx
     lists.pyx
     merge.pyx
+    quantiles.pyx
     reduce.pyx
     replace.pyx
     reshape.pyx
@@ -36,6 +38,7 @@ set(cython_sources
     stream_compaction.pyx
     sorting.pyx
     table.pyx
+    traits.pyx
     types.pyx
     unary.pyx
     utils.pyx

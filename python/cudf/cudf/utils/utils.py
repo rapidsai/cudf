@@ -1,11 +1,11 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import decimal
 import functools
 import os
 import traceback
 import warnings
-from typing import FrozenSet, Set, Union
 
 import numpy as np
 import pandas as pd
@@ -159,8 +159,9 @@ def _external_only_api(func, alternative=""):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         # Check the immediately preceding frame to see if it's in cudf.
-        frame, lineno = next(traceback.walk_stack(None))
-        fn = frame.f_code.co_filename
+        pre_frame = traceback.extract_stack(limit=2)[0]
+        fn = pre_frame.filename
+        lineno = pre_frame.lineno
         if _cudf_root in fn and _tests_root not in fn:
             raise RuntimeError(
                 f"External-only API called in {fn} at line {lineno}. "
@@ -218,7 +219,7 @@ class GetAttrGetItemMixin:
     # `__setstate__`, but this class may be used in complex multiple
     # inheritance hierarchies that might also override serialization.  The
     # solution here is a minimally invasive change that avoids such conflicts.
-    _PROTECTED_KEYS: Union[FrozenSet[str], Set[str]] = frozenset()
+    _PROTECTED_KEYS: frozenset[str] | set[str] = frozenset()
 
     def __getattr__(self, key):
         if key in self._PROTECTED_KEYS:

@@ -9,6 +9,7 @@ import operator
 import os
 import pathlib
 import pickle
+import subprocess
 import tempfile
 import types
 from io import BytesIO, StringIO
@@ -20,7 +21,7 @@ from numba import NumbaDeprecationWarning
 from pytz import utc
 
 from cudf.pandas import LOADED, Profiler
-from cudf.pandas.fast_slow_proxy import _Unusable
+from cudf.pandas.fast_slow_proxy import _Unusable, is_proxy_object
 
 if not LOADED:
     raise ImportError("These tests must be run with cudf.pandas loaded")
@@ -41,8 +42,9 @@ from pandas.tseries.holiday import (
     get_calendar,
 )
 
-# Accelerated pandas has the real pandas module as an attribute
+# Accelerated pandas has the real pandas and cudf modules as attributes
 pd = xpd._fsproxy_slow
+cudf = xpd._fsproxy_fast
 
 
 @pytest.fixture
@@ -462,6 +464,9 @@ def test_options_mode():
     assert xpd.options.mode.copy_on_write == pd.options.mode.copy_on_write
 
 
+# Codecov and Profiler interfere with each-other,
+# hence we don't want to run code-cov on this test.
+@pytest.mark.no_cover
 def test_profiler():
     pytest.importorskip("cudf")
 
@@ -1170,7 +1175,7 @@ def test_intermediates_are_proxied():
 
 def test_from_dataframe():
     cudf = pytest.importorskip("cudf")
-    from cudf.testing._utils import assert_eq
+    from cudf.testing import assert_eq
 
     data = {"foo": [1, 2, 3], "bar": [4, 5, 6]}
 
@@ -1424,5 +1429,159 @@ def test_holidays_within_dates(holiday, start, expected):
     ) == [utc.localize(dt) for dt in expected]
 
 
+@pytest.mark.parametrize(
+    "env_value",
+    ["", "cuda", "pool", "async", "managed", "managed_pool", "abc"],
+)
+def test_rmm_option_on_import(env_value):
+    data_directory = os.path.dirname(os.path.abspath(__file__))
+    # Create a copy of the current environment variables
+    env = os.environ.copy()
+    env["CUDF_PANDAS_RMM_MODE"] = env_value
+
+    sp_completed = subprocess.run(
+        [
+            "python",
+            "-m",
+            "cudf.pandas",
+            data_directory + "/data/profile_basic.py",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    if env_value in {"cuda", "pool", "async", "managed", "managed_pool"}:
+        assert sp_completed.returncode == 0
+    else:
+        assert sp_completed.returncode == 1
+
+
+def test_cudf_pandas_debugging_different_results(monkeypatch):
+    cudf_mean = cudf.Series.mean
+
+    def mock_mean_one(self, *args, **kwargs):
+        return np.float64(1.0)
+
+    with monkeypatch.context() as monkeycontext:
+        monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", mock_mean_one)
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+        s = xpd.Series([1, 2])
+        with pytest.warns(
+            UserWarning,
+            match="The results from cudf and pandas were different.",
+        ):
+            assert s.mean() == 1.0
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", cudf_mean)
+
+
+def test_cudf_pandas_debugging_pandas_error(monkeypatch):
+    pd_mean = pd.Series.mean
+
+    def mock_mean_exception(self, *args, **kwargs):
+        raise Exception()
+
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setattr(
+            xpd.Series.mean, "_fsproxy_slow", mock_mean_exception
+        )
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+        s = xpd.Series([1, 2])
+        with pytest.warns(
+            UserWarning,
+            match="The result from pandas could not be computed.",
+        ):
+            s = xpd.Series([1, 2])
+            assert s.mean() == 1.5
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
+
+
+def test_cudf_pandas_debugging_failed(monkeypatch):
+    pd_mean = pd.Series.mean
+
+    def mock_mean_none(self, *args, **kwargs):
+        return None
+
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setattr(xpd.Series.mean, "_fsproxy_slow", mock_mean_none)
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+        s = xpd.Series([1, 2])
+        with pytest.warns(
+            UserWarning,
+            match="Pandas debugging mode failed.",
+        ):
+            s = xpd.Series([1, 2])
+            assert s.mean() == 1.5
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
+
+
 def test_excelwriter_pathlike():
     assert isinstance(pd.ExcelWriter("foo.xlsx"), os.PathLike)
+
+
+def test_is_proxy_object():
+    np_arr = np.array([1])
+
+    s1 = xpd.Series([1])
+    s2 = pd.Series([1])
+
+    np_arr_proxy = s1.to_numpy()
+
+    assert not is_proxy_object(np_arr)
+    assert is_proxy_object(np_arr_proxy)
+    assert is_proxy_object(s1)
+    assert not is_proxy_object(s2)
+
+
+def test_numpy_cupy_flatiter(series):
+    cp = pytest.importorskip("cupy")
+
+    _, s = series
+    arr = s.values
+
+    assert type(arr.flat._fsproxy_fast) == cp.flatiter
+    assert type(arr.flat._fsproxy_slow) == np.flatiter
+
+
+def test_arrow_string_arrays():
+    cu_s = xpd.Series(["a", "b", "c"])
+    pd_s = pd.Series(["a", "b", "c"])
+
+    cu_arr = xpd.arrays.ArrowStringArray._from_sequence(
+        cu_s, dtype=xpd.StringDtype("pyarrow")
+    )
+    pd_arr = pd.arrays.ArrowStringArray._from_sequence(
+        pd_s, dtype=pd.StringDtype("pyarrow")
+    )
+
+    tm.assert_equal(cu_arr, pd_arr)
+
+    cu_arr = xpd.core.arrays.string_arrow.ArrowStringArray._from_sequence(
+        cu_s, dtype=xpd.StringDtype("pyarrow_numpy")
+    )
+    pd_arr = pd.core.arrays.string_arrow.ArrowStringArray._from_sequence(
+        pd_s, dtype=pd.StringDtype("pyarrow_numpy")
+    )
+
+    tm.assert_equal(cu_arr, pd_arr)
+
+
+@pytest.mark.parametrize("indexer", ["at", "iat"])
+def test_at_iat(indexer):
+    df = xpd.DataFrame(range(3))
+    result = getattr(df, indexer)[0, 0]
+    assert result == 0
+
+    getattr(df, indexer)[0, 0] = 1
+    expected = pd.DataFrame([1, 1, 2])
+    tm.assert_frame_equal(df, expected)
+
+
+def test_at_setitem_empty():
+    df = xpd.DataFrame({"name": []}, dtype="float64")
+    df.at[0, "name"] = 1.0
+    df.at[0, "new"] = 2.0
+    expected = pd.DataFrame({"name": [1.0], "new": [2.0]})
+    tm.assert_frame_equal(df, expected)
