@@ -61,11 +61,11 @@ void bench_groupby_max_multithreaded(nvbench::state& state, nvbench::type_list<T
   cudf::detail::thread_pool threads(num_threads);
 
   std::vector<std::vector<cudf::groupby::aggregation_request>> requests(num_threads);
-  for (int64_t i = 0; i < num_threads; i++) {
+  for (auto& thread_requests : requests) {
     for (int64_t j = 0; j < num_aggregations; j++) {
-      requests[i].emplace_back(cudf::groupby::aggregation_request());
-      requests[i][j].values = vals->view();
-      requests[i][j].aggregations.push_back(
+      thread_requests.emplace_back();
+      thread_requests.back().values = vals->view();
+      thread_requests.back().aggregations.push_back(
         cudf::make_max_aggregation<cudf::groupby_aggregation>());
     }
   }
@@ -80,6 +80,7 @@ void bench_groupby_max_multithreaded(nvbench::state& state, nvbench::type_list<T
       timer.start();
       threads.wait_for_tasks();
       cudf::detail::join_streams(streams, cudf::get_default_stream());
+      cudf::get_default_stream().synchronize();
       timer.stop();
     });
 
@@ -97,5 +98,5 @@ NVBENCH_BENCH_TYPES(bench_groupby_max_multithreaded,
   .add_int64_axis("cardinality", {0})
   .add_int64_power_of_two_axis("num_rows", {12, 18})
   .add_float64_axis("null_probability", {0, 0.1, 0.9})
-  .add_int64_axis("num_aggregations", {1, 2, 4, 8, 16, 32})
+  .add_int64_axis("num_aggregations", {1, 2, 4, 8})
   .add_int64_axis("num_threads", {1, 2, 4, 8});
