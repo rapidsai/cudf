@@ -15,8 +15,8 @@
  */
 #pragma once
 
-#include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/operators.hpp>
+#include <cudf/ast/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -275,7 +275,7 @@ struct expression_evaluator {
    */
   template <typename Element, CUDF_ENABLE_IF(column_device_view::has_element_accessor<Element>())>
   __device__ inline possibly_null_value_t<Element, has_nulls> resolve_input(
-    detail::device_data_reference const& input_reference,
+    cudf::ast::device_data_reference const& input_reference,
     IntermediateDataType<has_nulls>* thread_intermediate_storage,
     cudf::size_type left_row_index,
     thrust::optional<cudf::size_type> right_row_index = {}) const
@@ -284,7 +284,7 @@ struct expression_evaluator {
     // left or right. Should we error-check somewhere to prevent
     // table_reference::OUTPUT from being specified?
     using ReturnType = possibly_null_value_t<Element, has_nulls>;
-    if (input_reference.reference_type == detail::device_data_reference_type::COLUMN) {
+    if (input_reference.reference_type == cudf::ast::device_data_reference_type::COLUMN) {
       // If we have nullable data, return an empty nullable type with no value if the data is null.
       auto const& table = (input_reference.table_source == table_reference::LEFT) ? left : right;
       // Note that the code below assumes that a right index has been passed in
@@ -300,7 +300,7 @@ struct expression_evaluator {
       } else {
         return ReturnType(table.column(input_reference.data_index).element<Element>(row_index));
       }
-    } else if (input_reference.reference_type == detail::device_data_reference_type::LITERAL) {
+    } else if (input_reference.reference_type == cudf::ast::device_data_reference_type::LITERAL) {
       if constexpr (has_nulls) {
         return plan.literals[input_reference.data_index].is_valid()
                  ? ReturnType(plan.literals[input_reference.data_index].value<Element>())
@@ -310,7 +310,7 @@ struct expression_evaluator {
         return ReturnType(plan.literals[input_reference.data_index].value<Element>());
       }
     } else {  // Assumes input_reference.reference_type ==
-              // detail::device_data_reference_type::INTERMEDIATE
+              // cudf::ast::device_data_reference_type::INTERMEDIATE
       // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
       // Using a temporary variable ensures that the compiler knows the result is aligned
       IntermediateDataType<has_nulls> intermediate =
@@ -326,7 +326,7 @@ struct expression_evaluator {
   template <typename Element,
             CUDF_ENABLE_IF(not column_device_view::has_element_accessor<Element>())>
   __device__ inline possibly_null_value_t<Element, has_nulls> resolve_input(
-    detail::device_data_reference const& device_data_reference,
+    cudf::ast::device_data_reference const& device_data_reference,
     IntermediateDataType<has_nulls>* thread_intermediate_storage,
     cudf::size_type left_row_index,
     thrust::optional<cudf::size_type> right_row_index = {}) const
@@ -351,8 +351,8 @@ struct expression_evaluator {
   __device__ inline void operator()(
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const input_row_index,
-    detail::device_data_reference const& input,
-    detail::device_data_reference const& output,
+    cudf::ast::device_data_reference const& input,
+    cudf::ast::device_data_reference const& output,
     cudf::size_type const output_row_index,
     ast_operator const op,
     IntermediateDataType<has_nulls>* thread_intermediate_storage) const
@@ -389,9 +389,9 @@ struct expression_evaluator {
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const left_row_index,
     cudf::size_type const right_row_index,
-    detail::device_data_reference const& lhs,
-    detail::device_data_reference const& rhs,
-    detail::device_data_reference const& output,
+    cudf::ast::device_data_reference const& lhs,
+    cudf::ast::device_data_reference const& rhs,
+    cudf::ast::device_data_reference const& output,
     cudf::size_type const output_row_index,
     ast_operator const op,
     IntermediateDataType<has_nulls>* thread_intermediate_storage) const
@@ -533,15 +533,15 @@ struct expression_evaluator {
               CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
     __device__ inline void resolve_output(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
-      detail::device_data_reference const& device_data_reference,
+      cudf::ast::device_data_reference const& device_data_reference,
       cudf::size_type const row_index,
       IntermediateDataType<has_nulls>* thread_intermediate_storage,
       possibly_null_value_t<Element, has_nulls> const& result) const
     {
-      if (device_data_reference.reference_type == detail::device_data_reference_type::COLUMN) {
+      if (device_data_reference.reference_type == cudf::ast::device_data_reference_type::COLUMN) {
         output_object.template set_value<Element>(row_index, result);
       } else {  // Assumes device_data_reference.reference_type ==
-                // detail::device_data_reference_type::INTERMEDIATE
+                // cudf::ast::device_data_reference_type::INTERMEDIATE
         // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
         // Using a temporary variable ensures that the compiler knows the result is aligned.
         IntermediateDataType<has_nulls> tmp;
@@ -557,7 +557,7 @@ struct expression_evaluator {
               CUDF_ENABLE_IF(!is_rep_layout_compatible<Element>())>
     __device__ inline void resolve_output(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
-      detail::device_data_reference const& device_data_reference,
+      cudf::ast::device_data_reference const& device_data_reference,
       cudf::size_type const row_index,
       IntermediateDataType<has_nulls>* thread_intermediate_storage,
       possibly_null_value_t<Element, has_nulls> const& result) const
@@ -598,7 +598,7 @@ struct expression_evaluator {
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       cudf::size_type const output_row_index,
       possibly_null_value_t<Input, has_nulls> const& input,
-      detail::device_data_reference const& output,
+      cudf::ast::device_data_reference const& output,
       IntermediateDataType<has_nulls>* thread_intermediate_storage) const
     {
       // The output data type is the same whether or not nulls are present, so
@@ -622,7 +622,7 @@ struct expression_evaluator {
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       cudf::size_type const output_row_index,
       possibly_null_value_t<Input, has_nulls> const& input,
-      detail::device_data_reference const& output,
+      cudf::ast::device_data_reference const& output,
       IntermediateDataType<has_nulls>* thread_intermediate_storage) const
     {
       CUDF_UNREACHABLE("Invalid unary dispatch operator for the provided input.");
@@ -664,7 +664,7 @@ struct expression_evaluator {
       cudf::size_type const output_row_index,
       possibly_null_value_t<LHS, has_nulls> const& lhs,
       possibly_null_value_t<RHS, has_nulls> const& rhs,
-      detail::device_data_reference const& output,
+      cudf::ast::device_data_reference const& output,
       IntermediateDataType<has_nulls>* thread_intermediate_storage) const
     {
       // The output data type is the same whether or not nulls are present, so
@@ -690,7 +690,7 @@ struct expression_evaluator {
       cudf::size_type const output_row_index,
       possibly_null_value_t<LHS, has_nulls> const& lhs,
       possibly_null_value_t<RHS, has_nulls> const& rhs,
-      detail::device_data_reference const& output,
+      cudf::ast::device_data_reference const& output,
       IntermediateDataType<has_nulls>* thread_intermediate_storage) const
     {
       CUDF_UNREACHABLE("Invalid binary dispatch operator for the provided input.");

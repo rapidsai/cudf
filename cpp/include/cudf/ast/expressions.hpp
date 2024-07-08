@@ -23,7 +23,7 @@
 
 #include <cstdint>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace ast {
 /**
  * @addtogroup expressions
@@ -32,10 +32,8 @@ namespace ast {
  */
 
 // Forward declaration.
-namespace detail {
 class expression_parser;
 class expression_transformer;
-}  // namespace detail
 
 /**
  * @brief A generic expression that can be evaluated to return a value.
@@ -50,7 +48,7 @@ struct expression {
    * @param visitor The `expression_parser` parsing this expression tree
    * @return Index of device data reference for this instance
    */
-  virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
+  virtual cudf::size_type accept(expression_parser& visitor) const = 0;
 
   /**
    * @brief Accepts a visitor class.
@@ -59,7 +57,7 @@ struct expression {
    * @return Reference wrapper of transformed expression
    */
   virtual std::reference_wrapper<expression const> accept(
-    detail::expression_transformer& visitor) const = 0;
+    expression_transformer& visitor) const = 0;
 
   /**
    * @brief Returns true if the expression may evaluate to null.
@@ -318,13 +316,13 @@ class literal : public expression {
   /**
    * @copydoc expression::accept
    */
-  cudf::size_type accept(detail::expression_parser& visitor) const override;
+  cudf::size_type accept(expression_parser& visitor) const override;
 
   /**
    * @copydoc expression::accept
    */
   std::reference_wrapper<expression const> accept(
-    detail::expression_transformer& visitor) const override;
+    expression_transformer& visitor) const override;
 
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
@@ -417,13 +415,13 @@ class column_reference : public expression {
   /**
    * @copydoc expression::accept
    */
-  cudf::size_type accept(detail::expression_parser& visitor) const override;
+  cudf::size_type accept(expression_parser& visitor) const override;
 
   /**
    * @copydoc expression::accept
    */
   std::reference_wrapper<expression const> accept(
-    detail::expression_transformer& visitor) const override;
+    expression_transformer& visitor) const override;
 
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
@@ -486,13 +484,13 @@ class operation : public expression {
   /**
    * @copydoc expression::accept
    */
-  cudf::size_type accept(detail::expression_parser& visitor) const override;
+  cudf::size_type accept(expression_parser& visitor) const override;
 
   /**
    * @copydoc expression::accept
    */
   std::reference_wrapper<expression const> accept(
-    detail::expression_transformer& visitor) const override;
+    expression_transformer& visitor) const override;
 
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
@@ -533,13 +531,13 @@ class column_name_reference : public expression {
   /**
    * @copydoc expression::accept
    */
-  cudf::size_type accept(detail::expression_parser& visitor) const override;
+  cudf::size_type accept(expression_parser& visitor) const override;
 
   /**
    * @copydoc expression::accept
    */
   std::reference_wrapper<expression const> accept(
-    detail::expression_transformer& visitor) const override;
+    expression_transformer& visitor) const override;
 
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
@@ -555,4 +553,4 @@ class column_name_reference : public expression {
 /** @} */  // end of group
 }  // namespace ast
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

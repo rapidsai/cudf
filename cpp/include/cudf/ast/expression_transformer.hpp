@@ -18,7 +18,7 @@
 
 #include <cudf/ast/expressions.hpp>
 
-namespace cudf::ast::detail {
+namespace cudf::ast {
 /**
  * @brief Base "visitor" pattern class with the `expression` class for expression transformer.
  *
@@ -61,4 +61,4 @@ class expression_transformer {
 
   virtual ~expression_transformer() {}
 };
-}  // namespace cudf::ast::detail
+}  // namespace cudf::ast

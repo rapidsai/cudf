@@ -15,9 +15,9 @@
  */
 #include "reader_impl_helpers.hpp"
 
-#include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/ast/expression_transformer.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/transform.hpp>
@@ -248,7 +248,7 @@ struct stats_caster {
  * statistics max value of a column is referenced by column_index*2+1
  *
  */
-class stats_expression_converter : public ast::detail::expression_transformer {
+class stats_expression_converter : public ast::expression_transformer {
  public:
   stats_expression_converter(ast::expression const& expr, size_type const& num_columns)
     : _num_columns{num_columns}
@@ -257,7 +257,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
   }
 
   /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
+   * @copydoc ast::expression_transformer::visit(ast::literal const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override
   {
@@ -266,7 +266,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
   }
 
   /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   * @copydoc ast::expression_transformer::visit(ast::column_reference const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override
   {
@@ -279,7 +279,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
   }
 
   /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   * @copydoc ast::expression_transformer::visit(ast::column_name_reference const& )
    */
   std::reference_wrapper<ast::expression const> visit(
     ast::column_name_reference const& expr) override
@@ -288,7 +288,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
   }
 
   /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   * @copydoc ast::expression_transformer::visit(ast::operation const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override
   {
@@ -561,7 +561,7 @@ named_to_reference_converter::visit_operands(
  * @brief Converts named columns to index reference columns
  *
  */
-class names_from_expression : public ast::detail::expression_transformer {
+class names_from_expression : public ast::expression_transformer {
  public:
   names_from_expression(std::optional<std::reference_wrapper<ast::expression const>> expr,
                         std::vector<std::string> const& skip_names)
@@ -572,21 +572,21 @@ class names_from_expression : public ast::detail::expression_transformer {
   }
 
   /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
+   * @copydoc ast::expression_transformer::visit(ast::literal const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override
   {
     return expr;
   }
   /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   * @copydoc ast::expression_transformer::visit(ast::column_reference const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override
   {
     return expr;
   }
   /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   * @copydoc ast::expression_transformer::visit(ast::column_name_reference const& )
    */
   std::reference_wrapper<ast::expression const> visit(
     ast::column_name_reference const& expr) override
@@ -597,7 +597,7 @@ class names_from_expression : public ast::detail::expression_transformer {
     return expr;
   }
   /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   * @copydoc ast::expression_transformer::visit(ast::operation const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override
   {

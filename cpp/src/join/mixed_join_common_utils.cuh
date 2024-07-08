@@ -18,6 +18,8 @@
 #include "join/join_common_utils.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
+#include <cudf/ast/expression_parser.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 
@@ -48,7 +50,7 @@ template <bool has_nulls>
 struct expression_equality {
   __device__ expression_equality(
     cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator,
-    cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage,
+    cudf::ast::IntermediateDataType<has_nulls>* thread_intermediate_storage,
     bool const swap_tables,
     row_equality const& equality_probe)
     : evaluator{evaluator},
@@ -58,7 +60,7 @@ struct expression_equality {
   {
   }
 
-  cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage;
+  cudf::ast::IntermediateDataType<has_nulls>* thread_intermediate_storage;
   cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator;
   bool const swap_tables;
   row_equality const& equality_probe;

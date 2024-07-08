@@ -15,7 +15,7 @@
  */
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
-#include <cudf/ast/detail/expression_parser.hpp>
+#include <cudf/ast/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -57,7 +57,7 @@ namespace detail {
 template <cudf::size_type max_block_size, bool has_nulls>
 __launch_bounds__(max_block_size) CUDF_KERNEL
   void compute_column_kernel(table_device_view const table,
-                             ast::detail::expression_device_view device_expression_data,
+                             ast::expression_device_view device_expression_data,
                              mutable_column_device_view output_column)
 {
   // The (required) extern storage of the shared memory array leads to
@@ -65,8 +65,8 @@ __launch_bounds__(max_block_size) CUDF_KERNEL
   // workaround is to declare an arbitrary (here char) array type then cast it
   // after the fact to the appropriate type.
   extern __shared__ char raw_intermediate_storage[];
-  ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
+  ast::IntermediateDataType<has_nulls>* intermediate_storage =
+    reinterpret_cast<ast::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
 
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
@@ -91,7 +91,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
   // path.
   auto const has_nulls = expr.may_evaluate_null(table, stream);
 
-  auto const parser = ast::detail::expression_parser{expr, table, has_nulls, stream, mr};
+  auto const parser = ast::expression_parser{expr, table, has_nulls, stream, mr};
 
   auto const output_column_mask_state =
     has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;

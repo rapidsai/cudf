@@ -19,7 +19,6 @@
 #include "join/join_common_utils.hpp"
 #include "join/mixed_join_common_utils.cuh"
 
-#include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/span.hpp>
 
@@ -60,7 +59,7 @@ __global__ void mixed_join_semi(table_device_view left_table,
                                 row_equality const equality_probe,
                                 cudf::detail::semi_map_type::device_view hash_table_view,
                                 cudf::device_span<bool> left_table_keep_mask,
-                                cudf::ast::detail::expression_device_view device_expression_data);
+                                cudf::ast::expression_device_view device_expression_data);
 
 }  // namespace detail
 

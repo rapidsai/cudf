@@ -18,8 +18,8 @@
 
 #include "parquet_gpu.hpp"
 
-#include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/ast/expression_transformer.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>
@@ -321,26 +321,26 @@ class aggregate_reader_metadata {
  * @brief Converts named columns to index reference columns
  *
  */
-class named_to_reference_converter : public ast::detail::expression_transformer {
+class named_to_reference_converter : public ast::expression_transformer {
  public:
   named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
                                table_metadata const& metadata);
 
   /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
+   * @copydoc ast::expression_transformer::visit(ast::literal const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
   /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   * @copydoc ast::expression_transformer::visit(ast::column_reference const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
   /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   * @copydoc ast::expression_transformer::visit(ast::column_name_reference const& )
    */
   std::reference_wrapper<ast::expression const> visit(
     ast::column_name_reference const& expr) override;
   /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   * @copydoc ast::expression_transformer::visit(ast::operation const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
 

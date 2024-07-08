@@ -29,9 +29,7 @@
 #include <numeric>
 #include <optional>
 
-namespace cudf {
-namespace ast {
-namespace detail {
+namespace cudf::ast {
 
 /**
  * @brief Node data reference types.
@@ -76,7 +74,7 @@ struct alignas(8) device_data_reference {
 
 // Type used for intermediate storage in expression evaluation.
 template <bool has_nulls>
-using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
+using IntermediateDataType = detail::possibly_null_value_t<std::int64_t, has_nulls>;
 
 /**
  * @brief A container of all device data required to evaluate an expression on tables.
@@ -87,7 +85,7 @@ using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
  *
  */
 struct expression_device_view {
-  device_span<detail::device_data_reference const> data_references;
+  device_span<device_data_reference const> data_references;
   device_span<generic_scalar_device_view const> literals;
   device_span<ast_operator const> operators;
   device_span<cudf::size_type const> operator_source_indices;
@@ -268,8 +266,8 @@ class expression_parser {
 
     // Create device pointers to components of plan
     auto device_data_buffer_ptr            = static_cast<char const*>(_device_data_buffer.data());
-    device_expression_data.data_references = device_span<detail::device_data_reference const>(
-      reinterpret_cast<detail::device_data_reference const*>(device_data_buffer_ptr +
+    device_expression_data.data_references = device_span<device_data_reference const>(
+      reinterpret_cast<device_data_reference const*>(device_data_buffer_ptr +
                                                              buffer_offsets[0]),
       _data_references.size());
     device_expression_data.literals = device_span<generic_scalar_device_view const>(
@@ -311,7 +309,7 @@ class expression_parser {
    *
    * @return The index of the added data reference in the internal data references list.
    */
-  cudf::size_type add_data_reference(detail::device_data_reference data_ref);
+  cudf::size_type add_data_reference(device_data_reference data_ref);
 
   rmm::device_buffer
     _device_data_buffer;  ///< The device-side data buffer containing the plan information, which is
@@ -322,14 +320,10 @@ class expression_parser {
   cudf::size_type _expression_count;
   intermediate_counter _intermediate_counter;
   bool _has_nulls;
-  std::vector<detail::device_data_reference> _data_references;
+  std::vector<device_data_reference> _data_references;
   std::vector<ast_operator> _operators;
   std::vector<cudf::size_type> _operator_source_indices;
   std::vector<generic_scalar_device_view> _literals;
 };
 
-}  // namespace detail
-
-}  // namespace ast
-
-}  // namespace cudf
+}  // namespace cudf::ast

@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/operators.hpp>
+#include <cudf/ast/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -29,11 +29,7 @@
 #include <functional>
 #include <iterator>
 
-namespace cudf {
-
-namespace ast {
-
-namespace detail {
+namespace cudf::ast {
 
 device_data_reference::device_data_reference(device_data_reference_type reference_type,
                                              cudf::data_type data_type,
@@ -94,9 +90,9 @@ cudf::size_type expression_parser::visit(literal const& expr)
     auto device_view         = expr.get_value();                   // Construct a scalar device view
     auto const literal_index = cudf::size_type(_literals.size());  // Push literal
     _literals.push_back(device_view);
-    auto const source = detail::device_data_reference(detail::device_data_reference_type::LITERAL,
-                                                      data_type,
-                                                      literal_index);  // Push data reference
+    auto const source = device_data_reference(device_data_reference_type::LITERAL,
+                                              data_type,
+                                              literal_index);  // Push data reference
     return add_data_reference(source);
   }
 }
@@ -123,10 +119,10 @@ cudf::size_type expression_parser::visit(column_reference const& expr)
       }
     }
     // Push data reference
-    auto const source = detail::device_data_reference(detail::device_data_reference_type::COLUMN,
-                                                      data_type,
-                                                      expr.get_column_index(),
-                                                      expr.get_table_source());
+    auto const source = device_data_reference(device_data_reference_type::COLUMN,
+                                              data_type,
+                                              expr.get_column_index(),
+                                              expr.get_table_source());
     return add_data_reference(source);
   }
 }
@@ -155,7 +151,7 @@ cudf::size_type expression_parser::visit(operation const& expr)
     operand_data_ref_indices.cend(),
     [this](auto const& data_reference_index) {
       auto const operand_source = _data_references[data_reference_index];
-      if (operand_source.reference_type == detail::device_data_reference_type::INTERMEDIATE) {
+      if (operand_source.reference_type == device_data_reference_type::INTERMEDIATE) {
         auto const intermediate_index = operand_source.data_index;
         _intermediate_counter.give(intermediate_index);
       }
@@ -168,8 +164,7 @@ cudf::size_type expression_parser::visit(operation const& expr)
   auto const output = [&]() {
     if (expression_index == 0) {
       // This expression is the root. Output should be directed to the output column.
-      return detail::device_data_reference(
-        detail::device_data_reference_type::COLUMN, data_type, 0, table_reference::OUTPUT);
+      return device_data_reference(device_data_reference_type::COLUMN, data_type, 0, table_reference::OUTPUT);
     } else {
       // This expression is not the root. Output is an intermediate value.
       // Ensure that the output type is fixed width and fits in the intermediate storage.
@@ -180,8 +175,7 @@ cudf::size_type expression_parser::visit(operation const& expr)
                                                         : sizeof(IntermediateDataType<false>))) {
         CUDF_FAIL("The output data type is too large to be stored in an intermediate.");
       }
-      return detail::device_data_reference(
-        detail::device_data_reference_type::INTERMEDIATE, data_type, _intermediate_counter.take());
+      return device_data_reference(device_data_reference_type::INTERMEDIATE, data_type, _intermediate_counter.take());
     }
   }();
   auto const index = add_data_reference(output);
@@ -220,7 +214,7 @@ std::vector<cudf::size_type> expression_parser::visit_operands(
   return operand_data_reference_indices;
 }
 
-cudf::size_type expression_parser::add_data_reference(detail::device_data_reference data_ref)
+cudf::size_type expression_parser::add_data_reference(device_data_reference data_ref)
 {
   // If an equivalent data reference already exists, return its index. Otherwise add this data
   // reference and return the new index.
@@ -233,8 +227,4 @@ cudf::size_type expression_parser::add_data_reference(detail::device_data_refere
   }
 }
 
-}  // namespace detail
-
-}  // namespace ast
-
-}  // namespace cudf
+}  // namespace cudf::ast

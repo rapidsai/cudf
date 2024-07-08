@@ -21,7 +21,8 @@
 #include "mixed_join_common_utils.cuh"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
-#include <cudf/ast/detail/expression_parser.hpp>
+#include <cudf/ast/expression_parser.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/export.hpp>
@@ -50,7 +51,7 @@ CUDF_HIDDEN __launch_bounds__(block_size) __global__
                   cudf::detail::mixed_multimap_type::device_view hash_table_view,
                   size_type* join_output_l,
                   size_type* join_output_r,
-                  cudf::ast::detail::expression_device_view device_expression_data,
+                  cudf::ast::expression_device_view device_expression_data,
                   cudf::size_type const* join_result_offsets,
                   bool const swap_tables)
 {
@@ -59,8 +60,8 @@ CUDF_HIDDEN __launch_bounds__(block_size) __global__
   // used to circumvent conflicts between arrays of different types between
   // different template instantiations due to the extern specifier.
   extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
+  cudf::ast::IntermediateDataType<has_nulls>* intermediate_storage =
+    reinterpret_cast<cudf::ast::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
