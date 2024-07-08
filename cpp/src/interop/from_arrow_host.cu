@@ -38,6 +38,7 @@
 #include <rmm/cuda_device.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
@@ -49,7 +50,7 @@ namespace {
 
 struct dispatch_copy_from_arrow_host {
   rmm::cuda_stream_view stream;
-  rmm::mr::device_memory_resource* mr;
+  rmm::device_async_resource_ref mr;
 
   std::unique_ptr<rmm::device_buffer> get_mask_buffer(ArrowArray const* array)
   {
@@ -131,7 +132,7 @@ std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
                                         data_type type,
                                         bool skip_mask,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr);
+                                        rmm::device_async_resource_ref mr);
 
 template <>
 std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<bool>(ArrowSchemaView* schema,
@@ -388,7 +389,7 @@ std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
                                         data_type type,
                                         bool skip_mask,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
 {
   return type.id() != type_id::EMPTY
            ? std::move(type_dispatcher(
@@ -405,7 +406,7 @@ std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
 std::unique_ptr<table> from_arrow_host(ArrowSchema const* schema,
                                        ArrowDeviceArray const* input,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(schema != nullptr && input != nullptr,
                "input ArrowSchema and ArrowDeviceArray must not be NULL",
@@ -441,7 +442,7 @@ std::unique_ptr<table> from_arrow_host(ArrowSchema const* schema,
 std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
                                                ArrowDeviceArray const* input,
                                                rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+                                               rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(schema != nullptr && input != nullptr,
                "input ArrowSchema and ArrowDeviceArray must not be NULL",
@@ -462,7 +463,7 @@ std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
 std::unique_ptr<table> from_arrow_host(ArrowSchema const* schema,
                                        ArrowDeviceArray const* input,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -472,7 +473,7 @@ std::unique_ptr<table> from_arrow_host(ArrowSchema const* schema,
 std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
                                                ArrowDeviceArray const* input,
                                                rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -482,7 +483,7 @@ std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
 std::unique_ptr<table> from_arrow(ArrowSchema const* schema,
                                   ArrowArray const* input,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -497,7 +498,7 @@ std::unique_ptr<table> from_arrow(ArrowSchema const* schema,
 std::unique_ptr<column> from_arrow_column(ArrowSchema const* schema,
                                           ArrowArray const* input,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+                                          rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
