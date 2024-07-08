@@ -96,6 +96,8 @@ def broadcast(
     ``target_length`` is provided and not all columns are length-1
     (i.e. ``n != 1``), then ``target_length`` must be equal to ``n``.
     """
+    if len(columns) == 0:
+        return []
     lengths: set[int] = {column.obj.size() for column in columns}
     if lengths == {1}:
         if target_length is None:
@@ -431,7 +433,7 @@ class GroupBy(IR):
         NotImplementedError
             For unsupported expression nodes.
         """
-        if isinstance(agg, (expr.BinOp, expr.Cast)):
+        if isinstance(agg, (expr.BinOp, expr.Cast, expr.UnaryFunction)):
             return max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, expr.Agg):
             return 1 + max(GroupBy.check_agg(child) for child in agg.children)

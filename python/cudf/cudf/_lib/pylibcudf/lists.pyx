@@ -9,6 +9,7 @@ from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.lists cimport (
     contains as cpp_contains,
     explode as cpp_explode,
+    reverse as cpp_reverse,
 )
 from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_list_elements as cpp_concatenate_list_elements,
@@ -211,20 +212,45 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
     return Column.from_libcudf(move(c_result))
 
 
+cpdef Column reverse(Column input):
+    """Reverse the element order within each list of the input column.
+
+    For details, see :cpp:func:`reverse`.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+
+    Returns
+    -------
+    Column
+        A new Column with reversed lists.
+    """
+    cdef unique_ptr[column] c_result
+    cdef ListColumnView list_view = input.list_view()
+
+    with nogil:
+        c_result = move(cpp_reverse.reverse(
+            list_view.view(),
+        ))
+    return Column.from_libcudf(move(c_result))
+
+
 cpdef Column extract_list_element(Column input, ColumnOrSizeType index):
     """Create a column of extracted list elements.
 
-        Parameters
-        ----------
-        input : Column
-            The input column.
-        index : Union[Column, size_type]
-            The selection index or indices.
-
-        Returns
-        -------
-        Column
-            A new Column with elements extracted.
+    Parameters
+	----------
+	input : Column
+	    The input column.
+	index : Union[Column, size_type]
+	    The selection index or indices.
+	
+	Returns
+	-------
+	Column
+	    A new Column with elements extracted.
     """
     cdef unique_ptr[column] c_result
     cdef ListColumnView list_view = input.list_view()

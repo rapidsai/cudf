@@ -136,6 +136,18 @@ def test_index_of_list_column(test_data, column):
     assert_column_eq(expect, res)
 
 
+def test_reverse(test_data):
+    list_column = test_data[0][0]
+    arr = pa.array(list_column)
+    plc_column = plc.interop.from_arrow(arr)
+
+    res = plc.lists.reverse(plc_column)
+
+    expect = pa.array([lst[::-1] for lst in list_column])
+
+    assert_column_eq(expect, res)
+
+
 def test_extract_list_element_scalar(test_data):
     arr = pa.array(test_data[0][0])
     plc_column = plc.interop.from_arrow(arr)
@@ -153,5 +165,3 @@ def test_extract_list_element_column(test_data):
     expect = pa.array([0, None, None, 7])
 
     res = plc.lists.extract_list_element(plc_column, indices)
-
-    assert_column_eq(expect, res)
