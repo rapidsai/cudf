@@ -19,7 +19,6 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <cuda/std/limits>
-#include <cuda/std/tuple>
 #include <cuda/std/type_traits>
 
 #include <cstring>
@@ -760,9 +759,7 @@ struct shifting_constants {
  * @return integer_rep, shifted 1 and ++'d if the conversion to decimal causes truncation
  */
 template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
-CUDF_HOST_DEVICE cuda::std::tuple<T, int, bool> add_half_if_truncates(T integer_rep,
-                                                                      int pow2,
-                                                                      int pow10)
+CUDF_HOST_DEVICE cuda::std::pair<T, int> add_half_if_truncates(T integer_rep, int pow2, int pow10)
 {
   // The user-supplied scale may truncate information, so we need to talk about rounding.
   // We have chosen not to round, so we want 1.23456f with scale -4 to be decimal 12345
@@ -809,7 +806,7 @@ CUDF_HOST_DEVICE cuda::std::tuple<T, int, bool> add_half_if_truncates(T integer_
   --pow2;
   integer_rep += static_cast<T>(conversion_truncates);
 
-  return {integer_rep, pow2, conversion_truncates};
+  return {integer_rep, pow2};
 }
 
 /**
@@ -900,7 +897,6 @@ shift_to_decimal_pospow(typename shifting_constants<FloatingType>::IntegerRep co
  * @param base2_value The base-2 fixed-point value we are converting from
  * @param pow2 The number of powers of 2 to apply to convert from base-2
  * @param pow10 The number of powers of 10 to apply to reach the desired scale factor
- * @param truncating Whether the scale factor truncates floating-point information
  * @return Magnitude of the converted-to decimal integer
  */
 template <typename Rep,
@@ -909,8 +905,7 @@ template <typename Rep,
 CUDF_HOST_DEVICE inline typename shifting_constants<FloatingType>::ShiftingRep
 shift_to_decimal_negpow(typename shifting_constants<FloatingType>::IntegerRep base2_value,
                         int pow2,
-                        int pow10,
-                        bool truncating)
+                        int pow10)
 {
   // This is similar to shift_to_decimal_pospow(), except pow10 < 0 & pow2 < 0
   // See comments in that function for details.
@@ -936,11 +931,7 @@ shift_to_decimal_negpow(typename shifting_constants<FloatingType>::IntegerRep ba
     }
 
     // Final bit shifting: Shift may be large, guard against UB
-    // If we aren't truncating information from the original floating-point number,
-    // then always round up (to match pandas) by adding 1 to the last bit
-    shifting_rep = guarded_right_shift(shifting_rep, pow2_mag - 1);
-    shifting_rep += static_cast<ShiftingRep>(!truncating);
-    return (shifting_rep >> 1);
+    return guarded_right_shift(shifting_rep, pow2_mag);
   };
 
   // If our total decimal shift is less than the max, we don't need to iterate
@@ -1012,13 +1003,12 @@ CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& flo
   auto const pow10                        = static_cast<int>(scale);
 
   // Add half a bit if truncating to yield expected value, see function for discussion.
-  auto const [base2_value_bound, pow2_bound, truncates_bound] =
+  auto const [base2_value_bound, pow2_bound] =
     add_half_if_truncates(significand, floating_pow2, pow10);
 
   // Structured binding variables cannot be captured :/
   auto const base2_value = base2_value_bound;
   auto const pow2        = pow2_bound;
-  auto const truncates   = truncates_bound;
 
   // Apply the powers of 2 and 10 to convert to decimal.
   // The result will be base2_value * (2^pow2) / (10^pow10)
@@ -1054,7 +1044,7 @@ CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& flo
         auto const shifted = guarded_left_shift(static_cast<UnsignedRep>(base2_value), pow2);
         return multiply_power10<UnsignedRep>(shifted, -pow10);
       }
-      return shift_to_decimal_negpow<Rep, FloatingType>(base2_value, pow2, pow10, truncates);
+      return shift_to_decimal_negpow<Rep, FloatingType>(base2_value, pow2, pow10);
     }
   }();
 
