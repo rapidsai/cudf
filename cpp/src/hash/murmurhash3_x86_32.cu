@@ -49,6 +49,8 @@ std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(input, stream);
   auto output_view      = output->mutable_view();
 
+  std::cout << "\n\n\n murmurhash \n\n\n" << std::endl;
+
   // Compute the hash value for each row
   thrust::tabulate(rmm::exec_policy(stream),
                    output_view.begin<hash_value_type>(),
