@@ -937,11 +937,8 @@ def _fast_slow_function_call(
             domain="cudf_pandas",
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
-            if args[0].__name__ in ("read_pickle", "to_pickle"):
+            with disable_module_accelerator():
                 result = func(*slow_args, **slow_kwargs)
-            else:
-                with disable_module_accelerator():
-                    result = func(*slow_args, **slow_kwargs)
     return _maybe_wrap_result(result, func, *args, **kwargs), fast
 
 
