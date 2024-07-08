@@ -355,7 +355,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         super(cls, obj).__init__()
         obj._name = None
         obj._data = ColumnAccessor(data)
-        obj.names = obj._data.names
+        obj._names = pd.core.indexes.frozen.FrozenList(obj._data.names)
         if name is not None:
             obj.name = name
         obj._compute_levels_and_codes()
@@ -681,7 +681,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         levels = []
 
         codes = {}
-        for name, col in self._data.items():
+        for name, col in zip(self.names, self._columns):
             code, cats = cudf.Series._from_data({None: col}).factorize()
             cats.name = name
             codes[name] = code.astype(np.int64)
