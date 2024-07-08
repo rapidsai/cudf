@@ -3498,6 +3498,22 @@ def test_parquet_reader_pandas_compatibility():
     assert_eq(expected, df)
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"skip_rows": 0},
+        {"nrows": 1},
+    ],
+)
+def test_parquet_reader_pandas_compatibility_unsupported(kwargs):
+    df = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["av", "qw", "hi", "xyz"]})
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.read_parquet(buffer, **kwargs)
+
+
 @pytest.mark.parametrize("row_group_size", [1, 4, 33])
 def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     if len(pdf) > 100:

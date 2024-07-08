@@ -192,8 +192,14 @@ bytes_per_thread : int, default None
     This parameter is functional only when `use_python_file_object=False`.
 skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
+
+    .. pandas-compat::
+    This option is not supported when pandas compatibility mode is on.
 nrows : int, default None
     If not None, the total number of rows to read.
+
+    .. pandas-compat::
+    This option is not supported when pandas compatibility mode is on.
 
 Returns
 -------
