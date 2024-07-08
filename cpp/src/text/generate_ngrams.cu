@@ -37,9 +37,9 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
+#include <thrust/copy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/transform_scan.h>
 
 #include <stdexcept>
 
@@ -246,36 +246,68 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
 }
 
 namespace {
+
+constexpr int64_t block_size = 256;
+
 /**
  * @brief Computes the hash of each character ngram
  *
- * Each thread processes a single string. Substrings are resolved for every character
+ * Each warp processes a single string. Substrings are resolved for every character
  * of the string and hashed.
  */
-struct character_ngram_hash_fn {
-  cudf::column_device_view const d_strings;
-  cudf::size_type ngrams;
-  cudf::size_type const* d_ngram_offsets;
-  cudf::hash_value_type* d_results;
-
-  __device__ void operator()(cudf::size_type idx) const
-  {
-    if (d_strings.is_null(idx)) return;
-    auto const d_str = d_strings.element<cudf::string_view>(idx);
-    if (d_str.empty()) return;
-    auto itr                = d_str.begin();
-    auto const ngram_offset = d_ngram_offsets[idx];
-    auto const ngram_count  = d_ngram_offsets[idx + 1] - ngram_offset;
-    auto const hasher       = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>{0};
-    auto d_hashes           = d_results + ngram_offset;
-    for (cudf::size_type n = 0; n < ngram_count; ++n, ++itr) {
-      auto const begin = itr.byte_offset();
-      auto const end   = (itr + ngrams).byte_offset();
-      auto const ngram = cudf::string_view(d_str.data() + begin, end - begin);
-      *d_hashes++      = hasher(ngram);
-    }
+__global__ void character_ngram_hash_kernel(cudf::column_device_view const d_strings,
+                                            cudf::size_type ngrams,
+                                            cudf::size_type const* d_ngram_offsets,
+                                            cudf::hash_value_type* d_results)
+{
+  auto const idx = static_cast<std::size_t>(threadIdx.x + blockIdx.x * blockDim.x);
+  if (idx >= (static_cast<std::size_t>(d_strings.size()) *
+              static_cast<std::size_t>(cudf::detail::warp_size))) {
+    return;
   }
-};
+
+  auto const str_idx    = static_cast<cudf::size_type>(idx / cudf::detail::warp_size);
+  auto const lane_idx   = static_cast<cudf::size_type>(idx % cudf::detail::warp_size);
+  auto const thread_idx = static_cast<cudf::size_type>(idx % block_size);  // threadIdx.x
+
+  if (d_strings.is_null(str_idx)) return;
+  auto const d_str = d_strings.element<cudf::string_view>(str_idx);
+  if (d_str.empty()) return;
+
+  __shared__ cudf::hash_value_type hvs[block_size];  // temp store for hash values
+
+  auto const ngram_offset = d_ngram_offsets[str_idx];
+  auto const hasher       = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>{0};
+
+  auto const end        = d_str.data() + d_str.size_bytes();
+  auto const warp_count = (d_str.size_bytes() / cudf::detail::warp_size) + 1;
+
+  auto d_hashes = d_results + ngram_offset;
+  auto itr      = d_str.data() + lane_idx;
+  for (auto i = 0; i < warp_count; ++i) {
+    cudf::hash_value_type hash = 0;
+    if (itr < end && cudf::strings::detail::is_begin_utf8_char(*itr)) {
+      // resolve ngram substring
+      auto const sub_str =
+        cudf::string_view(itr, static_cast<cudf::size_type>(thrust::distance(itr, end)));
+      auto const [bytes, left] =
+        cudf::strings::detail::bytes_to_character_position(sub_str, ngrams);
+      if (left == 0) { hash = hasher(cudf::string_view(itr, bytes)); }
+    }
+    hvs[thread_idx] = hash;  // store hash into shared memory
+    __syncwarp();
+    if (lane_idx == 0) {
+      // copy valid hash values into d_hashes
+      auto const hashes = &hvs[thread_idx];
+      d_hashes          = thrust::copy_if(
+        thrust::seq, hashes, hashes + cudf::detail::warp_size, d_hashes, [](auto h) {
+          return h != 0;
+        });
+    }
+    __syncwarp();
+    itr += cudf::detail::warp_size;
+  }
+}
 }  // namespace
 
 std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view const& input,
@@ -313,11 +345,9 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
     cudf::make_numeric_column(output_type, total_ngrams, cudf::mask_state::UNALLOCATED, stream, mr);
   auto d_hashes = hashes->mutable_view().data<cudf::hash_value_type>();
 
-  character_ngram_hash_fn generator{*d_strings, ngrams, d_offsets, d_hashes};
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::counting_iterator<cudf::size_type>(0),
-                     input.size(),
-                     generator);
+  cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+  character_ngram_hash_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+    *d_strings, ngrams, d_offsets, d_hashes);
 
   return make_lists_column(
     input.size(), std::move(offsets), std::move(hashes), 0, rmm::device_buffer{}, stream, mr);
