@@ -22,7 +22,7 @@ requires = [
 [project]
 name = "libcudf"
 dynamic = ["version"]
-description = "cuDF - GPU Dataframe"
+description = "cuDF - GPU Dataframe (C++)"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
     { name = "NVIDIA Corporation" },

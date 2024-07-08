@@ -47,11 +47,12 @@ endif()
 # like headers from libcudacxx, but we do need the libraries. However, we want to control where they
 # are installed to. Since there are multiple subpackages of cudf._lib that require access to
 # libcudf, we place the library and all its dependent artifacts in the cudf directory as a single
-# source of truth and modify the other rpaths appropriately.
+# source of truth.
 include(cmake/Modules/WheelHelpers.cmake)
+
 # TODO: This install is currently overzealous. We should only install the libraries that are
 # downloaded by CPM during the build, not libraries that were found on the system.  However, in
-# practice right this would only be a problem is if libcudf was not found but some of the
+# practice this would only be a problem if libcudf was not found but some of the
 # dependencies were, and we have no real use cases where that happens.
 install_aliased_imported_targets(
   TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp
