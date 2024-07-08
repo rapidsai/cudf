@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import pytest
-
 import polars as pl
 
-from cudf_polars import translate_ir
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 def test_union():
@@ -31,8 +31,8 @@ def test_union_schema_mismatch_raises():
     ).lazy()
     ldf2 = ldf.select(pl.col("a").cast(pl.Float32))
     query = pl.concat([ldf, ldf2], how="diagonal")
-    with pytest.raises(NotImplementedError):
-        _ = translate_ir(query._ldf.visit())
+
+    assert_ir_translation_raises(query, NotImplementedError)
 
 
 def test_concat_vertical():
@@ -46,3 +46,12 @@ def test_concat_vertical():
     q = pl.concat([ldf, ldf2], how="vertical")
 
     assert_gpu_result_equal(q)
+
+
+def test_concat_diagonal_empty():
+    df1 = pl.LazyFrame()
+    df2 = pl.LazyFrame({"a": [1, 2]})
+
+    q = pl.concat([df1, df2], how="diagonal_relaxed")
+
+    assert_gpu_result_equal(q, collect_kwargs={"no_optimization": True})

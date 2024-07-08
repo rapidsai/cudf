@@ -91,6 +91,56 @@ enum class binary_operator : int32_t {
                      ///< (null, false) is null, and (valid, valid) == LOGICAL_OR(valid, valid)
   INVALID_BINARY     ///< invalid operation
 };
+
+/// Binary operation common type default
+template <typename L, typename R, typename = void>
+struct binary_op_common_type {};
+
+/// Binary operation common type specialization
+template <typename L, typename R>
+struct binary_op_common_type<L, R, std::enable_if_t<has_common_type_v<L, R>>> {
+  /// The common type of the template parameters
+  using type = std::common_type_t<L, R>;
+};
+
+/// Binary operation common type specialization
+template <typename L, typename R>
+struct binary_op_common_type<
+  L,
+  R,
+  std::enable_if_t<is_fixed_point<L>() && cuda::std::is_floating_point_v<R>>> {
+  /// The common type of the template parameters
+  using type = L;
+};
+
+/// Binary operation common type specialization
+template <typename L, typename R>
+struct binary_op_common_type<
+  L,
+  R,
+  std::enable_if_t<is_fixed_point<R>() && cuda::std::is_floating_point_v<L>>> {
+  /// The common type of the template parameters
+  using type = R;
+};
+
+/// Binary operation common type helper
+template <typename L, typename R>
+using binary_op_common_type_t = typename binary_op_common_type<L, R>::type;
+
+namespace detail {
+template <typename AlwaysVoid, typename L, typename R>
+struct binary_op_has_common_type_impl : std::false_type {};
+
+template <typename L, typename R>
+struct binary_op_has_common_type_impl<std::void_t<binary_op_common_type_t<L, R>>, L, R>
+  : std::true_type {};
+}  // namespace detail
+
+/// Checks if binary operation types have a common type
+template <typename L, typename R>
+constexpr inline bool binary_op_has_common_type_v =
+  detail::binary_op_has_common_type_impl<void, L, R>::value;
+
 /**
  * @brief Performs a binary operation between a scalar and a column.
  *

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import json
 import types
 from functools import cache
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
@@ -29,7 +30,7 @@ import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import DataFrame, NamedColumn
-from cudf_polars.utils import sorting
+from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -95,6 +96,8 @@ def broadcast(
     ``target_length`` is provided and not all columns are length-1
     (i.e. ``n != 1``), then ``target_length`` must be equal to ``n``.
     """
+    if len(columns) == 0:
+        return []
     lengths: set[int] = {column.obj.size() for column in columns}
     if lengths == {1}:
         if target_length is None:
@@ -123,12 +126,17 @@ def broadcast(
     ]
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class IR:
     """Abstract plan node, representing an unevaluated dataframe."""
 
     schema: Schema
     """Mapping from column names to their data types."""
+
+    def __post_init__(self):
+        """Validate preconditions."""
+        if any(dtype.id() == plc.TypeId.EMPTY for dtype in self.schema.values()):
+            raise NotImplementedError("Cannot make empty columns.")
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """
@@ -157,7 +165,7 @@ class IR:
         )  # pragma: no cover
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class PythonScan(IR):
     """Representation of input from a python function."""
 
@@ -171,12 +179,14 @@ class PythonScan(IR):
         raise NotImplementedError("PythonScan not implemented")
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Scan(IR):
     """Input from files."""
 
-    typ: Any
+    typ: str
     """What type of file are we reading? Parquet, CSV, etc..."""
+    options: tuple[Any, ...]
+    """Type specific options, as json-encoded strings."""
     paths: list[str]
     """List of paths to read from."""
     file_options: Any
@@ -206,17 +216,21 @@ class Scan(IR):
         with_columns = options.with_columns
         row_index = options.row_index
         if self.typ == "csv":
+            opts, cloud_opts = map(json.loads, self.options)
             df = DataFrame.from_cudf(
                 cudf.concat(
                     [cudf.read_csv(p, usecols=with_columns) for p in self.paths]
                 )
             )
         elif self.typ == "parquet":
+            opts, cloud_opts = map(json.loads, self.options)
             cdf = cudf.read_parquet(self.paths, columns=with_columns)
             assert isinstance(cdf, cudf.DataFrame)
             df = DataFrame.from_cudf(cdf)
         else:
-            assert_never(self.typ)
+            raise NotImplementedError(
+                f"Unhandled scan type: {self.typ}"
+            )  # pragma: no cover; post init trips first
         if row_index is not None:
             name, offset = row_index
             dtype = self.schema[name]
@@ -248,7 +262,7 @@ class Scan(IR):
             return df.filter(mask)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Cache(IR):
     """
     Return a cached plan node.
@@ -269,7 +283,7 @@ class Cache(IR):
             return cache.setdefault(self.key, self.value.evaluate(cache=cache))
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class DataFrameScan(IR):
     """
     Input from an existing polars DataFrame.
@@ -292,15 +306,10 @@ class DataFrameScan(IR):
         table = pdf.to_arrow()
         schema = table.schema
         for i, field in enumerate(schema):
-            # TODO: Nested types
-            if field.type == pa.large_string():
-                # TODO: goes away when libcudf supports large strings
-                schema = schema.set(i, pa.field(field.name, pa.string()))
-            elif isinstance(field.type, pa.LargeListType):
-                # TODO: goes away when libcudf supports large lists
-                schema = schema.set(
-                    i, pa.field(field.name, pa.list_(field.type.field(0)))
-                )
+            schema = schema.set(
+                i, pa.field(field.name, dtypes.downcast_arrow_lists(field.type))
+            )
+        # No-op if the schema is unchanged.
         table = table.cast(schema)
         df = DataFrame.from_table(
             plc.interop.from_arrow(table), list(self.schema.keys())
@@ -315,7 +324,7 @@ class DataFrameScan(IR):
             return df
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Select(IR):
     """Produce a new dataframe selecting given expressions from an input."""
 
@@ -336,7 +345,7 @@ class Select(IR):
         return DataFrame(columns)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Reduce(IR):
     """
     Produce a new dataframe selecting given expressions from an input.
@@ -389,7 +398,7 @@ def placeholder_column(n: int) -> plc.Column:
     )
 
 
-@dataclasses.dataclass(slots=False)
+@dataclasses.dataclass
 class GroupBy(IR):
     """Perform a groupby."""
 
@@ -424,7 +433,7 @@ class GroupBy(IR):
         NotImplementedError
             For unsupported expression nodes.
         """
-        if isinstance(agg, (expr.BinOp, expr.Cast)):
+        if isinstance(agg, (expr.BinOp, expr.Cast, expr.UnaryFunction)):
             return max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, expr.Agg):
             return 1 + max(GroupBy.check_agg(child) for child in agg.children)
@@ -490,7 +499,7 @@ class GroupBy(IR):
         return DataFrame([*result_keys, *results]).slice(self.options.slice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Join(IR):
     """A join of two dataframes."""
 
@@ -518,8 +527,16 @@ class Join(IR):
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
     """
 
-    @cache
+    def __post_init__(self) -> None:
+        """Validate preconditions."""
+        if any(
+            isinstance(e.value, expr.Literal)
+            for e in itertools.chain(self.left_on, self.right_on)
+        ):
+            raise NotImplementedError("Join with literal as join key.")
+
     @staticmethod
+    @cache
     def _joiners(
         how: Literal["inner", "left", "full", "leftsemi", "leftanti"],
     ) -> tuple[
@@ -582,17 +599,9 @@ class Join(IR):
                 for new, old in zip(columns[left.num_columns :], right.columns)
             ]
             return DataFrame([*left_cols, *right_cols])
-        left_on = DataFrame(
-            broadcast(
-                *(e.evaluate(left) for e in self.left_on), target_length=left.num_rows
-            )
-        )
-        right_on = DataFrame(
-            broadcast(
-                *(e.evaluate(right) for e in self.right_on),
-                target_length=right.num_rows,
-            )
-        )
+        # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
+        left_on = DataFrame(broadcast(*(e.evaluate(left) for e in self.left_on)))
+        right_on = DataFrame(broadcast(*(e.evaluate(right) for e in self.right_on)))
         null_equality = (
             plc.types.NullEquality.EQUAL
             if join_nulls
@@ -602,13 +611,10 @@ class Join(IR):
         if right_policy is None:
             # Semi join
             lg = join_fn(left_on.table, right_on.table, null_equality)
-            left = left.replace_columns(*left_on.columns)
             table = plc.copying.gather(left.table, lg, left_policy)
             result = DataFrame.from_table(table, left.column_names)
         else:
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
-            left = left.replace_columns(*left_on.columns)
-            right = right.replace_columns(*right_on.columns)
             if coalesce and how == "inner":
                 right = right.discard_columns(right_on.column_names_set)
             left = DataFrame.from_table(
@@ -642,7 +648,7 @@ class Join(IR):
         return result.slice(zlice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class HStack(IR):
     """Add new columns to a dataframe."""
 
@@ -671,7 +677,7 @@ class HStack(IR):
         return df.with_columns(columns)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Distinct(IR):
     """Produce a new dataframe with distinct rows."""
 
@@ -741,7 +747,7 @@ class Distinct(IR):
         return result.slice(self.zlice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Sort(IR):
     """Sort a dataframe."""
 
@@ -810,7 +816,7 @@ class Sort(IR):
         return DataFrame(columns).slice(self.zlice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Slice(IR):
     """Slice a dataframe."""
 
@@ -827,7 +833,7 @@ class Slice(IR):
         return df.slice((self.offset, self.length))
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Filter(IR):
     """Filter a dataframe with a boolean mask."""
 
@@ -843,7 +849,7 @@ class Filter(IR):
         return df.filter(mask)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Projection(IR):
     """Select a subset of columns from a dataframe."""
 
@@ -860,7 +866,7 @@ class Projection(IR):
         return DataFrame(columns)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class MapFunction(IR):
     """Apply some function to a dataframe."""
 
@@ -894,6 +900,13 @@ class MapFunction(IR):
                 # polars requires that all to-explode columns have the
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
+        elif self.name == "rename":
+            old, new, _ = self.options
+            # TODO: perhaps polars should validate renaming in the IR?
+            if len(new) != len(set(new)) or (
+                set(new) & (set(self.df.schema.keys() - set(old)))
+            ):
+                raise NotImplementedError("Duplicate new names in rename.")
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -919,7 +932,7 @@ class MapFunction(IR):
             raise AssertionError("Should never be reached")  # pragma: no cover
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Union(IR):
     """Concatenate dataframes vertically."""
 
@@ -943,7 +956,7 @@ class Union(IR):
         ).slice(self.zlice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class HConcat(IR):
     """Concatenate dataframes horizontally."""
 

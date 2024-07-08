@@ -6,8 +6,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars import translate_ir
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.fixture
@@ -45,6 +47,8 @@ def keys(request):
         [pl.col("float").max() - pl.col("int").min()],
         [pl.col("float").mean(), pl.col("int").std()],
         [(pl.col("float") - pl.lit(2)).max()],
+        [pl.col("float").sum().round(decimals=1)],
+        [pl.col("float").round(decimals=1).sum()],
     ],
     ids=lambda aggs: "-".join(map(str, aggs)),
 )
@@ -72,7 +76,7 @@ def test_groupby(df: pl.LazyFrame, maintain_order, keys, exprs):
     q = df.group_by(*keys, maintain_order=maintain_order).agg(*exprs)
 
     if not maintain_order:
-        sort_keys = list(q.schema.keys())[: len(keys)]
+        sort_keys = list(q.collect_schema().keys())[: len(keys)]
         q = q.sort(*sort_keys)
 
     assert_gpu_result_equal(q, check_exact=False)
@@ -81,10 +85,7 @@ def test_groupby(df: pl.LazyFrame, maintain_order, keys, exprs):
 def test_groupby_len(df, keys):
     q = df.group_by(*keys).agg(pl.len())
 
-    # TODO: polars returns UInt32, libcudf returns Int32
-    with pytest.raises(AssertionError):
-        assert_gpu_result_equal(q, check_row_order=False)
-    assert_gpu_result_equal(q, check_dtypes=False, check_row_order=False)
+    assert_gpu_result_equal(q, check_row_order=False)
 
 
 @pytest.mark.parametrize(
@@ -97,5 +98,4 @@ def test_groupby_len(df, keys):
 def test_groupby_unsupported(df, expr):
     q = df.group_by("key1").agg(expr)
 
-    with pytest.raises(NotImplementedError):
-        _ = translate_ir(q._ldf.visit())
+    assert_ir_translation_raises(q, NotImplementedError)

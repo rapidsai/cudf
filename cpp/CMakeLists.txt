@@ -52,6 +52,8 @@ option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
 mark_as_advanced(CUDF_BUILD_TESTUTIL)
 option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
+option(CUDF_LARGE_STRINGS_DISABLED "Build with large string support disabled" OFF)
+mark_as_advanced(CUDF_LARGE_STRINGS_DISABLED)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
 option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
 option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
@@ -365,6 +367,7 @@ add_library(
   src/interop/to_arrow_device.cu
   src/interop/from_arrow_device.cu
   src/interop/from_arrow_host.cu
+  src/interop/from_arrow_stream.cu
   src/interop/to_arrow_schema.cpp
   src/interop/detail/arrow_allocator.cpp
   src/io/avro/avro.cpp
@@ -662,6 +665,7 @@ add_library(
   src/unary/math_ops.cu
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
+  src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
@@ -779,6 +783,11 @@ endif()
 # Disable NVTX if necessary
 if(NOT USE_NVTX)
   target_compile_definitions(cudf PUBLIC NVTX_DISABLE)
+endif()
+
+# Disable large strings support
+if(CUDF_LARGE_STRINGS_DISABLED)
+  target_compile_definitions(cudf PRIVATE CUDF_LARGE_STRINGS_DISABLED)
 endif()
 
 # Define RMM logging level

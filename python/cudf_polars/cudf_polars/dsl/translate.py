@@ -12,6 +12,7 @@ from typing import Any
 import pyarrow as pa
 from typing_extensions import assert_never
 
+import polars.polars as plrs
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 import cudf._lib.pylibcudf as plc
@@ -86,9 +87,11 @@ def _(
 def _(
     node: pl_ir.Scan, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
+    typ, *options = node.scan_type
     return ir.Scan(
         schema,
-        node.scan_type,
+        typ,
+        tuple(options),
         node.paths,
         node.file_options,
         translate_named_expr(visitor, n=node.predicate)
@@ -342,14 +345,39 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
             *(translate_expr(visitor, n=n) for n in node.input),
         )
     elif isinstance(name, pl_expr.BooleanFunction):
+        if name == pl_expr.BooleanFunction.IsBetween:
+            column, lo, hi = (translate_expr(visitor, n=n) for n in node.input)
+            (closed,) = options
+            lop, rop = expr.BooleanFunction._BETWEEN_OPS[closed]
+            return expr.BinOp(
+                dtype,
+                plc.binaryop.BinaryOperator.LOGICAL_AND,
+                expr.BinOp(dtype, lop, column, lo),
+                expr.BinOp(dtype, rop, column, hi),
+            )
         return expr.BooleanFunction(
             dtype,
             name,
             options,
             *(translate_expr(visitor, n=n) for n in node.input),
         )
-    else:
-        raise NotImplementedError(f"No handler for Expr function node with {name=}")
+    elif isinstance(name, pl_expr.TemporalFunction):
+        return expr.TemporalFunction(
+            dtype,
+            name,
+            options,
+            *(translate_expr(visitor, n=n) for n in node.input),
+        )
+    elif isinstance(name, str):
+        return expr.UnaryFunction(
+            dtype,
+            name,
+            options,
+            *(translate_expr(visitor, n=n) for n in node.input),
+        )
+    raise NotImplementedError(
+        f"No handler for Expr function node with {name=}"
+    )  # pragma: no cover; polars raises on the rust side for now
 
 
 @_translate_expr.register
@@ -373,6 +401,8 @@ def _(node: pl_expr.Window, visitor: NodeTraverser, dtype: plc.DataType) -> expr
 
 @_translate_expr.register
 def _(node: pl_expr.Literal, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
+    if isinstance(node.value, plrs.PySeries):
+        return expr.LiteralColumn(dtype, node.value)
     value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
     return expr.Literal(dtype, value)
 
@@ -417,8 +447,11 @@ def _(node: pl_expr.Cast, visitor: NodeTraverser, dtype: plc.DataType) -> expr.E
     # Push casts into literals so we can handle Cast(Literal(Null))
     if isinstance(inner, expr.Literal):
         return expr.Literal(dtype, inner.value.cast(plc.interop.to_arrow(dtype)))
-    else:
-        return expr.Cast(dtype, inner)
+    elif isinstance(inner, expr.Cast):
+        # Translation of Len/Count-agg put in a cast, remove double
+        # casts if we have one.
+        (inner,) = inner.children
+    return expr.Cast(dtype, inner)
 
 
 @_translate_expr.register
@@ -428,11 +461,24 @@ def _(node: pl_expr.Column, visitor: NodeTraverser, dtype: plc.DataType) -> expr
 
 @_translate_expr.register
 def _(node: pl_expr.Agg, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
-    return expr.Agg(
+    value = expr.Agg(
         dtype,
         node.name,
         node.options,
-        translate_expr(visitor, n=node.arguments),
+        *(translate_expr(visitor, n=n) for n in node.arguments),
+    )
+    if value.name == "count" and value.dtype.id() != plc.TypeId.INT32:
+        return expr.Cast(value.dtype, value)
+    return value
+
+
+@_translate_expr.register
+def _(node: pl_expr.Ternary, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
+    return expr.Ternary(
+        dtype,
+        translate_expr(visitor, n=node.predicate),
+        translate_expr(visitor, n=node.truthy),
+        translate_expr(visitor, n=node.falsy),
     )
 
 
@@ -450,7 +496,10 @@ def _(
 
 @_translate_expr.register
 def _(node: pl_expr.Len, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
-    return expr.Len(dtype)
+    value = expr.Len(dtype)
+    if dtype.id() != plc.TypeId.INT32:
+        return expr.Cast(dtype, value)
+    return value  # pragma: no cover; never reached since polars len has uint32 dtype
 
 
 def translate_expr(visitor: NodeTraverser, *, n: int) -> expr.Expr:
