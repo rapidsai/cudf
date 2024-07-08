@@ -830,7 +830,7 @@ cdef class ParquetReader:
                   use_pandas_metadata=True,
                   size_t chunk_read_limit=0,
                   size_t pass_read_limit=1024000000,
-                  size_type num_rows=-1,
+                  size_type nrows=-1,
                   int64_t skip_rows=0):
 
         # Convert NativeFile buffers to NativeFileDatasource,
@@ -855,7 +855,7 @@ cdef class ParquetReader:
         cdef parquet_reader_options args
         cdef pair[parquet_reader_options, bool] c_res = _setup_parquet_reader_options(
             source, cpp_row_groups, use_pandas_metadata,
-            None, columns, num_rows, skip_rows)
+            None, columns, nrows, skip_rows)
         args, self.allow_range_index = c_res.first, c_res.second
 
         with nogil:
