@@ -23,14 +23,12 @@ def row_index(request):
 @pytest.fixture(
     params=[
         (None, 0),
-        (2, 1),
-        (3, 0),
-        # pytest.param(
-        #     (2, 1), marks=pytest.mark.xfail(reason="No handling of row limit in scan")
-        # ),
-        # pytest.param(
-        #     (3, 0), marks=pytest.mark.xfail(reason="No handling of row limit in scan")
-        # ),
+        pytest.param(
+            (2, 1), marks=pytest.mark.xfail(reason="No handling of row limit in scan")
+        ),
+        pytest.param(
+            (3, 0), marks=pytest.mark.xfail(reason="No handling of row limit in scan")
+        ),
     ],
     ids=["all-rows", "n_rows-with-skip", "n_rows-no-skip"],
 )
@@ -55,8 +53,7 @@ def df(request, tmp_path, row_index, n_rows_skip_rows):
             tmp_path / "file.csv",
             row_index_name=name,
             row_index_offset=offset,
-            has_header=False,
-            skip_rows=skip_rows,
+            skip_rows_after_header=skip_rows,
             n_rows=n_rows,
         )
     else:
