@@ -241,16 +241,16 @@ cpdef Column extract_list_element(Column input, ColumnOrSizeType index):
     """Create a column of extracted list elements.
 
     Parameters
-	----------
-	input : Column
-	    The input column.
-	index : Union[Column, size_type]
-	    The selection index or indices.
-	
-	Returns
-	-------
-	Column
-	    A new Column with elements extracted.
+    ----------
+    input : Column
+        The input column.
+    index : Union[Column, size_type]
+        The selection index or indices.
+
+    Returns
+    -------
+    Column
+        A new Column with elements extracted.
     """
     cdef unique_ptr[column] c_result
     cdef ListColumnView list_view = input.list_view()
