@@ -1080,6 +1080,13 @@ def test_pickle(obj):
 
     tm.assert_equal(obj, copy)
 
+    with tempfile.TemporaryFile() as f:
+        xpd.to_pickle(obj, f)
+        f.seek(0)
+        copy = xpd.read_pickle(f)
+
+    tm.assert_equal(obj, copy)
+
 
 def test_dataframe_query():
     cudf_pandas_df = xpd.DataFrame({"foo": [1, 2, 3], "bar": [4, 5, 6]})

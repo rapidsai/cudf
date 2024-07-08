@@ -930,7 +930,7 @@ def _fast_slow_function_call(
                             "Pandas debugging mode failed. "
                             f"The exception was {e}."
                         )
-    except Exception as e:
+    except Exception:
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
@@ -938,7 +938,6 @@ def _fast_slow_function_call(
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
             if args[0].__name__ in ("read_pickle", "to_pickle"):
-                print(slow_args, slow_args[1], type(type(slow_args[1])))
                 result = func(*slow_args, **slow_kwargs)
             else:
                 with disable_module_accelerator():
