@@ -937,6 +937,11 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     add_library(
       ${_tgt} SHARED src/utilities/stacktrace.cpp tests/utilities/identify_stream_usage.cpp
     )
+    if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
+      target_compile_definitions(
+        ${_tgt} PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM
+      )
+    endif()
 
     set_target_properties(
       ${_tgt}
