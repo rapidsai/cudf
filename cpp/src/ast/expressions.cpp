@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +15,15 @@
  */
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expression_parser.hpp>
-#include <cudf/ast/expressions.hpp>
 #include <cudf/ast/expression_transformer.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf::ast{
+namespace cudf::ast {
 
 operation::operation(ast_operator op, expression const& input) : op(op), operands({input})
 {
@@ -40,40 +40,24 @@ operation::operation(ast_operator op, expression const& left, expression const& 
   }
 }
 
-cudf::size_type literal::accept(expression_parser& visitor) const
-{
-  return visitor.visit(*this);
-}
-cudf::size_type column_reference::accept(expression_parser& visitor) const
-{
-  return visitor.visit(*this);
-}
-cudf::size_type operation::accept(expression_parser& visitor) const
-{
-  return visitor.visit(*this);
-}
-cudf::size_type column_name_reference::accept(expression_parser& visitor) const
-{
-  return visitor.visit(*this);
-}
+cudf::size_type literal::accept(expression_parser& visitor) const { return visitor.visit(*this); }
+cudf::size_type column_reference::accept(expression_parser& visitor) const { return visitor.visit(*this); }
+cudf::size_type operation::accept(expression_parser& visitor) const { return visitor.visit(*this); }
+cudf::size_type column_name_reference::accept(expression_parser& visitor) const { return visitor.visit(*this) }
 
-auto literal::accept(expression_transformer& visitor) const
-  -> decltype(visitor.visit(*this))
+auto literal::accept(expression_transformer& visitor) const -> decltype(visitor.visit(*this))
 {
   return visitor.visit(*this);
 }
-auto column_reference::accept(expression_transformer& visitor) const
-  -> decltype(visitor.visit(*this))
+auto column_reference::accept(expression_transformer& visitor) const -> decltype(visitor.visit(*this))
 {
   return visitor.visit(*this);
 }
-auto operation::accept(expression_transformer& visitor) const
-  -> decltype(visitor.visit(*this))
+auto operation::accept(expression_transformer& visitor) const -> decltype(visitor.visit(*this))
 {
   return visitor.visit(*this);
 }
-auto column_name_reference::accept(expression_transformer& visitor) const
-  -> decltype(visitor.visit(*this))
+auto column_name_reference::accept(expression_transformer& visitor) const -> decltype(visitor.visit(*this))
 {
   return visitor.visit(*this);
 }

@@ -267,8 +267,7 @@ class expression_parser {
     // Create device pointers to components of plan
     auto device_data_buffer_ptr            = static_cast<char const*>(_device_data_buffer.data());
     device_expression_data.data_references = device_span<device_data_reference const>(
-      reinterpret_cast<device_data_reference const*>(device_data_buffer_ptr +
-                                                             buffer_offsets[0]),
+      reinterpret_cast<device_data_reference const*>(device_data_buffer_ptr + buffer_offsets[0]),
       _data_references.size());
     device_expression_data.literals = device_span<generic_scalar_device_view const>(
       reinterpret_cast<generic_scalar_device_view const*>(device_data_buffer_ptr +

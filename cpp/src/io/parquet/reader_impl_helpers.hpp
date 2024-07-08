@@ -18,8 +18,8 @@
 
 #include "parquet_gpu.hpp"
 
-#include <cudf/ast/expressions.hpp>
 #include <cudf/ast/expression_transformer.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>

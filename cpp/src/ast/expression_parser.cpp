@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,16 +146,15 @@ cudf::size_type expression_parser::visit(operation const& expr)
   }
 
   // Give back intermediate storage locations that are consumed by this operation
-  std::for_each(
-    operand_data_ref_indices.cbegin(),
-    operand_data_ref_indices.cend(),
-    [this](auto const& data_reference_index) {
-      auto const operand_source = _data_references[data_reference_index];
-      if (operand_source.reference_type == device_data_reference_type::INTERMEDIATE) {
-        auto const intermediate_index = operand_source.data_index;
-        _intermediate_counter.give(intermediate_index);
-      }
-    });
+  std::for_each(operand_data_ref_indices.cbegin(),
+                operand_data_ref_indices.cend(),
+                [this](auto const& data_reference_index) {
+                  auto const operand_source = _data_references[data_reference_index];
+                  if (operand_source.reference_type == device_data_reference_type::INTERMEDIATE) {
+                    auto const intermediate_index = operand_source.data_index;
+                    _intermediate_counter.give(intermediate_index);
+                  }
+                });
   // Resolve expression type
   auto const op        = expr.get_operator();
   auto const data_type = cudf::ast::detail::ast_operator_return_type(op, operand_types);
@@ -164,7 +163,8 @@ cudf::size_type expression_parser::visit(operation const& expr)
   auto const output = [&]() {
     if (expression_index == 0) {
       // This expression is the root. Output should be directed to the output column.
-      return device_data_reference(device_data_reference_type::COLUMN, data_type, 0, table_reference::OUTPUT);
+      return device_data_reference(
+        device_data_reference_type::COLUMN, data_type, 0, table_reference::OUTPUT);
     } else {
       // This expression is not the root. Output is an intermediate value.
       // Ensure that the output type is fixed width and fits in the intermediate storage.
@@ -175,7 +175,8 @@ cudf::size_type expression_parser::visit(operation const& expr)
                                                         : sizeof(IntermediateDataType<false>))) {
         CUDF_FAIL("The output data type is too large to be stored in an intermediate.");
       }
-      return device_data_reference(device_data_reference_type::INTERMEDIATE, data_type, _intermediate_counter.take());
+      return device_data_reference(
+        device_data_reference_type::INTERMEDIATE, data_type, _intermediate_counter.take());
     }
   }();
   auto const index = add_data_reference(output);

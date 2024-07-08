@@ -16,8 +16,8 @@
 #include "reader_impl_helpers.hpp"
 
 #include <cudf/ast/detail/operators.hpp>
-#include <cudf/ast/expressions.hpp>
 #include <cudf/ast/expression_transformer.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/transform.hpp>

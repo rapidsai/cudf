@@ -56,8 +56,7 @@ struct expression {
    * @param visitor The `expression_transformer` transforming this expression tree
    * @return Reference wrapper of transformed expression
    */
-  virtual std::reference_wrapper<expression const> accept(
-    expression_transformer& visitor) const = 0;
+  virtual std::reference_wrapper<expression const> accept(expression_transformer& visitor) const = 0;
 
   /**
    * @brief Returns true if the expression may evaluate to null.
@@ -420,8 +419,7 @@ class column_reference : public expression {
   /**
    * @copydoc expression::accept
    */
-  std::reference_wrapper<expression const> accept(
-    expression_transformer& visitor) const override;
+  std::reference_wrapper<expression const> accept(expression_transformer& visitor) const override;
 
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
@@ -489,8 +487,7 @@ class operation : public expression {
   /**
    * @copydoc expression::accept
    */
-  std::reference_wrapper<expression const> accept(
-    expression_transformer& visitor) const override;
+  std::reference_wrapper<expression const> accept(expression_transformer& visitor) const override;
 
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
@@ -536,8 +533,7 @@ class column_name_reference : public expression {
   /**
    * @copydoc expression::accept
    */
-  std::reference_wrapper<expression const> accept(
-    expression_transformer& visitor) const override;
+  std::reference_wrapper<expression const> accept(expression_transformer& visitor) const override;
 
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
