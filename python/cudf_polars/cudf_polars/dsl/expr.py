@@ -44,6 +44,7 @@ __all__ = [
     "Col",
     "BooleanFunction",
     "StringFunction",
+    "TemporalFunction",
     "Sort",
     "SortBy",
     "Gather",
@@ -815,6 +816,129 @@ class StringFunction(Expr):
         )  # pragma: no cover; handled by init raising
 
 
+class TemporalFunction(Expr):
+    __slots__ = ("name", "options", "children")
+    _non_child = ("dtype", "name", "options")
+    children: tuple[Expr, ...]
+
+    def __init__(
+        self,
+        dtype: plc.DataType,
+        name: pl_expr.TemporalFunction,
+        options: tuple[Any, ...],
+        *children: Expr,
+    ) -> None:
+        super().__init__(dtype)
+        self.options = options
+        self.name = name
+        self.children = children
+        if self.name != pl_expr.TemporalFunction.Year:
+            raise NotImplementedError(f"String function {self.name}")
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        columns = [
+            child.evaluate(df, context=context, mapping=mapping)
+            for child in self.children
+        ]
+        if self.name == pl_expr.TemporalFunction.Year:
+            (column,) = columns
+            return Column(plc.datetime.extract_year(column.obj))
+        raise NotImplementedError(
+            f"TemporalFunction {self.name}"
+        )  # pragma: no cover; init trips first
+
+
+class UnaryFunction(Expr):
+    __slots__ = ("name", "options", "children")
+    _non_child = ("dtype", "name", "options")
+    children: tuple[Expr, ...]
+
+    def __init__(
+        self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
+    ) -> None:
+        super().__init__(dtype)
+        self.name = name
+        self.options = options
+        self.children = children
+        if self.name not in ("round", "unique"):
+            raise NotImplementedError(f"Unary function {name=}")
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        if self.name == "round":
+            (decimal_places,) = self.options
+            (values,) = (
+                child.evaluate(df, context=context, mapping=mapping)
+                for child in self.children
+            )
+            return Column(
+                plc.round.round(
+                    values.obj, decimal_places, plc.round.RoundingMethod.HALF_UP
+                )
+            ).sorted_like(values)
+        elif self.name == "unique":
+            (maintain_order,) = self.options
+            (values,) = (
+                child.evaluate(df, context=context, mapping=mapping)
+                for child in self.children
+            )
+            # Only one column, so keep_any is the same as keep_first
+            # for stable distinct
+            keep = plc.stream_compaction.DuplicateKeepOption.KEEP_ANY
+            if values.is_sorted:
+                maintain_order = True
+                result = plc.stream_compaction.unique(
+                    plc.Table([values.obj]),
+                    [0],
+                    keep,
+                    plc.types.NullEquality.EQUAL,
+                )
+            else:
+                distinct = (
+                    plc.stream_compaction.stable_distinct
+                    if maintain_order
+                    else plc.stream_compaction.distinct
+                )
+                result = distinct(
+                    plc.Table([values.obj]),
+                    [0],
+                    keep,
+                    plc.types.NullEquality.EQUAL,
+                    plc.types.NanEquality.ALL_EQUAL,
+                )
+            (column,) = result.columns()
+            if maintain_order:
+                return Column(column).sorted_like(values)
+            return Column(column)
+        raise NotImplementedError(
+            f"Unimplemented unary function {self.name=}"
+        )  # pragma: no cover; init trips first
+
+    def collect_agg(self, *, depth: int) -> AggInfo:
+        """Collect information about aggregations in groupbys."""
+        if depth == 1:
+            # inside aggregation, need to pre-evaluate, groupby
+            # construction has checked that we don't have nested aggs,
+            # so stop the recursion and return ourselves for pre-eval
+            return AggInfo([(self, plc.aggregation.collect_list(), self)])
+        else:
+            (child,) = self.children
+            return child.collect_agg(depth=depth)
+
+
 class Sort(Expr):
     __slots__ = ("options", "children")
     _non_child = ("dtype", "options")
@@ -1218,7 +1342,8 @@ class BinOp(Expr):
         self.children = (left, right)
         if (
             op in (plc.binaryop.BinaryOperator.ADD, plc.binaryop.BinaryOperator.SUB)
-            and ({left.dtype.id(), right.dtype.id()}.issubset(dtypes.TIMELIKE_TYPES))
+            and plc.traits.is_chrono(left.dtype)
+            and plc.traits.is_chrono(right.dtype)
             and not dtypes.have_compatible_resolution(left.dtype.id(), right.dtype.id())
         ):
             raise NotImplementedError("Casting rules for timelike types")
