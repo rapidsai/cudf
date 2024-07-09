@@ -36,7 +36,7 @@ def n_rows(request):
     return request.param
 
 
-@pytest.fixture(params=["csv", "parquet"])
+@pytest.fixture(params=["csv", "ndjson", "parquet"])
 def df(request, tmp_path, row_index, n_rows):
     df = pl.DataFrame(
         {
@@ -50,6 +50,15 @@ def df(request, tmp_path, row_index, n_rows):
         df.write_csv(tmp_path / "file.csv")
         return pl.scan_csv(
             tmp_path / "file.csv",
+            row_index_name=name,
+            row_index_offset=offset,
+            n_rows=n_rows,
+        )
+    elif request.param == "ndjson":
+        df.write_ndjson(tmp_path / "file.jsonl")
+        # ndjson doesn't have skip_rows argument
+        return pl.scan_ndjson(
+            tmp_path / "file.jsonl",
             row_index_name=name,
             row_index_offset=offset,
             n_rows=n_rows,
@@ -85,15 +94,15 @@ def test_scan(df, columns, mask):
     if mask is not None:
         q = q.filter(mask)
     if columns is not None:
-        q = df.select(*columns)
+        q = q.select(*columns)
     assert_gpu_result_equal(q)
 
 
 def test_scan_unsupported_raises(tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
 
-    df.write_ndjson(tmp_path / "df.json")
-    q = pl.scan_ndjson(tmp_path / "df.json")
+    df.write_ipc(tmp_path / "df.ipc")
+    q = pl.scan_ipc(tmp_path / "df.ipc")
     assert_ir_translation_raises(q, NotImplementedError)
 
 

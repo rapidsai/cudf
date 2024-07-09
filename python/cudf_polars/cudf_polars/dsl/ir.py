@@ -207,7 +207,7 @@ class Scan(IR):
         """Validate preconditions."""
         if self.file_options.n_rows is not None:
             raise NotImplementedError("row limit in scan")
-        if self.typ not in ("csv", "parquet"):
+        if self.typ not in ("csv", "parquet", "ndjson"):
             raise NotImplementedError(f"Unhandled scan type: {self.typ}")
         if self.cloud_options is not None and any(
             self.cloud_options[k] is not None for k in ("aws", "azure", "gcp")
@@ -235,6 +235,10 @@ class Scan(IR):
                 # Need to do some file introspection to get the number
                 # of columns so that column projection works right.
                 raise NotImplementedError("Reading CSV without header")
+        elif self.typ == "ndjson":
+            # Only relevant options are low_memory (use chunked reader)
+            # and schema
+            print(self.reader_options)
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -309,6 +313,19 @@ class Scan(IR):
             cdf = cudf.read_parquet(self.paths, columns=with_columns)
             assert isinstance(cdf, cudf.DataFrame)
             df = DataFrame.from_cudf(cdf)
+        elif self.typ == "ndjson":
+            plc_tbl_w_meta = plc.io.json.read_json(
+                plc.io.SourceInfo(self.paths), lines=True
+            )
+            # TODO: I don't think cudf-polars supports nested types in general right now
+            # (but when it does, we should pass child column names from nested columns in)
+            df = DataFrame.from_table(
+                plc_tbl_w_meta.tbl, plc_tbl_w_meta.column_names(include_children=False)
+            )
+            # TODO: libcudf doesn't support column-projection (like usecols)
+            # We should change the prune_columns param to usecols (with a deprecation cycle)
+            if with_columns is not None:
+                df = df.select(with_columns)
         else:
             raise NotImplementedError(
                 f"Unhandled scan type: {self.typ}"
