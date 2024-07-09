@@ -27,7 +27,7 @@ namespace io::nvcomp {
 enum class compression_type { SNAPPY, ZSTD, DEFLATE, LZ4 };
 
 /**
- * @brief Set of parameters that impact whether the use nvCOMP features is enabled.
+ * @brief Set of parameters that impact whether nvCOMP features are enabled.
  *
  */
 struct feature_status_parameters {
@@ -43,15 +43,15 @@ struct feature_status_parameters {
    */
   feature_status_parameters();
 
-  /**pht
+  /**
    * @brief feature_status_parameters Constructor
    *
-   * @param major positive integer representing major value
-   * @param minor positive integer representing minor value
-   * @param patch positive integer representing patch value
+   * @param major positive integer representing major value of nvcomp
+   * @param minor positive integer representing minor value of nvcomp
+   * @param patch positive integer representing patch value of nvcomp
    * @param all_enabled if all integrations are enabled
    * @param stable_enabled if stable integrations are enabled
-   * @param cc_major cuda compute capability
+   * @param cc_major CUDA compute capability
    */
   feature_status_parameters(
     int major, int minor, int patch, bool all_enabled, bool stable_enabled, int cc_major)
@@ -81,7 +81,7 @@ inline bool operator==(feature_status_parameters const& lhs, feature_status_para
 /**
  * @brief If a compression type is disabled through nvCOMP, returns the reason as a string.
  *
- * Result cab depend on nvCOMP version and environment variables.
+ * Result depends on nvCOMP version and environment variables.
  *
  * @param compression Compression type
  * @param params Optional parameters to query status with different configurations
@@ -93,7 +93,7 @@ inline bool operator==(feature_status_parameters const& lhs, feature_status_para
 /**
  * @brief If a decompression type is disabled through nvCOMP, returns the reason as a string.
  *
- * Result can depend on nvCOMP version and environment variables.
+ * Result depends on nvCOMP version and environment variables.
  *
  * @param compression Compression type
  * @param params Optional parameters to query status with different configurations
