@@ -216,8 +216,7 @@ table_with_metadata read_json(json_reader_options options,
 }
 
 void write_json(json_writer_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::device_async_resource_ref mr)
+                rmm::cuda_stream_view stream)
 {
   auto sinks = make_datasinks(options.get_sink());
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for JSON writing");
@@ -226,8 +225,7 @@ void write_json(json_writer_options const& options,
     sinks[0].get(),
     options.get_table(),
     options,
-    stream,
-    mr);
+    stream);
 }
 
 table_with_metadata read_csv(csv_reader_options options,

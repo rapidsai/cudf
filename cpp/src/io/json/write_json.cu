@@ -829,8 +829,7 @@ void write_chunked(data_sink* out_sink,
 void write_json(data_sink* out_sink,
                 table_view const& table,
                 json_writer_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::device_async_resource_ref mr)
+                rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   std::vector<column_name_info> user_column_names = [&]() {
@@ -912,7 +911,8 @@ void write_json(data_sink* out_sink,
       bool const include_line_terminator =
         (&sub_view != &vector_views.back()) or options.is_enabled_lines();
       auto const skip_last_chars = (include_line_terminator ? 0 : line_terminator.size());
-      write_chunked(out_sink, str_concat_col->view(), skip_last_chars, options, stream, mr);
+      write_chunked(out_sink, str_concat_col->view(), skip_last_chars, options, stream, 
+                    rmm::mr::get_current_device_resource());
     }
   } else {
     if (options.is_enabled_lines()) {
