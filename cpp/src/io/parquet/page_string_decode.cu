@@ -1026,9 +1026,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       if (s->dict_base) {
         src_target_pos = gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, lane_id).first;
       } else {
-        gpuInitStringDescriptors<false>(s, sb, src_target_pos, tile32);
+        gpuInitStringDescriptors<false>(s, sb, src_target_pos, tile_warp);
       }
-      if (tile32.thread_rank() == 0) { s->dict_pos = src_target_pos; }
+      if (tile_warp.thread_rank() == 0) { s->dict_pos = src_target_pos; }
     } else {
       int const me = t - out_thread0;
 
