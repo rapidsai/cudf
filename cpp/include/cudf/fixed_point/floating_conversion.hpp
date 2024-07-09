@@ -107,7 +107,7 @@ struct floating_converter {
   // The value of the mantissa is in the range [1, 2).
   /// # significand bits (includes understood bit)
   static constexpr int num_significand_bits = cuda::std::numeric_limits<FloatingType>::digits;
-  /// # mantissa bits (-1 for understood bit)
+  /// # stored mantissa bits (-1 for understood bit)
   static constexpr int num_stored_mantissa_bits = num_significand_bits - 1;
   /// The mask for the understood bit
   static constexpr IntegralType understood_bit_mask = (IntegralType(1) << num_stored_mantissa_bits);
@@ -983,6 +983,59 @@ CUDF_HOST_DEVICE inline cuda::std::make_unsigned_t<Rep> shift_to_decimal_negpow(
 }
 
 /**
+ * @brief Perform base-2 -> base-10 fixed-point conversion
+ *
+ * @tparam Rep The type of integer we are converting to, to store the decimal value
+ * @tparam FloatingType The type of floating-point object we are converting from
+ * @param base2_value The base-2 fixed-point value we are converting from
+ * @param pow2 The number of powers of 2 to apply to convert from base-2
+ * @param pow10 The number of powers of 10 to apply to reach the desired scale factor
+ * @return Integer representation of the floating-point value, given the desired scale
+ */
+template <typename Rep,
+          typename FloatingType,
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
+CUDF_HOST_DEVICE inline cuda::std::make_unsigned_t<Rep> convert_floating_to_integral_shifting(
+  typename floating_converter<FloatingType>::IntegralType base2_value, int pow10, int pow2)
+{
+  // Apply the powers of 2 and 10 to convert to decimal.
+  // The result will be base2_value * (2^pow2) / (10^pow10)
+
+  // Note that while this code is branchy, the decimal scale factor is part of the
+  // column type itself, so every thread will take the same branches on pow10.
+  // Also data within a column tends to be similar, so they will often take the
+  // same branches on pow2 as well.
+
+  // NOTE: some returns here can overflow (e.g. ShiftingRep -> UnsignedRep)
+  using UnsignedRep = cuda::std::make_unsigned_t<Rep>;
+  if (pow10 == 0) {
+    // NOTE: Left Bit-shift can overflow! As can cast! (e.g. double -> decimal32)
+    // Bit shifts may be large, guard against UB
+    if (pow2 >= 0) {
+      return guarded_left_shift(static_cast<UnsignedRep>(base2_value), pow2);
+    } else {
+      return static_cast<UnsignedRep>(guarded_right_shift(base2_value, -pow2));
+    }
+  } else if (pow10 > 0) {
+    if (pow2 <= 0) {
+      // Power-2/10 shifts both downward: order doesn't matter, apply and bail.
+      // Guard against shift being undefined behavior
+      auto const shifted = guarded_right_shift(base2_value, -pow2);
+      return static_cast<UnsignedRep>(divide_power10<decltype(shifted)>(shifted, pow10));
+    }
+    return shift_to_decimal_pospow<Rep, FloatingType>(base2_value, pow2, pow10);
+  } else {  // pow10 < 0
+    if (pow2 >= 0) {
+      // Power-2/10 shifts both upward: order doesn't matter, apply and bail.
+      // NOTE: Either shift, multiply, or cast (e.g. double -> decimal32) can overflow!
+      auto const shifted = guarded_left_shift(static_cast<UnsignedRep>(base2_value), pow2);
+      return multiply_power10<UnsignedRep>(shifted, -pow10);
+    }
+    return shift_to_decimal_negpow<Rep, FloatingType>(base2_value, pow2, pow10);
+  }
+}
+
+/**
  * @brief Perform floating-point -> integer decimal conversion
  *
  * @tparam Rep The type of integer we are converting to, to store the decimal value
@@ -1005,53 +1058,14 @@ CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& flo
   // Note that the significand here is an unsigned integer with sizeof(FloatingType)
   auto const is_negative                  = converter::get_is_negative(integer_rep);
   auto const [significand, floating_pow2] = converter::get_significand_and_pow2(integer_rep);
-  auto const pow10                        = static_cast<int>(scale);
 
   // Add half a bit if truncating to yield expected value, see function for discussion.
-  auto const [base2_value_bound, pow2_bound] =
-    add_half_if_truncates(significand, floating_pow2, pow10);
-
-  // Structured binding variables cannot be captured :/
-  auto const base2_value = base2_value_bound;
-  auto const pow2        = pow2_bound;
+  auto const pow10               = static_cast<int>(scale);
+  auto const [base2_value, pow2] = add_half_if_truncates(significand, floating_pow2, pow10);
 
   // Apply the powers of 2 and 10 to convert to decimal.
-  // The result will be base2_value * (2^pow2) / (10^pow10)
-  //
-  // Note that while this code is branchy, the decimal scale factor is part of the
-  // column type itself, so every thread will take the same branches on pow10.
-  // Also data within a column tends to be similar, so they will often take the
-  // same branches on pow2 as well.
-  //
-  // NOTE: some returns here can overflow (e.g. ShiftingRep -> UnsignedRep)
-  using UnsignedRep    = cuda::std::make_unsigned_t<Rep>;
-  auto const magnitude = [&]() -> UnsignedRep {
-    if (pow10 == 0) {
-      // NOTE: Left Bit-shift can overflow! As can cast! (e.g. double -> decimal32)
-      // Bit shifts may be large, guard against UB
-      if (pow2 >= 0) {
-        return guarded_left_shift(static_cast<UnsignedRep>(base2_value), pow2);
-      } else {
-        return static_cast<UnsignedRep>(guarded_right_shift(base2_value, -pow2));
-      }
-    } else if (pow10 > 0) {
-      if (pow2 <= 0) {
-        // Power-2/10 shifts both downward: order doesn't matter, apply and bail.
-        // Guard against shift being undefined behavior
-        auto const shifted = guarded_right_shift(base2_value, -pow2);
-        return static_cast<UnsignedRep>(divide_power10<decltype(shifted)>(shifted, pow10));
-      }
-      return shift_to_decimal_pospow<Rep, FloatingType>(base2_value, pow2, pow10);
-    } else {  // pow10 < 0
-      if (pow2 >= 0) {
-        // Power-2/10 shifts both upward: order doesn't matter, apply and bail.
-        // NOTE: Either shift, multiply, or cast (e.g. double -> decimal32) can overflow!
-        auto const shifted = guarded_left_shift(static_cast<UnsignedRep>(base2_value), pow2);
-        return multiply_power10<UnsignedRep>(shifted, -pow10);
-      }
-      return shift_to_decimal_negpow<Rep, FloatingType>(base2_value, pow2, pow10);
-    }
-  }();
+  auto const magnitude =
+    convert_floating_to_integral_shifting<Rep, FloatingType>(base2_value, pow10, pow2);
 
   // Reapply the sign and return
   // NOTE: Cast can overflow!
