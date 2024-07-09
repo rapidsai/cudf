@@ -161,6 +161,7 @@ def test_groupby_nan_minmax_raises(op):
     "expr",
     [
         pl.lit(1).alias("value"),
+        pl.lit([[4, 5, 6]]).alias("value"),
         pl.col("float") * (1 - pl.col("int")),
         [pl.lit(2).alias("value"), pl.col("float") * 2],
     ],

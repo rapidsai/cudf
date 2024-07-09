@@ -386,6 +386,13 @@ class LiteralColumn(Expr):
         data = value.to_arrow()
         self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
 
+    def get_hash(self) -> int:
+        """Compute a hash of the column."""
+        # This is stricter than necessary, but we only need this hash
+        # for identity in groupby replacements so it's OK. And this
+        # way we avoid doing potentially expensive compute.
+        return hash((type(self), self.dtype, id(self.value)))
+
     def do_evaluate(
         self,
         df: DataFrame,
