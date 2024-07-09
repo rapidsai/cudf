@@ -50,10 +50,7 @@
 namespace cudf {
 namespace binops {
 
-/**
- * @brief Returns true if the binary operator is supported for the given input types
- */
-bool is_supported_binaryop(data_type out, data_type lhs, data_type rhs, binary_operator op)
+bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op)
 {
   return cudf::binops::compiled::is_supported_operation(out, lhs, rhs, op);
 }

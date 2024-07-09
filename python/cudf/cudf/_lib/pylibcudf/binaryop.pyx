@@ -86,13 +86,13 @@ cpdef Column binary_operation(
     return Column.from_libcudf(move(result))
 
 
-def _is_supported_binaryop(
+def is_supported_operation(
     DataType out,
     DataType lhs,
     DataType rhs,
     binary_operator op
 ):
-    return cpp_binaryop.is_supported_binaryop(
+    return cpp_binaryop.is_supported_operation(
         out.c_obj,
         lhs.c_obj,
         rhs.c_obj,

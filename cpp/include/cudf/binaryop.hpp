@@ -299,7 +299,7 @@ namespace binops {
  * @param op The binary operator
  * @return true if the binary operator is supported for the given input types
  */
-bool is_supported_binaryop(data_type out, data_type lhs, data_type rhs, binary_operator op);
+bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op);
 
 /**
  * @brief Computes output valid mask for op between a column and a scalar
