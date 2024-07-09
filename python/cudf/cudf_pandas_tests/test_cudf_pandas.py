@@ -1092,6 +1092,13 @@ def test_pickle(obj):
 
     tm.assert_equal(obj, copy)
 
+    with tempfile.TemporaryFile() as f:
+        xpd.to_pickle(obj, f)
+        f.seek(0)
+        copy = xpd.read_pickle(f)
+
+    tm.assert_equal(obj, copy)
+
 
 def test_dataframe_query():
     cudf_pandas_df = xpd.DataFrame({"foo": [1, 2, 3], "bar": [4, 5, 6]})
@@ -1607,6 +1614,16 @@ def test_is_proxy_object():
     assert not is_proxy_object(s2)
 
 
+def test_numpy_cupy_flatiter(series):
+    cp = pytest.importorskip("cupy")
+
+    _, s = series
+    arr = s.values
+
+    assert type(arr.flat._fsproxy_fast) == cp.flatiter
+    assert type(arr.flat._fsproxy_slow) == np.flatiter
+
+
 def test_arrow_string_arrays():
     cu_s = xpd.Series(["a", "b", "c"])
     pd_s = pd.Series(["a", "b", "c"])
@@ -1628,3 +1645,22 @@ def test_arrow_string_arrays():
     )
 
     tm.assert_equal(cu_arr, pd_arr)
+
+
+@pytest.mark.parametrize("indexer", ["at", "iat"])
+def test_at_iat(indexer):
+    df = xpd.DataFrame(range(3))
+    result = getattr(df, indexer)[0, 0]
+    assert result == 0
+
+    getattr(df, indexer)[0, 0] = 1
+    expected = pd.DataFrame([1, 1, 2])
+    tm.assert_frame_equal(df, expected)
+
+
+def test_at_setitem_empty():
+    df = xpd.DataFrame({"name": []}, dtype="float64")
+    df.at[0, "name"] = 1.0
+    df.at[0, "new"] = 2.0
+    expected = pd.DataFrame({"name": [1.0], "new": [2.0]})
+    tm.assert_frame_equal(df, expected)
