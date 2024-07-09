@@ -106,6 +106,34 @@ def table_data(request):
     ), pa_table
 
 
+@pytest.fixture(params=["zero", "half", "all"])
+def skiprows(table_data, request):
+    """
+    Parametrized skiprows fixture that accompanies table_data
+    """
+    _, pa_table = table_data
+    if request.param == "zero":
+        return 0
+    elif request.param == "half":
+        return len(pa_table) // 2
+    elif request.param == "all":
+        return len(pa_table)
+
+
+@pytest.fixture(params=["zero", "half", "all"])
+def nrows(table_data, skiprows, request):
+    """
+    Parametrized nrows fixture that accompanies table_data
+    """
+    _, pa_table = table_data
+    if request.param == "zero":
+        return 0
+    elif request.param == "half":
+        return (len(pa_table) - skiprows) // 2
+    elif request.param == "all":
+        return -1
+
+
 @pytest.fixture(
     params=["a.txt", pathlib.Path("a.txt"), io.BytesIO, io.StringIO],
 )
