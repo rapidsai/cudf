@@ -556,7 +556,7 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
       // If already empty (empty dataframe case), simply initialize to a list of zeros
       if (not out_metadata.num_rows_per_source.size()) {
         out_metadata.num_rows_per_source =
-          std::vector<size_t>(out_metadata.num_rows_per_source.size(), 0);
+          std::vector<size_t>(_file_itm_data.num_rows_per_source.size(), 0);
       }
       // If this is previously non-empty, simply fill in zeros
       else {
