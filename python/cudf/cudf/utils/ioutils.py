@@ -323,8 +323,11 @@ output_as_binary : set, optional, default None
     If a column name is present in the set, that column will be output as
     unannotated binary, rather than the default 'UTF-8'.
 store_schema : bool, default False
-    If ``True``, enable computing and writing arrow schema to Parquet
-    file footer's key-value metadata section for faithful round-tripping.
+    If ``True``, writes arrow schema to Parquet file footer's key-value
+    metadata section to faithfully round-trip ``duration`` types with arrow.
+    This cannot be used with ``int96_timestamps`` enabled as int96 timestamps
+    are deprecated in arrow. Also, all decimal32 and decimal64 columns will be
+    converted to decimal128 as arrow only supports decimal128 and decimal256 types.
 **kwargs
     Additional parameters will be passed to execution engines other
     than ``cudf``.
