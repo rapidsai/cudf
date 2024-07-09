@@ -379,12 +379,13 @@ def test_read_parquet_filters(s3_base, s3so, pdf_ext, precache):
     buffer.seek(0)
     filters = [("String", "==", "Omega")]
     with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        got = cudf.read_parquet(
-            f"s3://{bucket}/{fname}",
-            storage_options=s3so,
-            filters=filters,
-            open_file_options={"precache_options": {"method": precache}},
-        )
+        with pytest.warns(FutureWarning):
+            got = cudf.read_parquet(
+                f"s3://{bucket}/{fname}",
+                storage_options=s3so,
+                filters=filters,
+                open_file_options={"precache_options": {"method": precache}},
+            )
 
     # All row-groups should be filtered out
     assert_eq(pdf_ext.iloc[:0], got.reset_index(drop=True))

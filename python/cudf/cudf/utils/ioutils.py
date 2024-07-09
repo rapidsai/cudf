@@ -187,6 +187,11 @@ open_file_options : dict, optional
     deactivate optimized precaching, set the "method" to `None` under the
     "precache_options" key. Note that the `open_file_func` key can also be
     used to specify a custom file-open function.
+
+    .. deprecated:: 24.08
+        `open_file_options` is deprecated as it was intended for
+        pyarrow file inputs, which will no longer be accepted as
+        input/output cudf readers/writers in the future.
 bytes_per_thread : int, default None
     Determines the number of bytes to be allocated per thread to read the
     files in parallel. When there is a file of large size, we get slightly
@@ -1444,6 +1449,11 @@ use_python_file_object : boolean, default False
 open_file_options : dict, optional
     Optional dictionary of keyword arguments to pass to
     `_open_remote_files` (used for remote storage only).
+
+    .. deprecated:: 24.08
+        `open_file_options` is deprecated as it was intended for
+        pyarrow file inputs, which will no longer be accepted as
+        input/output cudf readers/writers in the future.
 allow_raw_text_input : boolean, default False
     If True, this indicates the input `path_or_data` could be a raw text
     input and will not check for its existence in the filesystem. If False,
@@ -1744,6 +1754,13 @@ def get_reader_filepath_or_buffer(
         # Preserve defaults for now, even though use_python_file_object
         # is deprecated
         use_python_file_object = True
+
+    if open_file_options is not None:
+        warnings.warn(
+            "The 'open_file_options' keyword is deprecated and "
+            "will be removed in a future version.",
+            FutureWarning,
+        )
 
     if isinstance(path_or_data, str):
         # Get a filesystem object if one isn't already available
