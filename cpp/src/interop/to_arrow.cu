@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "decimal_conversion_utilities.cuh"
 #include "detail/arrow_allocator.hpp"
 
 #include <cudf/column/column.hpp>
@@ -157,29 +158,9 @@ std::shared_ptr<arrow::Array> unsupported_decimals_to_arrow(column_view input,
                                                             arrow::MemoryPool* ar_mr,
                                                             rmm::cuda_stream_view stream)
 {
-  constexpr size_type BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DeviceType);
+  auto buf = cudf::detail::convert_decimal_data_to_decimal128<DeviceType>(input, stream);
 
-  rmm::device_uvector<DeviceType> buf(input.size() * BIT_WIDTH_RATIO, stream);
-
-  auto count = thrust::make_counting_iterator(0);
-
-  thrust::for_each(
-    rmm::exec_policy(cudf::get_default_stream()),
-    count,
-    count + input.size(),
-    [in = input.begin<DeviceType>(), out = buf.data(), BIT_WIDTH_RATIO] __device__(auto in_idx) {
-      auto const out_idx = in_idx * BIT_WIDTH_RATIO;
-      // The lowest order bits are the value, the remainder
-      // simply matches the sign bit to satisfy the two's
-      // complement integer representation of negative numbers.
-      out[out_idx] = in[in_idx];
-#pragma unroll BIT_WIDTH_RATIO - 1
-      for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
-        out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
-      }
-    });
-
-  auto const buf_size_in_bytes = buf.size() * sizeof(DeviceType);
+  auto const buf_size_in_bytes = buf.size() * sizeof(__int128_t);
   auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(
