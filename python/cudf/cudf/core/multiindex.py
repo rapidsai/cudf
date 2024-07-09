@@ -23,6 +23,7 @@ from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
 from cudf.core._base_index import _return_get_indexer_result
+from cudf.core.algorithms import factorize
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import (
@@ -1366,9 +1367,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     (2, 'blue')],
                    names=['number', 'color'])
         """
-        # Imported here due to circular import
-        from cudf.core.algorithms import factorize
-
         error_msg = "Input must be a list / sequence of array-likes."
         if not is_list_like(arrays):
             raise TypeError(error_msg)
