@@ -1,5 +1,6 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
+import math
 import os
 
 import pandas as pd
@@ -107,7 +108,7 @@ def test_read_json_aggregate_files(tmp_path):
     df1.to_json(json_path)
 
     df2 = dask_cudf.read_json(json_path, aggregate_files=2)
-    assert df2.npartitions * 2 == df1.npartitions
+    assert df2.npartitions == math.ceil(df1.npartitions / 2)
     dd.assert_eq(df1, df2, check_index=False)
 
     df2 = dask_cudf.read_json(
@@ -116,11 +117,12 @@ def test_read_json_aggregate_files(tmp_path):
     assert df2.npartitions == 1
     dd.assert_eq(df1, df2, check_index=False)
 
-    df2 = dask_cudf.read_json(
-        json_path,
-        aggregate_files=2,
-        include_path_column=True,
-    )
-    assert "path" in df2.columns
-    assert len(df2["path"].compute().unique()) == df1.npartitions
-    dd.assert_eq(df1, df2.drop(columns=["path"]), check_index=False)
+    for include_path_column, name in [(True, "path"), ("file", "file")]:
+        df2 = dask_cudf.read_json(
+            json_path,
+            aggregate_files=2,
+            include_path_column=include_path_column,
+        )
+        assert name in df2.columns
+        assert len(df2[name].compute().unique()) == df1.npartitions
+        dd.assert_eq(df1, df2.drop(columns=[name]), check_index=False)

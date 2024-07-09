@@ -668,9 +668,9 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
 
     @staticmethod
     def read_json(*args, **kwargs):
-        from dask_cudf.io.json import read_json
+        from dask_cudf.io.json import read_json_impl
 
-        return read_json(*args, **kwargs)
+        return read_json_impl(*args, **kwargs)
 
     @staticmethod
     def read_orc(*args, **kwargs):
