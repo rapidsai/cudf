@@ -2269,8 +2269,8 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
     auto const result = cudf::io::read_parquet(in_opts);
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-    ASSERT_EQ(result.metadata.num_rows_per_source.size(), 1);
-    ASSERT_EQ(result.metadata.num_rows_per_source[0], num_rows);
+    EXPECT_EQ(result.metadata.num_rows_per_source.size(), 1);
+    EXPECT_EQ(result.metadata.num_rows_per_source[0], num_rows);
   }
 
   // num_rows_per_source.size() must be = 1 and num_rows_per_source[0] must be = rows_to_read
@@ -2289,8 +2289,8 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
     cudf::table_view const expected_selected({int64_col_selected});
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_selected, result.tbl->view());
-    ASSERT_EQ(result.metadata.num_rows_per_source.size(), 1);
-    ASSERT_EQ(result.metadata.num_rows_per_source[0], rows_to_read);
+    EXPECT_EQ(result.metadata.num_rows_per_source.size(), 1);
+    EXPECT_EQ(result.metadata.num_rows_per_source[0], rows_to_read);
   }
 
   // num_rows_per_source must be empty
@@ -2320,7 +2320,7 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
     auto const result = cudf::io::read_parquet(in_opts);
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_filtered, result.tbl->view());
-    ASSERT_EQ(result.metadata.num_rows_per_source.size(), 0);
+    EXPECT_EQ(result.metadata.num_rows_per_source.size(), 0);
   }
 
   // num_rows_per_source.size() must be = 10 and all num_rows_per_source[k] must be = num_rows
@@ -2335,8 +2335,8 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
     // Initialize expected_counts
     std::vector<size_t> const expected_counts(nsources, num_rows);
 
-    ASSERT_EQ(result.metadata.num_rows_per_source.size(), nsources);
-    ASSERT_EQ(std::equal(expected_counts.cbegin(),
+    EXPECT_EQ(result.metadata.num_rows_per_source.size(), nsources);
+    EXPECT_EQ(std::equal(expected_counts.cbegin(),
                          expected_counts.cend(),
                          result.metadata.num_rows_per_source.cbegin()),
               true);
@@ -2385,8 +2385,8 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
       }
     }
 
-    ASSERT_EQ(result.metadata.num_rows_per_source.size(), nsources);
-    ASSERT_EQ(std::equal(expected_counts.cbegin(),
+    EXPECT_EQ(result.metadata.num_rows_per_source.size(), nsources);
+    EXPECT_EQ(std::equal(expected_counts.cbegin(),
                          expected_counts.cend(),
                          result.metadata.num_rows_per_source.cbegin()),
               true);

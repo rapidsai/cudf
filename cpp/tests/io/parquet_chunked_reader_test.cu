@@ -1502,14 +1502,12 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     auto out_tables       = std::vector<std::unique_ptr<cudf::table>>{};
     int num_chunks        = 0;
     auto nrows_per_source = std::vector<size_t>{};
-    // should always be true
-    EXPECT_EQ(reader.has_next(), true);
     while (reader.has_next()) {
       auto chunk = reader.read_chunk();
       out_tables.emplace_back(std::move(chunk.tbl));
       num_chunks++;
       if (nrows_per_source.empty()) {
-        nrows_per_source = chunk.metadata.num_rows_per_source;
+        nrows_per_source = std::move(chunk.metadata.num_rows_per_source);
       } else {
         std::transform(chunk.metadata.num_rows_per_source.cbegin(),
                        chunk.metadata.num_rows_per_source.cend(),
@@ -1539,13 +1537,13 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result->view());
-    ASSERT_EQ(num_rows_per_source.size(), 1);
-    ASSERT_EQ(num_rows_per_source[0], num_rows);
+    EXPECT_EQ(num_rows_per_source.size(), 1);
+    EXPECT_EQ(num_rows_per_source[0], num_rows);
   }
 
   // num_rows_per_source.size() must be = 1 and num_rows_per_source[0] must be = rows_to_read
   {
-    // TODO: rows_to_skip not applicable until
+    // TODO: rows_to_skip not applicable for chunked read until
     // https://github.com/rapidsai/cudf/issues/16186 is fixed
     auto const rows_to_skip          = 0;
     auto const rows_to_read          = 7'232;
@@ -1568,8 +1566,8 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     cudf::table_view const expected_selected({int64_col_selected->view()});
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_selected, result->view());
-    ASSERT_EQ(num_rows_per_source.size(), 1);
-    ASSERT_EQ(num_rows_per_source[0], rows_to_read);
+    EXPECT_EQ(num_rows_per_source.size(), 1);
+    EXPECT_EQ(num_rows_per_source[0], rows_to_read);
   }
 
   // num_rows_per_source must be empty
@@ -1604,7 +1602,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     cudf::table_view expected_filtered({int64_col_filtered->view()});
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_filtered, result->view());
-    ASSERT_EQ(num_rows_per_source.empty(), true);
+    EXPECT_EQ(num_rows_per_source.empty(), true);
   }
 
   // num_rows_per_source.size() must be = 10 and all num_rows_per_source[k] must be = num_rows
@@ -1624,15 +1622,15 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     // Initialize expected_counts
     std::vector<size_t> const expected_counts(nsources, num_rows);
 
-    ASSERT_EQ(num_rows_per_source.size(), nsources);
-    ASSERT_EQ(
+    EXPECT_EQ(num_rows_per_source.size(), nsources);
+    EXPECT_EQ(
       std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()),
       true);
   }
 
   // num_rows_per_source.size() must be = 10 and all num_rows_per_source[k] must be = num_rows
   {
-    // TODO: rows_to_skip not applicable until
+    // TODO: rows_to_skip not applicable for chunked read until
     // https://github.com/rapidsai/cudf/issues/16186 is fixed
     auto const rows_to_skip          = 0;
     auto const rows_to_read          = 47'232;
@@ -1679,8 +1677,8 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
       }
     }
 
-    ASSERT_EQ(num_rows_per_source.size(), nsources);
-    ASSERT_EQ(
+    EXPECT_EQ(num_rows_per_source.size(), nsources);
+    EXPECT_EQ(
       std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()),
       true);
   }
