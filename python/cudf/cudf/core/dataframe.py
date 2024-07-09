@@ -6240,6 +6240,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 return getattr(concat_columns(source._data.columns), op)(
                     **kwargs
                 )
+            elif axis == 0 and op in {"sum", "product", "std", "var"}:
+                result = [
+                    getattr(source._data[col], op)(**kwargs)
+                    for col in source._data.names
+                ]
+                return getattr(as_column(result, nan_as_null=False), op)(
+                    **kwargs
+                )
             try:
                 result = [
                     getattr(source._data[col], op)(**kwargs)
