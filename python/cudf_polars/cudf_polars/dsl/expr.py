@@ -1123,24 +1123,7 @@ class Cast(Expr):
                 "Need to implement cast to/from string separately."
             )
         # TODO: use exposed libcudf trait checking APIs
-        elif self.dtype.id() in {
-            plc.TypeId.TIMESTAMP_DAYS,
-            plc.TypeId.TIMESTAMP_MICROSECONDS,
-            plc.TypeId.TIMESTAMP_MILLISECONDS,
-            plc.TypeId.TIMESTAMP_NANOSECONDS,
-        } and value.dtype.id() in {
-            plc.TypeId.INT8,
-            plc.TypeId.INT16,
-            plc.TypeId.INT32,
-            plc.TypeId.INT64,
-            plc.TypeId.UINT8,
-            plc.TypeId.UINT16,
-            plc.TypeId.UINT32,
-            plc.TypeId.UINT64,
-            plc.TypeId.FLOAT32,
-            plc.TypeId.FLOAT64,
-            plc.TypeId.BOOL,
-        }:
+        elif plc.traits.is_chrono(self.dtype) and plc.traits.is_numeric(value.dtype):
             raise NotImplementedError("Can't cast duration to numeric")
 
     def do_evaluate(
