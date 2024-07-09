@@ -446,6 +446,8 @@ file_segmentation calculate_segmentation(host_span<orc_column_view const> column
                                          stripe_size_limits max_stripe_size,
                                          rmm::cuda_stream_view stream)
 {
+  // Number of stripes is not known in advance. Only reserve a single element to use pinned memory
+  // resource if at all enabled.
   auto infos                    = cudf::detail::make_empty_host_vector<stripe_rowgroups>(1, stream);
   size_type const num_rowgroups = rowgroup_bounds.size().first;
   size_type stripe_start        = 0;

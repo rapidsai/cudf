@@ -25,14 +25,18 @@
 #include <cstddef>
 
 namespace cudf::detail {
-
-CUDF_EXPORT rmm::host_async_resource_ref& get_pageable_memory_resource();
+/**
+ * @brief Get the memory resource to be used for pageable memory allocations.
+ *
+ * @return Reference to the pageable memory resource
+ */
+CUDF_EXPORT rmm::host_async_resource_ref get_pageable_memory_resource();
 
 /**
- * @brief Get the rmm resource to be used for host memory allocations.
+ * @brief Get the memory resource to be used for the host memory allocation.
  *
- * @param size The size of the allocation
- * @return The rmm resource to be used for host memory allocations
+ * @param size The number of elements of type T to allocate
+ * @return The memory resource to be used for the host memory allocation
  */
 template <typename T>
 rmm_host_allocator<T> get_host_allocator(std::size_t size, rmm::cuda_stream_view _stream)

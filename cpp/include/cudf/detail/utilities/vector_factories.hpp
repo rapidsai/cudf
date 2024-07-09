@@ -180,7 +180,18 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
   return make_device_uvector_async(
     device_span<typename Container::value_type const>{c}, stream, mr);
 }
-
+/**
+ * @brief Asynchronously construct a `device_uvector` containing a deep copy of data from a
+ * `host_vector`
+ *
+ * @note This function does not synchronize `stream` after the copy.
+ *
+ * @tparam T The type of the data to copy
+ * @param v The host_vector of data to deep copy
+ * @param stream The stream on which to allocate memory and perform the copy
+ * @param mr The memory resource to use for allocating the returned device_uvector
+ * @return A device_uvector containing the copied data
+ */
 template <typename T>
 rmm::device_uvector<T> make_device_uvector_async(host_vector<T> const& v,
                                                  rmm::cuda_stream_view stream,
@@ -286,21 +297,11 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
   return make_device_uvector_sync(device_span<typename Container::value_type const>{c}, stream, mr);
 }
 
-// Utility function template to allow copying to either a thrust::host_vector or std::vector
-template <typename T, typename OutContainer>
-OutContainer make_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
-{
-  OutContainer result(v.size());
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    result.data(), v.data(), v.size() * sizeof(T), cudaMemcpyDefault, stream.value()));
-  return result;
-}
-
 /**
  * @brief Asynchronously construct a `std::vector` containing a copy of data from a
  * `device_span`
  *
- * @note This function does not synchronize `stream`.
+ * @note This function does not synchronize `stream` after the copy.
  *
  * @tparam T The type of the data to copy
  * @param source_data The device data to copy
@@ -310,14 +311,17 @@ OutContainer make_vector_async(device_span<T const> v, rmm::cuda_stream_view str
 template <typename T>
 std::vector<T> make_std_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
 {
-  return make_vector_async<T, std::vector<T>>(v, stream);
+  std::vector<T> result(v.size());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    result.data(), v.data(), v.size() * sizeof(T), cudaMemcpyDefault, stream.value()));
+  return result;
 }
 
 /**
  * @brief Asynchronously construct a `std::vector` containing a copy of data from a device
  * container
  *
- * @note This function synchronizes `stream`.
+ * @note This function synchronizes `stream` after the copy.
  *
  * @tparam Container The type of the container to copy from
  * @tparam T The type of the data to copy
@@ -339,7 +343,7 @@ std::vector<typename Container::value_type> make_std_vector_async(Container cons
  * @brief Synchronously construct a `std::vector` containing a copy of data from a
  * `device_span`
  *
- * @note This function does a synchronize on `stream`.
+ * @note This function does a synchronize on `stream` after the copy.
  *
  * @tparam T The type of the data to copy
  * @param source_data The device data to copy
@@ -376,12 +380,32 @@ std::vector<typename Container::value_type> make_std_vector_sync(Container const
   return make_std_vector_sync(device_span<typename Container::value_type const>{c}, stream);
 }
 
+/**
+ * @brief Construct a `thrust::host_vector` of the given size.
+ *
+ * @note The returned vector may be using a pinned memory resource.
+ *
+ * @tparam T The type of the vector data
+ * @param size The number of elements in the created vector
+ * @param stream The stream on which to allocate memory
+ * @return A host_vector of the given size
+ */
 template <typename T>
 host_vector<T> make_host_vector(size_t size, rmm::cuda_stream_view stream)
 {
   return host_vector<T>(size, get_host_allocator<T>(size, stream));
 }
 
+/**
+ * @brief Construct an empty `thrust::host_vector` with the given capacity.
+ *
+ * @note The returned vector may be using a pinned memory resource.
+ *
+ * @tparam T The type of the vector data
+ * @param capacity Initial capacity of the vector
+ * @param stream The stream on which to allocate memory
+ * @return A host_vector with the given capacity
+ */
 template <typename T>
 host_vector<T> make_empty_host_vector(size_t capacity, rmm::cuda_stream_view stream)
 {
@@ -394,7 +418,8 @@ host_vector<T> make_empty_host_vector(size_t capacity, rmm::cuda_stream_view str
  * @brief Asynchronously construct a `thrust::host_vector` containing a copy of data from a
  * `device_span`
  *
- * @note This function does not synchronize `stream`.
+ * @note This function does not synchronize `stream` after the copy. The returned vector may be
+ * using a pinned memory resource.
  *
  * @tparam T The type of the data to copy
  * @param source_data The device data to copy
@@ -418,7 +443,8 @@ host_vector<T> make_host_vector_async(device_span<T const> v, rmm::cuda_stream_v
  * @brief Asynchronously construct a `std::vector` containing a copy of data from a device
  * container
  *
- * @note This function does not synchronize `stream`.
+ * @note This function does not synchronize `stream` after the copy. The returned vector may be
+ * using a pinned memory resource.
  *
  * @tparam Container The type of the container to copy from
  * @tparam T The type of the data to copy
@@ -440,7 +466,8 @@ host_vector<typename Container::value_type> make_host_vector_async(Container con
  * @brief Synchronously construct a `thrust::host_vector` containing a copy of data from a
  * `device_span`
  *
- * @note This function does a synchronize on `stream`.
+ * @note This function does a synchronize on `stream` after the copy. The returned vector may be
+ * using a pinned memory resource.
  *
  * @tparam T The type of the data to copy
  * @param source_data The device data to copy
@@ -459,7 +486,7 @@ host_vector<T> make_host_vector_sync(device_span<T const> v, rmm::cuda_stream_vi
  * @brief Synchronously construct a `thrust::host_vector` containing a copy of data from a device
  * container
  *
- * @note This function synchronizes `stream`.
+ * @note This function synchronizes `stream` after the copy.
  *
  * @tparam Container The type of the container to copy from
  * @tparam T The type of the data to copy
@@ -480,7 +507,7 @@ host_vector<typename Container::value_type> make_host_vector_sync(Container cons
 /**
  * @brief Asynchronously construct a pinned `cudf::detail::host_vector` of the given size
  *
- * @note This function may not synchronize `stream`.
+ * @note This function may not synchronize `stream` after the copy.
  *
  * @tparam T The type of the vector data
  * @param size The number of elements in the created vector
@@ -496,7 +523,7 @@ host_vector<T> make_pinned_vector_async(size_t size, rmm::cuda_stream_view strea
 /**
  * @brief Synchronously construct a pinned `cudf::detail::host_vector` of the given size
  *
- * @note This function synchronizes `stream`.
+ * @note This function synchronizes `stream` after the copy.
  *
  * @tparam T The type of the vector data
  * @param size The number of elements in the created vector
