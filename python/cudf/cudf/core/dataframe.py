@@ -73,7 +73,7 @@ from cudf.core.indexed_frame import (
 )
 from cudf.core.join import Merge, MergeSemi
 from cudf.core.missing import NA
-from cudf.core.multiindex import MultiIndex
+from cudf.core.multiindex import MultiIndex, _compute_levels_and_codes
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
 from cudf.core.udf.row_function import _get_row_kernel
@@ -3601,7 +3601,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     inplace=True,
                 )
                 out_index._data[level] = column.as_column(level_values)
-                out_index._compute_levels_and_codes()
+                out_index._levels, out_index._codes = (
+                    _compute_levels_and_codes(out_index._data)
+                )
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())

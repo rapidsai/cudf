@@ -347,7 +347,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         name: Any = None,
     ) -> MultiIndex:
         """
-        Use when you have a ColumnAccessor-like mapping and no codes or levels.
+        Use when you have a ColumnAccessor-like mapping but no codes and levels.
         """
         levels, codes = _compute_levels_and_codes(data)
         return cls._simple_new(
@@ -582,11 +582,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             else if level is index of the level, then level
             label will be returned as per the index.
         """
-
-        if level in self._data.names:
+        if level in self.names:
             return level
         else:
-            return self._data.names[level]
+            return self.names[level]
 
     @_performance_tracking
     def isin(self, values, level=None):
