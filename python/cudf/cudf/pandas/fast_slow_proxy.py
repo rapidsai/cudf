@@ -526,6 +526,8 @@ class _FastSlowProxy:
         if name.startswith("_"):
             object.__setattr__(self, name, value)
             return
+        if name == "name":
+            self._fsproxy_wrapped.name_ = value
         return _FastSlowAttribute("__setattr__").__get__(self, type(self))(
             name, value
         )

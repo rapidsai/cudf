@@ -285,6 +285,11 @@ Index = make_final_proxy_type(
     },
 )
 
+
+def name(self):
+    return self._fsproxy_wrapped.name_
+
+
 RangeIndex = make_final_proxy_type(
     "RangeIndex",
     cudf.RangeIndex,
@@ -292,7 +297,11 @@ RangeIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "name_": None,
+        "name": property(name),
+    },
 )
 
 SparseDtype = make_final_proxy_type(
