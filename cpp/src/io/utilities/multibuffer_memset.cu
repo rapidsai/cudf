@@ -28,6 +28,8 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
+#include <cudf/detail/nvtx/ranges.hpp>
+
 
 #include <cstddef>
 #include <numeric>

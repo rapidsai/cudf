@@ -9,6 +9,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 
 #include <rmm/cuda_stream_view.hpp>

@@ -1471,6 +1471,7 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
 
 void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows)
 {
+  CUDF_FUNC_RANGE();
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
@@ -1520,7 +1521,7 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
         // we're going to start null mask as all valid and then turn bits off if necessary
         out_buf.create_with_mask(
           out_buf.type.id() == type_id::LIST && l_idx < max_depth ? num_rows + 1 : num_rows,
-          cudf::mask_state::ALL_VALID,
+          cudf::mask_state::UNINITIALIZED,
           _stream,
           _mr);
         memset_bufs.push_back(cudf::device_span<uint8_t>((uint8_t *)(out_buf.data()), out_buf.data_size()));
@@ -1600,7 +1601,7 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
 
           // allocate
           // we're going to start null mask as all valid and then turn bits off if necessary
-          out_buf.create_with_mask(size, cudf::mask_state::ALL_VALID, _stream, _mr);
+          out_buf.create_with_mask(size, cudf::mask_state::UNINITIALIZED, _stream, _mr);
           memset_bufs.push_back(cudf::device_span<uint8_t>(static_cast<uint8_t *>(out_buf.data()), out_buf.data_size()));
           nullmask_bufs.push_back(cudf::device_span<uint8_t>((uint8_t *)(out_buf.null_mask()), out_buf.null_mask_size()));
 
@@ -1608,11 +1609,9 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
       }
     }
   }
-  // for (size_t i = 0; i < memset_bufs.size(); i++) {
-  //   fprintf(stderr, "Buf %lu size: %lu \n", i, memset_bufs[i].size());
-  // }
-  //multibuffer_memset(memset_bufs, 0, _stream, _mr);
-  //multibuffer_memset(nullmask_bufs, 0xFF, _stream, _mr);
+  multibuffer_memset(memset_bufs, 0, _stream, _mr);
+  multibuffer_memset(nullmask_bufs, 0xFF, _stream, _mr);
+  _stream.synchronize();
 }
 
 std::vector<size_t> reader::impl::calculate_page_string_offsets()
