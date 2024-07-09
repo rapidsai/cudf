@@ -430,13 +430,13 @@ void write_csv(data_sink* out_sink,
                table_view const& table,
                host_span<std::string const> user_column_names,
                csv_writer_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::device_async_resource_ref mr)
+               rmm::cuda_stream_view stream)
 {
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //
-  write_chunked_begin(out_sink, table, user_column_names, options, stream, mr);
+  write_chunked_begin(out_sink, table, user_column_names, options, stream, 
+                      rmm::mr::get_current_device_resource());
 
   if (table.num_rows() > 0) {
     // no need to check same-size columns constraint; auto-enforced by table_view
