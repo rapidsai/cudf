@@ -122,7 +122,7 @@ std::unique_ptr<column> replace_slice(
  * If a target string is found, it is replaced by the corresponding entry in the repls column.
  * All occurrences found in each string are replaced.
  *
- * This does not use regex to match targets in the string.
+ * This does not use regex to match targets in the string. Empty string targets are ignored.
  *
  * Null string entries will return null output string entries.
  *
