@@ -15,7 +15,11 @@
 #   run-pandas-tests.sh --tb=line --report-log=log.json
 #
 # This script creates a `pandas-testing` directory if it doesn't exist
+
 export CUDF_PANDAS_FALLBACK_DEBUGGING=True
+
+echo ${CUDF_PANDAS_FALLBACK_DEBUGGING}
+
 set -euo pipefail
 
 # Grab the Pandas source corresponding to the version
