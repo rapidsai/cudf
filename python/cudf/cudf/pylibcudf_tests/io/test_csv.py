@@ -1,32 +1,23 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import io
 
+import pandas as pd
+import pyarrow as pa
 import pytest
-from utils import COMPRESSION_TYPE_TO_PANDAS, assert_table_and_meta_eq
+from utils import (
+    _convert_numeric_types_to_floating,
+    assert_table_and_meta_eq,
+    make_source,
+)
 
 import cudf._lib.pylibcudf as plc
 from cudf._lib.pylibcudf.io.types import CompressionType
 
-
-# TODO: de-dupe with make_json_source
-def make_csv_source(path_or_buf, pa_table, **kwargs):
-    """
-    Uses pandas to write a pyarrow Table to a JSON file.
-    The caller is responsible for making sure that no arguments
-    unsupported by pandas are passed in.
-    """
-    df = pa_table.to_pandas()
-    mode = "w"
-    if "compression" in kwargs:
-        kwargs["compression"] = COMPRESSION_TYPE_TO_PANDAS[
-            kwargs["compression"]
-        ]
-        if kwargs["compression"] is not None:
-            mode = "wb"
-    df.to_csv(path_or_buf, index=False, mode=mode, **kwargs)
-    if isinstance(path_or_buf, io.IOBase):
-        path_or_buf.seek(0)
-    return path_or_buf
+# Shared kwargs to pass to make_source
+_COMMON_CSV_SOURCE_KWARGS = {
+    "format": "csv",
+    "index": False,
+}
 
 
 @pytest.fixture(params=[True, False])
@@ -41,16 +32,23 @@ def column_names(table_data, request):
     return None
 
 
+@pytest.mark.parametrize("delimiter", [",", ";"])
 def test_read_csv_basic(
-    table_data, source_or_sink, compression_type, column_names, nrows, skiprows
+    table_data,
+    source_or_sink,
+    compression_type,
+    column_names,
+    nrows,
+    skiprows,
+    delimiter,
 ):
     if compression_type in {
         # Not supported by libcudf
-        CompressionType.SNAPPY,
         CompressionType.XZ,
         CompressionType.ZSTD,
         # Not supported by pandas
         # TODO: find a way to test these
+        CompressionType.SNAPPY,
         CompressionType.BROTLI,
         CompressionType.LZ4,
         CompressionType.LZO,
@@ -82,12 +80,17 @@ def test_read_csv_basic(
         if column_names is not None:
             column_names = pa_table.column_names
 
-    source = make_csv_source(
-        source_or_sink, pa_table, compression=compression_type
+    source = make_source(
+        source_or_sink,
+        pa_table,
+        compression=compression_type,
+        sep=delimiter,
+        **_COMMON_CSV_SOURCE_KWARGS,
     )
 
     res = plc.io.csv.read_csv(
         plc.io.SourceInfo([source]),
+        delimiter=delimiter,
         compression=compression_type,
         col_names=column_names,
         nrows=nrows,
@@ -107,16 +110,91 @@ def test_read_csv_basic(
     )
 
 
+# Note: make sure chunk size is big enough so that dtype inference
+# infers correctly
+@pytest.mark.parametrize("chunk_size", [4204, 6000])
+def test_read_csv_byte_range(table_data, chunk_size):
+    _, pa_table = table_data
+    if len(pa_table) == 0:
+        # pandas writes nothing when we have empty table
+        # and header=None
+        pytest.skip("Don't test empty table case")
+    source = io.BytesIO()
+    source = make_source(
+        source, pa_table, header=False, **_COMMON_CSV_SOURCE_KWARGS
+    )
+    tbls_w_meta = []
+    for chunk_start in range(0, len(source.getbuffer()), chunk_size):
+        tbls_w_meta.append(
+            plc.io.csv.read_csv(
+                plc.io.SourceInfo([source]),
+                byte_range_offset=chunk_start,
+                byte_range_size=chunk_start + chunk_size,
+                header=-1,
+                col_names=pa_table.column_names,
+            )
+        )
+    if isinstance(source, io.IOBase):
+        source.seek(0)
+    exp = pd.read_csv(source, names=pa_table.column_names, header=None)
+    tbls = []
+    for tbl_w_meta in tbls_w_meta:
+        if tbl_w_meta.tbl.num_rows() > 0:
+            tbls.append(plc.interop.to_arrow(tbl_w_meta.tbl))
+    full_tbl = pa.concat_tables(tbls)
+
+    full_tbl_plc = plc.io.TableWithMetadata(
+        plc.interop.from_arrow(full_tbl),
+        tbls_w_meta[0].column_names(include_children=True),
+    )
+    assert_table_and_meta_eq(pa.Table.from_pandas(exp), full_tbl_plc)
+
+
+def test_read_csv_dtypes(table_data, source_or_sink):
+    # Simple test for dtypes where we read in
+    # all numeric data as floats
+    _, pa_table = table_data
+
+    # Drop the string column for now, since it contains ints
+    # (which won't roundtrip since they are not quoted by python csv writer)
+    # also uint64 will get confused for int64
+    pa_table = pa_table.drop_columns(
+        [
+            "col_string",
+            "col_uint64",
+            # Nested types don't work by default
+            "col_list<item: int64>",
+            "col_list<item: list<item: int64>>",
+            "col_struct<v: int64 not null>",
+            "col_struct<a: int64 not null, b_struct: struct<b: double not null> not null>",
+        ]
+    )
+    source = make_source(
+        source_or_sink,
+        pa_table,
+        **_COMMON_CSV_SOURCE_KWARGS,
+    )
+
+    dtypes, new_fields = _convert_numeric_types_to_floating(pa_table)
+    # Extract the dtype out of the (name, type, child_types) tuple
+    # (read_csv doesn't support this format since it doesn't support nested columns)
+    dtypes = [dtype for _, dtype, _ in dtypes]
+
+    new_schema = pa.schema(new_fields)
+
+    res = plc.io.csv.read_csv(plc.io.SourceInfo([source]), dtypes=dtypes)
+    new_table = pa_table.cast(new_schema)
+
+    assert_table_and_meta_eq(new_table, res)
+
+
 # TODO: test these
-# size_t byte_range_offset = 0,
-# size_t byte_range_size = 0,
 # str prefix = "",
 # bool mangle_dupe_cols = True,
 # list usecols = None,
 # size_type skipfooter = 0,
 # size_type header = 0,
 # str lineterminator = "\n",
-# str delimiter = None,
 # str thousands = None,
 # str decimal = ".",
 # str comment = None,
@@ -128,7 +206,6 @@ def test_read_csv_basic(
 # bool doublequote = True,
 # bool detect_whitespace_around_quotes = False,
 # list parse_dates = None,
-# list parse_hex = None,
 # object dtypes = None,
 # list true_values = None,
 # list false_values = None,
@@ -136,4 +213,3 @@ def test_read_csv_basic(
 # bool keep_default_na = True,
 # bool na_filter = True,
 # bool dayfirst = False,
-# DataType timestamp_type = DataType(type_id.EMPTY)

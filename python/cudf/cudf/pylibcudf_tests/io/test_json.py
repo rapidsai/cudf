@@ -4,32 +4,10 @@ import io
 import pandas as pd
 import pyarrow as pa
 import pytest
-from utils import (
-    COMPRESSION_TYPE_TO_PANDAS,
-    assert_table_and_meta_eq,
-    sink_to_str,
-)
+from utils import assert_table_and_meta_eq, make_source, sink_to_str
 
 import cudf._lib.pylibcudf as plc
 from cudf._lib.pylibcudf.io.types import CompressionType
-
-
-def make_json_source(path_or_buf, pa_table, **kwargs):
-    """
-    Uses pandas to write a pyarrow Table to a JSON file.
-
-    The caller is responsible for making sure that no arguments
-    unsupported by pandas are passed in.
-    """
-    df = pa_table.to_pandas()
-    if "compression" in kwargs:
-        kwargs["compression"] = COMPRESSION_TYPE_TO_PANDAS[
-            kwargs["compression"]
-        ]
-    df.to_json(path_or_buf, orient="records", **kwargs)
-    if isinstance(path_or_buf, io.IOBase):
-        path_or_buf.seek(0)
-    return path_or_buf
 
 
 def write_json_bytes(source, json_str):
@@ -44,6 +22,10 @@ def write_json_bytes(source, json_str):
             json_str = json_str.encode("utf-8")
         source.write(json_str)
         source.seek(0)
+
+
+# Shared kwargs to pass to make_source
+_COMMON_JSON_SOURCE_KWARGS = {"format": "json", "orient": "records"}
 
 
 @pytest.mark.parametrize("rows_per_chunk", [8, 100])
@@ -178,8 +160,12 @@ def test_read_json_basic(
 
     _, pa_table = table_data
 
-    source = make_json_source(
-        source_or_sink, pa_table, lines=lines, compression=compression_type
+    source = make_source(
+        source_or_sink,
+        pa_table,
+        lines=lines,
+        compression=compression_type,
+        **_COMMON_JSON_SOURCE_KWARGS,
     )
 
     request.applymarker(
@@ -237,10 +223,11 @@ def test_read_json_dtypes(table_data, source_or_sink):
     # Simple test for dtypes where we read in
     # all numeric data as floats
     _, pa_table = table_data
-    source = make_json_source(
+    source = make_source(
         source_or_sink,
         pa_table,
         lines=True,
+        **_COMMON_JSON_SOURCE_KWARGS,
     )
 
     dtypes = []

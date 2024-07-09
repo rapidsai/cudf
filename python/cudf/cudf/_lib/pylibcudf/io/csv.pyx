@@ -16,7 +16,7 @@ from cudf._lib.pylibcudf.libcudf.io.types cimport (
     quote_style,
     table_with_metadata,
 )
-from cudf._lib.pylibcudf.libcudf.types cimport data_type, size_type, type_id
+from cudf._lib.pylibcudf.libcudf.types cimport data_type, size_type
 from cudf._lib.pylibcudf.types cimport DataType
 
 
@@ -56,7 +56,10 @@ cpdef TableWithMetadata read_csv(
     bool keep_default_na = True,
     bool na_filter = True,
     bool dayfirst = False,
-    DataType timestamp_type = DataType(type_id.EMPTY)
+    # Note: These options are supported by the libcudf reader
+    # but are not exposed here (since there is no demand for them
+    # on the Python side yet)
+    # DataType timestamp_type = DataType(type_id.EMPTY),
 ):
     """
 

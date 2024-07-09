@@ -4,7 +4,7 @@ from libcpp cimport bool
 
 from cudf._lib.pylibcudf.io.types cimport SourceInfo, TableWithMetadata
 from cudf._lib.pylibcudf.libcudf.io.types cimport compression_type, quote_style
-from cudf._lib.pylibcudf.libcudf.types cimport size_type, type_id
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from cudf._lib.pylibcudf.types cimport DataType
 
 
@@ -42,5 +42,7 @@ cpdef TableWithMetadata read_csv(
     bool keep_default_na = *,
     bool na_filter = *,
     bool dayfirst = *,
-    DataType timestamp_type = *
+    # Disabled for now, see comments
+    # in csv.pyx
+    # DataType timestamp_type = *,
 )

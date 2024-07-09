@@ -110,10 +110,10 @@ def assert_column_eq(
         lhs_type = _make_fields_nullable(lhs.type)
         lhs = rhs.cast(lhs_type)
 
-    print(lhs)
-    print(rhs)
-    print(lhs.type)
-    print(rhs.type)
+    # print(lhs)
+    # print(rhs)
+    # print(lhs.type)
+    # print(rhs.type)
     if not check_type:
         # Useful for lossy formats like CSV
         import numpy as np
@@ -192,6 +192,46 @@ def is_nested_list(typ):
     return nesting_level(typ)[0] > 1
 
 
+def _convert_numeric_types_to_floating(pa_table):
+    """
+    Useful little helper for testing the
+    dtypes option in I/O readers.
+
+    Returns a tuple containing the pylibcudf dtypes
+    and the new pyarrow schema
+    """
+    dtypes = []
+    new_fields = []
+    for i in range(len(pa_table.schema)):
+        field = pa_table.schema.field(i)
+        child_types = []
+
+        def get_child_types(typ):
+            typ_child_types = []
+            for i in range(typ.num_fields):
+                curr_field = typ.field(i)
+                typ_child_types.append(
+                    (
+                        curr_field.name,
+                        curr_field.type,
+                        get_child_types(curr_field.type),
+                    )
+                )
+            return typ_child_types
+
+        plc_type = plc.interop.from_arrow(field.type)
+        if pa.types.is_integer(field.type) or pa.types.is_unsigned_integer(
+            field.type
+        ):
+            plc_type = plc.interop.from_arrow(pa.float64())
+            field = field.with_type(pa.float64())
+
+        dtypes.append((field.name, plc_type, child_types))
+
+        new_fields.append(field)
+    return dtypes, new_fields
+
+
 def sink_to_str(sink):
     """
     Takes a sink (e.g. StringIO/BytesIO, filepath, etc.)
@@ -208,6 +248,32 @@ def sink_to_str(sink):
         sink.seek(0)
         str_result = sink.read()
     return str_result
+
+
+def make_source(path_or_buf, pa_table, format, **kwargs):
+    """
+    Write a pyarrow Table to a specific format using pandas
+    by dispatching to the appropriate to_* call.
+
+    The caller is responsible for making sure that no arguments
+    unsupported by pandas are passed in.
+    """
+    df = pa_table.to_pandas()
+    mode = "w"
+    if "compression" in kwargs:
+        kwargs["compression"] = COMPRESSION_TYPE_TO_PANDAS[
+            kwargs["compression"]
+        ]
+        if kwargs["compression"] is not None and format != "json":
+            # pandas json method only supports mode="w"/"a"
+            mode = "wb"
+    if format == "json":
+        df.to_json(path_or_buf, mode=mode, **kwargs)
+    elif format == "csv":
+        df.to_csv(path_or_buf, mode=mode, **kwargs)
+    if isinstance(path_or_buf, io.IOBase):
+        path_or_buf.seek(0)
+    return path_or_buf
 
 
 NUMERIC_PA_TYPES = [pa.int64(), pa.float64(), pa.uint64()]
