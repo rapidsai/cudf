@@ -72,7 +72,7 @@ size_t max_compression_output_size(Compression codec, uint32_t compression_block
   return compress_max_output_chunk_size(to_nvcomp_compression_type(codec), compression_blocksize);
 }
 
-void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
+void fill_table_meta(table_input_metadata& table_meta)
 {
   // Fill unnamed columns' names in table_meta
   std::function<void(column_in_metadata&, std::string)> add_default_name =
@@ -82,8 +82,8 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
         add_default_name(col_meta.child(i), col_meta.get_name() + "_" + std::to_string(i));
       }
     };
-  for (size_t i = 0; i < table_meta->column_metadata.size(); ++i) {
-    add_default_name(table_meta->column_metadata[i], "_col" + std::to_string(i));
+  for (size_t i = 0; i < table_meta.column_metadata.size(); ++i) {
+    add_default_name(table_meta.column_metadata[i], "_col" + std::to_string(i));
   }
 }
 

@@ -2474,7 +2474,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   CUDF_EXPECTS(not _closed, "Data has already been flushed to out and closed");
 
   if (not _table_meta) { _table_meta = std::make_unique<table_input_metadata>(input); }
-  fill_table_meta(_table_meta);
+  fill_table_meta(*_table_meta);
 
   // All kinds of memory allocation and data compressions/encoding are performed here.
   // If any error occurs, such as out-of-memory exception, the internal state of the current

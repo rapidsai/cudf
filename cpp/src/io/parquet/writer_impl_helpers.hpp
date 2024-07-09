@@ -67,7 +67,7 @@ size_t max_compression_output_size(Compression codec, uint32_t compression_block
  *
  * @param table_meta The table metadata to fill
  */
-void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta);
+void fill_table_meta(table_input_metadata& table_meta);
 
 /**
  * @brief Compute size (in bytes) of the data stored in the given column.
