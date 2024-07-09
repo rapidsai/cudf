@@ -1113,24 +1113,18 @@ class CategoricalColumn(column.ColumnBase):
     def as_categorical_column(self, dtype: Dtype) -> CategoricalColumn:
         if isinstance(dtype, str) and dtype == "category":
             return self
+        if isinstance(dtype, pd.CategoricalDtype):
+            dtype = cudf.CategoricalDtype.from_pandas(dtype)
         if (
-            isinstance(
-                dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)
-            )
-            and (dtype.categories is None)
-            and (dtype.ordered is None)
+            isinstance(dtype, cudf.CategoricalDtype)
+            and dtype.categories is None
+            and dtype.ordered is None
         ):
             return self
-
-        if isinstance(dtype, pd.CategoricalDtype):
-            dtype = CategoricalDtype(
-                categories=dtype.categories, ordered=dtype.ordered
-            )
-
-        if not isinstance(dtype, CategoricalDtype):
+        elif not isinstance(dtype, CategoricalDtype):
             raise ValueError("dtype must be CategoricalDtype")
 
-        if not isinstance(self.categories, type(dtype.categories._values)):
+        if not isinstance(self.categories, type(dtype.categories._column)):
             # If both categories are of different Column types,
             # return a column full of Nulls.
             return _create_empty_categorical_column(self, dtype)
