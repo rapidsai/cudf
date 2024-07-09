@@ -237,13 +237,16 @@ cpdef Column reverse(Column input):
 
 cpdef Column segmented_gather(Column input, Column gather_map_list):
     """Create a column with elements gathered based on the indices in gather_map_list
+
     For details, see :cpp:func:`segmented_gather`.
+
     Parameters
     ----------
     input : Column
         The input column.
     gather_map_list : Column
         The indices of the lists column to gather.
+
     Returns
     -------
     Column
