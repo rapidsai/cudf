@@ -2391,38 +2391,37 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
                          result.metadata.num_rows_per_source.cbegin()),
               true);
   }
+}
 
-  // num_rows_per_source.size() must be = 10 and all num_rows_per_source[k] must be = 0
-  {
-    auto const nsources = 10;
+TEST_F(ParquetReaderTest, NumRowsPerSourceEmptyTable)
+{
+  auto const nsources = 10;
 
-    column_wrapper<int64_t> const int64_empty_col{};
-    cudf::table_view const expected_empty({int64_empty_col});
+  column_wrapper<int64_t> const int64_empty_col{};
+  cudf::table_view const expected_empty({int64_empty_col});
 
-    // Write to Parquet
-    auto const filepath_empty = temp_env->get_temp_filepath("NumRowsPerSourceEmpty.parquet");
-    auto const out_opts =
-      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath_empty}, expected_empty)
-        .row_group_size_rows(rows_in_row_group)
-        .build();
-    cudf::io::write_parquet(out_opts);
+  // Write to Parquet
+  auto const filepath_empty = temp_env->get_temp_filepath("NumRowsPerSourceEmpty.parquet");
+  auto const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath_empty}, expected_empty)
+      .build();
+  cudf::io::write_parquet(out_opts);
 
-    // Read from Parquet
-    std::vector<std::string> const datasources(nsources, filepath_empty);
+  // Read from Parquet
+  std::vector<std::string> const datasources(nsources, filepath_empty);
 
-    auto const in_opts =
-      cudf::io::parquet_reader_options::builder(cudf::io::source_info{datasources}).build();
-    auto const result = cudf::io::read_parquet(in_opts);
+  auto const in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{datasources}).build();
+  auto const result = cudf::io::read_parquet(in_opts);
 
-    // Initialize expected_counts
-    std::vector<size_t> const expected_counts(nsources, 0);
+  // Initialize expected_counts
+  std::vector<size_t> const expected_counts(nsources, 0);
 
-    EXPECT_EQ(result.metadata.num_rows_per_source.size(), nsources);
-    EXPECT_EQ(std::equal(expected_counts.cbegin(),
-                         expected_counts.cend(),
-                         result.metadata.num_rows_per_source.cbegin()),
-              true);
-  }
+  EXPECT_EQ(result.metadata.num_rows_per_source.size(), nsources);
+  EXPECT_EQ(std::equal(expected_counts.cbegin(),
+                       expected_counts.cend(),
+                       result.metadata.num_rows_per_source.cbegin()),
+            true);
 }
 
 ///////////////////
