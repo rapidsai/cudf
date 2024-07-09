@@ -19,7 +19,7 @@ from cudf._lib.strings.convert.convert_fixed_point import (
 from cudf._typing import ColumnBinaryOperand, Dtype
 from cudf.api.types import is_integer_dtype, is_scalar
 from cudf.core.buffer import as_buffer
-from cudf.core.column import ColumnBase
+from cudf.core.column import ColumnBase, as_column
 from cudf.core.dtypes import (
     Decimal32Dtype,
     Decimal64Dtype,
@@ -103,9 +103,14 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str):
         reflect, op = self._check_reflected_op(op)
-        other = self._wrap_binop_normalization(other)
-        if other is NotImplemented:
+        normalized_other = self._wrap_binop_normalization(other)
+        if normalized_other is NotImplemented:
+            if op in {"__eq__", "__ne__"} and isinstance(other, ColumnBase):
+                return as_column(
+                    op != "__eq__", length=len(self), dtype="bool"
+                )
             return NotImplemented
+        other = normalized_other
         lhs, rhs = (other, self) if reflect else (self, other)
 
         # Binary Arithmetics between decimal columns. `Scale` and `precision`

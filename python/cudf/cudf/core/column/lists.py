@@ -11,6 +11,7 @@ import pyarrow as pa
 from typing_extensions import Self
 
 import cudf
+import cudf._lib as libcudf
 from cudf._lib.copying import segmented_gather
 from cudf._lib.lists import (
     concatenate_list_elements,
@@ -36,7 +37,7 @@ from cudf.core.missing import NA
 
 class ListColumn(ColumnBase):
     dtype: ListDtype
-    _VALID_BINARY_OPERATIONS = {"__add__", "__radd__"}
+    _VALID_BINARY_OPERATIONS = {"__add__", "__radd__", "__eq__", "__ne__"}
 
     def __init__(
         self,
@@ -109,19 +110,28 @@ class ListColumn(ColumnBase):
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         # Lists only support __add__, which concatenates lists.
         reflect, op = self._check_reflected_op(op)
-        other = self._wrap_binop_normalization(other)
-        if other is NotImplemented:
-            return NotImplemented
-        if isinstance(other.dtype, ListDtype):
-            if op == "__add__":
-                return concatenate_rows([self, other])
-            else:
-                raise NotImplementedError(
-                    "Lists concatenation for this operation is not yet"
-                    "supported"
+
+        normalized_other = self._wrap_binop_normalization(other)
+        if normalized_other is NotImplemented:
+            if op in {"__eq__", "__ne__"} and isinstance(other, ColumnBase):
+                return as_column(
+                    op != "__eq__", length=len(self), dtype="bool"
                 )
-        else:
-            raise TypeError("can only concatenate list to list")
+            return NotImplemented
+        other = normalized_other
+
+        lhs, rhs = (other, self) if reflect else (self, other)
+
+        if isinstance(other.dtype, ListDtype) and op == "__add__":
+            return concatenate_rows([lhs, rhs])
+        elif op in {"__eq__", "__ne__"}:
+            return libcudf.binaryop.binaryop(
+                lhs=lhs, rhs=rhs, op=op, dtype="bool"
+            )
+        raise TypeError(
+            f"'{op}' not supported between instances of "
+            f"'{type(self).__name__}' and '{type(other).__name__}'"
+        )
 
     @property
     def elements(self):
