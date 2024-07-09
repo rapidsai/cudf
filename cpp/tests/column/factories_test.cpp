@@ -24,7 +24,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/utilities.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -762,7 +762,7 @@ TEST_F(ColumnFactoryTest, FromStructScalarNull) { struct_from_scalar(false); }
 
 TEST_F(ColumnFactoryTest, FromScalarErrors)
 {
-  if (cudf::strings::detail::is_large_strings_enabled()) { return; }
+  if (cudf::strings::is_large_strings_enabled()) { return; }
   cudf::string_scalar ss("hello world");
   EXPECT_THROW(cudf::make_column_from_scalar(ss, 214748365), std::overflow_error);
 
