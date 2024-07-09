@@ -432,7 +432,7 @@ template <bool sizes_only, typename state_buf, typename thread_group>
 __device__ size_type gpuInitStringDescriptors(page_state_s* s,
                                               [[maybe_unused]] state_buf* sb,
                                               int target_pos,
-                                              thread_group const g)
+                                              thread_group const& g)
 {
   int const t         = g.thread_rank();
   int const dict_size = s->dict_size;
