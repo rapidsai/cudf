@@ -100,7 +100,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv*
           return cudf::make_histogram_aggregation();
         case 34:  // MERGE_HISTOGRAM
           return cudf::make_merge_histogram_aggregation();
-        case 35:  // MINBY
+        case 35:  // MAX_BY
+          return cudf::make_max_by_aggregation();
+        case 36:  // MIN_BY
           return cudf::make_min_by_aggregation();
 
         default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");

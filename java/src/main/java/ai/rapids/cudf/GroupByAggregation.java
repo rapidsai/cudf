@@ -130,6 +130,13 @@ public final class GroupByAggregation {
   }
 
   /**
+   * MaxBy Aggregation
+   */
+  public static GroupByAggregation maxBy() {
+    return new GroupByAggregation(Aggregation.maxBy());
+  }
+
+  /**
    * Arithmetic mean reduction.
    */
   public static GroupByAggregation mean() {

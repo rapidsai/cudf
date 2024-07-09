@@ -100,7 +100,48 @@ std::unique_ptr<column> group_min(column_view const& values,
                                   cudf::device_span<size_type const> group_labels,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr);
+/**
+ * @brief Internal API to calculate groupwise maximum value by another order column, packed in a
+ * structs column.
+ * 
+ * @code{.pseudo}
+ * values       = [{1, 2}, {2, 1}, {4, 4}, {-1, 3}, {-2, 2}, {<NA>, 1}, {4, 4}, {<NA>, 2}]
+ * group_labels = [     0,      0,      0,       1,       1,         2,      2,         3]
+ * num_groups   = 4
+ * 
+ * group_min_by = [{4, 4}, {-1, 3}, {4, 4}, {<NA>, 2}]
+ * @endcode
+ * 
+ * @param structs_column Structs column containing the values to get minimum from
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param num_groups Number of groups
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_max_by(column_view const& structs_column,
+                                     cudf::device_span<size_type const> group_labels,
+                                     size_type num_groups,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr);
 
+/**
+ * @brief Internal API to calculate groupwise minimum value by another order column, packed in a
+ * structs column.
+ * 
+ * @code{.pseudo}
+ * values       = [{1, 2}, {2, 1}, {4, 4}, {-1, 3}, {-2, 2}, {<NA>, 1}, {4, 4}, {<NA>, 2}]
+ * group_labels = [     0,      0,      0,       1,       1,         2,      2,         3]
+ * num_groups   = 4
+ * 
+ * group_min_by = [{2, 1}, {-2, 2}, {<NA>, 1}, {<NA>, 2}]
+ * @endcode
+ * 
+ * @param structs_column Structs column containing the values to get minimum from
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param num_groups Number of groups
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
 std::unique_ptr<column> group_min_by(column_view const& structs_column,
                                      cudf::device_span<size_type const> group_labels,
                                      size_type num_groups,

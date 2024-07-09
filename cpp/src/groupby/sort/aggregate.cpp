@@ -199,6 +199,19 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
 }
 
 template <>
+void aggregate_result_functor::operator()<aggregation::MAX_BY>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) return;
+
+  cache.add_result(
+    values,
+    agg,
+    detail::group_max_by(
+      get_grouped_values(), helper.group_labels(stream), helper.num_groups(stream), stream, mr));
+}
+
+
+template <>
 void aggregate_result_functor::operator()<aggregation::MIN_BY>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;
