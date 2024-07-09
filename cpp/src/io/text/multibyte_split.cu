@@ -55,9 +55,7 @@
 #include <numeric>
 #include <optional>
 
-namespace cudf {
-namespace io {
-namespace text {
+namespace cudf::io::text {
 namespace detail {
 namespace {
 
@@ -595,6 +593,4 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   return result;
 }
 
-}  // namespace text
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::text
