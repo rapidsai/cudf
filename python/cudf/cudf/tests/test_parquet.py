@@ -1970,6 +1970,26 @@ def test_parquet_partitioned(tmpdir_factory, cols, filename):
                 assert fn == filename
 
 
+@pytest.mark.parametrize("kwargs", [{"nrows": 1}, {"skip_rows": 1}])
+def test_parquet_partitioned_notimplemented(tmpdir_factory, kwargs):
+    # Checks that write_to_dataset is wrapping to_parquet
+    # as expected
+    pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
+    size = 100
+    pdf = pd.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="int64"),
+            "b": np.random.choice(list("abcd"), size=size),
+            "c": np.random.choice(np.arange(4), size=size),
+        }
+    )
+    pdf.to_parquet(pdf_dir, index=False, partition_cols=["b"])
+
+    # Check that cudf and pd return the same read
+    with pytest.raises(NotImplementedError):
+        cudf.read_parquet(pdf_dir, **kwargs)
+
+
 @pytest.mark.parametrize("return_meta", [True, False])
 def test_parquet_writer_chunked_partitioned(tmpdir_factory, return_meta):
     pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))

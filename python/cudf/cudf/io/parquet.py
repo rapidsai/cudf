@@ -813,6 +813,11 @@ def _parquet_to_frame(
             **kwargs,
         )
 
+    if nrows is not None or skip_rows is not None:
+        raise NotImplementedError(
+            "nrows/skip_rows is not supported when reading a partitioned parquet dataset"
+        )
+
     partition_meta = None
     partitioning = (dataset_kwargs or {}).get("partitioning", None)
     if hasattr(partitioning, "schema"):
@@ -842,12 +847,6 @@ def _parquet_to_frame(
                 key_paths,
                 *args,
                 row_groups=key_row_groups,
-                # TODO: is this still right?
-                # Also, do we still care?
-                # partition_keys uses pyarrow dataset
-                # (which we can't use anymore after pyarrow is gone)
-                nrows=nrows,
-                skip_rows=skip_rows,
                 **kwargs,
             )
         )
