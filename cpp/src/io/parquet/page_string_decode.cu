@@ -1010,7 +1010,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     __syncthreads();
 
     // Create a warp sized thread block tile
-    auto const tile32 = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+    auto const tile_warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
 
     if (t < 32) {
       // decode repetition and definition levels.
@@ -1028,7 +1028,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       } else {
         gpuInitStringDescriptors<false>(s, sb, src_target_pos, tile32);
       }
-      if (!tile32.thread_rank()) { s->dict_pos = src_target_pos; }
+      if (tile32.thread_rank() == 0) { s->dict_pos = src_target_pos; }
     } else {
       int const me = t - out_thread0;
 
