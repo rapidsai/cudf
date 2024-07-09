@@ -17,6 +17,7 @@ import dataclasses
 import itertools
 import types
 from functools import cache
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import pyarrow as pa
@@ -29,7 +30,7 @@ import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import DataFrame, NamedColumn
-from cudf_polars.utils import sorting
+from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -95,6 +96,8 @@ def broadcast(
     ``target_length`` is provided and not all columns are length-1
     (i.e. ``n != 1``), then ``target_length`` must be equal to ``n``.
     """
+    if len(columns) == 0:
+        return []
     lengths: set[int] = {column.obj.size() for column in columns}
     if lengths == {1}:
         if target_length is None:
@@ -129,6 +132,11 @@ class IR:
 
     schema: Schema
     """Mapping from column names to their data types."""
+
+    def __post_init__(self):
+        """Validate preconditions."""
+        if any(dtype.id() == plc.TypeId.EMPTY for dtype in self.schema.values()):
+            raise NotImplementedError("Cannot make empty columns.")
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """
@@ -175,8 +183,12 @@ class PythonScan(IR):
 class Scan(IR):
     """Input from files."""
 
-    typ: Any
+    typ: str
     """What type of file are we reading? Parquet, CSV, etc..."""
+    reader_options: dict[str, Any]
+    """Reader-specific options, as dictionary."""
+    cloud_options: dict[str, Any] | None
+    """Cloud-related authentication options, currently ignored."""
     paths: list[str]
     """List of paths to read from."""
     file_options: Any
@@ -196,9 +208,33 @@ class Scan(IR):
         if self.file_options.n_rows is not None:
             raise NotImplementedError("row limit in scan")
         if self.typ not in ("csv", "parquet"):
+            raise NotImplementedError(f"Unhandled scan type: {self.typ}")
+        if self.cloud_options is not None and any(
+            self.cloud_options[k] is not None for k in ("aws", "azure", "gcp")
+        ):
             raise NotImplementedError(
-                f"Unhandled scan type: {self.typ}"
-            )  # pragma: no cover; polars raises on the rust side for now
+                "Read from cloud storage"
+            )  # pragma: no cover; no test yet
+        if self.typ == "csv":
+            if self.reader_options["skip_rows_after_header"] != 0:
+                raise NotImplementedError("Skipping rows after header in CSV reader")
+            parse_options = self.reader_options["parse_options"]
+            if (
+                null_values := parse_options["null_values"]
+            ) is not None and "Named" in null_values:
+                raise NotImplementedError(
+                    "Per column null value specification not supported for CSV reader"
+                )
+            if (
+                comment := parse_options["comment_prefix"]
+            ) is not None and "Multi" in comment:
+                raise NotImplementedError(
+                    "Multi-character comment prefix not supported for CSV reader"
+                )
+            if not self.reader_options["has_header"]:
+                # Need to do some file introspection to get the number
+                # of columns so that column projection works right.
+                raise NotImplementedError("Reading CSV without header")
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -206,17 +242,77 @@ class Scan(IR):
         with_columns = options.with_columns
         row_index = options.row_index
         if self.typ == "csv":
-            df = DataFrame.from_cudf(
-                cudf.concat(
-                    [cudf.read_csv(p, usecols=with_columns) for p in self.paths]
+            dtype_map = {
+                name: cudf._lib.types.PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[typ.id()]
+                for name, typ in self.schema.items()
+            }
+            parse_options = self.reader_options["parse_options"]
+            sep = chr(parse_options["separator"])
+            quote = chr(parse_options["quote_char"])
+            eol = chr(parse_options["eol_char"])
+            if self.reader_options["schema"] is not None:
+                # Reader schema provides names
+                column_names = list(self.reader_options["schema"]["inner"].keys())
+            else:
+                # file provides column names
+                column_names = None
+            usecols = with_columns
+            # TODO: support has_header=False
+            header = 0
+
+            # polars defaults to no null recognition
+            null_values = [""]
+            if parse_options["null_values"] is not None:
+                ((typ, nulls),) = parse_options["null_values"].items()
+                if typ == "AllColumnsSingle":
+                    # Single value
+                    null_values.append(nulls)
+                else:
+                    # List of values
+                    null_values.extend(nulls)
+            if parse_options["comment_prefix"] is not None:
+                comment = chr(parse_options["comment_prefix"]["Single"])
+            else:
+                comment = None
+            decimal = "," if parse_options["decimal_comma"] else "."
+
+            # polars skips blank lines at the beginning of the file
+            pieces = []
+            for p in self.paths:
+                skiprows = self.reader_options["skip_rows"]
+                # TODO: read_csv expands globs which we should not do,
+                # because polars will already have handled them.
+                path = Path(p)
+                with path.open() as f:
+                    while f.readline() == "\n":
+                        skiprows += 1
+                pieces.append(
+                    cudf.read_csv(
+                        path,
+                        sep=sep,
+                        quotechar=quote,
+                        lineterminator=eol,
+                        names=column_names,
+                        header=header,
+                        usecols=usecols,
+                        na_filter=True,
+                        na_values=null_values,
+                        keep_default_na=False,
+                        skiprows=skiprows,
+                        comment=comment,
+                        decimal=decimal,
+                        dtype=dtype_map,
+                    )
                 )
-            )
+            df = DataFrame.from_cudf(cudf.concat(pieces))
         elif self.typ == "parquet":
             cdf = cudf.read_parquet(self.paths, columns=with_columns)
             assert isinstance(cdf, cudf.DataFrame)
             df = DataFrame.from_cudf(cdf)
         else:
-            assert_never(self.typ)
+            raise NotImplementedError(
+                f"Unhandled scan type: {self.typ}"
+            )  # pragma: no cover; post init trips first
         if row_index is not None:
             name, offset = row_index
             dtype = self.schema[name]
@@ -292,15 +388,10 @@ class DataFrameScan(IR):
         table = pdf.to_arrow()
         schema = table.schema
         for i, field in enumerate(schema):
-            # TODO: Nested types
-            if field.type == pa.large_string():
-                # TODO: goes away when libcudf supports large strings
-                schema = schema.set(i, pa.field(field.name, pa.string()))
-            elif isinstance(field.type, pa.LargeListType):
-                # TODO: goes away when libcudf supports large lists
-                schema = schema.set(
-                    i, pa.field(field.name, pa.list_(field.type.field(0)))
-                )
+            schema = schema.set(
+                i, pa.field(field.name, dtypes.downcast_arrow_lists(field.type))
+            )
+        # No-op if the schema is unchanged.
         table = table.cast(schema)
         df = DataFrame.from_table(
             plc.interop.from_arrow(table), list(self.schema.keys())
@@ -424,7 +515,7 @@ class GroupBy(IR):
         NotImplementedError
             For unsupported expression nodes.
         """
-        if isinstance(agg, (expr.BinOp, expr.Cast)):
+        if isinstance(agg, (expr.BinOp, expr.Cast, expr.UnaryFunction)):
             return max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, expr.Agg):
             return 1 + max(GroupBy.check_agg(child) for child in agg.children)

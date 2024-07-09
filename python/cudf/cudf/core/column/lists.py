@@ -73,10 +73,15 @@ class ListColumn(ColumnBase):
             child0_size = (
                 current_base_child.size + 1 - current_offset
             ) * current_base_child.base_children[0].dtype.itemsize
-            current_offset = current_base_child.base_children[
-                0
-            ].element_indexing(current_offset)
             n += child0_size
+            current_offset_col = current_base_child.base_children[0]
+            if not len(current_offset_col):
+                # See https://github.com/rapidsai/cudf/issues/16164 why
+                # offset column can be uninitialized
+                break
+            current_offset = current_offset_col.element_indexing(
+                current_offset
+            )
             current_base_child = current_base_child.base_children[1]
 
         n += (

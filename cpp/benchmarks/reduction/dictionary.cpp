@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/benchmark_utilities.hpp>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
@@ -52,6 +53,13 @@ void BM_reduction_dictionary(benchmark::State& state,
     cuda_event_timer timer(state, true);
     auto result = cudf::reduce(*values, *agg, output_dtype);
   }
+
+  // The benchmark takes a column and produces two scalars.
+  set_items_processed(state, column_size + 1);
+
+  // We don't set the metrics for the size read/written as row_bit_count() doesn't
+  // support the dictionary type yet (and so is estimate_size()).
+  // See https://github.com/rapidsai/cudf/issues/16121 for details.
 }
 
 #define concat(a, b, c) a##b##c

@@ -522,6 +522,22 @@ StringArray = make_final_proxy_type(
     },
 )
 
+ArrowStringArrayNumpySemantics = make_final_proxy_type(
+    "ArrowStringArrayNumpySemantics",
+    _Unusable,
+    pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+)
+
+ArrowStringArray = make_final_proxy_type(
+    "ArrowStringArray",
+    _Unusable,
+    pd.core.arrays.string_arrow.ArrowStringArray,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+)
+
 StringDtype = make_final_proxy_type(
     "StringDtype",
     _Unusable,
@@ -757,6 +773,18 @@ _DataFrameLocIndexer = make_intermediate_proxy_type(
     "_DataFrameLocIndexer",
     cudf.core.dataframe._DataFrameLocIndexer,
     pd.core.indexing._LocIndexer,
+)
+
+_AtIndexer = make_intermediate_proxy_type(
+    "_AtIndexer",
+    cudf.core.dataframe._DataFrameAtIndexer,
+    pd.core.indexing._AtIndexer,
+)
+
+_iAtIndexer = make_intermediate_proxy_type(
+    "_iAtIndexer",
+    cudf.core.dataframe._DataFrameiAtIndexer,
+    pd.core.indexing._iAtIndexer,
 )
 
 FixedForwardWindowIndexer = make_final_proxy_type(
