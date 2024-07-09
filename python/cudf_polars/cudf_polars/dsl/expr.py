@@ -32,7 +32,7 @@ from cudf_polars.utils import dtypes, sorting
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    import polars.polars as plrs
+    import polars as pl
     import polars.type_aliases as pl_types
 
     from cudf_polars.containers import DataFrame
@@ -377,7 +377,7 @@ class LiteralColumn(Expr):
     value: pa.Array[Any, Any]
     children: tuple[()]
 
-    def __init__(self, dtype: plc.DataType, value: plrs.PySeries) -> None:
+    def __init__(self, dtype: plc.DataType, value: pl.Series) -> None:
         super().__init__(dtype)
         data = value.to_arrow()
         self.value = data.cast(dtypes.downcast_arrow_lists(data.type))

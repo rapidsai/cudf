@@ -8,13 +8,14 @@ import pyarrow as pa
 import pytest
 
 from cudf._lib import pylibcudf as plc
+from cudf._lib.pylibcudf.io.types import CompressionType
 
 
 def metadata_from_arrow_type(
     pa_type: pa.Array,
     name: str = "",
 ) -> plc.interop.ColumnMetadata | None:
-    metadata = plc.interop.ColumnMetadata(name)  # None
+    metadata = plc.interop.ColumnMetadata(name)
     if pa.types.is_list(pa_type):
         child_meta = [plc.interop.ColumnMetadata("offsets")]
         for i in range(pa_type.num_fields):
@@ -39,9 +40,25 @@ def metadata_from_arrow_type(
 
 
 def assert_column_eq(
-    lhs: pa.Array | plc.Column, rhs: pa.Array | plc.Column
+    lhs: pa.Array | plc.Column,
+    rhs: pa.Array | plc.Column,
+    check_field_nullability=True,
 ) -> None:
-    """Verify that a pylibcudf array and PyArrow array are equal."""
+    """Verify that a pylibcudf array and PyArrow array are equal.
+
+    Parameters
+    ----------
+    lhs: Union[pa.Array, plc.Column]
+        The array with the expected values
+    rhs: Union[pa.Array, plc.Column]
+        The array to check
+    check_field_nullability:
+        For list/struct dtypes, whether to check if the nullable attributes
+        on child fields are equal.
+
+        Useful for checking roundtripping of lossy formats like JSON that may not
+        preserve this information.
+    """
     # Nested types require children metadata to be passed to the conversion function.
     if isinstance(lhs, (pa.Array, pa.ChunkedArray)) and isinstance(
         rhs, plc.Column
@@ -65,6 +82,33 @@ def assert_column_eq(
     if isinstance(rhs, pa.ChunkedArray):
         rhs = rhs.combine_chunks()
 
+    def _make_fields_nullable(typ):
+        new_fields = []
+        for i in range(typ.num_fields):
+            child_field = typ.field(i)
+            if not child_field.nullable:
+                child_type = child_field.type
+                if isinstance(child_field.type, (pa.StructType, pa.ListType)):
+                    child_type = _make_fields_nullable(child_type)
+                new_fields.append(
+                    pa.field(child_field.name, child_type, nullable=True)
+                )
+            else:
+                new_fields.append(child_field)
+
+        if isinstance(typ, pa.StructType):
+            return pa.struct(new_fields)
+        elif isinstance(typ, pa.ListType):
+            return pa.list_(new_fields[0])
+        return typ
+
+    if not check_field_nullability:
+        rhs_type = _make_fields_nullable(rhs.type)
+        rhs = rhs.cast(rhs_type)
+
+        lhs_type = _make_fields_nullable(lhs.type)
+        lhs = rhs.cast(lhs_type)
+
     assert lhs.equals(rhs)
 
 
@@ -78,20 +122,24 @@ def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
 
 
 def assert_table_and_meta_eq(
-    plc_table_w_meta: plc.io.types.TableWithMetadata, pa_table: pa.Table
+    pa_table: pa.Table,
+    plc_table_w_meta: plc.io.types.TableWithMetadata,
+    check_field_nullability=True,
 ) -> None:
     """Verify that the pylibcudf TableWithMetadata and PyArrow table are equal"""
 
     plc_table = plc_table_w_meta.tbl
 
     plc_shape = (plc_table.num_rows(), plc_table.num_columns())
-    assert plc_shape == pa_table.shape
+    assert (
+        plc_shape == pa_table.shape
+    ), f"{plc_shape} is not equal to {pa_table.shape}"
 
     for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
-        assert_column_eq(plc_col, pa_col)
+        assert_column_eq(pa_col, plc_col, check_field_nullability)
 
     # Check column name equality
-    assert plc_table_w_meta.column_names == pa_table.column_names
+    assert plc_table_w_meta.column_names() == pa_table.column_names
 
 
 def cudf_raises(expected_exception: BaseException, *args, **kwargs):
@@ -182,4 +230,26 @@ DEFAULT_PA_TYPES = (
     + DEFAULT_PA_STRUCT_TESTING_TYPES
 )
 
+# Map pylibcudf compression types to pandas ones
+# Not all compression types map cleanly, read the comments to learn more!
+# If a compression type is unsupported, it maps to False.
+
+COMPRESSION_TYPE_TO_PANDAS = {
+    CompressionType.NONE: None,
+    # Users of this dict will have to special case
+    # AUTO
+    CompressionType.AUTO: None,
+    CompressionType.GZIP: "gzip",
+    CompressionType.BZIP2: "bz2",
+    CompressionType.ZIP: "zip",
+    CompressionType.XZ: "xz",
+    CompressionType.ZSTD: "zstd",
+    # Unsupported
+    CompressionType.ZLIB: False,
+    CompressionType.LZ4: False,
+    CompressionType.LZO: False,
+    # These only work for parquet
+    CompressionType.SNAPPY: "snappy",
+    CompressionType.BROTLI: "brotli",
+}
 ALL_PA_TYPES = DEFAULT_PA_TYPES
