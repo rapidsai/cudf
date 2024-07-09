@@ -16,17 +16,15 @@
 
 #pragma once
 
+#include <cudf/column/column_view.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/linked_column.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
 
-#include <cudf/column/column_view.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
-
-#include <cudf/detail/utilities/linked_column.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
-
-#include <rmm/exec_policy.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
 
@@ -40,8 +38,8 @@ namespace {
  * @copydoc cudf::detail::convert_decimal_data_to_decimal128
  */
 template <typename DecimalType>
-rmm::device_uvector<__int128_t> gpu_convert_decimal_data_to_decimal128(cudf::column_view const& column,
-                                                           rmm::cuda_stream_view stream)
+rmm::device_uvector<__int128_t> gpu_convert_decimal_data_to_decimal128(
+  cudf::column_view const& column, rmm::cuda_stream_view stream)
 {
   cudf::size_type constexpr BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DecimalType);
 
@@ -67,7 +65,7 @@ rmm::device_uvector<__int128_t> gpu_convert_decimal_data_to_decimal128(cudf::col
   return d128_buffer;
 }
 
-} // namespace
+}  // namespace
 
 /**
  * @brief Convert decimal32 and decimal64 numeric data to decimal128 and return the device vector
@@ -79,12 +77,13 @@ rmm::device_uvector<__int128_t> gpu_convert_decimal_data_to_decimal128(cudf::col
  *
  * @return A device vector containing the converted decimal128 data
  */
-template <typename DecimalType, std::enable_if_t<
-    std::is_same_v<DecimalType, int32_t> or std::is_same_v<DecimalType, int64_t>>* = nullptr>
+template <typename DecimalType,
+          std::enable_if_t<std::is_same_v<DecimalType, int32_t> or
+                           std::is_same_v<DecimalType, int64_t>>* = nullptr>
 rmm::device_uvector<__int128_t> convert_decimal_data_to_decimal128(cudf::column_view const& column,
-                                                           rmm::cuda_stream_view stream)
+                                                                   rmm::cuda_stream_view stream)
 {
   return gpu_convert_decimal_data_to_decimal128<DecimalType>(column, stream);
 }
 
-} // namespace cudf::detail
+}  // namespace cudf::detail
