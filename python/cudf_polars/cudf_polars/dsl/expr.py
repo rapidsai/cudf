@@ -1122,7 +1122,6 @@ class Cast(Expr):
             raise NotImplementedError(
                 "Need to implement cast to/from string separately."
             )
-        # TODO: use exposed libcudf trait checking APIs
         elif plc.traits.is_chrono(self.dtype) and plc.traits.is_numeric(value.dtype):
             raise NotImplementedError("Can't cast duration to numeric")
 
