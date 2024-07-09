@@ -1758,7 +1758,7 @@ class csv_writer_options_builder {
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void write_csv(csv_writer_options const& options,
-               rmm::cuda_stream_view stream      = cudf::get_default_stream());
+               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /** @} */  // end of group
 }  // namespace io

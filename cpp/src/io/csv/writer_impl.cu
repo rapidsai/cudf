@@ -435,8 +435,8 @@ void write_csv(data_sink* out_sink,
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //
-  write_chunked_begin(out_sink, table, user_column_names, options, stream, 
-                      rmm::mr::get_current_device_resource());
+  write_chunked_begin(
+    out_sink, table, user_column_names, options, stream, rmm::mr::get_current_device_resource());
 
   if (table.num_rows() > 0) {
     // no need to check same-size columns constraint; auto-enforced by table_view

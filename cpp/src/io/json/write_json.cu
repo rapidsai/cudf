@@ -911,7 +911,11 @@ void write_json(data_sink* out_sink,
       bool const include_line_terminator =
         (&sub_view != &vector_views.back()) or options.is_enabled_lines();
       auto const skip_last_chars = (include_line_terminator ? 0 : line_terminator.size());
-      write_chunked(out_sink, str_concat_col->view(), skip_last_chars, options, stream, 
+      write_chunked(out_sink,
+                    str_concat_col->view(),
+                    skip_last_chars,
+                    options,
+                    stream,
                     rmm::mr::get_current_device_resource());
     }
   } else {

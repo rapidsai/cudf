@@ -215,8 +215,7 @@ table_with_metadata read_json(json_reader_options options,
   return json::detail::read_json(datasources, options, stream, mr);
 }
 
-void write_json(json_writer_options const& options,
-                rmm::cuda_stream_view stream)
+void write_json(json_writer_options const& options, rmm::cuda_stream_view stream)
 {
   auto sinks = make_datasinks(options.get_sink());
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for JSON writing");
@@ -250,8 +249,7 @@ table_with_metadata read_csv(csv_reader_options options,
 }
 
 // Freeform API wraps the detail writer class API
-void write_csv(csv_writer_options const& options,
-               rmm::cuda_stream_view stream)
+void write_csv(csv_writer_options const& options, rmm::cuda_stream_view stream)
 {
   using namespace cudf::io::detail;
 
