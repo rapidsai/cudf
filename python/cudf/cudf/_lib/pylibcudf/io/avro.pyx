@@ -19,7 +19,7 @@ cpdef TableWithMetadata read_avro(
     size_type num_rows = -1
 ):
     """
-    Reads an Avro dataset into a set of columns.
+    Reads an Avro dataset into a :py:class:`~.types.TableWithMetadata`.
 
     Parameters
     ----------
@@ -36,7 +36,7 @@ cpdef TableWithMetadata read_avro(
     Returns
     -------
     TableWithMetadata
-        The Table and its corresponding metadata that was read in.
+        The Table and its corresponding metadata (column names) that were read in.
     """
     cdef vector[string] c_columns
     if columns is not None and len(columns) > 0:
