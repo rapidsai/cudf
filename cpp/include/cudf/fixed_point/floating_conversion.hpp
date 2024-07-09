@@ -812,17 +812,18 @@ CUDF_HOST_DEVICE cuda::std::pair<T, int> add_half_if_truncates(T integer_rep, in
 /**
  * @brief Perform base-2 -> base-10 fixed-point conversion for pow10 > 0
  *
+ * @tparam Rep The type of the storage for the decimal value
  * @tparam FloatingType The type of the original floating-point value we are converting from
  * @param base2_value The base-2 fixed-point value we are converting from
  * @param pow2 The number of powers of 2 to apply to convert from base-2
  * @param pow10 The number of powers of 10 to apply to reach the desired scale factor
  * @return Magnitude of the converted-to decimal integer
  */
-template <typename FloatingType, CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
-CUDF_HOST_DEVICE inline typename shifting_constants<FloatingType>::ShiftingRep
-shift_to_decimal_pospow(typename shifting_constants<FloatingType>::IntegerRep const base2_value,
-                        int pow2,
-                        int pow10)
+template <typename Rep,
+          typename FloatingType,
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
+CUDF_HOST_DEVICE inline cuda::std::make_unsigned_t<Rep> shift_to_decimal_pospow(
+  typename shifting_constants<FloatingType>::IntegerRep const base2_value, int pow2, int pow10)
 {
   // To convert to decimal, we need to apply the input powers of 2 and 10
   // The result will be (integer) base2_value * (2^pow2) / (10^pow10)
@@ -849,9 +850,12 @@ shift_to_decimal_pospow(typename shifting_constants<FloatingType>::IntegerRep co
   static constexpr int max_init_shift = shift_up_to - shift_from;
 
   // If our total bit shift is less than this, we don't need to iterate
+  using UnsignedRep = cuda::std::make_unsigned_t<Rep>;
   if (pow2 <= max_init_shift) {
     // Shift bits left, divide by 10s to apply the scale factor, and we're done.
-    return divide_power10<ShiftingRep>(shifting_rep << pow2, pow10);
+    shifting_rep = divide_power10<ShiftingRep>(shifting_rep << pow2, pow10);
+    // NOTE: Cast can overflow!
+    return static_cast<UnsignedRep>(shifting_rep);
   }
 
   // We need to iterate. Do the combined initial shift
@@ -867,8 +871,10 @@ shift_to_decimal_pospow(typename shifting_constants<FloatingType>::IntegerRep co
     // If our remaining bit shift is less than the max, we're finished iterating
     if (pow2 <= Constants::max_bits_shift) {
       // Shift bits left, divide by 10s to apply the scale factor, and we're done.
-      // Note: This divide result may not fit in the low half of the bit range
-      return divide_power10<ShiftingRep>(shifting_rep << pow2, pow10);
+      shifting_rep = divide_power10<ShiftingRep>(shifting_rep << pow2, pow10);
+
+      // NOTE: Cast can overflow!
+      return static_cast<UnsignedRep>(shifting_rep);
     }
 
     // Shift the max number of bits left again
@@ -886,13 +892,14 @@ shift_to_decimal_pospow(typename shifting_constants<FloatingType>::IntegerRep co
   }
 
   // Final bit shift: Shift may be large, guard against UB
-  // NOTE: This can overflow!
-  return guarded_left_shift(shifting_rep, pow2);
+  // NOTE: This can overflow (both cast and shift)!
+  return guarded_left_shift(static_cast<UnsignedRep>(shifting_rep), pow2);
 }
 
 /**
  * @brief Perform base-2 -> base-10 fixed-point conversion for pow10 < 0
  *
+ * @tparam Rep The type of the storage for the decimal value
  * @tparam FloatingType The type of the original floating-point value we are converting from
  * @param base2_value The base-2 fixed-point value we are converting from
  * @param pow2 The number of powers of 2 to apply to convert from base-2
@@ -902,10 +909,8 @@ shift_to_decimal_pospow(typename shifting_constants<FloatingType>::IntegerRep co
 template <typename Rep,
           typename FloatingType,
           CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
-CUDF_HOST_DEVICE inline typename shifting_constants<FloatingType>::ShiftingRep
-shift_to_decimal_negpow(typename shifting_constants<FloatingType>::IntegerRep base2_value,
-                        int pow2,
-                        int pow10)
+CUDF_HOST_DEVICE inline cuda::std::make_unsigned_t<Rep> shift_to_decimal_negpow(
+  typename shifting_constants<FloatingType>::IntegerRep base2_value, int pow2, int pow10)
 {
   // This is similar to shift_to_decimal_pospow(), except pow10 < 0 & pow2 < 0
   // See comments in that function for details.
@@ -921,6 +926,7 @@ shift_to_decimal_negpow(typename shifting_constants<FloatingType>::IntegerRep ba
   int pow2_mag  = -pow2;
 
   // For performing final 10s-shift
+  using UnsignedRep        = cuda::std::make_unsigned_t<Rep>;
   auto final_shifts_low10s = [&]() {
     // Last 10s-shift: multiply all remaining decimal places, shift all remaining bits, then bail
     // The multiplier is less than the max-shift, and thus fits within 64 / 32 bits
@@ -931,7 +937,7 @@ shift_to_decimal_negpow(typename shifting_constants<FloatingType>::IntegerRep ba
     }
 
     // Final bit shifting: Shift may be large, guard against UB
-    return guarded_right_shift(shifting_rep, pow2_mag);
+    return static_cast<UnsignedRep>(guarded_right_shift(shifting_rep, pow2_mag));
   };
 
   // If our total decimal shift is less than the max, we don't need to iterate
@@ -963,7 +969,6 @@ shift_to_decimal_negpow(typename shifting_constants<FloatingType>::IntegerRep ba
       // We need to convert to the output rep for the final scale-factor multiply, because if (e.g.)
       // float -> dec128 and some large pow10_mag, it might overflow the 64bit shifting rep.
       // It's not needed for pow10 > 0 because we're dividing by 10s there instead of multiplying.
-      using UnsignedRep = cuda::std::make_unsigned_t<Rep>;
       // NOTE: This can overflow! (Both multiply and cast)
       return multiply_power10<UnsignedRep>(static_cast<UnsignedRep>(shifting_rep), pow10_mag);
     }
@@ -997,7 +1002,7 @@ CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& flo
   auto const integer_rep = converter::bit_cast_to_integer(floating);
   if (converter::is_zero(integer_rep)) { return 0; }
 
-  // Note that the base2_value here is an unsigned integer with sizeof(FloatingType)
+  // Note that the significand here is an unsigned integer with sizeof(FloatingType)
   auto const is_negative                  = converter::get_is_negative(integer_rep);
   auto const [significand, floating_pow2] = converter::get_significand_and_pow2(integer_rep);
   auto const pow10                        = static_cast<int>(scale);
@@ -1027,16 +1032,16 @@ CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& flo
       if (pow2 >= 0) {
         return guarded_left_shift(static_cast<UnsignedRep>(base2_value), pow2);
       } else {
-        return guarded_right_shift(base2_value, -pow2);
+        return static_cast<UnsignedRep>(guarded_right_shift(base2_value, -pow2));
       }
     } else if (pow10 > 0) {
       if (pow2 <= 0) {
         // Power-2/10 shifts both downward: order doesn't matter, apply and bail.
         // Guard against shift being undefined behavior
         auto const shifted = guarded_right_shift(base2_value, -pow2);
-        return divide_power10<decltype(shifted)>(shifted, pow10);
+        return static_cast<UnsignedRep>(divide_power10<decltype(shifted)>(shifted, pow10));
       }
-      return shift_to_decimal_pospow<FloatingType>(base2_value, pow2, pow10);
+      return shift_to_decimal_pospow<Rep, FloatingType>(base2_value, pow2, pow10);
     } else {  // pow10 < 0
       if (pow2 >= 0) {
         // Power-2/10 shifts both upward: order doesn't matter, apply and bail.
