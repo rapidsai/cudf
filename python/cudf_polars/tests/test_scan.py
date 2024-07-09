@@ -22,22 +22,22 @@ def row_index(request):
 
 @pytest.fixture(
     params=[
-        (None, 0),
+        None,
         pytest.param(
-            (2, 1), marks=pytest.mark.xfail(reason="No handling of row limit in scan")
+            2, marks=pytest.mark.xfail(reason="No handling of row limit in scan")
         ),
         pytest.param(
-            (3, 0), marks=pytest.mark.xfail(reason="No handling of row limit in scan")
+            3, marks=pytest.mark.xfail(reason="No handling of row limit in scan")
         ),
     ],
     ids=["all-rows", "n_rows-with-skip", "n_rows-no-skip"],
 )
-def n_rows_skip_rows(request):
+def n_rows(request):
     return request.param
 
 
 @pytest.fixture(params=["csv", "parquet"])
-def df(request, tmp_path, row_index, n_rows_skip_rows):
+def df(request, tmp_path, row_index, n_rows):
     df = pl.DataFrame(
         {
             "a": [1, 2, 3, None],
@@ -46,14 +46,12 @@ def df(request, tmp_path, row_index, n_rows_skip_rows):
         }
     )
     name, offset = row_index
-    n_rows, skip_rows = n_rows_skip_rows
     if request.param == "csv":
         df.write_csv(tmp_path / "file.csv")
         return pl.scan_csv(
             tmp_path / "file.csv",
             row_index_name=name,
             row_index_offset=offset,
-            skip_rows_after_header=skip_rows,
             n_rows=n_rows,
         )
     else:
@@ -97,3 +95,98 @@ def test_scan_unsupported_raises(tmp_path):
     df.write_ndjson(tmp_path / "df.json")
     q = pl.scan_ndjson(tmp_path / "df.json")
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_row_index_projected_out(tmp_path):
+    df = pl.DataFrame({"a": [1, 2, 3]})
+
+    df.write_parquet(tmp_path / "df.pq")
+
+    q = pl.scan_parquet(tmp_path / "df.pq").with_row_index().select(pl.col("a"))
+
+    assert_gpu_result_equal(q)
+
+
+def test_scan_csv_column_renames_projection_schema(tmp_path):
+    with (tmp_path / "test.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+
+    q = pl.scan_csv(
+        tmp_path / "test.csv",
+        with_column_names=lambda names: [f"{n}_suffix" for n in names],
+        schema_overrides={
+            "foo_suffix": pl.String(),
+            "bar_suffix": pl.Int8(),
+            "baz_suffix": pl.UInt16(),
+        },
+    )
+
+    assert_gpu_result_equal(q)
+
+
+def test_scan_csv_skip_after_header_not_implemented(tmp_path):
+    with (tmp_path / "test.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
+
+    q = pl.scan_csv(tmp_path / "test.csv", skip_rows_after_header=1)
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_csv_null_values_per_column_not_implemented(tmp_path):
+    with (tmp_path / "test.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
+
+    q = pl.scan_csv(tmp_path / "test.csv", null_values={"foo": "1", "baz": "5"})
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_csv_comment_str_not_implemented(tmp_path):
+    with (tmp_path / "test.csv").open("w") as f:
+        f.write("""foo,bar,baz\n// 1,2,3\n3,4,5""")
+
+    q = pl.scan_csv(tmp_path / "test.csv", comment_prefix="// ")
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_csv_comment_char(tmp_path):
+    with (tmp_path / "test.csv").open("w") as f:
+        f.write("""foo,bar,baz\n# 1,2,3\n3,4,5""")
+
+    q = pl.scan_csv(tmp_path / "test.csv", comment_prefix="#")
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("nulls", [None, "3", ["3", "5"]])
+def test_scan_csv_null_values(tmp_path, nulls):
+    with (tmp_path / "test.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2,3\n3,4,5\n5,,2""")
+
+    q = pl.scan_csv(tmp_path / "test.csv", null_values=nulls)
+
+    assert_gpu_result_equal(q)
+
+
+def test_scan_csv_decimal_comma(tmp_path):
+    with (tmp_path / "test.csv").open("w") as f:
+        f.write("""foo|bar|baz\n1,23|2,34|3,56\n1""")
+
+    q = pl.scan_csv(tmp_path / "test.csv", separator="|", decimal_comma=True)
+
+    assert_gpu_result_equal(q)
+
+
+def test_scan_csv_skip_initial_empty_rows(tmp_path):
+    with (tmp_path / "test.csv").open("w") as f:
+        f.write("""\n\n\n\nfoo|bar|baz\n1|2|3\n1""")
+
+    q = pl.scan_csv(tmp_path / "test.csv", separator="|", skip_rows=1, has_header=False)
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+    q = pl.scan_csv(tmp_path / "test.csv", separator="|", skip_rows=1)
+
+    assert_gpu_result_equal(q)
