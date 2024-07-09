@@ -15,6 +15,7 @@
  */
 
 #include "arrow_utilities.hpp"
+#include "decimal_conversion_utilities.cuh"
 #include "detail/arrow_allocator.hpp"
 
 #include <cudf/column/column.hpp>

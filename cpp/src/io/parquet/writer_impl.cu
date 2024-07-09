@@ -22,6 +22,7 @@
 #include "arrow_schema_writer.hpp"
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
+#include "interop/decimal_conversion_utilities.cuh"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_gpu.hpp"
@@ -1602,44 +1603,6 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
 }
 
 /**
- * @brief Convert decimal32 and decimal64 data to decimal128 and return the device vector
- *
- * @tparam DecimalType to convert from
- *
- * @param column A view of the input columns
- * @param stream CUDA stream used for device memory operations and kernel launches
- *
- * @return A device vector containing the converted decimal128 data
- */
-template <typename DecimalType>
-rmm::device_uvector<__int128_t> convert_data_to_decimal128(column_view const& column,
-                                                           rmm::cuda_stream_view stream)
-{
-  size_type constexpr BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DecimalType);
-
-  rmm::device_uvector<__int128_t> d128_buffer(column.size(), stream);
-
-  thrust::for_each(rmm::exec_policy_nosync(stream),
-                   thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(column.size()),
-                   [in  = column.begin<DecimalType>(),
-                    out = reinterpret_cast<DecimalType*>(d128_buffer.data()),
-                    BIT_WIDTH_RATIO] __device__(auto in_idx) {
-                     auto const out_idx = in_idx * BIT_WIDTH_RATIO;
-                     // The lowest order bits are the value, the remainder
-                     // simply matches the sign bit to satisfy the two's
-                     // complement integer representation of negative numbers.
-                     out[out_idx] = in[in_idx];
-#pragma unroll BIT_WIDTH_RATIO - 1
-                     for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
-                       out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
-                     }
-                   });
-
-  return d128_buffer;
-}
-
-/**
  * @brief Function to convert decimal32 and decimal64 columns to decimal128 data,
  *        update the input table metadata, and return a new vector of column views.
  *
@@ -1673,7 +1636,8 @@ std::vector<column_view> convert_decimal_columns_and_metadata(
     switch (column.type().id()) {
       case type_id::DECIMAL32:
         // Convert data to decimal128 type
-        d128_vectors.emplace_back(convert_data_to_decimal128<int32_t>(column, stream));
+        d128_vectors.emplace_back(
+          cudf::detail::convert_decimal_data_to_decimal128<int32_t>(column, stream));
         // Update metadata
         metadata.set_decimal_precision(MAX_DECIMAL32_PRECISION);
         metadata.set_type_length(size_of(data_type{type_id::DECIMAL128, column.type().scale()}));
@@ -1687,7 +1651,8 @@ std::vector<column_view> convert_decimal_columns_and_metadata(
                 converted_children};
       case type_id::DECIMAL64:
         // Convert data to decimal128 type
-        d128_vectors.emplace_back(convert_data_to_decimal128<int64_t>(column, stream));
+        d128_vectors.emplace_back(
+          cudf::detail::convert_decimal_data_to_decimal128<int64_t>(column, stream));
         // Update metadata
         metadata.set_decimal_precision(MAX_DECIMAL64_PRECISION);
         metadata.set_type_length(size_of(data_type{type_id::DECIMAL128, column.type().scale()}));
