@@ -25,7 +25,7 @@
 
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -287,4 +287,4 @@ void set_all_valid_null_masks(column_view const& input,
 
 }  // namespace detail
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

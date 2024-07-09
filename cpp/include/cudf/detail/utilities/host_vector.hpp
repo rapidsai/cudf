@@ -18,6 +18,7 @@
 
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/aligned.hpp>
 #include <rmm/resource_ref.hpp>
@@ -28,7 +29,8 @@
 #include <limits>
 #include <new>  // for bad_alloc
 
-namespace cudf::detail {
+namespace CUDF_EXPORT cudf {
+namespace detail {
 
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
  *  that employs \c a `rmm::host_async_resource_ref` for allocation.
@@ -184,4 +186,5 @@ class rmm_host_allocator {
 template <typename T>
 using host_vector = thrust::host_vector<T, rmm_host_allocator<T>>;
 
-}  // namespace cudf::detail
+}  // namespace detail
+}  // namespace CUDF_EXPORT cudf

@@ -24,6 +24,7 @@
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -36,7 +37,7 @@
 
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -477,4 +478,4 @@ host_vector<T> make_pinned_vector_sync(size_t size, rmm::cuda_stream_view stream
 
 }  // namespace detail
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

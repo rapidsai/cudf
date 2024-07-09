@@ -22,7 +22,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -120,4 +120,4 @@ std::unique_ptr<column> inclusive_one_normalized_percent_rank_scan(
   column_view const& order_by, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

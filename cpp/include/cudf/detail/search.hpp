@@ -25,7 +25,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf::detail {
+namespace CUDF_EXPORT cudf {
+namespace detail {
+
 /**
  * @copydoc cudf::lower_bound
  *
@@ -100,4 +102,5 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr);
 
-}  // namespace cudf::detail
+}  // namespace detail
+}  // namespace CUDF_EXPORT cudf
