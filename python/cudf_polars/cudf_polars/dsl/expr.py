@@ -379,8 +379,7 @@ class LiteralColumn(Expr):
 
     def __init__(self, dtype: plc.DataType, value: pl.Series) -> None:
         super().__init__(dtype)
-        # TODO: investigate if we can handle future=True since that improves perf
-        data = value.to_arrow(future=False)
+        data = value.to_arrow()
         self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
 
     def do_evaluate(
@@ -827,13 +826,11 @@ class StringFunction(Expr):
         elif self.name == pl_expr.StringFunction.Replace:
             column, target, repl = columns
             n, literal = self.options
-            if target.is_scalar and repl.is_scalar:
-                return Column(
-                    plc.strings.replace.replace(
-                        column.obj, target.obj_scalar, repl.obj_scalar, maxrepl=n
-                    )
+            return Column(
+                plc.strings.replace.replace(
+                    column.obj, target.obj_scalar, repl.obj_scalar, maxrepl=n
                 )
-            raise NotImplementedError("replace")
+            )
         elif self.name == pl_expr.StringFunction.ReplaceMany:
             column, target, repl = columns
             return Column(

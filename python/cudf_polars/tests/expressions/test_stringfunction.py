@@ -167,16 +167,15 @@ def test_replace_re(ldf):
     [
         (["A", "de", "kLm", "awef"], "a"),
         (["A", "de", "kLm", "awef"], ["a", "b", "c", "d"]),
-        (pl.col("a").drop_nulls(), pl.col("a").drop_nulls()),
+        # Test an expression, cannot use pl.col('a') since it contains nulls
+        # which replace_many doesn't support
+        (
+            pl.lit(pl.Series(["A", "de", "kLm", "awef"])),
+            pl.lit(pl.Series(["a", "b", "c", "d"])),
+        ),
     ],
 )
 def test_replace_many(ldf, target, repl):
-    if isinstance(target, pl.Expr):
-        # drop nulls since this will raise in both cudf/polars
-        #
-        # TODO: refactor so that drop_nulls happens on the pl.col call
-        # (once the dropnull unary function is implemented)
-        ldf = ldf.drop_nulls()
     query = ldf.select(pl.col("a").str.replace_many(target, repl))
 
     assert_gpu_result_equal(query)
