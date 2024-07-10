@@ -367,7 +367,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
 {
   CUDF_EXPECTS(metadata.children_meta.empty() ||
                  metadata.children_meta.size() == static_cast<std::size_t>(input.num_children()),
-               "Number of field names and number of children doesn't match\n");
+               "Number of field names and number of children do not match\n");
   std::unique_ptr<column> tmp_column = nullptr;
   if ((input.offset() != 0) or
       ((input.num_children() == 2) and (input.child(0).size() - 1 != input.size()))) {
