@@ -98,5 +98,5 @@ NVBENCH_BENCH_TYPES(bench_groupby_max_multithreaded,
   .add_int64_axis("cardinality", {0})
   .add_int64_power_of_two_axis("num_rows", {12, 18})
   .add_float64_axis("null_probability", {0, 0.1, 0.9})
-  .add_int64_axis("num_aggregations", {1, 2, 4, 8})
+  .add_int64_axis("num_aggregations", {1})
   .add_int64_axis("num_threads", {1, 2, 4, 8});
