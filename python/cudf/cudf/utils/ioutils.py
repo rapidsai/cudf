@@ -1757,8 +1757,12 @@ def get_reader_filepath_or_buffer(
             FutureWarning,
         )
     else:
-        # Preserve defaults for now, even though use_python_file_object
-        # is deprecated
+        # Preserve the readers (e.g. read_csv) default of True
+        # if no use_python_file_object option is specified by the user
+        # for now (note: this is different from the default for this
+        # function of False)
+        # TODO: when non-pyarrow file reading perf is good enough
+        # we can default this to False
         use_python_file_object = True
 
     if open_file_options is not None:
