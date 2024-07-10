@@ -1,16 +1,21 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
+
 import warnings
+from typing import TYPE_CHECKING
 
 import cupy as cp
 import numpy as np
 
 from cudf.core.column import as_column
-from cudf.core.copy_types import BooleanMask
 from cudf.core.index import RangeIndex, ensure_index
-from cudf.core.indexed_frame import IndexedFrame
 from cudf.core.scalar import Scalar
 from cudf.options import get_option
 from cudf.utils.dtypes import can_convert_to_column
+
+if TYPE_CHECKING:
+    from cudf.core.column.column import ColumnBase
+    from cudf.core.index import BaseIndex
 
 
 def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
@@ -110,55 +115,31 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
     return labels, cats.values if return_cupy_array else ensure_index(cats)
 
 
-def _linear_interpolation(column, index=None):
-    """
-    Interpolate over a float column. Implicitly assumes that values are
-    evenly spaced with respect to the x-axis, for example the data
-    [1.0, NaN, 3.0] will be interpolated assuming the NaN is half way
-    between the two valid values, yielding [1.0, 2.0, 3.0]
-    """
-
-    index = RangeIndex(start=0, stop=len(column), step=1)
-    return _index_or_values_interpolation(column, index=index)
-
-
-def _index_or_values_interpolation(column, index=None):
+def _interpolation(column: ColumnBase, index: BaseIndex) -> ColumnBase:
     """
     Interpolate over a float column. assumes a linear interpolation
     strategy using the index of the data to denote spacing of the x
     values. For example the data and index [1.0, NaN, 4.0], [1, 3, 4]
-    would result in [1.0, 3.0, 4.0]
+    would result in [1.0, 3.0, 4.0].
     """
     # figure out where the nans are
-    mask = cp.isnan(column)
+    mask = column.isnull()
 
     # trivial cases, all nan or no nans
-    num_nan = mask.sum()
-    if num_nan == 0 or num_nan == len(column):
-        return column
+    if not mask.any() or mask.all():
+        return column.copy()
 
-    to_interp = IndexedFrame(data={None: column}, index=index)
-    known_x_and_y = to_interp._apply_boolean_mask(
-        BooleanMask(~mask, len(to_interp))
-    )
-
-    known_x = known_x_and_y.index.to_cupy()
-    known_y = known_x_and_y._data.columns[0].values
+    valid_locs = ~mask
+    if isinstance(index, RangeIndex):
+        # Each point is evenly spaced, index values don't matter
+        known_x = cp.flatnonzero(valid_locs.values)
+    else:
+        known_x = index._column.apply_boolean_mask(valid_locs).values  # type: ignore[attr-defined]
+    known_y = column.apply_boolean_mask(valid_locs).values
 
     result = cp.interp(index.to_cupy(), known_x, known_y)
 
     # find the first nan
-    first_nan_idx = (mask == 0).argmax().item()
+    first_nan_idx = valid_locs.values.argmax().item()
     result[:first_nan_idx] = np.nan
-    return result
-
-
-def get_column_interpolator(method):
-    interpolator = {
-        "linear": _linear_interpolation,
-        "index": _index_or_values_interpolation,
-        "values": _index_or_values_interpolation,
-    }.get(method, None)
-    if not interpolator:
-        raise ValueError(f"Interpolation method `{method}` not found")
-    return interpolator
+    return as_column(result)
