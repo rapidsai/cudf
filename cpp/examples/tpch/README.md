@@ -1,8 +1,8 @@
 # TPC-H Inspired Examples
 
-Implementing the TPC-H queries using `libcudf`. We leverage the data generator (wrapper around official TPC-H datagen) from [Apache Datafusion](https://github.com/apache/datafusion) for generating data in the form of Parquet files. 
+Implementing the TPC-H queries using `libcudf`. We leverage the data generator (wrapper around official TPC-H datagen) from [Apache Datafusion](https://github.com/apache/datafusion) for generating data in the form of Parquet files.
 
-## Requirements 
+## Requirements
 
 - Rust
 
