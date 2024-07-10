@@ -271,12 +271,14 @@ cpdef Column segmented_gather(Column input, Column gather_map_list):
 
 cpdef Column extract_list_element(Column input, ColumnOrSizeType index):
     """Create a column of extracted list elements.
+
     Parameters
     ----------
     input : Column
         The input column.
     index : Union[Column, size_type]
         The selection index or indices.
+
     Returns
     -------
     Column
