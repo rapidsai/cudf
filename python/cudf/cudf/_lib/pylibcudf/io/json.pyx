@@ -50,6 +50,7 @@ cdef map[string, schema_element] _generate_schema_map(list dtypes):
         schema_map[c_name] = s_elem
     return schema_map
 
+
 cdef json_reader_options _setup_json_reader_options(
         SourceInfo source_info,
         list dtypes,
@@ -61,6 +62,7 @@ cdef json_reader_options _setup_json_reader_options(
         bool mixed_types_as_string,
         bool prune_columns,
         json_recovery_mode_t recovery_mode):
+
     cdef vector[data_type] types_vec
     cdef json_reader_options opts = move(
         json_reader_options.builder(source_info.c_obj)
