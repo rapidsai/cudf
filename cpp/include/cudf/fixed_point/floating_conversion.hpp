@@ -18,6 +18,7 @@
 
 #include <cudf/utilities/traits.hpp>
 
+#include <cuda/std/cmath>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
@@ -752,14 +753,19 @@ struct shifting_constants {
  *
  * @note This fixes problems like 1.2 (value = 1.1999...) at scale -1 -> 11
  *
- * @tparam T Type of integer holding the floating-point significand
+ * @tparam FloatingType Type of integer holding the floating-point significand
+ * @param floating The floating-point number to convert
  * @param integer_rep The integer representation of the floating-point significand
  * @param pow2 The power of 2 that needs to be applied to the significand
  * @param pow10 The power of 10 that needs to be applied to the significand
  * @return integer_rep, shifted 1 and ++'d if the conversion to decimal causes truncation
  */
-template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
-CUDF_HOST_DEVICE cuda::std::pair<T, int> add_half_if_truncates(T integer_rep, int pow2, int pow10)
+template <typename FloatingType, CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
+CUDF_HOST_DEVICE cuda::std::pair<typename floating_converter<FloatingType>::IntegralType, int>
+add_half_if_truncates(FloatingType floating,
+                      typename floating_converter<FloatingType>::IntegralType integer_rep,
+                      int pow2,
+                      int pow10)
 {
   // The user-supplied scale may truncate information, so we need to talk about rounding.
   // We have chosen not to round, so we want 1.23456f with scale -4 to be decimal 12345
@@ -801,10 +807,15 @@ CUDF_HOST_DEVICE cuda::std::pair<T, int> add_half_if_truncates(T integer_rep, in
   bool const conversion_truncates =
     (pow10_term > pow2_term) || ((pow2_term == pow10_term) && (pow2 < 0));
 
+  // However, don't add a half-bit if the input is a whole number!
+  // This is only for errors introduced by rounding decimal fractions!
+  bool const is_whole_number = (cuda::std::floor(floating) == floating);
+  bool const add_half_bit    = conversion_truncates && !is_whole_number;
+
   // Add half a bit on truncation (shift to make room and update pow2)
   integer_rep <<= 1;
   --pow2;
-  integer_rep += static_cast<T>(conversion_truncates);
+  integer_rep += static_cast<decltype(integer_rep)>(add_half_bit);
 
   return {integer_rep, pow2};
 }
@@ -1060,8 +1071,9 @@ CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& flo
   auto const [significand, floating_pow2] = converter::get_significand_and_pow2(integer_rep);
 
   // Add half a bit if truncating to yield expected value, see function for discussion.
-  auto const pow10               = static_cast<int>(scale);
-  auto const [base2_value, pow2] = add_half_if_truncates(significand, floating_pow2, pow10);
+  auto const pow10 = static_cast<int>(scale);
+  auto const [base2_value, pow2] =
+    add_half_if_truncates(floating, significand, floating_pow2, pow10);
 
   // Apply the powers of 2 and 10 to convert to decimal.
   auto const magnitude =
