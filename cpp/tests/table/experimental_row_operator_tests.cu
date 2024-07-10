@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,15 +109,14 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTables)
   auto const lhs       = cudf::table_view{{col1}};
   auto const empty_rhs = cudf::table_view{{col2}};
 
-  auto const stream    = cudf::get_default_stream();
-  auto const test_sort = [stream](auto const& preprocessed,
-                                  auto const& input,
-                                  auto const& comparator,
-                                  auto const& expected) {
-    auto const order = sorted_order(
-      preprocessed, input.num_rows(), cudf::detail::has_nested_columns(input), comparator, stream);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, order->view());
-  };
+  auto const stream = cudf::get_default_stream();
+  auto const test_sort =
+    [stream](
+      auto const& preprocessed, auto const& input, auto const& comparator, auto const& expected) {
+      auto const order = sorted_order(
+        preprocessed, input.num_rows(), cudf::has_nested_columns(input), comparator, stream);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, order->view());
+    };
 
   auto const test_sort_two_tables = [&](auto const& preprocessed_lhs,
                                         auto const& preprocessed_empty_rhs) {
@@ -188,15 +187,14 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTablesWithListsOfStructs)
   auto const lhs          = cudf::table_view{{*col1}};
   auto const empty_rhs    = cudf::table_view{{*col2}};
 
-  auto const stream    = cudf::get_default_stream();
-  auto const test_sort = [stream](auto const& preprocessed,
-                                  auto const& input,
-                                  auto const& comparator,
-                                  auto const& expected) {
-    auto const order = sorted_order(
-      preprocessed, input.num_rows(), cudf::detail::has_nested_columns(input), comparator, stream);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, order->view());
-  };
+  auto const stream = cudf::get_default_stream();
+  auto const test_sort =
+    [stream](
+      auto const& preprocessed, auto const& input, auto const& comparator, auto const& expected) {
+      auto const order = sorted_order(
+        preprocessed, input.num_rows(), cudf::has_nested_columns(input), comparator, stream);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, order->view());
+    };
 
   auto const test_sort_two_tables = [&](auto const& preprocessed_lhs,
                                         auto const& preprocessed_empty_rhs) {

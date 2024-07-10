@@ -462,6 +462,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                             self._frame[col].loc[key[0]] = value[i]
 
 
+class _DataFrameAtIndexer(_DataFrameLocIndexer):
+    pass
+
+
 class _DataFrameIlocIndexer(_DataFrameIndexer):
     """
     For selection by index.
@@ -582,6 +586,10 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 else:
                     for i, col in enumerate(columns_df._column_names):
                         self._frame[col].iloc[key[0]] = value[i]
+
+
+class _DataFrameiAtIndexer(_DataFrameIlocIndexer):
+    pass
 
 
 class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
@@ -2404,7 +2412,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if isinstance(map_index, cudf.core.column.StringColumn):
             cat_index = cast(
                 cudf.core.column.CategoricalColumn,
-                map_index.as_categorical_column("category"),
+                map_index.astype("category"),
             )
             map_index = cat_index.codes
             warnings.warn(
@@ -2581,14 +2589,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         Alias for ``DataFrame.iloc``; provided for compatibility with Pandas.
         """
-        return self.iloc
+        return _DataFrameiAtIndexer(self)
 
     @property
     def at(self):
         """
         Alias for ``DataFrame.loc``; provided for compatibility with Pandas.
         """
-        return self.loc
+        return _DataFrameAtIndexer(self)
 
     @property  # type: ignore
     @_external_only_api(
