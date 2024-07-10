@@ -532,16 +532,17 @@ class GroupBy(IR):
         keys = broadcast(
             *(k.evaluate(df) for k in self.keys), target_length=df.num_rows
         )
-        # TODO: use sorted information, need to expose column_order
-        # and null_precedence in pylibcudf groupby constructor
-        # sorted = (
-        #     plc.types.Sorted.YES
-        #     if all(k.is_sorted for k in keys)
-        #     else plc.types.Sorted.NO
-        # )
+        sorted = (
+            plc.types.Sorted.YES
+            if all(k.is_sorted for k in keys)
+            else plc.types.Sorted.NO
+        )
         grouper = plc.groupby.GroupBy(
             plc.Table([k.obj for k in keys]),
             null_handling=plc.types.NullPolicy.INCLUDE,
+            keys_are_sorted=sorted,
+            column_order=[k.order for k in keys],
+            null_precedence=[k.null_order for k in keys],
         )
         # TODO: uniquify
         requests = []
