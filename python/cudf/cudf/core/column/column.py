@@ -275,7 +275,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return libcudf.reduce.reduce("any", self, dtype=np.bool_)
 
     def dropna(self) -> Self:
-        return drop_nulls([self])[0]._with_type_metadata(self.dtype)
+        if self.has_nulls():
+            return drop_nulls([self])[0]._with_type_metadata(self.dtype)
+        else:
+            return self.copy()
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -700,6 +703,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def isnull(self) -> ColumnBase:
         """Identify missing values in a Column."""
+        if not self.has_nulls(include_nan=self.dtype.kind == "f"):
+            return as_column(False, length=len(self))
+
         result = libcudf.unary.is_null(self)
 
         if self.dtype.kind == "f":
@@ -711,6 +717,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column."""
+        if not self.has_nulls(include_nan=self.dtype.kind == "f"):
+            return as_column(True, length=len(self))
+
         result = libcudf.unary.is_valid(self)
 
         if self.dtype.kind == "f":
@@ -923,15 +932,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @property
     def is_unique(self) -> bool:
+        # distinct_count might already be cached
         return self.distinct_count(dropna=False) == len(self)
 
-    @property
+    @cached_property
     def is_monotonic_increasing(self) -> bool:
         return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [True], None
         )
 
-    @property
+    @cached_property
     def is_monotonic_decreasing(self) -> bool:
         return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [False], None
@@ -942,6 +952,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         ascending: bool = True,
         na_position: str = "last",
     ) -> ColumnBase:
+        if (not ascending and self.is_monotonic_decreasing) or (
+            ascending and self.is_monotonic_increasing
+        ):
+            return self.copy()
         return libcudf.sort.sort(
             [self], column_order=[ascending], null_precedence=[na_position]
         )[0]
@@ -1160,9 +1174,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         Get unique values in the data
         """
-        return drop_duplicates([self], keep="first")[0]._with_type_metadata(
-            self.dtype
-        )
+        if self.is_unique:
+            return self.copy()
+        else:
+            return drop_duplicates([self], keep="first")[
+                0
+            ]._with_type_metadata(self.dtype)
 
     def serialize(self) -> tuple[dict, list]:
         # data model:
