@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from libc.stdint cimport bool, int32_t
+from libc.stdint cimport int32_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -44,6 +44,7 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         NULL_EQUALS
         NULL_MAX
         NULL_MIN
+        NULL_NOT_EQUALS
         GENERIC_BINARY
         NULL_LOGICAL_AND
         NULL_LOGICAL_OR
