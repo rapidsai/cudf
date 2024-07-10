@@ -75,6 +75,7 @@ def _write_parquet(
     column_encoding=None,
     column_type_length=None,
     output_as_binary=None,
+    write_arrow_schema=True,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -112,6 +113,7 @@ def _write_parquet(
         "column_encoding": column_encoding,
         "column_type_length": column_type_length,
         "output_as_binary": output_as_binary,
+        "write_arrow_schema": write_arrow_schema,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -156,6 +158,7 @@ def write_to_dataset(
     column_encoding=None,
     column_type_length=None,
     output_as_binary=None,
+    store_schema=False,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -244,6 +247,9 @@ def write_to_dataset(
     output_as_binary : set, optional, default None
         If a column name is present in the set, that column will be output as
         unannotated binary, rather than the default 'UTF-8'.
+    store_schema : bool, default False
+        If ``True``, enable computing and writing arrow schema to Parquet
+        file footer's key-value metadata section for faithful round-tripping.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
@@ -287,6 +293,7 @@ def write_to_dataset(
             column_encoding=column_encoding,
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
+            store_schema=store_schema,
         )
 
     else:
@@ -314,6 +321,7 @@ def write_to_dataset(
             column_encoding=column_encoding,
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
+            store_schema=store_schema,
         )
 
     return metadata
@@ -981,6 +989,7 @@ def to_parquet(
     column_encoding=None,
     column_type_length=None,
     output_as_binary=None,
+    store_schema=False,
     *args,
     **kwargs,
 ):
@@ -1036,6 +1045,7 @@ def to_parquet(
                 column_encoding=column_encoding,
                 column_type_length=column_type_length,
                 output_as_binary=output_as_binary,
+                store_schema=store_schema,
             )
 
         partition_info = (
@@ -1068,6 +1078,7 @@ def to_parquet(
             column_encoding=column_encoding,
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
+            write_arrow_schema=store_schema,
         )
 
     else:

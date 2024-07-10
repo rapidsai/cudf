@@ -25,3 +25,5 @@ cpdef Column contains_nulls(Column)
 cpdef Column index_of(Column, ColumnOrScalar, bool)
 
 cpdef Column reverse(Column)
+
+cpdef Column segmented_gather(Column, Column)

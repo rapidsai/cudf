@@ -919,6 +919,12 @@ except ImportError:
 
 _eval_func = _FunctionProxy(_Unusable(), pd.eval)
 
+register_proxy_func(pd.read_pickle)(
+    _FunctionProxy(_Unusable(), pd.read_pickle)
+)
+
+register_proxy_func(pd.to_pickle)(_FunctionProxy(_Unusable(), pd.to_pickle))
+
 
 def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
     frame = sys._getframe(level + 3)
