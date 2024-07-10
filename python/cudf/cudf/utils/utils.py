@@ -6,7 +6,7 @@ import functools
 import os
 import traceback
 import warnings
-from contextlib import ExitStack
+from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
@@ -406,17 +406,13 @@ def _all_bools_with_nulls(lhs, rhs, bool_fill_value):
     return result_col
 
 
-class filtered_deprecation(ExitStack):
-    def __init__(self, should_filter, message, category):
-        self.should_filter = should_filter
-        self.message = message
-        self.category = category
-        super().__init__()
-
-    def __enter__(self):
-        if self.should_filter:
-            self.enter_context(warnings.catch_warnings())
+@contextmanager
+def maybe_filter_deprecation(condition, message, category):
+    with warnings.catch_warnings():
+        if condition:
             warnings.filterwarnings(
-                action="ignore", message=self.message, category=self.category
+                "ignore",
+                message,
+                category=category,
             )
-        return super().__enter__()
+        yield

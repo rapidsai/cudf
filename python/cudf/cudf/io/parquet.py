@@ -24,7 +24,7 @@ from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import filtered_deprecation
+from cudf.utils.utils import maybe_filter_deprecation
 
 BYTE_SIZES = {
     "kb": 1000,
@@ -549,7 +549,6 @@ def read_parquet(
         )
     # Do not allow the user to set file-opening options
     # when `use_python_file_object=False` is specified
-    # TODO: what to do here??? deprecate this too?
     if use_python_file_object is False:
         if open_file_options:
             raise ValueError(
@@ -671,7 +670,8 @@ def read_parquet(
 
     # Don't want to warn if use_python_file_object causes us to get
     # a NativeFile (there is a separate deprecation warning for that)
-    with filtered_deprecation(
+    # with filtered_deprecation(
+    with maybe_filter_deprecation(
         not have_nativefile,
         message="Support for reading pyarrow's NativeFile is deprecated",
         category=FutureWarning,

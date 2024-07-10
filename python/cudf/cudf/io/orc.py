@@ -10,7 +10,7 @@ import cudf
 from cudf._lib import orc as liborc
 from cudf.api.types import is_list_like
 from cudf.utils import ioutils
-from cudf.utils.utils import filtered_deprecation
+from cudf.utils.utils import maybe_filter_deprecation
 
 
 def _make_empty_df(filepath_or_buffer, columns):
@@ -366,7 +366,7 @@ def read_orc(
     if engine == "cudf":
         # Don't want to warn if use_python_file_object causes us to get
         # a NativeFile (there is a separate deprecation warning for that)
-        with filtered_deprecation(
+        with maybe_filter_deprecation(
             not have_nativefile,
             message="Support for reading pyarrow's NativeFile is deprecated",
             category=FutureWarning,
