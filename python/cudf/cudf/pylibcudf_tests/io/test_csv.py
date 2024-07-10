@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import io
+import os
 
 import pandas as pd
 import pyarrow as pa
@@ -20,24 +21,29 @@ _COMMON_CSV_SOURCE_KWARGS = {
 }
 
 
-@pytest.fixture(params=[True, False])
-def column_names(table_data, request):
+@pytest.fixture(scope="module")
+def csv_table_data(table_data):
     """
-    Parametrized fixture returning column names (or None).
-    Useful for testing col_names argument in read_csv
+    Like the table_data but with nested types dropped
+    since the CSV reader can't handle that
     """
-    if request.param:
-        _, pa_table = table_data
-        return pa_table.column_names
-    return None
+    _, pa_table = table_data
+    pa_table = pa_table.drop_columns(
+        [
+            "col_list<item: int64>",
+            "col_list<item: list<item: int64>>",
+            "col_struct<v: int64 not null>",
+            "col_struct<a: int64 not null, b_struct: struct<b: double not null> not null>",
+        ]
+    )
+    return plc.interop.from_arrow(pa_table), pa_table
 
 
 @pytest.mark.parametrize("delimiter", [",", ";"])
 def test_read_csv_basic(
-    table_data,
+    csv_table_data,
     source_or_sink,
     compression_type,
-    column_names,
     nrows,
     skiprows,
     delimiter,
@@ -56,29 +62,15 @@ def test_read_csv_basic(
     }:
         pytest.skip("unsupported compression type by pandas/libcudf")
 
-    _, pa_table = table_data
+    _, pa_table = csv_table_data
 
     # can't compress non-binary data with pandas
     if isinstance(source_or_sink, io.StringIO):
         compression_type = CompressionType.NONE
 
     if len(pa_table) > 0:
-        # Drop the string column for now, since it contains ints
-        # (which won't roundtrip since they are not quoted by python csv writer)
-        # also uint64 will get confused for int64
-        pa_table = pa_table.drop_columns(
-            [
-                "col_string",
-                "col_uint64",
-                # Nested types don't work by default
-                "col_list<item: int64>",
-                "col_list<item: list<item: int64>>",
-                "col_struct<v: int64 not null>",
-                "col_struct<a: int64 not null, b_struct: struct<b: double not null> not null>",
-            ]
-        )
-        if column_names is not None:
-            column_names = pa_table.column_names
+        # Drop the uint64 column since it gets confused for int64
+        pa_table = pa_table.drop_columns(["col_uint64"])
 
     source = make_source(
         source_or_sink,
@@ -87,6 +79,10 @@ def test_read_csv_basic(
         sep=delimiter,
         **_COMMON_CSV_SOURCE_KWARGS,
     )
+
+    # Rename the table (by reversing the names) to test names argument
+    pa_table = pa_table.rename_columns(pa_table.column_names[::-1])
+    column_names = pa_table.column_names
 
     res = plc.io.csv.read_csv(
         plc.io.SourceInfo([source]),
@@ -112,24 +108,25 @@ def test_read_csv_basic(
 
 # Note: make sure chunk size is big enough so that dtype inference
 # infers correctly
-@pytest.mark.parametrize("chunk_size", [4204, 6000])
-def test_read_csv_byte_range(table_data, chunk_size):
+@pytest.mark.parametrize("chunk_size", [1000, 5999])
+def test_read_csv_byte_range(table_data, chunk_size, tmp_path):
     _, pa_table = table_data
     if len(pa_table) == 0:
         # pandas writes nothing when we have empty table
         # and header=None
         pytest.skip("Don't test empty table case")
-    source = io.BytesIO()
+    source = f"{tmp_path}/a.csv"
     source = make_source(
         source, pa_table, header=False, **_COMMON_CSV_SOURCE_KWARGS
     )
+    file_size = os.stat(source).st_size
     tbls_w_meta = []
-    for chunk_start in range(0, len(source.getbuffer()), chunk_size):
+    for segment in range((file_size + chunk_size - 1) // chunk_size):
         tbls_w_meta.append(
             plc.io.csv.read_csv(
                 plc.io.SourceInfo([source]),
-                byte_range_offset=chunk_start,
-                byte_range_size=chunk_start + chunk_size,
+                byte_range_offset=segment * chunk_size,
+                byte_range_size=chunk_size,
                 header=-1,
                 col_names=pa_table.column_names,
             )
@@ -160,8 +157,6 @@ def test_read_csv_dtypes(table_data, source_or_sink):
     # also uint64 will get confused for int64
     pa_table = pa_table.drop_columns(
         [
-            "col_string",
-            "col_uint64",
             # Nested types don't work by default
             "col_list<item: int64>",
             "col_list<item: list<item: int64>>",

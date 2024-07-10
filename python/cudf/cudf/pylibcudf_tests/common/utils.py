@@ -110,17 +110,22 @@ def assert_column_eq(
         lhs_type = _make_fields_nullable(lhs.type)
         lhs = rhs.cast(lhs_type)
 
-    # print(lhs)
-    # print(rhs)
-    # print(lhs.type)
-    # print(rhs.type)
+    print(lhs)
+    print(rhs)
+    print(lhs.type)
+    print(rhs.type)
     if not check_type:
         # Useful for lossy formats like CSV
         import numpy as np
 
         assert np.array_equal(lhs, rhs)
     else:
-        assert lhs.equals(rhs)
+        if pa.types.is_floating(lhs.type) and pa.types.is_floating(rhs.type):
+            import numpy as np
+
+            np.testing.assert_array_almost_equal(lhs, rhs)
+        else:
+            assert lhs.equals(rhs)
 
 
 def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:

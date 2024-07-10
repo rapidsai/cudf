@@ -168,20 +168,6 @@ def test_read_json_basic(
         **_COMMON_JSON_SOURCE_KWARGS,
     )
 
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                len(pa_table) > 0
-                and compression_type
-                not in {CompressionType.NONE, CompressionType.AUTO}
-            ),
-            # note: wasn't able to narrow down the specific types that were failing
-            # seems to be a little non-deterministic, but always fails with
-            # cudaErrorInvalidValue invalid argument
-            reason="libcudf json reader crashes on compressed non empty table_data",
-        )
-    )
-
     if isinstance(source, io.IOBase):
         source.seek(0)
 
