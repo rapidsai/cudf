@@ -1609,7 +1609,7 @@ def test_at_setitem_empty():
             ["2024-06", "2023-06", "2022-06"], freq="M", name="foo"
         ),
         xpd.IntervalIndex.from_breaks([0, 1, 2, 3], name="foo"),
-        pd.MultiIndex.from_tuples(
+        xpd.MultiIndex.from_tuples(
             [(1, "a"), (2, "b"), (3, "c")], names=["foo1", "bar1"]
         ),
     ],
