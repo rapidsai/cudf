@@ -44,7 +44,6 @@ cpdef TableWithMetadata read_csv(
     quote_style quoting = quote_style.MINIMAL,
     str quotechar = '"',
     bool doublequote = True,
-    bool detect_whitespace_around_quotes = False,
     list parse_dates = None,
     list parse_hex = None,
     # Technically this should be dict/list
@@ -59,10 +58,91 @@ cpdef TableWithMetadata read_csv(
     # Note: These options are supported by the libcudf reader
     # but are not exposed here (since there is no demand for them
     # on the Python side yet)
+    # bool detect_whitespace_around_quotes = False,
     # DataType timestamp_type = DataType(type_id.EMPTY),
 ):
-    """
+    """Reads an CSV file into a :py:class:`~.types.TableWithMetadata`.
 
+    Parameters
+    ----------
+    source_info : SourceInfo
+        The SourceInfo to read the CSV file from.
+    compression : compression_type, default CompressionType.AUTO
+        The compression format of the CSV source.
+    byte_range_offset : size_type, default 0
+        Number of bytes to skip from source start.
+    byte_range_size : size_type, default 0
+        Number of bytes to read. By default, will read all bytes.
+    col_names : list, default None
+        The column names to use.
+    prefix : string, default ""
+        The prefix to apply to the column names.
+    mangle_dupe_cols : bool, default True
+        If True, rename duplicate column names.
+    usecols : list, default None
+        Specify the string column names/integer column indices of columns to be read.
+    nrows : size_type, default -1
+        The number of rows to read.
+    skiprows : size_type, default 0
+        The number of rows to skip from the start before reading
+    skipfooter : size_type, default 0
+        The number of rows to skip from the end
+    header : size_type, default 0
+        The index of the row that will be used for header names.
+        Pass -1 to use default column names.
+    lineterminator : str, default "\n"
+        The character used to determine the end of a line.
+    delimiter : str, default ","
+        The character used to separate fields in a row.
+    thousands : str, default None
+        The character used as the thousands separator.
+        Cannot match delimiter.
+    decimal : str, default "."
+        The character used as the decimal separator.
+        Cannot match delimiter.
+    comment : str, default None
+        The character used to identify the start of a comment line.
+        (which will be skipped by the reader)
+    delim_whitespace : bool, default False
+        If True, treat whitespace as the field delimiter.
+    skipinitialspace : bool, default False
+        If True, skip whitespace after the delimiter.
+    skip_blank_lines : bool, default True
+        If True, ignore empty lines (otherwise line values are parsed as null).
+    quoting : QuoteStyle, default QuoteStyle.MINIMAL
+        The quoting style used in the input CSV data. One of
+        { QuoteStyle.MINIMAL, QuoteStyle.ALL, QuoteStyle.NONNUMERIC, QuoteStyle.NONE }
+    quotechar : str, default '"'
+        The character used to indicate quoting.
+    doublequote : bool, default True
+        If True, a quote inside a value is double-quoted.
+    parse_dates : list, default None
+        A list of integer column indices/string column names
+        of columns to read as datetime.
+    parse_hex : list, default None
+        A list of integer column indices/string column names
+        of columns to read as hexadecimal.
+    dtypes : Union[Dict[str, DataType], List[DataType]], default None
+        A list of data types or a dictionary mapping column names
+        to a DataType.
+    true_values : List[str], default None
+        A list of additional values to recognize as True.
+    false_values : List[str], default None
+        A list of additional values to recognize as False.
+    na_values : List[str], default None
+        A list of additional values to recognize as null.
+    keep_default_na : bool, default True
+        Whether to keep the built-in default N/A values.
+    na_filter : bool, default True
+        Whether to detect missing values. If False, can
+        improve performance.
+    dayfirst : bool, default False
+        If True, interpret dates as being in the DD/MM format.
+
+    Returns
+    -------
+    TableWithMetadata
+        The Table and its corresponding metadata (column names) that were read in.
     """
     cdef vector[string] c_names
     cdef vector[int] c_use_cols_indexes

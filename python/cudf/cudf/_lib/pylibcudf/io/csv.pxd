@@ -32,7 +32,6 @@ cpdef TableWithMetadata read_csv(
     quote_style quoting = *,
     str quotechar = *,
     bool doublequote = *,
-    bool detect_whitespace_around_quotes = *,
     list parse_dates = *,
     list parse_hex = *,
     object dtypes = *,
@@ -44,5 +43,6 @@ cpdef TableWithMetadata read_csv(
     bool dayfirst = *,
     # Disabled for now, see comments
     # in csv.pyx
+    # bool detect_whitespace_around_quotes = *,
     # DataType timestamp_type = *,
 )
