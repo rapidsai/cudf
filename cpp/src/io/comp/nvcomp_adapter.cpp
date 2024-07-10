@@ -37,6 +37,7 @@
 #include NVCOMP_ZSTD_HEADER
 #endif
 
+// When building with nvcomp 4.0 or newer, map the new version macros to the old ones
 #ifndef NVCOMP_MAJOR_VERSION
 #define NVCOMP_MAJOR_VERSION NVCOMP_VER_MAJOR
 #define NVCOMP_MINOR_VERSION NVCOMP_VER_MINOR
