@@ -426,8 +426,8 @@ def is_c_contiguous(
     itemsize : int
         Size of an element in bytes.
 
-    Return
-    ------
+    Returns
+    -------
     bool
         The boolean answer.
     """
