@@ -9,6 +9,8 @@ from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.lists cimport (
     contains as cpp_contains,
     explode as cpp_explode,
+    gather as cpp_gather,
+    reverse as cpp_reverse,
 )
 from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_list_elements as cpp_concatenate_list_elements,
@@ -211,10 +213,65 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
     return Column.from_libcudf(move(c_result))
 
 
+cpdef Column reverse(Column input):
+    """Reverse the element order within each list of the input column.
+
+    For details, see :cpp:func:`reverse`.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+
+    Returns
+    -------
+    Column
+        A new Column with reversed lists.
+    """
+    cdef unique_ptr[column] c_result
+    cdef ListColumnView list_view = input.list_view()
+
+    with nogil:
+        c_result = move(cpp_reverse.reverse(
+            list_view.view(),
+        ))
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column segmented_gather(Column input, Column gather_map_list):
+    """Create a column with elements gathered based on the indices in gather_map_list
+
+    For details, see :cpp:func:`segmented_gather`.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+    gather_map_list : Column
+        The indices of the lists column to gather.
+
+    Returns
+    -------
+    Column
+        A new Column with elements in list of rows
+        gathered based on gather_map_list
+    """
+
+    cdef unique_ptr[column] c_result
+    cdef ListColumnView list_view1 = input.list_view()
+    cdef ListColumnView list_view2 = gather_map_list.list_view()
+
+    with nogil:
+        c_result = move(cpp_gather.segmented_gather(
+            list_view1.view(),
+            list_view2.view(),
+        ))
+    return Column.from_libcudf(move(c_result))
+
+
 cpdef Column count_elements(Column input):
     """Count the number of rows in each
     list element in the given lists column.
-
     For details, see :cpp:func:`count_elements`.
 
     Parameters
