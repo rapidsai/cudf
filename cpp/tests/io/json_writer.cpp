@@ -96,15 +96,12 @@ TEST_F(JsonWriterTest, ErrorCases)
 
   mt.schema_info.emplace_back("int16");
   out_options.set_metadata(mt);
-  EXPECT_NO_THROW(cudf::io::write_json(
-    out_options, cudf::test::get_default_stream());
+  EXPECT_NO_THROW(cudf::io::write_json(out_options, cudf::test::get_default_stream()));
 
   // chunk_rows must be at least 8
   out_options.set_rows_per_chunk(0);
-  EXPECT_THROW(
-    cudf::io::write_json(
-      out_options, cudf::test::get_default_stream()),
-    cudf::logic_error);
+  EXPECT_THROW(cudf::io::write_json(out_options, cudf::test::get_default_stream()),
+               cudf::logic_error);
 }
 
 TEST_F(JsonWriterTest, PlainTable)
