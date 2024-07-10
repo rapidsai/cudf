@@ -148,22 +148,6 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   return buffer.first(uncomp_data.size());
 }
 
-size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::datasource>> sources,
-                                        json_reader_options const& reader_opts,
-                                        char const delimiter,
-                                        rmm::cuda_stream_view stream)
-{
-  auto total_source_size = sources_size(sources, 0, 0) + (sources.size() - 1);
-  rmm::device_uvector<char> buffer(total_source_size, stream);
-  auto readbufspan = ingest_raw_input(buffer,
-                                      sources,
-                                      reader_opts.get_compression(),
-                                      reader_opts.get_byte_range_offset(),
-                                      reader_opts.get_byte_range_size(),
-                                      stream);
-  return find_first_delimiter(readbufspan, '\n', stream);
-}
-
 size_t estimate_size_per_subchunk(size_t chunk_size)
 {
   auto geometric_mean = [](double a, double b) { return std::sqrt(a * b); };
@@ -309,9 +293,9 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
    * The batched JSON reader enforces that the size of each batch is at most INT_MAX
    * bytes (~2.14GB). Batches are defined to be byte range chunks - characterized by
    * chunk offset and chunk size - that may span across multiple source files.
-   * Note that the batched reader does not work for compressed inputs.
+   * Note that the batched reader does not work for compressed inputs or for regular
+   * JSON inputs.
    */
-
   size_t const total_source_size = sources_size(sources, 0, 0);
   size_t chunk_offset            = reader_opts.get_byte_range_offset();
   size_t chunk_size              = reader_opts.get_byte_range_size();
@@ -322,10 +306,16 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   size_t const batch_size_ub =
     std::numeric_limits<int>::max() - (max_subchunks_prealloced * size_per_subchunk);
 
-  // Identify the position of starting source file from which to begin batching based on
-  // byte range offset. If the offset is larger than the sum of all source
-  // sizes, then start_source is total number of source files i.e. no file is read
+  /*
+   * Identify the position (zero-indexed) of starting source file from which to begin 
+   * batching based on byte range offset. If the offset is larger than the sum of all 
+   * source sizes, then start_source is total number of source files i.e. no file is 
+   * read
+   */
+  
+  // Prefix sum of source file sizes
   size_t pref_source_size   = 0;
+  // Starting source file from which to being batching evaluated using byte range offset
   size_t const start_source = [chunk_offset, &sources, &pref_source_size]() {
     for (size_t src_idx = 0; src_idx < sources.size(); ++src_idx) {
       if (pref_source_size + sources[src_idx]->size() > chunk_offset) { return src_idx; }
@@ -333,25 +323,32 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     }
     return sources.size();
   }();
-  // Construct batches of byte ranges spanning source files, with the starting position of batches
-  // indicated by batch_offsets.
+  /*
+   * Construct batches of byte ranges spanning source files, with the starting position of batches
+   * indicated by `batch_offsets`. `pref_bytes_size` gives the bytes position from which the current 
+   * batch begins, and `end_bytes_size` gives the terminal bytes position after which reading 
+   * stops. 
+   */
   size_t pref_bytes_size = chunk_offset;
   size_t end_bytes_size  = chunk_offset + chunk_size;
-  std::vector<size_t> batch_offsets;
-  batch_offsets.push_back(pref_bytes_size);
+  std::vector<size_t> batch_offsets{pref_bytes_size};
   for (size_t i = start_source; i < sources.size() && pref_bytes_size < end_bytes_size;) {
     pref_source_size += sources[i]->size();
+    // If the current source file can subsume multiple batches, we split the file until the 
+    // boundary of the last batch exceeds the end of the file (indexed by `pref_source_size`)
     while (pref_bytes_size < end_bytes_size &&
            pref_source_size >= std::min(pref_bytes_size + batch_size_ub, end_bytes_size)) {
-      batch_offsets.push_back(batch_offsets.back() +
-                              std::min(batch_size_ub, end_bytes_size - pref_bytes_size));
-      pref_bytes_size += std::min(batch_size_ub, end_bytes_size - pref_bytes_size);
+      auto next_batch_size = std::min(batch_size_ub, end_bytes_size - pref_bytes_size);
+      batch_offsets.push_back(batch_offsets.back() + next_batch_size);
+      pref_bytes_size += next_batch_size;
     }
     i++;
   }
-  // If there is a single batch, then we can directly return the table without the
-  // unnecessary concatenate. The size of batch_offsets is 1 if all sources are empty,
-  // or if end_bytes_size is larger than total_source_size.
+  /*
+   * If there is a single batch, then we can directly return the table without the
+   * unnecessary concatenate. The size of batch_offsets is 1 if all sources are empty,
+   * or if end_bytes_size is larger than total_source_size.
+   */
   if (batch_offsets.size() <= 2) return read_batch(sources, reader_opts, stream, mr);
 
   std::vector<cudf::io::table_with_metadata> partial_tables;
