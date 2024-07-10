@@ -154,3 +154,23 @@ cpdef Column is_not_nan(Column input):
         result = move(cpp_unary.is_not_nan(input.view()))
 
     return Column.from_libcudf(move(result))
+
+cpdef bool is_supported_cast(DataType from_, DataType to):
+    """Check if a cast between datatypes is supported.
+
+    For details, see :cpp:func:`is_supported_cast`.
+
+    Parameters
+    ----------
+    from_
+        The source datatype
+    to
+        The target datatype
+
+    Returns
+    -------
+    bool
+        True if the cast is supported.
+    """
+    with nogil:
+        return cpp_unary.is_supported_cast(from_, to)

@@ -43,5 +43,6 @@ cdef extern from "cudf/unary.hpp" namespace "cudf" nogil:
     cdef extern unique_ptr[column] cast(
         column_view input,
         data_type out_type) except +
+    cdef extern bool is_supported_cast(data_type from_, data_type to) noexcept
     cdef extern unique_ptr[column] is_nan(column_view input) except +
     cdef extern unique_ptr[column] is_not_nan(column_view input) except +
