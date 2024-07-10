@@ -5669,16 +5669,25 @@ class StringColumn(column.ColumnBase):
         result_col = _str_to_numeric_typecast_functions[out_dtype](string_col)
         return result_col
 
-    def _as_datetime_or_timedelta_column(self, dtype, format):
-        if len(self) == 0:
-            return cudf.core.column.column_empty(0, dtype=dtype)
-
-        # Check for None strings
-        if (self == "None").any():
-            raise ValueError("Could not convert `None` value to datetime")
-
-        is_nat = self == "NaT"
-        if dtype.kind == "M":
+    def strptime(
+        self, dtype: Dtype, format: str
+    ) -> cudf.core.column.DatetimeColumn | cudf.core.column.TimeDeltaColumn:
+        if dtype.kind not in "Mm":  # type: ignore[union-attr]
+            raise ValueError(
+                f"dtype must be datetime or timedelta type, not {dtype}"
+            )
+        elif self.null_count == len(self):
+            return column.column_empty(len(self), dtype=dtype, masked=True)  # type: ignore[return-value]
+        elif (self == "None").any():
+            raise ValueError(
+                "Cannot convert `None` value to datetime or timedelta."
+            )
+        elif dtype.kind == "M":  # type: ignore[union-attr]
+            if format.endswith("%z"):
+                raise NotImplementedError(
+                    "cuDF does not yet support timezone-aware datetimes"
+                )
+            is_nat = self == "NaT"
             without_nat = self.apply_boolean_mask(is_nat.unary_operator("not"))
             all_same_length = (
                 libstrings.count_characters(without_nat).distinct_count(
@@ -5699,52 +5708,36 @@ class StringColumn(column.ColumnBase):
             if not valid.all():
                 raise ValueError(f"Column contains invalid data for {format=}")
 
-        casting_func = (
-            str_cast.timestamp2int
-            if dtype.type == np.datetime64
-            else str_cast.timedelta2int
-        )
+            casting_func = str_cast.timestamp2int
+            add_back_nat = is_nat.any()
+        elif dtype.kind == "m":  # type: ignore[union-attr]
+            casting_func = str_cast.timedelta2int
+            add_back_nat = False
+
         result_col = casting_func(self, dtype, format)
 
-        if is_nat.any():
+        if add_back_nat:
             result_col[is_nat] = None
 
         return result_col
 
     def as_datetime_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.DatetimeColumn":
-        out_dtype = cudf.api.types.dtype(dtype)
-
-        # infer on host from the first not na element
-        # or return all null column if all values
-        # are null in current column
-        if format is None:
-            if self.null_count == len(self):
-                return cast(
-                    "cudf.core.column.DatetimeColumn",
-                    column.column_empty(
-                        len(self), dtype=out_dtype, masked=True
-                    ),
-                )
-            else:
-                format = datetime.infer_format(
-                    self.apply_boolean_mask(self.notnull()).element_indexing(0)
-                )
-
-        if format.endswith("%z"):
-            raise NotImplementedError(
-                "cuDF does not yet support timezone-aware datetimes"
-            )
-        return self._as_datetime_or_timedelta_column(out_dtype, format)
+        self, dtype: Dtype
+    ) -> cudf.core.column.DatetimeColumn:
+        not_null = self.apply_boolean_mask(self.notnull())
+        if len(not_null) == 0:
+            # We should hit the self.null_count == len(self) condition
+            # so format doesn't matter
+            format = ""
+        else:
+            # infer on host from the first not na element
+            format = datetime.infer_format(not_null.element_indexing(0))
+        return self.strptime(dtype, format)  # type: ignore[return-value]
 
     def as_timedelta_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.TimeDeltaColumn":
-        out_dtype = cudf.api.types.dtype(dtype)
-        if format is None:
-            format = "%D days %H:%M:%S"
-        return self._as_datetime_or_timedelta_column(out_dtype, format)
+        self, dtype: Dtype
+    ) -> cudf.core.column.TimeDeltaColumn:
+        return self.strptime(dtype, "%D days %H:%M:%S")  # type: ignore[return-value]
 
     def as_decimal_column(
         self, dtype: Dtype

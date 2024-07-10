@@ -1143,19 +1143,11 @@ class CategoricalColumn(column.ColumnBase):
             dtype, format=format
         )
 
-    def as_datetime_column(
-        self, dtype, format: str | None = None
-    ) -> DatetimeColumn:
-        return self._get_decategorized_column().as_datetime_column(
-            dtype, format
-        )
+    def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
+        return self._get_decategorized_column().as_datetime_column(dtype)
 
-    def as_timedelta_column(
-        self, dtype, format: str | None = None
-    ) -> TimeDeltaColumn:
-        return self._get_decategorized_column().as_timedelta_column(
-            dtype, format
-        )
+    def as_timedelta_column(self, dtype: Dtype) -> TimeDeltaColumn:
+        return self._get_decategorized_column().as_timedelta_column(dtype)
 
     def _get_decategorized_column(self) -> ColumnBase:
         if self.null_count == len(self):

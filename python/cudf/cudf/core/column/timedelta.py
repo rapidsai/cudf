@@ -263,9 +263,7 @@ class TimeDeltaColumn(ColumnBase):
         )
         return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
 
-    def as_datetime_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.DatetimeColumn":
+    def as_datetime_column(self, dtype: Dtype) -> None:  # type: ignore[override]
         raise TypeError(
             f"cannot astype a timedelta from {self.dtype} to {dtype}"
         )
@@ -285,10 +283,7 @@ class TimeDeltaColumn(ColumnBase):
                 column.column_empty(0, dtype="object", masked=False),
             )
 
-    def as_timedelta_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> TimeDeltaColumn:
-        dtype = cudf.dtype(dtype)
+    def as_timedelta_column(self, dtype: Dtype) -> TimeDeltaColumn:
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
