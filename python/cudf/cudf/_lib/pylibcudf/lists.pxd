@@ -30,4 +30,6 @@ cpdef Column index_of(Column, ColumnOrScalar, bool)
 
 cpdef Column reverse(Column)
 
+cpdef Column segmented_gather(Column, Column)
+
 cpdef Column extract_list_element(Column, ColumnOrSizeType)

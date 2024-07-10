@@ -762,12 +762,23 @@ void parquet_writer_options_base::set_compression(compression_type compression)
 
 void parquet_writer_options_base::enable_int96_timestamps(bool req)
 {
+  CUDF_EXPECTS(not req or not is_enabled_write_arrow_schema(),
+               "INT96 timestamps and arrow schema cannot be simultaneously "
+               "enabled as INT96 timestamps are deprecated in Arrow.");
   _write_timestamps_as_int96 = req;
 }
 
 void parquet_writer_options_base::enable_utc_timestamps(bool val)
 {
   _write_timestamps_as_UTC = val;
+}
+
+void parquet_writer_options_base::enable_write_arrow_schema(bool val)
+{
+  CUDF_EXPECTS(not val or not is_enabled_int96_timestamps(),
+               "arrow schema and INT96 timestamps cannot be simultaneously "
+               "enabled as INT96 timestamps are deprecated in Arrow.");
+  _write_arrow_schema = val;
 }
 
 void parquet_writer_options_base::set_row_group_size_bytes(size_t size_bytes)
@@ -971,6 +982,13 @@ template <class BuilderT, class OptionsT>
 BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::utc_timestamps(bool enabled)
 {
   _options.enable_utc_timestamps(enabled);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::write_arrow_schema(bool enabled)
+{
+  _options.enable_write_arrow_schema(enabled);
   return static_cast<BuilderT&>(*this);
 }
 
