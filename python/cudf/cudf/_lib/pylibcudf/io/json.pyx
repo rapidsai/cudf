@@ -50,13 +50,46 @@ cdef map[string, schema_element] _generate_schema_map(list dtypes):
         schema_map[c_name] = s_elem
     return schema_map
 
+cdef json_reader_options _setup_json_reader_options(
+        SourceInfo source_info,
+        list dtypes,
+        compression_type compression,
+        bool lines,
+        size_type byte_range_offset,
+        size_type byte_range_size,
+        bool keep_quotes,
+        bool mixed_types_as_string,
+        bool prune_columns,
+        json_recovery_mode_t recovery_mode):
+    cdef vector[data_type] types_vec
+    cdef json_reader_options opts = move(
+        json_reader_options.builder(source_info.c_obj)
+        .compression(compression)
+        .lines(lines)
+        .byte_range_offset(byte_range_offset)
+        .byte_range_size(byte_range_size)
+        .recovery_mode(recovery_mode)
+        .build()
+    )
+
+    if dtypes is not None:
+        if isinstance(dtypes[0], tuple):
+            opts.set_dtypes(move(_generate_schema_map(dtypes)))
+        else:
+            for dtype in dtypes:
+                types_vec.push_back((<DataType>dtype).c_obj)
+            opts.set_dtypes(types_vec)
+
+    opts.enable_keep_quotes(keep_quotes)
+    opts.enable_mixed_types_as_string(mixed_types_as_string)
+    opts.enable_prune_columns(prune_columns)
+    return opts
+
+
 cpdef tuple chunked_read_json(
     SourceInfo source_info,
     list dtypes = None,
     compression_type compression = compression_type.AUTO,
-    bool lines = False,
-    size_type byte_range_offset = 0,
-    size_type byte_range_size = 0,
     bool keep_quotes = False,
     bool mixed_types_as_string = False,
     bool prune_columns = False,
@@ -99,26 +132,18 @@ cpdef tuple chunked_read_json(
     cdef size_type c_range_size = (
         chunk_size if chunk_size is not None else 0
     )
-    cdef vector[data_type] types_vec
-    cdef json_reader_options opts = move(
-        json_reader_options.builder(source_info.c_obj)
-        .compression(compression)
-        .lines(lines)
-        .recovery_mode(recovery_mode)
-        .build()
+    cdef json_reader_options opts = _setup_json_reader_options(
+        source_info=source_info,
+        dtypes=dtypes,
+        compression=compression,
+        lines=True,
+        byte_range_offset=0,
+        byte_range_size=0,
+        keep_quotes=keep_quotes,
+        mixed_types_as_string=mixed_types_as_string,
+        prune_columns=prune_columns,
+        recovery_mode=recovery_mode,
     )
-
-    if dtypes is not None:
-        if isinstance(dtypes[0], tuple):
-            opts.set_dtypes(move(_generate_schema_map(dtypes)))
-        else:
-            for dtype in dtypes:
-                types_vec.push_back((<DataType>dtype).c_obj)
-            opts.set_dtypes(types_vec)
-
-    opts.enable_keep_quotes(keep_quotes)
-    opts.enable_mixed_types_as_string(mixed_types_as_string)
-    opts.enable_prune_columns(prune_columns)
 
     # Read JSON
     cdef table_with_metadata c_result
@@ -205,28 +230,18 @@ cpdef TableWithMetadata read_json(
     TableWithMetadata
         The Table and its corresponding metadata (column names) that were read in.
     """
-    cdef vector[data_type] types_vec
-    cdef json_reader_options opts = move(
-        json_reader_options.builder(source_info.c_obj)
-        .compression(compression)
-        .lines(lines)
-        .byte_range_offset(byte_range_offset)
-        .byte_range_size(byte_range_size)
-        .recovery_mode(recovery_mode)
-        .build()
+    cdef json_reader_options opts = _setup_json_reader_options(
+        source_info=source_info,
+        dtypes=dtypes,
+        compression=compression,
+        lines=lines,
+        byte_range_offset=byte_range_offset,
+        byte_range_size=byte_range_size,
+        keep_quotes=keep_quotes,
+        mixed_types_as_string=mixed_types_as_string,
+        prune_columns=prune_columns,
+        recovery_mode=recovery_mode,
     )
-
-    if dtypes is not None:
-        if isinstance(dtypes[0], tuple):
-            opts.set_dtypes(move(_generate_schema_map(dtypes)))
-        else:
-            for dtype in dtypes:
-                types_vec.push_back((<DataType>dtype).c_obj)
-            opts.set_dtypes(types_vec)
-
-    opts.enable_keep_quotes(keep_quotes)
-    opts.enable_mixed_types_as_string(mixed_types_as_string)
-    opts.enable_prune_columns(prune_columns)
 
     # Read JSON
     cdef table_with_metadata c_result
