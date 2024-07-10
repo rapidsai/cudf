@@ -5744,9 +5744,7 @@ class StringColumn(column.ColumnBase):
     ) -> "cudf.core.column.DecimalBaseColumn":
         return libstrings.to_decimal(self, dtype)
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> StringColumn:
+    def as_string_column(self) -> StringColumn:
         return self
 
     @property

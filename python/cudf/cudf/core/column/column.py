@@ -1003,7 +1003,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                         f"Casting to {dtype} is not supported, use "
                         "`.astype('str')` instead."
                     )
-                result = self.as_string_column(dtype)
+                result = self.as_string_column()
             else:
                 result = self.as_numerical_column(dtype)
 
@@ -1073,9 +1073,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     ) -> cudf.core.column.TimeDeltaColumn:
         raise NotImplementedError
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
+    def as_string_column(self) -> cudf.core.column.StringColumn:
         raise NotImplementedError
 
     def as_decimal_column(
