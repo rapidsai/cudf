@@ -73,7 +73,7 @@ from cudf.core.indexed_frame import (
 )
 from cudf.core.join import Merge, MergeSemi
 from cudf.core.missing import NA
-from cudf.core.multiindex import MultiIndex, _compute_levels_and_codes
+from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
 from cudf.core.udf.row_function import _get_row_kernel
@@ -3593,16 +3593,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             if level is not None and isinstance(self.index, MultiIndex):
                 level = self.index._get_level_label(level)
-                out_index = self.index.copy(deep=copy)
-                level_values = out_index.get_level_values(level)
-                level_values.to_frame().replace(
+                level_values = self.index.get_level_values(level)
+                ca = self.index._data.copy(deep=copy)
+                ca[level] = level_values._column.find_and_replace(
                     to_replace=list(index.keys()),
-                    value=list(index.values()),
-                    inplace=True,
+                    replacement=list(index.values()),
                 )
-                out_index._data[level] = column.as_column(level_values)
-                out_index._levels, out_index._codes = (
-                    _compute_levels_and_codes(out_index._data)
+                out_index = type(self.index)._from_data(
+                    ca, name=self.index.name
                 )
             else:
                 to_replace = list(index.keys())
