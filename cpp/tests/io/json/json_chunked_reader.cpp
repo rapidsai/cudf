@@ -60,10 +60,10 @@ TEST_F(JsonReaderTest, ByteRange_SingleSource)
   // Test for different chunk sizes
   for (auto chunk_size : {7, 10, 15, 20, 40, 50, 100, 200, 500}) {
     auto const tables = split_byte_range_reading(datasources,
-                                                           json_lines_options,
-                                                           chunk_size,
-                                                           cudf::get_default_stream(),
-                                                           rmm::mr::get_current_device_resource());
+                                                 json_lines_options,
+                                                 chunk_size,
+                                                 cudf::get_default_stream(),
+                                                 rmm::mr::get_current_device_resource());
 
     auto table_views = std::vector<cudf::table_view>(tables.size());
     std::transform(tables.begin(), tables.end(), table_views.begin(), [](auto& table) {
@@ -155,10 +155,10 @@ TEST_F(JsonReaderTest, ByteRange_MultiSource)
   // Test for different chunk sizes
   for (auto chunk_size : {7, 10, 15, 20, 40, 50, 100, 200, 500, 1000, 2000}) {
     auto const tables = split_byte_range_reading(datasources,
-                                                           json_lines_options,
-                                                           chunk_size,
-                                                           cudf::get_default_stream(),
-                                                           rmm::mr::get_current_device_resource());
+                                                 json_lines_options,
+                                                 chunk_size,
+                                                 cudf::get_default_stream(),
+                                                 rmm::mr::get_current_device_resource());
 
     auto table_views = std::vector<cudf::table_view>(tables.size());
     std::transform(tables.begin(), tables.end(), table_views.begin(), [](auto& table) {

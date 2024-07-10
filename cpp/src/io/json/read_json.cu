@@ -307,14 +307,14 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     std::numeric_limits<int>::max() - (max_subchunks_prealloced * size_per_subchunk);
 
   /*
-   * Identify the position (zero-indexed) of starting source file from which to begin 
-   * batching based on byte range offset. If the offset is larger than the sum of all 
-   * source sizes, then start_source is total number of source files i.e. no file is 
+   * Identify the position (zero-indexed) of starting source file from which to begin
+   * batching based on byte range offset. If the offset is larger than the sum of all
+   * source sizes, then start_source is total number of source files i.e. no file is
    * read
    */
-  
+
   // Prefix sum of source file sizes
-  size_t pref_source_size   = 0;
+  size_t pref_source_size = 0;
   // Starting source file from which to being batching evaluated using byte range offset
   size_t const start_source = [chunk_offset, &sources, &pref_source_size]() {
     for (size_t src_idx = 0; src_idx < sources.size(); ++src_idx) {
@@ -325,16 +325,16 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   }();
   /*
    * Construct batches of byte ranges spanning source files, with the starting position of batches
-   * indicated by `batch_offsets`. `pref_bytes_size` gives the bytes position from which the current 
-   * batch begins, and `end_bytes_size` gives the terminal bytes position after which reading 
-   * stops. 
+   * indicated by `batch_offsets`. `pref_bytes_size` gives the bytes position from which the current
+   * batch begins, and `end_bytes_size` gives the terminal bytes position after which reading
+   * stops.
    */
   size_t pref_bytes_size = chunk_offset;
   size_t end_bytes_size  = chunk_offset + chunk_size;
   std::vector<size_t> batch_offsets{pref_bytes_size};
   for (size_t i = start_source; i < sources.size() && pref_bytes_size < end_bytes_size;) {
     pref_source_size += sources[i]->size();
-    // If the current source file can subsume multiple batches, we split the file until the 
+    // If the current source file can subsume multiple batches, we split the file until the
     // boundary of the last batch exceeds the end of the file (indexed by `pref_source_size`)
     while (pref_bytes_size < end_bytes_size &&
            pref_source_size >= std::min(pref_bytes_size + batch_size_ub, end_bytes_size)) {

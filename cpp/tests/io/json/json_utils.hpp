@@ -43,14 +43,14 @@ std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
   auto find_first_delimiter_in_chunk = [&]() {
     rmm::device_uvector<char> buffer(total_source_size, stream);
     auto readbufspan = cudf::io::json::detail::ingest_raw_input(buffer,
-                                        sources,
-                                        reader_opts.get_compression(),
-                                        reader_opts.get_byte_range_offset(),
-                                        reader_opts.get_byte_range_size(),
-                                        stream);
+                                                                sources,
+                                                                reader_opts.get_compression(),
+                                                                reader_opts.get_byte_range_offset(),
+                                                                reader_opts.get_byte_range_size(),
+                                                                stream);
     return cudf::io::json::detail::find_first_delimiter(readbufspan, '\n', stream);
   };
-  size_t num_chunks              = (total_source_size + chunk_size - 1) / chunk_size;
+  size_t num_chunks          = (total_source_size + chunk_size - 1) / chunk_size;
   constexpr idx no_min_value = -1;
 
   // Get the first delimiter in each chunk.
@@ -60,8 +60,7 @@ std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
     auto const chunk_start = i * chunk_size;
     reader_opts_chunk.set_byte_range_offset(chunk_start);
     reader_opts_chunk.set_byte_range_size(chunk_size);
-    first_delimiter_index[i] =
-      find_first_delimiter_in_chunk();
+    first_delimiter_index[i] = find_first_delimiter_in_chunk();
     if (first_delimiter_index[i] != no_min_value) { first_delimiter_index[i] += chunk_start; }
   }
 

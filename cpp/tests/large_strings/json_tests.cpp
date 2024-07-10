@@ -26,7 +26,6 @@
 
 struct JsonLargeReaderTest : public cudf::test::StringsLargeTest {};
 
-
 TEST_F(JsonLargeReaderTest, MultiBatch)
 {
   std::string json_string             = R"(
@@ -70,11 +69,12 @@ TEST_F(JsonLargeReaderTest, MultiBatch)
   std::vector<size_t> chunk_sizes{
     batch_size_ub / 4, batch_size_ub / 2, batch_size_ub, static_cast<size_t>(batch_size_ub * 2)};
   for (auto chunk_size : chunk_sizes) {
-    auto const tables = split_byte_range_reading<std::int64_t>(datasources,
-                                                           json_lines_options,
-                                                           chunk_size,
-                                                           cudf::get_default_stream(),
-                                                           rmm::mr::get_current_device_resource());
+    auto const tables =
+      split_byte_range_reading<std::int64_t>(datasources,
+                                             json_lines_options,
+                                             chunk_size,
+                                             cudf::get_default_stream(),
+                                             rmm::mr::get_current_device_resource());
 
     auto table_views = std::vector<cudf::table_view>(tables.size());
     std::transform(tables.begin(), tables.end(), table_views.begin(), [](auto& table) {
