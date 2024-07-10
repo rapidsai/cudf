@@ -111,15 +111,15 @@ template <int MaxTranslatedOutChars,
           typename TransducerTableT,
           typename TransducedOutItT,
           typename TransducedIndexOutItT>
-class DFASWriteCallbackWrapper {
+class DFAWriteCallbackWrapper {
  public:
-  __device__ __forceinline__ DFASWriteCallbackWrapper(TransducerTableT transducer_table,
-                                                      TransducedOutItT out_it,
-                                                      TransducedIndexOutItT out_idx_it,
-                                                      uint32_t out_offset,
-                                                      uint32_t /*tile_out_offset*/,
-                                                      uint32_t /*tile_in_offset*/,
-                                                      uint32_t /*tile_out_count*/)
+  __device__ __forceinline__ DFAWriteCallbackWrapper(TransducerTableT transducer_table,
+                                                     TransducedOutItT out_it,
+                                                     TransducedIndexOutItT out_idx_it,
+                                                     uint32_t out_offset,
+                                                     uint32_t /*tile_out_offset*/,
+                                                     uint32_t /*tile_in_offset*/,
+                                                     uint32_t /*tile_out_count*/)
     : transducer_table(transducer_table),
       out_it(out_it),
       out_idx_it(out_idx_it),
@@ -215,7 +215,7 @@ class DFASWriteCallbackWrapper {
  * given output iterators. This class uses a shared memory-backed write buffer to coalesce writes to
  * global memory.
  *
- * @tparam DisrcardIndexOutput Whether to discard the indexes instead of writing them to the given
+ * @tparam DiscardIndexOutput Whether to discard the indexes instead of writing them to the given
  * output iterator
  * @tparam DiscardTranslatedOutput Whether to discard the translated output symbols instead of
  * writing them to the given output iterator
@@ -228,7 +228,7 @@ class DFASWriteCallbackWrapper {
  * transducer table are assignable.
  * @tparam TransducedIndexOutItT A random-access output iterator type to which indexes are written.
  */
-template <bool DisrcardIndexOutput,
+template <bool DiscardIndexOutput,
           bool DiscardTranslatedOutput,
           int NumWriteBufferItems,
           typename OutputT,
@@ -243,7 +243,7 @@ class WriteCoalescingCallbackWrapper {
     OutputT compacted_symbols[NumWriteBufferItems];
   };
   using offset_cache_t =
-    ::cuda::std::conditional_t<DisrcardIndexOutput, cub::NullType, TempStorage_Offsets>;
+    ::cuda::std::conditional_t<DiscardIndexOutput, cub::NullType, TempStorage_Offsets>;
   using symbol_cache_t = ::cuda::std::
     conditional_t<DiscardTranslatedOutput, cub::Uninitialized<cub::NullType>, TempStorage_Symbols>;
   struct TempStorage_ : offset_cache_t, symbol_cache_t {};
@@ -291,7 +291,7 @@ class WriteCoalescingCallbackWrapper {
   {
     uint32_t const count = transducer_table(old_state, symbol_id, read_symbol);
     for (uint32_t out_char = 0; out_char < count; out_char++) {
-      if constexpr (!DisrcardIndexOutput) {
+      if constexpr (!DiscardIndexOutput) {
         temp_storage.compacted_offset[thread_out_offset + out_char - tile_out_offset] =
           in_offset + character_index - tile_in_offset;
       }
@@ -311,7 +311,7 @@ class WriteCoalescingCallbackWrapper {
         out_it[tile_out_offset + out_char] = temp_storage.compacted_symbols[out_char];
       }
     }
-    if constexpr (!DisrcardIndexOutput) {
+    if constexpr (!DiscardIndexOutput) {
       for (uint32_t out_char = threadIdx.x; out_char < tile_out_count; out_char += blockDim.x) {
         out_idx_it[tile_out_offset + out_char] =
           temp_storage.compacted_offset[out_char] + tile_in_offset;
@@ -764,10 +764,10 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
   static constexpr bool discard_out_it =
     ::cuda::std::is_same<TransducedOutItT, thrust::discard_iterator<>>::value;
   using NonWriteCoalescingT =
-    DFASWriteCallbackWrapper<num_max_translated_out,
-                             decltype(dfa.InitTranslationTable(transducer_table_storage)),
-                             TransducedOutItT,
-                             TransducedIndexOutItT>;
+    DFAWriteCallbackWrapper<num_max_translated_out,
+                            decltype(dfa.InitTranslationTable(transducer_table_storage)),
+                            TransducedOutItT,
+                            TransducedIndexOutItT>;
 
   using WriteCoalescingT =
     WriteCoalescingCallbackWrapper<discard_out_index,
@@ -781,11 +781,17 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
   static constexpr bool is_translation_pass = (!IS_TRANS_VECTOR_PASS) || IS_SINGLE_PASS;
 
   // Use write-coalescing only if the worst-case output size per tile fits into shared memory
-  static constexpr bool use_shmem_cache =
-    is_translation_pass and (sizeof(typename WriteCoalescingT::TempStorage) <= 24 * 1024);
+  static constexpr bool can_use_smem_cache =
+    (sizeof(typename WriteCoalescingT::TempStorage) + sizeof(typename AgentDfaSimT::TempStorage) +
+     sizeof(typename DfaT::SymbolGroupStorageT) + sizeof(typename DfaT::TransitionTableStorageT) +
+     sizeof(typename DfaT::TranslationTableStorageT)) < (48 * 1024);
+  static constexpr bool use_smem_cache =
+    is_translation_pass and
+    (sizeof(typename WriteCoalescingT::TempStorage) <= AgentDFAPolicy::SMEM_THRESHOLD) and
+    can_use_smem_cache;
 
   using DFASimulationCallbackWrapperT =
-    typename cub::If<use_shmem_cache, WriteCoalescingT, NonWriteCoalescingT>::Type;
+    typename cub::If<use_smem_cache, WriteCoalescingT, NonWriteCoalescingT>::Type;
 
   // Stage 1: Compute the state-transition vector
   if (IS_TRANS_VECTOR_PASS || IS_SINGLE_PASS) {
