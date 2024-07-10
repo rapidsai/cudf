@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import datetime
+from operator import methodcaller
+
 import pytest
 
 import polars as pl
@@ -32,3 +35,28 @@ def test_datetime_dataframe_scan(dtype):
 
     query = ldf.select(pl.col("b"), pl.col("a"))
     assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        methodcaller("year"),
+        pytest.param(
+            methodcaller("day"),
+            marks=pytest.mark.xfail(reason="day extraction not implemented"),
+        ),
+    ],
+)
+def test_datetime_extract(field):
+    ldf = pl.LazyFrame(
+        {"dates": [datetime.date(2024, 1, 1), datetime.date(2024, 10, 11)]}
+    )
+    q = ldf.select(field(pl.col("dates").dt))
+
+    with pytest.raises(AssertionError):
+        # polars produces int32, libcudf produces int16 for the year extraction
+        # libcudf can lose data here.
+        # https://github.com/rapidsai/cudf/issues/16196
+        assert_gpu_result_equal(q)
+
+    assert_gpu_result_equal(q, check_dtypes=False)

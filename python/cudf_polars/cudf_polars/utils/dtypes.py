@@ -17,19 +17,6 @@ import cudf._lib.pylibcudf as plc
 __all__ = ["from_polars", "downcast_arrow_lists", "have_compatible_resolution"]
 
 
-TIMELIKE_TYPES: frozenset[plc.TypeId] = frozenset(
-    [
-        plc.TypeId.TIMESTAMP_MILLISECONDS,
-        plc.TypeId.TIMESTAMP_MICROSECONDS,
-        plc.TypeId.TIMESTAMP_NANOSECONDS,
-        plc.TypeId.TIMESTAMP_DAYS,
-        plc.TypeId.DURATION_MILLISECONDS,
-        plc.TypeId.DURATION_MICROSECONDS,
-        plc.TypeId.DURATION_NANOSECONDS,
-    ]
-)
-
-
 def have_compatible_resolution(lid: plc.TypeId, rid: plc.TypeId):
     """
     Do two datetime typeids have matching resolution for a binop.
