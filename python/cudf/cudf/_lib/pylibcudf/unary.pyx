@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
@@ -173,4 +174,4 @@ cpdef bool is_supported_cast(DataType from_, DataType to):
         True if the cast is supported.
     """
     with nogil:
-        return cpp_unary.is_supported_cast(from_, to)
+        return cpp_unary.is_supported_cast(from_.c_obj, to.c_obj)
