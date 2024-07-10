@@ -203,6 +203,16 @@ std::unique_ptr<column> cast(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Check if a cast between two datatypes is supported.
+ *
+ * @param from source type
+ * @param to   target type
+ *
+ * @returns true if the cast is supported.
+ */
+bool is_supported_cast(data_type from, data_type to) noexcept;
+
+/**
  * @brief Creates a column of `type_id::BOOL8` elements indicating the presence of `NaN` values
  * in a column of floating point values.
  * The output element at row `i` is `true` if the element in `input` at row i is `NAN`, else `false`

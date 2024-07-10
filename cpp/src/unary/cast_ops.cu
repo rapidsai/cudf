@@ -28,6 +28,7 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -459,6 +460,19 @@ std::unique_ptr<column> cast(column_view const& input,
   return type_dispatcher(input.type(), detail::dispatch_unary_cast_from{input}, type, stream, mr);
 }
 
+struct is_supported_cast_impl {
+  template <typename From, typename To>
+  bool operator()() const
+  {
+    return is_supported_cast<From, To>();
+  }
+};
+
+bool is_supported_cast(data_type from, data_type to) noexcept
+{
+  return double_type_dispatcher(from, to, is_supported_cast_impl{});
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> cast(column_view const& input,
@@ -468,6 +482,12 @@ std::unique_ptr<column> cast(column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::cast(input, type, stream, mr);
+}
+
+bool is_supported_cast(data_type from, data_type to) noexcept
+{
+  CUDF_FUNC_RANGE();
+  return detail::is_supported_cast(from, to);
 }
 
 }  // namespace cudf
