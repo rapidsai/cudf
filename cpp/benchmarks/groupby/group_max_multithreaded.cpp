@@ -20,8 +20,8 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/thread_pool.hpp>
 
+#include <BS_thread_pool.hpp>
 #include <nvbench/nvbench.cuh>
 
 template <typename Type>
@@ -58,7 +58,7 @@ void bench_groupby_max_multithreaded(nvbench::state& state, nvbench::type_list<T
   auto gb_obj    = cudf::groupby::groupby(cudf::table_view({keys_view, keys_view, keys_view}));
 
   auto streams = cudf::detail::fork_streams(cudf::get_default_stream(), num_threads);
-  cudf::detail::thread_pool threads(num_threads);
+  BS::thread_pool threads(num_threads);
 
   std::vector<std::vector<cudf::groupby::aggregation_request>> requests(num_threads);
   for (auto& thread_requests : requests) {
@@ -75,9 +75,7 @@ void bench_groupby_max_multithreaded(nvbench::state& state, nvbench::type_list<T
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
       auto perform_agg = [&](int64_t index) { gb_obj.aggregate(requests[index], streams[index]); };
       timer.start();
-      for (int64_t i = 0; i < num_threads; ++i) {
-        threads.submit(perform_agg, i);
-      }
+      threads.detach_sequence(decltype(num_threads){0}, num_threads, perform_agg);
       threads.wait_for_tasks();
       cudf::detail::join_streams(streams, cudf::get_default_stream());
       cudf::get_default_stream().synchronize();
