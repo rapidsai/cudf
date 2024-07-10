@@ -6208,19 +6208,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         source = self
 
         if axis is None:
-            if op in {"sum", "product", "std", "var"}:
-                # Do not remove until pandas 2.0 support is added.
-                warnings.warn(
-                    f"In a future version, {type(self).__name__}"
-                    f".{op}(axis=None) will return a scalar {op} over "
-                    "the entire DataFrame. To retain the old behavior, "
-                    f"use '{type(self).__name__}.{op}(axis=0)' or "
-                    f"just '{type(self)}.{op}()'",
-                    FutureWarning,
-                )
-                axis = 0
-            else:
-                axis = 2
+            axis = 2
         elif axis is no_default:
             axis = 0
         else:
@@ -6241,14 +6229,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     dtype="float64",
                 )
         if axis in {0, 2}:
-            if axis == 2 and op in ("kurtosis", "kurt", "skew"):
-                # TODO: concat + op can probably be done in the general case
-                # for axis == 2.
-                # https://github.com/rapidsai/cudf/issues/14930
+            if axis == 2 and op in (
+                "kurtosis",
+                "kurt",
+                "skew",
+                "mean",
+                "sum",
+                "product",
+            ):
                 return getattr(concat_columns(source._data.columns), op)(
                     **kwargs
                 )
-            elif axis == 0 and op in {"sum", "product", "std", "var"}:
+            elif axis == 2 and op in {"std", "var"}:
                 result = [
                     getattr(source._data[col], op)(**kwargs)
                     for col in source._data.names
@@ -6256,6 +6248,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 return getattr(as_column(result, nan_as_null=False), op)(
                     **kwargs
                 )
+                return getattr(concat_columns(source._data.columns), op)(
+                    **kwargs
+                )
+            elif axis == 2 and op in {"median"}:
+                return getattr(
+                    concat_columns(source._data.columns).sort_values(), op
+                )(**kwargs)
             try:
                 result = [
                     getattr(source._data[col], op)(**kwargs)

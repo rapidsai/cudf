@@ -2311,7 +2311,7 @@ def gdf(pdf):
         ),
     ],
 )
-@pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize("axis", [0, 1, None])
 @pytest.mark.parametrize(
     "func",
     [
@@ -2363,7 +2363,28 @@ def test_dataframe_reductions(data, axis, func, skipna):
             with pytest.raises(expected_exception):
                 (getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),)
         else:
-            expect = getattr(pdf, func)(axis=axis, skipna=skipna, **kwargs)
+            if (
+                func in {"sum", "prod", "product", "std", "var"}
+                and axis is None
+            ):
+                # TODO: Remove when these reductions support axis=None in Pandas 3.0
+                expect = getattr(
+                    getattr(pdf, func)(skipna=skipna, **kwargs), func
+                )(skipna=skipna, **kwargs)
+            elif func == "median" and axis is None:
+                with expect_warning_if(
+                    skipna
+                    and func == "median"
+                    and axis is None
+                    and np.all(np.isnan(np.array(list(data.values()))))
+                    and len(data["x"]),
+                    RuntimeWarning,
+                ):
+                    expect = getattr(pdf, func)(
+                        axis=axis, skipna=skipna, **kwargs
+                    )
+            else:
+                expect = getattr(pdf, func)(axis=axis, skipna=skipna, **kwargs)
             with expect_warning_if(
                 skipna
                 and func in {"min", "max"}
