@@ -30,6 +30,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include <map>
 #include <unordered_map>
 
 namespace cudf {
@@ -362,6 +363,57 @@ class host_buffer_source final : public datasource {
 
  private:
   cudf::host_span<std::byte const> _h_buffer;  ///< A non-owning view of the existing host data
+};
+
+// sparse host-buffer datasource
+class sparse_host_buffer_source final : public datasource {
+ public:
+  explicit sparse_host_buffer_source(
+    std::map<size_t, cudf::host_span<std::byte const>> h_buffer_map, size_t full_size)
+    : _h_buffer_map{h_buffer_map}, _full_size{full_size}
+  {
+  }
+
+  const size_t find_chunk_offset(const size_t offset)
+  {
+    // Iterate over h_buffer_map to find the appropriate chunk
+    for (auto const& [chunk_offset, chunk] : _h_buffer_map) {
+      if (offset < chunk_offset) {
+        break;
+      } else if (offset < chunk_offset + chunk.size()) {
+        return pair;
+      }
+    }
+    return _full_size;  // No appropriate offset found
+  }
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    auto const chunk_offset = this->find_chunk_offset(offset);
+    CUDF_EXPECTS(chunk_offset != _full_size, "Invalid sparse host-buffer offset");
+    auto const& chunk = _h_buffer_map[chunk_offset];
+    auto const count  = std::min(size, chunk.size() - (offset - chunk_offset));
+    std::memcpy(dst, chunk.data() + offset - chunk_offset, count);
+    return count;
+  }
+
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    auto const chunk_offset = this->find_chunk_offset(offset);
+    CUDF_EXPECTS(chunk_offset != _full_size, "Invalid sparse host-buffer offset");
+    auto const& chunk = _h_buffer_map[chunk_offset];
+    auto const count  = std::min(size, chunk.size() - (offset - chunk_offset));
+    return std::make_unique<non_owning_buffer>(
+      reinterpret_cast<uint8_t const*>(chunk.data() + offset - chunk_offset), count);
+  }
+
+  [[nodiscard]] bool supports_device_read() const override { return false; }
+
+  [[nodiscard]] size_t size() const override { return _full_size; }
+
+ private:
+  size_t _full_size;
+  std::map<size_t, cudf::host_span<std::byte const>> _h_buffer_map;
 };
 
 /**
