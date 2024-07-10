@@ -36,7 +36,7 @@ cpdef void write_json(
     str false_value = *
 )
 
-cdef tuple chunked_read_json(
+cpdef tuple chunked_read_json(
     SourceInfo source_info,
     list dtypes = *,
     compression_type compression = *,

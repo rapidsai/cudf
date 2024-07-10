@@ -50,7 +50,7 @@ cdef map[string, schema_element] _generate_schema_map(list dtypes):
         schema_map[c_name] = s_elem
     return schema_map
 
-cdef tuple chunked_read_json(
+cpdef tuple chunked_read_json(
     SourceInfo source_info,
     list dtypes = None,
     compression_type compression = compression_type.AUTO,
@@ -143,7 +143,7 @@ cdef tuple chunked_read_json(
                 c_result.metadata.schema_info
             )
         new_chunk = [
-            col.to_pylibcudf(mode="read") for col in TableWithMetadata.from_libcudf(
+            col for col in TableWithMetadata.from_libcudf(
                 c_result).columns
         ]
 
