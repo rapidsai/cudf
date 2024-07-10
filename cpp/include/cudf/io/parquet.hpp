@@ -482,6 +482,7 @@ class chunked_parquet_reader {
    * @brief Default constructor, this should never be used.
    *
    * This is added just to satisfy cython.
+   * This is added to not leak detail API
    */
   chunked_parquet_reader();
 
