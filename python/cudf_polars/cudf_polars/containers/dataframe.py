@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import itertools
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
@@ -160,7 +161,10 @@ class DataFrame:
         -----
         If column names overlap, newer names replace older ones.
         """
-        return type(self)([*self.columns, *columns])
+        columns = list(
+            {c.name: c for c in itertools.chain(self.columns, columns)}.values()
+        )
+        return type(self)(columns)
 
     def discard_columns(self, names: Set[str]) -> Self:
         """Drop columns by name."""
