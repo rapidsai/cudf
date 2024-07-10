@@ -1107,11 +1107,22 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         )
 
     def argsort(
-        self, ascending: bool = True, na_position: str = "last"
-    ) -> "cudf.core.column.NumericalColumn":
-        return libcudf.sort.order_by(
-            [self], [ascending], na_position, stable=True
-        )
+        self,
+        ascending: bool = True,
+        na_position: Literal["first", "last"] = "last",
+    ) -> cudf.core.column.NumericalColumn:
+        if (ascending and self.is_monotonic_increasing) or (
+            not ascending and self.is_monotonic_decreasing
+        ):
+            return as_column(range(len(self)))
+        elif (ascending and self.is_monotonic_decreasing) or (
+            not ascending and self.is_monotonic_increasing
+        ):
+            return as_column(range(len(self) - 1, -1, -1))
+        else:
+            return libcudf.sort.order_by(
+                [self], [ascending], na_position, stable=True
+            )
 
     def __arrow_array__(self, type=None):
         raise TypeError(
