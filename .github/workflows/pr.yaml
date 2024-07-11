@@ -196,7 +196,7 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@cuda-12.5.1
     with:
-      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.9" and .CUDA_VER == "12.5.1" ))
+      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.9" and (.CUDA_VER | startswith("12.5.")) ))
       build_type: pull-request
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
       # Hide test failures because they exceed the GITHUB_STEP_SUMMARY output limit.
