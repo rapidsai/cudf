@@ -114,8 +114,13 @@ class DataFrame:
                 i, pa.field(field.name, dtypes.downcast_arrow_lists(field.type))
             )
         # No-op if the schema is unchanged.
-        table = table.cast(schema)
-        return cls.from_table(plc.interop.from_arrow(table), df.columns)
+        d_table = plc.interop.from_arrow(table.cast(schema))
+        return cls(
+            [
+                NamedColumn(column, h_col.name).copy_metadata(h_col)
+                for column, h_col in zip(d_table.columns(), df.iter_columns())
+            ]
+        )
 
     @classmethod
     def from_table(cls, table: plc.Table, names: Sequence[str]) -> Self:
