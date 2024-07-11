@@ -468,11 +468,6 @@ struct is_supported_cast_impl {
   }
 };
 
-bool is_supported_cast(data_type from, data_type to) noexcept
-{
-  return double_type_dispatcher(from, to, is_supported_cast_impl{});
-}
-
 }  // namespace detail
 
 std::unique_ptr<column> cast(column_view const& input,
@@ -486,8 +481,9 @@ std::unique_ptr<column> cast(column_view const& input,
 
 bool is_supported_cast(data_type from, data_type to) noexcept
 {
-  CUDF_FUNC_RANGE();
-  return detail::is_supported_cast(from, to);
+  // No matching detail API call/nvtx annotation, since this doesn't
+  // launch a kernel.
+  return double_type_dispatcher(from, to, detail::is_supported_cast_impl{});
 }
 
 }  // namespace cudf

@@ -87,11 +87,6 @@ std::unique_ptr<column> cast(column_view const& input,
                              rmm::device_async_resource_ref mr);
 
 /**
- * @copydoc cudf::is_supported_cast
- */
-bool is_supported_cast(data_type from, data_type to) noexcept;
-
-/**
  * @copydoc cudf::is_nan
  */
 std::unique_ptr<column> is_nan(cudf::column_view const& input,
