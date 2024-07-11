@@ -141,11 +141,8 @@ class table_with_names {
     CUDF_FUNC_RANGE();
     auto const sink_info = cudf::io::sink_info(filepath);
     cudf::io::table_metadata metadata;
-    std::vector<cudf::io::column_name_info> col_name_infos;
-    for (auto const& col_name : col_names) {
-      col_name_infos.push_back(cudf::io::column_name_info(col_name));
-    }
-    metadata.schema_info            = col_name_infos;
+    metadata.schema_info =
+      std::vector<cudf::io::column_name_info>(col_names.begin(), col_names.end());
     auto const table_input_metadata = cudf::io::table_input_metadata{metadata};
     auto builder = cudf::io::parquet_writer_options::builder(sink_info, tbl->view());
     builder.metadata(table_input_metadata);
@@ -391,9 +388,8 @@ std::unique_ptr<table_with_names> read_parquet(
   if (predicate) { builder.filter(*predicate); }
   auto const options       = builder.build();
   auto table_with_metadata = cudf::io::read_parquet(options);
-  auto const schema_info   = table_with_metadata.metadata.schema_info;
   std::vector<std::string> column_names;
-  for (auto const& col_info : schema_info) {
+  for (auto const& col_info : table_with_metadata.metadata.schema_info) {
     column_names.push_back(col_info.name);
   }
   return std::make_unique<table_with_names>(std::move(table_with_metadata.tbl), column_names);
