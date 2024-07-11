@@ -97,7 +97,7 @@ def test_typecast_from_float_to_decimal(request, data, from_dtype, to_dtype):
         pytest.mark.xfail(
             condition=version.parse(pa.__version__) >= version.parse("13.0.0")
             and from_dtype == np.dtype("float32")
-            and to_dtype.precision > 7,
+            and to_dtype.precision > 12,
             reason="https://github.com/rapidsai/cudf/issues/14169",
         )
     )
