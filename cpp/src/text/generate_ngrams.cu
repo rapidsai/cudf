@@ -166,8 +166,8 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
 namespace detail {
 namespace {
 
-constexpr int64_t block_size       = 256;
-constexpr int64_t bytes_per_thread = 4;
+constexpr cudf::thread_index_type block_size       = 256;
+constexpr cudf::thread_index_type bytes_per_thread = 4;
 
 /**
  * @brief Counts the number of ngrams in each row of the given strings column
@@ -188,8 +188,8 @@ CUDF_KERNEL void count_char_ngrams_kernel(cudf::column_device_view const d_strin
   using warp_reduce = cub::WarpReduce<cudf::size_type>;
   __shared__ typename warp_reduce::TempStorage temp_storage;
 
-  auto const str_idx  = static_cast<cudf::size_type>(idx / cudf::detail::warp_size);
-  auto const lane_idx = static_cast<cudf::size_type>(idx % cudf::detail::warp_size);
+  auto const str_idx  = idx / cudf::detail::warp_size;
+  auto const lane_idx = idx % cudf::detail::warp_size;
   if (d_strings.is_null(str_idx)) {
     d_counts[str_idx] = 0;
     return;
@@ -305,9 +305,8 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
     return;
   }
 
-  auto const str_idx    = static_cast<cudf::size_type>(idx / cudf::detail::warp_size);
-  auto const lane_idx   = static_cast<cudf::size_type>(idx % cudf::detail::warp_size);
-  auto const thread_idx = static_cast<cudf::size_type>(idx % block_size);  // threadIdx.x
+  auto const str_idx  = idx / cudf::detail::warp_size;
+  auto const lane_idx = idx % cudf::detail::warp_size;
 
   if (d_strings.is_null(str_idx)) { return; }
   auto const d_str = d_strings.element<cudf::string_view>(str_idx);
@@ -333,11 +332,11 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
         cudf::strings::detail::bytes_to_character_position(sub_str, ngrams);
       if (left == 0) { hash = hasher(cudf::string_view(itr, bytes)); }
     }
-    hvs[thread_idx] = hash;  // store hash into shared memory
+    hvs[threadIdx.x] = hash;  // store hash into shared memory
     __syncwarp();
     if (lane_idx == 0) {
       // copy valid hash values into d_hashes
-      auto const hashes = &hvs[thread_idx];
+      auto const hashes = &hvs[threadIdx.x];
       d_hashes          = thrust::copy_if(
         thrust::seq, hashes, hashes + cudf::detail::warp_size, d_hashes, [](auto h) {
           return h != 0;
