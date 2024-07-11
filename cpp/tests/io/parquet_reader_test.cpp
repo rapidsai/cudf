@@ -2323,6 +2323,31 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
     EXPECT_EQ(result.metadata.num_rows_per_source.size(), 0);
   }
 
+  // num_rows_per_source.size() must be = 2
+  {
+    auto constexpr rows_to_skip = 15'723;
+    auto constexpr nsources     = 2;
+    std::vector<std::string> const datasources(nsources, filepath);
+
+    auto const in_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{datasources})
+        .skip_rows(rows_to_skip)
+        .build();
+
+    auto const result = cudf::io::read_parquet(in_opts);
+
+    column_wrapper<int64_t> int64_col_selected{int64_data.begin() + rows_to_skip - num_rows,
+                                               int64_data.end(),
+                                               cudf::test::iterators::no_nulls()};
+
+    cudf::table_view const expected_selected({int64_col_selected});
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_selected, result.tbl->view());
+    EXPECT_EQ(result.metadata.num_rows_per_source.size(), 2);
+    EXPECT_EQ(result.metadata.num_rows_per_source[0], 0);
+    EXPECT_EQ(result.metadata.num_rows_per_source[1], nsources * num_rows - rows_to_skip);
+  }
+
   // num_rows_per_source.size() must be = 10 and all num_rows_per_source[k] must be = num_rows
   {
     auto constexpr nsources = 10;

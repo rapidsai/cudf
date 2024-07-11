@@ -679,8 +679,7 @@ table_with_metadata reader::impl::finalize_output(read_mode mode,
                                                   table_metadata& out_metadata,
                                                   std::vector<std::unique_ptr<column>>& out_columns)
 {
-  // Create empty columns as needed (this can happen if we've ended up with no actual data to
-  // read)
+  // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_buffers.size(); ++i) {
     if (!_output_metadata) {
       column_name_info& col_name = out_metadata.schema_info[i];

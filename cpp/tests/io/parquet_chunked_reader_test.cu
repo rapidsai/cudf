@@ -1568,6 +1568,37 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     EXPECT_EQ(num_rows_per_source[0], rows_to_read);
   }
 
+  // num_rows_per_source.size() must be = 2
+  {
+    auto constexpr rows_to_skip      = 15'723;
+    auto constexpr output_read_limit = 1'500;
+    auto constexpr pass_read_limit   = 3'500;
+
+    auto constexpr nsources = 2;
+    std::vector<std::string> const datasources(nsources, filepath);
+
+    auto const options =
+      cudf::io::parquet_reader_options_builder(cudf::io::source_info{datasources})
+        .skip_rows(rows_to_skip)
+        .build();
+
+    auto const reader = cudf::io::chunked_parquet_reader(
+      output_read_limit, pass_read_limit, options, cudf::get_default_stream());
+
+    auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
+
+    column_wrapper<int64_t> int64_col_selected{int64_data.begin() + rows_to_skip - num_rows,
+                                               int64_data.end(),
+                                               cudf::test::iterators::no_nulls()};
+
+    cudf::table_view const expected_selected({int64_col_selected});
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_selected, result->view());
+    EXPECT_EQ(num_rows_per_source.size(), 2);
+    EXPECT_EQ(num_rows_per_source[0], 0);
+    EXPECT_EQ(num_rows_per_source[1], nsources * num_rows - rows_to_skip);
+  }
+
   // num_rows_per_source.size() must be = 1 and num_rows_per_source[0] must be = num_rows -
   // rows_to_read
   {
