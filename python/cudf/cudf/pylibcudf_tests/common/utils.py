@@ -110,10 +110,6 @@ def assert_column_eq(
         lhs_type = _make_fields_nullable(lhs.type)
         lhs = rhs.cast(lhs_type)
 
-    print(lhs)
-    print(rhs)
-    print(lhs.type)
-    print(rhs.type)
     if not check_type:
         # Useful for lossy formats like CSV
         import numpy as np
@@ -210,19 +206,6 @@ def _convert_numeric_types_to_floating(pa_table):
     for i in range(len(pa_table.schema)):
         field = pa_table.schema.field(i)
         child_types = []
-
-        def get_child_types(typ):
-            typ_child_types = []
-            for i in range(typ.num_fields):
-                curr_field = typ.field(i)
-                typ_child_types.append(
-                    (
-                        curr_field.name,
-                        curr_field.type,
-                        get_child_types(curr_field.type),
-                    )
-                )
-            return typ_child_types
 
         plc_type = plc.interop.from_arrow(field.type)
         if pa.types.is_integer(field.type) or pa.types.is_unsigned_integer(
