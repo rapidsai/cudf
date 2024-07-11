@@ -12,7 +12,6 @@ from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
     is_integer,
-    is_integer_dtype,
 )
 from cudf.core.copy_types import BooleanMask, GatherMap
 
@@ -234,7 +233,7 @@ def parse_row_iloc_indexer(key: Any, n: int) -> IndexingSpec:
             return MaskIndexer(BooleanMask(key, n))
         elif len(key) == 0:
             return EmptyIndexer()
-        elif is_integer_dtype(key.dtype):
+        elif key.dtype.kind in "iu":
             return MapIndexer(GatherMap(key, n, nullify=False))
         else:
             raise TypeError(

@@ -13,7 +13,6 @@ from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
     is_integer,
-    is_integer_dtype,
     is_numeric_dtype,
 )
 from cudf.core.column import ColumnBase, as_column
@@ -359,7 +358,7 @@ class SingleColumnFrame(Frame, NotIterable):
             arg = as_column(arg)
             if len(arg) == 0:
                 arg = cudf.core.column.column_empty(0, dtype="int32")
-            if is_integer_dtype(arg.dtype):
+            if arg.dtype.kind in "iu":
                 return self._column.take(arg)
             if is_bool_dtype(arg.dtype):
                 if (bn := len(arg)) != (n := len(self)):

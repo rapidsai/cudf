@@ -25,7 +25,6 @@ from cudf.api.types import (
     is_bool_dtype,
     is_dict_like,
     is_integer,
-    is_integer_dtype,
     is_scalar,
 )
 from cudf.core import indexing_utils
@@ -357,12 +356,10 @@ class _SeriesLocIndexer(_FrameIndexer):
             )
             if not _is_non_decimal_numeric_dtype(index_dtype) and not (
                 isinstance(index_dtype, cudf.CategoricalDtype)
-                and is_integer_dtype(index_dtype.categories.dtype)
+                and index_dtype.categories.dtype.kind in "iu"
             ):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
-                if isinstance(arg, cudf.Scalar) and is_integer_dtype(
-                    arg.dtype
-                ):
+                if isinstance(arg, cudf.Scalar) and arg.dtype.kind in "iu":
                     # Do not remove until pandas 3.0 support is added.
                     assert (
                         PANDAS_LT_300

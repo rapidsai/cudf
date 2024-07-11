@@ -14,13 +14,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import pylibcudf
 from cudf._lib.types import size_type_dtype
-from cudf.api.types import (
-    is_bool_dtype,
-    is_float_dtype,
-    is_integer,
-    is_integer_dtype,
-    is_scalar,
-)
+from cudf.api.types import is_bool_dtype, is_integer, is_scalar
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -264,7 +258,7 @@ class NumericalColumn(NumericalBaseColumn):
             out_dtype = "bool"
 
         if op in {"__and__", "__or__", "__xor__"}:
-            if is_float_dtype(self.dtype) or is_float_dtype(other.dtype):
+            if self.dtype.kind == "f" or other.dtype.kind == "f":
                 raise TypeError(
                     f"Operation 'bitwise {op[2:-2]}' not supported between "
                     f"{self.dtype.type.__name__} and "
@@ -275,8 +269,8 @@ class NumericalColumn(NumericalBaseColumn):
 
         if (
             op == "__pow__"
-            and is_integer_dtype(self.dtype)
-            and (is_integer(other) or is_integer_dtype(other.dtype))
+            and self.dtype.kind in "iu"
+            and (is_integer(other) or other.dtype.kind in "iu")
         ):
             op = "INT_POW"
 
