@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Copyright (c) 2019-2023, NVIDIA CORPORATION.
+  Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -590,8 +590,6 @@
                                         <include>libcudfjni.so</include>
                                         <include>libcufilejni.so</include>
                                         <include>libnvcomp.so</include>
-                                        <include>libnvcomp_gdeflate.so</include>
-                                        <include>libnvcomp_bitcomp.so</include>
                                     </includes>
                                 </resource>
                                 <resource>
