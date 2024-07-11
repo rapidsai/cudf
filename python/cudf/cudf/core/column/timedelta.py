@@ -263,32 +263,26 @@ class TimeDeltaColumn(ColumnBase):
         )
         return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
 
-    def as_datetime_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.DatetimeColumn":
+    def as_datetime_column(self, dtype: Dtype) -> None:  # type: ignore[override]
         raise TypeError(
             f"cannot astype a timedelta from {self.dtype} to {dtype}"
         )
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
-        if format is None:
-            format = "%D days %H:%M:%S"
-        if len(self) > 0:
-            return string._timedelta_to_str_typecast_functions[
-                cudf.dtype(self.dtype)
-            ](self, format=format)
-        else:
+    def strftime(self, format: str) -> cudf.core.column.StringColumn:
+        if len(self) == 0:
             return cast(
-                "cudf.core.column.StringColumn",
+                cudf.core.column.StringColumn,
                 column.column_empty(0, dtype="object", masked=False),
             )
+        else:
+            return string._timedelta_to_str_typecast_functions[self.dtype](
+                self, format=format
+            )
 
-    def as_timedelta_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> TimeDeltaColumn:
-        dtype = cudf.dtype(dtype)
+    def as_string_column(self) -> cudf.core.column.StringColumn:
+        return self.strftime("%D days %H:%M:%S")
+
+    def as_timedelta_column(self, dtype: Dtype) -> TimeDeltaColumn:
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
