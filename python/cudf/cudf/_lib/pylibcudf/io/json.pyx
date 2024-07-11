@@ -112,24 +112,25 @@ cpdef tuple chunked_read_json(
         the list of child dtypes is an empty list if the child is not
         a nested type (list or struct dtype), and is of format
         (column_child_name, column_child_type, list of grandchild dtypes).
-    compression_type: CompressionType, default CompressionType.AUTO
+    compression: CompressionType, default CompressionType.AUTO
         The compression format of the JSON source.
-    byte_range_offset : size_type, default 0
-        Number of bytes to skip from source start.
-    byte_range_size : size_type, default 0
-        Number of bytes to read. By default, will read all bytes.
     keep_quotes : bool, default False
         Whether the reader should keep quotes of string values.
+    mixed_types_as_string : bool, default False
+        If True, mixed type columns are returned as string columns.
+        If `False` parsing mixed type columns will thrown an error.
     prune_columns : bool, default False
         Whether to only read columns specified in dtypes.
     recover_mode : JSONRecoveryMode, default JSONRecoveryMode.FAIL
         Whether to raise an error or set corresponding values to null
         when encountering an invalid JSON line.
+    chunk_size : int, default 100_000_000 bytes.
+        The number of bytes to be read in chunks.
 
     Returns
     -------
-    TableWithMetadata
-        The Table and its corresponding metadata (column names) that were read in.
+    tuple
+        A tuple of (columns, column_name, child_names)
     """
     cdef size_type c_range_size = (
         chunk_size if chunk_size is not None else 0
@@ -213,7 +214,7 @@ cpdef TableWithMetadata read_json(
         the list of child dtypes is an empty list if the child is not
         a nested type (list or struct dtype), and is of format
         (column_child_name, column_child_type, list of grandchild dtypes).
-    compression_type: CompressionType, default CompressionType.AUTO
+    compression: CompressionType, default CompressionType.AUTO
         The compression format of the JSON source.
     byte_range_offset : size_type, default 0
         Number of bytes to skip from source start.
@@ -221,6 +222,9 @@ cpdef TableWithMetadata read_json(
         Number of bytes to read. By default, will read all bytes.
     keep_quotes : bool, default False
         Whether the reader should keep quotes of string values.
+    mixed_types_as_string : bool, default False
+        If True, mixed type columns are returned as string columns.
+        If `False` parsing mixed type columns will thrown an error.
     prune_columns : bool, default False
         Whether to only read columns specified in dtypes.
     recover_mode : JSONRecoveryMode, default JSONRecoveryMode.FAIL
