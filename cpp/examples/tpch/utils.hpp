@@ -223,10 +223,10 @@ std::unique_ptr<cudf::table> join_and_gather(cudf::table_view const& left_input,
  * @param compare_nulls The null equality policy
  */
 std::unique_ptr<table_with_names> apply_inner_join(
-  std::unique_ptr<table_with_names>& left_input,
-  std::unique_ptr<table_with_names>& right_input,
-  std::vector<std::string> left_on,
-  std::vector<std::string> right_on,
+  std::unique_ptr<table_with_names> const& left_input,
+  std::unique_ptr<table_with_names> const& right_input,
+  std::vector<std::string> const& left_on,
+  std::vector<std::string> const& right_on,
   cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
 {
   CUDF_FUNC_RANGE();
@@ -250,8 +250,8 @@ std::unique_ptr<table_with_names> apply_inner_join(
  * @param table The input table
  * @param predicate The filter predicate
  */
-std::unique_ptr<table_with_names> apply_filter(std::unique_ptr<table_with_names>& table,
-                                               cudf::ast::operation& predicate)
+std::unique_ptr<table_with_names> apply_filter(std::unique_ptr<table_with_names> const& table,
+                                               cudf::ast::operation const& predicate)
 {
   CUDF_FUNC_RANGE();
   auto const boolean_mask = cudf::compute_column(table->table(), predicate);
@@ -265,8 +265,8 @@ std::unique_ptr<table_with_names> apply_filter(std::unique_ptr<table_with_names>
  * @param table The input table
  * @param mask The boolean mask
  */
-std::unique_ptr<table_with_names> apply_mask(std::unique_ptr<table_with_names>& table,
-                                             std::unique_ptr<cudf::column>& mask)
+std::unique_ptr<table_with_names> apply_mask(std::unique_ptr<table_with_names> const& table,
+                                             std::unique_ptr<cudf::column> const& mask)
 {
   CUDF_FUNC_RANGE();
   auto result_table = cudf::apply_boolean_mask(table->table(), mask->view());
@@ -285,8 +285,8 @@ struct groupby_context_t {
  * @param table The input table
  * @param ctx The groupby context
  */
-std::unique_ptr<table_with_names> apply_groupby(std::unique_ptr<table_with_names>& table,
-                                                groupby_context_t ctx)
+std::unique_ptr<table_with_names> apply_groupby(std::unique_ptr<table_with_names> const& table,
+                                                groupby_context_t const& ctx)
 {
   CUDF_FUNC_RANGE();
   auto const keys = table->select(ctx.keys);
@@ -335,9 +335,9 @@ std::unique_ptr<table_with_names> apply_groupby(std::unique_ptr<table_with_names
  * @param sort_keys The sort keys
  * @param sort_key_orders The sort key orders
  */
-std::unique_ptr<table_with_names> apply_orderby(std::unique_ptr<table_with_names>& table,
-                                                std::vector<std::string> sort_keys,
-                                                std::vector<cudf::order> sort_key_orders)
+std::unique_ptr<table_with_names> apply_orderby(std::unique_ptr<table_with_names> const& table,
+                                                std::vector<std::string> const& sort_keys,
+                                                std::vector<cudf::order> const& sort_key_orders)
 {
   CUDF_FUNC_RANGE();
   std::vector<cudf::column_view> column_views;
@@ -356,9 +356,9 @@ std::unique_ptr<table_with_names> apply_orderby(std::unique_ptr<table_with_names
  * @param agg_kind The aggregation kind
  * @param col_name The name of the output column
  */
-std::unique_ptr<table_with_names> apply_reduction(cudf::column_view& column,
-                                                  cudf::aggregation::Kind agg_kind,
-                                                  std::string col_name)
+std::unique_ptr<table_with_names> apply_reduction(cudf::column_view const& column,
+                                                  cudf::aggregation::Kind const& agg_kind,
+                                                  std::string const& col_name)
 {
   CUDF_FUNC_RANGE();
   auto const agg            = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
@@ -380,9 +380,9 @@ std::unique_ptr<table_with_names> apply_reduction(cudf::column_view& column,
  * @param predicate The filter predicate to pushdown
  */
 std::unique_ptr<table_with_names> read_parquet(
-  std::string filename,
-  std::vector<std::string> columns                = {},
-  std::unique_ptr<cudf::ast::operation> predicate = nullptr)
+  std::string const& filename,
+  std::vector<std::string> const& columns                = {},
+  std::unique_ptr<cudf::ast::operation> const& predicate = nullptr)
 {
   CUDF_FUNC_RANGE();
   auto const source = cudf::io::source_info(filename);
@@ -408,7 +408,7 @@ std::unique_ptr<table_with_names> read_parquet(
  */
 std::tm make_tm(int year, int month, int day)
 {
-  std::tm tm = {0};
+  std::tm tm{};
   tm.tm_year = year - 1900;
   tm.tm_mon  = month - 1;
   tm.tm_mday = day;
@@ -472,13 +472,13 @@ class Timer {
 
   Timer() { reset(); }
   void reset() { start_time = std::chrono::high_resolution_clock::now(); }
-  auto elapsed() { return (std::chrono::high_resolution_clock::now() - start_time); }
-  void print_elapsed_micros()
+  auto const elapsed() { return (std::chrono::high_resolution_clock::now() - start_time); }
+  void const print_elapsed_micros()
   {
     std::cout << "Elapsed Time: " << std::chrono::duration_cast<micros>(elapsed()).count()
               << "us\n\n";
   }
-  void print_elapsed_millis()
+  void const print_elapsed_millis()
   {
     std::cout << "Elapsed Time: " << std::chrono::duration_cast<millis>(elapsed()).count()
               << "ms\n\n";
