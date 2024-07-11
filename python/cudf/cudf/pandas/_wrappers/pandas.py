@@ -260,6 +260,23 @@ def Index__new__(cls, *args, **kwargs):
     return self
 
 
+def name(self):
+    return self._fsproxy_wrapped._name
+
+
+def Index__setattr__(self, name, value):
+    if name.startswith("_"):
+        object.__setattr__(self, name, value)
+        return
+    if name == "name":
+        setattr(self._fsproxy_wrapped, "_name", value)
+    if name == "names":
+        setattr(self._fsproxy_wrapped, "_names", value)
+    return _FastSlowAttribute("__setattr__").__get__(self, type(self))(
+        name, value
+    )
+
+
 Index = make_final_proxy_type(
     "Index",
     cudf.Index,
@@ -277,11 +294,13 @@ Index = make_final_proxy_type(
         "__iter__": custom_iter,
         "__init__": _DELETE,
         "__new__": Index__new__,
+        "__setattr__": Index__setattr__,
         "_constructor": _FastSlowAttribute("_constructor"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_accessors": set(),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "name": property(name),
     },
 )
 
@@ -292,7 +311,11 @@ RangeIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "__setattr__": Index__setattr__,
+        "name": property(name),
+    },
 )
 
 SparseDtype = make_final_proxy_type(
@@ -319,7 +342,11 @@ CategoricalIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "__setattr__": Index__setattr__,
+        "name": property(name),
+    },
 )
 
 Categorical = make_final_proxy_type(
@@ -350,6 +377,8 @@ DatetimeIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "__setattr__": Index__setattr__,
+        "name": property(name),
     },
 )
 
@@ -385,6 +414,8 @@ TimedeltaIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "__setattr__": Index__setattr__,
+        "name": property(name),
     },
 )
 
@@ -441,6 +472,8 @@ PeriodIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "__setattr__": Index__setattr__,
+        "name": property(name),
     },
 )
 
@@ -474,6 +507,11 @@ Period = make_final_proxy_type(
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
+
+def names(self):
+    return self._fsproxy_wrapped._names
+
+
 MultiIndex = make_final_proxy_type(
     "MultiIndex",
     cudf.MultiIndex,
@@ -481,7 +519,11 @@ MultiIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "__setattr__": Index__setattr__,
+        "name": property(names),
+    },
 )
 
 TimeGrouper = make_intermediate_proxy_type(
@@ -669,6 +711,8 @@ IntervalIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "__setattr__": Index__setattr__,
+        "name": property(name),
     },
 )
 
