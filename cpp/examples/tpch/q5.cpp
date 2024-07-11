@@ -66,8 +66,8 @@
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<cudf::column> calc_revenue(
-  cudf::column_view extendedprice,
-  cudf::column_view discount,
+  cudf::column_view const& extendedprice,
+  cudf::column_view const& discount,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {

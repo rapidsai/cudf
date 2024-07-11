@@ -58,8 +58,8 @@
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<cudf::column> calc_disc_price(
-  cudf::column_view discount,
-  cudf::column_view extendedprice,
+  cudf::column_view const& discount,
+  cudf::column_view const& extendedprice,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
@@ -85,8 +85,8 @@ std::unique_ptr<cudf::column> calc_disc_price(
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<cudf::column> calc_charge(
-  cudf::column_view tax,
-  cudf::column_view disc_price,
+  cudf::column_view const& tax,
+  cudf::column_view const& disc_price,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {

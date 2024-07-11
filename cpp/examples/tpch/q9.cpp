@@ -78,10 +78,10 @@
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<cudf::column> calc_amount(
-  cudf::column_view discount,
-  cudf::column_view extendedprice,
-  cudf::column_view supplycost,
-  cudf::column_view quantity,
+  cudf::column_view const& discount,
+  cudf::column_view const& extendedprice,
+  cudf::column_view const& supplycost,
+  cudf::column_view const& quantity,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
@@ -159,7 +159,7 @@ int main(int argc, char const** argv)
   profit_columns.push_back(std::move(amount));
 
   auto profit_table = std::make_unique<cudf::table>(std::move(profit_columns));
-  auto profit       = std::make_unique<table_with_cols>(
+  auto profit       = std::make_unique<table_with_names>(
     std::move(profit_table), std::vector<std::string>{"nation", "o_year", "amount"});
 
   // Perform the groupby operation

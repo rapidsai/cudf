@@ -66,32 +66,35 @@ inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
 /**
  * @brief A class to represent a table with column names attached
  */
-class table_with_cols {
+class table_with_names {
  public:
-  table_with_cols(std::unique_ptr<cudf::table> tbl, std::vector<std::string> col_names)
+  table_with_names(std::unique_ptr<cudf::table> tbl, std::vector<std::string> col_names)
     : tbl(std::move(tbl)), col_names(col_names)
   {
   }
   /**
    * @brief Return the table view
    */
-  cudf::table_view table() { return tbl->view(); }
+  [[nodiscard]] cudf::table_view const table() { return tbl->view(); }
   /**
    * @brief Return the column view for a given column name
    *
    * @param col_name The name of the column
    */
-  cudf::column_view column(std::string col_name) { return tbl->view().column(col_id(col_name)); }
+  [[nodiscard]] cudf::column_view const column(std::string const& col_name)
+  {
+    return tbl->view().column(col_id(col_name));
+  }
   /**
    * @param Return the column names of the table
    */
-  std::vector<std::string> columns() { return col_names; }
+  [[nodiscard]] std::vector<std::string> const column_names() { return col_names; }
   /**
    * @brief Translate a column name to a column index
    *
    * @param col_name The name of the column
    */
-  cudf::size_type col_id(std::string col_name)
+  [[nodiscard]] cudf::size_type const col_id(std::string const& col_name)
   {
     CUDF_FUNC_RANGE();
     auto it = std::find(col_names.begin(), col_names.end(), col_name);
@@ -104,21 +107,22 @@ class table_with_cols {
    * @param col The column to append
    * @param col_name The name of the appended column
    */
-  std::unique_ptr<table_with_cols> append(std::unique_ptr<cudf::column>& col, std::string col_name)
+  std::unique_ptr<table_with_names> append(std::unique_ptr<cudf::column>& col,
+                                           std::string const& col_name)
   {
     CUDF_FUNC_RANGE();
     auto cols = tbl->release();
     cols.push_back(std::move(col));
     col_names.push_back(col_name);
     auto appended_table = std::make_unique<cudf::table>(std::move(cols));
-    return std::make_unique<table_with_cols>(std::move(appended_table), col_names);
+    return std::make_unique<table_with_names>(std::move(appended_table), col_names);
   }
   /**
    * @brief Select a subset of columns from the table
    *
    * @param col_names The names of the columns to select
    */
-  cudf::table_view select(std::vector<std::string> col_names)
+  [[nodiscard]] cudf::table_view const select(std::vector<std::string> const& col_names)
   {
     CUDF_FUNC_RANGE();
     std::vector<cudf::size_type> col_indices;
@@ -132,7 +136,7 @@ class table_with_cols {
    *
    * @param filepath The path to the parquet file
    */
-  void to_parquet(std::string filepath)
+  void to_parquet(std::string const& filepath)
   {
     CUDF_FUNC_RANGE();
     auto const sink_info = cudf::io::sink_info(filepath);
@@ -179,14 +183,14 @@ std::vector<T> concat(std::vector<T> const& lhs, std::vector<T> const& rhs)
  * @param right_on The columns to join on in the right table
  * @param compare_nulls The null equality policy
  */
-std::unique_ptr<cudf::table> join_and_gather(cudf::table_view left_input,
-                                             cudf::table_view right_input,
-                                             std::vector<cudf::size_type> left_on,
-                                             std::vector<cudf::size_type> right_on,
+std::unique_ptr<cudf::table> join_and_gather(cudf::table_view const& left_input,
+                                             cudf::table_view const& right_input,
+                                             std::vector<cudf::size_type> const& left_on,
+                                             std::vector<cudf::size_type> const& right_on,
                                              cudf::null_equality compare_nulls)
 {
   CUDF_FUNC_RANGE();
-  auto oob_policy                                    = cudf::out_of_bounds_policy::DONT_CHECK;
+  constexpr auto oob_policy                          = cudf::out_of_bounds_policy::DONT_CHECK;
   auto const left_selected                           = left_input.select(left_on);
   auto const right_selected                          = right_input.select(right_on);
   auto const [left_join_indices, right_join_indices] = cudf::inner_join(
@@ -218,9 +222,9 @@ std::unique_ptr<cudf::table> join_and_gather(cudf::table_view left_input,
  * @param right_on The columns to join on in the right table
  * @param compare_nulls The null equality policy
  */
-std::unique_ptr<table_with_cols> apply_inner_join(
-  std::unique_ptr<table_with_cols>& left_input,
-  std::unique_ptr<table_with_cols>& right_input,
+std::unique_ptr<table_with_names> apply_inner_join(
+  std::unique_ptr<table_with_names>& left_input,
+  std::unique_ptr<table_with_names>& right_input,
   std::vector<std::string> left_on,
   std::vector<std::string> right_on,
   cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
@@ -236,8 +240,8 @@ std::unique_ptr<table_with_cols> apply_inner_join(
   }
   auto table = join_and_gather(
     left_input->table(), right_input->table(), left_on_indices, right_on_indices, compare_nulls);
-  return std::make_unique<table_with_cols>(std::move(table),
-                                           concat(left_input->columns(), right_input->columns()));
+  return std::make_unique<table_with_names>(
+    std::move(table), concat(left_input->column_names(), right_input->column_names()));
 }
 
 /**
@@ -246,13 +250,13 @@ std::unique_ptr<table_with_cols> apply_inner_join(
  * @param table The input table
  * @param predicate The filter predicate
  */
-std::unique_ptr<table_with_cols> apply_filter(std::unique_ptr<table_with_cols>& table,
-                                              cudf::ast::operation& predicate)
+std::unique_ptr<table_with_names> apply_filter(std::unique_ptr<table_with_names>& table,
+                                               cudf::ast::operation& predicate)
 {
   CUDF_FUNC_RANGE();
   auto const boolean_mask = cudf::compute_column(table->table(), predicate);
   auto result_table       = cudf::apply_boolean_mask(table->table(), boolean_mask->view());
-  return std::make_unique<table_with_cols>(std::move(result_table), table->columns());
+  return std::make_unique<table_with_names>(std::move(result_table), table->column_names());
 }
 
 /**
@@ -261,12 +265,12 @@ std::unique_ptr<table_with_cols> apply_filter(std::unique_ptr<table_with_cols>& 
  * @param table The input table
  * @param mask The boolean mask
  */
-std::unique_ptr<table_with_cols> apply_mask(std::unique_ptr<table_with_cols>& table,
-                                            std::unique_ptr<cudf::column>& mask)
+std::unique_ptr<table_with_names> apply_mask(std::unique_ptr<table_with_names>& table,
+                                             std::unique_ptr<cudf::column>& mask)
 {
   CUDF_FUNC_RANGE();
   auto result_table = cudf::apply_boolean_mask(table->table(), mask->view());
-  return std::make_unique<table_with_cols>(std::move(result_table), table->columns());
+  return std::make_unique<table_with_names>(std::move(result_table), table->column_names());
 }
 
 struct groupby_context_t {
@@ -281,8 +285,8 @@ struct groupby_context_t {
  * @param table The input table
  * @param ctx The groupby context
  */
-std::unique_ptr<table_with_cols> apply_groupby(std::unique_ptr<table_with_cols>& table,
-                                               groupby_context_t ctx)
+std::unique_ptr<table_with_names> apply_groupby(std::unique_ptr<table_with_names>& table,
+                                                groupby_context_t ctx)
 {
   CUDF_FUNC_RANGE();
   auto const keys = table->select(ctx.keys);
@@ -321,7 +325,7 @@ std::unique_ptr<table_with_cols> apply_groupby(std::unique_ptr<table_with_cols>&
     }
   }
   auto result_table = std::make_unique<cudf::table>(std::move(result_columns));
-  return std::make_unique<table_with_cols>(std::move(result_table), result_column_names);
+  return std::make_unique<table_with_names>(std::move(result_table), result_column_names);
 }
 
 /**
@@ -331,9 +335,9 @@ std::unique_ptr<table_with_cols> apply_groupby(std::unique_ptr<table_with_cols>&
  * @param sort_keys The sort keys
  * @param sort_key_orders The sort key orders
  */
-std::unique_ptr<table_with_cols> apply_orderby(std::unique_ptr<table_with_cols>& table,
-                                               std::vector<std::string> sort_keys,
-                                               std::vector<cudf::order> sort_key_orders)
+std::unique_ptr<table_with_names> apply_orderby(std::unique_ptr<table_with_names>& table,
+                                                std::vector<std::string> sort_keys,
+                                                std::vector<cudf::order> sort_key_orders)
 {
   CUDF_FUNC_RANGE();
   std::vector<cudf::column_view> column_views;
@@ -342,7 +346,7 @@ std::unique_ptr<table_with_cols> apply_orderby(std::unique_ptr<table_with_cols>&
   }
   auto result_table =
     cudf::sort_by_key(table->table(), cudf::table_view{column_views}, sort_key_orders);
-  return std::make_unique<table_with_cols>(std::move(result_table), table->columns());
+  return std::make_unique<table_with_names>(std::move(result_table), table->column_names());
 }
 
 /**
@@ -352,9 +356,9 @@ std::unique_ptr<table_with_cols> apply_orderby(std::unique_ptr<table_with_cols>&
  * @param agg_kind The aggregation kind
  * @param col_name The name of the output column
  */
-std::unique_ptr<table_with_cols> apply_reduction(cudf::column_view& column,
-                                                 cudf::aggregation::Kind agg_kind,
-                                                 std::string col_name)
+std::unique_ptr<table_with_names> apply_reduction(cudf::column_view& column,
+                                                  cudf::aggregation::Kind agg_kind,
+                                                  std::string col_name)
 {
   CUDF_FUNC_RANGE();
   auto const agg            = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
@@ -365,7 +369,7 @@ std::unique_ptr<table_with_cols> apply_reduction(cudf::column_view& column,
   columns.push_back(std::move(col));
   auto result_table                  = std::make_unique<cudf::table>(std::move(columns));
   std::vector<std::string> col_names = {col_name};
-  return std::make_unique<table_with_cols>(std::move(result_table), col_names);
+  return std::make_unique<table_with_names>(std::move(result_table), col_names);
 }
 
 /**
@@ -375,7 +379,7 @@ std::unique_ptr<table_with_cols> apply_reduction(cudf::column_view& column,
  * @param columns The columns to read
  * @param predicate The filter predicate to pushdown
  */
-std::unique_ptr<table_with_cols> read_parquet(
+std::unique_ptr<table_with_names> read_parquet(
   std::string filename,
   std::vector<std::string> columns                = {},
   std::unique_ptr<cudf::ast::operation> predicate = nullptr)
@@ -383,7 +387,7 @@ std::unique_ptr<table_with_cols> read_parquet(
   CUDF_FUNC_RANGE();
   auto const source = cudf::io::source_info(filename);
   auto builder      = cudf::io::parquet_reader_options_builder(source);
-  if (columns.size()) { builder.columns(columns); }
+  if (!columns.empty()) { builder.columns(columns); }
   if (predicate) { builder.filter(*predicate); }
   auto const options       = builder.build();
   auto table_with_metadata = cudf::io::read_parquet(options);
@@ -392,7 +396,7 @@ std::unique_ptr<table_with_cols> read_parquet(
   for (auto const& col_info : schema_info) {
     column_names.push_back(col_info.name);
   }
-  return std::make_unique<table_with_cols>(std::move(table_with_metadata.tbl), column_names);
+  return std::make_unique<table_with_names>(std::move(table_with_metadata.tbl), column_names);
 }
 
 /**
