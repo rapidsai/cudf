@@ -122,7 +122,7 @@ class table_with_cols {
   {
     CUDF_FUNC_RANGE();
     std::vector<cudf::size_type> col_indices;
-    for (auto& col_name : col_names) {
+    for (auto const& col_name : col_names) {
       col_indices.push_back(col_id(col_name));
     }
     return tbl->select(col_indices);
@@ -135,17 +135,17 @@ class table_with_cols {
   void to_parquet(std::string filepath)
   {
     CUDF_FUNC_RANGE();
-    auto sink_info = cudf::io::sink_info(filepath);
+    auto const sink_info = cudf::io::sink_info(filepath);
     cudf::io::table_metadata metadata;
     std::vector<cudf::io::column_name_info> col_name_infos;
-    for (auto& col_name : col_names) {
+    for (auto const& col_name : col_names) {
       col_name_infos.push_back(cudf::io::column_name_info(col_name));
     }
-    metadata.schema_info      = col_name_infos;
-    auto table_input_metadata = cudf::io::table_input_metadata{metadata};
-    auto builder              = cudf::io::parquet_writer_options::builder(sink_info, tbl->view());
+    metadata.schema_info            = col_name_infos;
+    auto const table_input_metadata = cudf::io::table_input_metadata{metadata};
+    auto builder = cudf::io::parquet_writer_options::builder(sink_info, tbl->view());
     builder.metadata(table_input_metadata);
-    auto options = builder.build();
+    auto const options = builder.build();
     cudf::io::write_parquet(options);
   }
 
@@ -250,8 +250,8 @@ std::unique_ptr<table_with_cols> apply_filter(std::unique_ptr<table_with_cols>& 
                                               cudf::ast::operation& predicate)
 {
   CUDF_FUNC_RANGE();
-  auto boolean_mask = cudf::compute_column(table->table(), predicate);
-  auto result_table = cudf::apply_boolean_mask(table->table(), boolean_mask->view());
+  auto const boolean_mask = cudf::compute_column(table->table(), predicate);
+  auto result_table       = cudf::apply_boolean_mask(table->table(), boolean_mask->view());
   return std::make_unique<table_with_cols>(std::move(result_table), table->columns());
 }
 
@@ -285,7 +285,7 @@ std::unique_ptr<table_with_cols> apply_groupby(std::unique_ptr<table_with_cols>&
                                                groupby_context_t ctx)
 {
   CUDF_FUNC_RANGE();
-  auto keys = table->select(ctx.keys);
+  auto const keys = table->select(ctx.keys);
   cudf::groupby::groupby groupby_obj(keys);
   std::vector<std::string> result_column_names;
   result_column_names.insert(result_column_names.end(), ctx.keys.begin(), ctx.keys.end());
@@ -357,8 +357,8 @@ std::unique_ptr<table_with_cols> apply_reduction(cudf::column_view& column,
                                                  std::string col_name)
 {
   CUDF_FUNC_RANGE();
-  auto agg            = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
-  auto result         = cudf::reduce(column, *agg, column.type());
+  auto const agg      = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
+  auto const result   = cudf::reduce(column, *agg, column.type());
   cudf::size_type len = 1;
   auto col            = cudf::make_column_from_scalar(*result, len);
   std::vector<std::unique_ptr<cudf::column>> columns;
@@ -381,15 +381,15 @@ std::unique_ptr<table_with_cols> read_parquet(
   std::unique_ptr<cudf::ast::operation> predicate = nullptr)
 {
   CUDF_FUNC_RANGE();
-  auto source  = cudf::io::source_info(filename);
-  auto builder = cudf::io::parquet_reader_options_builder(source);
+  auto const source = cudf::io::source_info(filename);
+  auto builder      = cudf::io::parquet_reader_options_builder(source);
   if (columns.size()) { builder.columns(columns); }
   if (predicate) { builder.filter(*predicate); }
-  auto options             = builder.build();
+  auto const options       = builder.build();
   auto table_with_metadata = cudf::io::read_parquet(options);
-  auto schema_info         = table_with_metadata.metadata.schema_info;
+  auto const schema_info   = table_with_metadata.metadata.schema_info;
   std::vector<std::string> column_names;
-  for (auto& col_info : schema_info) {
+  for (auto const& col_info : schema_info) {
     column_names.push_back(col_info.name);
   }
   return std::make_unique<table_with_cols>(std::move(table_with_metadata.tbl), column_names);
