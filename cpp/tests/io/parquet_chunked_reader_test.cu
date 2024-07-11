@@ -1526,8 +1526,8 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
 
   // num_rows_per_source.size() must be = 1 and num_rows_per_source[0] must be = num_rows
   {
-    auto constexpr output_read_limit = 4'500;
-    auto constexpr pass_read_limit   = 8'500;
+    auto constexpr output_read_limit = 1'500;
+    auto constexpr pass_read_limit   = 3'500;
 
     auto const options =
       cudf::io::parquet_reader_options_builder(cudf::io::source_info{filepath}).build();
@@ -1543,12 +1543,10 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
 
   // num_rows_per_source.size() must be = 1 and num_rows_per_source[0] must be = rows_to_read
   {
-    // TODO: rows_to_skip not applicable for chunked read until
-    // https://github.com/rapidsai/cudf/issues/16186 is fixed
-    auto const rows_to_skip          = 0;
+    auto const rows_to_skip          = 1'237;
     auto const rows_to_read          = 7'232;
-    auto constexpr output_read_limit = 4'500;
-    auto constexpr pass_read_limit   = 8'500;
+    auto constexpr output_read_limit = 1'500;
+    auto constexpr pass_read_limit   = 3'500;
 
     auto const options = cudf::io::parquet_reader_options_builder(cudf::io::source_info{filepath})
                            .skip_rows(rows_to_skip)
@@ -1570,11 +1568,36 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     EXPECT_EQ(num_rows_per_source[0], rows_to_read);
   }
 
+  // num_rows_per_source.size() must be = 1 and num_rows_per_source[0] must be = num_rows -
+  // rows_to_read
+  {
+    auto const rows_to_skip          = 1'237;
+    auto constexpr output_read_limit = 1'500;
+    auto constexpr pass_read_limit   = 3'500;
+
+    auto const options = cudf::io::parquet_reader_options_builder(cudf::io::source_info{filepath})
+                           .skip_rows(rows_to_skip)
+                           .build();
+    auto const reader = cudf::io::chunked_parquet_reader(
+      output_read_limit, pass_read_limit, options, cudf::get_default_stream());
+
+    auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
+
+    auto int64_col_selected =
+      int64s_col(int64_data.begin() + rows_to_skip, int64_data.end()).release();
+
+    cudf::table_view const expected_selected({int64_col_selected->view()});
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_selected, result->view());
+    EXPECT_EQ(num_rows_per_source.size(), 1);
+    EXPECT_EQ(num_rows_per_source[0], num_rows - rows_to_skip);
+  }
+
   // num_rows_per_source must be empty
   {
-    auto const max_value             = 100;
-    auto constexpr output_read_limit = 4'500;
-    auto constexpr pass_read_limit   = 8'500;
+    int64_t const max_value          = int64_data[int64_data.size() / 2];
+    auto constexpr output_read_limit = 1'500;
+    auto constexpr pass_read_limit   = 3'500;
     auto literal_value               = cudf::numeric_scalar<int64_t>{max_value};
     auto literal                     = cudf::ast::literal{literal_value};
     auto col_ref                     = cudf::ast::column_reference(0);
@@ -1608,8 +1631,8 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
   // num_rows_per_source.size() must be = 10 and all num_rows_per_source[k] must be = num_rows
   {
     auto const nsources              = 10;
-    auto constexpr output_read_limit = 25'000;
-    auto constexpr pass_read_limit   = 45'000;
+    auto constexpr output_read_limit = 15'000;
+    auto constexpr pass_read_limit   = 35'000;
     std::vector<std::string> const datasources(nsources, filepath);
 
     auto const options =
@@ -1628,14 +1651,12 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
       true);
   }
 
-  // num_rows_per_source.size() must be = 10 and all num_rows_per_source[k] must be = num_rows
+  // num_rows_per_source.size() must be = 10
   {
-    // TODO: rows_to_skip not applicable for chunked read until
-    // https://github.com/rapidsai/cudf/issues/16186 is fixed
-    auto const rows_to_skip          = 0;
+    auto const rows_to_skip          = 5'571;
     auto const rows_to_read          = 47'232;
-    auto constexpr output_read_limit = 25'000;
-    auto constexpr pass_read_limit   = 45'000;
+    auto constexpr output_read_limit = 15'000;
+    auto constexpr pass_read_limit   = 35'000;
 
     auto const nsources = 10;
     std::vector<std::string> const datasources(nsources, filepath);
@@ -1673,6 +1694,57 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
         counter += nrows;
         nrows = (counter >= rows_to_read) ? rows_to_read - counter + nrows : nrows;
       } else if (counter > rows_to_read) {
+        nrows = 0;
+      }
+    }
+
+    EXPECT_EQ(num_rows_per_source.size(), nsources);
+    EXPECT_EQ(
+      std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()),
+      true);
+  }
+
+  // num_rows_per_source.size() must be = 10
+  {
+    auto const rows_to_skip          = 5'571;
+    auto constexpr output_read_limit = 15'000;
+    auto constexpr pass_read_limit   = 35'000;
+
+    auto const nsources = 10;
+    std::vector<std::string> const datasources(nsources, filepath);
+
+    auto const options =
+      cudf::io::parquet_reader_options_builder(cudf::io::source_info{datasources})
+        .skip_rows(rows_to_skip)
+        .build();
+    auto const reader = cudf::io::chunked_parquet_reader(
+      output_read_limit, pass_read_limit, options, cudf::get_default_stream());
+
+    auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
+
+    // Initialize expected_counts
+    std::vector<size_t> expected_counts(nsources, num_rows);
+
+    // Adjust expected_counts for rows_to_skip
+    int64_t counter = 0;
+    for (auto& nrows : expected_counts) {
+      if (counter < rows_to_skip) {
+        counter += nrows;
+        nrows = (counter >= rows_to_skip) ? counter - rows_to_skip : 0;
+      } else {
+        break;
+      }
+    }
+
+    // Reset the counter
+    counter = 0;
+
+    // Adjust expected_counts for rows_to_read
+    for (auto& nrows : expected_counts) {
+      if (counter < num_rows * nsources) {
+        counter += nrows;
+        nrows = (counter >= num_rows * nsources) ? (num_rows * nsources) - counter + nrows : nrows;
+      } else if (counter > num_rows * nsources) {
         nrows = 0;
       }
     }

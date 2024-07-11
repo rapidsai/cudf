@@ -1015,14 +1015,17 @@ aggregate_reader_metadata::select_row_groups(
         auto const chunk_start_row = count;
         count += rg.num_rows;
         if (count > rows_to_skip || count == 0) {
-          num_rows_per_source[src_idx] += count;
-          num_rows_per_source[src_idx] -= (chunk_start_row < rows_to_skip and count > rows_to_skip)
-                                            ? rows_to_skip
-                                            : chunk_start_row;
+          // start row of this row group adjusted with rows_to_skip
+          auto const chunk_start_row_this_rg =
+            (chunk_start_row <= rows_to_skip and count > rows_to_skip) ? rows_to_skip
+                                                                       : chunk_start_row;
+          num_rows_per_source[src_idx] += count - chunk_start_row_this_rg;
 
+          // We need the unadjusted start index of this row group to correctly initialize
+          // ColumnChunkDesc for this row group in create_global_chunk_info().
           selection.emplace_back(rg_idx, chunk_start_row, src_idx);
           // if page-level indexes are present, then collect extra chunk and page info.
-          column_info_for_row_group(selection.back(), chunk_start_row);
+          column_info_for_row_group(selection.back(), chunk_start_row_this_rg);
         }
         // Adjust the number of rows for the last source file.
         if (count >= rows_to_skip + rows_to_read) {

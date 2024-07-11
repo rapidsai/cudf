@@ -1245,8 +1245,10 @@ void reader::impl::setup_next_pass(read_mode mode)
       // everything we will be reading, regardless of what pass we are on.
       // num_rows is how many rows we are reading this pass.
       pass.skip_rows =
-        global_start_row +
         _file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass];
+
+      // global_start_row should only be added to the first input pass and not to subsequent ones.
+      pass.skip_rows += (_file_itm_data._current_input_pass == 0) ? global_start_row : 0;
       pass.num_rows = end_row - start_row;
     }
 
@@ -1477,9 +1479,9 @@ void reader::impl::setup_next_subpass(read_mode mode)
 
 void reader::impl::create_global_chunk_info()
 {
-  auto const num_rows         = _file_itm_data.global_num_rows;
-  auto const& row_groups_info = _file_itm_data.row_groups;
-  auto& chunks                = _file_itm_data.chunks;
+  auto const num_rows   = _file_itm_data.global_num_rows;
+  auto& row_groups_info = _file_itm_data.row_groups;
+  auto& chunks          = _file_itm_data.chunks;
 
   // Descriptors for all the chunks that make up the selected columns
   auto const num_input_columns = _input_columns.size();
@@ -1509,7 +1511,8 @@ void reader::impl::create_global_chunk_info()
 
   // Initialize column chunk information
   auto remaining_rows = num_rows;
-  for (auto const& rg : row_groups_info) {
+  auto skip_rows      = _file_itm_data.global_skip_rows;
+  for (auto& rg : row_groups_info) {
     auto const& row_group      = _metadata->get_row_group(rg.index, rg.source_index);
     auto const row_group_start = rg.start_row;
     auto const row_group_rows  = std::min<int>(remaining_rows, row_group.num_rows);
@@ -1561,7 +1564,18 @@ void reader::impl::create_global_chunk_info()
                                        schema.type == BYTE_ARRAY and _strings_to_categorical));
     }
 
-    remaining_rows -= row_group_rows;
+    // Adjust for skip_rows when updating the remaining rows after the first group
+    remaining_rows -=
+      (skip_rows) ? std::min<int>(rg.start_row + row_group.num_rows - skip_rows, remaining_rows)
+                  : row_group_rows;
+
+    // Adjust the start_row of the first row group which was left unadjusted during
+    // select_row_groups().
+    if (skip_rows) {
+      rg.start_row = (skip_rows) ? skip_rows : rg.start_row;
+      // Set skip_rows = 0 as it is no longer needed for subsequent row_groups
+      skip_rows = 0;
+    }
   }
 }
 
