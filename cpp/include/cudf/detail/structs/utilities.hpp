@@ -25,7 +25,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf::structs::detail {
+namespace CUDF_EXPORT cudf {
+namespace structs::detail {
 
 enum class column_nullability {
   MATCH_INCOMING,  ///< generate a null column if the incoming column has nulls
@@ -170,7 +171,6 @@ class flattened_table {
  *         orders, flattened null precedence, alongside the supporting columns and device_buffers
  *         for the flattened table.
  */
-CUDF_EXPORT
 [[nodiscard]] std::unique_ptr<cudf::structs::detail::flattened_table> flatten_nested_columns(
   table_view const& input,
   std::vector<cudf::order> const& column_order,
@@ -195,7 +195,6 @@ CUDF_EXPORT
  * @param mr Device memory resource used to allocate new device memory
  * @return A new column with potentially new null mask
  */
-CUDF_EXPORT
 [[nodiscard]] std::unique_ptr<cudf::column> superimpose_nulls(bitmask_type const* null_mask,
                                                               cudf::size_type null_count,
                                                               std::unique_ptr<cudf::column>&& input,
@@ -224,7 +223,6 @@ CUDF_EXPORT
  *         2. An instance of `temporary_nullable_data` holding the temporary data that needs
  *         to be kept alive.
  */
-CUDF_EXPORT
 [[nodiscard]] std::pair<column_view, temporary_nullable_data> push_down_nulls(
   column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
@@ -252,7 +250,6 @@ CUDF_EXPORT
  *         2. An instance of `temporary_nullable_data` holding the temporary data that needs
  *         to be kept alive.
  */
-CUDF_EXPORT
 [[nodiscard]] std::pair<table_view, temporary_nullable_data> push_down_nulls(
   table_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
@@ -270,4 +267,5 @@ CUDF_EXPORT
  */
 bool contains_null_structs(column_view const& col);
 
-}  // namespace cudf::structs::detail
+}  // namespace structs::detail
+}  // namespace CUDF_EXPORT cudf

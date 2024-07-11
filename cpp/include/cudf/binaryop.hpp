@@ -311,7 +311,8 @@ std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
 
-namespace cudf::binops::compiled::detail {
+namespace CUDF_EXPORT cudf {
+namespace binops::compiled::detail {
 
 /**
  * @brief struct binary operation using `NaN` aware sorting physical element comparators
@@ -331,4 +332,5 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
                                     bool is_rhs_scalar,
                                     binary_operator op,
                                     rmm::cuda_stream_view stream);
-}  // namespace cudf::binops::compiled::detail
+}  // namespace binops::compiled::detail
+}  // namespace CUDF_EXPORT cudf
