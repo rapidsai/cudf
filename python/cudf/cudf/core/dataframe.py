@@ -5449,10 +5449,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2  3  6
 
         .. pandas-compat::
-            :meth:`pandas.DataFrame.from_arrow`
+            `pandas.DataFrame.from_arrow`
 
-            -   Does not support automatically setting index column(s) similar
-                to how ``to_pandas`` works for PyArrow Tables.
+            This method does not exit in pandas but it simlar to
+            how :meth:`pyarrow.Table.to_pandas` works for PyArrow Tables i.e.
+            it does not support automatically setting index column(s).
         """
         index_col = None
         col_index_names = None
