@@ -621,23 +621,22 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
   return finalize_output(mode, out_metadata, out_columns);
 }
 
-std::vector<size_t> reader::impl::calculate_output_num_rows_per_source(size_t const start_row,
-                                                                       size_t const num_rows)
+std::vector<size_t> reader::impl::calculate_output_num_rows_per_source(size_t const chunk_start_row,
+                                                                       size_t const chunk_num_rows)
 {
   std::vector<size_t> num_rows_per_source(_file_itm_data.num_rows_per_source.size(), 0);
 
-  // TODO: Modify to simply end_row = start_row + num_rows once
-  // https://github.com/rapidsai/cudf/issues/16186 is fixed.
-  auto const end_row = std::min(_file_itm_data.global_skip_rows + _file_itm_data.global_num_rows,
-                                start_row + num_rows);
-  CUDF_EXPECTS(start_row < end_row and
-                 end_row <= _file_itm_data.global_skip_rows + _file_itm_data.global_num_rows,
+  // Subtract global skip rows from the start_row as we took care of that when computing
+  // _file_itm_data.num_rows_per_source
+  auto const start_row = chunk_start_row - _file_itm_data.global_skip_rows;
+  auto const end_row   = start_row + chunk_num_rows;
+  CUDF_EXPECTS(start_row <= end_row and end_row <= _file_itm_data.global_num_rows,
                "Encountered invalid output chunk row bounds.");
 
   // Copy reference to a const local variable for better readability
   auto const& partial_sum_nrows_source = _file_itm_data.exclusive_sum_num_rows_per_source;
 
-  // Binary search start_row and end_row in exclusive_sum_num_rows_per_source array
+  // Binary search start_row and end_row in exclusive_sum_num_rows_per_source vector
   auto const start_iter = thrust::upper_bound(
     partial_sum_nrows_source.cbegin(), partial_sum_nrows_source.cend(), start_row);
   auto const end_iter =
@@ -654,7 +653,7 @@ std::vector<size_t> reader::impl::calculate_output_num_rows_per_source(size_t co
 
   // If the entire chunk is from the same source file, then the count is simply num_rows
   if (start_idx == end_idx) {
-    num_rows_per_source[start_idx] = num_rows;
+    num_rows_per_source[start_idx] = chunk_num_rows;
   } else {
     // Compute the number of rows from the first source file
     num_rows_per_source[start_idx] = partial_sum_nrows_source[start_idx] - start_row;
