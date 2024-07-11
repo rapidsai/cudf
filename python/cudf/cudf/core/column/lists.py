@@ -253,15 +253,11 @@ class ListColumn(ColumnBase):
         )
         return res
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
+    def as_string_column(self) -> cudf.core.column.StringColumn:
         """
         Create a strings column from a list column
         """
-        lc = self._transform_leaves(
-            lambda col, dtype: col.as_string_column(dtype), dtype
-        )
+        lc = self._transform_leaves(lambda col: col.as_string_column())
 
         # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])
