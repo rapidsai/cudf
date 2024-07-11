@@ -17,9 +17,9 @@ jobs:
   pandas-tests:
       # run the Pandas unit tests
       secrets: inherit
-      uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.08
+      uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@cuda-12.5.1
       with:
-        matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.9" and .CUDA_VER == "12.2.2" ))
+        matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.9" and .CUDA_VER == "12.5.1" ))
         build_type: nightly
         branch: ${{ inputs.branch }}
         date: ${{ inputs.date }}
