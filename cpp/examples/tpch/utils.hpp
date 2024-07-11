@@ -357,10 +357,10 @@ std::unique_ptr<table_with_cols> apply_reduction(cudf::column_view& column,
                                                  std::string col_name)
 {
   CUDF_FUNC_RANGE();
-  auto const agg      = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
-  auto const result   = cudf::reduce(column, *agg, column.type());
-  cudf::size_type len = 1;
-  auto col            = cudf::make_column_from_scalar(*result, len);
+  auto const agg            = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
+  auto const result         = cudf::reduce(column, *agg, column.type());
+  cudf::size_type const len = 1;
+  auto col                  = cudf::make_column_from_scalar(*result, len);
   std::vector<std::unique_ptr<cudf::column>> columns;
   columns.push_back(std::move(col));
   auto result_table                  = std::make_unique<cudf::table>(std::move(columns));
