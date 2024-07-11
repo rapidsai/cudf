@@ -19,6 +19,7 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
+#include "arrow_schema_writer.hpp"
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
@@ -26,22 +27,20 @@
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "io/utilities/column_utils.cuh"
-#include "io/utilities/config_utils.hpp"
 #include "parquet_common.hpp"
 #include "parquet_gpu.cuh"
 #include "writer_impl.hpp"
+#include "writer_impl_helpers.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -70,7 +69,8 @@ struct aggregate_writer_metadata {
                             host_span<std::map<std::string, std::string> const> kv_md,
                             host_span<SchemaElement const> tbl_schema,
                             size_type num_columns,
-                            statistics_freq stats_granularity)
+                            statistics_freq stats_granularity,
+                            std::string const arrow_schema_ipc_message)
     : version(1),
       schema(std::vector<SchemaElement>(tbl_schema.begin(), tbl_schema.end())),
       files(partitions.size())
@@ -91,6 +91,13 @@ struct aggregate_writer_metadata {
                      [](auto const& kv) {
                        return KeyValue{kv.first, kv.second};
                      });
+    }
+
+    // Append arrow schema to the key-value metadata
+    if (not arrow_schema_ipc_message.empty()) {
+      std::for_each(this->files.begin(), this->files.end(), [&](auto& file) {
+        file.key_value_metadata.emplace_back(KeyValue{ARROW_SCHEMA_KEY, arrow_schema_ipc_message});
+      });
     }
   }
 
@@ -181,26 +188,6 @@ struct aggregate_writer_metadata {
 };
 
 namespace {
-
-/**
- * @brief Function that translates GDF compression to parquet compression.
- *
- * @param compression The compression type
- * @return The supported Parquet compression
- */
-Compression to_parquet_compression(compression_type compression)
-{
-  switch (compression) {
-    case compression_type::AUTO:
-    case compression_type::SNAPPY: return Compression::SNAPPY;
-    case compression_type::ZSTD: return Compression::ZSTD;
-    case compression_type::LZ4:
-      // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
-      return Compression::LZ4_RAW;
-    case compression_type::NONE: return Compression::UNCOMPRESSED;
-    default: CUDF_FAIL("Unsupported compression type");
-  }
-}
 
 /**
  * @brief Convert a mask of encodings to a vector.
@@ -326,6 +313,7 @@ struct leaf_schema_fn {
   column_in_metadata const& col_meta;
   bool timestamp_is_int96;
   bool timestamp_is_utc;
+  bool write_arrow_schema;
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, bool>, void> operator()()
@@ -493,10 +481,11 @@ struct leaf_schema_fn {
     }
   }
 
-  //  unsupported outside cudf for parquet 1.0.
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
   {
+    // duration_D is based on int32_t and not a valid arrow duration type so simply convert to
+    // time32(ms).
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
     col_schema.stats_dtype    = statistics_dtype::dtype_int32;
@@ -507,62 +496,86 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
   {
-    col_schema.type           = Type::INT32;
-    col_schema.converted_type = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
-    col_schema.ts_scale       = 1000;
-    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
+    // If writing arrow schema, no logical type nor converted type is necessary
+    if (write_arrow_schema) {
+      col_schema.type        = Type::INT64;
+      col_schema.stats_dtype = statistics_dtype::dtype_int64;
+    } else {
+      // Write as Time32 logical type otherwise. Parquet TIME_MILLIS annotates INT32
+      col_schema.type           = Type::INT32;
+      col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+      col_schema.converted_type = ConvertedType::TIME_MILLIS;
+      col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
+      col_schema.ts_scale       = 1000;
+    }
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
   {
-    col_schema.type           = Type::INT32;
-    col_schema.converted_type = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
-    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
+    // If writing arrow schema, no logical type nor converted type is necessary
+    if (write_arrow_schema) {
+      col_schema.type        = Type::INT64;
+      col_schema.stats_dtype = statistics_dtype::dtype_int64;
+    } else {
+      // Write as Time32 logical type otherwise. Parquet TIME_MILLIS annotates INT32
+      col_schema.type           = Type::INT32;
+      col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+      col_schema.converted_type = ConvertedType::TIME_MILLIS;
+      col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
+    }
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_us>, void> operator()()
   {
-    col_schema.type           = Type::INT64;
-    col_schema.converted_type = ConvertedType::TIME_MICROS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
-    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MICROS}};
+    col_schema.type        = Type::INT64;
+    col_schema.stats_dtype = statistics_dtype::dtype_int64;
+    // Only write as time64 logical type if not writing arrow schema
+    if (not write_arrow_schema) {
+      col_schema.converted_type = ConvertedType::TIME_MICROS;
+      col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MICROS}};
+    }
   }
 
-  //  unsupported outside cudf for parquet 1.0.
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
   {
-    col_schema.type         = Type::INT64;
-    col_schema.stats_dtype  = statistics_dtype::dtype_int64;
-    col_schema.logical_type = LogicalType{TimeType{timestamp_is_utc, TimeUnit::NANOS}};
+    col_schema.type        = Type::INT64;
+    col_schema.stats_dtype = statistics_dtype::dtype_int64;
+    // Only write as time64 logical type if not writing arrow schema
+    if (not write_arrow_schema) {
+      col_schema.logical_type = LogicalType{TimeType{timestamp_is_utc, TimeUnit::NANOS}};
+    }
   }
 
   template <typename T>
   std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
   {
-    if (std::is_same_v<T, numeric::decimal32>) {
-      col_schema.type              = Type::INT32;
-      col_schema.stats_dtype       = statistics_dtype::dtype_int32;
-      col_schema.decimal_precision = MAX_DECIMAL32_PRECISION;
-      col_schema.logical_type      = LogicalType{DecimalType{0, MAX_DECIMAL32_PRECISION}};
-    } else if (std::is_same_v<T, numeric::decimal64>) {
-      col_schema.type              = Type::INT64;
-      col_schema.stats_dtype       = statistics_dtype::dtype_decimal64;
-      col_schema.decimal_precision = MAX_DECIMAL64_PRECISION;
-      col_schema.logical_type      = LogicalType{DecimalType{0, MAX_DECIMAL64_PRECISION}};
-    } else if (std::is_same_v<T, numeric::decimal128>) {
+    // If writing arrow schema, then convert d32 and d64 to d128
+    if (write_arrow_schema or std::is_same_v<T, numeric::decimal128>) {
       col_schema.type              = Type::FIXED_LEN_BYTE_ARRAY;
       col_schema.type_length       = sizeof(__int128_t);
       col_schema.stats_dtype       = statistics_dtype::dtype_decimal128;
       col_schema.decimal_precision = MAX_DECIMAL128_PRECISION;
       col_schema.logical_type      = LogicalType{DecimalType{0, MAX_DECIMAL128_PRECISION}};
     } else {
-      CUDF_FAIL("Unsupported fixed point type for parquet writer");
+      if (std::is_same_v<T, numeric::decimal32>) {
+        col_schema.type              = Type::INT32;
+        col_schema.stats_dtype       = statistics_dtype::dtype_int32;
+        col_schema.decimal_precision = MAX_DECIMAL32_PRECISION;
+        col_schema.logical_type      = LogicalType{DecimalType{0, MAX_DECIMAL32_PRECISION}};
+      } else if (std::is_same_v<T, numeric::decimal64>) {
+        col_schema.type              = Type::INT64;
+        col_schema.stats_dtype       = statistics_dtype::dtype_decimal64;
+        col_schema.decimal_precision = MAX_DECIMAL64_PRECISION;
+        col_schema.logical_type      = LogicalType{DecimalType{0, MAX_DECIMAL64_PRECISION}};
+      } else {
+        CUDF_FAIL("Unsupported fixed point type for parquet writer");
+      }
     }
+
+    // Write logical and converted types, decimal scale and precision
     col_schema.converted_type = ConvertedType::DECIMAL;
     col_schema.decimal_scale = -col->type().scale();  // parquet and cudf disagree about scale signs
     col_schema.logical_type->decimal_type->scale = -col->type().scale();
@@ -590,33 +603,19 @@ struct leaf_schema_fn {
   }
 };
 
-inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
-                            column_in_metadata const& col_meta,
-                            single_write_mode write_mode)
-{
-  if (col_meta.is_nullability_defined()) {
-    CUDF_EXPECTS(col_meta.nullable() or col->null_count() == 0,
-                 "Mismatch in metadata prescribed nullability and input column. "
-                 "Metadata for input column with nulls cannot prescribe nullability = false");
-    return col_meta.nullable();
-  }
-  // For chunked write, when not provided nullability, we assume the worst case scenario
-  // that all columns are nullable.
-  return write_mode == single_write_mode::NO or col->nullable();
-}
-
 /**
  * @brief Construct schema from input columns and per-column input options
  *
  * Recursively traverses through linked_columns and corresponding metadata to construct schema tree.
  * The resulting schema tree is stored in a vector in pre-order traversal order.
  */
-std::vector<schema_tree_node> construct_schema_tree(
+std::vector<schema_tree_node> construct_parquet_schema_tree(
   cudf::detail::LinkedColVector const& linked_columns,
   table_input_metadata& metadata,
   single_write_mode write_mode,
   bool int96_timestamps,
-  bool utc_timestamps)
+  bool utc_timestamps,
+  bool write_arrow_schema)
 {
   std::vector<schema_tree_node> schema;
   schema_tree_node root{};
@@ -629,7 +628,7 @@ std::vector<schema_tree_node> construct_schema_tree(
 
   std::function<void(cudf::detail::LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
     [&](cudf::detail::LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
-      bool const col_nullable = is_col_nullable(col, col_meta, write_mode);
+      bool const col_nullable = is_output_column_nullable(col, col_meta, write_mode);
 
       auto set_field_id = [&schema, parent_idx](schema_tree_node& s,
                                                 column_in_metadata const& col_meta) {
@@ -854,7 +853,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         right_child_meta.set_name("value");
         // check the repetition type of key is required i.e. the col should be non-nullable
         auto key_col = col->children[lists_column_view::child_column_index]->children[0];
-        CUDF_EXPECTS(!is_col_nullable(key_col, left_child_meta, write_mode),
+        CUDF_EXPECTS(!is_output_column_nullable(key_col, left_child_meta, write_mode),
                      "key column cannot be nullable. For chunked writing, explicitly set the "
                      "nullability to false in metadata");
         // process key
@@ -886,7 +885,8 @@ std::vector<schema_tree_node> construct_schema_tree(
 
         cudf::type_dispatcher(
           col->type(),
-          leaf_schema_fn{col_schema, col, col_meta, timestamp_is_int96, utc_timestamps});
+          leaf_schema_fn{
+            col_schema, col, col_meta, timestamp_is_int96, utc_timestamps, write_arrow_schema});
 
         col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
         col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
@@ -1148,7 +1148,6 @@ void calculate_page_fragments(device_span<PageFragment> frag,
  *
  * @param frag_stats output statistics
  * @param frags Input page fragments
- * @param int96_timestamps Flag to indicate if timestamps will be written as INT96
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void gather_fragment_statistics(device_span<statistics_chunk> frag_stats,
@@ -1162,32 +1161,6 @@ void gather_fragment_statistics(device_span<statistics_chunk> frag_stats,
   detail::calculate_group_statistics<detail::io_file_format::PARQUET>(
     frag_stats.data(), frag_stats_group.data(), frag_stats.size(), stream, int96_timestamps);
   stream.synchronize();
-}
-
-auto to_nvcomp_compression_type(Compression codec)
-{
-  if (codec == Compression::SNAPPY) return nvcomp::compression_type::SNAPPY;
-  if (codec == Compression::ZSTD) return nvcomp::compression_type::ZSTD;
-  // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
-  if (codec == Compression::LZ4_RAW) return nvcomp::compression_type::LZ4;
-  CUDF_FAIL("Unsupported compression type");
-}
-
-auto page_alignment(Compression codec)
-{
-  if (codec == Compression::UNCOMPRESSED or
-      nvcomp::is_compression_disabled(to_nvcomp_compression_type(codec))) {
-    return 1u;
-  }
-
-  return 1u << nvcomp::compress_input_alignment_bits(to_nvcomp_compression_type(codec));
-}
-
-size_t max_compression_output_size(Compression codec, uint32_t compression_blocksize)
-{
-  if (codec == Compression::UNCOMPRESSED) return 0;
-
-  return compress_max_output_chunk_size(to_nvcomp_compression_type(codec), compression_blocksize);
 }
 
 auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
@@ -1629,23 +1602,127 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
 }
 
 /**
- * @brief Fill the table metadata with default column names.
+ * @brief Convert decimal32 and decimal64 data to decimal128 and return the device vector
  *
- * @param table_meta The table metadata to fill
+ * @tparam DecimalType to convert from
+ *
+ * @param column A view of the input columns
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return A device vector containing the converted decimal128 data
  */
-void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
+template <typename DecimalType>
+rmm::device_uvector<__int128_t> convert_data_to_decimal128(column_view const& column,
+                                                           rmm::cuda_stream_view stream)
 {
-  // Fill unnamed columns' names in table_meta
-  std::function<void(column_in_metadata&, std::string)> add_default_name =
-    [&](column_in_metadata& col_meta, std::string default_name) {
-      if (col_meta.get_name().empty()) col_meta.set_name(default_name);
-      for (size_type i = 0; i < col_meta.num_children(); ++i) {
-        add_default_name(col_meta.child(i), col_meta.get_name() + "_" + std::to_string(i));
-      }
-    };
-  for (size_t i = 0; i < table_meta->column_metadata.size(); ++i) {
-    add_default_name(table_meta->column_metadata[i], "_col" + std::to_string(i));
-  }
+  size_type constexpr BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DecimalType);
+
+  rmm::device_uvector<__int128_t> d128_buffer(column.size(), stream);
+
+  thrust::for_each(rmm::exec_policy_nosync(stream),
+                   thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(column.size()),
+                   [in  = column.begin<DecimalType>(),
+                    out = reinterpret_cast<DecimalType*>(d128_buffer.data()),
+                    BIT_WIDTH_RATIO] __device__(auto in_idx) {
+                     auto const out_idx = in_idx * BIT_WIDTH_RATIO;
+                     // The lowest order bits are the value, the remainder
+                     // simply matches the sign bit to satisfy the two's
+                     // complement integer representation of negative numbers.
+                     out[out_idx] = in[in_idx];
+#pragma unroll BIT_WIDTH_RATIO - 1
+                     for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
+                       out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
+                     }
+                   });
+
+  return d128_buffer;
+}
+
+/**
+ * @brief Function to convert decimal32 and decimal64 columns to decimal128 data,
+ *        update the input table metadata, and return a new vector of column views.
+ *
+ * @param[in,out] table_meta The table metadata
+ * @param[in,out] d128_vectors Vector containing the computed decimal128 data buffers.
+ * @param input The input table
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return A device vector containing the converted decimal128 data
+ */
+std::vector<column_view> convert_decimal_columns_and_metadata(
+  table_input_metadata& table_meta,
+  std::vector<rmm::device_uvector<__int128_t>>& d128_vectors,
+  table_view const& table,
+  rmm::cuda_stream_view stream)
+{
+  // Lambda function to convert each decimal32/decimal64 column to decimal128.
+  std::function<column_view(column_view, column_in_metadata&)> convert_column =
+    [&](column_view column, column_in_metadata& metadata) -> column_view {
+    // Vector of passable-by-reference children column views
+    std::vector<column_view> converted_children;
+
+    // Process children column views first
+    std::transform(
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(column.num_children()),
+      std::back_inserter(converted_children),
+      [&](auto const idx) { return convert_column(column.child(idx), metadata.child(idx)); });
+
+    // Process this column view. Only convert if decimal32 and decimal64 column.
+    switch (column.type().id()) {
+      case type_id::DECIMAL32:
+        // Convert data to decimal128 type
+        d128_vectors.emplace_back(convert_data_to_decimal128<int32_t>(column, stream));
+        // Update metadata
+        metadata.set_decimal_precision(MAX_DECIMAL32_PRECISION);
+        metadata.set_type_length(size_of(data_type{type_id::DECIMAL128, column.type().scale()}));
+        // Create a new column view from the d128 data vector
+        return {data_type{type_id::DECIMAL128, column.type().scale()},
+                column.size(),
+                d128_vectors.back().data(),
+                column.null_mask(),
+                column.null_count(),
+                column.offset(),
+                converted_children};
+      case type_id::DECIMAL64:
+        // Convert data to decimal128 type
+        d128_vectors.emplace_back(convert_data_to_decimal128<int64_t>(column, stream));
+        // Update metadata
+        metadata.set_decimal_precision(MAX_DECIMAL64_PRECISION);
+        metadata.set_type_length(size_of(data_type{type_id::DECIMAL128, column.type().scale()}));
+        // Create a new column view from the d128 data vector
+        return {data_type{type_id::DECIMAL128, column.type().scale()},
+                column.size(),
+                d128_vectors.back().data(),
+                column.null_mask(),
+                column.null_count(),
+                column.offset(),
+                converted_children};
+      default:
+        // Update the children vector keeping everything else the same
+        return {column.type(),
+                column.size(),
+                column.head(),
+                column.null_mask(),
+                column.null_count(),
+                column.offset(),
+                converted_children};
+    }
+  };
+
+  // Vector of converted column views
+  std::vector<column_view> converted_column_views;
+
+  // Convert each column view
+  std::transform(
+    thrust::make_zip_iterator(
+      thrust::make_tuple(table.begin(), table_meta.column_metadata.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(table.end(), table_meta.column_metadata.end())),
+    std::back_inserter(converted_column_views),
+    [&](auto elem) { return convert_column(thrust::get<0>(elem), thrust::get<1>(elem)); });
+
+  return converted_column_views;
 }
 
 /**
@@ -1698,12 +1775,22 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    bool int96_timestamps,
                                    bool utc_timestamps,
                                    bool write_v2_headers,
+                                   bool write_arrow_schema,
                                    host_span<std::unique_ptr<data_sink> const> out_sink,
                                    rmm::cuda_stream_view stream)
 {
-  auto vec = table_to_linked_columns(input);
-  auto schema_tree =
-    construct_schema_tree(vec, table_meta, write_mode, int96_timestamps, utc_timestamps);
+  // Container to store decimal128 converted data if needed
+  std::vector<rmm::device_uvector<__int128_t>> d128_vectors;
+
+  // Convert decimal32/decimal64 data to decimal128 if writing arrow schema
+  // and initialize LinkedColVector
+  auto vec = table_to_linked_columns(
+    (write_arrow_schema)
+      ? table_view({convert_decimal_columns_and_metadata(table_meta, d128_vectors, input, stream)})
+      : input);
+
+  auto schema_tree = construct_parquet_schema_tree(
+    vec, table_meta, write_mode, int96_timestamps, utc_timestamps, write_arrow_schema);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;
 
@@ -1829,7 +1916,14 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   std::unique_ptr<aggregate_writer_metadata> agg_meta;
   if (!curr_agg_meta) {
     agg_meta = std::make_unique<aggregate_writer_metadata>(
-      partitions, kv_meta, this_table_schema, num_columns, stats_granularity);
+      partitions,
+      kv_meta,
+      this_table_schema,
+      num_columns,
+      stats_granularity,
+      (write_arrow_schema)
+        ? construct_arrow_schema_ipc_message(vec, table_meta, write_mode, utc_timestamps)
+        : "");
   } else {
     agg_meta = std::make_unique<aggregate_writer_metadata>(*curr_agg_meta);
 
@@ -2310,6 +2404,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _write_arrow_schema(options.is_enabled_write_arrow_schema()),
     _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
@@ -2340,6 +2435,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _write_arrow_schema(options.is_enabled_write_arrow_schema()),
     _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
@@ -2381,7 +2477,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   CUDF_EXPECTS(not _closed, "Data has already been flushed to out and closed");
 
   if (not _table_meta) { _table_meta = std::make_unique<table_input_metadata>(input); }
-  fill_table_meta(_table_meta);
+  fill_table_meta(*_table_meta);
 
   // All kinds of memory allocation and data compressions/encoding are performed here.
   // If any error occurs, such as out-of-memory exception, the internal state of the current
@@ -2418,6 +2514,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                            _int96_timestamps,
                                            _utc_timestamps,
                                            _write_v2_headers,
+                                           _write_arrow_schema,
                                            _out_sink,
                                            _stream);
     } catch (...) {  // catch any exception type
