@@ -22,7 +22,7 @@ from cudf._lib.reshape import interleave_columns
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
-from cudf.api.types import is_bool_dtype, is_list_like, is_numeric_dtype
+from cudf.api.types import is_list_like, is_numeric_dtype
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, StructDtype, as_column
@@ -1531,7 +1531,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # For `sum` & `product`, boolean types
                 # will need to result in `int64` type.
                 for name, col in res._data.items():
-                    if is_bool_dtype(col.dtype):
+                    if col.dtype.kind == "b":
                         res._data[name] = col.astype("int")
             return res
 

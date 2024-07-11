@@ -7,11 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 import cudf
-from cudf.api.types import (
-    _is_non_decimal_numeric_dtype,
-    is_bool_dtype,
-    is_scalar,
-)
+from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
     _can_cast,
@@ -106,7 +102,7 @@ def _check_and_cast_columns_with_other(
         other = cudf.Scalar(other)
 
     if is_mixed_with_object_dtype(other, source_col) or (
-        is_bool_dtype(source_dtype) and not is_bool_dtype(common_dtype)
+        source_dtype.kind == "b" and common_dtype.kind != "b"
     ):
         raise TypeError(mixed_err)
 

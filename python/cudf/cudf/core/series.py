@@ -22,7 +22,6 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
-    is_bool_dtype,
     is_dict_like,
     is_integer,
     is_integer_dtype,
@@ -223,7 +222,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
                 )
             elif (
                 self._frame.dtype.kind == "b"
-                and not is_bool_dtype(value)
+                and value.dtype.kind != "b"
                 and value not in {None, cudf.NA}
             ):
                 raise MixedTypeError(
@@ -3221,7 +3220,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             percentiles = np.array([0.25, 0.5, 0.75])
 
         dtype = "str"
-        if is_bool_dtype(self.dtype):
+        if self.dtype.kind == "b":
             data = _describe_categorical(self, percentiles)
         elif isinstance(self._column, cudf.core.column.NumericalColumn):
             data = _describe_numeric(self, percentiles)
