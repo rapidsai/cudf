@@ -22,47 +22,50 @@
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-/*
-create view part as select * from '/tables/scale-1/part.parquet';
-create view supplier as select * from '/tables/scale-1/supplier.parquet';
-create view lineitem as select * from '/tables/scale-1/lineitem.parquet';
-create view partsupp as select * from '/tables/scale-1/partsupp.parquet';
-create view orders as select * from '/tables/scale-1/orders.parquet';
-create view nation as select * from '/tables/scale-1/nation.parquet';
-
-select
-    nation,
-    o_year,
-    sum(amount) as sum_profit
-from
-    (
-        select
-            n_name as nation,
-            extract(year from o_orderdate) as o_year,
-            l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount
-        from
-            part,
-            supplier,
-            lineitem,
-            partsupp,
-            orders,
-            nation
-        where
-            s_suppkey = l_suppkey
-            and ps_suppkey = l_suppkey
-            and ps_partkey = l_partkey
-            and p_partkey = l_partkey
-            and o_orderkey = l_orderkey
-            and s_nationkey = n_nationkey
-            and p_name like '%green%'
-    ) as profit
-group by
-    nation,
-    o_year
-order by
-    nation,
-    o_year desc;
-*/
+/**
+ * @file q9.cpp
+ * @brief Implement query 9 of the TPC-H benchmark.
+ *
+ * create view part as select * from '/tables/scale-1/part.parquet';
+ * create view supplier as select * from '/tables/scale-1/supplier.parquet';
+ * create view lineitem as select * from '/tables/scale-1/lineitem.parquet';
+ * create view partsupp as select * from '/tables/scale-1/partsupp.parquet';
+ * create view orders as select * from '/tables/scale-1/orders.parquet';
+ * create view nation as select * from '/tables/scale-1/nation.parquet';
+ *
+ * select
+ *    nation,
+ *    o_year,
+ *    sum(amount) as sum_profit
+ * from
+ *     (
+ *        select
+ *            n_name as nation,
+ *            extract(year from o_orderdate) as o_year,
+ *            l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount
+ *        from
+ *            part,
+ *            supplier,
+ *            lineitem,
+ *            partsupp,
+ *            orders,
+ *            nation
+ *        where
+ *           s_suppkey = l_suppkey
+ *           and ps_suppkey = l_suppkey
+ *           and ps_partkey = l_partkey
+ *           and p_partkey = l_partkey
+ *           and o_orderkey = l_orderkey
+ *           and s_nationkey = n_nationkey
+ *           and p_name like '%green%'
+ *     ) as profit
+ * group by
+ *     nation,
+ *     o_year
+ * order by
+ *     nation,
+ *     o_year desc;
+ */
 
 /**
  * @brief Calculate the amount column
