@@ -422,9 +422,7 @@ def get_time_unit(obj):
 
 def _get_nan_for_dtype(dtype):
     dtype = cudf.dtype(dtype)
-    if pd.api.types.is_datetime64_dtype(
-        dtype
-    ) or pd.api.types.is_timedelta64_dtype(dtype):
+    if dtype.kind in "mM":
         time_unit, _ = np.datetime_data(dtype)
         return dtype.type("nat", time_unit)
     elif dtype.kind == "f":
@@ -568,16 +566,12 @@ def find_common_type(dtypes):
 
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately
-    dt_dtypes = set(
-        filter(lambda t: cudf.api.types.is_datetime_dtype(t), dtypes)
-    )
+    dt_dtypes = set(filter(lambda t: t.kind == "M", dtypes))
     if len(dt_dtypes) > 0:
         dtypes = dtypes - dt_dtypes
         dtypes.add(np.result_type(*dt_dtypes))
 
-    td_dtypes = set(
-        filter(lambda t: pd.api.types.is_timedelta64_dtype(t), dtypes)
-    )
+    td_dtypes = set(filter(lambda t: t.kind == "m", dtypes))
     if len(td_dtypes) > 0:
         dtypes = dtypes - td_dtypes
         dtypes.add(np.result_type(*td_dtypes))

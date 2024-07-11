@@ -694,12 +694,7 @@ def test_list_scalar_host_construction_null(elem_type, nesting_level):
         dtype = cudf.ListDtype(dtype)
 
     slr = cudf.Scalar(None, dtype=dtype)
-    assert slr.value is (
-        cudf.NaT
-        if cudf.api.types.is_datetime64_dtype(slr.dtype)
-        or cudf.api.types.is_timedelta64_dtype(slr.dtype)
-        else cudf.NA
-    )
+    assert slr.value is cudf.NaT if slr.dtype.kind in "mM" else cudf.NA
 
 
 @pytest.mark.parametrize(

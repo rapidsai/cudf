@@ -18,7 +18,6 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.labeling import label_bins
 from cudf._lib.search import search_sorted
-from cudf.api.types import is_datetime64_dtype, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals.timezones import (
     check_ambiguous_and_nonexistent,
@@ -565,9 +564,9 @@ class DatetimeColumn(column.ColumnBase):
 
         # We check this on `other` before reflection since we already know the
         # dtype of `self`.
-        other_is_timedelta = is_timedelta64_dtype(other.dtype)
-        other_is_datetime64 = not other_is_timedelta and is_datetime64_dtype(
-            other.dtype
+        other_is_timedelta = other.dtype.kind == "m"
+        other_is_datetime64 = (
+            not other_is_timedelta and other.dtype.kind == "M"
         )
         lhs, rhs = (other, self) if reflect else (self, other)
         out_dtype = None

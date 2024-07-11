@@ -211,9 +211,7 @@ def test_scalar_roundtrip(value):
 )
 def test_null_scalar(dtype):
     s = cudf.Scalar(None, dtype=dtype)
-    if cudf.api.types.is_datetime64_dtype(
-        dtype
-    ) or cudf.api.types.is_timedelta64_dtype(dtype):
+    if s.dtype.kind in "mM":
         assert s.value is cudf.NaT
     else:
         assert s.value is cudf.NA
@@ -352,12 +350,7 @@ def test_scalar_implicit_int_conversion(value):
 @pytest.mark.parametrize("dtype", sorted(set(ALL_TYPES) - {"category"}))
 def test_scalar_invalid_implicit_conversion(cls, dtype):
     try:
-        cls(
-            pd.NaT
-            if cudf.api.types.is_datetime64_dtype(dtype)
-            or cudf.api.types.is_timedelta64_dtype(dtype)
-            else pd.NA
-        )
+        cls(pd.NaT if cudf.dtype(dtype).kind in "mM" else pd.NA)
     except TypeError as e:
         with pytest.raises(TypeError, match=re.escape(str(e))):
             slr = cudf.Scalar(None, dtype=dtype)
