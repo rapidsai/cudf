@@ -9,7 +9,10 @@ from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.lists cimport (
     contains as cpp_contains,
     explode as cpp_explode,
+<<<<<<< HEAD
+=======
     gather as cpp_gather,
+>>>>>>> branch-24.08
     reverse as cpp_reverse,
 )
 from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
@@ -293,4 +296,3 @@ cpdef Column extract_list_element(Column input, ColumnOrSizeType index):
             index.view() if ColumnOrSizeType is Column else index,
         ))
     return Column.from_libcudf(move(c_result))
->>>>>>> branch-24.08
