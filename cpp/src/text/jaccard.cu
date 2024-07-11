@@ -46,8 +46,8 @@ namespace nvtext {
 namespace detail {
 namespace {
 
-constexpr int64_t block_size       = 256;
-constexpr int64_t bytes_per_thread = 4;
+constexpr cudf::thread_index_type block_size       = 256;
+constexpr cudf::thread_index_type bytes_per_thread = 4;
 
 /**
  * @brief Retrieve the row data (span) for the given column/row-index
@@ -115,7 +115,7 @@ rmm::device_uvector<cudf::size_type> compute_unique_counts(uint32_t const* value
 {
   auto d_results        = rmm::device_uvector<cudf::size_type>(rows, stream);
   auto const num_blocks = cudf::util::div_rounding_up_safe(
-    static_cast<int64_t>(rows) * cudf::detail::warp_size, block_size);
+    static_cast<cudf::thread_index_type>(rows) * cudf::detail::warp_size, block_size);
   sorted_unique_fn<<<num_blocks, block_size, 0, stream.value()>>>(
     values, offsets, rows, d_results.data());
   return d_results;
@@ -189,7 +189,7 @@ rmm::device_uvector<cudf::size_type> compute_intersect_counts(uint32_t const* va
 {
   auto d_results        = rmm::device_uvector<cudf::size_type>(rows, stream);
   auto const num_blocks = cudf::util::div_rounding_up_safe(
-    static_cast<int64_t>(rows) * cudf::detail::warp_size, block_size);
+    static_cast<cudf::thread_index_type>(rows) * cudf::detail::warp_size, block_size);
   sorted_intersect_fn<<<num_blocks, block_size, 0, stream.value()>>>(
     values1, offsets1, values2, offsets2, rows, d_results.data());
   return d_results;
@@ -199,7 +199,7 @@ rmm::device_uvector<cudf::size_type> compute_intersect_counts(uint32_t const* va
  * @brief Counts the number of substrings in each row of the given strings column
  *
  * Each warp processes a single string.
- * Formula is `count = max(1,str.length() - width + 1)`
+ * Formula is `count = max(1, str.length() - width + 1)`
  * If a string has less than width characters (but not empty), the count is 1
  * since the entire string is still hashed.
  *
@@ -325,7 +325,7 @@ std::pair<rmm::device_uvector<uint32_t>, rmm::device_uvector<int64_t>> hash_subs
   // count substrings
   auto offsets          = rmm::device_uvector<int64_t>(input.size() + 1, stream);
   auto const num_blocks = cudf::util::div_rounding_up_safe(
-    static_cast<int64_t>(input.size()) * cudf::detail::warp_size, block_size);
+    static_cast<cudf::thread_index_type>(input.size()) * cudf::detail::warp_size, block_size);
   count_substrings_kernel<<<num_blocks, block_size, 0, stream.value()>>>(
     *d_strings, width, offsets.data());
   auto const total_hashes =
