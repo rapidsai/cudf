@@ -237,6 +237,21 @@ def _convert_numeric_types_to_floating(pa_table):
     return dtypes, new_fields
 
 
+def write_source_str(source, input_str):
+    """
+    Write a string to the source
+    (useful for testing CSV/JSON I/O)
+    """
+    if not isinstance(source, io.IOBase):
+        with open(source, "w") as source_f:
+            source_f.write(input_str)
+    else:
+        if isinstance(source, io.BytesIO):
+            input_str = input_str.encode("utf-8")
+        source.write(input_str)
+        source.seek(0)
+
+
 def sink_to_str(sink):
     """
     Takes a sink (e.g. StringIO/BytesIO, filepath, etc.)

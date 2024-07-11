@@ -4,25 +4,15 @@ import io
 import pandas as pd
 import pyarrow as pa
 import pytest
-from utils import assert_table_and_meta_eq, make_source, sink_to_str
+from utils import (
+    assert_table_and_meta_eq,
+    make_source,
+    sink_to_str,
+    write_source_str,
+)
 
 import cudf._lib.pylibcudf as plc
 from cudf._lib.pylibcudf.io.types import CompressionType
-
-
-def write_json_bytes(source, json_str):
-    """
-    Write a JSON string to the source
-    """
-    if not isinstance(source, io.IOBase):
-        with open(source, "w") as source_f:
-            source_f.write(json_str)
-    else:
-        if isinstance(source, io.BytesIO):
-            json_str = json_str.encode("utf-8")
-        source.write(json_str)
-        source.seek(0)
-
 
 # Shared kwargs to pass to make_source
 _COMMON_JSON_SOURCE_KWARGS = {"format": "json", "orient": "records"}
@@ -138,21 +128,9 @@ def test_write_json_bool_opts(true_value, false_value):
 
 @pytest.mark.parametrize("lines", [True, False])
 def test_read_json_basic(
-    table_data, source_or_sink, lines, compression_type, request
+    table_data, source_or_sink, lines, text_compression_type
 ):
-    if compression_type in {
-        # Not supported by libcudf
-        CompressionType.SNAPPY,
-        CompressionType.XZ,
-        CompressionType.ZSTD,
-        # Not supported by pandas
-        # TODO: find a way to test these
-        CompressionType.BROTLI,
-        CompressionType.LZ4,
-        CompressionType.LZO,
-        CompressionType.ZLIB,
-    }:
-        pytest.skip("unsupported compression type by pandas/libcudf")
+    compression_type = text_compression_type
 
     # can't compress non-binary data with pandas
     if isinstance(source_or_sink, io.StringIO):
@@ -268,7 +246,7 @@ def test_read_json_lines_byte_range(source_or_sink, chunk_size):
         pytest.skip("byte_range doesn't work on StringIO")
 
     json_str = "[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9]\n"
-    write_json_bytes(source, json_str)
+    write_source_str(source, json_str)
 
     tbls_w_meta = []
     for chunk_start in range(0, len(json_str.encode("utf-8")), chunk_size):
@@ -304,7 +282,7 @@ def test_read_json_lines_keep_quotes(keep_quotes, source_or_sink):
     source = source_or_sink
 
     json_bytes = '["a", "b", "c"]\n'
-    write_json_bytes(source, json_bytes)
+    write_source_str(source, json_bytes)
 
     tbl_w_meta = plc.io.json.read_json(
         plc.io.SourceInfo([source]), lines=True, keep_quotes=keep_quotes
@@ -332,8 +310,8 @@ def test_read_json_lines_keep_quotes(keep_quotes, source_or_sink):
 def test_read_json_lines_recovery_mode(recovery_mode, source_or_sink):
     source = source_or_sink
 
-    json_bytes = '{"a":1,"b":10}\n{"a":2,"b":11}\nabc\n{"a":3,"b":12}\n'
-    write_json_bytes(source, json_bytes)
+    json_str = '{"a":1,"b":10}\n{"a":2,"b":11}\nabc\n{"a":3,"b":12}\n'
+    write_source_str(source, json_str)
 
     if recovery_mode == plc.io.types.JSONRecoveryMode.FAIL:
         with pytest.raises(RuntimeError):

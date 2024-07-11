@@ -11,6 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf._lib.pylibcudf as plc
+from cudf._lib.pylibcudf.io.types import CompressionType
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 
@@ -135,32 +136,18 @@ def table_data(request):
     ), pa_table
 
 
-@pytest.fixture(params=["zero", "half", "all"])
-def skiprows(table_data, request):
-    """
-    Parametrized skiprows fixture that accompanies table_data
-    """
-    _, pa_table = table_data
-    if request.param == "zero":
-        return 0
-    elif request.param == "half":
-        return len(pa_table) // 2
-    elif request.param == "all":
-        return len(pa_table)
-
-
-@pytest.fixture(params=["zero", "half", "all"])
-def nrows(table_data, skiprows, request):
+@pytest.fixture(params=[(0, 0), ("half", 0), (-1, "half")])
+def nrows_skiprows(table_data, request):
     """
     Parametrized nrows fixture that accompanies table_data
     """
     _, pa_table = table_data
-    if request.param == "zero":
-        return 0
-    elif request.param == "half":
-        return (len(pa_table) - skiprows) // 2
-    elif request.param == "all":
-        return -1
+    nrows, skiprows = request.param
+    if nrows == "half":
+        nrows = len(pa_table) // 2
+    if skiprows == "half":
+        skiprows = (len(pa_table) - nrows) // 2
+    return nrows, skiprows
 
 
 @pytest.fixture(
@@ -176,6 +163,33 @@ def source_or_sink(request, tmp_path):
         # Must construct io.StringIO/io.BytesIO inside
         # fixture, or we'll end up re-using it
         return fp_or_buf()
+
+
+unsupported_types = {
+    # Not supported by pandas
+    # TODO: find a way to test these
+    CompressionType.SNAPPY,
+    CompressionType.BROTLI,
+    CompressionType.LZ4,
+    CompressionType.LZO,
+    CompressionType.ZLIB,
+}
+
+unsupported_text_compression_types = unsupported_types.union(
+    {
+        # compressions not supported by libcudf
+        # for csv/json
+        CompressionType.XZ,
+        CompressionType.ZSTD,
+    }
+)
+
+
+@pytest.fixture(
+    params=set(CompressionType).difference(unsupported_text_compression_types)
+)
+def text_compression_type(request):
+    return request.param
 
 
 @pytest.fixture(params=[opt for opt in plc.io.types.CompressionType])
