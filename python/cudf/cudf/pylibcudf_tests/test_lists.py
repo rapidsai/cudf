@@ -146,8 +146,6 @@ def test_reverse(test_data):
     expect = pa.array([lst[::-1] for lst in list_column])
 
     assert_column_eq(expect, res)
-<<<<<<< HEAD
-=======
 
 
 def test_segmented_gather(test_data):
@@ -183,4 +181,3 @@ def test_extract_list_element_column(test_data):
     expect = pa.array([0, None, None, 7])
 
     assert_column_eq(expect, res)
->>>>>>> branch-24.08

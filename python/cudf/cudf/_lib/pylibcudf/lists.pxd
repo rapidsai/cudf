@@ -29,10 +29,7 @@ cpdef Column contains_nulls(Column)
 cpdef Column index_of(Column, ColumnOrScalar, bool)
 
 cpdef Column reverse(Column)
-<<<<<<< HEAD
-=======
 
 cpdef Column segmented_gather(Column, Column)
 
 cpdef Column extract_list_element(Column, ColumnOrSizeType)
->>>>>>> branch-24.08
