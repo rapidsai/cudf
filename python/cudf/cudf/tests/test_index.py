@@ -2396,8 +2396,8 @@ def test_intersection_index(idx1, idx2, sort, pandas_compatible):
             expected,
             actual,
             exact=False
-            if (idx1.dtype.kind == "b" and not idx2.dtype.kind == "b")
-            or (idx1.dtype.kind != "b" or idx2.dtype.kind != "b")
+            if (idx1.dtype.kind == "b" and idx2.dtype.kind != "b")
+            or (idx1.dtype.kind != "b" or idx2.dtype.kind == "b")
             else True,
         )
 
