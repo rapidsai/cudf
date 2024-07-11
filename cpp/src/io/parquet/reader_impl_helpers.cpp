@@ -1018,7 +1018,7 @@ aggregate_reader_metadata::select_row_groups(
           // ColumnChunkDesc for this row group in create_global_chunk_info().
           selection.emplace_back(rg_idx, chunk_start_row, src_idx);
           // if page-level indexes are present, then collect extra chunk and page info.
-          column_info_for_row_group(selection.back(), chunk_start_row_this_rg);
+          column_info_for_row_group(selection.back(), chunk_start_row);
         }
         // Adjust the number of rows for the last source file.
         if (count >= rows_to_skip + rows_to_read) {
