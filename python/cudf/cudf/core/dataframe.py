@@ -3999,7 +3999,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         a new (ncol x nrow) dataframe. self is (nrow x ncol)
 
         .. pandas-compat::
-            :meth:`pandas.DataFrame.transpose`, :meth:`pandas.DataFrame.T`
+            :meth:`pandas.DataFrame.transpose`, :attr:`pandas.DataFrame.T`
 
             Not supporting *copy* because default and only behavior is
             copy=True
