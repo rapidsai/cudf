@@ -20,39 +20,42 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 
-/*
-create view customer as select * from '/tables/scale-1/customer.parquet';
-create view orders as select * from '/tables/scale-1/orders.parquet';
-create view lineitem as select * from '/tables/scale-1/lineitem.parquet';
-create view supplier as select * from '/tables/scale-1/supplier.parquet';
-create view nation as select * from '/tables/scale-1/nation.parquet';
-create view region as select * from '/tables/scale-1/region.parquet';
-
-select
-    n_name,
-    sum(l_extendedprice * (1 - l_discount)) as revenue
-from
-    customer,
-    orders,
-    lineitem,
-    supplier,
-    nation,
-    region
-where
-    c_custkey = o_custkey
-    and l_orderkey = o_orderkey
-    and l_suppkey = s_suppkey
-    and c_nationkey = s_nationkey
-    and s_nationkey = n_nationkey
-    and n_regionkey = r_regionkey
-    and r_name = 'ASIA'
-    and o_orderdate >= date '1994-01-01'
-    and o_orderdate < date '1995-01-01'
-group by
-    n_name
-order by
-    revenue desc;
-*/
+/**
+ * @file q5.cpp
+ * @brief Implement query 5 of the TPC-H benchmark.
+ *
+ * create view customer as select * from '/tables/scale-1/customer.parquet';
+ * create view orders as select * from '/tables/scale-1/orders.parquet';
+ * create view lineitem as select * from '/tables/scale-1/lineitem.parquet';
+ * create view supplier as select * from '/tables/scale-1/supplier.parquet';
+ * create view nation as select * from '/tables/scale-1/nation.parquet';
+ * create view region as select * from '/tables/scale-1/region.parquet';
+ *
+ * select
+ *    n_name,
+ *    sum(l_extendedprice * (1 - l_discount)) as revenue
+ * from
+ *    customer,
+ *    orders,
+ *    lineitem,
+ *    supplier,
+ *    nation,
+ *    region
+ * where
+ *     c_custkey = o_custkey
+ *    and l_orderkey = o_orderkey
+ *    and l_suppkey = s_suppkey
+ *    and c_nationkey = s_nationkey
+ *    and s_nationkey = n_nationkey
+ *    and n_regionkey = r_regionkey
+ *    and r_name = 'ASIA'
+ *    and o_orderdate >= date '1994-01-01'
+ *    and o_orderdate < date '1995-01-01'
+ * group by
+ *    n_name
+ * order by
+ *    revenue desc;
+ */
 
 /**
  * @brief Calculate the revenue column
