@@ -76,7 +76,7 @@ void bench_groupby_max_multithreaded(nvbench::state& state, nvbench::type_list<T
       auto perform_agg = [&](int64_t index) { gb_obj.aggregate(requests[index], streams[index]); };
       timer.start();
       threads.detach_sequence(decltype(num_threads){0}, num_threads, perform_agg);
-      threads.wait()
+      threads.wait();
       cudf::detail::join_streams(streams, cudf::get_default_stream());
       cudf::get_default_stream().synchronize();
       timer.stop();
