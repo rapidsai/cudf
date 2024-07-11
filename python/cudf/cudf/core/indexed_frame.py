@@ -497,7 +497,7 @@ class IndexedFrame(Frame):
         True
 
         .. pandas-compat::
-            :meth:`pandas.DataFrame.empty`, :meth:`pandas.Series.empty`
+            :attr:`pandas.DataFrame.empty`, :attr:`pandas.Series.empty`
 
             If DataFrame/Series contains only `null` values, it is still not
             considered empty. See the example above.
