@@ -50,8 +50,16 @@ class DataFrame:
             self.table,
             [plc.interop.ColumnMetadata(name=c.name) for c in self.columns],
         )
-
-        return cast(pl.DataFrame, pl.from_arrow(table))
+        return cast(pl.DataFrame, pl.from_arrow(table)).with_columns(
+            *(
+                pl.col(c.name).set_sorted(
+                    descending=c.order == plc.types.Order.DESCENDING
+                )
+                if c.is_sorted
+                else pl.col(c.name)
+                for c in self.columns
+            )
+        )
 
     @cached_property
     def column_names_set(self) -> frozenset[str]:
