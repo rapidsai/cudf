@@ -21,9 +21,11 @@ function(find_and_configure_thread_pool)
     GIT_TAG 097aa718f25d44315cadb80b407144ad455ee4f9
     GIT_SHALLOW TRUE
   )
-  add_library(BS_thread_pool INTERFACE)
-  target_include_directories(BS_thread_pool INTERFACE ${BS_thread_pool_SOURCE_DIR}/include)
-  target_compile_definitions(BS_thread_pool INTERFACE "BS_THREAD_POOL_ENABLE_PAUSE=1")
+  if(NOT TARGET BS_thread_pool)
+    add_library(BS_thread_pool INTERFACE)
+    target_include_directories(BS_thread_pool INTERFACE ${BS_thread_pool_SOURCE_DIR}/include)
+    target_compile_definitions(BS_thread_pool INTERFACE "BS_THREAD_POOL_ENABLE_PAUSE=1")
+  endif()
 endfunction()
 
 find_and_configure_thread_pool()
