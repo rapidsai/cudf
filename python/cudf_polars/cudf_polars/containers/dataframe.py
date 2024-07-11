@@ -9,16 +9,18 @@ import itertools
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
+import pyarrow as pa
+
 import polars as pl
 
 import cudf._lib.pylibcudf as plc
 
 from cudf_polars.containers.column import NamedColumn
+from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence, Set
 
-    import pyarrow as pa
     from typing_extensions import Self
 
     import cudf
@@ -90,6 +92,30 @@ class DataFrame:
                 for name, c in df._data.items()
             ]
         )
+
+    @classmethod
+    def from_polars(cls, df: pl.DataFrame) -> Self:
+        """
+        Create from a polars dataframe.
+
+        Parameters
+        ----------
+        df
+            Polars dataframe to convert
+
+        Returns
+        -------
+        New dataframe representing the input.
+        """
+        table = df.to_arrow()
+        schema = table.schema
+        for i, field in enumerate(schema):
+            schema = schema.set(
+                i, pa.field(field.name, dtypes.downcast_arrow_lists(field.type))
+            )
+        # No-op if the schema is unchanged.
+        table = table.cast(schema)
+        return cls.from_table(plc.interop.from_arrow(table), df.columns)
 
     @classmethod
     def from_table(cls, table: plc.Table, names: Sequence[str]) -> Self:

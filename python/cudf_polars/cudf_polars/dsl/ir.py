@@ -30,7 +30,7 @@ import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import DataFrame, NamedColumn
-from cudf_polars.utils import dtypes, sorting
+from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -385,17 +385,7 @@ class DataFrameScan(IR):
         pdf = pl.DataFrame._from_pydf(self.df)
         if self.projection is not None:
             pdf = pdf.select(self.projection)
-        table = pdf.to_arrow()
-        schema = table.schema
-        for i, field in enumerate(schema):
-            schema = schema.set(
-                i, pa.field(field.name, dtypes.downcast_arrow_lists(field.type))
-            )
-        # No-op if the schema is unchanged.
-        table = table.cast(schema)
-        df = DataFrame.from_table(
-            plc.interop.from_arrow(table), list(self.schema.keys())
-        )
+        df = DataFrame.from_polars(pdf)
         assert all(
             c.obj.type() == dtype for c, dtype in zip(df.columns, self.schema.values())
         )
