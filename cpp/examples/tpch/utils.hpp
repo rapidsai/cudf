@@ -154,6 +154,12 @@ class table_with_cols {
   std::vector<std::string> col_names;
 };
 
+/**
+ * @brief Concatenate two vectors
+ *
+ * @param lhs The left vector
+ * @param rhs The right vector
+ */
 template <typename T>
 std::vector<T> concat(std::vector<T> const& lhs, std::vector<T> const& rhs)
 {
@@ -382,6 +388,13 @@ std::unique_ptr<table_with_cols> read_parquet(
   return std::make_unique<table_with_cols>(std::move(table_with_metadata.tbl), column_names);
 }
 
+/**
+ * @brief Generate the `std::tm` structure from year, month, and day
+ *
+ * @param year The year
+ * @param month The month
+ * @param day The day
+ */
 std::tm make_tm(int year, int month, int day)
 {
   std::tm tm = {0};
@@ -391,6 +404,13 @@ std::tm make_tm(int year, int month, int day)
   return tm;
 }
 
+/**
+ * @brief Calculate the number of days since the UNIX epoch
+ *
+ * @param year The year
+ * @param month The month
+ * @param day The day
+ */
 int32_t days_since_epoch(int year, int month, int day)
 {
   std::tm tm             = make_tm(year, month, day);
