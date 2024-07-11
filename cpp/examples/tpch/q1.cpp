@@ -52,7 +52,7 @@ std::unique_ptr<cudf::column> calc_disc_price(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
-  auto one = cudf::numeric_scalar<double>(1);
+  auto const one = cudf::numeric_scalar<double>(1);
   auto one_minus_discount =
     cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type(), stream, mr);
   auto disc_price_type = cudf::data_type{cudf::type_id::FLOAT64};
@@ -71,7 +71,7 @@ std::unique_ptr<cudf::column> calc_charge(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
-  auto one = cudf::numeric_scalar<double>(1);
+  auto const one = cudf::numeric_scalar<double>(1);
   auto one_plus_tax =
     cudf::binary_operation(one, tax, cudf::binary_operator::ADD, tax.type(), stream, mr);
   auto charge_type = cudf::data_type{cudf::type_id::FLOAT64};
