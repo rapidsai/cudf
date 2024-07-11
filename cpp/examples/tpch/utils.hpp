@@ -170,20 +170,27 @@ std::vector<T> concat(std::vector<T> const& lhs, std::vector<T> const& rhs)
   return result;
 }
 
-std::unique_ptr<cudf::table> join_and_gather(
-  cudf::table_view left_input,
-  cudf::table_view right_input,
-  std::vector<cudf::size_type> left_on,
-  std::vector<cudf::size_type> right_on,
-  cudf::null_equality compare_nulls,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+/**
+ * @brief Inner join two tables and gather the result
+ *
+ * @param left_input The left input table
+ * @param right_input The right input table
+ * @param left_on The columns to join on in the left table
+ * @param right_on The columns to join on in the right table
+ * @param compare_nulls The null equality policy
+ */
+std::unique_ptr<cudf::table> join_and_gather(cudf::table_view left_input,
+                                             cudf::table_view right_input,
+                                             std::vector<cudf::size_type> left_on,
+                                             std::vector<cudf::size_type> right_on,
+                                             cudf::null_equality compare_nulls)
 {
   CUDF_FUNC_RANGE();
-  auto oob_policy     = cudf::out_of_bounds_policy::DONT_CHECK;
-  auto left_selected  = left_input.select(left_on);
-  auto right_selected = right_input.select(right_on);
-  auto const [left_join_indices, right_join_indices] =
-    cudf::inner_join(left_selected, right_selected, compare_nulls, mr);
+  auto oob_policy                                    = cudf::out_of_bounds_policy::DONT_CHECK;
+  auto left_selected                                 = left_input.select(left_on);
+  auto right_selected                                = right_input.select(right_on);
+  auto const [left_join_indices, right_join_indices] = cudf::inner_join(
+    left_selected, right_selected, compare_nulls, rmm::mr::get_current_device_resource());
 
   auto left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
   auto right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
