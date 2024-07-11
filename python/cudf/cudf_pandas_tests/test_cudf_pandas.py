@@ -1080,6 +1080,13 @@ def test_pickle(obj):
 
     tm.assert_equal(obj, copy)
 
+    with tempfile.TemporaryFile() as f:
+        xpd.to_pickle(obj, f)
+        f.seek(0)
+        copy = xpd.read_pickle(f)
+
+    tm.assert_equal(obj, copy)
+
 
 def test_dataframe_query():
     cudf_pandas_df = xpd.DataFrame({"foo": [1, 2, 3], "bar": [4, 5, 6]})
@@ -1566,3 +1573,62 @@ def test_arrow_string_arrays():
     )
 
     tm.assert_equal(cu_arr, pd_arr)
+
+
+@pytest.mark.parametrize("indexer", ["at", "iat"])
+def test_at_iat(indexer):
+    df = xpd.DataFrame(range(3))
+    result = getattr(df, indexer)[0, 0]
+    assert result == 0
+
+    getattr(df, indexer)[0, 0] = 1
+    expected = pd.DataFrame([1, 1, 2])
+    tm.assert_frame_equal(df, expected)
+
+
+def test_at_setitem_empty():
+    df = xpd.DataFrame({"name": []}, dtype="float64")
+    df.at[0, "name"] = 1.0
+    df.at[0, "new"] = 2.0
+    expected = pd.DataFrame({"name": [1.0], "new": [2.0]})
+    tm.assert_frame_equal(df, expected)
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        xpd.Index([1, 2, 3], name="foo"),
+        xpd.Index(["a", "b", "c"], name="foo"),
+        xpd.RangeIndex(start=0, stop=3, step=1, name="foo"),
+        xpd.CategoricalIndex(["a", "b", "a"], name="foo"),
+        xpd.DatetimeIndex(
+            ["2024-04-24", "2025-04-24", "2026-04-24"], name="foo"
+        ),
+        xpd.TimedeltaIndex(["1 days", "2 days", "3 days"], name="foo"),
+        xpd.PeriodIndex(
+            ["2024-06", "2023-06", "2022-06"], freq="M", name="foo"
+        ),
+        xpd.IntervalIndex.from_breaks([0, 1, 2, 3], name="foo"),
+        xpd.MultiIndex.from_tuples(
+            [(1, "a"), (2, "b"), (3, "c")], names=["foo1", "bar1"]
+        ),
+    ],
+)
+def test_change_index_name(index):
+    s = xpd.Series([1, 2, object()], index=index)
+    df = xpd.DataFrame({"values": [1, 2, object()]}, index=index)
+
+    if isinstance(index, xpd.MultiIndex):
+        names = ["foo2", "bar2"]
+        s.index.names = names
+        df.index.names = names
+
+        assert s.index.names == names
+        assert df.index.names == names
+    else:
+        name = "bar"
+        s.index.name = name
+        df.index.name = name
+
+        assert s.index.name == name
+        assert df.index.name == name
