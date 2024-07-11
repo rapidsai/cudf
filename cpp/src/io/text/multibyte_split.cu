@@ -55,9 +55,7 @@
 #include <numeric>
 #include <optional>
 
-namespace cudf {
-namespace io {
-namespace text {
+namespace cudf::io::text {
 namespace detail {
 namespace {
 
@@ -341,12 +339,11 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   std::optional<byte_offset> last_row_offset;
 
   auto [global_offsets, chars] = [&] {
-    auto const concurrency = 2;
-
     // must be at least 32 when using warp-reduce on partials
     // must be at least 1 more than max possible concurrent tiles
     // best when at least 32 more than max possible concurrent tiles, due to rolling `invalid`s
-    auto num_tile_states = std::max(32, TILES_PER_CHUNK * concurrency + 32);
+    auto const concurrency = 2;
+    auto num_tile_states   = std::max(32, TILES_PER_CHUNK * concurrency + 32);
     auto tile_multistates =
       scan_tile_state<multistate>(num_tile_states, stream, rmm::mr::get_current_device_resource());
     auto tile_offsets = scan_tile_state<output_offset>(
@@ -380,7 +377,6 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     auto reader               = source.create_reader();
     auto const byte_range_end = byte_range.offset() + byte_range.size();
     reader->skip_bytes(chunk_offset);
-
     // amortize output chunk allocations over 8 worst-case outputs. This limits the overallocation
     constexpr auto max_growth = 8;
     output_builder<byte_offset> row_offset_storage(ITEMS_PER_CHUNK, max_growth, stream);
@@ -597,6 +593,4 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   return result;
 }
 
-}  // namespace text
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::text
