@@ -20,13 +20,7 @@ def dtype(request):
     return request.param
 
 
-@pytest.fixture(
-    params=[
-        False,
-        pytest.param(True, marks=pytest.mark.xfail(reason="No handler for set_sorted")),
-    ],
-    ids=["unsorted", "sorted"],
-)
+@pytest.fixture(params=[False, True], ids=["unsorted", "sorted"])
 def is_sorted(request):
     return request.param
 
