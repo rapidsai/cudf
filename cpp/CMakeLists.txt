@@ -411,6 +411,7 @@ add_library(
   src/io/orc/stripe_init.cu
   src/datetime/timezone.cpp
   src/io/orc/writer_impl.cu
+  src/io/parquet/arrow_schema_writer.cpp
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
@@ -427,6 +428,7 @@ add_library(
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu
+  src/io/parquet/writer_impl_helpers.cpp
   src/io/parquet/decode_fixed.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
