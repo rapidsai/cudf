@@ -220,10 +220,10 @@ class _SeriesIlocIndexer(_FrameIndexer):
                     f"Cannot assign {value=} to "
                     f"non-float dtype={self._frame.dtype}"
                 )
-            elif (
-                self._frame.dtype.kind == "b"
-                and value.dtype.kind != "b"
-                and value not in {None, cudf.NA}
+            elif self._frame.dtype.kind == "b" and not (
+                value in {None, cudf.NA}
+                or isinstance(value, (np.bool_, bool))
+                or (isinstance(value, cudf.Scalar) and value.dtype.kind == "b")
             ):
                 raise MixedTypeError(
                     f"Cannot assign {value=} to "
