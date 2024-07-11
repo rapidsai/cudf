@@ -20,20 +20,23 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 
-/*
-create view lineitem as select * from '/tables/scale-1/lineitem.parquet';
-
-select
-    sum(l_extendedprice * l_discount) as revenue
-from
-    lineitem
-where
-    l_shipdate >= date '1994-01-01'
-    and l_shipdate < date '1995-01-01'
-    and l_discount >= 0.05
-    and l_discount <= 0.07
-    and l_quantity < 24;
-*/
+/**
+ * @file q6.cpp
+ * @brief Implement query 6 of the TPC-H benchmark.
+ *
+ * create view lineitem as select * from '/tables/scale-1/lineitem.parquet';
+ *
+ * select
+ *    sum(l_extendedprice * l_discount) as revenue
+ * from
+ *    lineitem
+ * where
+ *    l_shipdate >= date '1994-01-01'
+ *    and l_shipdate < date '1995-01-01'
+ *    and l_discount >= 0.05
+ *    and l_discount <= 0.07
+ *    and l_quantity < 24;
+ */
 
 /**
  * @brief Calculate the revenue column
