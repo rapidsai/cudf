@@ -187,19 +187,19 @@ std::unique_ptr<cudf::table> join_and_gather(cudf::table_view left_input,
 {
   CUDF_FUNC_RANGE();
   auto oob_policy                                    = cudf::out_of_bounds_policy::DONT_CHECK;
-  auto left_selected                                 = left_input.select(left_on);
-  auto right_selected                                = right_input.select(right_on);
+  auto const left_selected                           = left_input.select(left_on);
+  auto const right_selected                          = right_input.select(right_on);
   auto const [left_join_indices, right_join_indices] = cudf::inner_join(
     left_selected, right_selected, compare_nulls, rmm::mr::get_current_device_resource());
 
-  auto left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
-  auto right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
+  auto const left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
+  auto const right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
 
-  auto left_indices_col  = cudf::column_view{left_indices_span};
-  auto right_indices_col = cudf::column_view{right_indices_span};
+  auto const left_indices_col  = cudf::column_view{left_indices_span};
+  auto const right_indices_col = cudf::column_view{right_indices_span};
 
-  auto left_result  = cudf::gather(left_input, left_indices_col, oob_policy);
-  auto right_result = cudf::gather(right_input, right_indices_col, oob_policy);
+  auto const left_result  = cudf::gather(left_input, left_indices_col, oob_policy);
+  auto const right_result = cudf::gather(right_input, right_indices_col, oob_policy);
 
   auto joined_cols = left_result->release();
   auto right_cols  = right_result->release();
