@@ -35,6 +35,14 @@ where
     and l_quantity < 24;
 */
 
+/**
+ * @brief Calculate the revenue column
+ *
+ * @param extendedprice The extended price column
+ * @param discount The discount column
+ * @param stream The CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ */
 std::unique_ptr<cudf::column> calc_revenue(
   cudf::column_view extendedprice,
   cudf::column_view discount,

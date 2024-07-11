@@ -46,6 +46,14 @@ order by
     l_linestatus;
 */
 
+/**
+ * @brief Calculate the discount price column
+ *
+ * @param discount The discount column
+ * @param extendedprice The extended price column
+ * @param stream The CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ */
 std::unique_ptr<cudf::column> calc_disc_price(
   cudf::column_view discount,
   cudf::column_view extendedprice,
@@ -65,6 +73,14 @@ std::unique_ptr<cudf::column> calc_disc_price(
   return disc_price;
 }
 
+/**
+ * @brief Calculate the charge column
+ *
+ * @param tax The tax column
+ * @param disc_price The discount price column
+ * @param stream The CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ */
 std::unique_ptr<cudf::column> calc_charge(
   cudf::column_view tax,
   cudf::column_view disc_price,

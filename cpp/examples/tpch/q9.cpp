@@ -64,6 +64,16 @@ order by
     o_year desc;
 */
 
+/**
+ * @brief Calculate the amount column
+ *
+ * @param discount The discount column
+ * @param extendedprice The extended price column
+ * @param supplycost The supply cost column
+ * @param quantity The quantity column
+ * @param stream The CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ */
 std::unique_ptr<cudf::column> calc_amount(
   cudf::column_view discount,
   cudf::column_view extendedprice,
