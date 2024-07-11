@@ -75,7 +75,7 @@ cpdef TableWithMetadata read_csv(
         Number of bytes to read. By default, will read all bytes.
     col_names : list, default None
         The column names to use.
-    prefix : string, default ""
+    prefix : string, default ''
         The prefix to apply to the column names.
     mangle_dupe_cols : bool, default True
         If True, rename duplicate column names.
@@ -90,14 +90,14 @@ cpdef TableWithMetadata read_csv(
     header : size_type, default 0
         The index of the row that will be used for header names.
         Pass -1 to use default column names.
-    lineterminator : str, default "\n"
+    lineterminator : str, default '\\n'
         The character used to determine the end of a line.
     delimiter : str, default ","
         The character used to separate fields in a row.
     thousands : str, default None
         The character used as the thousands separator.
         Cannot match delimiter.
-    decimal : str, default "."
+    decimal : str, default '.'
         The character used as the decimal separator.
         Cannot match delimiter.
     comment : str, default None
