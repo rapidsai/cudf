@@ -23,6 +23,7 @@ function(find_and_configure_thread_pool)
   )
   add_library(BS_thread_pool INTERFACE)
   target_include_directories(BS_thread_pool INTERFACE ${BS_thread_pool_SOURCE_DIR}/include)
+  target_compile_definitions(BS_thread_pool INTERFACE "BS_THREAD_POOL_ENABLE_PAUSE=1")
 endfunction()
 
 find_and_configure_thread_pool()

@@ -800,9 +800,6 @@ target_compile_definitions(cudf PRIVATE "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL
 # Define spdlog level
 target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}")
 
-# Enable pause functions in thread_pool implementation
-target_compile_definitions(cudf PRIVATE "BS_THREAD_POOL_ENABLE_PAUSE=1")
-
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
 
