@@ -682,7 +682,7 @@ abstract class Aggregation {
     }
 
     /**
-     * Corresponding value of the minimum order element along with the minimum order.
+     * Corresponding value of the maximum order element along with the maximum order.
      */
     static final class MaxByAggregation extends NoParamAggregation {
         private MaxByAggregation() {

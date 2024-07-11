@@ -109,10 +109,10 @@ std::unique_ptr<column> group_min(column_view const& values,
  * group_labels = [     0,      0,      0,       1,       1,         2,      2,         3]
  * num_groups   = 4
  * 
- * group_min_by = [{4, 4}, {-1, 3}, {4, 4}, {<NA>, 2}]
+ * group_max_by = [{4, 4}, {-1, 3}, {4, 4}, {<NA>, 2}]
  * @endcode
  * 
- * @param structs_column Structs column containing the values to get minimum from
+ * @param structs_column Structs column containing the values to get maximum from
  * @param group_labels ID of group that the corresponding value belongs to
  * @param num_groups Number of groups
  * @param stream CUDA stream used for device memory operations and kernel launches.
