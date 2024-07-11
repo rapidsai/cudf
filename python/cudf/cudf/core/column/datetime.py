@@ -565,9 +565,7 @@ class DatetimeColumn(column.ColumnBase):
         # We check this on `other` before reflection since we already know the
         # dtype of `self`.
         other_is_timedelta = other.dtype.kind == "m"
-        other_is_datetime64 = (
-            not other_is_timedelta and other.dtype.kind == "M"
-        )
+        other_is_datetime64 = other.dtype.kind == "M"
         lhs, rhs = (other, self) if reflect else (self, other)
         out_dtype = None
 
