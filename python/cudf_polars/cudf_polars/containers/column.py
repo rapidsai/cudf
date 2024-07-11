@@ -101,6 +101,8 @@ class Column:
         --------
         set_sorted, sorted_like
         """
+        if len(from_) <= 1:
+            return self
         ascending = from_.flags["SORTED_ASC"]
         descending = from_.flags["SORTED_DESC"]
         if ascending or descending:
