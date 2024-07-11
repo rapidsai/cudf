@@ -117,6 +117,9 @@ struct metadata : public FileMetaData {
   void sanitize_schema();
 };
 
+/**
+ * @brief Class to extract data types from arrow schema tree
+ */
 struct arrow_schema_data_types {
   std::vector<arrow_schema_data_types> children;
   data_type type{type_id::EMPTY};
@@ -142,7 +145,7 @@ class aggregate_reader_metadata {
     const;
 
   /**
-   * @brief Decodes and constructs the arrow schema from the "ARROW:schema" IPC message
+   * @brief Decodes and constructs the arrow schema from the ARROW_SCHEMA_KEY IPC message
    * in key value metadata section of Parquet file footer
    */
   [[nodiscard]] arrow_schema_data_types collect_arrow_schema() const;
