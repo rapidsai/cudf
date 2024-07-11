@@ -236,9 +236,16 @@ class Scan(IR):
                 # of columns so that column projection works right.
                 raise NotImplementedError("Reading CSV without header")
         elif self.typ == "ndjson":
-            # Only relevant options are low_memory (use chunked reader)
-            # and schema
-            print(self.reader_options)
+            # TODO: consider handling the low memory option here
+            # (maybe use chunked JSON reader)
+            if self.reader_options["infer_schema_length"] != 100:
+                raise NotImplementedError(
+                    "infer_schema_length is not supported in the JSON reader"
+                )
+            if self.reader_options["ignore_errors"]:
+                raise NotImplementedError(
+                    "ignore_errors is not supported in the JSON reader"
+                )
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -314,8 +321,14 @@ class Scan(IR):
             assert isinstance(cdf, cudf.DataFrame)
             df = DataFrame.from_cudf(cdf)
         elif self.typ == "ndjson":
+            json_schema: list[tuple[str, str, list]] = [
+                (name, typ, []) for name, typ in self.schema.items()
+            ]
             plc_tbl_w_meta = plc.io.json.read_json(
-                plc.io.SourceInfo(self.paths), lines=True
+                plc.io.SourceInfo(self.paths),
+                lines=True,
+                dtypes=json_schema,
+                prune_columns=True,
             )
             # TODO: I don't think cudf-polars supports nested types in general right now
             # (but when it does, we should pass child column names from nested columns in)
@@ -323,7 +336,7 @@ class Scan(IR):
                 plc_tbl_w_meta.tbl, plc_tbl_w_meta.column_names(include_children=False)
             )
             # TODO: libcudf doesn't support column-projection (like usecols)
-            # We should change the prune_columns param to usecols (with a deprecation cycle)
+            # We should change the prune_columns param to usecols there to support this
             if with_columns is not None:
                 df = df.select(with_columns)
         else:
