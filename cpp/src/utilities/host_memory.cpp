@@ -241,7 +241,7 @@ class new_delete_memory_resource {
 };
 
 static_assert(cuda::mr::resource_with<new_delete_memory_resource, cuda::mr::host_accessible>,
-              "Pinned pool mr must be accessible from both host and device");
+              "Pageable pool mr must be accessible from the host");
 
 }  // namespace
 
@@ -285,7 +285,7 @@ size_t get_kernel_pinned_copy_threshold() { return kernel_pinned_copy_threshold(
 CUDF_EXPORT auto& allocate_host_as_pinned_threshold()
 {
   // use pageable memory for all host allocations
-  static std::atomic<size_t> threshold = 16 * 1024;
+  static std::atomic<size_t> threshold = 0;
   return threshold;
 }
 

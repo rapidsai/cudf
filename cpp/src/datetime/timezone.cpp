@@ -490,7 +490,7 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
                  transition_times.cend(),
                  std::back_inserter(ttimes_typed),
                  [](auto ts) { return timestamp_s{duration_s{ts}}; });
-  auto offsets_typed = make_empty_host_vector<duration_s>(transition_times.size(), stream);
+  auto offsets_typed = make_empty_host_vector<duration_s>(offsets.size(), stream);
   std::transform(offsets.cbegin(), offsets.cend(), std::back_inserter(offsets_typed), [](auto ts) {
     return duration_s{ts};
   });
