@@ -94,7 +94,6 @@ def _test_binaryop_inner(pa_data, plc_data, pyop, plc_op):
         with pytest.raises(TypeError):
             get_result()
         return
-
     expect = pyop(lhs_py, rhs_py).cast(outty_py)
     got = get_result()
     assert_column_eq(expect, got)
@@ -375,7 +374,7 @@ def test_log_base(pa_data, plc_data):
 @pytest.mark.parametrize(
     "pa_data",
     [
-        ("float64", "float64", "int64"),
+        ("float64", "float64", "float64"),
         ("int64", "float64", "float64"),
         ("int64", "int64", "timedelta64[ns]"),
     ],
@@ -445,6 +444,8 @@ def test_shift_right_unsigned(pa_data, plc_data):
         y = y.to_pylist()
 
         def logical_right_shift(x, y):
+            if x is None or y is None:
+                return None
             unsigned_x = np.uint32(x)
             result = unsigned_x >> y
             return result
@@ -755,7 +756,7 @@ def test_generic_binary(pa_data, plc_data):
     _test_binaryop_inner(
         pa_data,
         plc_data,
-        pa.compute.generic_binary,
+        None,
         plc.binaryop.BinaryOperator.GENERIC_BINARY,
     )
 
