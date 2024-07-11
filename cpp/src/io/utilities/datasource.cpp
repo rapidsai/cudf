@@ -505,6 +505,12 @@ std::unique_ptr<datasource> datasource::create(cudf::host_span<std::byte const> 
   return std::make_unique<host_buffer_source>(buffer);
 }
 
+std::unique_ptr<datasource> datasource::create(
+  std::map<size_t, cudf::host_span<std::byte const>> buffer_map)
+{
+  return std::make_unique<sparse_host_buffer_source>(buffer_map);
+}
+
 std::unique_ptr<datasource> datasource::create(cudf::device_span<std::byte const> buffer)
 {
   return std::make_unique<device_buffer_source>(buffer);
