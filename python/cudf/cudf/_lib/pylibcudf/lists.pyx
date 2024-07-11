@@ -9,10 +9,7 @@ from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.lists cimport (
     contains as cpp_contains,
     explode as cpp_explode,
-<<<<<<< HEAD
-=======
     gather as cpp_gather,
->>>>>>> branch-24.08
     reverse as cpp_reverse,
 )
 from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
