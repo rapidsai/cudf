@@ -440,10 +440,21 @@ def test_shift_right(pa_data, plc_data):
     ids=idfn,
 )
 def test_shift_right_unsigned(pa_data, plc_data):
+    def shift_right_unsigned(x, y):
+        x = x.to_pylist()
+        y = y.to_pylist()
+
+        def logical_right_shift(x, y):
+            unsigned_x = np.uint32(x)
+            result = unsigned_x >> y
+            return result
+
+        return pa.array([logical_right_shift(x, y) for x, y in zip(x, y)])
+
     _test_binaryop_inner(
         pa_data,
         plc_data,
-        pa.compute.shift_right_unsigned,
+        shift_right_unsigned,
         plc.binaryop.BinaryOperator.SHIFT_RIGHT_UNSIGNED,
     )
 
@@ -689,7 +700,7 @@ def test_null_max(pa_data, plc_data):
     _test_binaryop_inner(
         pa_data,
         plc_data,
-        pa.compute.max,
+        pa.compute.max_element_wise,
         plc.binaryop.BinaryOperator.NULL_MAX,
     )
 
@@ -707,7 +718,7 @@ def test_null_min(pa_data, plc_data):
     _test_binaryop_inner(
         pa_data,
         plc_data,
-        pa.compute.min,
+        pa.compute.min_element_wise,
         plc.binaryop.BinaryOperator.NULL_MIN,
     )
 
