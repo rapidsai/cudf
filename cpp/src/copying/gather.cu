@@ -48,7 +48,6 @@ std::unique_ptr<table> gather(table_view const& source_table,
   auto map_begin = indexalator_factory::make_input_iterator(gather_map);
   auto map_end   = map_begin + gather_map.size();
 
-  // ZZZZ prefetch gather_map
   cudf::experimental::prefetch::detail::prefetch("prefetch", gather_map);
 
   if (neg_indices == negative_index_policy::ALLOWED) {

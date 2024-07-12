@@ -69,7 +69,6 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
   auto offsets_column      = make_numeric_column(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto d_offsets = offsets_column->mutable_view().template data<int32_t>();
-  // ZZZZ prefetch d_offsets
   cudf::experimental::prefetch::detail::prefetch(
     "prefetch", d_offsets, offsets_column->size() * sizeof(int32_t));
 
@@ -95,7 +94,6 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
     offsets_column = make_numeric_column(
       data_type{type_id::INT64}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
     auto d_offsets64 = offsets_column->mutable_view().template data<int64_t>();
-    // ZZZZ prefetch d_offsets64
     cudf::experimental::prefetch::detail::prefetch(
       "prefetch", d_offsets64, offsets_column->size() * sizeof(int64_t));
 
@@ -195,7 +193,6 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
   // Now build the chars column
   rmm::device_uvector<char> chars(bytes, stream, mr);
   size_and_exec_fn.d_chars = chars.data();
-  // ZZZZ prefetch chars
   cudf::experimental::prefetch::detail::prefetch("prefetch", chars.data(), chars.size());
 
   // Execute the function fn again to fill in the chars data.

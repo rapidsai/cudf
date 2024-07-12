@@ -106,7 +106,6 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
       return src_offsets[offset_index + 1] - src_offsets[offset_index];
     }));
 
-  // ZZZZ prefetch src_offsets, null_mask
   cudf::experimental::prefetch::detail::prefetch(
     "prefetch", src_offsets, source_column.offsets().size() * sizeof(int32_t));
   cudf::experimental::prefetch::detail::prefetch(
@@ -123,7 +122,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
 
   // generate the base offsets
   rmm::device_uvector<int32_t> base_offsets = rmm::device_uvector<int32_t>(output_count, stream);
-  // ZZZZ prefetch dst_offsets, base_offsets, null_mask
+
   cudf::experimental::prefetch::detail::prefetch(
     "prefetch", dst_offsets_c->view().template data<int32_t>(), output_count * sizeof(int32_t));
   cudf::experimental::prefetch::detail::prefetch(

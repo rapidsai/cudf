@@ -309,7 +309,6 @@ std::pair<std::unique_ptr<column>, size_type> make_offsets_child_column(
     data_type{type_to_id<size_type>()}, count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
   auto d_offsets    = offsets_view.template data<size_type>();
-  // ZZZZ prefetch d_offsets
   cudf::experimental::prefetch::detail::prefetch("prefetch", d_offsets, offsets_view.size());
 
   // The number of offsets is count+1 so to build the offsets from the sizes

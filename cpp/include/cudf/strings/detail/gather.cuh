@@ -233,7 +233,6 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
 
   auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
   auto d_chars    = chars_data.data();
-  // ZZZZ prefetch d_chars,chars_bytes
   cudf::experimental::prefetch::detail::prefetch("prefetch", d_chars, chars_bytes);
 
   constexpr int warps_per_threadblock = 4;
@@ -302,13 +301,11 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
     strings.is_empty() ? make_empty_column(type_id::INT32)->view() : strings.offsets(),
     strings.offset());
 
-  // ZZZZ prefetch strings.offsets[offset,size]
   if (!strings.is_empty()) {
     auto offsets =
       cudf::slice(strings.offsets(), {strings.offset(), strings.offset() + strings.size()}, stream)
         .front();
     cudf::experimental::prefetch::detail::prefetch("prefetch", offsets);
-    // ZZZZ prefetch null_mask
     cudf::experimental::prefetch::detail::prefetch(
       "prefetch", strings.null_mask(), cudf::bitmask_allocation_size_bytes(strings.size()));
   }
@@ -325,7 +322,6 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
     sizes_itr, sizes_itr + output_count, stream, mr);
 
   // build chars column
-  // ZZZZ prefetch out_offsets and input chars
   cudf::experimental::prefetch::detail::prefetch("prefetch", out_offsets_column->view());
   cudf::experimental::prefetch::detail::prefetch(
     "prefetch", strings.chars_begin(stream), strings.chars_size(stream));

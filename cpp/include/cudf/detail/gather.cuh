@@ -222,7 +222,6 @@ struct column_gatherer_impl<Element, std::enable_if_t<is_rep_layout_compatible<E
     auto const policy       = cudf::mask_allocation_policy::NEVER;
     auto destination_column = cudf::allocate_like(source_column, num_rows, policy, stream, mr);
 
-    // ZZZZ prefetch source_column, destination_column
     auto const src = source_column.data<Element>();
     cudf::experimental::prefetch::detail::prefetch(
       "prefetch", src, sizeof(Element) * source_column.size());
@@ -587,7 +586,6 @@ void gather_bitmask(table_view const& source,
   // Make device array of target bitmask pointers
   std::vector<bitmask_type*> target_masks(target.size());
   std::transform(target.begin(), target.end(), target_masks.begin(), [](auto const& col) {
-    // ZZZZ prefetch masks
     auto mask = col->mutable_view().null_mask();
     cudf::experimental::prefetch::detail::prefetch(
       "prefetch", mask, cudf::bitmask_allocation_size_bytes(col->size()));
