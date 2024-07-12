@@ -1609,8 +1609,8 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
       }
     }
   }
-  multibuffer_memset(memset_bufs, 0, _stream, _mr);
-  multibuffer_memset(nullmask_bufs, 0xFF, _stream, _mr);
+  multibuffer_memset<128 * 1024, 256>(memset_bufs, 0, _stream, _mr);
+  multibuffer_memset<128 * 1024, 256>(nullmask_bufs, 0xFF, _stream, _mr);
   _stream.synchronize();
 }
 

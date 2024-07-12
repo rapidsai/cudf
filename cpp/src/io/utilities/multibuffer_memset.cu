@@ -9,6 +9,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 
 #include <rmm/cuda_stream_view.hpp>
@@ -28,8 +29,6 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
-#include <cudf/detail/nvtx/ranges.hpp>
-
 
 #include <cstddef>
 #include <numeric>
@@ -60,28 +59,28 @@ __global__ void memset_kernel(memset_task * tasks, int8_t const value)
   }
 }
 
+template <int bytes_per_task, int threads_per_block>
 void multibuffer_memset(std::vector<cudf::device_span<uint8_t>> & bufs, 
                         int8_t const value,
-                        rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref temp_mr
+                        rmm::cuda_stream_view _stream,
+                        rmm::device_async_resource_ref _mr
                         )
 { 
   // define task and bytes paramters
-  constexpr uint64_t bytes_per_task = 128 * 1024;
-  constexpr uint64_t threads_per_block = 256;
   auto const num_bufs = bufs.size();
+  auto const bpt = bytes_per_task;
 
   // declare offsets vector which stores for each buffer at which task in the task lists it starts at 
-  rmm::device_uvector<std::size_t> offsets(bufs.size() + 1, stream, temp_mr); 
+  rmm::device_uvector<std::size_t> offsets(bufs.size() + 1, _stream, _mr); 
 
   // copy bufs into gpu and then get sizes from there (cudf detail function make device vector async)
-  auto gpu_bufs = cudf::detail::make_device_uvector_async(bufs, stream, temp_mr);
+  auto gpu_bufs = cudf::detail::make_device_uvector_async(bufs, _stream, _mr);
 
   // get a vector with the sizes of all buffers
   auto buf_count_iter = cudf::detail::make_counting_transform_iterator(
     0, 
     cuda::proclaim_return_type<std::size_t>(
-      [gpu_bufs = gpu_bufs.data(), bytes_per_task = bytes_per_task, num_bufs] __device__(cudf::size_type i) {
+      [gpu_bufs = gpu_bufs.data(), bpt, num_bufs] __device__(cudf::size_type i) {
         size_t temp = cudf::util::round_up_safe(gpu_bufs[i].size(), bytes_per_task);
         return i >= num_bufs ? 0 : temp / bytes_per_task;
       }
@@ -89,22 +88,22 @@ void multibuffer_memset(std::vector<cudf::device_span<uint8_t>> & bufs,
   );
 
   // fill up offsets buffer using exclusive scan
-  thrust::exclusive_scan(rmm::exec_policy(stream, temp_mr), buf_count_iter, buf_count_iter + bufs.size() + 1, offsets.begin(), 0);
+  thrust::exclusive_scan(rmm::exec_policy(_stream, _mr), buf_count_iter, buf_count_iter + bufs.size() + 1, offsets.begin(), 0);
 
   // the total number of tasks is the last number in the offsets vector
-  size_t const total_tasks = offsets.back_element(stream);
+  size_t const total_tasks = offsets.back_element(_stream);
 
   // declaring list of tasks to pass onto cuda kernel
-  rmm::device_uvector<memset_task> tasks(total_tasks, stream, temp_mr); 
+  rmm::device_uvector<memset_task> tasks(total_tasks, _stream, _mr); 
 
   // fill up task lists based on buffer values
   thrust::transform(
-    rmm::exec_policy(stream, temp_mr),
+    rmm::exec_policy(_stream, _mr),
     thrust::make_counting_iterator<std::size_t>(0), 
     thrust::make_counting_iterator<std::size_t>(total_tasks), 
     tasks.begin(), 
     cuda::proclaim_return_type<memset_task>(
-      [offsets = offsets.data(), offset_size = num_bufs + 1, gpu_bufs = gpu_bufs.data(), bytes_per_task] __device__(cudf::size_type task) {
+      [offsets = offsets.data(), offset_size = num_bufs + 1, gpu_bufs = gpu_bufs.data(), bpt] __device__(cudf::size_type task) {
         auto buf_idx = thrust::upper_bound(thrust::seq, offsets, offsets + offset_size, task);
         if (*buf_idx > task) {buf_idx -= 1;}
         size_t start = (task - *buf_idx) * bytes_per_task;
