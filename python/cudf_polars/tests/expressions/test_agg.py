@@ -53,14 +53,25 @@ def test_agg(df, agg):
 
 
 @pytest.mark.parametrize(
-    "propagate_nans",
-    [pytest.param(False, marks=pytest.mark.xfail(reason="Need to mask nans")), True],
-    ids=["mask_nans", "propagate_nans"],
+    "op", [pl.Expr.min, pl.Expr.nan_min, pl.Expr.max, pl.Expr.nan_max]
 )
-@pytest.mark.parametrize("op", ["min", "max"])
-def test_agg_float_with_nans(propagate_nans, op):
-    df = pl.LazyFrame({"a": pl.Series([1, 2, float("nan")], dtype=pl.Float64())})
-    op = getattr(pl.Expr, f"nan_{op}" if propagate_nans else op)
+def test_agg_float_with_nans(op):
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series([1, 2, float("nan")], dtype=pl.Float64()),
+            "b": pl.Series([1, 2, None], dtype=pl.Int8()),
+        }
+    )
+    q = df.select(op(pl.col("a")), op(pl.col("b")))
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.xfail(reason="https://github.com/pola-rs/polars/issues/17513")
+@pytest.mark.parametrize("op", [pl.Expr.max, pl.Expr.min])
+def test_agg_singleton(op):
+    df = pl.LazyFrame({"a": pl.Series([float("nan")])})
+
     q = df.select(op(pl.col("a")))
 
     assert_gpu_result_equal(q)

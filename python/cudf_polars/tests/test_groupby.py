@@ -130,3 +130,27 @@ def test_groupby_unsupported(df, expr):
     q = df.group_by("key1").agg(expr)
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.xfail(reason="https://github.com/pola-rs/polars/issues/17513")
+def test_groupby_minmax_with_nan():
+    df = pl.LazyFrame(
+        {"key": [1, 2, 2, 2], "value": [float("nan"), 1, -1, float("nan")]}
+    )
+
+    q = df.group_by("key").agg(
+        pl.col("value").max().alias("max"), pl.col("value").min().alias("min")
+    )
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("op", [pl.Expr.nan_max, pl.Expr.nan_min])
+def test_groupby_nan_minmax_raises(op):
+    df = pl.LazyFrame(
+        {"key": [1, 2, 2, 2], "value": [float("nan"), 1, -1, float("nan")]}
+    )
+
+    q = df.group_by("key").agg(op(pl.col("value")))
+
+    assert_ir_translation_raises(q, NotImplementedError)

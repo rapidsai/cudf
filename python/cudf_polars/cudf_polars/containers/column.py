@@ -167,24 +167,29 @@ class Column:
         )
 
     def mask_nans(self) -> Self:
-        """Return a copy of self with nans masked out."""
-        if self.nan_count > 0:
-            raise NotImplementedError("Need to port transform.hpp to pylibcudf")
+        """Return a shallow copy of self with nans masked out."""
+        if plc.traits.is_floating_point(self.obj.type()):
+            old_count = self.obj.null_count()
+            mask, new_count = plc.transform.nans_to_nulls(self.obj)
+            result = type(self)(self.obj.with_mask(mask, new_count))
+            if old_count == new_count:
+                return result.sorted_like(self)
+            return result
         return self.copy()
 
     @functools.cached_property
     def nan_count(self) -> int:
         """Return the number of NaN values in the column."""
-        if self.obj.type().id() not in (plc.TypeId.FLOAT32, plc.TypeId.FLOAT64):
-            return 0
-        return plc.interop.to_arrow(
-            plc.reduce.reduce(
-                plc.unary.is_nan(self.obj),
-                plc.aggregation.sum(),
-                # TODO: pylibcudf needs to have a SizeType DataType singleton
-                plc.DataType(plc.TypeId.INT32),
-            )
-        ).as_py()
+        if plc.traits.is_floating_point(self.obj.type()):
+            return plc.interop.to_arrow(
+                plc.reduce.reduce(
+                    plc.unary.is_nan(self.obj),
+                    plc.aggregation.sum(),
+                    # TODO: pylibcudf needs to have a SizeType DataType singleton
+                    plc.DataType(plc.TypeId.INT32),
+                )
+            ).as_py()
+        return 0
 
 
 class NamedColumn(Column):
@@ -226,3 +231,17 @@ class NamedColumn(Column):
             order=self.order,
             null_order=self.null_order,
         )
+
+    def mask_nans(self) -> Self:
+        """Return a shallow copy of self with nans masked out."""
+        # Annoying, the inheritance is not right (can't call the
+        # super-type mask_nans), but will sort that by refactoring
+        # later.
+        if plc.traits.is_floating_point(self.obj.type()):
+            old_count = self.obj.null_count()
+            mask, new_count = plc.transform.nans_to_nulls(self.obj)
+            result = type(self)(self.obj.with_mask(mask, new_count), self.name)
+            if old_count == new_count:
+                return result.sorted_like(self)
+            return result
+        return self.copy()
