@@ -8,6 +8,7 @@ import os
 
 import numpy as np
 import pytest
+from packaging import version
 
 import cudf
 
@@ -84,7 +85,7 @@ class TestDoctests:
     def prinoptions(cls):
         # TODO: NumPy now prints scalars as `np.int8(1)`, etc. this should
         #       be adapted evantually.
-        if np.lib.NumpyVersion(np.__version__) >= "2.0.0rc1":
+        if version.parse(np.__version__) >= version.parse("2.0"):
             with np.printoptions(legacy="1.25"):
                 yield
         else:
