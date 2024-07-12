@@ -153,8 +153,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     row_comparator_conditional_build.equal_to<false>(build_nulls, compare_nulls);
   double_row_equality equality_build{equality_build_equality, equality_build_conditional};
 
-  hash_set_type set{compute_hash_table_size(build.num_rows()),
-                    0.5,
+  auto const build_num_rows = compute_hash_table_size(build.num_rows());
+
+  hash_set_type set{build_num_rows,
                     cuco::empty_key{JoinNoneValue},
                     equality_build,
                     {row_hash_build.device_hasher(build_nulls)},
