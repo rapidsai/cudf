@@ -26,7 +26,6 @@ from libc.stdint cimport uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
-from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
@@ -34,7 +33,6 @@ from libcpp.vector cimport vector
 
 cimport cudf._lib.pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
 cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
-cimport cudf._lib.pylibcudf.libcudf.types as cudf_types
 from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport (
     add_df_col_struct_names,
@@ -45,13 +43,10 @@ from cudf._lib.pylibcudf.expressions cimport Expression
 from cudf._lib.pylibcudf.io.datasource cimport NativeFileDatasource
 from cudf._lib.pylibcudf.io.parquet cimport ChunkedParquetReader
 from cudf._lib.pylibcudf.io.types cimport TableWithMetadata
-from cudf._lib.pylibcudf.libcudf.expressions cimport expression
 from cudf._lib.pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_writer_options,
     merge_row_group_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
-    parquet_reader_options,
-    parquet_reader_options_builder,
     parquet_writer_options,
     write_parquet as parquet_writer,
 )
@@ -64,7 +59,7 @@ from cudf._lib.pylibcudf.libcudf.io.types cimport (
     table_input_metadata,
 )
 from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
-from cudf._lib.pylibcudf.libcudf.types cimport data_type, size_type
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from cudf._lib.utils cimport table_view_from_table
 
 from pyarrow.lib import NativeFile
@@ -127,42 +122,6 @@ def _parse_metadata(meta):
     if 'column_indexes' in meta and len(meta['column_indexes']) == 1:
         file_column_dtype = meta['column_indexes'][0]["numpy_type"]
     return file_is_range_index, file_index_cols, file_column_dtype
-
-
-cdef pair[parquet_reader_options, bool] _setup_parquet_reader_options(
-     cudf_io_types.source_info source,
-     vector[vector[size_type]] row_groups,
-     bool use_pandas_metadata,
-     Expression filters,
-     object columns):
-
-    cdef parquet_reader_options args
-    cdef parquet_reader_options_builder builder
-    cdef data_type cpp_timestamp_type = cudf_types.data_type(
-        cudf_types.type_id.EMPTY
-    )
-    builder = (
-        parquet_reader_options.builder(source)
-        .row_groups(row_groups)
-        .use_pandas_metadata(use_pandas_metadata)
-        .use_arrow_schema(True)
-        .timestamp_type(cpp_timestamp_type)
-    )
-    if filters is not None:
-        builder = builder.filter(<expression &>dereference(filters.c_obj.get()))
-
-    args = move(builder.build())
-    cdef vector[string] cpp_columns
-    allow_range_index = True
-    if columns is not None:
-        cpp_columns.reserve(len(columns))
-        allow_range_index = len(columns) > 0
-        for col in columns:
-            cpp_columns.push_back(str(col).encode())
-        args.set_columns(cpp_columns)
-    allow_range_index &= filters is None
-
-    return pair[parquet_reader_options, bool](args, allow_range_index)
 
 
 cdef object _process_metadata(object df,
@@ -351,26 +310,32 @@ cdef class CudfChunkedParquetReader(ChunkedParquetReader):
             pass_read_limit=pass_read_limit
         )
 
-    def _read_chunk(self):
-        tbl_w_meta = super()._read_chunk()
+    cpdef _read_chunk(self):
+        tbl_w_meta = ChunkedParquetReader.read_chunk(self)
 
         if not self.initialized:
-            self.names = tbl_w_meta.column_names
+            self.names = tbl_w_meta.column_names(include_children=False)
             self.child_names = tbl_w_meta.child_names
             self.per_file_user_data = tbl_w_meta.per_file_user_data
 
-        df = cudf.DataFrame._from_data(*data_from_pylibcudf_io(
-            tbl_w_meta
-        ))
-
         self.initialized = True
-        return df
+        return tbl_w_meta
 
     def read(self):
-        dfs = []
-        while self._has_next():
-            dfs.append(self._read_chunk())
-        df = cudf.concat(dfs)
+        tbl_w_metas = []
+        while self.has_next():
+            tbl_w_metas.append(self._read_chunk())
+        tbl_concated = plc.concatenate.concatenate(
+            [tbl_w_meta.tbl for tbl_w_meta in tbl_w_metas]
+        )
+        df = cudf.DataFrame._from_data(
+            *data_from_pylibcudf_io(
+                plc.io.TableWithMetadata(
+                    tbl_concated,
+                    tbl_w_metas[0].column_names(include_children=True)
+                )
+            )
+        )
         df = _process_metadata(df, self.names, self.child_names,
                                self.per_file_user_data, self.row_groups,
                                self.filepaths_or_buffers, self.pa_buffers,
@@ -380,9 +345,7 @@ cdef class CudfChunkedParquetReader(ChunkedParquetReader):
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                    use_pandas_metadata=True,
-                   Expression filters=None,
-                   num_rows=-1,
-                   skip_rows=0):
+                   Expression filters=None):
     """
     Cython function to call into libcudf API, see `read_parquet`.
 
@@ -418,16 +381,14 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         filters,
         convert_strings_to_categories = False,
         use_pandas_metadata = use_pandas_metadata,
-        skip_rows = skip_rows,
-        num_rows = num_rows
     )
 
     df = cudf.DataFrame._from_data(
         *data_from_pylibcudf_io(tbl_w_meta)
     )
 
-    df = _process_metadata(df, tbl_w_meta.column_names, tbl_w_meta.child_names,
-                           tbl_w_meta.per_file_user_data,
+    df = _process_metadata(df, tbl_w_meta.column_names(include_children=False),
+                           tbl_w_meta.child_names, tbl_w_meta.per_file_user_data,
                            row_groups, filepaths_or_buffers, pa_buffers,
                            allow_range_index, use_pandas_metadata)
     return df

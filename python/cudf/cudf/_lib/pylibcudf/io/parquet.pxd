@@ -13,11 +13,11 @@ from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from cudf._lib.pylibcudf.types cimport DataType
 
 
-cdef class ReaderColumnSchema:
-    pass
-
 cdef class ChunkedParquetReader:
     cdef unique_ptr[cpp_chunked_parquet_reader] reader
+
+    cpdef bool has_next(self)
+    cpdef TableWithMetadata read_chunk(self)
 
 
 cpdef read_parquet(
@@ -27,8 +27,9 @@ cpdef read_parquet(
     Expression filters = *,
     bool convert_strings_to_categories = *,
     bool use_pandas_metadata = *,
-    # ReaderColumnSchema reader_column_schema = *,
     int64_t skip_rows = *,
     size_type num_rows = *,
-    DataType timestamp_type = *
+    # disabled see comment in parquet.pyx for more
+    # ReaderColumnSchema reader_column_schema = *,
+    # DataType timestamp_type = *
 )

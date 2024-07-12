@@ -15,8 +15,7 @@ from cudf._lib.pylibcudf.libcudf.io.parquet cimport (
     read_parquet as cpp_read_parquet,
 )
 from cudf._lib.pylibcudf.libcudf.io.types cimport table_with_metadata
-from cudf._lib.pylibcudf.libcudf.types cimport size_type, type_id
-from cudf._lib.pylibcudf.types cimport DataType
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 
 cdef parquet_reader_options _setup_parquet_reader_options(
@@ -26,18 +25,17 @@ cdef parquet_reader_options _setup_parquet_reader_options(
     Expression filters = None,
     bool convert_strings_to_categories = False,
     bool use_pandas_metadata = True,
-    # ReaderColumnSchema reader_column_schema = None,
     int64_t skip_rows = 0,
     size_type num_rows = -1,
-    DataType timestamp_type = DataType(type_id.EMPTY)
+    # ReaderColumnSchema reader_column_schema = None,
+    # DataType timestamp_type = DataType(type_id.EMPTY)
 ):
     cdef vector[string] col_vec
-    cdef parquet_reader_options opts = move(
+    cdef parquet_reader_options opts = (
         parquet_reader_options.builder(source_info.c_obj)
         .convert_strings_to_categories(convert_strings_to_categories)
         .use_pandas_metadata(use_pandas_metadata)
         .use_arrow_schema(True)
-        .timestamp_type(timestamp_type.c_obj)
         .build()
     )
     if row_groups is not None:
@@ -57,7 +55,30 @@ cdef parquet_reader_options _setup_parquet_reader_options(
 
 
 cdef class ChunkedParquetReader:
+    """
+    Reads chunks of a Parquet file into a :py:class:`~.types.TableWithMetadata`.
 
+    Parameters
+    ----------
+    source_info : SourceInfo
+        The SourceInfo object to read the Parquet file from.
+    columns : list, default None
+        The names of the columns to be read
+    row_groups : list[list[size_type]], default None
+        List of row groups to be read.
+    filters : Expression, default None
+        An AST :py:class:`cudf._lib.pylibcudf.expression.Expression`
+        to use for predicate pushdown.
+    convert_strings_to_categories : bool, default False
+        Whether to convert string columns to the category type
+    use_pandas_metadata : bool, default True
+        If True, return metadata about the index column in
+        the per-file user metadata of the ``TableWithMetadata``
+    skip_rows : int64_t, default 0
+        The number of rows to skip from the start of the file.
+    num_rows : size_type, default -1
+        The number of rows to read. By default, read the entire file.
+    """
     def __init__(
         self,
         SourceInfo source_info,
@@ -67,23 +88,19 @@ cdef class ChunkedParquetReader:
         bool convert_strings_to_categories=False,
         int64_t skip_rows = 0,
         size_type num_rows = -1,
-        DataType timestamp_type = DataType(type_id.EMPTY),
         size_t chunk_read_limit=0,
         size_t pass_read_limit=1024000000
     ):
 
-        cdef parquet_reader_options opts = move(
-            _setup_parquet_reader_options(
-                source_info,
-                columns,
-                row_groups,
-                filters=None,
-                convert_strings_to_categories=convert_strings_to_categories,
-                use_pandas_metadata=use_pandas_metadata,
-                skip_rows=skip_rows,
-                num_rows=num_rows,
-                timestamp_type=timestamp_type
-            )
+        cdef parquet_reader_options opts = _setup_parquet_reader_options(
+            source_info,
+            columns,
+            row_groups,
+            filters=None,
+            convert_strings_to_categories=convert_strings_to_categories,
+            use_pandas_metadata=use_pandas_metadata,
+            skip_rows=skip_rows,
+            num_rows=num_rows,
         )
 
         with nogil:
@@ -95,13 +112,29 @@ cdef class ChunkedParquetReader:
                 )
             )
 
-    def _has_next(self):
+    cpdef bool has_next(self):
+        """
+        Returns True if there is another chunk in the Parquet file
+        to be read.
+
+        Returns
+        -------
+        True if we have not finished reading the file.
+        """
         cdef bool res
         with nogil:
             res = self.reader.get()[0].has_next()
         return res
 
-    def _read_chunk(self):
+    cpdef TableWithMetadata read_chunk(self):
+        """
+        Read the next chunk into a :py:class:`~.types.TableWithMetadata`
+
+        Returns
+        -------
+        TableWithMetadata
+            The Table and its corresponding metadata (column names) that were read in.
+        """
         # Read Parquet
         cdef table_with_metadata c_result
 
@@ -110,9 +143,6 @@ cdef class ChunkedParquetReader:
 
         return TableWithMetadata.from_libcudf(c_result)
 
-cdef class ReaderColumnSchema:
-    pass
-
 cpdef read_parquet(
     SourceInfo source_info,
     list columns = None,
@@ -120,26 +150,51 @@ cpdef read_parquet(
     Expression filters = None,
     bool convert_strings_to_categories = False,
     bool use_pandas_metadata = True,
-    # ReaderColumnSchema reader_column_schema = None,
     int64_t skip_rows = 0,
     size_type num_rows = -1,
-    DataType timestamp_type = DataType(type_id.EMPTY)
+    # Disabled, these aren't used by cudf-python
+    # we should only add them back in if there's user demand
+    # ReaderColumnSchema reader_column_schema = None,
+    # DataType timestamp_type = DataType(type_id.EMPTY)
 ):
-    """
+    """Reads an Parquet file into a :py:class:`~.types.TableWithMetadata`.
+
+    Parameters
+    ----------
+    source_info : SourceInfo
+        The SourceInfo object to read the Parquet file from.
+    columns : list, default None
+        The names of the columns to be read
+    row_groups : list[list[size_type]], default None
+        List of row groups to be read.
+    filters : Expression, default None
+        An AST :py:class:`cudf._lib.pylibcudf.expression.Expression`
+        to use for predicate pushdown.
+    convert_strings_to_categories : bool, default False
+        Whether to convert string columns to the category type
+    use_pandas_metadata : bool, default True
+        If True, return metadata about the index column in
+        the per-file user metadata of the ``TableWithMetadata``
+    skip_rows : int64_t, default 0
+        The number of rows to skip from the start of the file.
+    num_rows : size_type, default -1
+        The number of rows to read. By default, read the entire file.
+
+    Returns
+    -------
+    TableWithMetadata
+        The Table and its corresponding metadata (column names) that were read in.
     """
     cdef table_with_metadata c_result
-    cdef parquet_reader_options opts = move(
-        _setup_parquet_reader_options(
-            source_info,
-            columns,
-            row_groups,
-            filters,
-            convert_strings_to_categories,
-            use_pandas_metadata,
-            skip_rows,
-            num_rows,
-            timestamp_type
-        )
+    cdef parquet_reader_options opts = _setup_parquet_reader_options(
+        source_info,
+        columns,
+        row_groups,
+        filters,
+        convert_strings_to_categories,
+        use_pandas_metadata,
+        skip_rows,
+        num_rows,
     )
 
     with nogil:

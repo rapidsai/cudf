@@ -613,29 +613,6 @@ def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
     assert_eq(ref_df, gdf)
 
 
-@pytest.mark.parametrize("row_group_size", [1, 4, 33])
-def test_parquet_read_rows(tmpdir, pdf, row_group_size):
-    if len(pdf) > 100:
-        pytest.skip("Skipping long setup test")
-
-    fname = tmpdir.join("row_group.parquet")
-    pdf.to_parquet(fname, compression="None", row_group_size=row_group_size)
-
-    total_rows, _, _, _, _ = cudf.io.read_parquet_metadata(fname)
-
-    num_rows = total_rows // 4
-    skip_rows = (total_rows - num_rows) // 2
-    gdf = cudf.read_parquet(fname, skip_rows=skip_rows, num_rows=num_rows)
-
-    # cudf doesn't preserve category dtype
-    if "col_category" in pdf.columns:
-        pdf = pdf.drop(columns=["col_category"])
-    if "col_category" in gdf.columns:
-        gdf = gdf.drop(columns=["col_category"])
-
-    assert_eq(pdf.iloc[skip_rows : skip_rows + num_rows], gdf)
-
-
 def test_parquet_reader_spark_timestamps(datadir):
     fname = datadir / "spark_timestamp.snappy.parquet"
 

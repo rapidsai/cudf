@@ -17,3 +17,4 @@ I/O Functions
 
     avro
     json
+    parquet
