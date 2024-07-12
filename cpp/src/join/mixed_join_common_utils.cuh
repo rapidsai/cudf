@@ -186,7 +186,7 @@ class double_row_equality {
 };
 
 // The hash table type used by mixed_semi_join with the build_table.
-using hash_set_type = cuco::static_set<hash_value_type,
+using hash_set_type = cuco::static_set<size_type,
                                        cuco::extent<size_t>,
                                        cuda::thread_scope_device,
                                        double_row_equality,

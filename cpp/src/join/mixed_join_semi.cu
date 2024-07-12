@@ -155,7 +155,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
 
   hash_set_type set{compute_hash_table_size(build.num_rows()),
                     0.5,
-                    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+                    cuco::empty_key{JoinNoneValue},
                     equality_build,
                     {row_hash_build.device_hasher(build_nulls)},
                     {},
