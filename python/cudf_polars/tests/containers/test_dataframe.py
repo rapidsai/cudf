@@ -94,7 +94,7 @@ def test_shallow_copy():
     assert copy.columns[0].is_sorted == plc.types.Sorted.NO
 
 
-def test_flags_preserved_empty():
+def test_sorted_flags_preserved_empty():
     df = pl.DataFrame({"a": pl.Series([], dtype=pl.Int8())})
     df.select(pl.col("a").sort())
 
@@ -108,7 +108,7 @@ def test_flags_preserved_empty():
 
 
 @pytest.mark.parametrize("nulls_last", [True, False])
-def test_flags_preserved(with_nulls, nulls_last):
+def test_sorted_flags_preserved(with_nulls, nulls_last):
     values = [1, 2, -1, 2, 4, 5]
     if with_nulls:
         values[4] = None
