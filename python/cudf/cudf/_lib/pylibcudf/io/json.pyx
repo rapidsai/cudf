@@ -125,7 +125,8 @@ cpdef tuple chunked_read_json(
         Whether to raise an error or set corresponding values to null
         when encountering an invalid JSON line.
     chunk_size : int, default 100_000_000 bytes.
-        The number of bytes to be read in chunks. The chunk_size should be set to at least row_size.
+        The number of bytes to be read in chunks.
+        The chunk_size should be set to at least row_size.
 
     Returns
     -------
