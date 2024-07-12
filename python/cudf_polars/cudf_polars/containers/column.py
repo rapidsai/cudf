@@ -13,6 +13,8 @@ import cudf._lib.pylibcudf as plc
 if TYPE_CHECKING:
     from typing_extensions import Self
 
+    import polars as pl
+
 __all__: list[str] = ["Column", "NamedColumn"]
 
 
@@ -76,11 +78,48 @@ class Column:
 
         See Also
         --------
-        set_sorted
+        set_sorted, copy_metadata
         """
         return self.set_sorted(
             is_sorted=like.is_sorted, order=like.order, null_order=like.null_order
         )
+
+    def copy_metadata(self, from_: pl.Series, /) -> Self:
+        """
+        Copy metadata from a host series onto self.
+
+        Parameters
+        ----------
+        from_
+            Polars series to copy metadata from
+
+        Returns
+        -------
+        Self with metadata set.
+
+        See Also
+        --------
+        set_sorted, sorted_like
+        """
+        if len(from_) <= 1:
+            return self
+        ascending = from_.flags["SORTED_ASC"]
+        descending = from_.flags["SORTED_DESC"]
+        if ascending or descending:
+            has_null_first = from_.item(0) is None
+            has_null_last = from_.item(-1) is None
+            order = (
+                plc.types.Order.ASCENDING if ascending else plc.types.Order.DESCENDING
+            )
+            null_order = plc.types.NullOrder.BEFORE
+            if (descending and has_null_first) or (ascending and has_null_last):
+                null_order = plc.types.NullOrder.AFTER
+            return self.set_sorted(
+                is_sorted=plc.types.Sorted.YES,
+                order=order,
+                null_order=null_order,
+            )
+        return self
 
     def set_sorted(
         self,
