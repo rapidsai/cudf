@@ -3786,6 +3786,39 @@ def test_parquet_chunked_reader(
     assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize("chunk_read_limit", [240])  # [0, 240, 102400000])
+@pytest.mark.parametrize("pass_read_limit", [240])  # [0, 240, 102400000])
+@pytest.mark.parametrize(
+    "nrows,skip_rows",
+    [
+        # These are OK
+        # (0, 0),
+        # (1000, 0),
+        # This one is not OK
+        (1000, 10000),
+    ],
+)
+def test_parquet_chunked_reader_nrows_skiprows(
+    chunk_read_limit, pass_read_limit, nrows, skip_rows
+):
+    df = pd.DataFrame(
+        {"a": [1, 2, 3, 4] * 100000, "b": ["av", "qw", "hi", "xyz"] * 100000}
+    )
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+    reader = ParquetReader(
+        [buffer],
+        chunk_read_limit=chunk_read_limit,
+        pass_read_limit=pass_read_limit,
+        nrows=nrows,
+        skip_rows=skip_rows,
+    )
+    buffer.seek(0)
+    expected = cudf.read_parquet(buffer, nrows=nrows, skip_rows=skip_rows)
+    actual = reader.read()
+    assert_eq(expected, actual)
+
+
 def test_parquet_reader_pandas_compatibility():
     df = pd.DataFrame(
         {"a": [1, 2, 3, 4] * 10000, "b": ["av", "qw", "hi", "xyz"] * 10000}

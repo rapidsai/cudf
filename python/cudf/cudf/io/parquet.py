@@ -936,19 +936,21 @@ def _read_parquet(
             # (It's not super important now since pandas doesn't support it ATM,
             # but may be relevant in the future)
             # xref https://github.com/pandas-dev/pandas/issues/51830
-            if nrows is not None:
-                raise NotImplementedError(
-                    "pandas compatibility mode doesn't support nrows in read_parquet"
-                )
-            if skip_rows is not None:
-                raise NotImplementedError(
-                    "pandas compatibility mode doesn't support skip_rows in read_parquet"
-                )
+            # if nrows is not None:
+            #     raise NotImplementedError(
+            #         "pandas compatibility mode doesn't support nrows in read_parquet"
+            #     )
+            # if skip_rows is not None:
+            #     raise NotImplementedError(
+            #         "pandas compatibility mode doesn't support skip_rows in read_parquet"
+            #     )
             return libparquet.ParquetReader(
                 filepaths_or_buffers,
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
+                nrows=nrows,
+                skip_rows=skip_rows,
             ).read()
         else:
             if nrows is None:
