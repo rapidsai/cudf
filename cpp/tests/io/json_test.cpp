@@ -1400,9 +1400,7 @@ TEST_F(JsonReaderTest, JsonLongString)
                            .lines(true)
                            .na_rep("null");
 
-  cudf::io::write_json(options_builder.build(),
-                       cudf::test::get_default_stream(),
-                       rmm::mr::get_current_device_resource());
+  cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
 
   cudf::column_view int16_with_mask(repeat_times);
   cudf::column_view int16(

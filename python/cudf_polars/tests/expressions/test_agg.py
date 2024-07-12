@@ -52,7 +52,7 @@ def test_agg(df, agg):
 
     # https://github.com/rapidsai/cudf/issues/15852
     check_dtypes = agg not in {"n_unique", "median"}
-    if not check_dtypes and q.schema["a"] != pl.Float64:
+    if not check_dtypes and q.collect_schema()["a"] != pl.Float64:
         with pytest.raises(AssertionError):
             assert_gpu_result_equal(q)
     assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
@@ -65,7 +65,7 @@ def test_agg(df, agg):
 )
 @pytest.mark.parametrize("op", ["min", "max"])
 def test_agg_float_with_nans(propagate_nans, op):
-    df = pl.LazyFrame({"a": [1, 2, float("nan")]})
+    df = pl.LazyFrame({"a": pl.Series([1, 2, float("nan")], dtype=pl.Float64())})
     op = getattr(pl.Expr, f"nan_{op}" if propagate_nans else op)
     q = df.select(op(pl.col("a")))
 

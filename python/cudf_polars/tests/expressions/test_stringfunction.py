@@ -8,8 +8,11 @@ import pytest
 
 import polars as pl
 
-from cudf_polars import execute_with_cudf, translate_ir
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars import execute_with_cudf
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.fixture
@@ -34,6 +37,30 @@ def ldf(with_nulls):
     return pl.LazyFrame({"a": a, "b": range(len(a))})
 
 
+slice_cases = [
+    (1, 3),
+    (0, 3),
+    (0, 0),
+    (-3, 1),
+    (-100, 5),
+    (1, 1),
+    (100, 100),
+    (-3, 4),
+    (-3, 3),
+]
+
+
+@pytest.fixture(params=slice_cases)
+def slice_column_data(ldf, request):
+    start, length = request.param
+    if length:
+        return ldf.with_columns(
+            pl.lit(start).alias("start"), pl.lit(length).alias("length")
+        )
+    else:
+        return ldf.with_columns(pl.lit(start).alias("start"))
+
+
 def test_supported_stringfunction_expression(ldf):
     query = ldf.select(
         pl.col("a").str.starts_with("Z"),
@@ -47,22 +74,19 @@ def test_supported_stringfunction_expression(ldf):
 def test_unsupported_stringfunction(ldf):
     q = ldf.select(pl.col("a").str.count_matches("e", literal=True))
 
-    with pytest.raises(NotImplementedError):
-        _ = translate_ir(q._ldf.visit())
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_contains_re_non_strict_raises(ldf):
     q = ldf.select(pl.col("a").str.contains(".", strict=False))
 
-    with pytest.raises(NotImplementedError):
-        _ = translate_ir(q._ldf.visit())
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_contains_re_non_literal_raises(ldf):
     q = ldf.select(pl.col("a").str.contains(pl.col("b"), literal=False))
 
-    with pytest.raises(NotImplementedError):
-        _ = translate_ir(q._ldf.visit())
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -104,3 +128,25 @@ def test_contains_invalid(ldf):
         query.collect()
     with pytest.raises(pl.exceptions.ComputeError):
         query.collect(post_opt_callback=partial(execute_with_cudf, raise_on_fail=True))
+
+
+@pytest.mark.parametrize("offset", [1, -1, 0, 100, -100])
+def test_slice_scalars_offset(ldf, offset):
+    query = ldf.select(pl.col("a").str.slice(offset))
+    assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize("offset,length", slice_cases)
+def test_slice_scalars_length_and_offset(ldf, offset, length):
+    query = ldf.select(pl.col("a").str.slice(offset, length))
+    assert_gpu_result_equal(query)
+
+
+def test_slice_column(slice_column_data):
+    if "length" in slice_column_data.collect_schema():
+        query = slice_column_data.select(
+            pl.col("a").str.slice(pl.col("start"), pl.col("length"))
+        )
+    else:
+        query = slice_column_data.select(pl.col("a").str.slice(pl.col("start")))
+    assert_ir_translation_raises(query, NotImplementedError)

@@ -666,15 +666,32 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 f"{num_keys}"
             )
 
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> cudf.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
+        if is_scalar(fill_value):
+            return cudf.Scalar(fill_value, dtype=self.dtype)
+        return as_column(fill_value)
+
     def fillna(
         self,
-        fill_value: Any = None,
-        method: str | None = None,
+        fill_value: ScalarLike | ColumnLike,
+        method: Literal["ffill", "bfill", None] = None,
     ) -> Self:
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
         """
+        if not self.has_nulls(include_nan=True):
+            return self.copy()
+        elif method is None:
+            if is_scalar(fill_value) and libcudf.scalar._is_null_host_scalar(
+                fill_value
+            ):
+                return self.copy()
+            else:
+                fill_value = self._validate_fillna_value(fill_value)
         return libcudf.replace.replace_nulls(
             input_col=self.nans_to_nulls(),
             replacement=fill_value,
@@ -910,13 +927,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @property
     def is_monotonic_increasing(self) -> bool:
-        return not self.has_nulls() and libcudf.sort.is_sorted(
+        return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [True], None
         )
 
     @property
     def is_monotonic_decreasing(self) -> bool:
-        return not self.has_nulls() and libcudf.sort.is_sorted(
+        return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [False], None
         )
 
@@ -942,53 +959,62 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         raise NotImplementedError()
 
     def astype(self, dtype: Dtype, copy: bool = False) -> ColumnBase:
-        if copy:
-            col = self.copy()
-        else:
-            col = self
-        if dtype == "category":
+        if len(self) == 0:
+            dtype = cudf.dtype(dtype)
+            if self.dtype == dtype:
+                result = self
+            else:
+                result = column_empty(0, dtype=dtype, masked=self.nullable)
+        elif dtype == "category":
             # TODO: Figure out why `cudf.dtype("category")`
             # astype's different than just the string
-            return col.as_categorical_column(dtype)
+            result = self.as_categorical_column(dtype)
         elif (
             isinstance(dtype, str)
             and dtype == "interval"
             and isinstance(self.dtype, cudf.IntervalDtype)
         ):
             # astype("interval") (the string only) should no-op
-            return col
-        was_object = dtype == object or dtype == np.dtype(object)
-        dtype = cudf.dtype(dtype)
-        if self.dtype == dtype:
-            return col
-        elif isinstance(dtype, CategoricalDtype):
-            return col.as_categorical_column(dtype)
-        elif isinstance(dtype, IntervalDtype):
-            return col.as_interval_column(dtype)
-        elif isinstance(dtype, (ListDtype, StructDtype)):
-            if not col.dtype == dtype:
-                raise NotImplementedError(
-                    f"Casting {self.dtype} columns not currently supported"
-                )
-            return col
-        elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
-            return col.as_decimal_column(dtype)
-        elif dtype.kind == "M":
-            return col.as_datetime_column(dtype)
-        elif dtype.kind == "m":
-            return col.as_timedelta_column(dtype)
-        elif dtype.kind == "O":
-            if cudf.get_option("mode.pandas_compatible") and was_object:
-                raise ValueError(
-                    f"Casting to {dtype} is not supported, use "
-                    "`.astype('str')` instead."
-                )
-            return col.as_string_column(dtype)
+            result = self
         else:
-            return col.as_numerical_column(dtype)
+            was_object = dtype == object or dtype == np.dtype(object)
+            dtype = cudf.dtype(dtype)
+            if self.dtype == dtype:
+                result = self
+            elif isinstance(dtype, CategoricalDtype):
+                result = self.as_categorical_column(dtype)
+            elif isinstance(dtype, IntervalDtype):
+                result = self.as_interval_column(dtype)
+            elif isinstance(dtype, (ListDtype, StructDtype)):
+                if not self.dtype == dtype:
+                    raise NotImplementedError(
+                        f"Casting {self.dtype} columns not currently supported"
+                    )
+                result = self
+            elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+                result = self.as_decimal_column(dtype)
+            elif dtype.kind == "M":
+                result = self.as_datetime_column(dtype)
+            elif dtype.kind == "m":
+                result = self.as_timedelta_column(dtype)
+            elif dtype.kind == "O":
+                if cudf.get_option("mode.pandas_compatible") and was_object:
+                    raise ValueError(
+                        f"Casting to {dtype} is not supported, use "
+                        "`.astype('str')` instead."
+                    )
+                result = self.as_string_column()
+            else:
+                result = self.as_numerical_column(dtype)
+
+        if copy and result is self:
+            return result.copy()
+        return result
 
     def as_categorical_column(self, dtype) -> ColumnBase:
-        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
+        if isinstance(dtype, pd.CategoricalDtype):
+            dtype = cudf.CategoricalDtype.from_pandas(dtype)
+        if isinstance(dtype, cudf.CategoricalDtype):
             ordered = dtype.ordered
         else:
             ordered = False
@@ -997,14 +1023,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if (
             isinstance(dtype, cudf.CategoricalDtype)
             and dtype._categories is not None
-        ) or (
-            isinstance(dtype, pd.CategoricalDtype)
-            and dtype.categories is not None
         ):
-            labels = self._label_encoding(cats=as_column(dtype.categories))
-
+            cat_col = dtype._categories
+            labels = self._label_encoding(cats=cat_col)
             return build_categorical_column(
-                categories=as_column(dtype.categories),
+                categories=cat_col,
                 codes=labels,
                 mask=self.mask,
                 ordered=dtype.ordered,
@@ -1036,8 +1059,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         raise NotImplementedError
 
     def as_datetime_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.DatetimeColumn":
+        self, dtype: Dtype
+    ) -> cudf.core.column.DatetimeColumn:
         raise NotImplementedError
 
     def as_interval_column(
@@ -1046,13 +1069,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         raise NotImplementedError
 
     def as_timedelta_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.TimeDeltaColumn":
+        self, dtype: Dtype
+    ) -> cudf.core.column.TimeDeltaColumn:
         raise NotImplementedError
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
+    def as_string_column(self) -> cudf.core.column.StringColumn:
         raise NotImplementedError
 
     def as_decimal_column(

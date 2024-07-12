@@ -9,7 +9,8 @@ import pytest
 import cudf
 from cudf._lib.transform import mask_to_bools
 from cudf.core.column.column import as_column
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 from cudf.utils import dtypes as dtypeutils
 
 dtypes = sorted(
@@ -512,17 +513,6 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
     ).values_host
 
     np.testing.assert_array_equal(expect_mask, got_mask)
-
-
-def test_concatenate_large_column_strings():
-    num_strings = 1_000_000
-    string_scale_f = 100
-
-    s_1 = cudf.Series(["very long string " * string_scale_f] * num_strings)
-    s_2 = cudf.Series(["very long string " * string_scale_f] * num_strings)
-
-    with pytest.raises(OverflowError):
-        cudf.concat([s_1, s_2])
 
 
 @pytest.mark.parametrize(

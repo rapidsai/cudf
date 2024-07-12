@@ -15,7 +15,7 @@ dependencies:
 - cachetools
 - clang-tools=16.0.6
 - clang==16.0.6
-- cmake>=3.26.4
+- cmake>=3.26.4,!=3.30.0
 - cramjam
 - cubinlinker
 - cuda-nvtx=11.8
@@ -26,7 +26,6 @@ dependencies:
 - cupy>=12.0.0
 - cxx-compiler
 - cython>=3.0.3
-- dask-cuda==24.8.*
 - dask-cuda==24.8.*,>=0.0.0a0
 - dlpack>=0.8,<1.0
 - doxygen=1.9.1
@@ -44,10 +43,10 @@ dependencies:
 - libcufile=1.4.0.31
 - libcurand-dev=10.3.0.86
 - libcurand=10.3.0.86
-- libkvikio==24.8.*
+- libkvikio==24.8.*,>=0.0.0a0
 - libparquet==16.1.0.*
 - librdkafka>=1.9.0,<1.10.0a0
-- librmm==24.8.*
+- librmm==24.8.*,>=0.0.0a0
 - make
 - moto>=4.0.8
 - msgpack-python

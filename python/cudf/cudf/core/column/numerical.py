@@ -331,9 +331,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return libcudf.string_casting.int2ip(self)
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
+    def as_string_column(self) -> cudf.core.column.StringColumn:
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
                 cudf.dtype(self.dtype)
@@ -345,8 +343,8 @@ class NumericalColumn(NumericalBaseColumn):
             )
 
     def as_datetime_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.DatetimeColumn":
+        self, dtype: Dtype
+    ) -> cudf.core.column.DatetimeColumn:
         return cast(
             "cudf.core.column.DatetimeColumn",
             build_column(
@@ -359,8 +357,8 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_timedelta_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.TimeDeltaColumn":
+        self, dtype: Dtype
+    ) -> cudf.core.column.TimeDeltaColumn:
         return cast(
             "cudf.core.column.TimeDeltaColumn",
             build_column(
@@ -532,57 +530,26 @@ class NumericalColumn(NumericalBaseColumn):
             replaced, df._data["old"], df._data["new"]
         )
 
-    def fillna(
-        self,
-        fill_value: Any = None,
-        method: str | None = None,
-    ) -> Self:
-        """
-        Fill null values with *fill_value*
-        """
-        col = self.nans_to_nulls()
-
-        if col.null_count == 0:
-            return col
-
-        if method is not None:
-            return super().fillna(fill_value, method)
-
-        if fill_value is None:
-            raise ValueError("Must specify either 'fill_value' or 'method'")
-
-        if (
-            isinstance(fill_value, cudf.Scalar)
-            and fill_value.dtype == col.dtype
-        ):
-            return super().fillna(fill_value, method)
-
-        if np.isscalar(fill_value):
-            # cast safely to the same dtype as self
-            fill_value_casted = col.dtype.type(fill_value)
-            if not np.isnan(fill_value) and (fill_value_casted != fill_value):
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> cudf.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
+        if is_scalar(fill_value):
+            cudf_obj = cudf.Scalar(fill_value)
+            if not as_column(cudf_obj).can_cast_safely(self.dtype):
                 raise TypeError(
                     f"Cannot safely cast non-equivalent "
-                    f"{type(fill_value).__name__} to {col.dtype.name}"
+                    f"{type(fill_value).__name__} to {self.dtype.name}"
                 )
-            fill_value = cudf.Scalar(fill_value_casted)
         else:
-            fill_value = column.as_column(fill_value, nan_as_null=False)
-            if is_integer_dtype(col.dtype):
-                # cast safely to the same dtype as self
-                if fill_value.dtype != col.dtype:
-                    new_fill_value = fill_value.astype(col.dtype)
-                    if not (new_fill_value == fill_value).all():
-                        raise TypeError(
-                            f"Cannot safely cast non-equivalent "
-                            f"{fill_value.dtype.type.__name__} to "
-                            f"{col.dtype.type.__name__}"
-                        )
-                    fill_value = new_fill_value
-            else:
-                fill_value = fill_value.astype(col.dtype)
-
-        return super().fillna(fill_value, method)
+            cudf_obj = as_column(fill_value, nan_as_null=False)
+            if not cudf_obj.can_cast_safely(self.dtype):  # type: ignore[attr-defined]
+                raise TypeError(
+                    f"Cannot safely cast non-equivalent "
+                    f"{cudf_obj.dtype.type.__name__} to "
+                    f"{self.dtype.type.__name__}"
+                )
+        return cudf_obj.astype(self.dtype)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         """

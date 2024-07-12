@@ -229,7 +229,7 @@ def parse_row_iloc_indexer(key: Any, n: int) -> IndexingSpec:
     else:
         key = cudf.core.column.as_column(key)
         if isinstance(key, cudf.core.column.CategoricalColumn):
-            key = key.as_numerical_column(key.codes.dtype)
+            key = key.astype(key.codes.dtype)
         if is_bool_dtype(key.dtype):
             return MaskIndexer(BooleanMask(key, n))
         elif len(key) == 0:

@@ -14,11 +14,11 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
-    assert_eq,
     expect_warning_if,
 )
 
@@ -1077,8 +1077,13 @@ def test_json_dtypes_nested_data():
     )
 
     pdf = pd.read_json(
-        StringIO(expected_json_str), orient="records", lines=True
+        StringIO(expected_json_str),
+        orient="records",
+        lines=True,
     )
+
+    assert_eq(df, pdf)
+
     pdf.columns = pdf.columns.astype("str")
     pa_table_pdf = pa.Table.from_pandas(
         pdf, schema=df.to_arrow().schema, safe=False

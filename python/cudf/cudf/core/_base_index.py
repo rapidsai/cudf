@@ -1104,7 +1104,11 @@ class BaseIndex(Serializable):
                 f"of [None, False, True]; {sort} was passed."
             )
 
-        other = cudf.Index(other, name=getattr(other, "name", self.name))
+        if not isinstance(other, BaseIndex):
+            other = cudf.Index(
+                other,
+                name=getattr(other, "name", self.name),
+            )
 
         if not len(other):
             res = self._get_reconciled_name_object(other).unique()

@@ -24,6 +24,7 @@ from . cimport (
     sorting,
     stream_compaction,
     strings,
+    traits,
     types,
     unary,
 )
@@ -55,12 +56,14 @@ __all__ = [
     "quantiles",
     "reduce",
     "replace",
+    "reshape",
     "rolling",
     "round",
     "search",
     "stream_compaction",
     "strings",
     "sorting",
+    "traits",
     "types",
     "unary",
 ]

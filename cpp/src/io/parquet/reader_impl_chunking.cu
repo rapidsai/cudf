@@ -16,7 +16,6 @@
 
 #include "compact_protocol_reader.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
-#include "io/utilities/config_utils.hpp"
 #include "io/utilities/time_utils.cuh"
 #include "reader_impl.hpp"
 #include "reader_impl_chunking.hpp"
@@ -25,6 +24,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/config_utils.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -337,7 +337,8 @@ int64_t find_next_split(int64_t cur_pos,
                         size_t cur_row_index,
                         size_t cur_cumulative_size,
                         cudf::host_span<cumulative_page_info const> sizes,
-                        size_t size_limit)
+                        size_t size_limit,
+                        size_t min_row_count)
 {
   auto const start = thrust::make_transform_iterator(
     sizes.begin(),
@@ -357,7 +358,7 @@ int64_t find_next_split(int64_t cur_pos,
   // this guarantees that even if we cannot fit the set of rows represented by our where our cur_pos
   // is, we will still move forward instead of failing.
   while (split_pos < (static_cast<int64_t>(sizes.size()) - 1) &&
-         (sizes[split_pos].end_row_index == cur_row_index)) {
+         (sizes[split_pos].end_row_index - cur_row_index < min_row_count)) {
     split_pos++;
   }
 
@@ -657,8 +658,10 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto const start_index = find_start_index(h_aggregated_info, start_row);
   auto const cumulative_size =
     start_row == 0 || start_index == 0 ? 0 : h_aggregated_info[start_index - 1].size_bytes;
+  // when choosing subpasses, we need to guarantee at least 2 rows in the included pages so that all
+  // list columns have a clear start and end.
   auto const end_index =
-    find_next_split(start_index, start_row, cumulative_size, h_aggregated_info, size_limit);
+    find_next_split(start_index, start_row, cumulative_size, h_aggregated_info, size_limit, 2);
   auto const end_row = h_aggregated_info[end_index].end_row_index;
 
   // for each column, collect the set of pages that spans start_row / end_row
@@ -703,8 +706,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   size_t cur_cumulative_size = 0;
   auto const max_row         = min(skip_rows + num_rows, h_aggregated_info.back().end_row_index);
   while (cur_row_index < max_row) {
-    auto const split_pos =
-      find_next_split(cur_pos, cur_row_index, cur_cumulative_size, h_aggregated_info, size_limit);
+    auto const split_pos = find_next_split(
+      cur_pos, cur_row_index, cur_cumulative_size, h_aggregated_info, size_limit, 1);
 
     auto const start_row = cur_row_index;
     cur_row_index        = min(max_row, h_aggregated_info[split_pos].end_row_index);
@@ -859,7 +862,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
         gpuinflate(d_comp_in, d_comp_out, d_comp_res_view, gzip_header_included::YES, stream);
         break;
       case SNAPPY:
-        if (cudf::io::detail::nvcomp_integration::is_stable_enabled()) {
+        if (cudf::io::nvcomp_integration::is_stable_enabled()) {
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                      d_comp_in,
                                      d_comp_out,
@@ -1068,7 +1071,7 @@ struct get_decomp_scratch {
       case BROTLI: return get_gpu_debrotli_scratch_size(di.num_pages);
 
       case SNAPPY:
-        if (cudf::io::detail::nvcomp_integration::is_stable_enabled()) {
+        if (cudf::io::nvcomp_integration::is_stable_enabled()) {
           return cudf::io::nvcomp::batched_decompress_temp_size(
             cudf::io::nvcomp::compression_type::SNAPPY,
             di.num_pages,

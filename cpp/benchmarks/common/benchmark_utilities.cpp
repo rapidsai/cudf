@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,23 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
 
-#include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/hashing/detail/helper_functions.cuh>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
+#include "benchmark_utilities.hpp"
 
-#include <cuco/static_map.cuh>
-#include <cuda/std/atomic>
+void set_items_processed(::benchmark::State& state, int64_t items_processed_per_iteration)
+{
+  state.SetItemsProcessed(state.iterations() * items_processed_per_iteration);
+}
 
-#include <limits>
-
-namespace cudf {
-namespace detail {
-
-using hash_map_type = cuco::legacy::
-  static_map<size_type, size_type, cuda::thread_scope_device, cudf::detail::cuco_allocator>;
-
-}  // namespace detail
-}  // namespace cudf
+void set_bytes_processed(::benchmark::State& state, int64_t bytes_processed_per_iteration)
+{
+  state.SetBytesProcessed(state.iterations() * bytes_processed_per_iteration);
+}
