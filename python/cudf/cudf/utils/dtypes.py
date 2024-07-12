@@ -523,16 +523,14 @@ def find_common_type(dtypes):
             return cudf.dtype("O")
 
     # Aggregate same types
-    dtypes = set(dtypes)
+    dtypes = {cudf.dtype(dtype) for dtype in dtypes}
+    if len(dtypes) == 1:
+        return dtypes.pop()
 
     if any(
         isinstance(dtype, cudf.core.dtypes.DecimalDtype) for dtype in dtypes
     ):
-        if all(
-            cudf.api.types.is_decimal_dtype(dtype)
-            or cudf.api.types.is_numeric_dtype(dtype)
-            for dtype in dtypes
-        ):
+        if all(cudf.api.types.is_numeric_dtype(dtype) for dtype in dtypes):
             return _find_common_type_decimal(
                 [
                     dtype
@@ -542,27 +540,19 @@ def find_common_type(dtypes):
             )
         else:
             return cudf.dtype("O")
-    if any(isinstance(dtype, cudf.ListDtype) for dtype in dtypes):
-        if len(dtypes) == 1:
-            return dtypes.get(0)
-        else:
-            # TODO: As list dtypes allow casting
-            # to identical types, improve this logic of returning a
-            # common dtype, for example:
-            # ListDtype(int64) & ListDtype(int32) common
-            # dtype could be ListDtype(int64).
-            raise NotImplementedError(
-                "Finding a common type for `ListDtype` is currently "
-                "not supported"
-            )
-    if any(isinstance(dtype, cudf.StructDtype) for dtype in dtypes):
-        if len(dtypes) == 1:
-            return dtypes.get(0)
-        else:
-            raise NotImplementedError(
-                "Finding a common type for `StructDtype` is currently "
-                "not supported"
-            )
+    elif any(
+        isinstance(dtype, (cudf.ListDtype, cudf.StructDtype))
+        for dtype in dtypes
+    ):
+        # TODO: As list dtypes allow casting
+        # to identical types, improve this logic of returning a
+        # common dtype, for example:
+        # ListDtype(int64) & ListDtype(int32) common
+        # dtype could be ListDtype(int64).
+        raise NotImplementedError(
+            "Finding a common type for `ListDtype` or `StructDtype` is currently "
+            "not supported"
+        )
 
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately

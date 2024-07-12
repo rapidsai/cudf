@@ -694,7 +694,7 @@ def test_list_scalar_host_construction_null(elem_type, nesting_level):
         dtype = cudf.ListDtype(dtype)
 
     slr = cudf.Scalar(None, dtype=dtype)
-    assert slr.value is cudf.NaT if slr.dtype.kind in "mM" else cudf.NA
+    assert slr.value is (cudf.NaT if slr.dtype.kind in "mM" else cudf.NA)
 
 
 @pytest.mark.parametrize(
