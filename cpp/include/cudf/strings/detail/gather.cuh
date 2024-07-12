@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -302,10 +303,11 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
     strings.offset());
 
   // ZZZZ prefetch strings.offsets[offset,size]
-  // ZZZZ could use a utility that accepts a column_view to prefetch its data/null_mask
   if (!strings.is_empty()) {
-    cudf::experimental::prefetch::detail::prefetch(
-      "prefetch", strings.offsets().head(), strings.size() * size_of(strings.offsets().type()));
+    auto offsets =
+      cudf::slice(strings.offsets(), {strings.offset(), strings.offset() + strings.size()}, stream)
+        .front();
+    cudf::experimental::prefetch::detail::prefetch("prefetch", offsets);
     // ZZZZ prefetch null_mask
     cudf::experimental::prefetch::detail::prefetch(
       "prefetch", strings.null_mask(), cudf::bitmask_allocation_size_bytes(strings.size()));
@@ -323,11 +325,10 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
     sizes_itr, sizes_itr + output_count, stream, mr);
 
   // build chars column
-  // ZZZZ prefetch out_offsets?
+  // ZZZZ prefetch out_offsets and input chars
+  cudf::experimental::prefetch::detail::prefetch("prefetch", out_offsets_column->view());
   cudf::experimental::prefetch::detail::prefetch(
-    "prefetch",
-    out_offsets_column->view().head(),
-    output_count * size_of(out_offsets_column->type()));
+    "prefetch", strings.chars_begin(stream), strings.chars_size(stream));
   auto const offsets_view =
     cudf::detail::offsetalator_factory::make_input_iterator(out_offsets_column->view());
   auto out_chars_data = gather_chars(

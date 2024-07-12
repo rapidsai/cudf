@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/prefetch.hpp>
@@ -62,10 +63,30 @@ void prefetch(std::string_view key, void const* ptr, std::size_t size)
   }
 }
 
+namespace {
+struct prefetch_fn {
+  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_width<T>())>
+  void operator()(column_view const& col, std::string_view key)
+  {
+    prefetch(key, col.data<T>(), col.size() * sizeof(T));
+  }
+  template <typename T, CUDF_ENABLE_IF(not cudf::is_fixed_width<T>())>
+  void operator()(column_view const& col, std::string_view key)
+  {
+    CUDF_UNREACHABLE("");
+  }
+};
+}  // namespace
+
 void prefetch(std::string_view key, cudf::column_view const& col, bool prefetch_mask)
 {
-  // type-dispatch to resolve the data pointer and size
+  if (col.is_empty()) { return; }
   // only support fixed-width-types
+  if (not cudf::is_fixed_width(col.type())) { return; }
+  type_dispatcher<dispatch_storage_type>(col.type(), prefetch_fn{}, col, key);
+  if (prefetch_mask && col.has_nulls()) {
+    prefetch(key, col.null_mask(), cudf::bitmask_allocation_size_bytes(col.size()));
+  }
 }
 
 }  // namespace detail

@@ -16,6 +16,7 @@
 
 #include <cudf/detail/gather.cuh>
 #include <cudf/lists/detail/gather.cuh>
+#include <cudf/utilities/prefetch.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>

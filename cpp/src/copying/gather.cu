@@ -49,8 +49,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
   auto map_end   = map_begin + gather_map.size();
 
   // ZZZZ prefetch gather_map
-  cudf::experimental::prefetch::detail::prefetch(
-    "prefetch", gather_map.head(), gather_map.size() * size_of(gather_map.type()));
+  cudf::experimental::prefetch::detail::prefetch("prefetch", gather_map);
 
   if (neg_indices == negative_index_policy::ALLOWED) {
     cudf::size_type n_rows = source_table.num_rows();
