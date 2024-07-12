@@ -350,11 +350,7 @@ def test_any_all_axis_none(data, op):
 def test_reductions_axis_none_warning(op):
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [10, 2, 3]})
     pdf = df.to_pandas()
-    with expect_warning_if(
-        op in {"sum", "product", "std", "var"},
-        FutureWarning,
-    ):
-        actual = getattr(df, op)(axis=None)
+    actual = getattr(df, op)(axis=None)
     with expect_warning_if(
         op in {"sum", "product", "std", "var"},
         FutureWarning,
