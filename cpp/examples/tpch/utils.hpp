@@ -229,12 +229,14 @@ std::unique_ptr<table_with_names> apply_inner_join(
   CUDF_FUNC_RANGE();
   std::vector<cudf::size_type> left_on_indices;
   std::vector<cudf::size_type> right_on_indices;
-  for (auto& col_name : left_on) {
-    left_on_indices.push_back(left_input->col_id(col_name));
-  }
-  for (auto& col_name : right_on) {
-    right_on_indices.push_back(right_input->col_id(col_name));
-  }
+  std::transform(
+    left_on.begin(), left_on.end(), std::back_inserter(left_on_indices), [&](auto const& col_name) {
+      return left_input->col_id(col_name);
+    });
+  std::transform(right_on.begin(),
+                 right_on.end(),
+                 std::back_inserter(right_on_indices),
+                 [&](auto const& col_name) { return right_input->col_id(col_name); });
   auto table = join_and_gather(
     left_input->table(), right_input->table(), left_on_indices, right_on_indices, compare_nulls);
   return std::make_unique<table_with_names>(
