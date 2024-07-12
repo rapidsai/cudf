@@ -22,7 +22,7 @@ TEST(MultiBufferTestIntegral, BasicTest)
         rmm::device_uvector<uint8_t> temp(BUF_SIZES[i], stream, _mr);
         bufs.push_back(cudf::device_span<uint8_t>(temp));
     }
-    multibuffer_memset<128 * 1024, 256>(bufs, 0, stream, _mr);
+    multibuffer_memset(bufs, 0, stream, _mr);
 
     // Compare
     for (int i = 0; i < NUM_BUFS; i++) {
@@ -49,7 +49,7 @@ TEST(MultiBufferTestIntegral, BasicTest2)
         rmm::device_uvector<uint8_t> temp(BUF_SIZES[i], stream, _mr);
         bufs.push_back(cudf::device_span<uint8_t>(temp));
     }
-    multibuffer_memset<128 * 1024, 256>(bufs, 1, stream, _mr);
+    multibuffer_memset(bufs, 1, stream, _mr);
 
     // Compare
     for (int i = 0; i < NUM_BUFS; i++) {
@@ -75,7 +75,7 @@ TEST(MultiBufferTestIntegral, BasicTest3)
         rmm::device_uvector<uint8_t> temp(BUF_SIZES[i], stream, _mr);
         bufs.push_back(cudf::device_span<uint8_t>(temp));
     }
-    multibuffer_memset<128 * 1024, 256>(bufs, 2, stream, _mr);
+    multibuffer_memset(bufs, 2, stream, _mr);
 
     // Compare
     for (int i = 0; i < NUM_BUFS; i++) {
@@ -101,7 +101,7 @@ TEST(MultiBufferTestIntegral, BasicTest4)
         rmm::device_uvector<uint8_t> temp(BUF_SIZES[i], stream, _mr);
         bufs.push_back(cudf::device_span<uint8_t>(temp));
     }
-    multibuffer_memset<128 * 1024, 256>(bufs, 3, stream, _mr);
+    multibuffer_memset(bufs, 3, stream, _mr);
 
     // Compare
     for (int i = 0; i < NUM_BUFS; i++) {

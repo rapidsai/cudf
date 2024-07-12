@@ -1602,15 +1602,15 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
           // allocate
           // we're going to start null mask as all valid and then turn bits off if necessary
           out_buf.create_with_mask(size, cudf::mask_state::UNINITIALIZED, _stream, _mr);
-          memset_bufs.push_back(cudf::device_span<uint8_t>(static_cast<uint8_t *>(out_buf.data()), out_buf.data_size()));
+          memset_bufs.push_back(cudf::device_span<uint8_t>((uint8_t *)(out_buf.data()), out_buf.data_size()));
           nullmask_bufs.push_back(cudf::device_span<uint8_t>((uint8_t *)(out_buf.null_mask()), out_buf.null_mask_size()));
 
         }
       }
     }
   }
-  multibuffer_memset<128 * 1024, 256>(memset_bufs, 0, _stream, _mr);
-  multibuffer_memset<128 * 1024, 256>(nullmask_bufs, 0xFF, _stream, _mr);
+  multibuffer_memset(memset_bufs, 0, _stream, _mr);
+  multibuffer_memset_validity(nullmask_bufs, 0xFF, _stream, _mr);
   _stream.synchronize();
 }
 
