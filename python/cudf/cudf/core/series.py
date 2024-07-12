@@ -214,7 +214,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
                         and self._frame.dtype.categories.dtype.kind == "f"
                     )
                 )
-                and isinstance(value, (np.float32, np.float64))
+                and isinstance(value, np.floating)
                 and np.isnan(value)
             ):
                 raise MixedTypeError(

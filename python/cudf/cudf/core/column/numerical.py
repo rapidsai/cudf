@@ -232,8 +232,8 @@ class NumericalColumn(NumericalBaseColumn):
                 tmp = self if reflect else other
                 # Guard against division by zero for integers.
                 if (
-                    (tmp.dtype.type in int_float_dtype_mapping)
-                    and (tmp.dtype.type != np.bool_)
+                    tmp.dtype.type in int_float_dtype_mapping
+                    and tmp.dtype.kind != "b"
                     and (
                         (
                             (

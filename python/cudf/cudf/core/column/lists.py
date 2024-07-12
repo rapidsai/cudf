@@ -564,10 +564,11 @@ class ListMethods(ColumnMethods):
             raise ValueError(
                 "lists_indices and list column is of different " "size."
             )
-        if not _is_non_decimal_numeric_dtype(
-            lists_indices_col.children[1].dtype
-        ) or not np.issubdtype(
-            lists_indices_col.children[1].dtype, np.integer
+        if (
+            not _is_non_decimal_numeric_dtype(
+                lists_indices_col.children[1].dtype
+            )
+            or lists_indices_col.children[1].dtype.kind not in "iu"
         ):
             raise TypeError(
                 "lists_indices should be column of values of index types."
