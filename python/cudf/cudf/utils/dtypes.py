@@ -663,7 +663,7 @@ def _maybe_convert_to_default_type(dtype: DtypeObj) -> DtypeObj:
             return cudf.dtype(f"i{ib//8}")
         elif dtype.kind == "u":
             return cudf.dtype(f"u{ib//8}")
-    if fb := cudf.get_option("default_float_bitwidth") and dtype.kind == "f":
+    if (fb := cudf.get_option("default_float_bitwidth")) and dtype.kind == "f":
         return cudf.dtype(f"f{fb//8}")
     return dtype
 

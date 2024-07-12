@@ -2194,7 +2194,7 @@ def as_column(
                 and pa.types.is_floating(arbitrary.type)
             ):
                 dtype = _maybe_convert_to_default_type(
-                    arbitrary.type.to_pandas_dtype()
+                    cudf.dtype(arbitrary.type.to_pandas_dtype())
                 )
         except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
             arbitrary = pd.Series(arbitrary)
