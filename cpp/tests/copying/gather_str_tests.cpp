@@ -24,6 +24,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/prefetch.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
@@ -31,6 +32,9 @@ class GatherTestStr : public cudf::test::BaseFixture {};
 
 TEST_F(GatherTestStr, StringColumn)
 {
+  cudf::experimental::prefetch::enable_prefetching("prefetch");
+  // cudf::experimental::prefetch::prefetch_debugging(true);
+
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{1, 2, 3, 4, 5, 6},
                                                        {true, true, false, true, false, true}};
   cudf::test::strings_column_wrapper col2{{"This", "is", "not", "a", "string", "type"},
