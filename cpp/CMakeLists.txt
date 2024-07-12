@@ -72,12 +72,6 @@ option(
   "Replace the current optimization flags by the options '-rdynamic -Og -NDEBUG', useful for debugging with stacktrace retrieval"
   OFF
 )
-set_source_files_properties(src/io/parquet/reader_impl.cpp PROPERTIES COMPILE_OPTIONS "-g")
-set_source_files_properties(src/io/utilities/column_buffer.cpp PROPERTIES COMPILE_OPTIONS "-g")
-set_source_files_properties(src/structs/structs_column_factories.cu PROPERTIES COMPILE_OPTIONS "-g")
-set_source_files_properties(src/structs/utilities.cpp PROPERTIES COMPILE_OPTIONS "-g")
-set_source_files_properties(src/copying/purge_nonempty_nulls.cu PROPERTIES COMPILE_OPTIONS "-g")
-set_source_files_properties(src/copying/gather.cu PROPERTIES COMPILE_OPTIONS "-g")
 
 option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
