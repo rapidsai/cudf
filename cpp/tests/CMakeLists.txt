@@ -270,6 +270,7 @@ ConfigureTest(
   INTEROP_TEST
   interop/to_arrow_device_test.cpp
   interop/to_arrow_test.cpp
+  interop/to_arrow_host_test.cpp
   interop/from_arrow_test.cpp
   interop/from_arrow_device_test.cpp
   interop/from_arrow_host_test.cpp

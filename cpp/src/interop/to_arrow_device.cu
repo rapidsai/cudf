@@ -56,14 +56,6 @@ void device_buffer_finalize(ArrowBufferAllocator* allocator, uint8_t*, int64_t)
   delete unique_buffer;
 }
 
-int initialize_array(ArrowArray* arr, ArrowType storage_type, cudf::column_view column)
-{
-  NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(arr, storage_type));
-  arr->length     = column.size();
-  arr->null_count = column.null_count();
-  return NANOARROW_OK;
-}
-
 template <typename>
 struct is_device_scalar : public std::false_type {};
 
@@ -97,21 +89,6 @@ int set_buffer(std::unique_ptr<T> device_buf, int64_t i, ArrowArray* out)
                                                    new std::unique_ptr<T>(std::move(device_buf)))));
   buf->data = ptr;
   return NANOARROW_OK;
-}
-
-ArrowType id_to_arrow_storage_type(cudf::type_id id)
-{
-  switch (id) {
-    case cudf::type_id::TIMESTAMP_SECONDS:
-    case cudf::type_id::TIMESTAMP_MILLISECONDS:
-    case cudf::type_id::TIMESTAMP_MICROSECONDS:
-    case cudf::type_id::TIMESTAMP_NANOSECONDS: return NANOARROW_TYPE_INT64;
-    case cudf::type_id::DURATION_SECONDS:
-    case cudf::type_id::DURATION_MILLISECONDS:
-    case cudf::type_id::DURATION_MICROSECONDS:
-    case cudf::type_id::DURATION_NANOSECONDS: return NANOARROW_TYPE_INT64;
-    default: return id_to_arrow_type(id);
-  }
 }
 
 struct dispatch_to_arrow_device {
@@ -164,27 +141,7 @@ int decimals_to_arrow(cudf::column_view input,
   nanoarrow::UniqueArray tmp;
   NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, input));
 
-  constexpr size_type BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DeviceType);
-  auto buf =
-    std::make_unique<rmm::device_uvector<DeviceType>>(input.size() * BIT_WIDTH_RATIO, stream, mr);
-
-  auto count = thrust::counting_iterator<size_type>(0);
-
-  thrust::for_each(
-    rmm::exec_policy(stream, mr),
-    count,
-    count + input.size(),
-    [in = input.begin<DeviceType>(), out = buf->data(), BIT_WIDTH_RATIO] __device__(auto in_idx) {
-      auto const out_idx = in_idx * BIT_WIDTH_RATIO;
-      // the lowest order bits are the value, the remainder
-      // simply matches the sign bit to satisfy the two's
-      // complement integer representation of negative numbers.
-      out[out_idx] = in[in_idx];
-#pragma unroll BIT_WIDTH_RATIO - 1
-      for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
-        out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
-      }
-    });
+  auto buf = detail::decimals_to_arrow<DeviceType>(input, stream, mr);
   NANOARROW_RETURN_NOT_OK(set_buffer(std::move(buf), fixed_width_data_buffer_idx, tmp.get()));
 
   ArrowArrayMove(tmp.get(), out);

@@ -16,8 +16,15 @@
 
 #include "arrow_utilities.hpp"
 
+#include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <nanoarrow/nanoarrow.h>
 
@@ -83,9 +90,69 @@ ArrowType id_to_arrow_type(cudf::type_id id)
     case cudf::type_id::FLOAT32: return NANOARROW_TYPE_FLOAT;
     case cudf::type_id::FLOAT64: return NANOARROW_TYPE_DOUBLE;
     case cudf::type_id::TIMESTAMP_DAYS: return NANOARROW_TYPE_DATE32;
+    case cudf::type_id::DECIMAL128: return NANOARROW_TYPE_DECIMAL128;
     default: CUDF_FAIL("Unsupported type_id conversion to arrow type", cudf::data_type_error);
   }
 }
+
+ArrowType id_to_arrow_storage_type(cudf::type_id id)
+{
+  switch (id) {
+    case cudf::type_id::TIMESTAMP_SECONDS:
+    case cudf::type_id::TIMESTAMP_MILLISECONDS:
+    case cudf::type_id::TIMESTAMP_MICROSECONDS:
+    case cudf::type_id::TIMESTAMP_NANOSECONDS: return NANOARROW_TYPE_INT64;
+    case cudf::type_id::DURATION_SECONDS:
+    case cudf::type_id::DURATION_MILLISECONDS:
+    case cudf::type_id::DURATION_MICROSECONDS:
+    case cudf::type_id::DURATION_NANOSECONDS: return NANOARROW_TYPE_INT64;
+    default: return id_to_arrow_type(id);
+  }
+}
+
+int initialize_array(ArrowArray* arr, ArrowType storage_type, cudf::column_view column)
+{
+  NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(arr, storage_type));
+  arr->length     = column.size();
+  arr->null_count = column.null_count();
+  return NANOARROW_OK;
+}
+
+template <typename DeviceType>
+std::unique_ptr<rmm::device_buffer> decimals_to_arrow(cudf::column_view input,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr)
+{
+  constexpr size_type BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DeviceType);
+  auto buf = std::make_unique<rmm::device_buffer>(input.size() * sizeof(__int128_t), stream, mr);
+
+  auto count = thrust::counting_iterator<size_type>(0);
+  thrust::for_each(
+    rmm::exec_policy(stream, mr),
+    count,
+    count + input.size(),
+    [in = input.begin<DeviceType>(), out = buf->data(), BIT_WIDTH_RATIO] __device__(auto in_idx) {
+      auto const out_idx = in_idx * BIT_WIDTH_RATIO;
+      // the lowest order bits are the value, the remainder
+      // simply matches the sign bit to satisfy the two's
+      // complement integer representation of negative numbers.
+      out[out_idx] = in[in_idx];
+#pragma unroll BIT_WIDTH_RATIO - 1
+      for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
+        out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
+      }
+    });
+
+  return buf;
+}
+
+template <>
+std::unique_ptr<rmm::device_buffer> decimals_to_arrow<numeric::decimal32>(
+  cudf::column_view input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+
+template <>
+std::unique_ptr<rmm::device_buffer> decimals_to_arrow<numeric::decimal64>(
+  cudf::column_view input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace cudf

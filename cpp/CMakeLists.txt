@@ -365,6 +365,7 @@ add_library(
   src/interop/arrow_utilities.cpp
   src/interop/to_arrow.cu
   src/interop/to_arrow_device.cu
+  src/interop/to_arrow_host.cu
   src/interop/from_arrow_device.cu
   src/interop/from_arrow_host.cu
   src/interop/from_arrow_stream.cu
