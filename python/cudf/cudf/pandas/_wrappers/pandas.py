@@ -260,10 +260,6 @@ def Index__new__(cls, *args, **kwargs):
     return self
 
 
-def name(self):
-    return self._fsproxy_wrapped._name
-
-
 def Index__setattr__(self, name, value):
     if name.startswith("_"):
         object.__setattr__(self, name, value)
@@ -300,7 +296,7 @@ Index = make_final_proxy_type(
         "_accessors": set(),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
-        "name": property(name),
+        "name": _FastSlowAttribute("_name"),
     },
 )
 
@@ -314,7 +310,7 @@ RangeIndex = make_final_proxy_type(
     additional_attributes={
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
-        "name": property(name),
+        "name": _FastSlowAttribute("_name"),
     },
 )
 
@@ -345,7 +341,7 @@ CategoricalIndex = make_final_proxy_type(
     additional_attributes={
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
-        "name": property(name),
+        "name": _FastSlowAttribute("_name"),
     },
 )
 
@@ -378,7 +374,7 @@ DatetimeIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "__setattr__": Index__setattr__,
-        "name": property(name),
+        "name": _FastSlowAttribute("_name"),
     },
 )
 
@@ -415,7 +411,7 @@ TimedeltaIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "__setattr__": Index__setattr__,
-        "name": property(name),
+        "name": _FastSlowAttribute("_name"),
     },
 )
 
@@ -473,7 +469,7 @@ PeriodIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "__setattr__": Index__setattr__,
-        "name": property(name),
+        "name": _FastSlowAttribute("_name"),
     },
 )
 
@@ -508,10 +504,6 @@ Period = make_final_proxy_type(
 )
 
 
-def names(self):
-    return self._fsproxy_wrapped._names
-
-
 MultiIndex = make_final_proxy_type(
     "MultiIndex",
     cudf.MultiIndex,
@@ -522,7 +514,7 @@ MultiIndex = make_final_proxy_type(
     additional_attributes={
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
-        "name": property(names),
+        "name": _FastSlowAttribute("_names"),
     },
 )
 
@@ -712,7 +704,7 @@ IntervalIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "__setattr__": Index__setattr__,
-        "name": property(name),
+        "name": _FastSlowAttribute("_name"),
     },
 )
 
