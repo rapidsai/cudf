@@ -648,7 +648,7 @@ _CP_DTYPES = {
 
 def from_dataframe(
     df: DataFrameObject, allow_copy: bool = False
-) -> _CuDFDataFrame:
+) -> cudf.DataFrame:
     """
     Construct a ``DataFrame`` from ``df`` if it supports the
     dataframe interchange protocol (``__dataframe__``).

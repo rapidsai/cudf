@@ -451,6 +451,7 @@ def write_parquet(
     object column_encoding=None,
     object column_type_length=None,
     object output_as_binary=None,
+    write_arrow_schema=False,
 ):
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -555,6 +556,7 @@ def write_parquet(
         .write_v2_headers(header_version == "2.0")
         .dictionary_policy(dict_policy)
         .utc_timestamps(False)
+        .write_arrow_schema(write_arrow_schema)
         .build()
     )
     if partitions_info is not None:
@@ -634,6 +636,9 @@ cdef class ParquetWriter:
         If ``True``, enable dictionary encoding for Parquet page data
         subject to ``max_dictionary_size`` constraints.
         If ``False``, disable dictionary encoding for Parquet page data.
+    store_schema : bool, default False
+        If ``True``, enable computing and writing arrow schema to Parquet
+        file footer's key-value metadata section for faithful round-tripping.
     See Also
     --------
     cudf.io.parquet.write_parquet
@@ -652,6 +657,7 @@ cdef class ParquetWriter:
     cdef size_type max_page_size_rows
     cdef size_t max_dictionary_size
     cdef cudf_io_types.dictionary_policy dict_policy
+    cdef bool write_arrow_schema
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
                   object compression="snappy", str statistics="ROWGROUP",
@@ -660,7 +666,8 @@ cdef class ParquetWriter:
                   int max_page_size_bytes=524288,
                   int max_page_size_rows=20000,
                   int max_dictionary_size=1048576,
-                  bool use_dictionary=True):
+                  bool use_dictionary=True,
+                  bool store_schema=False):
         filepaths_or_buffers = (
             list(filepath_or_buffer)
             if is_list_like(filepath_or_buffer)
@@ -681,6 +688,7 @@ cdef class ParquetWriter:
             if use_dictionary
             else cudf_io_types.dictionary_policy.NEVER
         )
+        self.write_arrow_schema = store_schema
 
     def write_table(self, table, object partitions_info=None):
         """ Writes a single table to the file """
@@ -799,6 +807,7 @@ cdef class ParquetWriter:
                 .max_page_size_bytes(self.max_page_size_bytes)
                 .max_page_size_rows(self.max_page_size_rows)
                 .max_dictionary_size(self.max_dictionary_size)
+                .write_arrow_schema(self.write_arrow_schema)
                 .build()
             )
             args.set_dictionary_policy(self.dict_policy)
