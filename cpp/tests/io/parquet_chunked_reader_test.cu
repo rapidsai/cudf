@@ -1587,11 +1587,10 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
 
     auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
 
-    column_wrapper<int64_t> int64_col_selected{int64_data.begin() + rows_to_skip - num_rows,
-                                               int64_data.end(),
-                                               cudf::test::iterators::no_nulls()};
+    auto int64_col_selected =
+      int64s_col(int64_data.begin() + rows_to_skip - num_rows, int64_data.end()).release();
 
-    cudf::table_view const expected_selected({int64_col_selected});
+    cudf::table_view const expected_selected({int64_col_selected->view()});
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_selected, result->view());
     EXPECT_EQ(num_rows_per_source.size(), 2);
