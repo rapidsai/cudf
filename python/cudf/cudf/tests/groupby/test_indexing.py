@@ -1,6 +1,6 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 def test_rank_return_type_compatible_mode():

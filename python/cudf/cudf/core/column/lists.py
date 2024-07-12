@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
 import pandas as pd
@@ -26,12 +26,14 @@ from cudf._lib.lists import (
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
 from cudf._lib.types import size_type_dtype
-from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
+
+if TYPE_CHECKING:
+    from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 
 
 class ListColumn(ColumnBase):
@@ -71,10 +73,15 @@ class ListColumn(ColumnBase):
             child0_size = (
                 current_base_child.size + 1 - current_offset
             ) * current_base_child.base_children[0].dtype.itemsize
-            current_offset = current_base_child.base_children[
-                0
-            ].element_indexing(current_offset)
             n += child0_size
+            current_offset_col = current_base_child.base_children[0]
+            if not len(current_offset_col):
+                # See https://github.com/rapidsai/cudf/issues/16164 why
+                # offset column can be uninitialized
+                break
+            current_offset = current_offset_col.element_indexing(
+                current_offset
+            )
             current_base_child = current_base_child.base_children[1]
 
         n += (
@@ -165,7 +172,7 @@ class ListColumn(ColumnBase):
         else:
             super().set_base_data(value)
 
-    def set_base_children(self, value: Tuple[ColumnBase, ...]):
+    def set_base_children(self, value: tuple[ColumnBase, ...]):
         super().set_base_children(value)
         _, values = value
         self._dtype = cudf.ListDtype(element_type=values.dtype)
@@ -246,15 +253,11 @@ class ListColumn(ColumnBase):
         )
         return res
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
+    def as_string_column(self) -> cudf.core.column.StringColumn:
         """
         Create a strings column from a list column
         """
-        lc = self._transform_leaves(
-            lambda col, dtype: col.as_string_column(dtype), dtype
-        )
+        lc = self._transform_leaves(lambda col: col.as_string_column())
 
         # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])
@@ -267,7 +270,7 @@ class ListColumn(ColumnBase):
         # as ``self``, but with the leaf column transformed
         # by applying ``func`` to it
 
-        cc: List[ListColumn] = []
+        cc: list[ListColumn] = []
         c: ColumnBase = self
 
         while isinstance(c, ListColumn):
@@ -318,7 +321,7 @@ class ListMethods(ColumnMethods):
     def get(
         self,
         index: int,
-        default: Optional[Union[ScalarLike, ColumnLike]] = None,
+        default: ScalarLike | ColumnLike | None = None,
     ) -> ParentType:
         """
         Extract element at the given index from each list in a Series of lists.
@@ -422,7 +425,7 @@ class ListMethods(ColumnMethods):
             contains_scalar(self._column, cudf.Scalar(search_key))
         )
 
-    def index(self, search_key: Union[ScalarLike, ColumnLike]) -> ParentType:
+    def index(self, search_key: ScalarLike | ColumnLike) -> ParentType:
         """
         Returns integers representing the index of the search key for each row.
 

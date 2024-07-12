@@ -23,7 +23,7 @@
 
 namespace cudf {
 namespace detail {
-data_type arrow_to_cudf_type(const ArrowSchemaView* arrow_view)
+data_type arrow_to_cudf_type(ArrowSchemaView const* arrow_view)
 {
   switch (arrow_view->type) {
     case NANOARROW_TYPE_NA: return data_type(type_id::EMPTY);
@@ -39,7 +39,8 @@ data_type arrow_to_cudf_type(const ArrowSchemaView* arrow_view)
     case NANOARROW_TYPE_FLOAT: return data_type(type_id::FLOAT32);
     case NANOARROW_TYPE_DOUBLE: return data_type(type_id::FLOAT64);
     case NANOARROW_TYPE_DATE32: return data_type(type_id::TIMESTAMP_DAYS);
-    case NANOARROW_TYPE_STRING: return data_type(type_id::STRING);
+    case NANOARROW_TYPE_STRING:
+    case NANOARROW_TYPE_LARGE_STRING: return data_type(type_id::STRING);
     case NANOARROW_TYPE_LIST: return data_type(type_id::LIST);
     case NANOARROW_TYPE_DICTIONARY: return data_type(type_id::DICTIONARY32);
     case NANOARROW_TYPE_STRUCT: return data_type(type_id::STRUCT);

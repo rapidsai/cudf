@@ -325,7 +325,7 @@ using optional_dremel_view = thrust::optional<detail::dremel_device_view const>;
  *
  * @tparam has_nested_columns compile-time optimization for primitive types.
  *         This template parameter is to be used by the developer by querying
- *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+ *         `cudf::has_nested_columns(input)`. `true` compiles operator
  *         overloads for nested types, while `false` only compiles operator
  *         overloads for primitive types.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
@@ -1087,7 +1087,7 @@ class self_comparator {
    *
    * @tparam has_nested_columns compile-time optimization for primitive types.
    *         This template parameter is to be used by the developer by querying
-   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         `cudf::has_nested_columns(input)`. `true` compiles operator
    *         overloads for nested types, while `false` only compiles operator
    *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
@@ -1259,7 +1259,7 @@ class two_table_comparator {
    *
    * @tparam has_nested_columns compile-time optimization for primitive types.
    *         This template parameter is to be used by the developer by querying
-   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         `cudf::has_nested_columns(input)`. `true` compiles operator
    *         overloads for nested types, while `false` only compiles operator
    *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
@@ -1399,7 +1399,7 @@ struct nan_equal_physical_equality_comparator {
  *
  * @tparam has_nested_columns compile-time optimization for primitive types.
  *         This template parameter is to be used by the developer by querying
- *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+ *         `cudf::has_nested_columns(input)`. `true` compiles operator
  *         overloads for nested types, while `false` only compiles operator
  *         overloads for primitive types.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
@@ -1747,7 +1747,7 @@ class self_comparator {
    *
    * @tparam has_nested_columns compile-time optimization for primitive types.
    *         This template parameter is to be used by the developer by querying
-   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         `cudf::has_nested_columns(input)`. `true` compiles operator
    *         overloads for nested types, while `false` only compiles operator
    *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
@@ -1928,7 +1928,7 @@ class two_table_comparator {
    *
    * @tparam has_nested_columns compile-time optimization for primitive types.
    *         This template parameter is to be used by the developer by querying
-   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         `cudf::has_nested_columns(input)`. `true` compiles operator
    *         overloads for nested types, while `false` only compiles operator
    *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.

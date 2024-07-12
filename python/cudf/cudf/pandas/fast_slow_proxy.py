@@ -9,20 +9,15 @@ import inspect
 import operator
 import pickle
 import types
+import warnings
 from collections.abc import Iterator
 from enum import IntEnum
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Literal,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-    Type,
-)
+from typing import Any, Callable, Literal, Mapping
 
+import numpy as np
+
+from ..options import _env_get_bool
+from ..testing import assert_eq
 from .annotation import nvtx
 
 
@@ -113,12 +108,12 @@ def make_final_proxy_type(
     *,
     fast_to_slow: Callable,
     slow_to_fast: Callable,
-    module: Optional[str] = None,
+    module: str | None = None,
     additional_attributes: Mapping[str, Any] | None = None,
     postprocess: Callable[[_FinalProxy, Any, Any], Any] | None = None,
-    bases: Tuple = (),
-    metaclasses: Tuple = (),
-) -> Type[_FinalProxy]:
+    bases: tuple = (),
+    metaclasses: tuple = (),
+) -> type[_FinalProxy]:
     """
     Defines a fast-slow proxy type for a pair of "final" fast and slow
     types. Final types are types for which known operations exist for
@@ -265,8 +260,8 @@ def make_intermediate_proxy_type(
     fast_type: type,
     slow_type: type,
     *,
-    module: Optional[str] = None,
-) -> Type[_IntermediateProxy]:
+    module: str | None = None,
+) -> type[_IntermediateProxy]:
     """
     Defines a proxy type for a pair of "intermediate" fast and slow
     types. Intermediate types are the types of the results of
@@ -608,13 +603,13 @@ class _IntermediateProxy(_FastSlowProxy):
     `make_intermediate_proxy_type` to create subtypes.
     """
 
-    _method_chain: Tuple[Callable, Tuple, Dict]
+    _method_chain: tuple[Callable, tuple, dict]
 
     @classmethod
     def _fsproxy_wrap(
         cls,
         obj: Any,
-        method_chain: Tuple[Callable, Tuple, Dict],
+        method_chain: tuple[Callable, tuple, dict],
     ):
         """
         Parameters
@@ -808,7 +803,9 @@ class _FastSlowAttribute:
             else:
                 # for anything else, use a fast-slow attribute:
                 self._attr, _ = _fast_slow_function_call(
-                    getattr, owner, self._name
+                    getattr,
+                    owner,
+                    self._name,
                 )
 
                 if isinstance(
@@ -829,9 +826,11 @@ class _FastSlowAttribute:
                         getattr(instance._fsproxy_slow, self._name),
                         None,  # type: ignore
                     )
-                return _fast_slow_function_call(getattr, instance, self._name)[
-                    0
-                ]
+                return _fast_slow_function_call(
+                    getattr,
+                    instance,
+                    self._name,
+                )[0]
         return self._attr
 
 
@@ -866,7 +865,17 @@ class _MethodProxy(_FunctionProxy):
         setattr(self._fsproxy_slow, "__name__", value)
 
 
-def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
+def _assert_fast_slow_eq(left, right):
+    if _is_final_type(type(left)) or type(left) in NUMPY_TYPES:
+        assert_eq(left, right)
+
+
+def _fast_slow_function_call(
+    func: Callable,
+    /,
+    *args,
+    **kwargs,
+) -> Any:
     """
     Call `func` with all `args` and `kwargs` converted to their
     respective fast type. If that fails, call `func` with all
@@ -890,6 +899,37 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
                 # try slow path
                 raise Exception()
             fast = True
+            if _env_get_bool("CUDF_PANDAS_DEBUGGING", False):
+                try:
+                    with nvtx.annotate(
+                        "EXECUTE_SLOW_DEBUG",
+                        color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
+                        domain="cudf_pandas",
+                    ):
+                        slow_args, slow_kwargs = (
+                            _slow_arg(args),
+                            _slow_arg(kwargs),
+                        )
+                        with disable_module_accelerator():
+                            slow_result = func(*slow_args, **slow_kwargs)
+                except Exception as e:
+                    warnings.warn(
+                        "The result from pandas could not be computed. "
+                        f"The exception was {e}."
+                    )
+                else:
+                    try:
+                        _assert_fast_slow_eq(result, slow_result)
+                    except AssertionError as e:
+                        warnings.warn(
+                            "The results from cudf and pandas were different. "
+                            f"The exception was {e}."
+                        )
+                    except Exception as e:
+                        warnings.warn(
+                            "Pandas debugging mode failed. "
+                            f"The exception was {e}."
+                        )
     except Exception:
         with nvtx.annotate(
             "EXECUTE_SLOW",
@@ -905,7 +945,7 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
 def _transform_arg(
     arg: Any,
     attribute_name: Literal["_fsproxy_slow", "_fsproxy_fast"],
-    seen: Set[int],
+    seen: set[int],
 ) -> Any:
     """
     Transform "arg" into its corresponding slow (or fast) type.
@@ -1002,7 +1042,7 @@ def _fast_arg(arg: Any) -> Any:
     """
     Transform "arg" into its corresponding fast type.
     """
-    seen: Set[int] = set()
+    seen: set[int] = set()
     return _transform_arg(arg, "_fsproxy_fast", seen)
 
 
@@ -1010,7 +1050,7 @@ def _slow_arg(arg: Any) -> Any:
     """
     Transform "arg" into its corresponding slow type.
     """
-    seen: Set[int] = set()
+    seen: set[int] = set()
     return _transform_arg(arg, "_fsproxy_slow", seen)
 
 
@@ -1087,7 +1127,7 @@ def _is_function_or_method(obj: Any) -> bool:
 def _replace_closurevars(
     f: types.FunctionType,
     attribute_name: Literal["_fsproxy_slow", "_fsproxy_fast"],
-    seen: Set[int],
+    seen: set[int],
 ) -> Callable[..., Any]:
     """
     Return a copy of `f` with its closure variables replaced with
@@ -1135,7 +1175,24 @@ def _replace_closurevars(
     )
 
 
-_SPECIAL_METHODS: Set[str] = {
+def is_proxy_object(obj: Any) -> bool:
+    """Determine if an object is proxy object
+
+    Parameters
+    ----------
+    obj : object
+        Any python object.
+
+    """
+    if _FastSlowProxyMeta in type(type(obj)).__mro__:
+        return True
+    return False
+
+
+NUMPY_TYPES: set[str] = set(np.sctypeDict.values())
+
+
+_SPECIAL_METHODS: set[str] = {
     "__abs__",
     "__add__",
     "__and__",

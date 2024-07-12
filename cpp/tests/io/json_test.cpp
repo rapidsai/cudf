@@ -28,13 +28,13 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/json.hpp>
-#include <cudf/io/memory_resource.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 
@@ -1400,9 +1400,7 @@ TEST_F(JsonReaderTest, JsonLongString)
                            .lines(true)
                            .na_rep("null");
 
-  cudf::io::write_json(options_builder.build(),
-                       cudf::test::get_default_stream(),
-                       rmm::mr::get_current_device_resource());
+  cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
 
   cudf::column_view int16_with_mask(repeat_times);
   cudf::column_view int16(
@@ -1829,7 +1827,7 @@ TYPED_TEST(JsonValidFixedPointReaderTest, SingleColumnPositiveScale)
 
 TYPED_TEST(JsonFixedPointReaderTest, EmptyValues)
 {
-  auto const buffer = std::string{"{\"col0\":\"\"}"};
+  auto const buffer = std::string{R"({"col0":""})"};
 
   cudf::io::json_reader_options const in_opts =
     cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
@@ -2068,7 +2066,7 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringSync)
                     size_t{128} * 1024 * 1024};
 
   // Set new resource
-  auto last_mr = cudf::io::set_host_memory_resource(mr);
+  auto last_mr = cudf::set_pinned_memory_resource(mr);
 
   /**
    * @brief Spark has the specific need to ignore extra characters that come after the first record
@@ -2158,7 +2156,7 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringSync)
     float64_wrapper{c_data.cbegin(), c_data.cend(), c_validity.cbegin()});
 
   // Restore original memory source
-  cudf::io::set_host_memory_resource(last_mr);
+  cudf::set_pinned_memory_resource(last_mr);
 }
 
 TEST_F(JsonReaderTest, MixedTypes)
@@ -2424,7 +2422,7 @@ TEST_P(JsonDelimiterParamTest, JsonLinesDelimiter)
    * linearly in O(n), we can do it in O(log n) by doubling the input in each iteration. The total
    * number of such iterations is log_repetitions.
    */
-  std::size_t const log_repetitions =
+  auto const log_repetitions =
     static_cast<std::size_t>(std::ceil(std::log2(string_size / input.size())));
   std::size_t const repetitions = 1UL << log_repetitions;
   for (std::size_t i = 0; i < log_repetitions; i++) {

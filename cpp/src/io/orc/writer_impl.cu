@@ -27,7 +27,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/pinned_host_vector.hpp>
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -2339,7 +2339,7 @@ auto convert_table_to_orc_data(table_view const& input,
                       std::move(streams),
                       std::move(stripes),
                       std::move(stripe_dicts.views),
-                      cudf::detail::pinned_host_vector<uint8_t>()};
+                      cudf::detail::make_pinned_vector_async<uint8_t>(0, stream)};
   }
 
   // Allocate intermediate output stream buffer
@@ -2407,7 +2407,7 @@ auto convert_table_to_orc_data(table_view const& input,
     return max_stream_size;
   }();
 
-  cudf::detail::pinned_host_vector<uint8_t> bounce_buffer(max_out_stream_size);
+  auto bounce_buffer = cudf::detail::make_pinned_vector_async<uint8_t>(max_out_stream_size, stream);
 
   auto intermediate_stats = gather_statistic_blobs(stats_freq, orc_table, segmentation, stream);
 

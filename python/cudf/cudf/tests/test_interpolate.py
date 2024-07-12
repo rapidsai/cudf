@@ -4,11 +4,8 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
-from cudf.testing._utils import (
-    assert_eq,
-    assert_exceptions_equal,
-    expect_warning_if,
-)
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 @pytest.mark.parametrize(
@@ -138,3 +135,9 @@ def test_interpolate_dataframe_error_cases(data, kwargs):
         lfunc_args_and_kwargs=([], kwargs),
         rfunc_args_and_kwargs=([], kwargs),
     )
+
+
+def test_interpolate_noop_new_column():
+    ser = cudf.Series([1.0, 2.0, 3.0])
+    result = ser.interpolate()
+    assert ser._column is not result._column
