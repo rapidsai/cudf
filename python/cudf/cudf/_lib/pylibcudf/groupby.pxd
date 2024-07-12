@@ -16,6 +16,7 @@ from cudf._lib.pylibcudf.libcudf.groupby cimport (
     scan_request,
 )
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.types cimport null_order, order
 
 from .column cimport Column
 from .table cimport Table
@@ -38,6 +39,9 @@ cdef class GroupByRequest:
 cdef class GroupBy:
     cdef unique_ptr[groupby] c_obj
     cdef Table _keys
+    cdef unique_ptr[vector[order]] _column_order
+    cdef unique_ptr[vector[null_order]] _null_precedence
+
     cpdef tuple aggregate(self, list requests)
     cpdef tuple scan(self, list requests)
     cpdef tuple shift(self, Table values, list offset, list fill_values)
