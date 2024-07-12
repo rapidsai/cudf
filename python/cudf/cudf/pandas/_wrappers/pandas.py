@@ -704,7 +704,7 @@ IntervalIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "__setattr__": Index__setattr__,
-        "name": _FastSlowAttribute("_name"),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
