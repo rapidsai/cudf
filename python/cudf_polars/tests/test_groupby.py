@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import itertools
+
 import pytest
 
 import polars as pl
@@ -26,12 +28,12 @@ def df():
 
 @pytest.fixture(
     params=[
-        ["key1"],
-        ["key2"],
+        [pl.col("key1")],
+        [pl.col("key2")],
         [pl.col("key1") * pl.col("key2")],
-        ["key1", "key2"],
+        [pl.col("key1"), pl.col("key2")],
         [pl.col("key1") == pl.col("key2")],
-        ["key2", pl.col("key1") == pl.lit(1, dtype=pl.Int64)],
+        [pl.col("key2"), pl.col("key1") == pl.lit(1, dtype=pl.Int64)],
     ],
     ids=lambda keys: "-".join(map(str, keys)),
 )
@@ -82,6 +84,35 @@ def test_groupby(df: pl.LazyFrame, maintain_order, keys, exprs):
     assert_gpu_result_equal(q, check_exact=False)
 
 
+def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs):
+    sorted_keys = [
+        key.sort(descending=descending)
+        for key, descending in zip(keys, itertools.cycle([False, True]))
+    ]
+
+    q = df.group_by(*sorted_keys).agg(*exprs)
+
+    schema = q.collect_schema()
+    sort_keys = list(schema.keys())[: len(keys)]
+    # Multiple keys don't do sorting
+    qsorted = q.sort(*sort_keys)
+    if len(keys) > 1:
+        with pytest.raises(AssertionError):
+            # https://github.com/pola-rs/polars/issues/17556
+            assert_gpu_result_equal(q, check_exact=False)
+        if schema[sort_keys[1]] == pl.Boolean():
+            # https://github.com/pola-rs/polars/issues/17557
+            with pytest.raises(AssertionError):
+                assert_gpu_result_equal(qsorted, check_exact=False)
+        else:
+            assert_gpu_result_equal(qsorted, check_exact=False)
+    elif schema[sort_keys[0]] == pl.Boolean():
+        # Boolean keys don't do sorting, so we get random order
+        assert_gpu_result_equal(qsorted, check_exact=False)
+    else:
+        assert_gpu_result_equal(q, check_exact=False)
+
+
 def test_groupby_len(df, keys):
     q = df.group_by(*keys).agg(pl.len())
 
@@ -97,5 +128,29 @@ def test_groupby_len(df, keys):
 )
 def test_groupby_unsupported(df, expr):
     q = df.group_by("key1").agg(expr)
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.xfail(reason="https://github.com/pola-rs/polars/issues/17513")
+def test_groupby_minmax_with_nan():
+    df = pl.LazyFrame(
+        {"key": [1, 2, 2, 2], "value": [float("nan"), 1, -1, float("nan")]}
+    )
+
+    q = df.group_by("key").agg(
+        pl.col("value").max().alias("max"), pl.col("value").min().alias("min")
+    )
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("op", [pl.Expr.nan_max, pl.Expr.nan_min])
+def test_groupby_nan_minmax_raises(op):
+    df = pl.LazyFrame(
+        {"key": [1, 2, 2, 2], "value": [float("nan"), 1, -1, float("nan")]}
+    )
+
+    q = df.group_by("key").agg(op(pl.col("value")))
 
     assert_ir_translation_raises(q, NotImplementedError)
