@@ -226,6 +226,9 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   using namespace numeric;
   using RepType = typename ElementTo::rep;
 
+  CUDF_EXPECTS(std::all_of(begin, end, [](ElementFrom v) { return v.scale() == 0; }),
+               "Only zero-scale fixed-point values are supported");
+
   auto to_rep            = [](ElementTo fp) { return fp.value(); };
   auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
   auto const size        = cudf::distance(begin, end);
