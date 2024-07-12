@@ -24,6 +24,7 @@ from . cimport (
     stream_compaction,
     strings,
     traits,
+    transform,
     types,
     unary,
 )
@@ -63,6 +64,7 @@ __all__ = [
     "strings",
     "sorting",
     "traits",
+    "transform",
     "types",
     "unary",
 ]
