@@ -179,8 +179,10 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     set.insert_if(iter, iter + right_num_rows, stencil, pred, stream.value());
   }
 
+  auto constexpr cg_size = hash_set_type::cg_size;
+
   detail::grid_1d const config(outer_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
-  auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
+  auto const shmem_size_per_block = (parser.shmem_per_thread/cg_size) * config.num_threads_per_block;
 
   auto const row_hash = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
 

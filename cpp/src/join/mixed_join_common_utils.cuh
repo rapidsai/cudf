@@ -190,7 +190,7 @@ using hash_set_type = cuco::static_set<size_type,
                                        cuco::extent<size_t>,
                                        cuda::thread_scope_device,
                                        double_row_equality,
-                                       cuco::linear_probing<1, row_hash>,
+                                       cuco::linear_probing<4, row_hash>,
                                        cudf::detail::cuco_allocator,
                                        cuco::storage<1>>;
 
