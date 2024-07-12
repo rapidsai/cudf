@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from packaging import version
 
 import rmm
 
@@ -260,8 +261,7 @@ def test_generic_null_scalar_construction_fails(value):
 def test_scalar_out_of_bounds_pyint_fails(value, dtype):
     # Test that we align with NumPy on scalar creation behavior from
     # Python integers.
-    np_ver = np.lib.NumpyVersion(np.__version__)
-    if np_ver >= "2.0.0":
+    if version.parse(np.__version__) >= version.parse("2.0"):
         with pytest.raises(OverflowError):
             cudf.Scalar(value, dtype)
     else:
