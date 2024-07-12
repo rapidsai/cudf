@@ -265,9 +265,9 @@ def Index__setattr__(self, name, value):
         object.__setattr__(self, name, value)
         return
     if name == "name":
-        setattr(self._fsproxy_wrapped, "_name", value)
+        setattr(self._fsproxy_wrapped, "name", value)
     if name == "names":
-        setattr(self._fsproxy_wrapped, "_names", value)
+        setattr(self._fsproxy_wrapped, "names", value)
     return _FastSlowAttribute("__setattr__").__get__(self, type(self))(
         name, value
     )
@@ -296,7 +296,7 @@ Index = make_final_proxy_type(
         "_accessors": set(),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
-        "name": _FastSlowAttribute("_name"),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -310,7 +310,7 @@ RangeIndex = make_final_proxy_type(
     additional_attributes={
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
-        "name": _FastSlowAttribute("_name"),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -341,7 +341,7 @@ CategoricalIndex = make_final_proxy_type(
     additional_attributes={
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
-        "name": _FastSlowAttribute("_name"),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -374,7 +374,7 @@ DatetimeIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "__setattr__": Index__setattr__,
-        "name": _FastSlowAttribute("_name"),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -411,7 +411,7 @@ TimedeltaIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "__setattr__": Index__setattr__,
-        "name": _FastSlowAttribute("_name"),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -469,7 +469,7 @@ PeriodIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "__setattr__": Index__setattr__,
-        "name": _FastSlowAttribute("_name"),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -514,7 +514,7 @@ MultiIndex = make_final_proxy_type(
     additional_attributes={
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
-        "name": _FastSlowAttribute("_names"),
+        "name": _FastSlowAttribute("names"),
     },
 )
 
