@@ -48,6 +48,10 @@ std::unique_ptr<table> gather(table_view const& source_table,
   auto map_begin = indexalator_factory::make_input_iterator(gather_map);
   auto map_end   = map_begin + gather_map.size();
 
+  // ZZZZ prefetch gather_map
+  cudf::experimental::prefetch::detail::prefetch(
+    "prefetch", gather_map.head(), gather_map.size() * size_of(gather_map.type()));
+
   if (neg_indices == negative_index_policy::ALLOWED) {
     cudf::size_type n_rows = source_table.num_rows();
     auto idx_converter     = cuda::proclaim_return_type<size_type>(

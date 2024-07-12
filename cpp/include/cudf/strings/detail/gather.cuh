@@ -23,6 +23,7 @@
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/prefetch.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -231,6 +232,8 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
 
   auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
   auto d_chars    = chars_data.data();
+  // ZZZZ prefetch d_chars,chars_bytes
+  cudf::experimental::prefetch::detail::prefetch("prefetch", d_chars, chars_bytes);
 
   constexpr int warps_per_threadblock = 4;
   // String parallel strategy will be used if average string length is above this threshold.
@@ -298,6 +301,16 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
     strings.is_empty() ? make_empty_column(type_id::INT32)->view() : strings.offsets(),
     strings.offset());
 
+  // ZZZZ prefetch strings.offsets[offset,size]
+  // ZZZZ could use a utility that accepts a column_view to prefetch its data/null_mask
+  if (!strings.is_empty()) {
+    cudf::experimental::prefetch::detail::prefetch(
+      "prefetch", strings.offsets().head(), strings.size() * size_of(strings.offsets().type()));
+    // ZZZZ prefetch null_mask
+    cudf::experimental::prefetch::detail::prefetch(
+      "prefetch", strings.null_mask(), cudf::bitmask_allocation_size_bytes(strings.size()));
+  }
+
   auto sizes_itr = thrust::make_transform_iterator(
     begin,
     cuda::proclaim_return_type<size_type>(
@@ -310,6 +323,11 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
     sizes_itr, sizes_itr + output_count, stream, mr);
 
   // build chars column
+  // ZZZZ prefetch out_offsets?
+  cudf::experimental::prefetch::detail::prefetch(
+    "prefetch",
+    out_offsets_column->view().head(),
+    output_count * size_of(out_offsets_column->type()));
   auto const offsets_view =
     cudf::detail::offsetalator_factory::make_input_iterator(out_offsets_column->view());
   auto out_chars_data = gather_chars(

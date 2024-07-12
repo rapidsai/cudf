@@ -33,6 +33,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/prefetch.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -221,9 +222,16 @@ struct column_gatherer_impl<Element, std::enable_if_t<is_rep_layout_compatible<E
     auto const policy       = cudf::mask_allocation_policy::NEVER;
     auto destination_column = cudf::allocate_like(source_column, num_rows, policy, stream, mr);
 
-    gather_helper(source_column.data<Element>(),
+    // ZZZZ prefetch source_column, destination_column
+    auto const src = source_column.data<Element>();
+    cudf::experimental::prefetch::detail::prefetch(
+      "prefetch", src, sizeof(Element) * source_column.size());
+    auto const dest = destination_column->mutable_view().template begin<Element>();
+    cudf::experimental::prefetch::detail::prefetch("prefetch", dest, sizeof(Element) * num_rows);
+
+    gather_helper(src,
                   source_column.size(),
-                  destination_column->mutable_view().template begin<Element>(),
+                  dest,
                   gather_map_begin,
                   gather_map_end,
                   nullify_out_of_bounds,
@@ -579,7 +587,11 @@ void gather_bitmask(table_view const& source,
   // Make device array of target bitmask pointers
   std::vector<bitmask_type*> target_masks(target.size());
   std::transform(target.begin(), target.end(), target_masks.begin(), [](auto const& col) {
-    return col->mutable_view().null_mask();
+    // ZZZZ prefetch masks
+    auto mask = col->mutable_view().null_mask();
+    cudf::experimental::prefetch::detail::prefetch(
+      "prefetch", mask, cudf::bitmask_allocation_size_bytes(col->size()));
+    return mask;
   });
   auto d_target_masks =
     make_device_uvector_async(target_masks, stream, rmm::mr::get_current_device_resource());
