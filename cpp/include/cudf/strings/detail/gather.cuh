@@ -35,8 +35,6 @@
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <inttypes.h>
-#include <cstdio>
 
 namespace cudf {
 namespace strings {
