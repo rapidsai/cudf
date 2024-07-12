@@ -35,7 +35,7 @@
 using cudf::test::iterators::no_nulls;
 
 template <typename mask_op_t>
-void test_durations(mask_op_t mask_op, bool use_byte_stream_split)
+void test_durations(mask_op_t mask_op, bool use_byte_stream_split, bool arrow_schema)
 {
   std::default_random_engine generator;
   std::uniform_int_distribution<int> distribution_d(0, 30);
@@ -76,20 +76,27 @@ void test_durations(mask_op_t mask_op, bool use_byte_stream_split)
 
   auto filepath = temp_env->get_temp_filepath("Durations.parquet");
   cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .write_arrow_schema(arrow_schema);
+
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .use_arrow_schema(arrow_schema);
   auto result = cudf::io::read_parquet(in_opts);
 
   auto durations_d_got =
     cudf::cast(result.tbl->view().column(0), cudf::data_type{cudf::type_id::DURATION_DAYS});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_d, durations_d_got->view());
 
-  auto durations_s_got =
-    cudf::cast(result.tbl->view().column(1), cudf::data_type{cudf::type_id::DURATION_SECONDS});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_s, durations_s_got->view());
+  if (arrow_schema) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_s, result.tbl->view().column(1));
+  } else {
+    auto durations_s_got =
+      cudf::cast(result.tbl->view().column(1), cudf::data_type{cudf::type_id::DURATION_SECONDS});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_s, durations_s_got->view());
+  }
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_ms, result.tbl->view().column(2));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_us, result.tbl->view().column(3));
@@ -98,10 +105,15 @@ void test_durations(mask_op_t mask_op, bool use_byte_stream_split)
 
 TEST_F(ParquetWriterTest, Durations)
 {
-  test_durations([](auto i) { return true; }, false);
-  test_durations([](auto i) { return (i % 2) != 0; }, false);
-  test_durations([](auto i) { return (i % 3) != 0; }, false);
-  test_durations([](auto i) { return false; }, false);
+  test_durations([](auto i) { return true; }, false, false);
+  test_durations([](auto i) { return (i % 2) != 0; }, false, false);
+  test_durations([](auto i) { return (i % 3) != 0; }, false, false);
+  test_durations([](auto i) { return false; }, false, false);
+
+  test_durations([](auto i) { return true; }, false, true);
+  test_durations([](auto i) { return (i % 2) != 0; }, false, true);
+  test_durations([](auto i) { return (i % 3) != 0; }, false, true);
+  test_durations([](auto i) { return false; }, false, true);
 }
 
 TEST_F(ParquetWriterTest, MultiIndex)
@@ -491,6 +503,50 @@ TEST_F(ParquetWriterTest, DecimalWrite)
   auto result = cudf::io::read_parquet(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, table);
+}
+
+TEST_F(ParquetWriterTest, DecimalWriteWithArrowSchema)
+{
+  constexpr cudf::size_type num_rows = 500;
+  auto seq_col0                      = random_values<int32_t>(num_rows);
+  auto seq_col1                      = random_values<int64_t>(num_rows);
+
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+
+  auto col0 = cudf::test::fixed_point_column_wrapper<int32_t>{
+    seq_col0.begin(), seq_col0.end(), valids, numeric::scale_type{5}};
+  auto col1 = cudf::test::fixed_point_column_wrapper<int64_t>{
+    seq_col1.begin(), seq_col1.end(), valids, numeric::scale_type{-9}};
+
+  auto table = table_view({col0, col1});
+
+  auto filepath = temp_env->get_temp_filepath("DecimalWriteWithArrowSchema.parquet");
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table)
+      .write_arrow_schema(true);
+
+  cudf::io::table_input_metadata expected_metadata(table);
+  // verify success if equal precision is given
+  expected_metadata.column_metadata[0].set_decimal_precision(
+    cudf::io::parquet::detail::MAX_DECIMAL32_PRECISION);
+  expected_metadata.column_metadata[1].set_decimal_precision(
+    cudf::io::parquet::detail::MAX_DECIMAL64_PRECISION);
+  args.set_metadata(std::move(expected_metadata));
+  cudf::io::write_parquet(args);
+
+  auto expected_col0 = cudf::test::fixed_point_column_wrapper<__int128_t>{
+    seq_col0.begin(), seq_col0.end(), valids, numeric::scale_type{5}};
+  auto expected_col1 = cudf::test::fixed_point_column_wrapper<__int128_t>{
+    seq_col1.begin(), seq_col1.end(), valids, numeric::scale_type{-9}};
+
+  auto expected_table = table_view({expected_col0, expected_col1});
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, expected_table);
 }
 
 TEST_F(ParquetWriterTest, RowGroupSizeInvalid)
@@ -1935,10 +1991,15 @@ TEST_F(ParquetWriterTest, DecimalByteStreamSplit)
 
 TEST_F(ParquetWriterTest, DurationByteStreamSplit)
 {
-  test_durations([](auto i) { return true; }, true);
-  test_durations([](auto i) { return (i % 2) != 0; }, true);
-  test_durations([](auto i) { return (i % 3) != 0; }, true);
-  test_durations([](auto i) { return false; }, true);
+  test_durations([](auto i) { return true; }, true, false);
+  test_durations([](auto i) { return (i % 2) != 0; }, true, false);
+  test_durations([](auto i) { return (i % 3) != 0; }, true, false);
+  test_durations([](auto i) { return false; }, true, false);
+
+  test_durations([](auto i) { return true; }, true, true);
+  test_durations([](auto i) { return (i % 2) != 0; }, true, true);
+  test_durations([](auto i) { return (i % 3) != 0; }, true, true);
+  test_durations([](auto i) { return false; }, true, true);
 }
 
 TEST_F(ParquetWriterTest, WriteFixedLenByteArray)

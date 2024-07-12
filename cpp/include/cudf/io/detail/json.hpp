@@ -46,13 +46,11 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
  * @param table The set of columns
  * @param options Settings for controlling behavior
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource to use for device memory allocation
  */
 void write_json(data_sink* sink,
                 table_view const& table,
                 json_writer_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::device_async_resource_ref mr);
+                rmm::cuda_stream_view stream);
 
 /**
  * @brief Normalize single quotes to double quotes using FST

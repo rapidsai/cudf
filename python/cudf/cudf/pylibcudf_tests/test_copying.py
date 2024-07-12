@@ -9,9 +9,6 @@ from utils import (
     assert_column_eq,
     assert_table_eq,
     cudf_raises,
-    is_fixed_width,
-    is_floating,
-    is_integer,
     is_nested_list,
     is_nested_struct,
     is_string,
@@ -359,9 +356,9 @@ def test_scatter_table_type_mismatch(source_table, index_column, target_table):
     _, plc_index_column = index_column
     _, plc_target_table = target_table
     with cudf_raises(TypeError):
-        if is_integer(
+        if plc.traits.is_integral_not_bool(
             dtype := plc_target_table.columns()[0].type()
-        ) or is_floating(dtype):
+        ) or plc.traits.is_floating_point(dtype):
             pa_array = pa.array([True] * plc_source_table.num_rows())
         else:
             pa_array = pa.array([1] * plc_source_table.num_rows())
@@ -428,9 +425,9 @@ def test_scatter_scalars_type_mismatch(index_column, target_table):
     _, plc_index_column = index_column
     _, plc_target_table = target_table
     with cudf_raises(TypeError):
-        if is_integer(
+        if plc.traits.is_integral_not_bool(
             dtype := plc_target_table.columns()[0].type()
-        ) or is_floating(dtype):
+        ) or plc.traits.is_floating_point(dtype):
             plc_source_scalar = [plc.interop.from_arrow(pa.scalar(True))]
         else:
             plc_source_scalar = [plc.interop.from_arrow(pa.scalar(1))]
@@ -458,7 +455,7 @@ def test_empty_like_table(source_table):
 @pytest.mark.parametrize("size", [None, 10])
 def test_allocate_like(input_column, size):
     _, plc_input_column = input_column
-    if is_fixed_width(plc_input_column.type()):
+    if plc.traits.is_fixed_width(plc_input_column.type()):
         result = plc.copying.allocate_like(
             plc_input_column,
             plc.copying.MaskAllocationPolicy.RETAIN,
@@ -484,7 +481,7 @@ def test_copy_range_in_place(
 
     pa_target_column, _ = target_column
 
-    if not is_fixed_width(mutable_target_column.type()):
+    if not plc.traits.is_fixed_width(mutable_target_column.type()):
         with pytest.raises(TypeError):
             plc.copying.copy_range_in_place(
                 plc_input_column,
@@ -516,7 +513,7 @@ def test_copy_range_in_place_out_of_bounds(
 ):
     _, plc_input_column = input_column
 
-    if is_fixed_width(mutable_target_column.type()):
+    if plc.traits.is_fixed_width(mutable_target_column.type()):
         with cudf_raises(IndexError):
             plc.copying.copy_range_in_place(
                 plc_input_column,
@@ -528,7 +525,9 @@ def test_copy_range_in_place_out_of_bounds(
 
 
 def test_copy_range_in_place_different_types(mutable_target_column):
-    if is_integer(dtype := mutable_target_column.type()) or is_floating(dtype):
+    if plc.traits.is_integral_not_bool(
+        dtype := mutable_target_column.type()
+    ) or plc.traits.is_floating_point(dtype):
         plc_input_column = plc.interop.from_arrow(pa.array(["a", "b", "c"]))
     else:
         plc_input_column = plc.interop.from_arrow(pa.array([1, 2, 3]))
@@ -548,7 +547,7 @@ def test_copy_range_in_place_null_mismatch(
 ):
     pa_input_column, _ = input_column
 
-    if is_fixed_width(mutable_target_column.type()):
+    if plc.traits.is_fixed_width(mutable_target_column.type()):
         pa_input_column = pc.if_else(
             _pyarrow_index_to_mask([0], len(pa_input_column)),
             pa_input_column,
@@ -568,7 +567,9 @@ def test_copy_range_in_place_null_mismatch(
 def test_copy_range(input_column, target_column):
     pa_input_column, plc_input_column = input_column
     pa_target_column, plc_target_column = target_column
-    if is_fixed_width(dtype := plc_target_column.type()) or is_string(dtype):
+    if plc.traits.is_fixed_width(
+        dtype := plc_target_column.type()
+    ) or is_string(dtype):
         result = plc.copying.copy_range(
             plc_input_column,
             plc_target_column,
@@ -610,7 +611,9 @@ def test_copy_range_out_of_bounds(input_column, target_column):
 
 def test_copy_range_different_types(target_column):
     _, plc_target_column = target_column
-    if is_integer(dtype := plc_target_column.type()) or is_floating(dtype):
+    if plc.traits.is_integral_not_bool(
+        dtype := plc_target_column.type()
+    ) or plc.traits.is_floating_point(dtype):
         plc_input_column = plc.interop.from_arrow(pa.array(["a", "b", "c"]))
     else:
         plc_input_column = plc.interop.from_arrow(pa.array([1, 2, 3]))
@@ -629,7 +632,9 @@ def test_shift(target_column, source_scalar):
     pa_source_scalar, plc_source_scalar = source_scalar
     pa_target_column, plc_target_column = target_column
     shift = 2
-    if is_fixed_width(dtype := plc_target_column.type()) or is_string(dtype):
+    if plc.traits.is_fixed_width(
+        dtype := plc_target_column.type()
+    ) or is_string(dtype):
         result = plc.copying.shift(plc_target_column, shift, plc_source_scalar)
         expected = pa.concat_arrays(
             [pa.array([pa_source_scalar] * shift), pa_target_column[:-shift]]
@@ -642,7 +647,9 @@ def test_shift(target_column, source_scalar):
 
 def test_shift_type_mismatch(target_column):
     _, plc_target_column = target_column
-    if is_integer(dtype := plc_target_column.type()) or is_floating(dtype):
+    if plc.traits.is_integral_not_bool(
+        dtype := plc_target_column.type()
+    ) or plc.traits.is_floating_point(dtype):
         fill_value = plc.interop.from_arrow(pa.scalar("a"))
     else:
         fill_value = plc.interop.from_arrow(pa.scalar(1))
@@ -747,7 +754,9 @@ def test_copy_if_else_column_column(target_column, mask, source_scalar):
 def test_copy_if_else_wrong_type(target_column, mask):
     _, plc_target_column = target_column
     _, plc_mask = mask
-    if is_integer(dtype := plc_target_column.type()) or is_floating(dtype):
+    if plc.traits.is_integral_not_bool(
+        dtype := plc_target_column.type()
+    ) or plc.traits.is_floating_point(dtype):
         plc_input_column = plc.interop.from_arrow(
             pa.array(["a"] * plc_target_column.size())
         )
@@ -951,9 +960,9 @@ def test_boolean_mask_scatter_from_wrong_num_true(source_table, target_table):
 def test_boolean_mask_scatter_from_wrong_col_type(target_table, mask):
     _, plc_target_table = target_table
     _, plc_mask = mask
-    if is_integer(
+    if plc.traits.is_integral_not_bool(
         dtype := plc_target_table.columns()[0].type()
-    ) or is_floating(dtype):
+    ) or plc.traits.is_floating_point(dtype):
         input_column = plc.interop.from_arrow(pa.array(["a", "b", "c"]))
     else:
         input_column = plc.interop.from_arrow(pa.array([1, 2, 3]))
