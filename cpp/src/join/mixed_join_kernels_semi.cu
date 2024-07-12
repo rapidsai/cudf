@@ -54,11 +54,8 @@ __attribute__((visibility("hidden"))) __launch_bounds__(block_size) __global__
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
-  cudf::size_type const left_num_rows  = left_table.num_rows();
-  cudf::size_type const right_num_rows = right_table.num_rows();
-  auto const outer_num_rows            = left_num_rows;
-
-  cudf::size_type outer_row_index = threadIdx.x + blockIdx.x * block_size;
+  cudf::size_type const outer_num_rows = left_table.num_rows();
+  cudf::size_type outer_row_index      = threadIdx.x + blockIdx.x * block_size;
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
