@@ -7849,7 +7849,26 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return result
 
 
-def from_dataframe(df, allow_copy=False):
+def from_dataframe(df, allow_copy: bool = False) -> DataFrame:
+    """
+    Build a :class:`DataFrame` from an object supporting the dataframe interchange protocol.
+
+    .. note::
+
+        If you have a ``pandas.DataFrame``, use :func:`from_pandas` instead.
+
+    Parameters
+    ----------
+    df : DataFrameXchg
+        Object supporting the interchange protocol, i.e. ``__dataframe__`` method.
+    allow_copy : bool, default: True
+        Whether to allow copying the memory to perform the conversion
+        (if false then zero-copy approach is requested).
+
+    Returns
+    -------
+    :class:`DataFrame`
+    """
     return df_protocol.from_dataframe(df, allow_copy=allow_copy)
 
 
