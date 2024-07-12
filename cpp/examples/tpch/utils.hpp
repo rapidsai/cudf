@@ -107,8 +107,8 @@ class table_with_names {
    * @param col The column to append
    * @param col_name The name of the appended column
    */
-  std::unique_ptr<table_with_names> append(std::unique_ptr<cudf::column>& col,
-                                           std::string const& col_name)
+  [[nodiscard]] std::unique_ptr<table_with_names> append(std::unique_ptr<cudf::column>& col,
+                                                         std::string const& col_name)
   {
     CUDF_FUNC_RANGE();
     auto cols = tbl->release();
