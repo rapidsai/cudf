@@ -87,15 +87,16 @@ cdef class GroupBy:
     keys : Table
         The columns to group by.
     null_handling : null_policy, optional
-        Whether or not to include null rows in ``keys``. Default is null_policy.EXCLUDE.
+        Whether or not to include null rows in `keys`.
+        Default is ``null_policy.EXCLUDE``.
     keys_are_sorted : sorted, optional
-        Whether the keys are already sorted. Default is sorted.NO.
+        Whether the keys are already sorted. Default is ``sorted.NO``.
     column_order : list[order]
-        Order of each key column if the keys are sorted. Default if not
-        provided uses order.ASCENDING. Ignored if keys_are_sorted is sorted.NO.
+        Indicates the order of each column. Default is ``order.ASCENDING``.
+        Ignored if `keys_are_sorted` is ``sorted.NO``.
     null_precedence : list[null_order]
-        Where do nulls sort if the keys are sorted?
-        Default is null_order.AFTER. Ignored if keys_are_sorted is sorted.NO.
+        Indicates the ordering of null values in each column.
+        Default is ``null_order.AFTER``. Ignored if `keys_are_sorted` is ``sorted.NO``.
     """
     def __init__(
         self,
