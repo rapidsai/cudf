@@ -59,16 +59,18 @@ __global__ void memset_kernel(memset_task * tasks, int8_t const value)
   }
 }
 
-template <int bytes_per_task, int threads_per_block>
+namespace detail {
+
 void multibuffer_memset(std::vector<cudf::device_span<uint8_t>> & bufs, 
                         int8_t const value,
                         rmm::cuda_stream_view _stream,
-                        rmm::device_async_resource_ref _mr
+                        rmm::device_async_resource_ref _mr,
+                        std::size_t const bytes_per_task,
+                        std::size_t const threads_per_block
                         )
 { 
   // define task and bytes paramters
   auto const num_bufs = bufs.size();
-  auto const bpt = bytes_per_task;
 
   // declare offsets vector which stores for each buffer at which task in the task lists it starts at 
   rmm::device_uvector<std::size_t> offsets(bufs.size() + 1, _stream, _mr); 
@@ -80,7 +82,7 @@ void multibuffer_memset(std::vector<cudf::device_span<uint8_t>> & bufs,
   auto buf_count_iter = cudf::detail::make_counting_transform_iterator(
     0, 
     cuda::proclaim_return_type<std::size_t>(
-      [gpu_bufs = gpu_bufs.data(), bpt, num_bufs] __device__(cudf::size_type i) {
+      [gpu_bufs = gpu_bufs.data(), bytes_per_task, num_bufs] __device__(cudf::size_type i) {
         size_t temp = cudf::util::round_up_safe(gpu_bufs[i].size(), bytes_per_task);
         return i >= num_bufs ? 0 : temp / bytes_per_task;
       }
@@ -103,7 +105,7 @@ void multibuffer_memset(std::vector<cudf::device_span<uint8_t>> & bufs,
     thrust::make_counting_iterator<std::size_t>(total_tasks), 
     tasks.begin(), 
     cuda::proclaim_return_type<memset_task>(
-      [offsets = offsets.data(), offset_size = num_bufs + 1, gpu_bufs = gpu_bufs.data(), bpt] __device__(cudf::size_type task) {
+      [offsets = offsets.data(), offset_size = num_bufs + 1, gpu_bufs = gpu_bufs.data(), bytes_per_task] __device__(cudf::size_type task) {
         auto buf_idx = thrust::upper_bound(thrust::seq, offsets, offsets + offset_size, task);
         if (*buf_idx > task) {buf_idx -= 1;}
         size_t start = (task - *buf_idx) * bytes_per_task;
@@ -120,5 +122,24 @@ void multibuffer_memset(std::vector<cudf::device_span<uint8_t>> & bufs,
   if (total_tasks != 0) {
     memset_kernel<<<total_tasks, threads_per_block>>>(tasks.data(), value);
   }
+}
 
+} // namespace detail
+
+void multibuffer_memset(std::vector<cudf::device_span<uint8_t>> & bufs, 
+                        int8_t const value,
+                        rmm::cuda_stream_view _stream,
+                        rmm::device_async_resource_ref _mr
+                        )
+{
+  detail::multibuffer_memset(bufs, value, _stream, _mr, 1024 * 128, 256);
+}
+
+void multibuffer_memset_validity(std::vector<cudf::device_span<uint8_t>> & bufs, 
+                        int8_t const value,
+                        rmm::cuda_stream_view _stream,
+                        rmm::device_async_resource_ref _mr
+                        )
+{
+  detail::multibuffer_memset(bufs, value, _stream, _mr, 1024, 256);
 }

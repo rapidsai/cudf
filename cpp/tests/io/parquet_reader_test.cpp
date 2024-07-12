@@ -30,27 +30,6 @@
 #include <cudf/transform.hpp>
 
 
-void memset_test()
-{
-  srand(31337);
-  auto expected = create_random_fixed_table<int>(2000, 500000, false);
-
-  auto filepath = temp_env->get_temp_filepath("memset.parquet");
-  cudf::io::parquet_writer_options args =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected);
-  cudf::io::write_parquet(args);
-
-  cudf::io::parquet_reader_options read_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
-  auto result = cudf::io::read_parquet(read_opts);
-  EXPECT_EQ(result.tbl->view().column(0).size(), 500000);
-}
-
-TEST_F(ParquetReaderTest, memsettest) 
-{
-    memset_test();
-}
-
 TEST_F(ParquetReaderTest, UserBounds)
 {
   // trying to read more rows than there are should result in

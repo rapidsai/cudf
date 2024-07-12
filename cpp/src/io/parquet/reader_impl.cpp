@@ -24,8 +24,6 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 
-#include <io/utilities/multibuffer_memset.hpp>
-
 #include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
