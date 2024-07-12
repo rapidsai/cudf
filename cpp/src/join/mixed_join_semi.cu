@@ -178,13 +178,13 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     set.insert_if(iter, iter + right_num_rows, stencil, pred, stream.value());
   }
 
-  hash_set_ref_type set_ref = set.ref(cuco::contains);
-
   detail::grid_1d const config(outer_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
-  auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-  auto const hash_probe = row_hash.device_hasher(has_nulls);
+  auto const row_hash = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+
+  hash_set_ref_type set_ref =
+    set.ref(cuco::contains).with_hash_function(row_hash.device_hasher(has_nulls));
 
   // Vector used to indicate indices from left/probe table which are present in output
   auto left_table_keep_mask = rmm::device_uvector<bool>(probe.num_rows(), stream);
@@ -196,7 +196,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
         *right_conditional_view,
         *probe_view,
         *build_view,
-        hash_probe,
         equality_probe,
         set_ref,
         cudf::device_span<bool>(left_table_keep_mask),
@@ -208,7 +207,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
         *right_conditional_view,
         *probe_view,
         *build_view,
-        hash_probe,
         equality_probe,
         set_ref,
         cudf::device_span<bool>(left_table_keep_mask),
