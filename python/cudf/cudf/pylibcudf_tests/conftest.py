@@ -38,28 +38,29 @@ def numeric_pa_type(request):
     return request.param
 
 
-def _get_vals_of_type(pa_type, length):
+def _get_vals_of_type(pa_type, length, seed):
     """
     Returns an list-like of random values of that type
     """
+    rng = np.random.default_rng(seed=seed)
     if pa_type == pa.int64():
         half = length // 2
-        negs = np.random.randint(-length, 0, half, dtype=np.int64)
-        pos = np.random.randint(0, length, length - half, dtype=np.int64)
+        negs = rng.integers(-length, 0, half, dtype=np.int64)
+        pos = rng.integers(0, length, length - half, dtype=np.int64)
         return np.concatenate([negs, pos])
     elif pa_type == pa.uint64():
-        return np.random.randint(0, length, length, dtype=np.uint64)
+        return rng.integers(0, length, length, dtype=np.uint64)
     elif pa_type == pa.float64():
         # Round to 6 decimal places or else we have problems comparing our
         # output to pandas due to floating point/rounding differences
-        return np.random.uniform(-length, length, length).round(6)
+        return rng.uniform(-length, length, length).round(6)
     elif pa_type == pa.bool_():
-        return np.random.randint(0, 2, length, dtype=bool)
+        return rng.integers(0, 2, length, dtype=bool)
     elif pa_type == pa.string():
         # Generate random ASCII strings
         strs = []
         for _ in range(length):
-            chrs = np.random.randint(33, 128, length)
+            chrs = rng.integers(33, 128, length)
             strs.append("".join(chr(x) for x in chrs))
         return strs
     else:
@@ -88,7 +89,7 @@ def table_data(request):
     # plc.io.TableWithMetadata
     colnames = []
 
-    np.random.seed(42)
+    seed = 42
 
     for typ in ALL_PA_TYPES:
         child_colnames = []
@@ -118,13 +119,17 @@ def table_data(request):
                 child_colnames.append(("", grandchild_colnames))
             else:
                 # typ is scalar type
-                pa_array = pa.array(_get_vals_of_type(typ, nrows), type=typ)
+                pa_array = pa.array(
+                    _get_vals_of_type(typ, nrows, seed=seed), type=typ
+                )
             return pa_array, child_colnames
 
         if isinstance(typ, (pa.ListType, pa.StructType)):
             rand_arr, child_colnames = _generate_nested_data(typ)
         else:
-            rand_arr = pa.array(_get_vals_of_type(typ, nrows), type=typ)
+            rand_arr = pa.array(
+                _get_vals_of_type(typ, nrows, seed=seed), type=typ
+            )
 
         table_dict[f"col_{typ}"] = rand_arr
         colnames.append((f"col_{typ}", child_colnames))

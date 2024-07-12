@@ -257,7 +257,6 @@ def make_source(path_or_buf, pa_table, format, **kwargs):
     """
     Write a pyarrow Table to a specific format using pandas
     by dispatching to the appropriate to_* call.
-
     The caller is responsible for making sure that no arguments
     unsupported by pandas are passed in.
     """
