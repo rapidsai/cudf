@@ -180,9 +180,9 @@ cdef class Column:
 
         Parameters
         ----------
-        mask
+        mask : gpumemoryview
             New mask (or None to unset the mask)
-        null_count
+        null_count : int
             New null count. If this is incorrect, bad things happen.
 
         Returns

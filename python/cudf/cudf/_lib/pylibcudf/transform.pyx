@@ -17,7 +17,7 @@ cpdef tuple[gpumemoryview, int] nans_to_nulls(Column input):
 
     Parameters
     ----------
-    input
+    input : Column
         Column to produce new mask from.
 
     Returns
