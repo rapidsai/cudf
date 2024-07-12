@@ -235,18 +235,8 @@ class NumericalColumn(NumericalBaseColumn):
                     tmp.dtype.type in int_float_dtype_mapping
                     and tmp.dtype.kind != "b"
                     and (
-                        (
-                            (
-                                np.isscalar(tmp)
-                                or (
-                                    isinstance(tmp, cudf.Scalar)
-                                    # host to device copy
-                                    and tmp.is_valid()
-                                )
-                            )
-                            and (0 == tmp)
-                        )
-                        or ((isinstance(tmp, NumericalColumn)) and (0 in tmp))
+                        (is_scalar(tmp) and tmp == 0)
+                        or (isinstance(tmp, NumericalColumn) and 0 in tmp)
                     )
                 ):
                     out_dtype = cudf.dtype("float64")

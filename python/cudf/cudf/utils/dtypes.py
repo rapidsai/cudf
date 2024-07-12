@@ -373,10 +373,10 @@ def min_column_type(x, expected_type):
     if x.null_count == len(x):
         return x.dtype
 
-    if np.issubdtype(x.dtype, np.floating):
+    if x.dtype.kind == "f":
         return get_min_float_dtype(x)
 
-    elif np.issubdtype(expected_type, np.integer):
+    elif cudf.dtype(expected_type).kind in "iu":
         max_bound_dtype = np.min_scalar_type(x.max())
         min_bound_dtype = np.min_scalar_type(x.min())
         result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
