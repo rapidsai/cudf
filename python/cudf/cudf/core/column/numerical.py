@@ -234,8 +234,9 @@ class NumericalColumn(NumericalBaseColumn):
                 if (
                     tmp.dtype.type in int_float_dtype_mapping
                     and tmp.dtype.kind != "b"
+                    # tmp == 0 can return NA
                     and (
-                        (is_scalar(tmp) and tmp == 0)
+                        (is_scalar(tmp) and ((tmp == 0) is True))
                         or (isinstance(tmp, NumericalColumn) and 0 in tmp)
                     )
                 ):

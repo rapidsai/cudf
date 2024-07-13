@@ -90,27 +90,23 @@ def _match_join_keys(
     if (
         is_numeric_dtype(ltype)
         and is_numeric_dtype(rtype)
-        and not (ltype.dtype.kind == "m" or rtype.dtype.kind == "m")
+        and not (ltype.kind == "m" or rtype.kind == "m")
     ):
         common_type = (
             max(ltype, rtype)
             if ltype.kind == rtype.kind
             else np.result_type(ltype, rtype)
         )
-    elif (ltype.dtype.kind == "M" and rtype.dtype.kind == "M") or (
-        ltype.dtype.kind == "m" and rtype.dtype.kind == "m"
+    elif (ltype.kind == "M" and rtype.kind == "M") or (
+        ltype.kind == "m" and rtype.kind == "m"
     ):
         common_type = max(ltype, rtype)
-    elif ltype.dtype.kind in "mM" and not rcol.fillna(0).can_cast_safely(
-        ltype
-    ):
+    elif ltype.kind in "mM" and not rcol.fillna(0).can_cast_safely(ltype):
         raise TypeError(
             f"Cannot join between {ltype} and {rtype}, please type-cast both "
             "columns to the same type."
         )
-    elif rtype.dtype.kind in "mM" and not lcol.fillna(0).can_cast_safely(
-        rtype
-    ):
+    elif rtype.kind in "mM" and not lcol.fillna(0).can_cast_safely(rtype):
         raise TypeError(
             f"Cannot join between {rtype} and {ltype}, please type-cast both "
             "columns to the same type."
