@@ -721,7 +721,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return result
 
     def indices_of(
-        self, value: ScalarLike | Self
+        self, value: ScalarLike
     ) -> cudf.core.column.NumericalColumn:
         """
         Find locations of value in the column
@@ -735,10 +735,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         -------
         Column of indices that match value
         """
-        if not isinstance(value, ColumnBase):
-            value = as_column([value], dtype=self.dtype)
+        if not is_scalar(value):
+            raise ValueError("value must be a scalar")
         else:
-            assert len(value) == 1
+            value = as_column(value, dtype=self.dtype, length=1)
         mask = libcudf.search.contains(value, self)
         return apply_boolean_mask(
             [as_column(range(0, len(self)), dtype=size_type_dtype)], mask

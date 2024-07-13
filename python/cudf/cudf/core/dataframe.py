@@ -430,7 +430,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
             else:
                 value = cupy.asarray(value)
-                if cupy.ndim(value) == 2:
+                if value.ndim == 2:
                     # If the inner dimension is 1, it's broadcastable to
                     # all columns of the dataframe.
                     indexed_shape = columns_df.loc[key[0]].shape
@@ -567,7 +567,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             # TODO: consolidate code path with identical counterpart
             # in `_DataFrameLocIndexer._setitem_tuple_arg`
             value = cupy.asarray(value)
-            if cupy.ndim(value) == 2:
+            if value.ndim == 2:
                 indexed_shape = columns_df.iloc[key[0]].shape
                 if value.shape[1] == 1:
                     if value.shape[0] != indexed_shape[0]:
@@ -2200,8 +2200,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         orient = orient.lower()
         if orient == "index":
-            if len(data) > 0 and isinstance(
-                next(iter(data.values())), (cudf.Series, cupy.ndarray)
+            if isinstance(
+                next(iter(data.values()), None), (cudf.Series, cupy.ndarray)
             ):
                 result = cls(data).T
                 result.columns = (
@@ -5699,7 +5699,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @classmethod
     @_performance_tracking
-    def _from_arrays(cls, data, index=None, columns=None, nan_as_null=False):
+    def _from_arrays(
+        cls,
+        data: np.ndarray | cupy.ndarray,
+        index=None,
+        columns=None,
+        nan_as_null=False,
+    ):
         """Convert a numpy/cupy array to DataFrame.
 
         Parameters
@@ -5717,8 +5723,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
         """
-
-        data = cupy.asarray(data)
         if data.ndim != 1 and data.ndim != 2:
             raise ValueError(
                 f"records dimension expected 1 or 2 but found: {data.ndim}"
