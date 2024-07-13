@@ -6535,7 +6535,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             }
             result_dtype = (
                 common_dtype
-                if method in type_coerced_methods or common_dtype.kind == "M"
+                if method in type_coerced_methods
+                or (common_dtype is not None and common_dtype.kind == "M")
                 else None
             )
             result = column.as_column(result, dtype=result_dtype)
