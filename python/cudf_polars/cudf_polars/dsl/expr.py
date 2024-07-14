@@ -867,7 +867,7 @@ class UnaryFunction(Expr):
         self.name = name
         self.options = options
         self.children = children
-        if self.name not in ("round", "unique", "mask_nans"):
+        if self.name not in ("mask_nans", "round", "setsorted", "unique"):
             raise NotImplementedError(f"Unary function {name=}")
 
     def do_evaluate(
@@ -926,6 +926,33 @@ class UnaryFunction(Expr):
             if maintain_order:
                 return Column(column).sorted_like(values)
             return Column(column)
+        elif self.name == "setsorted":
+            (column,) = (
+                child.evaluate(df, context=context, mapping=mapping)
+                for child in self.children
+            )
+            (asc,) = self.options
+            order = (
+                plc.types.Order.ASCENDING
+                if asc == "ascending"
+                else plc.types.Order.DESCENDING
+            )
+            null_order = plc.types.NullOrder.BEFORE
+            if column.obj.null_count() > 0 and (n := column.obj.size()) > 1:
+                # PERF: This invokes four stream synchronisations!
+                has_nulls_first = not plc.copying.get_element(column.obj, 0).is_valid()
+                has_nulls_last = not plc.copying.get_element(
+                    column.obj, n - 1
+                ).is_valid()
+                if (order == plc.types.Order.DESCENDING and has_nulls_first) or (
+                    order == plc.types.Order.ASCENDING and has_nulls_last
+                ):
+                    null_order = plc.types.NullOrder.AFTER
+            return column.set_sorted(
+                is_sorted=plc.types.Sorted.YES,
+                order=order,
+                null_order=null_order,
+            )
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
         )  # pragma: no cover; init trips first
