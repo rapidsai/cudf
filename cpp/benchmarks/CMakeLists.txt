@@ -17,9 +17,17 @@ find_package(Threads REQUIRED)
 add_library(cudf_datagen STATIC common/generate_input.cu)
 target_compile_features(cudf_datagen PUBLIC cxx_std_17 cuda_std_17)
 
+add_executable(cudf_tpch_datagen common/cudf_datagen/dbgen.cu)
+target_compile_features(cudf_tpch_datagen PUBLIC cxx_std_17 cuda_std_17)
+
 target_compile_options(
   cudf_datagen PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                       "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
+
+target_compile_options(
+  cudf_tpch_datagen PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                           "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
 
 target_link_libraries(
@@ -31,6 +39,19 @@ target_link_libraries(
 
 target_include_directories(
   cudf_datagen
+  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+)
+
+target_link_libraries(
+  cudf_tpch_datagen
+  PUBLIC GTest::gmock GTest::gtest benchmark::benchmark nvbench::nvbench Threads::Threads cudf
+         cudftestutil nvtx3::nvtx3-cpp
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+)
+
+target_include_directories(
+  cudf_tpch_datagen
   PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
 )
