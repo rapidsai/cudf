@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <rmm/device_uvector.hpp>
+
 #include <map>
 #include <string>
 #include <string_view>
@@ -85,6 +87,14 @@ class PrefetchConfig {
 void prefetch(std::string_view key, void const* ptr, std::size_t size);
 
 void prefetch(std::string_view key, cudf::column_view const& col, bool prefetch_mask = false);
+
+template <typename T>
+void prefetch(std::string_view key, rmm::device_uvector<T> const& v)
+{
+  if (v.is_empty()) { return; }
+  prefetch(key, v.data(), v.size());
+}
+
 }  // namespace detail
 
 /**

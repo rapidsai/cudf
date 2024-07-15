@@ -32,7 +32,7 @@ class GatherTestStr : public cudf::test::BaseFixture {};
 
 TEST_F(GatherTestStr, StringColumn)
 {
-  cudf::experimental::prefetch::enable_prefetching("prefetch");
+  // cudf::experimental::prefetch::enable_prefetching("prefetch");
   // cudf::experimental::prefetch::prefetch_debugging(true);
 
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{1, 2, 3, 4, 5, 6},

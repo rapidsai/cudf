@@ -233,7 +233,7 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
 
   auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
   auto d_chars    = chars_data.data();
-  cudf::experimental::prefetch::detail::prefetch("prefetch", d_chars, chars_bytes);
+  cudf::experimental::prefetch::detail::prefetch("prefetch", chars_data);
 
   constexpr int warps_per_threadblock = 4;
   // String parallel strategy will be used if average string length is above this threshold.
