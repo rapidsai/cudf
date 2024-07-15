@@ -103,7 +103,13 @@ class ColumnAccessor(abc.MutableMapping):
         label_dtype: Dtype | None = None,
         verify: bool = True,
     ):
-        if isinstance(data, abc.MutableMapping):
+        if isinstance(data, ColumnAccessor):
+            self._data = data._data
+            self._level_names = data.level_names
+            self.multiindex: bool = data.multiindex
+            self.rangeindex: bool = data.rangeindex
+            self.label_dtype: Dtype | None = data.label_dtype
+        elif isinstance(data, abc.MutableMapping):
             # This code path is performance-critical for copies and should be
             # modified with care.
             if data and verify:
@@ -130,12 +136,6 @@ class ColumnAccessor(abc.MutableMapping):
             self.multiindex = multiindex
             self.label_dtype = label_dtype
             self._level_names = level_names
-        elif isinstance(data, ColumnAccessor):
-            self._data = data._data
-            self._level_names = data.level_names
-            self.multiindex = data.multiindex
-            self.rangeindex = data.rangeindex
-            self.label_dtype = data.label_dtype
         else:
             raise ValueError(
                 f"data must be a ColumnAccessor or MutableMapping, not {type(data).__name__}"
