@@ -29,7 +29,6 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 
-
 TEST_F(ParquetReaderTest, UserBounds)
 {
   // trying to read more rows than there are should result in

@@ -32,8 +32,6 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <stdexcept>
-#include <cstdio>
-
 
 namespace cudf {
 namespace strings {
@@ -65,7 +63,7 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
   auto constexpr size_type_max = static_cast<int64_t>(std::numeric_limits<size_type>::max());
   auto const lcount            = static_cast<int64_t>(std::distance(begin, end));
   CUDF_EXPECTS(
-   lcount <= size_type_max, "Size of output exceeds the column size limit", std::overflow_error);
+    lcount <= size_type_max, "Size of output exceeds the column size limit", std::overflow_error);
   auto const strings_count = static_cast<size_type>(lcount);
   auto offsets_column      = make_numeric_column(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);

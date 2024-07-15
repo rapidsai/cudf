@@ -657,6 +657,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
   std::vector<std::unique_ptr<column>> destination_columns;
 
   // TODO: Could be beneficial to use streams internally here
+  
   for (auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
     destination_columns.push_back(
