@@ -86,9 +86,9 @@ struct vocab_equal {
     return lhs == rhs;  // all rows are expected to be unique
   }
   // used by find
-  __device__ bool operator()(cudf::size_type lhs, cudf::string_view const& rhs) const noexcept
+  __device__ bool operator()(cudf::string_view const& lhs, cudf::size_type rhs) const noexcept
   {
-    return d_strings.element<cudf::string_view>(lhs) == rhs;
+    return d_strings.element<cudf::string_view>(rhs) == lhs;
   }
 };
 

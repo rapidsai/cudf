@@ -37,6 +37,30 @@ def ldf(with_nulls):
     return pl.LazyFrame({"a": a, "b": range(len(a))})
 
 
+slice_cases = [
+    (1, 3),
+    (0, 3),
+    (0, 0),
+    (-3, 1),
+    (-100, 5),
+    (1, 1),
+    (100, 100),
+    (-3, 4),
+    (-3, 3),
+]
+
+
+@pytest.fixture(params=slice_cases)
+def slice_column_data(ldf, request):
+    start, length = request.param
+    if length:
+        return ldf.with_columns(
+            pl.lit(start).alias("start"), pl.lit(length).alias("length")
+        )
+    else:
+        return ldf.with_columns(pl.lit(start).alias("start"))
+
+
 def test_supported_stringfunction_expression(ldf):
     query = ldf.select(
         pl.col("a").str.starts_with("Z"),
@@ -104,3 +128,25 @@ def test_contains_invalid(ldf):
         query.collect()
     with pytest.raises(pl.exceptions.ComputeError):
         query.collect(post_opt_callback=partial(execute_with_cudf, raise_on_fail=True))
+
+
+@pytest.mark.parametrize("offset", [1, -1, 0, 100, -100])
+def test_slice_scalars_offset(ldf, offset):
+    query = ldf.select(pl.col("a").str.slice(offset))
+    assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize("offset,length", slice_cases)
+def test_slice_scalars_length_and_offset(ldf, offset, length):
+    query = ldf.select(pl.col("a").str.slice(offset, length))
+    assert_gpu_result_equal(query)
+
+
+def test_slice_column(slice_column_data):
+    if "length" in slice_column_data.collect_schema():
+        query = slice_column_data.select(
+            pl.col("a").str.slice(pl.col("start"), pl.col("length"))
+        )
+    else:
+        query = slice_column_data.select(pl.col("a").str.slice(pl.col("start")))
+    assert_ir_translation_raises(query, NotImplementedError)

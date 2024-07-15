@@ -8,39 +8,19 @@ import cudf
 from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
-from libcpp.map cimport map
-from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
-from libcpp.utility cimport move
-from libcpp.vector cimport vector
 
 cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
 from cudf._lib.column cimport Column
-from cudf._lib.io.utils cimport (
-    make_sink_info,
-    make_source_info,
-    update_struct_field_names,
-)
-from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
-from cudf._lib.pylibcudf.libcudf.io.json cimport (
-    json_reader_options,
-    json_recovery_mode_t,
-    json_writer_options,
-    read_json as libcudf_read_json,
-    schema_element,
-    write_json as libcudf_write_json,
-)
-from cudf._lib.pylibcudf.libcudf.io.types cimport (
-    column_name_info,
-    compression_type,
-    sink_info,
-    table_metadata,
-    table_with_metadata,
-)
-from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
-from cudf._lib.pylibcudf.libcudf.types cimport data_type, size_type
+from cudf._lib.io.utils cimport add_df_col_struct_names
+from cudf._lib.pylibcudf.io.types cimport compression_type
+from cudf._lib.pylibcudf.libcudf.io.json cimport json_recovery_mode_t
+from cudf._lib.pylibcudf.libcudf.io.types cimport compression_type
+from cudf._lib.pylibcudf.libcudf.types cimport data_type, type_id
+from cudf._lib.pylibcudf.types cimport DataType
 from cudf._lib.types cimport dtype_to_data_type
-from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
+from cudf._lib.utils cimport _data_from_columns, data_from_pylibcudf_io
+
+import cudf._lib.pylibcudf as plc
 
 
 cdef json_recovery_mode_t _get_json_recovery_mode(object on_bad_lines):
@@ -73,6 +53,7 @@ cpdef read_json(object filepaths_or_buffers,
     # If input data is a JSON string (or StringIO), hold a reference to
     # the encoded memoryview externally to ensure the encoded buffer
     # isn't destroyed before calling libcudf `read_json()`
+
     for idx in range(len(filepaths_or_buffers)):
         if isinstance(filepaths_or_buffers[idx], io.StringIO):
             filepaths_or_buffers[idx] = \
@@ -82,17 +63,7 @@ cpdef read_json(object filepaths_or_buffers,
             filepaths_or_buffers[idx] = filepaths_or_buffers[idx].encode()
 
     # Setup arguments
-    cdef vector[data_type] c_dtypes_list
-    cdef map[string, schema_element] c_dtypes_schema_map
     cdef cudf_io_types.compression_type c_compression
-    # Determine byte read offsets if applicable
-    cdef size_type c_range_offset = (
-        byte_range[0] if byte_range is not None else 0
-    )
-    cdef size_type c_range_size = (
-        byte_range[1] if byte_range is not None else 0
-    )
-    cdef bool c_lines = lines
 
     if compression is not None:
         if compression == 'gzip':
@@ -105,57 +76,71 @@ cpdef read_json(object filepaths_or_buffers,
             c_compression = cudf_io_types.compression_type.AUTO
     else:
         c_compression = cudf_io_types.compression_type.NONE
-    is_list_like_dtypes = False
+
+    processed_dtypes = None
+
     if dtype is False:
         raise ValueError("False value is unsupported for `dtype`")
     elif dtype is not True:
+        processed_dtypes = []
         if isinstance(dtype, abc.Mapping):
             for k, v in dtype.items():
-                c_dtypes_schema_map[str(k).encode()] = \
-                    _get_cudf_schema_element_from_dtype(v)
+                # Make sure keys are string
+                k = str(k)
+                lib_type, child_types = _get_cudf_schema_element_from_dtype(v)
+                processed_dtypes.append((k, lib_type, child_types))
         elif isinstance(dtype, abc.Collection):
-            is_list_like_dtypes = True
-            c_dtypes_list.reserve(len(dtype))
             for col_dtype in dtype:
-                c_dtypes_list.push_back(
-                    _get_cudf_data_type_from_dtype(
-                        col_dtype))
+                processed_dtypes.append(
+                    # Ignore child columns since we cannot specify their dtypes
+                    # when passing a list
+                    _get_cudf_schema_element_from_dtype(col_dtype)[0]
+                )
         else:
             raise TypeError("`dtype` must be 'list like' or 'dict'")
 
-    cdef json_reader_options opts = move(
-        json_reader_options.builder(make_source_info(filepaths_or_buffers))
-        .compression(c_compression)
-        .lines(c_lines)
-        .byte_range_offset(c_range_offset)
-        .byte_range_size(c_range_size)
-        .recovery_mode(_get_json_recovery_mode(on_bad_lines))
-        .build()
-    )
-    if is_list_like_dtypes:
-        opts.set_dtypes(c_dtypes_list)
+    if cudf.get_option("mode.pandas_compatible") and lines:
+        res_cols, res_col_names, res_child_names = plc.io.json.chunked_read_json(
+            plc.io.SourceInfo(filepaths_or_buffers),
+            processed_dtypes,
+            c_compression,
+            keep_quotes = keep_quotes,
+            mixed_types_as_string = mixed_types_as_string,
+            prune_columns = prune_columns,
+            recovery_mode = _get_json_recovery_mode(on_bad_lines)
+        )
+        df = cudf.DataFrame._from_data(
+            *_data_from_columns(
+                columns=[Column.from_pylibcudf(plc) for plc in res_cols],
+                column_names=res_col_names,
+                index_names=None
+               )
+            )
+        add_df_col_struct_names(df, res_child_names)
+        return df
     else:
-        opts.set_dtypes(c_dtypes_schema_map)
+        table_w_meta = plc.io.json.read_json(
+            plc.io.SourceInfo(filepaths_or_buffers),
+            processed_dtypes,
+            c_compression,
+            lines,
+            byte_range_offset = byte_range[0] if byte_range is not None else 0,
+            byte_range_size = byte_range[1] if byte_range is not None else 0,
+            keep_quotes = keep_quotes,
+            mixed_types_as_string = mixed_types_as_string,
+            prune_columns = prune_columns,
+            recovery_mode = _get_json_recovery_mode(on_bad_lines)
+        )
 
-    opts.enable_keep_quotes(keep_quotes)
-    opts.enable_mixed_types_as_string(mixed_types_as_string)
-    opts.enable_prune_columns(prune_columns)
+        df = cudf.DataFrame._from_data(
+            *data_from_pylibcudf_io(
+                table_w_meta
+            )
+        )
 
-    # Read JSON
-    cdef cudf_io_types.table_with_metadata c_result
-
-    with nogil:
-        c_result = move(libcudf_read_json(opts))
-
-    meta_names = [info.name.decode() for info in c_result.metadata.schema_info]
-    df = cudf.DataFrame._from_data(*data_from_unique_ptr(
-        move(c_result.tbl),
-        column_names=meta_names
-    ))
-
-    update_struct_field_names(df, c_result.metadata.schema_info)
-
-    return df
+        # Post-processing to add in struct column names
+        add_df_col_struct_names(df, table_w_meta.child_names)
+        return df
 
 
 @acquire_spill_lock()
@@ -175,45 +160,27 @@ def write_json(
     --------
     cudf.to_json
     """
-    cdef table_view input_table_view = table_view_from_table(
-        table, ignore_index=True
-    )
+    cdef list colnames = []
 
-    cdef unique_ptr[data_sink] data_sink_c
-    cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
-    cdef string na_c = na_rep.encode()
-    cdef bool include_nulls_c = include_nulls
-    cdef bool lines_c = lines
-    cdef int rows_per_chunk_c = rows_per_chunk
-    cdef string true_value_c = 'true'.encode()
-    cdef string false_value_c = 'false'.encode()
-    cdef table_metadata tbl_meta
-
-    num_index_cols_meta = 0
-    cdef column_name_info child_info
-    for i, name in enumerate(table._column_names, num_index_cols_meta):
-        child_info.name = name.encode()
-        tbl_meta.schema_info.push_back(child_info)
-        _set_col_children_metadata(
-            table[name]._column,
-            tbl_meta.schema_info[i]
-        )
-
-    cdef json_writer_options options = move(
-        json_writer_options.builder(sink_info_c, input_table_view)
-        .metadata(tbl_meta)
-        .na_rep(na_c)
-        .include_nulls(include_nulls_c)
-        .lines(lines_c)
-        .rows_per_chunk(rows_per_chunk_c)
-        .true_value(true_value_c)
-        .false_value(false_value_c)
-        .build()
-    )
+    for name in table._column_names:
+        colnames.append((name, _dtype_to_names_list(table[name]._column)))
 
     try:
-        with nogil:
-            libcudf_write_json(options)
+        plc.io.json.write_json(
+            plc.io.SinkInfo([path_or_buf]),
+            plc.io.TableWithMetadata(
+                plc.Table([
+                    c.to_pylibcudf(mode="read") for c in table._columns
+                ]),
+                colnames
+            ),
+            na_rep,
+            include_nulls,
+            lines,
+            rows_per_chunk,
+            true_value="true",
+            false_value="false"
+        )
     except OverflowError:
         raise OverflowError(
             f"Writing JSON file with rows_per_chunk={rows_per_chunk} failed. "
@@ -221,28 +188,32 @@ def write_json(
         )
 
 
-cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except *:
-    cdef schema_element s_element
-    cdef data_type lib_type
+cdef _get_cudf_schema_element_from_dtype(object dtype) except *:
     dtype = cudf.dtype(dtype)
     if isinstance(dtype, cudf.CategoricalDtype):
         raise NotImplementedError(
             "CategoricalDtype as dtype is not yet "
             "supported in JSON reader"
         )
-    lib_type = dtype_to_data_type(dtype)
-    s_element.type = lib_type
+
+    lib_type = DataType.from_libcudf(dtype_to_data_type(dtype))
+    child_types = []
+
     if isinstance(dtype, cudf.StructDtype):
         for name, child_type in dtype.fields.items():
-            s_element.child_types[name.encode()] = \
+            child_lib_type, grandchild_types = \
                 _get_cudf_schema_element_from_dtype(child_type)
+            child_types.append((name, child_lib_type, grandchild_types))
     elif isinstance(dtype, cudf.ListDtype):
-        s_element.child_types["offsets".encode()] = \
-            _get_cudf_schema_element_from_dtype(cudf.dtype("int32"))
-        s_element.child_types["element".encode()] = \
+        child_lib_type, grandchild_types = \
             _get_cudf_schema_element_from_dtype(dtype.element_type)
 
-    return s_element
+        child_types = [
+            ("offsets", DataType.from_libcudf(data_type(type_id.INT32)), []),
+            ("element", child_lib_type, grandchild_types)
+        ]
+
+    return lib_type, child_types
 
 
 cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
@@ -254,23 +225,12 @@ cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
         )
     return dtype_to_data_type(dtype)
 
-cdef _set_col_children_metadata(Column col,
-                                column_name_info& col_meta):
-    cdef column_name_info child_info
+
+def _dtype_to_names_list(col):
     if isinstance(col.dtype, cudf.StructDtype):
-        for i, (child_col, name) in enumerate(
-            zip(col.children, list(col.dtype.fields))
-        ):
-            child_info.name = name.encode()
-            col_meta.children.push_back(child_info)
-            _set_col_children_metadata(
-                child_col, col_meta.children[i]
-            )
+        return [(name, _dtype_to_names_list(child))
+                for name, child in zip(col.dtype.fields, col.children)]
     elif isinstance(col.dtype, cudf.ListDtype):
-        for i, child_col in enumerate(col.children):
-            col_meta.children.push_back(child_info)
-            _set_col_children_metadata(
-                child_col, col_meta.children[i]
-            )
-    else:
-        return
+        return [("", _dtype_to_names_list(child))
+                for child in col.children]
+    return []
