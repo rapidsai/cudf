@@ -2257,20 +2257,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         order=None,
         ascending=True,
         na_position="last",
-    ):
-        obj = self.__class__._from_data(
-            {
-                None: super().argsort(
-                    axis=axis,
-                    kind=kind,
-                    order=order,
-                    ascending=ascending,
-                    na_position=na_position,
-                )
-            }
+    ) -> Self:
+        col = super().argsort(
+            axis=axis,
+            kind=kind,
+            order=order,
+            ascending=ascending,
+            na_position=na_position,
         )
-        obj.name = self.name
-        return obj
+        return self._from_data_like_self(
+            self._data._from_columns_like_self([col])
+        )
 
     @_performance_tracking
     def replace(self, to_replace=None, value=no_default, *args, **kwargs):
@@ -2625,7 +2622,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             val_counts = val_counts[val_counts == val_counts.iloc[0]]
 
         return Series._from_data(
-            {self.name: val_counts.index.sort_values()}, name=self.name
+            {self.name: val_counts.index.sort_values()._column}, name=self.name
         )
 
     @_performance_tracking

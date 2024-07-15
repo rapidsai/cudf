@@ -16,6 +16,8 @@ import cudf
 from cudf.core import column
 
 if TYPE_CHECKING:
+    from typing_extensions import Self
+
     from cudf._typing import Dtype
     from cudf.core.column import ColumnBase
 
@@ -86,58 +88,58 @@ class ColumnAccessor(abc.MutableMapping):
         (default=None).
     verify : bool, optional
         For non ColumnAccessor inputs, whether to verify
-        column length and type
+        column length and data.values() are all Columns
     """
 
-    _data: "dict[Any, ColumnBase]"
-    multiindex: bool
+    _data: dict[Any, ColumnBase]
     _level_names: tuple[Any, ...]
 
     def __init__(
         self,
-        data: abc.MutableMapping | ColumnAccessor | None = None,
+        data: abc.MutableMapping[Any, ColumnBase] | Self,
         multiindex: bool = False,
         level_names=None,
         rangeindex: bool = False,
         label_dtype: Dtype | None = None,
         verify: bool = True,
     ):
-        self.rangeindex = rangeindex
-        self.label_dtype = label_dtype
-        if data is None:
-            data = {}
-        # TODO: we should validate the keys of `data`
-        if isinstance(data, ColumnAccessor):
-            multiindex = multiindex or data.multiindex
-            level_names = level_names or data.level_names
-            self._data = data._data
+        if isinstance(data, abc.MutableMapping):
+            # This code path is performance-critical for copies and should be
+            # modified with care.
+            if data and verify:
+                # Faster than next(iter(data.values()))
+                column_length = len(data[next(iter(data))])
+                # TODO: we should validate the keys of `data`
+                for col in data.values():
+                    if not isinstance(col, column.ColumnBase):
+                        raise ValueError(
+                            f"All data.values() must be Column, not {type(col).__name__}"
+                        )
+                    if len(col) != column_length:
+                        raise ValueError("All columns must be of equal length")
+
+            if not isinstance(data, dict):
+                data = dict(data)
+            self._data = data
+
+            if rangeindex and multiindex:
+                raise ValueError(
+                    f"{rangeindex=} and {multiindex=} cannot both be True."
+                )
+            self.rangeindex = rangeindex
             self.multiindex = multiindex
+            self.label_dtype = label_dtype
             self._level_names = level_names
+        elif isinstance(data, ColumnAccessor):
+            self._data = data._data
+            self._level_names = data.level_names
+            self.multiindex = data.multiindex
             self.rangeindex = data.rangeindex
             self.label_dtype = data.label_dtype
         else:
-            # This code path is performance-critical for copies and should be
-            # modified with care.
-            data = dict(data)
-            if data and verify:
-                result = {}
-                # Faster than next(iter(data.values()))
-                column_length = len(data[next(iter(data))])
-                for k, v in data.items():
-                    # Much faster to avoid the function call if possible; the
-                    # extra isinstance is negligible if we do have to make a
-                    # column from something else.
-                    if not isinstance(v, column.ColumnBase):
-                        v = column.as_column(v)
-                    if len(v) != column_length:
-                        raise ValueError("All columns must be of equal length")
-                    result[k] = v
-                self._data = result
-            else:
-                self._data = data
-
-            self.multiindex = multiindex
-            self._level_names = level_names
+            raise ValueError(
+                f"data must be a ColumnAccessor or MutableMapping, not {type(data).__name__}"
+            )
 
     def __iter__(self):
         return iter(self._data)
@@ -161,7 +163,9 @@ class ColumnAccessor(abc.MutableMapping):
         type_info = (
             f"{self.__class__.__name__}("
             f"multiindex={self.multiindex}, "
-            f"level_names={self.level_names})"
+            f"level_names={self.level_names}, "
+            f"rangeindex={self.rangeindex}, "
+            f"label_dtype={self.label_dtype})"
         )
         column_info = "\n".join(
             [f"{name}: {col.dtype}" for name, col in self.items()]

@@ -349,7 +349,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def _data(self):
         return cudf.core.column_accessor.ColumnAccessor(
-            {self.name: self._values}
+            {self.name: self._values}, verify=False
         )
 
     @_performance_tracking
@@ -1493,7 +1493,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         order=None,
         ascending=True,
         na_position="last",
-    ):
+    ) -> cupy.ndarray:
         """Return the integer indices that would sort the index.
 
         Parameters
@@ -1516,12 +1516,16 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         -------
         cupy.ndarray: The indices sorted based on input.
         """  # noqa: E501
-        return super().argsort(
-            axis=axis,
-            kind=kind,
-            order=order,
-            ascending=ascending,
-            na_position=na_position,
+        return (
+            super()
+            .argsort(
+                axis=axis,
+                kind=kind,
+                order=order,
+                ascending=ascending,
+                na_position=na_position,
+            )
+            .values
         )
 
     def repeat(self, repeats, axis=None):

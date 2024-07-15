@@ -932,14 +932,10 @@ def _pivot(df, index, columns):
     index_labels, index_idx = index._encode()
     column_labels = columns_labels.to_pandas().to_flat_index()
 
-    # the result of pivot always has a multicolumn
-    result = cudf.core.column_accessor.ColumnAccessor(
-        multiindex=True, level_names=(None,) + columns._data.names
-    )
-
     def as_tuple(x):
         return x if isinstance(x, tuple) else (x,)
 
+    result = {}
     for v in df:
         names = [as_tuple(v) + as_tuple(name) for name in column_labels]
         nrows = len(index_labels)
@@ -964,8 +960,12 @@ def _pivot(df, index, columns):
                 }
             )
 
+    # the result of pivot always has a multicolumn
+    ca = cudf.core.column_accessor.ColumnAccessor(
+        result, multiindex=True, level_names=(None,) + columns._data.names
+    )
     return cudf.DataFrame._from_data(
-        result, index=cudf.Index(index_labels, name=index.name)
+        ca, index=cudf.Index(index_labels, name=index.name)
     )
 
 
