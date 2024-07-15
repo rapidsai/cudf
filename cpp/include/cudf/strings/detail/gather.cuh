@@ -23,7 +23,6 @@
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/device_uvector.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -230,9 +229,8 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
   auto const output_count = std::distance(map_begin, map_end);
   if (output_count == 0) return rmm::device_uvector<char>(0, stream, mr);
 
-  auto chars_data =
-    cudf::experimental::uvector::detail::device_uvector<char>(chars_bytes, stream, mr);
-  auto d_chars = chars_data.data();
+  auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
+  auto d_chars    = chars_data.data();
 
   constexpr int warps_per_threadblock = 4;
   // String parallel strategy will be used if average string length is above this threshold.
@@ -258,7 +256,7 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
          stream.value()>>>(strings_begin, d_chars, offsets, map_begin, output_count);
   }
 
-  return std::move(chars_data);
+  return chars_data;
 }
 
 /**

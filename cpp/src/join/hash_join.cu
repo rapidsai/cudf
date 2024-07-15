@@ -21,7 +21,6 @@
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
-#include <cudf/utilities/device_uvector.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
@@ -43,12 +42,10 @@
 #include <cstddef>
 #include <iostream>
 #include <numeric>
-#include <type_traits>
 
 namespace cudf {
 namespace detail {
 namespace {
-
 /**
  * @brief Calculates the exact size of the join output produced when
  * joining two tables together.
@@ -186,12 +183,8 @@ probe_join_hash_table(
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
-  auto left_indices =
-    std::make_unique<cudf::experimental::uvector::detail::device_uvector<size_type>>(
-      join_size, stream, mr);
-  auto right_indices =
-    std::make_unique<cudf::experimental::uvector::detail::device_uvector<size_type>>(
-      join_size, stream, mr);
+  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
+  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
 
   auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
 
