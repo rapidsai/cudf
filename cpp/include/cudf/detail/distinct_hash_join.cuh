@@ -29,6 +29,7 @@
 #include <memory>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace cudf::detail {
 
@@ -105,22 +106,56 @@ struct hasher_adapter {
 template <cudf::has_nested HasNested>
 struct distinct_hash_join {
  private:
-  /// Device row equal type
-  using d_equal_type = cudf::experimental::row::equality::strong_index_comparator_adapter<
-    cudf::experimental::row::equality::device_row_comparator<HasNested == cudf::has_nested::YES,
-                                                             cudf::nullate::DYNAMIC>>;
+  using row_comparator = cudf::experimental::row::equality::device_row_comparator<
+    HasNested == cudf::has_nested::YES,
+    cudf::nullate::DYNAMIC,
+    cudf::experimental::nan_equal_physical_equality_comparator,
+    cudf::experimental::type_identity_t>;
+
+  using row_comparator_no_nested = cudf::experimental::row::equality::device_row_comparator<
+    HasNested == cudf::has_nested::YES,
+    cudf::nullate::DYNAMIC,
+    cudf::experimental::nan_equal_physical_equality_comparator,
+    cudf::experimental::dispatch_void_if_nested_t>;
+
+  using row_comparator_no_compound = cudf::experimental::row::equality::device_row_comparator<
+    HasNested == cudf::has_nested::YES,
+    cudf::nullate::DYNAMIC,
+    cudf::experimental::nan_equal_physical_equality_comparator,
+    cudf::experimental::dispatch_void_if_compound_t>;
+
   using hasher              = hasher_adapter<thrust::identity<hash_value_type>>;
   using probing_scheme_type = cuco::linear_probing<1, hasher>;
   using cuco_storage_type   = cuco::storage<1>;
 
   /// Hash table type
-  using hash_table_type = cuco::static_set<cuco::pair<hash_value_type, rhs_index_type>,
-                                           cuco::extent<size_type>,
-                                           cuda::thread_scope_device,
-                                           comparator_adapter<d_equal_type>,
-                                           probing_scheme_type,
-                                           cudf::detail::cuco_allocator,
-                                           cuco_storage_type>;
+  using hash_table_type = std::variant<
+    cuco::static_set<cuco::pair<hash_value_type, rhs_index_type>,
+                     cuco::extent<size_type>,
+                     cuda::thread_scope_device,
+                     comparator_adapter<cudf::experimental::row::equality::
+                                          strong_index_comparator_adapter<row_comparator>>,
+                     probing_scheme_type,
+                     cudf::detail::cuco_allocator,
+                     cuco_storage_type>,
+    cuco::static_set<
+      cuco::pair<hash_value_type, rhs_index_type>,
+      cuco::extent<size_type>,
+      cuda::thread_scope_device,
+      comparator_adapter<cudf::experimental::row::equality::strong_index_comparator_adapter<
+        row_comparator_no_nested>>,
+      probing_scheme_type,
+      cudf::detail::cuco_allocator,
+      cuco_storage_type>,
+    cuco::static_set<
+      cuco::pair<hash_value_type, rhs_index_type>,
+      cuco::extent<size_type>,
+      cuda::thread_scope_device,
+      comparator_adapter<cudf::experimental::row::equality::strong_index_comparator_adapter<
+        row_comparator_no_compound>>,
+      probing_scheme_type,
+      cudf::detail::cuco_allocator,
+      cuco_storage_type>>;
 
   bool _has_nulls;  ///< true if nulls are present in either build table or probe table
   cudf::null_equality _nulls_equal;  ///< whether to consider nulls as equal
