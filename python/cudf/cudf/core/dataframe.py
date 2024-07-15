@@ -5451,7 +5451,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         .. pandas-compat::
             `pandas.DataFrame.from_arrow`
 
-            This method does not exit in pandas but it is simlar to
+            This method does not exist in pandas but it is similar to
             how :meth:`pyarrow.Table.to_pandas` works for PyArrow Tables i.e.
             it does not support automatically setting index column(s).
         """
