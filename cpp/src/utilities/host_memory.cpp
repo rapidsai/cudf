@@ -298,7 +298,7 @@ size_t get_allocate_host_as_pinned_threshold() { return allocate_host_as_pinned_
 
 namespace detail {
 
-CUDF_EXPORT rmm::host_async_resource_ref& get_pageable_memory_resource()
+CUDF_EXPORT rmm::host_async_resource_ref get_pageable_memory_resource()
 {
   static new_delete_memory_resource mr{};
   static rmm::host_async_resource_ref mr_ref{mr};
