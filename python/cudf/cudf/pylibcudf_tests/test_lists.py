@@ -24,7 +24,7 @@ def column():
 
 @pytest.fixture
 def lists_column():
-    return [[4, 2, 3, 1], [1, 2, None, 4], [-10, 10, 0]]
+    return [[4, 2, 3, 1], [1, 2, None, 4], [-10, 10, 10, 0]]
 
 
 def test_concatenate_rows(test_data):
@@ -141,28 +141,80 @@ def test_index_of_list_column(test_data, column):
     assert_column_eq(expect, res)
 
 
+def test_reverse(test_data):
+    list_column = test_data[0][0]
+    arr = pa.array(list_column)
+    plc_column = plc.interop.from_arrow(arr)
+
+    res = plc.lists.reverse(plc_column)
+
+    expect = pa.array([lst[::-1] for lst in list_column])
+
+    assert_column_eq(expect, res)
+
+
+def test_segmented_gather(test_data):
+    list_column1 = test_data[0][0]
+    list_column2 = test_data[0][1]
+
+    plc_column1 = plc.interop.from_arrow(pa.array(list_column1))
+    plc_column2 = plc.interop.from_arrow(pa.array(list_column2))
+
+    res = plc.lists.segmented_gather(plc_column2, plc_column1)
+
+    expect = pa.array([[8, 9], [14], [0], [0, 0]])
+
+    assert_column_eq(expect, res)
+
+
+def test_extract_list_element_scalar(test_data):
+    arr = pa.array(test_data[0][0])
+    plc_column = plc.interop.from_arrow(arr)
+
+    res = plc.lists.extract_list_element(plc_column, 0)
+    expect = pa.compute.list_element(test_data[0][0], 0)
+
+    assert_column_eq(expect, res)
+
+
+def test_extract_list_element_column(test_data):
+    arr = pa.array(test_data[0][0])
+    plc_column = plc.interop.from_arrow(arr)
+    indices = plc.interop.from_arrow(pa.array([0, 1, -4, -1]))
+
+    res = plc.lists.extract_list_element(plc_column, indices)
+    expect = pa.array([0, None, None, 7])
+
+    assert_column_eq(expect, res)
+
+
 @pytest.mark.parametrize(
     "ascending,na_position,expected",
     [
         (
             True,
-            "first",
-            [[1, 2, 3, 4], [None, 1, 2, 4], [-10, 0, 10]],
+            plc.types.NullOrder.BEFORE,
+            [[1, 2, 3, 4], [None, 1, 2, 4], [-10, 0, 10, 10]],
         ),
         (
             True,
-            "second",
-            [[1, 2, 3, 4], [1, 2, 4, None], [-10, 0, 10]],
+            plc.types.NullOrder.AFTER,
+            [[1, 2, 3, 4], [1, 2, 4, None], [-10, 0, 10, 10]],
         ),
         (
             False,
-            "first",
-            [[4, 3, 2, 1], [4, 2, 1, None], [10, 0, -10]],
+            plc.types.NullOrder.BEFORE,
+            [[4, 3, 2, 1], [4, 2, 1, None], [10, 10, 0, -10]],
         ),
         (
             False,
-            "second",
-            [[4, 3, 2, 1], [None, 4, 2, 1], [10, 0, -10]],
+            plc.types.NullOrder.AFTER,
+            [[4, 3, 2, 1], [None, 4, 2, 1], [10, 10, 0, -10]],
+        ),
+        (
+            False,
+            plc.types.NullOrder.AFTER,
+            [[4, 3, 2, 1], [None, 4, 2, 1], [10, 10, 0, -10]],
         ),
     ],
 )

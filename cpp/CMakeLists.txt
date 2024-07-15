@@ -52,6 +52,8 @@ option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
 mark_as_advanced(CUDF_BUILD_TESTUTIL)
 option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
+option(CUDF_LARGE_STRINGS_DISABLED "Build with large string support disabled" OFF)
+mark_as_advanced(CUDF_LARGE_STRINGS_DISABLED)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
 option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
 option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
@@ -407,6 +409,7 @@ add_library(
   src/io/orc/stripe_init.cu
   src/datetime/timezone.cpp
   src/io/orc/writer_impl.cu
+  src/io/parquet/arrow_schema_writer.cpp
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
@@ -423,6 +426,7 @@ add_library(
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu
+  src/io/parquet/writer_impl_helpers.cpp
   src/io/parquet/decode_fixed.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
@@ -783,6 +787,11 @@ if(NOT USE_NVTX)
   target_compile_definitions(cudf PUBLIC NVTX_DISABLE)
 endif()
 
+# Disable large strings support
+if(CUDF_LARGE_STRINGS_DISABLED)
+  target_compile_definitions(cudf PRIVATE CUDF_LARGE_STRINGS_DISABLED)
+endif()
+
 # Define RMM logging level
 target_compile_definitions(cudf PRIVATE "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL")
 
@@ -918,6 +927,11 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     add_library(
       ${_tgt} SHARED src/utilities/stacktrace.cpp tests/utilities/identify_stream_usage.cpp
     )
+    if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
+      target_compile_definitions(
+        ${_tgt} PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM
+      )
+    endif()
 
     set_target_properties(
       ${_tgt}

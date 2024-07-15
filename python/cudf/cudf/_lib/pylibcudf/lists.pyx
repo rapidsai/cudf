@@ -9,11 +9,16 @@ from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.lists cimport (
     contains as cpp_contains,
     explode as cpp_explode,
+    gather as cpp_gather,
+    reverse as cpp_reverse,
 )
 from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_list_elements as cpp_concatenate_list_elements,
     concatenate_null_policy,
     concatenate_rows as cpp_concatenate_rows,
+)
+from cudf._lib.pylibcudf.libcudf.lists.extract cimport (
+    extract_list_element as cpp_extract_list_element,
 )
 from cudf._lib.pylibcudf.libcudf.lists.sorting cimport (
     sort_lists as cpp_sort_lists,
@@ -21,7 +26,7 @@ from cudf._lib.pylibcudf.libcudf.lists.sorting cimport (
 )
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
 from cudf._lib.pylibcudf.libcudf.types cimport null_order, order, size_type
-from cudf._lib.pylibcudf.lists cimport ColumnOrScalar
+from cudf._lib.pylibcudf.lists cimport ColumnOrScalar, ColumnOrSizeType
 
 from .column cimport Column, ListColumnView
 from .scalar cimport Scalar
@@ -212,24 +217,108 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
     return Column.from_libcudf(move(c_result))
 
 
-cpdef Column sort_lists(Column input, bool ascending, str na_position, bool stable):
+cpdef Column reverse(Column input):
+    """Reverse the element order within each list of the input column.
+
+    For details, see :cpp:func:`reverse`.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+
+    Returns
+    -------
+    Column
+        A new Column with reversed lists.
+    """
+    cdef unique_ptr[column] c_result
+    cdef ListColumnView list_view = input.list_view()
+
+    with nogil:
+        c_result = move(cpp_reverse.reverse(
+            list_view.view(),
+        ))
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column segmented_gather(Column input, Column gather_map_list):
+    """Create a column with elements gathered based on the indices in gather_map_list
+
+    For details, see :cpp:func:`segmented_gather`.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+    gather_map_list : Column
+        The indices of the lists column to gather.
+
+    Returns
+    -------
+    Column
+        A new Column with elements in list of rows
+        gathered based on gather_map_list
+    """
+
+    cdef unique_ptr[column] c_result
+    cdef ListColumnView list_view1 = input.list_view()
+    cdef ListColumnView list_view2 = gather_map_list.list_view()
+
+    with nogil:
+        c_result = move(cpp_gather.segmented_gather(
+            list_view1.view(),
+            list_view2.view(),
+        ))
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column extract_list_element(Column input, ColumnOrSizeType index):
+    """Create a column of extracted list elements.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+    index : Union[Column, size_type]
+        The selection index or indices.
+
+    Returns
+    -------
+    Column
+        A new Column with elements extracted.
+    """
+    cdef unique_ptr[column] c_result
+    cdef ListColumnView list_view = input.list_view()
+
+    with nogil:
+        c_result = move(cpp_extract_list_element(
+            list_view.view(),
+            index.view() if ColumnOrSizeType is Column else index,
+        ))
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column sort_lists(
+    Column input,
+    bool ascending,
+    null_order na_position,
+    bool stable = False
+):
     """Sort the elements within a list in each row of a list column.
-
     For details, see :cpp:func:`sort_lists`.
-
     Parameters
     ----------
     input : Column
         The input column.
     ascending : bool
         If true, the sort order is ascending. Otherwise, the sort order is descending.
-    na_position : str
-        If na_position equals "first", then the null values in the output
+    na_position : NullOrder
+        If na_position equals NullOrder.FIRST, then the null values in the output
         column are placed first. Otherwise, they are be placed after.
     stable: bool
         If true :cpp:func:`stable_sort_lists` is used, Otherwise,
         :cpp:func:`sort_lists` is used.
-
     Returns
     -------
     Column
@@ -241,21 +330,18 @@ cpdef Column sort_lists(Column input, bool ascending, str na_position, bool stab
     cdef order c_sort_order = (
         order.ASCENDING if ascending else order.DESCENDING
     )
-    cdef null_order c_null_prec = (
-        null_order.BEFORE if na_position == "first" else null_order.AFTER
-    )
 
     with nogil:
         if stable:
             c_result = move(cpp_stable_sort_lists(
                     list_view.view(),
                     c_sort_order,
-                    c_null_prec,
+                    na_position,
             ))
         else:
             c_result = move(cpp_sort_lists(
                     list_view.view(),
                     c_sort_order,
-                    c_null_prec,
+                    na_position,
             ))
     return Column.from_libcudf(move(c_result))
