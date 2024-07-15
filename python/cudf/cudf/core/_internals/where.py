@@ -54,13 +54,17 @@ def _check_and_cast_columns_with_other(
 
     other_is_scalar = is_scalar(other)
     if other_is_scalar:
-        if (
-            isinstance(other, (float, np.floating)) and not np.isnan(other)
-        ) and (source_dtype.type(other) != other):
-            raise TypeError(
-                f"Cannot safely cast non-equivalent "
-                f"{type(other).__name__} to {source_dtype.name}"
-            )
+        if isinstance(other, (float, np.floating)) and not np.isnan(other):
+            try:
+                is_safe = source_dtype.type(other) == other
+            except OverflowError:
+                is_safe = False
+
+            if not is_safe:
+                raise TypeError(
+                    f"Cannot safely cast non-equivalent "
+                    f"{type(other).__name__} to {source_dtype.name}"
+                )
 
         if cudf.utils.utils.is_na_like(other):
             return _normalize_categorical(
@@ -84,8 +88,10 @@ def _check_and_cast_columns_with_other(
             )
         return _normalize_categorical(source_col, other.astype(source_dtype))
 
-    if _is_non_decimal_numeric_dtype(source_dtype) and _can_cast(
-        other, source_dtype
+    if (
+        _is_non_decimal_numeric_dtype(source_dtype)
+        and not other_is_scalar  # can-cast fails for Python scalars
+        and _can_cast(other, source_dtype)
     ):
         common_dtype = source_dtype
     elif (
