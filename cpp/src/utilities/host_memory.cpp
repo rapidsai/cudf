@@ -83,7 +83,7 @@ class fixed_pinned_pool_memory_resource {
   void deallocate_async(void* ptr,
                         std::size_t bytes,
                         std::size_t alignment,
-                        cuda::stream_ref stream) noexcept
+                        cuda::stream_ref stream)
   {
     if (bytes <= pool_size_ && ptr >= pool_begin_ && ptr < pool_end_) {
       pool_->deallocate_async(ptr, bytes, alignment, stream);
@@ -92,14 +92,14 @@ class fixed_pinned_pool_memory_resource {
     }
   }
 
-  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream) noexcept
+  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream)
   {
     return deallocate_async(ptr, bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
   }
 
   void deallocate(void* ptr,
                   std::size_t bytes,
-                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT) noexcept
+                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
   {
     deallocate_async(ptr, bytes, alignment, stream_);
     stream_.wait();
@@ -214,7 +214,7 @@ class new_delete_memory_resource {
 
   void deallocate(void* ptr,
                   std::size_t bytes,
-                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT) noexcept
+                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
   {
     rmm::detail::aligned_host_deallocate(
       ptr, bytes, rmm::CUDA_ALLOCATION_ALIGNMENT, [](void* ptr) { ::operator delete(ptr); });
@@ -223,12 +223,12 @@ class new_delete_memory_resource {
   void deallocate_async(void* ptr,
                         std::size_t bytes,
                         std::size_t alignment,
-                        cuda::stream_ref stream) noexcept
+                        cuda::stream_ref stream)
   {
     deallocate(ptr, bytes, alignment);
   }
 
-  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream) noexcept
+  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream)
   {
     deallocate(ptr, bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT);
   }
