@@ -17,8 +17,6 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/prefetch.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
@@ -39,48 +37,18 @@ static double constexpr CUCO_DESIRED_LOAD_FACTOR = 0.5;
  * to handle cuco memory allocation/deallocation with the given `stream` and the rmm default memory
  * resource.
  */
-template <typename T>
-class cuco_allocator_base
-  : public rmm::mr::stream_allocator_adaptor<rmm::mr::polymorphic_allocator<T>> {
+class cuco_allocator
+  : public rmm::mr::stream_allocator_adaptor<rmm::mr::polymorphic_allocator<char>> {
   /// Default stream-ordered allocator type
-  using default_allocator = rmm::mr::polymorphic_allocator<T>;
+  using default_allocator = rmm::mr::polymorphic_allocator<char>;
   /// The base allocator adaptor type
   using base_type = rmm::mr::stream_allocator_adaptor<default_allocator>;
 
  public:
-  template <typename U>
-  cuco_allocator_base(cuco_allocator_base<U> const& other) : cuco_allocator_base{other.stream()}
-  {
-  }
-
   /**
    * @brief Constructs the allocator adaptor with the given `stream`
    */
-  cuco_allocator_base(rmm::cuda_stream_view stream)
-    : base_type{default_allocator{}, stream}, stream_{stream}
-  {
-  }
-
-  // TODO: If we move forward with prefetching, rather than having to implement
-  // rebinding and override allocation we should just make the underlying
-  // polymorphic_allocator wrap a custom prefetching allocator. That should be simpler.
-  template <typename U>
-  struct rebind {
-    using other = cuco_allocator_base<U>;
-  };
-
-  typename base_type::value_type* allocate(std::size_t num)
-  {
-    auto ptr = base_type::allocate(num);
-    cudf::experimental::prefetch::detail::prefetch(
-      "cuco_allocator_base::allocate", ptr, num * sizeof(T));
-    return ptr;
-  }
-
- private:
-  rmm::cuda_stream_view stream_;  ///< Stream on which (de)allocations are performed
+  cuco_allocator(rmm::cuda_stream_view stream) : base_type{default_allocator{}, stream} {}
 };
-
-using cuco_allocator = cuco_allocator_base<char>;
 
 }  // namespace cudf::detail
