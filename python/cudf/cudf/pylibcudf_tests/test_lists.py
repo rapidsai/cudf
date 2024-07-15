@@ -143,33 +143,92 @@ def test_index_of_list_column(test_data, column):
     assert_column_eq(expect, res)
 
 
+def test_reverse(test_data):
+    list_column = test_data[0][0]
+    arr = pa.array(list_column)
+    plc_column = plc.interop.from_arrow(arr)
+
+    res = plc.lists.reverse(plc_column)
+
+    expect = pa.array([lst[::-1] for lst in list_column])
+
+    assert_column_eq(expect, res)
+
+
+def test_segmented_gather(test_data):
+    list_column1 = test_data[0][0]
+    list_column2 = test_data[0][1]
+
+    plc_column1 = plc.interop.from_arrow(pa.array(list_column1))
+    plc_column2 = plc.interop.from_arrow(pa.array(list_column2))
+
+    res = plc.lists.segmented_gather(plc_column2, plc_column1)
+
+    expect = pa.array([[8, 9], [14], [0], [0, 0]])
+
+    assert_column_eq(expect, res)
+
+
+def test_extract_list_element_scalar(test_data):
+    arr = pa.array(test_data[0][0])
+    plc_column = plc.interop.from_arrow(arr)
+
+    res = plc.lists.extract_list_element(plc_column, 0)
+    expect = pa.compute.list_element(test_data[0][0], 0)
+
+    assert_column_eq(expect, res)
+
+
+def test_extract_list_element_column(test_data):
+    arr = pa.array(test_data[0][0])
+    plc_column = plc.interop.from_arrow(arr)
+    indices = plc.interop.from_arrow(pa.array([0, 1, -4, -1]))
+
+    res = plc.lists.extract_list_element(plc_column, indices)
+    expect = pa.array([0, None, None, 7])
+
+    assert_column_eq(expect, res)
+
+
 @pytest.mark.parametrize(
-    "set_operation,expected",
+    "set_operation,nans_equal,nulls_equal,expected",
     [
         (
             plc.lists.difference_distinct,
+            True,
+            True,
             [[], [1, 2, 3], None, [4, 5]],
         ),
         (
             plc.lists.have_overlap,
+            True,
+            True,
             [True, False, None, True],
         ),
         (
             plc.lists.intersect_distinct,
+            True,
+            True,
             [[1, 2], [], None, [None]],
         ),
         (
             plc.lists.union_distinct,
-            [[2, 1, 3], [1, 2, 3, 4, 5], None, [4, None, 5]],
+            False,
+            True,
+            [[2, 1, 3], [1, 2, 3, 4, 5], None, [4, None, 5, None, None]],
         ),
     ],
 )
-def test_set_operations(set_lists_column, set_operation, expected):
+def test_set_operations(
+    set_lists_column, set_operation, nans_equal, nulls_equal, expected
+):
     lhs, rhs = set_lists_column
 
     res = set_operation(
         plc.interop.from_arrow(pa.array(lhs)),
         plc.interop.from_arrow(pa.array(rhs)),
+        nans_equal,
+        nulls_equal,
     )
     expect = pa.array(expected)
     assert_column_eq(expect, res)

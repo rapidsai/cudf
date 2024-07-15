@@ -9,6 +9,8 @@ from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.lists cimport (
     contains as cpp_contains,
     explode as cpp_explode,
+    gather as cpp_gather,
+    reverse as cpp_reverse,
     set_operations as cpp_set_operations,
 )
 from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
@@ -16,13 +18,16 @@ from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_null_policy,
     concatenate_rows as cpp_concatenate_rows,
 )
+from cudf._lib.pylibcudf.libcudf.lists.extract cimport (
+    extract_list_element as cpp_extract_list_element,
+)
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
 from cudf._lib.pylibcudf.libcudf.types cimport (
     nan_equality,
     null_equality,
     size_type,
 )
-from cudf._lib.pylibcudf.lists cimport ColumnOrScalar
+from cudf._lib.pylibcudf.lists cimport ColumnOrScalar, ColumnOrSizeType
 
 from .column cimport Column, ListColumnView
 from .scalar cimport Scalar
@@ -213,6 +218,88 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
     return Column.from_libcudf(move(c_result))
 
 
+cpdef Column reverse(Column input):
+    """Reverse the element order within each list of the input column.
+
+    For details, see :cpp:func:`reverse`.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+
+    Returns
+    -------
+    Column
+        A new Column with reversed lists.
+    """
+    cdef unique_ptr[column] c_result
+    cdef ListColumnView list_view = input.list_view()
+
+    with nogil:
+        c_result = move(cpp_reverse.reverse(
+            list_view.view(),
+        ))
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column segmented_gather(Column input, Column gather_map_list):
+    """Create a column with elements gathered based on the indices in gather_map_list
+
+    For details, see :cpp:func:`segmented_gather`.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+    gather_map_list : Column
+        The indices of the lists column to gather.
+
+    Returns
+    -------
+    Column
+        A new Column with elements in list of rows
+        gathered based on gather_map_list
+    """
+
+    cdef unique_ptr[column] c_result
+    cdef ListColumnView list_view1 = input.list_view()
+    cdef ListColumnView list_view2 = gather_map_list.list_view()
+
+    with nogil:
+        c_result = move(cpp_gather.segmented_gather(
+            list_view1.view(),
+            list_view2.view(),
+        ))
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column extract_list_element(Column input, ColumnOrSizeType index):
+    """Create a column of extracted list elements.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+    index : Union[Column, size_type]
+        The selection index or indices.
+
+    Returns
+    -------
+    Column
+        A new Column with elements extracted.
+    """
+    cdef unique_ptr[column] c_result
+    cdef ListColumnView list_view = input.list_view()
+
+    with nogil:
+        c_result = move(cpp_extract_list_element(
+            list_view.view(),
+            index.view() if ColumnOrSizeType is Column else index,
+        ))
+    return Column.from_libcudf(move(c_result))
+
+
 cpdef Column difference_distinct(
     Column lhs,
     Column rhs,
@@ -221,21 +308,18 @@ cpdef Column difference_distinct(
 ):
     """Create a column of index values indicating the position of a search
     key row within the corresponding list row in the lists column.
-
     For details, see :cpp:func:`difference_distinct`.
-
     Parameters
     ----------
     lhs : Column
         The input lists column of elements that may be included.
     rhs : Column
         The input lists column of elements to exclude.
-    nulls_equal : bool
+    nulls_equal : bool, default True
         If true, null elements are considered equal. Otherwise, unequal.
-    nans_equal : bool
+    nans_equal : bool, default True
         If true, libcudf will treat nan elements from {-nan, +nan}
         as equal. Otherwise, unequal. Otherwise, unequal.
-
     Returns
     -------
     Column
@@ -269,21 +353,18 @@ cpdef Column have_overlap(
     bool nans_equal=True
 ):
     """Check if lists at each row of the given lists columns overlap.
-
     For details, see :cpp:func:`have_overlap`.
-
     Parameters
     ----------
     lhs : Column
         The input lists column for one side.
     rhs : Column
         The input lists column for the other side.
-    nulls_equal : bool
+    nulls_equal : bool, default True
         If true, null elements are considered equal. Otherwise, unequal.
-    nans_equal : bool
+    nans_equal : bool, default True
         If true, libcudf will treat nan elements from {-nan, +nan}
         as equal. Otherwise, unequal. Otherwise, unequal.
-
     Returns
     -------
     Column
@@ -317,21 +398,18 @@ cpdef Column intersect_distinct(
     bool nans_equal=True
 ):
     """Create a lists column of distinct elements common to two input lists columns.
-
     For details, see :cpp:func:`intersect_distinct`.
-
     Parameters
     ----------
     lhs : Column
         The input lists column of elements that may be included.
     rhs : Column
         The input lists column of elements to exclude.
-    nulls_equal : bool
+    nulls_equal : bool, default True
         If true, null elements are considered equal. Otherwise, unequal.
-    nans_equal : bool
+    nans_equal : bool, default True
         If true, libcudf will treat nan elements from {-nan, +nan}
         as equal. Otherwise, unequal. Otherwise, unequal.
-
     Returns
     -------
     Column
@@ -366,21 +444,18 @@ cpdef Column union_distinct(
 ):
     """Create a lists column of distinct elements found in
     either of two input lists columns.
-
     For details, see :cpp:func:`union_distinct`.
-
     Parameters
     ----------
     lhs : Column
         The input lists column of elements that may be included.
     rhs : Column
         The input lists column of elements to exclude.
-    nulls_equal : bool
+    nulls_equal : bool, default True
         If true, null elements are considered equal. Otherwise, unequal.
-    nans_equal : bool
+    nans_equal : bool, default True
         If true, libcudf will treat nan elements from {-nan, +nan}
         as equal. Otherwise, unequal. Otherwise, unequal.
-
     Returns
     -------
     Column

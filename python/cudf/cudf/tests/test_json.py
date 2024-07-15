@@ -1077,8 +1077,13 @@ def test_json_dtypes_nested_data():
     )
 
     pdf = pd.read_json(
-        StringIO(expected_json_str), orient="records", lines=True
+        StringIO(expected_json_str),
+        orient="records",
+        lines=True,
     )
+
+    assert_eq(df, pdf)
+
     pdf.columns = pdf.columns.astype("str")
     pa_table_pdf = pa.Table.from_pandas(
         pdf, schema=df.to_arrow().schema, safe=False
@@ -1423,3 +1428,19 @@ def test_json_reader_on_bad_lines(on_bad_lines):
                 orient="records",
                 on_bad_lines=on_bad_lines,
             )
+
+
+def test_chunked_json_reader():
+    df = cudf.DataFrame(
+        {
+            "a": ["aaaa"] * 9_00_00_00,
+            "b": list(range(0, 9_00_00_00)),
+        }
+    )
+    buf = BytesIO()
+    df.to_json(buf, lines=True, orient="records", engine="cudf")
+    buf.seek(0)
+    df = df.to_pandas()
+    with cudf.option_context("mode.pandas_compatible", True):
+        gdf = cudf.read_json(buf, lines=True)
+    assert_eq(df, gdf)
