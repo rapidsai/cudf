@@ -357,4 +357,4 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
                     std::move(csr_max_row_offsets)};
 }
 
-}  // namespace cudf::io::json::detail
+}  // namespace cudf::io::json::experimental::detail

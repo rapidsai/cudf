@@ -176,13 +176,13 @@ TEST_F(JsonColumnTreeTests, SimpleLines)
 
   auto [d_column_tree_csr, d_max_row_offsets_csr] =
     cudf::io::json::experimental::detail::reduce_to_column_tree_csr(gpu_tree,
-                                                      gpu_col_id,
-                                                      sorted_col_ids,
-                                                      node_ids,
-                                                      gpu_row_offsets,
-                                                      false,
-                                                      row_array_parent_col_id,
-                                                      stream);
+                                                                    gpu_col_id,
+                                                                    sorted_col_ids,
+                                                                    node_ids,
+                                                                    gpu_row_offsets,
+                                                                    false,
+                                                                    row_array_parent_col_id,
+                                                                    stream);
 
   auto iseq = check_equality(d_column_tree, d_column_tree_csr, stream);
   // assert equality between csr and meta formats

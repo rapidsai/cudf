@@ -47,7 +47,6 @@ struct tree_meta_t {
   rmm::device_uvector<SymbolOffsetT> node_range_end;
 };
 
-
 /**
  * @brief A column type
  */
@@ -224,8 +223,8 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
   NodeIndexT const row_array_parent_col_id,
   rmm::cuda_stream_view stream);
 
-}
-}
+}  // namespace detail
+}  // namespace experimental
 
 namespace detail {
 
