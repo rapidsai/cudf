@@ -383,15 +383,8 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
     auto tmp_offset_buffer = allocate_arrow_buffer(sizeof(int32_t), ar_mr);
     memset(tmp_offset_buffer->mutable_data(), 0, sizeof(int32_t));
 
-    std::shared_ptr<arrow::Array> values{nullptr};
-    std::shared_ptr<arrow::DataType> element_type{nullptr};
-    if (child_arrays.empty()) {
-      element_type = arrow::null();
-      values       = std::make_shared<arrow::NullArray>(0);
-    } else {
-      element_type = child_arrays[1]->type();
-      values       = child_arrays[1];
-    }
+    std::shared_ptr<arrow::Array> values = child_arrays.empty() ?  std::make_shared<arrow::NullArray>(0) : child_arrays[1];
+    auto element_type = values->type();
     return std::make_shared<arrow::ListArray>(
       arrow::list(element_type), 0, std::move(tmp_offset_buffer), values);
   }
