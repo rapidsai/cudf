@@ -133,12 +133,13 @@ int main(int argc, char const** argv)
   // Calculate the discount price and charge columns and append to lineitem table
   auto disc_price =
     calc_disc_price(lineitem->column("l_discount"), lineitem->column("l_extendedprice"));
-  auto charge         = calc_charge(lineitem->column("l_tax"), disc_price->view());
-  auto appended_table = lineitem->append(disc_price, "disc_price")->append(charge, "charge");
+  auto charge = calc_charge(lineitem->column("l_tax"), disc_price->view());
+  lineitem->append(disc_price, "disc_price");
+  lineitem->append(charge, "charge");
 
   // Perform the group by operation
   auto groupedby_table = apply_groupby(
-    appended_table,
+    lineitem,
     groupby_context_t{
       {"l_returnflag", "l_linestatus"},
       {

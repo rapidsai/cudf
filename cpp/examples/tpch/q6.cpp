@@ -93,12 +93,13 @@ int main(int argc, char const** argv)
     cudf::cast(lineitem->column("l_discount"), cudf::data_type{cudf::type_id::FLOAT32});
   auto quantity_float =
     cudf::cast(lineitem->column("l_quantity"), cudf::data_type{cudf::type_id::FLOAT32});
-  auto appended_table =
-    lineitem->append(discout_float, "l_discount_float")->append(quantity_float, "l_quantity_float");
+
+  lineitem->append(discout_float, "l_discount_float");
+  lineitem->append(quantity_float, "l_quantity_float");
 
   // Apply the filters
-  auto discount_ref = cudf::ast::column_reference(appended_table->col_id("l_discount_float"));
-  auto quantity_ref = cudf::ast::column_reference(appended_table->col_id("l_quantity_float"));
+  auto discount_ref = cudf::ast::column_reference(lineitem->col_id("l_discount_float"));
+  auto quantity_ref = cudf::ast::column_reference(lineitem->col_id("l_quantity_float"));
 
   auto discount_lower         = cudf::numeric_scalar<float_t>(0.05);
   auto discount_lower_literal = cudf::ast::literal(discount_lower);
@@ -118,7 +119,7 @@ int main(int argc, char const** argv)
     cudf::ast::operation(cudf::ast::ast_operator::LESS, quantity_ref, quantity_upper_literal);
   auto discount_quantity_pred =
     cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, discount_pred, quantity_pred);
-  auto filtered_table = apply_filter(appended_table, discount_quantity_pred);
+  auto filtered_table = apply_filter(lineitem, discount_quantity_pred);
 
   // Calculate the `revenue` column
   auto revenue =

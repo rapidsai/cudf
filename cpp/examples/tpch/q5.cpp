@@ -146,11 +146,11 @@ int main(int argc, char const** argv)
   // Calculate and append the `revenue` column
   auto revenue =
     calc_revenue(joined_table->column("l_extendedprice"), joined_table->column("l_discount"));
-  auto appended_table = joined_table->append(revenue, "revenue");
+  joined_table->append(revenue, "revenue");
 
   // Perform the groupby operation
   auto groupedby_table =
-    apply_groupby(appended_table,
+    apply_groupby(joined_table,
                   groupby_context_t{{"n_name"},
                                     {
                                       {"revenue", {{cudf::aggregation::Kind::SUM, "revenue"}}},
