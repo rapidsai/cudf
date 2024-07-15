@@ -28,7 +28,6 @@
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "io/utilities/column_utils.cuh"
-#include "io/utilities/config_utils.hpp"
 #include "parquet_common.hpp"
 #include "parquet_gpu.cuh"
 #include "writer_impl.hpp"
@@ -39,6 +38,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
