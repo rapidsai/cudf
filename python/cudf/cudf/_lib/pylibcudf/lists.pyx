@@ -320,12 +320,12 @@ cpdef Column apply_boolean_mask(Column input, Column boolean_mask):
         A Column of filtered elements based upon the boolean mask.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view1 = input.list_view()
-    cdef ListColumnView list_view2 = boolean_mask.list_view()
+    cdef ListColumnView list_view = input.list_view()
+    cdef ListColumnView mask_view = boolean_mask.list_view()
     with nogil:
         c_result = move(cpp_apply_boolean_mask(
-            list_view1.view(),
-            list_view2.view(),
+            list_view.view(),
+            mask_view.view(),
         ))
     return Column.from_libcudf(move(c_result))
 
