@@ -1,6 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-
 import numpy as np
 import pyarrow as pa
 import pytest
