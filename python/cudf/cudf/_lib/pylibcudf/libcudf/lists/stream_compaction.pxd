@@ -15,6 +15,7 @@ cdef extern from "cudf/lists/stream_compaction.hpp" \
         const lists_column_view& lists_column,
         const lists_column_view& boolean_mask,
     ) except +
+
     cdef unique_ptr[column] distinct(
         const lists_column_view& lists_column,
         null_equality nulls_equal,

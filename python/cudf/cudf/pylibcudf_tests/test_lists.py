@@ -13,6 +13,11 @@ def test_data():
 
 
 @pytest.fixture
+def list_column():
+    return [[0, 1], [2], [5], [6, 7]]
+
+
+@pytest.fixture
 def scalar():
     return pa.scalar(1)
 
@@ -64,8 +69,7 @@ def test_concatenate_list_elements(test_data, dropna, expected):
     assert_column_eq(expect, res)
 
 
-def test_contains_scalar(test_data, scalar):
-    list_column = test_data[0][0]
+def test_contains_scalar(list_column, scalar):
     arr = pa.array(list_column)
 
     plc_column = plc.interop.from_arrow(arr)
@@ -77,9 +81,9 @@ def test_contains_scalar(test_data, scalar):
     assert_column_eq(expect, res)
 
 
-def test_contains_list_column(test_data):
-    list_column1 = test_data[0][0]
-    list_column2 = [1, 3, 5, 1]
+def test_contains_list_column(list_column, column):
+    list_column1 = list_column
+    list_column2, _ = column
     arr1 = pa.array(list_column1)
     arr2 = pa.array(list_column2)
 
@@ -87,7 +91,7 @@ def test_contains_list_column(test_data):
     plc_column2 = plc.interop.from_arrow(arr2)
     res = plc.lists.contains(plc_column1, plc_column2)
 
-    expect = pa.array([True, False, True, False])
+    expect = pa.array([False, True, True, True])
 
     assert_column_eq(expect, res)
 
@@ -115,8 +119,7 @@ def test_contains_nulls(list_column, expected):
     assert_column_eq(expect, res)
 
 
-def test_index_of_scalar(test_data, scalar):
-    list_column = test_data[0][0]
+def test_index_of_scalar(list_column, scalar):
     arr = pa.array(list_column)
 
     plc_column = plc.interop.from_arrow(arr)
@@ -128,8 +131,7 @@ def test_index_of_scalar(test_data, scalar):
     assert_column_eq(expect, res)
 
 
-def test_index_of_list_column(test_data, column):
-    list_column = test_data[0][0]
+def test_index_of_list_column(list_column, column):
     arr1 = pa.array(list_column)
     arr2, expect = column
     plc_column1 = plc.interop.from_arrow(arr1)
@@ -141,8 +143,50 @@ def test_index_of_list_column(test_data, column):
     assert_column_eq(expect, res)
 
 
-def test_apply_boolean_mask(test_data, bool_column):
-    list_column = test_data[0][0]
+def test_reverse(list_column):
+    arr = pa.array(list_column)
+    plc_column = plc.interop.from_arrow(arr)
+
+    res = plc.lists.reverse(plc_column)
+
+    expect = pa.array([lst[::-1] for lst in list_column])
+
+    assert_column_eq(expect, res)
+
+
+def test_segmented_gather(test_data):
+    list_column1, list_column2 = test_data[0]
+
+    plc_column1 = plc.interop.from_arrow(pa.array(list_column1))
+    plc_column2 = plc.interop.from_arrow(pa.array(list_column2))
+
+    res = plc.lists.segmented_gather(plc_column2, plc_column1)
+
+    expect = pa.array([[8, 9], [14], [0], [0, 0]])
+
+    assert_column_eq(expect, res)
+
+
+def test_extract_list_element_scalar(list_column):
+    plc_column = plc.interop.from_arrow(pa.array(list_column))
+
+    res = plc.lists.extract_list_element(plc_column, 0)
+    expect = pa.compute.list_element(list_column, 0)
+
+    assert_column_eq(expect, res)
+
+
+def test_extract_list_element_column(list_column):
+    plc_column = plc.interop.from_arrow(pa.array(list_column))
+    indices = plc.interop.from_arrow(pa.array([0, 1, -4, -1]))
+
+    res = plc.lists.extract_list_element(plc_column, indices)
+    expect = pa.array([0, None, None, 7])
+
+    assert_column_eq(expect, res)
+
+
+def test_apply_boolean_mask(list_column, bool_column):
     arr = pa.array(list_column)
     plc_column = plc.interop.from_arrow(arr)
     plc_bool_column = plc.interop.from_arrow(bool_column)

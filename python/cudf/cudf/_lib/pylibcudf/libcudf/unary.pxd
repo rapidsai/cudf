@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
@@ -43,5 +44,6 @@ cdef extern from "cudf/unary.hpp" namespace "cudf" nogil:
     cdef extern unique_ptr[column] cast(
         column_view input,
         data_type out_type) except +
+    cdef extern bool is_supported_cast(data_type from_, data_type to) noexcept
     cdef extern unique_ptr[column] is_nan(column_view input) except +
     cdef extern unique_ptr[column] is_not_nan(column_view input) except +
