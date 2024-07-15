@@ -35,6 +35,7 @@ This page provides API documentation for pylibcudf.
     stream_compaction
     table
     traits
+    transform
     types
     unary
 

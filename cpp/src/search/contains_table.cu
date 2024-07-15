@@ -76,18 +76,6 @@ struct comparator_adapter {
   {
   }
 
-  // suppress "function was declared but never referenced warning"
-#pragma nv_diagnostic push
-#pragma nv_diag_suppress 177
-  __device__ constexpr auto operator()(lhs_index_type lhs_index,
-                                       lhs_index_type rhs_index) const noexcept
-  {
-    auto const lhs = static_cast<size_type>(lhs_index);
-    auto const rhs = static_cast<size_type>(rhs_index);
-
-    return _self_equal(lhs, rhs);
-  }
-
   __device__ constexpr auto operator()(rhs_index_type lhs_index,
                                        rhs_index_type rhs_index) const noexcept
   {
@@ -102,13 +90,6 @@ struct comparator_adapter {
   {
     return _two_table_equal(lhs_index, rhs_index);
   }
-
-  __device__ constexpr auto operator()(rhs_index_type lhs_index,
-                                       lhs_index_type rhs_index) const noexcept
-  {
-    return _two_table_equal(lhs_index, rhs_index);
-  }
-#pragma nv_diagnostic pop
 
  private:
   SelfEqual const _self_equal;

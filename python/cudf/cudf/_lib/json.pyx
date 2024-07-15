@@ -10,6 +10,7 @@ from cudf.core.buffer import acquire_spill_lock
 from libcpp cimport bool
 
 cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
+from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport add_df_col_struct_names
 from cudf._lib.pylibcudf.io.types cimport compression_type
 from cudf._lib.pylibcudf.libcudf.io.json cimport json_recovery_mode_t
@@ -17,7 +18,7 @@ from cudf._lib.pylibcudf.libcudf.io.types cimport compression_type
 from cudf._lib.pylibcudf.libcudf.types cimport data_type, type_id
 from cudf._lib.pylibcudf.types cimport DataType
 from cudf._lib.types cimport dtype_to_data_type
-from cudf._lib.utils cimport data_from_pylibcudf_io
+from cudf._lib.utils cimport _data_from_columns, data_from_pylibcudf_io
 
 import cudf._lib.pylibcudf as plc
 
@@ -98,28 +99,48 @@ cpdef read_json(object filepaths_or_buffers,
         else:
             raise TypeError("`dtype` must be 'list like' or 'dict'")
 
-    table_w_meta = plc.io.json.read_json(
-        plc.io.SourceInfo(filepaths_or_buffers),
-        processed_dtypes,
-        c_compression,
-        lines,
-        byte_range_offset = byte_range[0] if byte_range is not None else 0,
-        byte_range_size = byte_range[1] if byte_range is not None else 0,
-        keep_quotes = keep_quotes,
-        mixed_types_as_string = mixed_types_as_string,
-        prune_columns = prune_columns,
-        recovery_mode = _get_json_recovery_mode(on_bad_lines)
-    )
-
-    df = cudf.DataFrame._from_data(
-        *data_from_pylibcudf_io(
-            table_w_meta
+    if cudf.get_option("mode.pandas_compatible") and lines:
+        res_cols, res_col_names, res_child_names = plc.io.json.chunked_read_json(
+            plc.io.SourceInfo(filepaths_or_buffers),
+            processed_dtypes,
+            c_compression,
+            keep_quotes = keep_quotes,
+            mixed_types_as_string = mixed_types_as_string,
+            prune_columns = prune_columns,
+            recovery_mode = _get_json_recovery_mode(on_bad_lines)
         )
-    )
+        df = cudf.DataFrame._from_data(
+            *_data_from_columns(
+                columns=[Column.from_pylibcudf(plc) for plc in res_cols],
+                column_names=res_col_names,
+                index_names=None
+               )
+            )
+        add_df_col_struct_names(df, res_child_names)
+        return df
+    else:
+        table_w_meta = plc.io.json.read_json(
+            plc.io.SourceInfo(filepaths_or_buffers),
+            processed_dtypes,
+            c_compression,
+            lines,
+            byte_range_offset = byte_range[0] if byte_range is not None else 0,
+            byte_range_size = byte_range[1] if byte_range is not None else 0,
+            keep_quotes = keep_quotes,
+            mixed_types_as_string = mixed_types_as_string,
+            prune_columns = prune_columns,
+            recovery_mode = _get_json_recovery_mode(on_bad_lines)
+        )
 
-    # Post-processing to add in struct column names
-    add_df_col_struct_names(df, table_w_meta.child_names)
-    return df
+        df = cudf.DataFrame._from_data(
+            *data_from_pylibcudf_io(
+                table_w_meta
+            )
+        )
+
+        # Post-processing to add in struct column names
+        add_df_col_struct_names(df, table_w_meta.child_names)
+        return df
 
 
 @acquire_spill_lock()
