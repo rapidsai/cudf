@@ -26,6 +26,8 @@ from typing_extensions import Self
 
 import cudf
 import cudf._lib as libcudf
+import cudf.core
+import cudf.core.algorithms
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -1987,6 +1989,8 @@ class IndexedFrame(Frame):
                 "Use obj.ffill() or obj.bfill() instead.",
                 FutureWarning,
             )
+        elif method not in {"linear", "values", "index"}:
+            raise ValueError(f"Interpolation method `{method}` not found")
 
         data = self
 
@@ -2000,7 +2004,10 @@ class IndexedFrame(Frame):
                 )
             )
 
-        interpolator = cudf.core.algorithms.get_column_interpolator(method)
+        if method == "linear":
+            interp_index = RangeIndex(self._num_rows)
+        else:
+            interp_index = data.index
         columns = []
         for col in data._columns:
             if isinstance(col, cudf.core.column.StringColumn):
@@ -2012,8 +2019,9 @@ class IndexedFrame(Frame):
             if col.nullable:
                 col = col.astype("float64").fillna(np.nan)
 
-            # Interpolation methods may or may not need the index
-            columns.append(interpolator(col, index=data.index))
+            columns.append(
+                cudf.core.algorithms._interpolation(col, index=interp_index)
+            )
 
         result = self._from_data_like_self(
             self._data._from_columns_like_self(columns)
