@@ -9,16 +9,18 @@ import itertools
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
+import pyarrow as pa
+
 import polars as pl
 
 import cudf._lib.pylibcudf as plc
 
 from cudf_polars.containers.column import NamedColumn
+from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence, Set
 
-    import pyarrow as pa
     from typing_extensions import Self
 
     import cudf
@@ -50,8 +52,16 @@ class DataFrame:
             self.table,
             [plc.interop.ColumnMetadata(name=c.name) for c in self.columns],
         )
-
-        return cast(pl.DataFrame, pl.from_arrow(table))
+        return cast(pl.DataFrame, pl.from_arrow(table)).with_columns(
+            *(
+                pl.col(c.name).set_sorted(
+                    descending=c.order == plc.types.Order.DESCENDING
+                )
+                if c.is_sorted
+                else pl.col(c.name)
+                for c in self.columns
+            )
+        )
 
     @cached_property
     def column_names_set(self) -> frozenset[str]:
@@ -80,6 +90,35 @@ class DataFrame:
             [
                 NamedColumn(c.to_pylibcudf(mode="read"), name)
                 for name, c in df._data.items()
+            ]
+        )
+
+    @classmethod
+    def from_polars(cls, df: pl.DataFrame) -> Self:
+        """
+        Create from a polars dataframe.
+
+        Parameters
+        ----------
+        df
+            Polars dataframe to convert
+
+        Returns
+        -------
+        New dataframe representing the input.
+        """
+        table = df.to_arrow()
+        schema = table.schema
+        for i, field in enumerate(schema):
+            schema = schema.set(
+                i, pa.field(field.name, dtypes.downcast_arrow_lists(field.type))
+            )
+        # No-op if the schema is unchanged.
+        d_table = plc.interop.from_arrow(table.cast(schema))
+        return cls(
+            [
+                NamedColumn(column, h_col.name).copy_metadata(h_col)
+                for column, h_col in zip(d_table.columns(), df.iter_columns())
             ]
         )
 

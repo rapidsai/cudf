@@ -175,6 +175,32 @@ cdef class Column:
             children,
         )
 
+    cpdef Column with_mask(self, gpumemoryview mask, size_type null_count):
+        """Augment this column with a new null mask.
+
+        Parameters
+        ----------
+        mask : gpumemoryview
+            New mask (or None to unset the mask)
+        null_count : int
+            New null count. If this is incorrect, bad things happen.
+
+        Returns
+        -------
+        New Column object sharing data with self (except for the mask which is new).
+        """
+        if mask is None and null_count > 0:
+            raise ValueError("Empty mask must have null count of zero")
+        return Column(
+            self._data_type,
+            self._size,
+            self._data,
+            mask,
+            null_count,
+            self._offset,
+            self._children,
+        )
+
     @staticmethod
     cdef Column from_column_view(const column_view& cv, Column owner):
         """Create a Column from a libcudf column_view.
@@ -250,7 +276,7 @@ cdef class Column:
         column is in use.
         """
         data = gpumemoryview(obj)
-        iface = data.__cuda_array_interface__()
+        iface = data.__cuda_array_interface__
         if iface.get('mask') is not None:
             raise ValueError("mask not yet supported.")
 
@@ -400,8 +426,8 @@ def is_c_contiguous(
     itemsize : int
         Size of an element in bytes.
 
-    Return
-    ------
+    Returns
+    -------
     bool
         The boolean answer.
     """
