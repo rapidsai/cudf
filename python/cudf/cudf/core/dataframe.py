@@ -151,7 +151,7 @@ class _DataFrameIndexer(_FrameIndexer):
         return self._setitem_tuple_arg(key, value)
 
     @_performance_tracking
-    def _can_downcast_to_series(self, df, arg) -> bool:
+    def _can_downcast_to_series(self, df, arg):
         """
         This method encapsulates the logic used
         to determine whether or not the result of a loc/iloc
@@ -171,10 +171,11 @@ class _DataFrameIndexer(_FrameIndexer):
                 or type(arg[1]) is slice
             ):
                 return False
-            elif isinstance(arg[0], (bool, np.bool_)) and not isinstance(
-                arg[1], slice
-            ):
-                return True
+            else:
+                if is_bool_dtype(as_column(arg[0]).dtype) and not isinstance(
+                    arg[1], slice
+                ):
+                    return True
             dtypes = df.dtypes.values.tolist()
             all_numeric = all(is_numeric_dtype(t) for t in dtypes)
             if all_numeric or (
