@@ -112,6 +112,34 @@ files:
     includes:
       - test_python_common
       - test_python_cudf
+  py_build_pylibcudf:
+    output: pyproject
+    pyproject_dir: python/pylibcudf
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes:
+      - build_base
+      - build_python_common
+      - build_python_cudf
+  py_run_pylibcudf:
+    output: pyproject
+    pyproject_dir: python/pylibcudf
+    extras:
+      table: project
+    includes:
+      - run_common
+      - run_cudf
+      - pyarrow_run
+  # py_test_pylibcudf:
+  #   output: pyproject
+  #   pyproject_dir: python/pylibcudf
+  #   extras:
+  #     table: project.optional-dependencies
+  #     key: test
+  #   includes:
+  #     - test_python_common
+  #     - test_python_cudf
   py_test_pandas_cudf:
     output: pyproject
     pyproject_dir: python/cudf
