@@ -196,9 +196,6 @@ struct column_tree_csr {
   rmm::device_uvector<NodeT> categories;
   rmm::device_uvector<SymbolOffsetT> range_begin;
   rmm::device_uvector<SymbolOffsetT> range_end;
-  std::vector<uint8_t> ignore_vals;
-  std::vector<uint8_t> is_mixed_type_column;
-  std::vector<uint8_t> is_pruned;
 };
 
 namespace detail {
