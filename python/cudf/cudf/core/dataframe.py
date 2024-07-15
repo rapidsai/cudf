@@ -3593,15 +3593,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             if level is not None and isinstance(self.index, MultiIndex):
                 level = self.index._get_level_label(level)
-                out_index = self.index.copy(deep=copy)
-                level_values = out_index.get_level_values(level)
-                level_values.to_frame().replace(
+                level_values = self.index.get_level_values(level)
+                ca = self.index._data.copy(deep=copy)
+                ca[level] = level_values._column.find_and_replace(
                     to_replace=list(index.keys()),
-                    value=list(index.values()),
-                    inplace=True,
+                    replacement=list(index.values()),
                 )
-                out_index._data[level] = column.as_column(level_values)
-                out_index._compute_levels_and_codes()
+                out_index = type(self.index)._from_data(
+                    ca, name=self.index.name
+                )
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())
@@ -7058,12 +7058,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # Assemble the final index
         new_index_columns = [*repeated_index._columns, *tiled_index]
         index_names = [*self.index.names, *unique_named_levels.names]
-        new_index = MultiIndex.from_frame(
-            DataFrame._from_data(
-                dict(zip(range(0, len(new_index_columns)), new_index_columns))
-            ),
-            names=index_names,
-        )
+        new_index = MultiIndex._from_data(dict(enumerate(new_index_columns)))
+        new_index.names = index_names
 
         # Compute the column indices that serves as the input for
         # `interleave_columns`
@@ -7849,7 +7845,26 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return result
 
 
-def from_dataframe(df, allow_copy=False):
+def from_dataframe(df, allow_copy: bool = False) -> DataFrame:
+    """
+    Build a :class:`DataFrame` from an object supporting the dataframe interchange protocol.
+
+    .. note::
+
+        If you have a ``pandas.DataFrame``, use :func:`from_pandas` instead.
+
+    Parameters
+    ----------
+    df : DataFrameXchg
+        Object supporting the interchange protocol, i.e. ``__dataframe__`` method.
+    allow_copy : bool, default: True
+        Whether to allow copying the memory to perform the conversion
+        (if false then zero-copy approach is requested).
+
+    Returns
+    -------
+    :class:`DataFrame`
+    """
     return df_protocol.from_dataframe(df, allow_copy=allow_copy)
 
 
