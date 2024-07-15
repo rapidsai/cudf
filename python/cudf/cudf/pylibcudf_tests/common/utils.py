@@ -6,6 +6,7 @@ import os
 
 import pyarrow as pa
 import pytest
+from pyarrow.parquet import write_table
 
 from cudf._lib import pylibcudf as plc
 from cudf._lib.pylibcudf.io.types import CompressionType
@@ -107,7 +108,7 @@ def assert_column_eq(
         rhs = rhs.cast(rhs_type)
 
         lhs_type = _make_fields_nullable(lhs.type)
-        lhs = rhs.cast(lhs_type)
+        lhs = lhs.cast(lhs_type)
 
     assert lhs.equals(rhs)
 
@@ -227,6 +228,16 @@ def make_source(path_or_buf, pa_table, format, **kwargs):
         df.to_json(path_or_buf, mode=mode, **kwargs)
     elif format == "csv":
         df.to_csv(path_or_buf, mode=mode, **kwargs)
+    elif format == "parquet":
+        # The conversion to pandas is lossy (doesn't preserve
+        # nested types) so we
+        # will just use pyarrow directly to write this
+        write_table(
+            pa_table,
+            pa.PythonFile(path_or_buf)
+            if isinstance(path_or_buf, io.IOBase)
+            else path_or_buf,
+        )
     if isinstance(path_or_buf, io.IOBase):
         path_or_buf.seek(0)
     return path_or_buf

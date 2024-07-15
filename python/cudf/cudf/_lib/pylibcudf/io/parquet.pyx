@@ -164,7 +164,7 @@ cpdef read_parquet(
     source_info : SourceInfo
         The SourceInfo object to read the Parquet file from.
     columns : list, default None
-        The names of the columns to be read
+        The string names of the columns to be read.
     row_groups : list[list[size_type]], default None
         List of row groups to be read.
     filters : Expression, default None
