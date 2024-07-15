@@ -88,7 +88,7 @@ def test_read_csv_basic(
     assert_table_and_meta_eq(
         pa_table,
         res,
-        check_types=False if len(pa_table) == 0 else True,
+        check_types_if_empty=False,
         check_names=False if skiprows > 0 and column_names is None else True,
     )
 
@@ -260,7 +260,7 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
     assert_table_and_meta_eq(
         pa_table,
         plc_table_w_meta,
-        check_types=False if len(pa_table) == 0 else True,
+        check_types_if_empty=False,
     )
 
 

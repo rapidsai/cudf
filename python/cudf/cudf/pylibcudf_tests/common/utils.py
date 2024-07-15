@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import os
 
+import numpy as np
 import pyarrow as pa
 import pytest
 
@@ -43,7 +44,6 @@ def assert_column_eq(
     lhs: pa.Array | plc.Column,
     rhs: pa.Array | plc.Column,
     check_field_nullability=True,
-    check_type=True,
 ) -> None:
     """Verify that a pylibcudf array and PyArrow array are equal.
 
@@ -110,18 +110,10 @@ def assert_column_eq(
         lhs_type = _make_fields_nullable(lhs.type)
         lhs = rhs.cast(lhs_type)
 
-    if not check_type:
-        # Useful for lossy formats like CSV
-        import numpy as np
-
-        assert np.array_equal(lhs, rhs)
+    if pa.types.is_floating(lhs.type) and pa.types.is_floating(rhs.type):
+        np.testing.assert_array_almost_equal(lhs, rhs)
     else:
-        if pa.types.is_floating(lhs.type) and pa.types.is_floating(rhs.type):
-            import numpy as np
-
-            np.testing.assert_array_almost_equal(lhs, rhs)
-        else:
-            assert lhs.equals(rhs)
+        assert lhs.equals(rhs)
 
 
 def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
@@ -137,7 +129,7 @@ def assert_table_and_meta_eq(
     pa_table: pa.Table,
     plc_table_w_meta: plc.io.types.TableWithMetadata,
     check_field_nullability=True,
-    check_types=True,
+    check_types_if_empty=True,
     check_names=True,
 ) -> None:
     """Verify that the pylibcudf TableWithMetadata and PyArrow table are equal"""
@@ -149,10 +141,11 @@ def assert_table_and_meta_eq(
         plc_shape == pa_table.shape
     ), f"{plc_shape} is not equal to {pa_table.shape}"
 
+    if not check_types_if_empty and plc_table.num_rows() == 0:
+        return
+
     for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
-        assert_column_eq(
-            pa_col, plc_col, check_field_nullability, check_type=check_types
-        )
+        assert_column_eq(pa_col, plc_col, check_field_nullability)
 
     # Check column name equality
     if check_names:
