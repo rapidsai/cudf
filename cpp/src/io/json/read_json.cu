@@ -192,7 +192,8 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
   size_t chunk_size                         = reader_opts.get_byte_range_size();
 
   CUDF_EXPECTS(total_source_size ? chunk_offset < total_source_size : !chunk_offset,
-               "Invalid offsetting");
+               "Invalid offsetting",
+               std::invalid_argument);
   auto should_load_all_sources = !chunk_size || chunk_size >= total_source_size - chunk_offset;
   chunk_size = should_load_all_sources ? total_source_size - chunk_offset : chunk_size;
 
