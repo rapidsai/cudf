@@ -49,7 +49,7 @@
 #include <thrust/transform.h>
 #include <thrust/unique.h>
 
-namespace cudf::io::json::detail {
+namespace cudf::io::json::experimental::detail {
 
 /**
  * @brief Reduces node tree representation to column tree CSR representation.
@@ -95,7 +95,7 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
     unique_node_ids.size(),
     column_levels.begin());
   auto [sorted_column_levels, sorted_column_levels_order] =
-    stable_sorted_key_order<size_t, TreeDepthT>(column_levels, stream);
+    cudf::io::json::detail::stable_sorted_key_order<size_t, TreeDepthT>(column_levels, stream);
 
   // 2. reduce_by_key {col_id}, {row_offset}, max.
   rmm::device_uvector<NodeIndexT> unique_col_ids(num_columns, stream);

@@ -47,19 +47,6 @@ struct tree_meta_t {
   rmm::device_uvector<SymbolOffsetT> node_range_end;
 };
 
-struct column_tree_csr {
-  // position of nnzs
-  rmm::device_uvector<NodeIndexT> rowidx;
-  rmm::device_uvector<NodeIndexT> colidx;
-  // node properties
-  rmm::device_uvector<NodeIndexT> column_ids;
-  rmm::device_uvector<NodeT> categories;
-  rmm::device_uvector<SymbolOffsetT> range_begin;
-  rmm::device_uvector<SymbolOffsetT> range_end;
-  std::vector<uint8_t> ignore_vals;
-  std::vector<uint8_t> is_mixed_type_column;
-  std::vector<uint8_t> is_pruned;
-};
 
 /**
  * @brief A column type
@@ -200,6 +187,46 @@ struct device_json_column {
   }
 };
 
+namespace experimental {
+struct column_tree_csr {
+  // position of nnzs
+  rmm::device_uvector<NodeIndexT> rowidx;
+  rmm::device_uvector<NodeIndexT> colidx;
+  // node properties
+  rmm::device_uvector<NodeIndexT> column_ids;
+  rmm::device_uvector<NodeT> categories;
+  rmm::device_uvector<SymbolOffsetT> range_begin;
+  rmm::device_uvector<SymbolOffsetT> range_end;
+  std::vector<uint8_t> ignore_vals;
+  std::vector<uint8_t> is_mixed_type_column;
+  std::vector<uint8_t> is_pruned;
+};
+
+namespace detail {
+/**
+ * @brief Reduce node tree into column tree by aggregating each property of column.
+ *
+ * @param tree json node tree to reduce (modified in-place, but restored to original state)
+ * @param col_ids column ids of each node (modified in-place, but restored to original state)
+ * @param row_offsets row offsets of each node (modified in-place, but restored to original state)
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @return A tuple containing the column tree, identifier for each column and the maximum row index
+ * in each column
+ */
+
+std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tree_csr(
+  tree_meta_t& tree,
+  device_span<NodeIndexT> original_col_ids,
+  device_span<NodeIndexT> sorted_col_ids,
+  device_span<NodeIndexT> ordered_node_ids,
+  device_span<size_type> row_offsets,
+  bool is_array_of_arrays,
+  NodeIndexT const row_array_parent_col_id,
+  rmm::cuda_stream_view stream);
+
+}
+}
+
 namespace detail {
 
 // TODO: return device_uvector instead of passing pre-allocated memory
@@ -320,27 +347,6 @@ reduce_to_column_tree(tree_meta_t& tree,
                       bool is_array_of_arrays,
                       NodeIndexT const row_array_parent_col_id,
                       rmm::cuda_stream_view stream);
-
-/**
- * @brief Reduce node tree into column tree by aggregating each property of column.
- *
- * @param tree json node tree to reduce (modified in-place, but restored to original state)
- * @param col_ids column ids of each node (modified in-place, but restored to original state)
- * @param row_offsets row offsets of each node (modified in-place, but restored to original state)
- * @param stream The CUDA stream to which kernels are dispatched
- * @return A tuple containing the column tree, identifier for each column and the maximum row index
- * in each column
- */
-
-std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tree_csr(
-  tree_meta_t& tree,
-  device_span<NodeIndexT> original_col_ids,
-  device_span<NodeIndexT> sorted_col_ids,
-  device_span<NodeIndexT> ordered_node_ids,
-  device_span<size_type> row_offsets,
-  bool is_array_of_arrays,
-  NodeIndexT const row_array_parent_col_id,
-  rmm::cuda_stream_view stream);
 
 /**
  * @brief Retrieves the parse_options to be used for type inference and type casting

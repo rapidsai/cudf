@@ -40,7 +40,6 @@
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
