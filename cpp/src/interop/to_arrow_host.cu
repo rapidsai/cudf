@@ -23,7 +23,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
-#include <cudf/interop/detail/arrow.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -33,6 +32,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
@@ -42,9 +42,48 @@
 
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
+#include <nanoarrow/nanoarrow_device.h>
+
+#include <iostream>
 
 namespace cudf {
 namespace detail {
+
+template <typename DeviceType>
+std::unique_ptr<rmm::device_buffer> decimals_to_arrow(cudf::column_view input,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr)
+{
+  constexpr size_type BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DeviceType);
+  auto buf = std::make_unique<rmm::device_buffer>(input.size() * sizeof(__int128_t), stream, mr);
+
+  auto count = thrust::counting_iterator<size_type>(0);
+  thrust::for_each(rmm::exec_policy(stream, mr),
+                   count,
+                   count + input.size(),
+                   [in  = input.begin<DeviceType>(),
+                    out = reinterpret_cast<DeviceType*>(buf->data()),
+                    BIT_WIDTH_RATIO] __device__(auto in_idx) {
+                     auto const out_idx = in_idx * BIT_WIDTH_RATIO;
+                     // the lowest order bits are the value, the remainder
+                     // simply matches the sign bit to satisfy the two's
+                     // complement integer representation of negative numbers.
+                     out[out_idx] = in[in_idx];
+#pragma unroll BIT_WIDTH_RATIO - 1
+                     for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
+                       out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
+                     }
+                   });
+
+  return buf;
+}
+
+template std::unique_ptr<rmm::device_buffer> decimals_to_arrow<int32_t>(
+  cudf::column_view input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+
+template std::unique_ptr<rmm::device_buffer> decimals_to_arrow<int64_t>(
+  cudf::column_view input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+
 namespace {
 
 struct dispatch_to_arrow_host {
@@ -71,7 +110,7 @@ struct dispatch_to_arrow_host {
 
   template <typename T>
   int populate_data_buffer(device_span<T const> input, ArrowBuffer* buffer) const
-  {
+  {    
     NANOARROW_RETURN_NOT_OK(ArrowBufferResize(buffer, input.size_bytes(), 1));
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       buffer->data, input.data(), input.size_bytes(), cudaMemcpyDefault, stream.value()));
@@ -162,7 +201,8 @@ int dispatch_to_arrow_host::operator()<cudf::string_view>(ArrowArray* out) const
 
   if (column.size() == 0) {
     // initialize the offset buffer with a single zero by convention
-    NANOARROW_RETURN_NOT_OK(ArrowArrayStartAppending(tmp.get()));
+    NANOARROW_RETURN_NOT_OK(
+      ArrowBufferAppendInt32(ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx), 0));
     ArrowArrayMove(tmp.get(), out);
     return NANOARROW_OK;
   }
@@ -190,18 +230,15 @@ int dispatch_to_arrow_host::operator()<cudf::list_view>(ArrowArray* out) const
   NANOARROW_RETURN_NOT_OK(ArrowArrayAllocateChildren(tmp.get(), 1));
 
   NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
-  if (column.size() == 0) {
-    // ArrowArrayStartAppending will add the single zero value for the offsets
-    // which is needed for an empty list column
-    NANOARROW_RETURN_NOT_OK(ArrowArrayStartAppending(tmp.get()));
-    ArrowArrayMove(tmp.get(), out);
-    return NANOARROW_OK;
-  }
-
   auto const lcv = cudf::lists_column_view(column);
-  NANOARROW_RETURN_NOT_OK(
-    populate_data_buffer(device_span<int32_t const>(lcv.offsets_begin(), column.size() + 1),
-                         ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
+  if (column.size() == 0) {    
+    NANOARROW_RETURN_NOT_OK(
+      ArrowBufferAppendInt32(ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx), 0));
+  } else {    
+    NANOARROW_RETURN_NOT_OK(
+      populate_data_buffer(device_span<int32_t const>(lcv.offsets_begin(), (column.size() + 1)),
+                           ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
+  }
 
   NANOARROW_RETURN_NOT_OK(get_column(lcv.child(), stream, mr, tmp->children[0]));
 
@@ -228,25 +265,25 @@ int dispatch_to_arrow_host::operator()<cudf::dictionary32>(ArrowArray* out) cons
       NANOARROW_RETURN_NOT_OK(populate_data_buffer(
         device_span<int8_t const>(dict_indices.data<int8_t>(), dict_indices.size()),
         ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
-        break;
+      break;
     case type_id::INT16:
     case type_id::UINT16:
       NANOARROW_RETURN_NOT_OK(populate_data_buffer(
         device_span<int16_t const>(dict_indices.data<int16_t>(), dict_indices.size()),
         ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
-        break;
+      break;
     case type_id::INT32:
     case type_id::UINT32:
       NANOARROW_RETURN_NOT_OK(populate_data_buffer(
         device_span<int32_t const>(dict_indices.data<int32_t>(), dict_indices.size()),
         ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
-        break;
+      break;
     case type_id::INT64:
     case type_id::UINT64:
       NANOARROW_RETURN_NOT_OK(populate_data_buffer(
         device_span<int64_t const>(dict_indices.data<int64_t>(), dict_indices.size()),
         ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
-        break;
+      break;
     default: CUDF_FAIL("unsupported type for dictionary indices");
   }
 
@@ -267,7 +304,7 @@ int dispatch_to_arrow_host::operator()<cudf::struct_view>(ArrowArray* out) const
 
   for (size_t i = 0; i < size_t(tmp->n_children); ++i) {
     ArrowArray* child_ptr = tmp->children[i];
-    auto const child = column.child(i);
+    auto const child      = column.child(i);
     NANOARROW_RETURN_NOT_OK(get_column(child, stream, mr, child_ptr));
   }
 
@@ -287,8 +324,13 @@ int get_column(cudf::column_view column,
 
 unique_device_array_t create_device_array(nanoarrow::UniqueArray&& out)
 {
-  NANOARROW_THROW_NOT_OK(ArrowArrayFinishBuildingDefault(out.get(), nullptr));
-  unique_device_array_t result(new ArrowDeviceArray, [](ArrowDeviceArray* arr) {
+  ArrowError err;
+  if (ArrowArrayFinishBuildingDefault(out.get(), &err) != NANOARROW_OK) {
+    std::cerr << err.message << std::endl;
+    CUDF_FAIL("failed to build");
+  }
+
+  unique_device_array_t result(new ArrowDeviceArray, [](ArrowDeviceArray* arr) {    
     if (arr->array.release != nullptr) { ArrowArrayRelease(&arr->array); }
     delete arr;
   });

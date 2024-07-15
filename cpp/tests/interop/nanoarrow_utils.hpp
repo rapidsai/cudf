@@ -18,7 +18,6 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/interop/detail/arrow.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -29,6 +28,7 @@
 #include <cudf/wrappers/durations.hpp>
 
 #include <nanoarrow/nanoarrow.hpp>
+#include <nanoarrow/nanoarrow_device.h>
 
 struct generated_test_data {
   generated_test_data(cudf::size_type length)

@@ -118,41 +118,5 @@ int initialize_array(ArrowArray* arr, ArrowType storage_type, cudf::column_view 
   return NANOARROW_OK;
 }
 
-template <typename DeviceType>
-std::unique_ptr<rmm::device_buffer> decimals_to_arrow(cudf::column_view input,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::device_async_resource_ref mr)
-{
-  constexpr size_type BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DeviceType);
-  auto buf = std::make_unique<rmm::device_buffer>(input.size() * sizeof(__int128_t), stream, mr);
-
-  auto count = thrust::counting_iterator<size_type>(0);
-  thrust::for_each(
-    rmm::exec_policy(stream, mr),
-    count,
-    count + input.size(),
-    [in = input.begin<DeviceType>(), out = buf->data(), BIT_WIDTH_RATIO] __device__(auto in_idx) {
-      auto const out_idx = in_idx * BIT_WIDTH_RATIO;
-      // the lowest order bits are the value, the remainder
-      // simply matches the sign bit to satisfy the two's
-      // complement integer representation of negative numbers.
-      out[out_idx] = in[in_idx];
-#pragma unroll BIT_WIDTH_RATIO - 1
-      for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
-        out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
-      }
-    });
-
-  return buf;
-}
-
-template <>
-std::unique_ptr<rmm::device_buffer> decimals_to_arrow<numeric::decimal32>(
-  cudf::column_view input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
-
-template <>
-std::unique_ptr<rmm::device_buffer> decimals_to_arrow<numeric::decimal64>(
-  cudf::column_view input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
-
 }  // namespace detail
 }  // namespace cudf
