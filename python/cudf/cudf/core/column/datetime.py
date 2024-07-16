@@ -178,43 +178,6 @@ def _resolve_mixed_dtypes(
     return cudf.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")
 
 
-def _get_datetime_format(col, dtype, time_unit):
-    format = _dtype_to_format_conversion.get(dtype.name, "%Y-%m-%d %H:%M:%S")
-    if format.endswith("f"):
-        sub_second_res_len = 3
-    else:
-        sub_second_res_len = 0
-
-    has_nanos = time_unit in {"ns"} and col.get_dt_field("nanosecond").any()
-    has_micros = (
-        time_unit in {"ns", "us"} and col.get_dt_field("microsecond").any()
-    )
-    has_millis = (
-        time_unit in {"ns", "us", "ms"}
-        and col.get_dt_field("millisecond").any()
-    )
-    has_seconds = col.get_dt_field("second").any()
-    has_minutes = col.get_dt_field("minute").any()
-    has_hours = col.get_dt_field("hour").any()
-    if sub_second_res_len:
-        if has_nanos:
-            # format should be intact and rest of the
-            # following conditions shouldn't execute.
-            pass
-        elif has_micros:
-            format = format[:-sub_second_res_len] + "%6f"
-        elif has_millis:
-            format = format[:-sub_second_res_len] + "%3f"
-        elif has_seconds or has_minutes or has_hours:
-            format = format[:-4]
-        else:
-            format = format.split(" ")[0]
-    else:
-        if not (has_seconds or has_minutes or has_hours):
-            format = format.split(" ")[0]
-    return format
-
-
 class DatetimeColumn(column.ColumnBase):
     """
     A Column implementation for Date-time types.
@@ -381,9 +344,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def isocalendar(self) -> dict[str, ColumnBase]:
         return {
-            field: self.as_string_column("str", format=directive).astype(
-                "uint32"
-            )
+            field: self.strftime(format=directive).astype("uint32")
             for field, directive in zip(
                 ["year", "week", "day"], ["%G", "%V", "%u"]
             )
@@ -445,17 +406,12 @@ class DatetimeColumn(column.ColumnBase):
 
         return NotImplemented
 
-    def as_datetime_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> DatetimeColumn:
-        dtype = cudf.dtype(dtype)
+    def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
-    def as_timedelta_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.TimeDeltaColumn":
+    def as_timedelta_column(self, dtype: Dtype) -> None:  # type: ignore[override]
         raise TypeError(
             f"cannot astype a datetimelike from {self.dtype} to {dtype}"
         )
@@ -472,32 +428,63 @@ class DatetimeColumn(column.ColumnBase):
         )
         return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
-        if format is None:
-            format = _dtype_to_format_conversion.get(
-                self.dtype.name, "%Y-%m-%d %H:%M:%S"
+    def strftime(self, format: str) -> cudf.core.column.StringColumn:
+        if len(self) == 0:
+            return cast(
+                cudf.core.column.StringColumn,
+                column.column_empty(0, dtype="object", masked=False),
             )
-            if cudf.get_option("mode.pandas_compatible"):
-                format = _get_datetime_format(
-                    self, dtype=self.dtype, time_unit=self.time_unit
-                )
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
             names = cudf.core.column.column_empty(
                 0, dtype="object", masked=False
             )
-        if len(self) > 0:
-            return string._datetime_to_str_typecast_functions[
-                cudf.dtype(self.dtype)
-            ](self, format, names)
-        else:
-            return cast(
-                "cudf.core.column.StringColumn",
-                column.column_empty(0, dtype="object", masked=False),
+        return string._datetime_to_str_typecast_functions[self.dtype](
+            self, format, names
+        )
+
+    def as_string_column(self) -> cudf.core.column.StringColumn:
+        format = _dtype_to_format_conversion.get(
+            self.dtype.name, "%Y-%m-%d %H:%M:%S"
+        )
+        if cudf.get_option("mode.pandas_compatible"):
+            if format.endswith("f"):
+                sub_second_res_len = 3
+            else:
+                sub_second_res_len = 0
+
+            has_nanos = (
+                self.time_unit in {"ns"}
+                and self.get_dt_field("nanosecond").any()
             )
+            has_micros = (
+                self.time_unit in {"ns", "us"}
+                and self.get_dt_field("microsecond").any()
+            )
+            has_millis = (
+                self.time_unit in {"ns", "us", "ms"}
+                and self.get_dt_field("millisecond").any()
+            )
+            has_seconds = self.get_dt_field("second").any()
+            has_minutes = self.get_dt_field("minute").any()
+            has_hours = self.get_dt_field("hour").any()
+            if sub_second_res_len:
+                if has_nanos:
+                    # format should be intact and rest of the
+                    # following conditions shouldn't execute.
+                    pass
+                elif has_micros:
+                    format = format[:-sub_second_res_len] + "%6f"
+                elif has_millis:
+                    format = format[:-sub_second_res_len] + "%3f"
+                elif has_seconds or has_minutes or has_hours:
+                    format = format[:-4]
+                else:
+                    format = format.split(" ")[0]
+            elif not (has_seconds or has_minutes or has_hours):
+                format = format.split(" ")[0]
+        return self.strftime(format)
 
     def mean(
         self, skipna=None, min_count: int = 0, dtype=np.float64
@@ -872,10 +859,11 @@ class DatetimeTZColumn(DatetimeColumn):
         offsets_from_utc = offsets.take(indices, nullify=True)
         return self + offsets_from_utc
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
-        return self._local_time.as_string_column(dtype, format)
+    def strftime(self, format: str) -> cudf.core.column.StringColumn:
+        return self._local_time.strftime(format)
+
+    def as_string_column(self) -> cudf.core.column.StringColumn:
+        return self._local_time.as_string_column()
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(

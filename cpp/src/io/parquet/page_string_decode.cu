@@ -31,6 +31,8 @@
 
 namespace cudf::io::parquet::detail {
 
+namespace cg = cooperative_groups;
+
 namespace {
 
 constexpr int preprocess_block_size    = 512;
@@ -1006,6 +1008,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     }
     // this needs to be here to prevent warp 1/2 modifying src_pos before all threads have read it
     __syncthreads();
+
+    // Create a warp sized thread block tile
+    auto const tile_warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+
     if (t < 32) {
       // decode repetition and definition levels.
       // - update validity vectors
@@ -1020,9 +1026,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       if (s->dict_base) {
         src_target_pos = gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, lane_id).first;
       } else {
-        gpuInitStringDescriptors<false>(s, sb, src_target_pos, lane_id);
+        gpuInitStringDescriptors<false>(s, sb, src_target_pos, tile_warp);
       }
-      if (t == 32) { s->dict_pos = src_target_pos; }
+      if (tile_warp.thread_rank() == 0) { s->dict_pos = src_target_pos; }
     } else {
       int const me = t - out_thread0;
 
