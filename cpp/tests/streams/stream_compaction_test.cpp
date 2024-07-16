@@ -41,6 +41,7 @@ auto constexpr NULL_UNEQUAL = cudf::null_equality::UNEQUAL;
 auto constexpr NAN_EQUAL    = cudf::nan_equality::ALL_EQUAL;
 auto constexpr NAN_UNEQUAL  = cudf::nan_equality::UNEQUAL;
 
+using int16s_col = cudf::test::fixed_width_column_wrapper<int16_t>;
 using int32s_col = cudf::test::fixed_width_column_wrapper<int32_t>;
 using floats_col = cudf::test::fixed_width_column_wrapper<float>;
 
@@ -51,11 +52,9 @@ using cudf::test::iterators::no_nulls;
 using cudf::test::iterators::null_at;
 using cudf::test::iterators::nulls_at;
 
-struct StableDistinctKeepAny : public cudf::test::BaseFixture {};
+struct StreamCompactionTest : public cudf::test::BaseFixture {};
 
-struct StableDistinctKeepFirstLastNone : public cudf::test::BaseFixture {};
-
-TEST_F(StableDistinctKeepAny, NoNullsTableWithNaNs)
+TEST_F(StreamCompactionTest, StableDistinctKeepAnyNoNullsTableWithNaNs)
 {
   // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
   // groups for equivalent keys because KEEP_ANY is nondeterministic.
@@ -94,7 +93,7 @@ TEST_F(StableDistinctKeepAny, NoNullsTableWithNaNs)
   }
 }
 
-TEST_F(StableDistinctKeepAny, InputWithNullsAndNaNs)
+TEST_F(StreamCompactionTest, StableDistinctKeepAnyInputWithNullsAndNaNs)
 {
   auto constexpr null{0.0};  // shadow the global `null` variable of type int
 
@@ -150,7 +149,7 @@ TEST_F(StableDistinctKeepAny, InputWithNullsAndNaNs)
   }
 }
 
-TEST_F(StableDistinctKeepFirstLastNone, InputWithNaNsEqual)
+TEST_F(StreamCompactionTest, StableDistinctKeepFirstLastNoneInputWithNaNsEqual)
 {
   // Column(s) used to test needs to have different rows for the same keys.
   auto const col     = int32s_col{0, 1, 2, 3, 4, 5, 6};
@@ -192,7 +191,7 @@ TEST_F(StableDistinctKeepFirstLastNone, InputWithNaNsEqual)
   }
 }
 
-TEST_F(StableDistinctKeepFirstLastNone, InputWithNaNsUnequal)
+TEST_F(StreamCompactionTest, StableDistinctKeepFirstLastNoneInputWithNaNsUnequal)
 {
   // Column(s) used to test needs to have different rows for the same keys.
   auto const col     = int32s_col{0, 1, 2, 3, 4, 5, 6, 7};
@@ -233,3 +232,262 @@ TEST_F(StableDistinctKeepFirstLastNone, InputWithNaNsUnequal)
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 }
+
+TEST_F(StreamCompactionTest, DropNaNs)
+{
+  auto const col1 = floats_col{{1., 2., NaN, NaN, 5., 6.}, nulls_at({2, 5})};
+  auto const col2 = int32s_col{{10, 40, 70, 5, 2, 10}, nulls_at({2, 5})};
+  auto const col3 = floats_col{{NaN, 40., 70., NaN, 2., 10.}, nulls_at({2, 5})};
+  cudf::table_view input{{col1, col2, col3}};
+
+  std::vector<cudf::size_type> keys{0, 2};
+
+  {
+    // With keep_threshold
+    auto const col1_expected = floats_col{{1., 2., 3., 5., 6.}, nulls_at({2, 4})};
+    auto const col2_expected = int32s_col{{10, 40, 70, 2, 10}, nulls_at({2, 4})};
+    auto const col3_expected = floats_col{{NaN, 40., 70., 2., 10.}, nulls_at({2, 4})};
+    cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
+
+    auto result = cudf::drop_nans(input, keys, keys.size() - 1, cudf::test::get_default_stream());
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+  }
+
+  {
+    // Without keep_threshold
+    auto const col1_expected = floats_col{{2., 3., 5., 6.}, nulls_at({1, 3})};
+    auto const col2_expected = int32s_col{{40, 70, 2, 10}, nulls_at({1, 3})};
+    auto const col3_expected = floats_col{{40., 70., 2., 10.}, nulls_at({1, 3})};
+    cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
+
+    auto result = cudf::drop_nans(input, keys, cudf::test::get_default_stream());
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+  }
+}
+
+TEST_F(StreamCompactionTest, DropNulls)
+{
+  auto const col1 = int16s_col{{1, 0, 1, 0, 1, 0}, nulls_at({2, 5})};
+  auto const col2 = int32s_col{{10, 40, 70, 5, 2, 10}, nulls_at({2})};
+  auto const col3 = floats_col{{10., 40., 70., 5., 2., 10.}, no_nulls()};
+  cudf::table_view input{{col1, col2, col3}};
+  std::vector<cudf::size_type> keys{0, 1, 2};
+
+  {
+    // With keep_threshold
+    auto const col1_expected = int16s_col{{1, 0, 0, 1, 0}, null_at(4)};
+    auto const col2_expected = int32s_col{{10, 40, 5, 2, 10}, no_nulls()};
+    auto const col3_expected = floats_col{{10., 40., 5., 2., 10.}, no_nulls()};
+    cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
+
+    auto result = cudf::drop_nulls(input, keys, keys.size() - 1, cudf::test::get_default_stream());
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+  }
+
+  {
+    // Without keep_threshold
+    auto const col1_expected = int16s_col{{1, 0, 0, 1}, no_nulls()};
+    auto const col2_expected = int32s_col{{10, 40, 5, 2}, no_nulls()};
+    auto const col3_expected = floats_col{{10., 40., 5., 2.}, no_nulls()};
+    cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
+
+    auto result = cudf::drop_nulls(input, keys, cudf::test::get_default_stream());
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+  }
+}
+
+TEST_F(StreamCompactionTest, UniqueKeepFirstLastNone)
+{
+  auto const col1     = int32s_col{5, 4, 3, 5, 8, 5};
+  auto const col2     = floats_col{4., 5., 3., 4., 9., 4.};
+  auto const col1_key = int32s_col{20, 20, 20, 19, 21, 9};
+  auto const col2_key = int32s_col{19, 19, 20, 20, 9, 21};
+
+  cudf::table_view input{{col1, col2, col1_key, col2_key}};
+  std::vector<cudf::size_type> keys = {2, 3};
+
+  {
+    // KEEP_FIRST
+    auto const exp_col1_first     = int32s_col{5, 3, 5, 8, 5};
+    auto const exp_col2_first     = floats_col{4., 3., 4., 9., 4.};
+    auto const exp_col1_key_first = int32s_col{20, 20, 19, 21, 9};
+    auto const exp_col2_key_first = int32s_col{19, 20, 20, 9, 21};
+    cudf::table_view expected_first{
+      {exp_col1_first, exp_col2_first, exp_col1_key_first, exp_col2_key_first}};
+
+    auto const result = cudf::unique(input,
+                                     keys,
+                                     cudf::duplicate_keep_option::KEEP_FIRST,
+                                     cudf::null_equality::EQUAL,
+                                     cudf::test::get_default_stream());
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_first, *result);
+  }
+
+  {
+    // KEEP_LAST
+    auto const exp_col1_last     = int32s_col{4, 3, 5, 8, 5};
+    auto const exp_col2_last     = floats_col{5., 3., 4., 9., 4.};
+    auto const exp_col1_key_last = int32s_col{20, 20, 19, 21, 9};
+    auto const exp_col2_key_last = int32s_col{19, 20, 20, 9, 21};
+    cudf::table_view expected_last{
+      {exp_col1_last, exp_col2_last, exp_col1_key_last, exp_col2_key_last}};
+
+    auto const result = cudf::unique(input,
+                                     keys,
+                                     cudf::duplicate_keep_option::KEEP_LAST,
+                                     cudf::null_equality::EQUAL,
+                                     cudf::test::get_default_stream());
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_last, *result);
+  }
+
+  {
+    // KEEP_NONE
+    auto const exp_col1_unique     = int32s_col{3, 5, 8, 5};
+    auto const exp_col2_unique     = floats_col{3., 4., 9., 4.};
+    auto const exp_col1_key_unique = int32s_col{20, 19, 21, 9};
+    auto const exp_col2_key_unique = int32s_col{20, 20, 9, 21};
+    cudf::table_view expected_unique{
+      {exp_col1_unique, exp_col2_unique, exp_col1_key_unique, exp_col2_key_unique}};
+
+    auto const result = cudf::unique(input,
+                                     keys,
+                                     cudf::duplicate_keep_option::KEEP_NONE,
+                                     cudf::null_equality::EQUAL,
+                                     cudf::test::get_default_stream());
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_unique, *result);
+  }
+}
+
+TEST_F(StreamCompactionTest, DistinctKeepFirstLastNone)
+{
+  // Column(s) used to test needs to have different rows for the same keys.
+  auto const col1  = int32s_col{0, 1, 2, 3, 4, 5, 6};
+  auto const col2  = floats_col{10, 11, 12, 13, 14, 15, 16};
+  auto const keys1 = int32s_col{20, 20, 20, 20, 19, 21, 9};
+  auto const keys2 = int32s_col{19, 19, 19, 20, 20, 9, 21};
+
+  auto const input   = cudf::table_view{{col1, col2, keys1, keys2}};
+  auto const key_idx = std::vector<cudf::size_type>{2, 3};
+
+  // KEEP_FIRST
+  {
+    auto const exp_col1_sort  = int32s_col{6, 4, 0, 3, 5};
+    auto const exp_col2_sort  = floats_col{16, 14, 10, 13, 15};
+    auto const exp_keys1_sort = int32s_col{9, 19, 20, 20, 21};
+    auto const exp_keys2_sort = int32s_col{21, 20, 19, 20, 9};
+    auto const expected_sort =
+      cudf::table_view{{exp_col1_sort, exp_col2_sort, exp_keys1_sort, exp_keys2_sort}};
+
+    auto const result      = cudf::distinct(input,
+                                       key_idx,
+                                       cudf::duplicate_keep_option::KEEP_FIRST,
+                                       cudf::null_equality::EQUAL,
+                                       cudf::nan_equality::ALL_EQUAL,
+                                       cudf::test::get_default_stream());
+    auto const result_sort = cudf::sort_by_key(*result, result->select(key_idx));
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
+  }
+
+  // KEEP_LAST
+  {
+    auto const exp_col1_sort  = int32s_col{6, 4, 2, 3, 5};
+    auto const exp_col2_sort  = floats_col{16, 14, 12, 13, 15};
+    auto const exp_keys1_sort = int32s_col{9, 19, 20, 20, 21};
+    auto const exp_keys2_sort = int32s_col{21, 20, 19, 20, 9};
+    auto const expected_sort =
+      cudf::table_view{{exp_col1_sort, exp_col2_sort, exp_keys1_sort, exp_keys2_sort}};
+
+    auto const result      = cudf::distinct(input,
+                                       key_idx,
+                                       cudf::duplicate_keep_option::KEEP_LAST,
+                                       cudf::null_equality::EQUAL,
+                                       cudf::nan_equality::ALL_EQUAL,
+                                       cudf::test::get_default_stream());
+    auto const result_sort = cudf::sort_by_key(*result, result->select(key_idx));
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
+  }
+
+  // KEEP_NONE
+  {
+    auto const exp_col1_sort  = int32s_col{6, 4, 3, 5};
+    auto const exp_col2_sort  = floats_col{16, 14, 13, 15};
+    auto const exp_keys1_sort = int32s_col{9, 19, 20, 21};
+    auto const exp_keys2_sort = int32s_col{21, 20, 20, 9};
+    auto const expected_sort =
+      cudf::table_view{{exp_col1_sort, exp_col2_sort, exp_keys1_sort, exp_keys2_sort}};
+
+    auto const result      = cudf::distinct(input,
+                                       key_idx,
+                                       cudf::duplicate_keep_option::KEEP_NONE,
+                                       cudf::null_equality::EQUAL,
+                                       cudf::nan_equality::ALL_EQUAL,
+                                       cudf::test::get_default_stream());
+    auto const result_sort = cudf::sort_by_key(*result, result->select(key_idx));
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
+  }
+}
+
+TEST_F(StreamCompactionTest, ApplyBooleanMask)
+{
+  auto const col = int32s_col{
+    9668, 9590, 9526, 9205, 9434, 9347, 9160, 9569, 9143, 9807, 9606, 9446, 9279, 9822, 9691};
+  cudf::test::fixed_width_column_wrapper<bool> mask({false,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     true});
+  cudf::table_view input({col});
+  auto const col_expected = int32s_col{9526, 9347, 9569, 9807, 9279, 9691};
+  cudf::table_view expected({col_expected});
+  auto const result = cudf::apply_boolean_mask(input, mask, cudf::test::get_default_stream());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+}
+
+TEST_F(StreamCompactionTest, DistinctCountColumn)
+{
+  auto const col = int32s_col{1, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4};
+  EXPECT_EQ(
+    11, cudf::distinct_count(col, cudf::null_policy::INCLUDE, cudf::nan_policy::NAN_IS_VALID));  //
+                                                                                                 //
+}
+
+// TEST_F(StreamCompactionTest, DistinctCountTable)
+// {
+//   using T = TypeParam;
+
+//   auto const input1 = cudf::test::make_type_param_vector<T>(
+//     {1, 3, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4});
+//   auto const input2 = cudf::test::make_type_param_vector<T>(
+//     {3, 3, 3, 4, 31, 1, 8, 5, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4, 1});
+
+//   std::vector<std::pair<T, T>> pair_input;
+//   std::transform(
+//     input1.begin(), input1.end(), input2.begin(), std::back_inserter(pair_input), [](T a, T b) {
+//       return std::pair(a, b);
+//     });
+
+//   cudf::test::fixed_width_column_wrapper<T> input_col1(input1.begin(), input1.end());
+//   cudf::test::fixed_width_column_wrapper<T> input_col2(input2.begin(), input2.end());
+//   cudf::table_view input_table({input_col1, input_col2});
+
+//   auto const expected = static_cast<cudf::size_type>(
+//     std::set<std::pair<T, T>>(pair_input.begin(), pair_input.end()).size());
+//   EXPECT_EQ(expected, cudf::distinct_count(input_table, null_equality::EQUAL));
+// }

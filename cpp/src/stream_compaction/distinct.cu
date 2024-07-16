@@ -149,11 +149,11 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 duplicate_keep_option keep,
                                 null_equality nulls_equal,
                                 nan_equality nans_equal,
+                                rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct(
-    input, keys, keep, nulls_equal, nans_equal, cudf::get_default_stream(), mr);
+  return detail::distinct(input, keys, keep, nulls_equal, nans_equal, stream, mr);
 }
 
 std::unique_ptr<column> distinct_indices(table_view const& input,
