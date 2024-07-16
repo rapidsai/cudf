@@ -7,14 +7,16 @@ from cudf._lib.pylibcudf.libcudf.expressions cimport (
     expression,
     table_reference,
 )
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+
+from .scalar cimport Scalar
 
 
 cdef class Expression:
     cdef unique_ptr[expression] c_obj
 
 cdef class Literal(Expression):
-    cdef unique_ptr[scalar] c_scalar
+    # Hold on to input scalar so it doesn't get gc'ed
+    cdef Scalar scalar
 
 cdef class ColumnReference(Expression):
     pass

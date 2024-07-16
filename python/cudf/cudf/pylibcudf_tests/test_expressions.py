@@ -1,5 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-import numpy as np
+import pyarrow as pa
 import pytest
 
 import cudf._lib.pylibcudf as plc
@@ -8,16 +8,11 @@ import cudf._lib.pylibcudf as plc
 # construction works properly
 
 
-@pytest.mark.parametrize(
-    "value", [1, 1.0, "1.0", np.datetime64(1, "ns"), np.timedelta64(1, "ns")]
-)
-def test_literal_construction(value):
-    plc.expressions.Literal(value)
-
-
 def test_literal_construction_invalid():
-    with pytest.raises(NotImplementedError):
-        plc.expressions.Literal(object())
+    with pytest.raises(ValueError):
+        plc.expressions.Literal(
+            plc.interop.from_arrow(pa.scalar(None, type=pa.list_(pa.int64())))
+        )
 
 
 @pytest.mark.parametrize(
@@ -41,13 +36,13 @@ def test_columnnameref_construction():
         # Unary op
         {
             "op": plc.expressions.ASTOperator.IDENTITY,
-            "left": plc.expressions.ColumnReference(1.0),
+            "left": plc.expressions.ColumnReference(1),
         },
         # Binop
         {
             "op": plc.expressions.ASTOperator.ADD,
-            "left": plc.expressions.ColumnReference(1.0),
-            "right": plc.expressions.ColumnReference(2.0),
+            "left": plc.expressions.ColumnReference(1),
+            "right": plc.expressions.ColumnReference(2),
         },
     ],
 )
