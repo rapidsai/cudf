@@ -10,6 +10,7 @@ import numpy
 import numpy.core.multiarray
 
 from ..fast_slow_proxy import (
+    ProxyNDarray,
     _FastSlowAttribute,
     make_final_proxy_type,
     make_intermediate_proxy_type,
@@ -111,6 +112,7 @@ ndarray = make_final_proxy_type(
     numpy.ndarray,
     fast_to_slow=cupy.ndarray.get,
     slow_to_fast=cupy.asarray,
+    bases=(ProxyNDarray,),
     additional_attributes={
         "__array__": array_method,
         # So that pa.array(wrapped-numpy-array) works

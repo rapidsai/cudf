@@ -14,6 +14,7 @@ from collections.abc import Iterator
 from enum import IntEnum
 from typing import Any, Callable, Literal, Mapping
 
+import cupy as cp
 import numpy as np
 
 from ..options import _env_get_bool
@@ -45,6 +46,20 @@ _WRAPPER_ASSIGNMENTS = tuple(
     # significant issues).
     if attr not in ("__annotations__", "__doc__")
 )
+
+
+class ProxyNDarray(np.ndarray):
+    def __new__(cls, arr):
+        if isinstance(arr, cp.ndarray):
+            obj = np.asarray(arr.get()).view(cls)
+            return obj
+        elif isinstance(arr, np.ndarray):
+            obj = np.asarray(arr).view(cls)
+            return obj
+        else:
+            raise TypeError(
+                "Unsupported array type. Must be numpy.ndarray or cupy.ndarray"
+            )
 
 
 def callers_module_name():
@@ -564,8 +579,12 @@ class _FinalProxy(_FastSlowProxy):
         _FinalProxy subclasses can override this classmethod if they
         need particular behaviour when wrapped up.
         """
-        proxy = object.__new__(cls)
-        proxy._fsproxy_wrapped = value
+        if np.ndarray in cls.__mro__:
+            proxy = ProxyNDarray.__new__(cls, value)
+            proxy._fsproxy_wrapped = value
+        else:
+            proxy = object.__new__(cls)
+            proxy._fsproxy_wrapped = value
         return proxy
 
     def __reduce__(self):
