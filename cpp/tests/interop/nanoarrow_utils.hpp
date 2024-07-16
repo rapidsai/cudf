@@ -295,6 +295,7 @@ std::enable_if_t<std::is_same_v<T, cudf::string_view>, nanoarrow::UniqueArray> g
 {
   nanoarrow::UniqueArray tmp;
   NANOARROW_THROW_NOT_OK(ArrowArrayInitFromType(tmp.get(), NANOARROW_TYPE_STRING));
+  NANOARROW_THROW_NOT_OK(ArrowBitmapReserve(ArrowArrayValidityBitmap(tmp.get()), mask.size()));
   NANOARROW_THROW_NOT_OK(ArrowArrayStartAppending(tmp.get()));
   NANOARROW_THROW_NOT_OK(ArrowArrayReserve(tmp.get(), data.size()));
 

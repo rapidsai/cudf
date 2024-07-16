@@ -377,7 +377,8 @@ TEST_F(ToArrowHostDeviceTest, StructColumn)
   auto str_array  = get_nanoarrow_array<cudf::string_view>(str);
   auto int_array  = get_nanoarrow_array<int32_t>({48, 27, 25});
   auto str2_array = get_nanoarrow_array<cudf::string_view>(str2, {0, 1, 0});
-  auto int2_array = get_nanoarrow_array<int32_t, uint8_t>({12, 24, 47}, {1, 0, 1});
+  // struct null will get pushed down and superimposed on this array
+  auto int2_array = get_nanoarrow_array<int32_t, uint8_t>({12, 24, 47}, {1, 0, 0});
   auto bool_array = get_nanoarrow_array<bool>({true, true, false});
   auto list_arr =
     get_nanoarrow_list_array<int64_t>({1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 2, 4, 5, 6, 7, 9});
