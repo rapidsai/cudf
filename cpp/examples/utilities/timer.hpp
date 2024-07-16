@@ -18,6 +18,7 @@
 #include <iostream>
 
 namespace cudf {
+namespace examples {
 /**
  * @brief Light-weight timer for measuring elapsed time.
  *
@@ -49,4 +50,5 @@ class timer {
   time_point_t start_time;
 };
 
+}  // namespace examples
 };  // namespace cudf

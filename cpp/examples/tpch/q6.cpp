@@ -67,7 +67,7 @@ int main(int argc, char const** argv)
   auto resource = create_memory_resource(args.memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
 
-  cudf::timer timer;
+  cudf::examples::timer timer;
 
   // Read out the `lineitem` table from parquet file
   std::vector<std::string> const lineitem_cols = {

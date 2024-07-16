@@ -108,7 +108,7 @@ int main(int argc, char const** argv)
   auto resource = create_memory_resource(args.memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
 
-  cudf::timer timer;
+  cudf::examples::timer timer;
 
   // Define the column projections and filter predicate for `lineitem` table
   std::vector<std::string> const lineitem_cols = {"l_returnflag",

@@ -142,7 +142,7 @@ int main(int argc, char const** argv)
             << page_stat_string << ".." << std::endl;
 
   // `timer` is automatically started here
-  cudf::timer timer;
+  cudf::examples::timer timer;
   write_parquet(input->view(), metadata, output_filepath, encoding, compression, page_stats);
   timer.print_elapsed_millis();
 
