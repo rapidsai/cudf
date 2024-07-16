@@ -47,7 +47,9 @@ if TYPE_CHECKING:
     )
 
 
-_DEFAULT_CATEGORICAL_VALUE = -1
+# Using np.int8(-1) to allow silent wrap-around when casting to uint
+# it may make sense to make this dtype specific or a function.
+_DEFAULT_CATEGORICAL_VALUE = np.int8(-1)
 
 
 class CategoricalAccessor(ColumnMethods):
