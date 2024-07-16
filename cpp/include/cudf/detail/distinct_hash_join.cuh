@@ -107,19 +107,19 @@ template <cudf::has_nested HasNested>
 struct distinct_hash_join {
  private:
   using row_comparator = cudf::experimental::row::equality::device_row_comparator<
-    HasNested == cudf::has_nested::YES,
+    true,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator,
     cudf::experimental::type_identity_t>;
 
   using row_comparator_no_nested = cudf::experimental::row::equality::device_row_comparator<
-    HasNested == cudf::has_nested::YES,
+    false,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator,
     cudf::experimental::dispatch_void_if_nested_t>;
 
   using row_comparator_no_compound = cudf::experimental::row::equality::device_row_comparator<
-    HasNested == cudf::has_nested::YES,
+    false,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator,
     cudf::experimental::dispatch_void_if_compound_t>;

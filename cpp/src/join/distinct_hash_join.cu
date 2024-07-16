@@ -47,7 +47,6 @@ namespace cudf {
 namespace detail {
 namespace {
 
-template <cudf::has_nested HasNested>
 auto prepare_device_equal(
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> build,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> probe,
@@ -57,7 +56,7 @@ auto prepare_device_equal(
 {
   auto const two_table_equal =
     cudf::experimental::row::equality::two_table_comparator(probe, build);
-  auto const d_comparator =
+  auto d_comparator =
     two_table_equal.equal_to(column_types, nullate::DYNAMIC{has_nulls}, compare_nulls);
   using ret_type = std::variant<
     comparator_adapter<cudf::experimental::row::equality::strong_index_comparator_adapter<
@@ -79,7 +78,12 @@ auto prepare_device_equal(
         cudf::experimental::row::equality::nan_equal_physical_equality_comparator,
         cudf::experimental::dispatch_void_if_compound_t>>>>;
   return std::visit(
-    [&](auto&& comparator) { return static_cast<ret_type>(comparator_adapter{comparator}); },
+    [&](auto&& comparator) {
+      return ret_type{
+        std::in_place_type<
+          comparator_adapter<typename std::remove_reference<decltype(comparator)>::type>>,
+        comparator};
+    },
     d_comparator);
 }
 
@@ -141,8 +145,21 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
     build_column_types.insert(col.type().id());
   }
 
+  auto comparators = prepare_device_equal(
+    _preprocessed_build, _preprocessed_probe, has_nulls, compare_nulls, build_column_types);
   std::visit(
     [&](auto&& comparator_adapter) {
+      // auto other_static_set =
+      //   cuco::static_set{build.num_rows(),
+      //                    CUCO_DESIRED_LOAD_FACTOR,
+      //                    cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
+      //                                               rhs_index_type{JoinNoneValue}}},
+      //                    comparator_adapter,
+      //                    distinct_hash_join::probing_scheme_type(),
+      //                    cuco::thread_scope_device,
+      //                    cuco_storage_type{},
+      //                    cudf::detail::cuco_allocator{stream},
+      //                    stream.value()};
       using static_set_type =
         cuco::static_set<cuco::pair<hash_value_type, rhs_index_type>,
                          cuco::extent<size_type>,
@@ -151,20 +168,21 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
                          distinct_hash_join::probing_scheme_type,
                          cudf::detail::cuco_allocator,
                          distinct_hash_join::cuco_storage_type>;
-      this->_hash_table = std::make_unique<hash_table_type>(std::in_place_type_t<static_set_type>{
+      // static_assert(std::is_same_v<static_set_type, decltype(other_static_set)>);
+      this->_hash_table = std::make_unique<hash_table_type>(
+        std::in_place_type<static_set_type>,
         cuco::extent{build.num_rows()},
         CUCO_DESIRED_LOAD_FACTOR,
         cuco::empty_key{
           cuco::pair{std::numeric_limits<hash_value_type>::max(), rhs_index_type{JoinNoneValue}}},
         comparator_adapter,
-        static_set_type::probing_scheme_type(),
+        distinct_hash_join::probing_scheme_type(),
         cuda::thread_scope_device,
         distinct_hash_join::cuco_storage_type{},
         cudf::detail::cuco_allocator{stream},
-        stream});
+        stream);
     },
-    prepare_device_equal<HasNested>(
-      _preprocessed_build, _preprocessed_probe, has_nulls, compare_nulls, build_column_types));
+    comparators);
 
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != this->_build.num_columns(), "Hash join build table is empty");
