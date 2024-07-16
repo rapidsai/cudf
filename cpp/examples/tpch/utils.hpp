@@ -431,7 +431,7 @@ int32_t days_since_epoch(int year, int month, int day)
   return static_cast<int32_t>(diff);
 }
 
-struct tpch_args_t {
+struct tpch_example_args {
   std::string dataset_dir;
   std::string memory_resource_type;
 };
@@ -442,7 +442,7 @@ struct tpch_args_t {
  * @param argc The number of command line arguments
  * @param argv The command line arguments
  */
-tpch_args_t parse_args(int argc, char const** argv)
+tpch_example_args parse_args(int argc, char const** argv)
 {
   if (argc < 3) {
     std::string usage_message = R"(
@@ -453,7 +453,7 @@ tpch_args_t parse_args(int argc, char const** argv)
     )";
     throw std::runtime_error(usage_message);
   }
-  tpch_args_t args;
+  tpch_example_args args;
   args.dataset_dir          = argv[1];
   args.memory_resource_type = argv[2];
   return args;
@@ -473,13 +473,13 @@ class Timer {
 
   Timer() { reset(); }
   void reset() { start_time = std::chrono::high_resolution_clock::now(); }
-  auto const elapsed() { return (std::chrono::high_resolution_clock::now() - start_time); }
-  void const print_elapsed_micros()
+  auto elapsed() const { return (std::chrono::high_resolution_clock::now() - start_time); }
+  void print_elapsed_micros() const
   {
     std::cout << "Elapsed Time: " << std::chrono::duration_cast<micros>(elapsed()).count()
               << "us\n\n";
   }
-  void const print_elapsed_millis()
+  void print_elapsed_millis() const
   {
     std::cout << "Elapsed Time: " << std::chrono::duration_cast<millis>(elapsed()).count()
               << "ms\n\n";
