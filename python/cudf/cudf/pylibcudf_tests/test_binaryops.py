@@ -1,5 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+import math
+
 import numpy as np
 import pyarrow as pa
 import pytest
@@ -381,10 +383,21 @@ def test_log_base(pa_data, plc_data):
     ids=idfn,
 )
 def test_atan2(pa_data, plc_data):
+    def atan2(x, y):
+        x = x.to_pylist()
+        y = y.to_pylist()
+
+        def atan2_none_safe(x, y):
+            if x is None or y is None:
+                return None
+            return math.atan2(x, y)
+
+        return pa.array([atan2_none_safe(x, y) for x, y in zip(x, y)])
+
     _test_binaryop_inner(
         pa_data,
         plc_data,
-        pa.compute.atan2,
+        atan2,
         plc.binaryop.BinaryOperator.ATAN2,
     )
 
