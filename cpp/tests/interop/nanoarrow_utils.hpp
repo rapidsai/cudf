@@ -255,8 +255,7 @@ std::enable_if_t<std::is_same_v<T, bool>, nanoarrow::UniqueArray> get_nanoarrow_
     ArrowBitmap out;
     ArrowBitmapInit(&out);
     NANOARROW_THROW_NOT_OK(ArrowBitmapResize(&out, b.size(), 1));
-    out.buffer.size_bytes = (b.size() >> 3) + ((b.size() & 7) != 0);
-    out.size_bits         = b.size();
+    std::memset(out.buffer.data, 0, out.buffer.size_bytes);
 
     for (size_t i = 0; i < b.size(); ++i) {
       ArrowBitSetTo(out.buffer.data, i, static_cast<uint8_t>(b[i]));
