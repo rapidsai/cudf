@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, Any, Callable, Sequence, cast
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 from typing_extensions import Self
@@ -13,7 +12,6 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import pylibcudf
-from cudf._lib.types import size_type_dtype
 from cudf.api.types import (
     is_bool_dtype,
     is_float_dtype,
@@ -131,12 +129,8 @@ class NumericalColumn(NumericalBaseColumn):
             and self.dtype.kind in {"c", "f"}
             and np.isnan(value)
         ):
-            return column.as_column(
-                cp.argwhere(
-                    cp.isnan(self.data_array_view(mode="read"))
-                ).flatten(),
-                dtype=size_type_dtype,
-            )
+            nan_col = libcudf.unary.is_nan(self)
+            return nan_col.indices_of(True)
         else:
             return super().indices_of(value)
 
