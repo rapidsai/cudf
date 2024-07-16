@@ -3772,6 +3772,6 @@ def test_parquet_reader_pandas_compatibility():
     )
     buffer = BytesIO()
     df.to_parquet(buffer)
-    with cudf.option_context("mode.pandas_compatible", True):
+    with cudf.option_context("io.parquet.low_memory", True):
         expected = cudf.read_parquet(buffer)
     assert_eq(expected, df)

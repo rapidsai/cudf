@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, Any, Callable, Sequence, cast
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 from typing_extensions import Self
@@ -13,9 +12,7 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import pylibcudf
-from cudf._lib.types import size_type_dtype
 from cudf.api.types import (
-    is_bool_dtype,
     is_float_dtype,
     is_integer,
     is_integer_dtype,
@@ -131,12 +128,8 @@ class NumericalColumn(NumericalBaseColumn):
             and self.dtype.kind in {"c", "f"}
             and np.isnan(value)
         ):
-            return column.as_column(
-                cp.argwhere(
-                    cp.isnan(self.data_array_view(mode="read"))
-                ).flatten(),
-                dtype=size_type_dtype,
-            )
+            nan_col = libcudf.unary.is_nan(self)
+            return nan_col.indices_of(True)
         else:
             return super().indices_of(value)
 
@@ -165,7 +158,7 @@ class NumericalColumn(NumericalBaseColumn):
             else as_column(value)
         )
 
-        if not is_bool_dtype(self.dtype) and is_bool_dtype(device_value.dtype):
+        if self.dtype.kind != "b" and device_value.dtype.kind == "b":
             raise TypeError(f"Invalid value {value} for dtype {self.dtype}")
         else:
             device_value = device_value.astype(self.dtype)
@@ -270,7 +263,7 @@ class NumericalColumn(NumericalBaseColumn):
                     f"{self.dtype.type.__name__} and "
                     f"{other.dtype.type.__name__}"
                 )
-            if is_bool_dtype(self.dtype) or is_bool_dtype(other.dtype):
+            if self.dtype.kind == "b" or other.dtype.kind == "b":
                 out_dtype = "bool"
 
         if (
