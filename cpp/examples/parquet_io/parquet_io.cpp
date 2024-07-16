@@ -16,7 +16,7 @@
 
 #include "parquet_io.hpp"
 
-#include <cudf/utilities/timer.hpp>
+#include "../utilities/timer.hpp"
 
 /**
  * @file parquet_io.cpp
