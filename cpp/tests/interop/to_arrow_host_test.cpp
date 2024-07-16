@@ -27,6 +27,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/interop.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
@@ -38,6 +39,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <iostream>
+#include <numeric>
 
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 
@@ -448,3 +450,372 @@ TEST_F(ToArrowHostDeviceTest, StructColumn)
 
   ArrowArrayViewReset(&expected);
 }
+
+template <typename T>
+using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;
+
+TEST_F(ToArrowHostDeviceTest, FixedPoint64Table)
+{
+  using namespace numeric;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const col   = fp_wrapper<int64_t>({-1, 2, 3, 4, 5, 6}, scale_type{scale});
+    auto const input = cudf::table_view({col});
+
+    auto const data = std::vector<__int128_t>{-1, 2, 3, 4, 5, 6};
+    nanoarrow::UniqueSchema expected_schema;
+    ArrowSchemaInit(expected_schema.get());
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(expected_schema.get(), 1));
+    ArrowSchemaInit(expected_schema->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
+                                                     NANOARROW_TYPE_DECIMAL128,
+                                                     cudf::detail::max_precision<int64_t>(),
+                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
+    expected_schema->children[0]->flags = 0;
+
+    nanoarrow::UniqueArray expected_array;
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(expected_array.get(), expected_schema.get(), nullptr));
+    expected_array->length = input.num_rows();
+
+    get_nanoarrow_array<__int128_t>(data).move(expected_array->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowArrayFinishBuildingDefault(expected_array.get(), nullptr));
+
+    auto got_arrow_host = cudf::to_arrow_host(input);
+    EXPECT_EQ(ARROW_DEVICE_CPU, got_arrow_host->device_type);
+    EXPECT_EQ(-1, got_arrow_host->device_id);
+    EXPECT_EQ(nullptr, got_arrow_host->sync_event);
+
+    ArrowArrayView expected, actual;
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&expected, expected_schema.get(), nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&expected, expected_array.get(), nullptr));
+
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&actual, expected_schema.get(), nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&actual, &got_arrow_host->array, nullptr));
+    compare_arrays(&expected, &actual);
+    ArrowArrayViewReset(&actual);
+
+    got_arrow_host = cudf::to_arrow_host(input.column(0));
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayViewInitFromSchema(&actual, expected_schema->children[0], nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&actual, &got_arrow_host->array, nullptr));
+    compare_arrays(expected.children[0], &actual);
+    ArrowArrayViewReset(&actual);
+
+    ArrowArrayViewReset(&expected);
+  }
+}
+
+TEST_F(ToArrowHostDeviceTest, FixedPoint128Table)
+{
+  using namespace numeric;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const col   = fp_wrapper<__int128_t>({-1, 2, 3, 4, 5, 6}, scale_type{scale});
+    auto const input = cudf::table_view({col});
+
+    auto const data = std::vector<__int128_t>{-1, 2, 3, 4, 5, 6};
+
+    nanoarrow::UniqueSchema expected_schema;
+    ArrowSchemaInit(expected_schema.get());
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(expected_schema.get(), 1));
+    ArrowSchemaInit(expected_schema->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
+                                                     NANOARROW_TYPE_DECIMAL128,
+                                                     cudf::detail::max_precision<__int128_t>(),
+                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
+    expected_schema->children[0]->flags = 0;
+
+    nanoarrow::UniqueArray expected_array;
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(expected_array.get(), expected_schema.get(), nullptr));
+    expected_array->length = input.num_rows();
+
+    get_nanoarrow_array<__int128_t>(data).move(expected_array->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowArrayFinishBuildingDefault(expected_array.get(), nullptr));
+
+    auto got_arrow_host = cudf::to_arrow_host(input);
+    EXPECT_EQ(ARROW_DEVICE_CPU, got_arrow_host->device_type);
+    EXPECT_EQ(-1, got_arrow_host->device_id);
+    EXPECT_EQ(nullptr, got_arrow_host->sync_event);
+
+    ArrowArrayView expected, actual;
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&expected, expected_schema.get(), nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&expected, expected_array.get(), nullptr));
+
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&actual, expected_schema.get(), nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&actual, &got_arrow_host->array, nullptr));
+    compare_arrays(&expected, &actual);
+    ArrowArrayViewReset(&actual);
+
+    got_arrow_host = cudf::to_arrow_host(input.column(0));
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayViewInitFromSchema(&actual, expected_schema->children[0], nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&actual, &got_arrow_host->array, nullptr));
+    compare_arrays(expected.children[0], &actual);
+    ArrowArrayViewReset(&actual);
+
+    ArrowArrayViewReset(&expected);
+  }
+}
+
+TEST_F(ToArrowHostDeviceTest, FixedPoint64TableLarge)
+{
+  using namespace numeric;
+  auto constexpr NUM_ELEMENTS = 1000;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const iota  = thrust::make_counting_iterator(1);
+    auto const col   = fp_wrapper<int64_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
+    auto const input = cudf::table_view({col});
+
+    auto expect_data = std::vector<__int128_t>(NUM_ELEMENTS);
+    std::iota(expect_data.begin(), expect_data.end(), 1);
+
+    nanoarrow::UniqueSchema expected_schema;
+    ArrowSchemaInit(expected_schema.get());
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(expected_schema.get(), 1));
+    ArrowSchemaInit(expected_schema->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
+                                                     NANOARROW_TYPE_DECIMAL128,
+                                                     cudf::detail::max_precision<int64_t>(),
+                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
+    expected_schema->children[0]->flags = 0;
+
+    nanoarrow::UniqueArray expected_array;
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(expected_array.get(), expected_schema.get(), nullptr));
+    expected_array->length = input.num_rows();
+
+    get_nanoarrow_array<__int128_t>(expect_data).move(expected_array->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowArrayFinishBuildingDefault(expected_array.get(), nullptr));
+
+    auto got_arrow_host = cudf::to_arrow_host(input);
+    EXPECT_EQ(ARROW_DEVICE_CPU, got_arrow_host->device_type);
+    EXPECT_EQ(-1, got_arrow_host->device_id);
+    EXPECT_EQ(nullptr, got_arrow_host->sync_event);
+
+    ArrowArrayView expected, actual;
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&expected, expected_schema.get(), nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&expected, expected_array.get(), nullptr));
+
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&actual, expected_schema.get(), nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&actual, &got_arrow_host->array, nullptr));
+    compare_arrays(&expected, &actual);
+    ArrowArrayViewReset(&actual);
+
+    got_arrow_host = cudf::to_arrow_host(input.column(0));
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayViewInitFromSchema(&actual, expected_schema->children[0], nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&actual, &got_arrow_host->array, nullptr));
+    compare_arrays(expected.children[0], &actual);
+    ArrowArrayViewReset(&actual);
+
+    ArrowArrayViewReset(&expected);
+  }
+}
+
+TEST_F(ToArrowHostDeviceTest, FixedPoint128TableLarge)
+{
+  using namespace numeric;
+  auto constexpr NUM_ELEMENTS = 1000;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const iota  = thrust::make_counting_iterator(1);
+    auto const col   = fp_wrapper<__int128_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
+    auto const input = cudf::table_view({col});
+
+    auto expect_data = std::vector<__int128_t>(NUM_ELEMENTS);
+    std::iota(expect_data.begin(), expect_data.end(), 1);
+
+    nanoarrow::UniqueSchema expected_schema;
+    ArrowSchemaInit(expected_schema.get());
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(expected_schema.get(), 1));
+    ArrowSchemaInit(expected_schema->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
+                                                     NANOARROW_TYPE_DECIMAL128,
+                                                     cudf::detail::max_precision<__int128_t>(),
+                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
+    expected_schema->children[0]->flags = 0;
+
+    nanoarrow::UniqueArray expected_array;
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(expected_array.get(), expected_schema.get(), nullptr));
+    expected_array->length = input.num_rows();
+
+    get_nanoarrow_array<__int128_t>(expect_data).move(expected_array->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowArrayFinishBuildingDefault(expected_array.get(), nullptr));
+
+    auto got_arrow_host = cudf::to_arrow_host(input);
+    EXPECT_EQ(ARROW_DEVICE_CPU, got_arrow_host->device_type);
+    EXPECT_EQ(-1, got_arrow_host->device_id);
+    EXPECT_EQ(nullptr, got_arrow_host->sync_event);
+
+    ArrowArrayView expected, actual;
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&expected, expected_schema.get(), nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&expected, expected_array.get(), nullptr));
+
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&actual, expected_schema.get(), nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&actual, &got_arrow_host->array, nullptr));
+    compare_arrays(&expected, &actual);
+    ArrowArrayViewReset(&actual);
+
+    got_arrow_host = cudf::to_arrow_host(input.column(0));
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayViewInitFromSchema(&actual, expected_schema->children[0], nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&actual, &got_arrow_host->array, nullptr));
+    compare_arrays(expected.children[0], &actual);
+    ArrowArrayViewReset(&actual);
+
+    ArrowArrayViewReset(&expected);
+  }
+}
+
+TEST_F(ToArrowHostDeviceTest, FixedPoint64TableNullsSimple)
+{
+  using namespace numeric;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const data     = std::vector<__int128_t>{1, 2, 3, 4, 5, 6, 0, 0};
+    auto const validity = std::vector<uint8_t>{1, 1, 1, 1, 1, 1, 0, 0};
+    auto const col =
+      fp_wrapper<int64_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
+    auto const input = cudf::table_view({col});
+
+    nanoarrow::UniqueSchema expected_schema;
+    ArrowSchemaInit(expected_schema.get());
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(expected_schema.get(), 1));
+    ArrowSchemaInit(expected_schema->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
+                                                     NANOARROW_TYPE_DECIMAL128,
+                                                     cudf::detail::max_precision<int64_t>(),
+                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
+    expected_schema->children[0]->flags = 0;
+
+    nanoarrow::UniqueArray expected_array;
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(expected_array.get(), expected_schema.get(), nullptr));
+    expected_array->length = input.num_rows();
+
+    get_nanoarrow_array<__int128_t>(data, validity).move(expected_array->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowArrayFinishBuildingDefault(expected_array.get(), nullptr));
+
+    auto got_arrow_host = cudf::to_arrow_host(input);
+    EXPECT_EQ(ARROW_DEVICE_CPU, got_arrow_host->device_type);
+    EXPECT_EQ(-1, got_arrow_host->device_id);
+    EXPECT_EQ(nullptr, got_arrow_host->sync_event);
+
+    ArrowArrayView expected, actual;
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&expected, expected_schema.get(), nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&expected, expected_array.get(), nullptr));
+
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&actual, expected_schema.get(), nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&actual, &got_arrow_host->array, nullptr));
+    compare_arrays(&expected, &actual);
+    ArrowArrayViewReset(&actual);
+
+    got_arrow_host = cudf::to_arrow_host(input.column(0));
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayViewInitFromSchema(&actual, expected_schema->children[0], nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&actual, &got_arrow_host->array, nullptr));
+    compare_arrays(expected.children[0], &actual);
+    ArrowArrayViewReset(&actual);
+
+    ArrowArrayViewReset(&expected);
+  }
+}
+
+TEST_F(ToArrowHostDeviceTest, FixedPoint128TableNullsSimple)
+{
+  using namespace numeric;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const data     = std::vector<__int128_t>{1, 2, 3, 4, 5, 6, 0, 0};
+    auto const validity = std::vector<uint8_t>{1, 1, 1, 1, 1, 1, 0, 0};
+    auto const col =
+      fp_wrapper<__int128_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
+    auto const input = cudf::table_view({col});
+
+    nanoarrow::UniqueSchema expected_schema;
+    ArrowSchemaInit(expected_schema.get());
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(expected_schema.get(), 1));
+    ArrowSchemaInit(expected_schema->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
+                                                     NANOARROW_TYPE_DECIMAL128,
+                                                     cudf::detail::max_precision<__int128_t>(),
+                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
+    expected_schema->children[0]->flags = 0;
+
+    nanoarrow::UniqueArray expected_array;
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(expected_array.get(), expected_schema.get(), nullptr));
+    expected_array->length = input.num_rows();
+
+    get_nanoarrow_array<__int128_t>(data, validity).move(expected_array->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowArrayFinishBuildingDefault(expected_array.get(), nullptr));
+
+    auto got_arrow_host = cudf::to_arrow_host(input);
+    EXPECT_EQ(ARROW_DEVICE_CPU, got_arrow_host->device_type);
+    EXPECT_EQ(-1, got_arrow_host->device_id);
+    EXPECT_EQ(nullptr, got_arrow_host->sync_event);
+
+    ArrowArrayView expected, actual;
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&expected, expected_schema.get(), nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&expected, expected_array.get(), nullptr));
+
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&actual, expected_schema.get(), nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&actual, &got_arrow_host->array, nullptr));
+    compare_arrays(&expected, &actual);
+    ArrowArrayViewReset(&actual);
+
+    got_arrow_host = cudf::to_arrow_host(input.column(0));
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayViewInitFromSchema(&actual, expected_schema->children[0], nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&actual, &got_arrow_host->array, nullptr));
+    compare_arrays(expected.children[0], &actual);
+    ArrowArrayViewReset(&actual);
+
+    ArrowArrayViewReset(&expected);
+  }
+}
+
+struct ToArrowHostDeviceTestSlice
+  : public ToArrowHostDeviceTest,
+    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {};
+
+TEST_P(ToArrowHostDeviceTestSlice, SliceTest)
+{
+  auto [table, expected_schema, expected_array] = get_nanoarrow_host_tables(10000);
+  auto cudf_table_view        = table->view();
+  auto const [start, end]     = GetParam();
+
+  auto sliced_cudf_table = cudf::slice(cudf_table_view, {start, end})[0];
+  auto got_arrow_host    = cudf::to_arrow_host(sliced_cudf_table);
+  EXPECT_EQ(ARROW_DEVICE_CPU, got_arrow_host->device_type);
+  EXPECT_EQ(-1, got_arrow_host->device_id);
+  EXPECT_EQ(nullptr, got_arrow_host->sync_event);
+
+  ArrowArrayView expected, actual;
+  NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&expected, expected_schema.get(), nullptr));
+  NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&expected, expected_array.get(), nullptr));
+
+  NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&actual, expected_schema.get(), nullptr));
+  NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&actual, &got_arrow_host->array, nullptr));
+  compare_arrays(&expected, &actual);
+  ArrowArrayViewReset(&actual);
+
+  ArrowArrayViewReset(&expected);
+}
+
+INSTANTIATE_TEST_CASE_P(ToArrowHostDeviceTest,
+                        ToArrowHostDeviceTestSlice,
+                        ::testing::Values(std::make_tuple(0, 10000),
+                                          std::make_tuple(100, 3000),
+                                          std::make_tuple(0, 0),
+                                          std::make_tuple(0, 3000)));
