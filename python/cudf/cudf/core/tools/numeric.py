@@ -8,12 +8,7 @@ import pandas as pd
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import strings as libstrings
-from cudf.api.types import (
-    _is_non_decimal_numeric_dtype,
-    is_datetime_dtype,
-    is_string_dtype,
-    is_timedelta_dtype,
-)
+from cudf.api.types import _is_non_decimal_numeric_dtype, is_string_dtype
 from cudf.core.column import as_column
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import can_convert_to_column
@@ -114,7 +109,7 @@ def to_numeric(arg, errors="raise", downcast=None):
     col = as_column(arg)
     dtype = col.dtype
 
-    if is_datetime_dtype(dtype) or is_timedelta_dtype(dtype):
+    if dtype.kind in "mM":
         col = col.astype(cudf.dtype("int64"))
     elif isinstance(dtype, CategoricalDtype):
         cat_dtype = col.dtype.type

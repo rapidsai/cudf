@@ -174,6 +174,21 @@ def is_nested_list(typ):
     return nesting_level(typ)[0] > 1
 
 
+def write_source_str(source, input_str):
+    """
+    Write a string to the source
+    (useful for testing CSV/JSON I/O)
+    """
+    if not isinstance(source, io.IOBase):
+        with open(source, "w") as source_f:
+            source_f.write(input_str)
+    else:
+        if isinstance(source, io.BytesIO):
+            input_str = input_str.encode("utf-8")
+        source.write(input_str)
+        source.seek(0)
+
+
 def sink_to_str(sink):
     """
     Takes a sink (e.g. StringIO/BytesIO, filepath, etc.)
@@ -190,6 +205,31 @@ def sink_to_str(sink):
         sink.seek(0)
         str_result = sink.read()
     return str_result
+
+
+def make_source(path_or_buf, pa_table, format, **kwargs):
+    """
+    Write a pyarrow Table to a specific format using pandas
+    by dispatching to the appropriate to_* call.
+    The caller is responsible for making sure that no arguments
+    unsupported by pandas are passed in.
+    """
+    df = pa_table.to_pandas()
+    mode = "w"
+    if "compression" in kwargs:
+        kwargs["compression"] = COMPRESSION_TYPE_TO_PANDAS[
+            kwargs["compression"]
+        ]
+        if kwargs["compression"] is not None and format != "json":
+            # pandas json method only supports mode="w"/"a"
+            mode = "wb"
+    if format == "json":
+        df.to_json(path_or_buf, mode=mode, **kwargs)
+    elif format == "csv":
+        df.to_csv(path_or_buf, mode=mode, **kwargs)
+    if isinstance(path_or_buf, io.IOBase):
+        path_or_buf.seek(0)
+    return path_or_buf
 
 
 NUMERIC_PA_TYPES = [pa.int64(), pa.float64(), pa.uint64()]
