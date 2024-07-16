@@ -6,7 +6,6 @@ import re
 import warnings
 from typing import Literal, Sequence
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 import pandas.tseries.offsets as pd_offset
@@ -894,7 +893,7 @@ def date_range(
         # integers and divide the number range evenly with `periods` elements.
         start = cudf.Scalar(start, dtype=dtype).value.astype("int64")
         end = cudf.Scalar(end, dtype=dtype).value.astype("int64")
-        arr = cp.linspace(start=start, stop=end, num=periods)
+        arr = np.linspace(start=start, stop=end, num=periods)
         result = cudf.core.column.as_column(arr).astype("datetime64[ns]")
         return cudf.DatetimeIndex._from_data({name: result}).tz_localize(tz)
 
@@ -991,8 +990,10 @@ def date_range(
         stop = end_estim.astype("int64")
         start = start.value.astype("int64")
         step = _offset_to_nanoseconds_lower_bound(offset)
-        arr = cp.arange(start=start, stop=stop, step=step, dtype="int64")
-        res = cudf.core.column.as_column(arr).astype("datetime64[ns]")
+        arr = range(int(start), int(stop), step)
+        res = cudf.core.column.as_column(arr, dtype="int64").astype(
+            "datetime64[ns]"
+        )
 
     return cudf.DatetimeIndex._from_data({name: res}, freq=freq).tz_localize(
         tz

@@ -217,7 +217,7 @@ class memory_mapped_source : public file_source {
 
   void map(int fd, size_t offset, size_t size)
   {
-    CUDF_EXPECTS(offset < _file.size(), "Offset is past end of file");
+    CUDF_EXPECTS(offset < _file.size(), "Offset is past end of file", std::overflow_error);
 
     // Offset for `mmap()` must be page aligned
     _map_offset = offset & ~(sysconf(_SC_PAGESIZE) - 1);
