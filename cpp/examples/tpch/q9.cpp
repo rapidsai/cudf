@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "../utilities/timer.hpp"
 #include "utils.hpp"
 
 #include <cudf/column/column.hpp>
@@ -21,7 +22,6 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/timer.hpp>
 
 /**
  * @file q9.cpp

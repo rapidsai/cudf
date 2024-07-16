@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+#include "../utilities/timer.hpp"
 #include "utils.hpp"
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/utilities/timer.hpp>
 
 /**
  * @file q1.cpp
