@@ -48,7 +48,7 @@ _WRAPPER_ASSIGNMENTS = tuple(
 )
 
 
-class ProxyNDarray(np.ndarray):
+class ProxyNDarrayBase(np.ndarray):
     def __new__(cls, arr):
         if isinstance(arr, cp.ndarray):
             obj = np.asarray(arr.get()).view(cls)
@@ -60,6 +60,9 @@ class ProxyNDarray(np.ndarray):
             raise TypeError(
                 "Unsupported array type. Must be numpy.ndarray or cupy.ndarray"
             )
+
+    def __array_finalize__(self, obj):
+        self._fsproxy_wrapped = getattr(obj, "_fsproxy_wrapped", None)
 
 
 def callers_module_name():
@@ -580,7 +583,7 @@ class _FinalProxy(_FastSlowProxy):
         need particular behaviour when wrapped up.
         """
         if np.ndarray in cls.__mro__:
-            proxy = ProxyNDarray.__new__(cls, value)
+            proxy = ProxyNDarrayBase.__new__(cls, value)
             proxy._fsproxy_wrapped = value
         else:
             proxy = object.__new__(cls)
