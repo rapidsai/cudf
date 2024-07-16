@@ -13,7 +13,6 @@ from cudf._lib.types cimport dtype_to_pylibcudf_type
 import errno
 import os
 from collections import abc
-from enum import IntEnum
 from io import BytesIO, StringIO
 
 import numpy as np
@@ -22,7 +21,6 @@ import pandas as pd
 import cudf
 from cudf.core.buffer import acquire_spill_lock
 
-from libc.stdint cimport int32_t
 from libcpp cimport bool
 
 from cudf._lib.io.utils cimport make_sink_info
@@ -41,33 +39,6 @@ import cudf._lib.pylibcudf as plc
 from cudf.api.types import is_hashable
 
 from cudf._lib.pylibcudf.types cimport DataType
-
-ctypedef int32_t underlying_type_t_compression
-
-
-class Compression(IntEnum):
-    INFER = (
-        <underlying_type_t_compression> compression_type.AUTO
-    )
-    SNAPPY = (
-        <underlying_type_t_compression> compression_type.SNAPPY
-    )
-    GZIP = (
-        <underlying_type_t_compression> compression_type.GZIP
-    )
-    BZ2 = (
-        <underlying_type_t_compression> compression_type.BZIP2
-    )
-    BROTLI = (
-        <underlying_type_t_compression> compression_type.BROTLI
-    )
-    ZIP = (
-        <underlying_type_t_compression> compression_type.ZIP
-    )
-    XZ = (
-        <underlying_type_t_compression> compression_type.XZ
-    )
-
 
 CSV_HEX_TYPE_MAP = {
     "hex": np.dtype("int64"),
@@ -175,7 +146,7 @@ def read_csv(
     if delimiter is None:
         delimiter = sep
 
-    delimiter = str(delimiter) if isinstance(delimiter, np.str_) else delimiter
+    delimiter = str(delimiter)
 
     if byte_range is None:
         byte_range = (0, 0)
@@ -183,11 +154,13 @@ def read_csv(
     if compression is None:
         c_compression = compression_type.NONE
     else:
-        compression = str(compression)
-        compression = Compression[compression.upper()]
-        c_compression = <compression_type> (
-            <underlying_type_t_compression> compression
-        )
+        compression_map = {
+            "infer": compression_type.AUTO,
+            "gzip": compression_type.GZIP,
+            "bz2": compression_type.BZIP2,
+            "zip": compression_type.ZIP,
+        }
+        c_compression = compression_map[compression]
 
     # We need this later when setting index cols
     orig_header = header
@@ -247,11 +220,7 @@ def read_csv(
                 "dtype should be a scalar/str/list-like/dict-like"
             )
 
-    lineterminator = (
-        str(lineterminator)
-        if isinstance(lineterminator, np.str_)
-        else lineterminator
-    )
+    lineterminator = str(lineterminator)
 
     df = cudf.DataFrame._from_data(
         *data_from_pylibcudf_io(

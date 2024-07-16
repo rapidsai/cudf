@@ -20,6 +20,22 @@ from cudf._lib.pylibcudf.libcudf.types cimport data_type, size_type
 from cudf._lib.pylibcudf.types cimport DataType
 
 
+cdef tuple _process_parse_dates_hex(list cols):
+    cdef vector[string] str_cols
+    cdef vector[int] int_cols
+    for col in cols:
+        if isinstance(col, str):
+            str_cols.push_back(col.encode())
+        else:
+            int_cols.push_back(col)
+    return str_cols, int_cols
+
+cdef vector[string] _make_str_vector(list vals):
+    cdef vector[string] res
+    for val in vals:
+        res.push_back((<str?>val).encode())
+    return res
+
 cpdef TableWithMetadata read_csv(
     SourceInfo source_info,
     compression_type compression = compression_type.AUTO,
@@ -56,12 +72,12 @@ cpdef TableWithMetadata read_csv(
     bool na_filter = True,
     bool dayfirst = False,
     # Note: These options are supported by the libcudf reader
-    # but are not exposed here (since there is no demand for them
-    # on the Python side yet)
+    # but are not exposed here since there is no demand for them
+    # on the Python side yet.
     # bool detect_whitespace_around_quotes = False,
     # DataType timestamp_type = DataType(type_id.EMPTY),
 ):
-    """Reads an CSV file into a :py:class:`~.types.TableWithMetadata`.
+    """Reads a CSV file into a :py:class:`~.types.TableWithMetadata`.
 
     Parameters
     ----------
@@ -144,18 +160,12 @@ cpdef TableWithMetadata read_csv(
     TableWithMetadata
         The Table and its corresponding metadata (column names) that were read in.
     """
-    cdef vector[string] c_names
-    cdef vector[int] c_use_cols_indexes
-    cdef vector[string] c_use_cols_names
     cdef vector[string] c_parse_dates_names
     cdef vector[int] c_parse_dates_indexes
     cdef vector[int] c_parse_hex_names
     cdef vector[int] c_parse_hex_indexes
     cdef vector[data_type] c_dtypes_list
     cdef map[string, data_type] c_dtypes_map
-    cdef vector[string] c_true_values
-    cdef vector[string] c_false_values
-    cdef vector[string] c_na_values
 
     cdef csv_reader_options options = move(
         csv_reader_options.builder(source_info.c_obj)
@@ -183,27 +193,16 @@ cpdef TableWithMetadata read_csv(
     options.set_header(header)
 
     if col_names is not None:
-        c_names.reserve(len(col_names))
-        for name in col_names:
-            c_names.push_back(str(name).encode())
-        options.set_names(c_names)
+        options.set_names([str(name).encode() for name in col_names])
 
     if prefix is not None:
         options.set_prefix(prefix.encode())
 
     if usecols is not None:
-        all_int = all([isinstance(col, int) for col in usecols])
-        if all_int:
-            c_use_cols_indexes.reserve(len(usecols))
-            c_use_cols_indexes = usecols
-            options.set_use_cols_indexes(c_use_cols_indexes)
+        if all([isinstance(col, int) for col in usecols]):
+            options.set_use_cols_indexes(list(usecols))
         else:
-            c_use_cols_names.reserve(len(usecols))
-            for col_name in usecols:
-                c_use_cols_names.push_back(
-                    str(col_name).encode()
-                )
-            options.set_use_cols_names(c_use_cols_names)
+            options.set_use_cols_names([str(name).encode() for name in usecols])
 
     if delimiter is not None:
         options.set_delimiter(ord(delimiter))
@@ -215,75 +214,48 @@ cpdef TableWithMetadata read_csv(
         options.set_comment(ord(comment))
 
     if parse_dates is not None:
-        for col in parse_dates:
-            if isinstance(col, str):
-                c_parse_dates_names.push_back(col.encode())
-            elif isinstance(col, int):
-                c_parse_dates_indexes.push_back(col)
-            else:
-                raise NotImplementedError(
+        if not all([isinstance(col, (str, int)) for col in parse_dates]):
+            raise NotImplementedError(
                     "`parse_dates`: Must pass a list of column names/indices")
 
         # Set both since users are allowed to mix column names and indices
+        c_parse_dates_names, c_parse_dates_indexes = \
+            _process_parse_dates_hex(parse_dates)
         options.set_parse_dates(c_parse_dates_names)
         options.set_parse_dates(c_parse_dates_indexes)
 
     if parse_hex is not None:
-        for col in parse_hex:
-            if isinstance(col, str):
-                c_parse_hex_names.push_back(col.encode())
-            elif isinstance(col, int):
-                c_parse_hex_indexes.push_back(col)
-            else:
-                raise NotImplementedError(
+        if not all([isinstance(col, (str, int)) for col in parse_hex]):
+            raise NotImplementedError(
                     "`parse_hex`: Must pass a list of column names/indices")
+
         # Set both since users are allowed to mix column names and indices
+        c_parse_hex_names, c_parse_hex_indexes = _process_parse_dates_hex(parse_hex)
         options.set_parse_hex(c_parse_hex_names)
         options.set_parse_hex(c_parse_hex_indexes)
 
     cdef string k_str
     if isinstance(dtypes, list):
         for dtype in dtypes:
-            if not isinstance(dtype, DataType):
-                raise TypeError("If passing list to read_csv, "
-                                "all elements must be of type `DataType`!")
-            c_dtypes_list.push_back((<DataType>dtype).c_obj)
+            c_dtypes_list.push_back((<DataType?>dtype).c_obj)
         options.set_dtypes(c_dtypes_list)
     elif isinstance(dtypes, dict):
         # dtypes_t is dict
         for k, v in dtypes.items():
             k_str = str(k).encode()
-            if not isinstance(v, DataType):
-                raise TypeError("If passing dict to read_csv, "
-                                "all values must be of type `DataType`!")
-            c_dtypes_map[k_str] = (<DataType>v).c_obj
+            c_dtypes_map[k_str] = (<DataType?>v).c_obj
         options.set_dtypes(c_dtypes_map)
     elif dtypes is not None:
         raise TypeError("dtypes must either by a list/dict")
 
     if true_values is not None:
-        c_true_values.reserve(len(true_values))
-        for tv in true_values:
-            if not isinstance(tv, str):
-                raise TypeError("true_values must be a list of str!")
-            c_true_values.push_back(tv.encode())
-        options.set_true_values(c_true_values)
+        options.set_true_values(_make_str_vector(true_values))
 
     if false_values is not None:
-        c_false_values.reserve(len(false_values))
-        for fv in false_values:
-            if not isinstance(fv, str):
-                raise TypeError("false_values must be a list of str!")
-            c_false_values.push_back(fv.encode())
-        options.set_false_values(c_false_values)
+        options.set_false_values(_make_str_vector(false_values))
 
     if na_values is not None:
-        c_na_values.reserve(len(na_values))
-        for nv in na_values:
-            if not isinstance(nv, str):
-                raise TypeError("na_values must be a list of str!")
-            c_na_values.push_back(nv.encode())
-        options.set_na_values(c_na_values)
+        options.set_na_values(_make_str_vector(na_values))
 
     cdef table_with_metadata c_result
     with nogil:
