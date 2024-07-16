@@ -152,16 +152,16 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
                          cudf::detail::cuco_allocator,
                          distinct_hash_join::cuco_storage_type>;
       this->_hash_table = std::make_unique<hash_table_type>(std::in_place_type_t<static_set_type>{
-        build.num_rows(),
+        cuco::extent{build.num_rows()},
         CUCO_DESIRED_LOAD_FACTOR,
         cuco::empty_key{
           cuco::pair{std::numeric_limits<hash_value_type>::max(), rhs_index_type{JoinNoneValue}}},
         comparator_adapter,
         static_set_type::probing_scheme_type(),
-        cuco::thread_scope_device,
+        cuda::thread_scope_device,
         distinct_hash_join::cuco_storage_type{},
         cudf::detail::cuco_allocator{stream},
-        stream.value()});
+        stream});
     },
     prepare_device_equal<HasNested>(
       _preprocessed_build, _preprocessed_probe, has_nulls, compare_nulls, build_column_types));
