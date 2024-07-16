@@ -19,7 +19,7 @@ from cudf._lib.stream_compaction import (
 )
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
-from cudf.api.types import is_bool_dtype, is_integer, is_list_like, is_scalar
+from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.errors import MixedTypeError
@@ -602,10 +602,8 @@ class BaseIndex(Serializable):
             )
 
         if cudf.get_option("mode.pandas_compatible"):
-            if (
-                is_bool_dtype(self.dtype) and not is_bool_dtype(other.dtype)
-            ) or (
-                not is_bool_dtype(self.dtype) and is_bool_dtype(other.dtype)
+            if (self.dtype.kind == "b" and other.dtype.kind != "b") or (
+                self.dtype.kind != "b" and other.dtype.kind == "b"
             ):
                 # Bools + other types will result in mixed type.
                 # This is not yet consistent in pandas and specific to APIs.
@@ -2142,7 +2140,7 @@ class BaseIndex(Serializable):
         Rows corresponding to `False` is dropped.
         """
         boolean_mask = cudf.core.column.as_column(boolean_mask)
-        if not is_bool_dtype(boolean_mask.dtype):
+        if boolean_mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
         return self._from_columns_like_self(

@@ -8,11 +8,7 @@ from typing import Any, List, Union
 from typing_extensions import TypeAlias
 
 import cudf
-from cudf.api.types import (
-    _is_scalar_or_zero_d_array,
-    is_bool_dtype,
-    is_integer,
-)
+from cudf.api.types import _is_scalar_or_zero_d_array, is_integer
 from cudf.core.copy_types import BooleanMask, GatherMap
 
 
@@ -229,7 +225,7 @@ def parse_row_iloc_indexer(key: Any, n: int) -> IndexingSpec:
         key = cudf.core.column.as_column(key)
         if isinstance(key, cudf.core.column.CategoricalColumn):
             key = key.astype(key.codes.dtype)
-        if is_bool_dtype(key.dtype):
+        if key.dtype.kind == "b":
             return MaskIndexer(BooleanMask(key, n))
         elif len(key) == 0:
             return EmptyIndexer()
