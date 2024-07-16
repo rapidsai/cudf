@@ -1534,18 +1534,7 @@ def test_date_range_start_end_periods(start, end, periods):
     )
 
 
-def test_date_range_start_end_freq(request, start, end, freq):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                start == "1831-05-08 15:23:21"
-                and end == "1996-11-21 04:05:30"
-                and freq == "110546789ms"
-            ),
-            reason="https://github.com/rapidsai/cudf/issues/12133",
-        )
-    )
-
+def test_date_range_start_end_freq(start, end, freq):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
@@ -1561,7 +1550,7 @@ def test_date_range_start_end_freq(request, start, end, freq):
     )
 
 
-def test_date_range_start_freq_periods(request, start, freq, periods):
+def test_date_range_start_freq_periods(start, freq, periods):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
