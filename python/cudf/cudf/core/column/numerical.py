@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, Any, Callable, Sequence, cast
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 from typing_extensions import Self
@@ -13,7 +12,6 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import pylibcudf
-from cudf._lib.types import size_type_dtype
 from cudf.api.types import is_bool_dtype, is_integer, is_scalar
 from cudf.core.column import (
     ColumnBase,
@@ -125,12 +123,8 @@ class NumericalColumn(NumericalBaseColumn):
             and self.dtype.kind in {"c", "f"}
             and np.isnan(value)
         ):
-            return column.as_column(
-                cp.argwhere(
-                    cp.isnan(self.data_array_view(mode="read"))
-                ).flatten(),
-                dtype=size_type_dtype,
-            )
+            nan_col = libcudf.unary.is_nan(self)
+            return nan_col.indices_of(True)
         else:
             return super().indices_of(value)
 
@@ -295,15 +289,28 @@ class NumericalColumn(NumericalBaseColumn):
         if isinstance(other, cudf.Scalar):
             if self.dtype == other.dtype:
                 return other
+
             # expensive device-host transfer just to
             # adjust the dtype
             other = other.value
+
+            # NumPy 2 needs a Python scalar to do weak promotion, but
+            # pandas forces weak promotion always
+            # TODO: We could use 0, 0.0, and 0j for promotion to avoid copies.
+            if other.dtype.kind in "ifc":
+                other = other.item()
+        elif not isinstance(other, (int, float, complex)):
+            # Go via NumPy to get the value
+            other = np.array(other)
+            if other.dtype.kind in "ifc":
+                other = other.item()
+
         # Try and match pandas and hence numpy. Deduce the common
-        # dtype via the _value_ of other, and the dtype of self. TODO:
-        # When NEP50 is accepted, this might want changed or
-        # simplified.
-        # This is not at all simple:
-        # np.result_type(np.int64(0), np.uint8)
+        # dtype via the _value_ of other, and the dtype of self on NumPy 1.x
+        # with NumPy 2, we force weak promotion even for our/NumPy scalars
+        # to match pandas 2.2.
+        # Weak promotion is not at all simple:
+        # np.result_type(0, np.uint8)
         #   => np.uint8
         # np.result_type(np.asarray([0], dtype=np.int64), np.uint8)
         #   => np.int64
@@ -620,7 +627,9 @@ class NumericalColumn(NumericalBaseColumn):
             min_, max_ = iinfo.min, iinfo.max
 
             # best we can do is hope to catch it here and avoid compare
-            if (self.min() >= min_) and (self.max() <= max_):
+            # Use Python floats, which have precise comparison for float64.
+            # NOTE(seberg): it would make sense to limit to the mantissa range.
+            if (float(self.min()) >= min_) and (float(self.max()) <= max_):
                 filled = self.fillna(0)
                 return (cudf.Series(filled) % 1 == 0).all()
             else:

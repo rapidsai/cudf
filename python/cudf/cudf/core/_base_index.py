@@ -30,6 +30,8 @@ from cudf.utils.utils import _is_same_name
 if TYPE_CHECKING:
     from collections.abc import Generator
 
+    import cupy
+
     from cudf.core.column_accessor import ColumnAccessor
 
 
@@ -1989,7 +1991,7 @@ class BaseIndex(Serializable):
             self._column_names,
         )
 
-    def duplicated(self, keep="first"):
+    def duplicated(self, keep="first") -> cupy.ndarray:
         """
         Indicate duplicate index values.
 

@@ -253,16 +253,18 @@ def to_cudf_compatible_scalar(val, dtype=None):
     elif isinstance(val, datetime.timedelta):
         val = np.timedelta64(val)
 
-    val = _maybe_convert_to_default_type(
-        cudf.api.types.pandas_dtype(type(val))
-    ).type(val)
-
     if dtype is not None:
-        if isinstance(val, str) and np.dtype(dtype).kind == "M":
+        dtype = np.dtype(dtype)
+        if isinstance(val, str) and dtype.kind == "M":
             # pd.Timestamp can handle str, but not np.str_
             val = pd.Timestamp(str(val)).to_datetime64().astype(dtype)
         else:
-            val = val.astype(dtype)
+            # At least datetimes cannot be converted to scalar via dtype.type:
+            val = np.array(val, dtype)[()]
+    else:
+        val = _maybe_convert_to_default_type(
+            cudf.api.types.pandas_dtype(type(val))
+        ).type(val)
 
     if val.dtype.type is np.datetime64:
         time_unit, _ = np.datetime_data(val.dtype)
@@ -422,9 +424,7 @@ def get_time_unit(obj):
 
 def _get_nan_for_dtype(dtype):
     dtype = cudf.dtype(dtype)
-    if pd.api.types.is_datetime64_dtype(
-        dtype
-    ) or pd.api.types.is_timedelta64_dtype(dtype):
+    if dtype.kind in "mM":
         time_unit, _ = np.datetime_data(dtype)
         return dtype.type("nat", time_unit)
     elif dtype.kind == "f":
@@ -525,16 +525,14 @@ def find_common_type(dtypes):
             return cudf.dtype("O")
 
     # Aggregate same types
-    dtypes = set(dtypes)
+    dtypes = {cudf.dtype(dtype) for dtype in dtypes}
+    if len(dtypes) == 1:
+        return dtypes.pop()
 
     if any(
         isinstance(dtype, cudf.core.dtypes.DecimalDtype) for dtype in dtypes
     ):
-        if all(
-            cudf.api.types.is_decimal_dtype(dtype)
-            or cudf.api.types.is_numeric_dtype(dtype)
-            for dtype in dtypes
-        ):
+        if all(cudf.api.types.is_numeric_dtype(dtype) for dtype in dtypes):
             return _find_common_type_decimal(
                 [
                     dtype
@@ -544,40 +542,28 @@ def find_common_type(dtypes):
             )
         else:
             return cudf.dtype("O")
-    if any(isinstance(dtype, cudf.ListDtype) for dtype in dtypes):
-        if len(dtypes) == 1:
-            return dtypes.get(0)
-        else:
-            # TODO: As list dtypes allow casting
-            # to identical types, improve this logic of returning a
-            # common dtype, for example:
-            # ListDtype(int64) & ListDtype(int32) common
-            # dtype could be ListDtype(int64).
-            raise NotImplementedError(
-                "Finding a common type for `ListDtype` is currently "
-                "not supported"
-            )
-    if any(isinstance(dtype, cudf.StructDtype) for dtype in dtypes):
-        if len(dtypes) == 1:
-            return dtypes.get(0)
-        else:
-            raise NotImplementedError(
-                "Finding a common type for `StructDtype` is currently "
-                "not supported"
-            )
+    elif any(
+        isinstance(dtype, (cudf.ListDtype, cudf.StructDtype))
+        for dtype in dtypes
+    ):
+        # TODO: As list dtypes allow casting
+        # to identical types, improve this logic of returning a
+        # common dtype, for example:
+        # ListDtype(int64) & ListDtype(int32) common
+        # dtype could be ListDtype(int64).
+        raise NotImplementedError(
+            "Finding a common type for `ListDtype` or `StructDtype` is currently "
+            "not supported"
+        )
 
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately
-    dt_dtypes = set(
-        filter(lambda t: cudf.api.types.is_datetime_dtype(t), dtypes)
-    )
+    dt_dtypes = set(filter(lambda t: t.kind == "M", dtypes))
     if len(dt_dtypes) > 0:
         dtypes = dtypes - dt_dtypes
         dtypes.add(np.result_type(*dt_dtypes))
 
-    td_dtypes = set(
-        filter(lambda t: pd.api.types.is_timedelta64_dtype(t), dtypes)
-    )
+    td_dtypes = set(filter(lambda t: t.kind == "m", dtypes))
     if len(td_dtypes) > 0:
         dtypes = dtypes - td_dtypes
         dtypes.add(np.result_type(*td_dtypes))
