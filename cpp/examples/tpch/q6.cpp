@@ -95,8 +95,7 @@ int main(int argc, char const** argv)
   auto quantity_float =
     cudf::cast(lineitem->column("l_quantity"), cudf::data_type{cudf::type_id::FLOAT32});
 
-  lineitem->append(discout_float, "l_discount_float");
-  lineitem->append(quantity_float, "l_quantity_float");
+  (*lineitem).append(discout_float, "l_discount_float").append(quantity_float, "l_quantity_float");
 
   // Apply the filters
   auto const discount_ref = cudf::ast::column_reference(lineitem->col_id("l_discount_float"));

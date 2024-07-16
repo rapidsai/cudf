@@ -135,8 +135,7 @@ int main(int argc, char const** argv)
   auto disc_price =
     calc_disc_price(lineitem->column("l_discount"), lineitem->column("l_extendedprice"));
   auto charge = calc_charge(lineitem->column("l_tax"), disc_price->view());
-  lineitem->append(disc_price, "disc_price");
-  lineitem->append(charge, "charge");
+  (*lineitem).append(disc_price, "disc_price").append(charge, "charge");
 
   // Perform the group by operation
   auto const groupedby_table = apply_groupby(

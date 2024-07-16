@@ -147,7 +147,7 @@ int main(int argc, char const** argv)
   // Calculate and append the `revenue` column
   auto revenue =
     calc_revenue(joined_table->column("l_extendedprice"), joined_table->column("l_discount"));
-  joined_table->append(revenue, "revenue");
+  (*joined_table).append(revenue, "revenue");
 
   // Perform the groupby operation
   auto const groupedby_table =
