@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import os
 
+import numpy as np
 import pyarrow as pa
 import pytest
 from pyarrow.parquet import write_table
@@ -103,6 +104,19 @@ def assert_column_eq(
             return pa.list_(new_fields[0])
         return typ
 
+    def _contains_type(parent_typ, typ_checker):
+        """
+        Check whether the parent or one of the children
+        satisfies the typ_checker.
+        """
+        if typ_checker(parent_typ):
+            return True
+        if pa.types.is_nested(parent_typ):
+            for i in range(parent_typ.num_fields):
+                if _contains_type(parent_typ.field(i).type, typ_checker):
+                    return True
+        return False
+
     if not check_field_nullability:
         rhs_type = _make_fields_nullable(rhs.type)
         rhs = rhs.cast(rhs_type)
@@ -110,7 +124,36 @@ def assert_column_eq(
         lhs_type = _make_fields_nullable(lhs.type)
         lhs = lhs.cast(lhs_type)
 
-    assert lhs.equals(rhs)
+    assert lhs.type == rhs.type, f"{lhs.type} != {rhs.type}"
+    if _contains_type(lhs.type, pa.types.is_floating) and _contains_type(
+        rhs.type, pa.types.is_floating
+    ):
+        # Flatten to do comparisons if nested
+        def _flatten_arrays(arr):
+            flat_arrs = []
+            if pa.types.is_nested(arr.type):
+                flattened = arr.flatten()
+                if isinstance(flattened, list):
+                    for arr in flattened:
+                        flat_arrs += _flatten_arrays(arr)
+                else:
+                    flat_arrs = [flattened]
+            else:
+                flat_arrs = [arr]
+            return flat_arrs
+
+        if isinstance(lhs, (pa.ListArray, pa.StructArray)):
+            lhs = _flatten_arrays(lhs)
+            rhs = _flatten_arrays(rhs)
+        else:
+            # Just a regular doublearray
+            lhs = [lhs]
+            rhs = [rhs]
+
+        for lh_arr, rh_arr in zip(lhs, rhs):
+            np.testing.assert_array_almost_equal(lh_arr, rh_arr)
+    else:
+        assert lhs.equals(rhs)
 
 
 def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
