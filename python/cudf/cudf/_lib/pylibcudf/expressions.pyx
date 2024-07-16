@@ -1,24 +1,11 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-<<<<<<< HEAD
-
-import numpy as np
-
-=======
->>>>>>> 6a954e299d97f69a62fd184529fa7d5f29c0e09f
 from cudf._lib.pylibcudf.libcudf.expressions import \
     ast_operator as ASTOperator  # no-cython-lint
 from cudf._lib.pylibcudf.libcudf.expressions import \
     table_reference as TableReference  # no-cython-lint
 
 from cython.operator cimport dereference
-
-<<<<<<< HEAD
-from libc.stdint cimport int64_t
-
-=======
 from libc.stdint cimport int32_t, int64_t
-
->>>>>>> 6a954e299d97f69a62fd184529fa7d5f29c0e09f
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -30,14 +17,7 @@ from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport (
     string_scalar,
     timestamp_scalar,
 )
-
-<<<<<<< HEAD
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
-
-=======
 from cudf._lib.pylibcudf.libcudf.types cimport size_type, type_id
-
->>>>>>> 6a954e299d97f69a62fd184529fa7d5f29c0e09f
 from cudf._lib.pylibcudf.libcudf.wrappers.durations cimport (
     duration_ms,
     duration_ns,

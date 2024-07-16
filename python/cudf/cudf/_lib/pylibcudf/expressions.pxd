@@ -7,7 +7,6 @@ from cudf._lib.pylibcudf.libcudf.expressions cimport (
     expression,
     table_reference,
 )
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 
 from .scalar cimport Scalar
 
