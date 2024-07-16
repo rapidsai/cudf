@@ -32,7 +32,6 @@ from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
-    is_bool_dtype,
     is_dict_like,
     is_dtype_equal,
     is_list_like,
@@ -171,7 +170,7 @@ class _DataFrameIndexer(_FrameIndexer):
             ):
                 return False
             else:
-                if is_bool_dtype(as_column(arg[0]).dtype) and not isinstance(
+                if as_column(arg[0]).dtype.kind == "b" and not isinstance(
                     arg[1], slice
                 ):
                     return True
@@ -320,7 +319,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     tmp_arg[1],
                 )
 
-                if is_bool_dtype(tmp_arg[0].dtype):
+                if tmp_arg[0].dtype.kind == "b":
                     df = columns_df._apply_boolean_mask(
                         BooleanMask(tmp_arg[0], len(columns_df))
                     )
@@ -3681,8 +3680,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         dtypes = [self[col].dtype for col in self._column_names]
         common_dtype = find_common_type(dtypes)
-        if not is_bool_dtype(common_dtype) and any(
-            is_bool_dtype(dtype) for dtype in dtypes
+        if common_dtype.kind != "b" and any(
+            dtype.kind == "b" for dtype in dtypes
         ):
             raise MixedTypeError("Cannot create a column with mixed types")
 
@@ -6309,8 +6308,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     and any(
                         not is_object_dtype(dtype) for dtype in source_dtypes
                     )
-                    or not is_bool_dtype(common_dtype)
-                    and any(is_bool_dtype(dtype) for dtype in source_dtypes)
+                    or common_dtype.kind != "b"
+                    and any(dtype.kind == "b" for dtype in source_dtypes)
                 ):
                     raise TypeError(
                         "Columns must all have the same dtype to "
