@@ -2262,7 +2262,7 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
       .build();
   cudf::io::write_parquet(out_opts);
 
-  // num_rows_per_source.size() must be = 1 and num_rows_per_source[0] must be = num_rows
+  // Read single data source entirely
   {
     auto const in_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
@@ -2273,7 +2273,7 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
     EXPECT_EQ(result.metadata.num_rows_per_source[0], num_rows);
   }
 
-  // num_rows_per_source.size() must be = 1 and num_rows_per_source[0] must be = rows_to_read
+  // Read rows_to_read rows skipping rows_to_skip from single data source
   {
     auto constexpr rows_to_skip = 557;  // a prime number != rows_in_row_group
     auto constexpr rows_to_read = 7'232;
@@ -2293,7 +2293,7 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
     EXPECT_EQ(result.metadata.num_rows_per_source[0], rows_to_read);
   }
 
-  // num_rows_per_source must be empty
+  // Filtered read from single data source
   {
     auto constexpr max_value = 100;
     auto literal_value       = cudf::numeric_scalar<int64_t>{max_value};
@@ -2323,7 +2323,7 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
     EXPECT_EQ(result.metadata.num_rows_per_source.size(), 0);
   }
 
-  // num_rows_per_source.size() must be = 2
+  // Read two data sources skipping the first entire file completely
   {
     auto constexpr rows_to_skip = 15'723;
     auto constexpr nsources     = 2;
@@ -2348,7 +2348,7 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
     EXPECT_EQ(result.metadata.num_rows_per_source[1], nsources * num_rows - rows_to_skip);
   }
 
-  // num_rows_per_source.size() must be = 10 and all num_rows_per_source[k] must be = num_rows
+  // Read ten data sources entirely
   {
     auto constexpr nsources = 10;
     std::vector<std::string> const datasources(nsources, filepath);
@@ -2362,11 +2362,11 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
 
     EXPECT_EQ(result.metadata.num_rows_per_source.size(), nsources);
     EXPECT_TRUE(std::equal(expected_counts.cbegin(),
-                         expected_counts.cend(),
-                         result.metadata.num_rows_per_source.cbegin()));
+                           expected_counts.cend(),
+                           result.metadata.num_rows_per_source.cbegin()));
   }
 
-  // num_rows_per_source.size() must be = 10 and all num_rows_per_source[k] must be = num_rows
+  // Read rows_to_read rows skipping rows_to_skip (> two sources) from ten data sources
   {
     auto constexpr rows_to_skip = 25'999;
     auto constexpr rows_to_read = 47'232;
@@ -2410,10 +2410,9 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
     }
 
     EXPECT_EQ(result.metadata.num_rows_per_source.size(), nsources);
-    EXPECT_EQ(std::equal(expected_counts.cbegin(),
-                         expected_counts.cend(),
-                         result.metadata.num_rows_per_source.cbegin()),
-              true);
+    EXPECT_TRUE(std::equal(expected_counts.cbegin(),
+                           expected_counts.cend(),
+                           result.metadata.num_rows_per_source.cbegin()));
   }
 }
 
@@ -2442,10 +2441,9 @@ TEST_F(ParquetReaderTest, NumRowsPerSourceEmptyTable)
   std::vector<size_t> const expected_counts(nsources, 0);
 
   EXPECT_EQ(result.metadata.num_rows_per_source.size(), nsources);
-  EXPECT_EQ(std::equal(expected_counts.cbegin(),
-                       expected_counts.cend(),
-                       result.metadata.num_rows_per_source.cbegin()),
-            true);
+  EXPECT_TRUE(std::equal(expected_counts.cbegin(),
+                         expected_counts.cend(),
+                         result.metadata.num_rows_per_source.cbegin()));
 }
 
 ///////////////////

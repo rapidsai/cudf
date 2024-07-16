@@ -351,12 +351,12 @@ class reader::impl {
   /**
    * @brief Calculate the number of rows read from each source in the output chunk
    *
-   * @param start_row The offset of the first row in the output chunk
-   * @param num_rows The number of rows in the the output chunk
+   * @param chunk_start_row The offset of the first row in the output chunk
+   * @param chunk_num_rows The number of rows in the the output chunk
    * @return Vector of number of rows from each respective data source in the output chunk
    */
-  [[nodiscard]] std::vector<size_t> calculate_output_num_rows_per_source(size_t start_row,
-                                                                         size_t num_rows);
+  [[nodiscard]] std::vector<size_t> calculate_output_num_rows_per_source(size_t chunk_start_row,
+                                                                         size_t chunk_num_rows);
 
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr{rmm::mr::get_current_device_resource()};

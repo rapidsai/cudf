@@ -1524,7 +1524,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     return std::tuple(cudf::concatenate(out_tviews), num_chunks, nrows_per_source);
   };
 
-  // num_rows_per_source.size() must be = 1 and num_rows_per_source[0] must be = num_rows
+  // Chunked-read single data source entirely
   {
     auto constexpr output_read_limit = 1'500;
     auto constexpr pass_read_limit   = 3'500;
@@ -1541,7 +1541,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     EXPECT_EQ(num_rows_per_source[0], num_rows);
   }
 
-  // num_rows_per_source.size() must be = 1 and num_rows_per_source[0] must be = rows_to_read
+  // Chunked-read rows_to_read rows skipping rows_to_skip from single data source
   {
     auto const rows_to_skip          = 1'237;
     auto const rows_to_read          = 7'232;
@@ -1568,7 +1568,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     EXPECT_EQ(num_rows_per_source[0], rows_to_read);
   }
 
-  // num_rows_per_source.size() must be = 2
+  // Chunked-read two data sources skipping the first entire file completely
   {
     auto constexpr rows_to_skip      = 15'723;
     auto constexpr output_read_limit = 1'500;
@@ -1598,8 +1598,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     EXPECT_EQ(num_rows_per_source[1], nsources * num_rows - rows_to_skip);
   }
 
-  // num_rows_per_source.size() must be = 1 and num_rows_per_source[0] must be = num_rows -
-  // rows_to_read
+  // Chunked-read from single data source skipping rows_to_skip
   {
     auto const rows_to_skip          = 1'237;
     auto constexpr output_read_limit = 1'500;
@@ -1623,7 +1622,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     EXPECT_EQ(num_rows_per_source[0], num_rows - rows_to_skip);
   }
 
-  // num_rows_per_source must be empty
+  // Filtered chunked-read from single data source
   {
     int64_t const max_value          = int64_data[int64_data.size() / 2];
     auto constexpr output_read_limit = 1'500;
@@ -1655,10 +1654,10 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     cudf::table_view expected_filtered({int64_col_filtered->view()});
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_filtered, result->view());
-    EXPECT_EQ(num_rows_per_source.empty(), true);
+    EXPECT_TRUE(num_rows_per_source.empty());
   }
 
-  // num_rows_per_source.size() must be = 10 and all num_rows_per_source[k] must be = num_rows
+  // Chunked-read ten data sources entirely
   {
     auto const nsources              = 10;
     auto constexpr output_read_limit = 15'000;
@@ -1676,14 +1675,13 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     std::vector<size_t> const expected_counts(nsources, num_rows);
 
     EXPECT_EQ(num_rows_per_source.size(), nsources);
-    EXPECT_EQ(
-      std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()),
-      true);
+    EXPECT_TRUE(
+      std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
   }
 
-  // num_rows_per_source.size() must be = 10
+  // Chunked-read rows_to_read rows skipping rows_to_skip from ten data sources
   {
-    auto const rows_to_skip          = 5'571;
+    auto const rows_to_skip          = 25'571;
     auto const rows_to_read          = 47'232;
     auto constexpr output_read_limit = 15'000;
     auto constexpr pass_read_limit   = 35'000;
@@ -1729,12 +1727,11 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     }
 
     EXPECT_EQ(num_rows_per_source.size(), nsources);
-    EXPECT_EQ(
-      std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()),
-      true);
+    EXPECT_TRUE(
+      std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
   }
 
-  // num_rows_per_source.size() must be = 10
+  // Chunked-read ten data sources skipping rows_to_skip rows
   {
     auto const rows_to_skip          = 5'571;
     auto constexpr output_read_limit = 15'000;
@@ -1780,12 +1777,11 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     }
 
     EXPECT_EQ(num_rows_per_source.size(), nsources);
-    EXPECT_EQ(
-      std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()),
-      true);
+    EXPECT_TRUE(
+      std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
   }
 
-  // num_rows_per_source.size() must be = 10 and all num_rows_per_source[k] must be = 0
+  // Chunked-read ten empty data sources
   {
     auto constexpr output_read_limit = 4'500;
     auto constexpr pass_read_limit   = 8'500;
