@@ -5234,7 +5234,7 @@ def test_rowwise_ops(data, op, skipna, numeric_only):
             else (pdf[column].notna().count() == 0)
         )
         or cudf.api.types.is_numeric_dtype(pdf[column].dtype)
-        or cudf.api.types.is_bool_dtype(pdf[column].dtype)
+        or pdf[column].dtype.kind == "b"
         for column in pdf
     ):
         with pytest.raises(TypeError):

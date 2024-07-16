@@ -13,7 +13,6 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import pylibcudf
 from cudf.api.types import (
-    is_bool_dtype,
     is_float_dtype,
     is_integer,
     is_integer_dtype,
@@ -159,7 +158,7 @@ class NumericalColumn(NumericalBaseColumn):
             else as_column(value)
         )
 
-        if not is_bool_dtype(self.dtype) and is_bool_dtype(device_value.dtype):
+        if self.dtype.kind != "b" and device_value.dtype.kind == "b":
             raise TypeError(f"Invalid value {value} for dtype {self.dtype}")
         else:
             device_value = device_value.astype(self.dtype)
@@ -264,7 +263,7 @@ class NumericalColumn(NumericalBaseColumn):
                     f"{self.dtype.type.__name__} and "
                     f"{other.dtype.type.__name__}"
                 )
-            if is_bool_dtype(self.dtype) or is_bool_dtype(other.dtype):
+            if self.dtype.kind == "b" or other.dtype.kind == "b":
                 out_dtype = "bool"
 
         if (
