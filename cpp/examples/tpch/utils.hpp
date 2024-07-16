@@ -443,12 +443,10 @@ struct tpch_example_args {
 tpch_example_args parse_args(int argc, char const** argv)
 {
   if (argc < 3) {
-    std::string usage_message = R"(
-      Usage: <dataset_dir> <memory_resource_type>
-
-      The query result will be saved to a parquet file named q{query_no}.parquet in the current
-      working directory.
-    )";
+    std::string usage_message = "Usage: " + std::string(argv[0]) +
+                                " <dataset_dir> <memory_resource_type>\n The query result will be "
+                                "saved to a parquet file named q{query_no}.parquet in the current "
+                                "working directory ";
     throw std::runtime_error(usage_message);
   }
   tpch_example_args args;
