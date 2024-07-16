@@ -553,16 +553,9 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
   if (!has_more_work()) {
     // Compute number of rows per source if no AST filters
     if (not _expr_conv.get_converted_expr().has_value()) {
-      // If already empty (empty dataframe case), simply initialize to a list of zeros
-      if (not out_metadata.num_rows_per_source.size()) {
-        out_metadata.num_rows_per_source =
-          std::vector<size_t>(_file_itm_data.num_rows_per_source.size(), 0);
-      }
-      // If this is previously non-empty, simply fill in zeros
-      else {
-        thrust::fill(
-          out_metadata.num_rows_per_source.begin(), out_metadata.num_rows_per_source.end(), 0);
-      }
+      // Empty dataframe case: Simply initialize to a list of zeros
+      out_metadata.num_rows_per_source =
+        std::vector<size_t>(_file_itm_data.num_rows_per_source.size(), 0);
     }
 
     // Finalize output
