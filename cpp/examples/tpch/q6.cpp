@@ -60,7 +60,7 @@
 
 int main(int argc, char const** argv)
 {
-  auto args = parse_args(argc, argv);
+  auto const args = parse_args(argc, argv);
 
   // Use a memory pool
   auto resource = create_memory_resource(args.memory_resource_type);
