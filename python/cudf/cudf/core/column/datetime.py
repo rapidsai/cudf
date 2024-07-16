@@ -629,9 +629,9 @@ class DatetimeColumn(column.ColumnBase):
     def indices_of(
         self, value: ScalarLike
     ) -> cudf.core.column.NumericalColumn:
-        value = column.as_column(
-            pd.to_datetime(value), dtype=self.dtype
-        ).astype("int64")
+        value = (
+            pd.to_datetime(value).to_numpy().astype(self.dtype).astype("int64")
+        )
         return self.astype("int64").indices_of(value)
 
     @property
