@@ -41,7 +41,6 @@ from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_pandas_nullable_extension_dtype,
     infer_dtype,
-    is_bool_dtype,
     is_dtype_equal,
     is_scalar,
     is_string_dtype,
@@ -619,7 +618,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         key: cudf.core.column.NumericalColumn,
         value: cudf.core.scalar.Scalar | ColumnBase,
     ) -> Self:
-        if is_bool_dtype(key.dtype):
+        if key.dtype.kind == "b":
             # `key` is boolean mask
             if len(key) != len(self):
                 raise ValueError(
@@ -644,7 +643,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         self._check_scatter_key_length(num_keys, value)
 
-        if is_bool_dtype(key.dtype):
+        if key.dtype.kind == "b":
             return libcudf.copying.boolean_mask_scatter([value], [self], key)[
                 0
             ]._with_type_metadata(self.dtype)
@@ -721,7 +720,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return result
 
     def indices_of(
-        self, value: ScalarLike | Self
+        self, value: ScalarLike
     ) -> cudf.core.column.NumericalColumn:
         """
         Find locations of value in the column
@@ -735,10 +734,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         -------
         Column of indices that match value
         """
-        if not isinstance(value, ColumnBase):
-            value = as_column([value], dtype=self.dtype)
+        if not is_scalar(value):
+            raise ValueError("value must be a scalar")
         else:
-            assert len(value) == 1
+            value = as_column(value, dtype=self.dtype, length=1)
         mask = libcudf.search.contains(value, self)
         return apply_boolean_mask(
             [as_column(range(0, len(self)), dtype=size_type_dtype)], mask
@@ -1083,7 +1082,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
         mask = as_column(mask)
-        if not is_bool_dtype(mask.dtype):
+        if mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
         return apply_boolean_mask([self], mask)[0]._with_type_metadata(
