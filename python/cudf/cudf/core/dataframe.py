@@ -33,7 +33,6 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
-    is_datetime_dtype,
     is_dict_like,
     is_dtype_equal,
     is_list_like,
@@ -6113,7 +6112,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             filtered = self.copy(deep=False)
 
-        is_pure_dt = all(is_datetime_dtype(dt) for dt in filtered.dtypes)
+        is_pure_dt = all(dt.kind == "M" for dt in filtered.dtypes)
 
         common_dtype = find_common_type(filtered.dtypes)
         if (
@@ -6510,7 +6509,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         cudf.utils.dtypes.get_min_float_dtype(
                             prepared._data[col]
                         )
-                        if not is_datetime_dtype(common_dtype)
+                        if common_dtype.kind != "M"
                         else cudf.dtype("float64")
                     )
                     .fillna(np.nan)
@@ -6537,7 +6536,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             result_dtype = (
                 common_dtype
                 if method in type_coerced_methods
-                or is_datetime_dtype(common_dtype)
+                or (common_dtype is not None and common_dtype.kind == "M")
                 else None
             )
             result = column.as_column(result, dtype=result_dtype)
