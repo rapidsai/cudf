@@ -109,19 +109,19 @@ struct distinct_hash_join {
   using row_comparator = cudf::experimental::row::equality::device_row_comparator<
     HasNested == cudf::has_nested::YES,
     cudf::nullate::DYNAMIC,
-    cudf::experimental::nan_equal_physical_equality_comparator,
+    cudf::experimental::row::equality::nan_equal_physical_equality_comparator,
     cudf::experimental::type_identity_t>;
 
   using row_comparator_no_nested = cudf::experimental::row::equality::device_row_comparator<
     HasNested == cudf::has_nested::YES,
     cudf::nullate::DYNAMIC,
-    cudf::experimental::nan_equal_physical_equality_comparator,
+    cudf::experimental::row::equality::nan_equal_physical_equality_comparator,
     cudf::experimental::dispatch_void_if_nested_t>;
 
   using row_comparator_no_compound = cudf::experimental::row::equality::device_row_comparator<
     HasNested == cudf::has_nested::YES,
     cudf::nullate::DYNAMIC,
-    cudf::experimental::nan_equal_physical_equality_comparator,
+    cudf::experimental::row::equality::nan_equal_physical_equality_comparator,
     cudf::experimental::dispatch_void_if_compound_t>;
 
   using hasher              = hasher_adapter<thrust::identity<hash_value_type>>;
@@ -164,8 +164,8 @@ struct distinct_hash_join {
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
     _preprocessed_build;  ///< input table preprocssed for row operators
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
-    _preprocessed_probe;        ///< input table preprocssed for row operators
-  hash_table_type _hash_table;  ///< hash table built on `_build`
+    _preprocessed_probe;                         ///< input table preprocssed for row operators
+  std::unique_ptr<hash_table_type> _hash_table;  ///< hash table built on `_build`
 
  public:
   distinct_hash_join()                                     = delete;
