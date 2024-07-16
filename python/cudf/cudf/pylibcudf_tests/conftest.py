@@ -217,6 +217,15 @@ def sorted_opt(request):
     return request.param
 
 
-@pytest.fixture(scope="session", params=[False, True])
+@pytest.fixture(
+    scope="session", params=[False, True], ids=["without_nulls", "with_nulls"]
+)
 def has_nulls(request):
+    return request.param
+
+
+@pytest.fixture(
+    scope="session", params=[False, True], ids=["without_nans", "with_nans"]
+)
+def has_nans(request):
     return request.param

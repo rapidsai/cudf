@@ -22,7 +22,7 @@ from cudf._lib.reshape import interleave_columns
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
-from cudf.api.types import is_bool_dtype, is_list_like, is_numeric_dtype
+from cudf.api.types import is_list_like, is_numeric_dtype
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, StructDtype, as_column
@@ -35,7 +35,12 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin
 
 if TYPE_CHECKING:
-    from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
+    from cudf._typing import (
+        AggType,
+        DataFrameOrSeries,
+        MultiColumnAggType,
+        ScalarLike,
+    )
 
 
 def _deprecate_collect():
@@ -357,7 +362,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
 
     @cached_property
-    def indices(self):
+    def indices(self) -> dict[ScalarLike, cp.ndarray]:
         """
         Dict {group name -> group indices}.
 
@@ -1015,18 +1020,16 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if ascending:
             # Count ascending from 0 to num_groups - 1
-            group_ids = cudf.Series._from_data({None: cp.arange(num_groups)})
+            groups = range(num_groups)
         elif has_null_group:
             # Count descending from num_groups - 1 to 0, but subtract one more
             # for the null group making it num_groups - 2 to -1.
-            group_ids = cudf.Series._from_data(
-                {None: cp.arange(num_groups - 2, -2, -1)}
-            )
+            groups = range(num_groups - 2, -2, -1)
         else:
             # Count descending from num_groups - 1 to 0
-            group_ids = cudf.Series._from_data(
-                {None: cp.arange(num_groups - 1, -1, -1)}
-            )
+            groups = range(num_groups - 1, -1, -1)
+
+        group_ids = cudf.Series._from_data({None: as_column(groups)})
 
         if has_null_group:
             group_ids.iloc[-1] = cudf.NA
@@ -1531,7 +1534,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # For `sum` & `product`, boolean types
                 # will need to result in `int64` type.
                 for name, col in res._data.items():
-                    if is_bool_dtype(col.dtype):
+                    if col.dtype.kind == "b":
                         res._data[name] = col.astype("int")
             return res
 
@@ -1713,7 +1716,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         return grouped_values.apply_chunks(function, **kwargs)
 
     @_performance_tracking
-    def _broadcast(self, values):
+    def _broadcast(self, values: cudf.Series) -> cudf.Series:
         """
         Broadcast the results of an aggregation to the group
 
