@@ -30,7 +30,7 @@ import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import DataFrame, NamedColumn
-from cudf_polars.utils import dtypes, sorting
+from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -343,7 +343,12 @@ class Scan(IR):
             raise NotImplementedError(
                 f"Unhandled scan type: {self.typ}"
             )  # pragma: no cover; post init trips first
-        if row_index is not None:
+        if (
+            row_index is not None
+            # TODO: remove condition when dropping support for polars 1.0
+            # https://github.com/pola-rs/polars/pull/17363
+            and row_index[0] in self.schema
+        ):
             name, offset = row_index
             dtype = self.schema[name]
             step = plc.interop.from_arrow(
@@ -415,17 +420,7 @@ class DataFrameScan(IR):
         pdf = pl.DataFrame._from_pydf(self.df)
         if self.projection is not None:
             pdf = pdf.select(self.projection)
-        table = pdf.to_arrow()
-        schema = table.schema
-        for i, field in enumerate(schema):
-            schema = schema.set(
-                i, pa.field(field.name, dtypes.downcast_arrow_lists(field.type))
-            )
-        # No-op if the schema is unchanged.
-        table = table.cast(schema)
-        df = DataFrame.from_table(
-            plc.interop.from_arrow(table), list(self.schema.keys())
-        )
+        df = DataFrame.from_polars(pdf)
         assert all(
             c.obj.type() == dtype for c, dtype in zip(df.columns, self.schema.values())
         )
@@ -572,16 +567,17 @@ class GroupBy(IR):
         keys = broadcast(
             *(k.evaluate(df) for k in self.keys), target_length=df.num_rows
         )
-        # TODO: use sorted information, need to expose column_order
-        # and null_precedence in pylibcudf groupby constructor
-        # sorted = (
-        #     plc.types.Sorted.YES
-        #     if all(k.is_sorted for k in keys)
-        #     else plc.types.Sorted.NO
-        # )
+        sorted = (
+            plc.types.Sorted.YES
+            if all(k.is_sorted for k in keys)
+            else plc.types.Sorted.NO
+        )
         grouper = plc.groupby.GroupBy(
             plc.Table([k.obj for k in keys]),
             null_handling=plc.types.NullPolicy.INCLUDE,
+            keys_are_sorted=sorted,
+            column_order=[k.order for k in keys],
+            null_precedence=[k.null_order for k in keys],
         )
         # TODO: uniquify
         requests = []

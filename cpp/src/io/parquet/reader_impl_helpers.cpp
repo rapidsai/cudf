@@ -564,14 +564,14 @@ aggregate_reader_metadata::aggregate_reader_metadata(
   // Collect and apply arrow:schema from Parquet's key value metadata section
   if (use_arrow_schema) { apply_arrow_schema(); }
 
-  // Erase "ARROW:schema" from the output pfm if exists
+  // Erase ARROW_SCHEMA_KEY from the output pfm if exists
   std::for_each(
-    keyval_maps.begin(), keyval_maps.end(), [](auto& pfm) { pfm.erase("ARROW:schema"); });
+    keyval_maps.begin(), keyval_maps.end(), [](auto& pfm) { pfm.erase(ARROW_SCHEMA_KEY); });
 }
 
 arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
 {
-  // Check the key_value metadata for ARROW:schema, decode and walk it
+  // Check the key_value metadata for arrow schema, decode and walk it
   // Function to convert from flatbuf::duration type to cudf::type_id
   auto const duration_from_flatbuffer = [](flatbuf::Duration const* duration) {
     // TODO: we only need this for arrow::DurationType for now. Else, we can take in a
@@ -645,9 +645,7 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
       return true;
     };
 
-  // TODO: Should we check if any file has the "ARROW:schema" key
-  // Or if all files have the same "ARROW:schema"?
-  auto const it = keyval_maps[0].find("ARROW:schema");
+  auto const it = keyval_maps[0].find(ARROW_SCHEMA_KEY);
   if (it == keyval_maps[0].end()) { return {}; }
 
   // Decode the base64 encoded ipc message string
@@ -788,11 +786,6 @@ void aggregate_reader_metadata::apply_arrow_schema()
 std::optional<std::string_view> aggregate_reader_metadata::decode_ipc_message(
   std::string_view const serialized_message) const
 {
-  // Constants copied from arrow source and renamed to match the case
-  constexpr int32_t MESSAGE_DECODER_NEXT_REQUIRED_SIZE_INITIAL         = sizeof(int32_t);
-  constexpr int32_t MESSAGE_DECODER_NEXT_REQUIRED_SIZE_METADATA_LENGTH = sizeof(int32_t);
-  constexpr int32_t IPC_CONTINUATION_TOKEN                             = -1;
-
   // message buffer
   auto message_buf = serialized_message.data();
   // current message (buffer) size
