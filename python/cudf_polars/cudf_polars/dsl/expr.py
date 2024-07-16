@@ -867,7 +867,7 @@ class UnaryFunction(Expr):
         self.name = name
         self.options = options
         self.children = children
-        if self.name not in ("mask_nans", "round", "setsorted", "unique"):
+        if self.name not in ("mask_nans", "round", "setsorted", "unique", "dropnull"):
             raise NotImplementedError(f"Unary function {name=}")
 
     def do_evaluate(
@@ -952,6 +952,16 @@ class UnaryFunction(Expr):
                 is_sorted=plc.types.Sorted.YES,
                 order=order,
                 null_order=null_order,
+            )
+        elif self.name == "dropnull":
+            (column,) = (
+                child.evaluate(df, context=context, mapping=mapping)
+                for child in self.children
+            )
+            return Column(
+                plc.stream_compaction.drop_nulls(
+                    plc.Table([column.obj]), [0], 1
+                ).columns()[0]
             )
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
