@@ -1,14 +1,24 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
+<<<<<<< HEAD
 
 import numpy as np
 
+=======
+>>>>>>> 6a954e299d97f69a62fd184529fa7d5f29c0e09f
 from cudf._lib.pylibcudf.libcudf.expressions import \
     ast_operator as ASTOperator  # no-cython-lint
 from cudf._lib.pylibcudf.libcudf.expressions import \
     table_reference as TableReference  # no-cython-lint
 
 from cython.operator cimport dereference
+
+<<<<<<< HEAD
 from libc.stdint cimport int64_t
+
+=======
+from libc.stdint cimport int32_t, int64_t
+
+>>>>>>> 6a954e299d97f69a62fd184529fa7d5f29c0e09f
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -20,7 +30,14 @@ from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport (
     string_scalar,
     timestamp_scalar,
 )
+
+<<<<<<< HEAD
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
+
+=======
+from cudf._lib.pylibcudf.libcudf.types cimport size_type, type_id
+
+>>>>>>> 6a954e299d97f69a62fd184529fa7d5f29c0e09f
 from cudf._lib.pylibcudf.libcudf.wrappers.durations cimport (
     duration_ms,
     duration_ns,
@@ -34,6 +51,10 @@ from cudf._lib.pylibcudf.libcudf.wrappers.timestamps cimport (
     timestamp_us,
 )
 
+from .scalar cimport Scalar
+from .traits cimport is_chrono, is_numeric
+from .types cimport DataType
+
 # Aliases for simplicity
 ctypedef unique_ptr[libcudf_exp.expression] expression_ptr
 
@@ -45,104 +66,88 @@ cdef class Literal(Expression):
 
     Parameters
     ----------
-    value : Union[int, float, str, np.datetime64, np.timedelta64]
-        A scalar value to use.
+    value : Scalar
+        The Scalar value of the Literal.
+        Must be either numeric, string, or a timestamp/duration scalar.
     """
-    def __cinit__(self, value):
-        if isinstance(value, int):
-            self.c_scalar.reset(new numeric_scalar[int64_t](value, True))
+    def __cinit__(self, Scalar value):
+        self.scalar = value
+        cdef DataType typ = value.type()
+        cdef type_id tid = value.type().id()
+        if not (is_numeric(typ) or is_chrono(typ) or tid == type_id.STRING):
+            raise ValueError(
+                "Only numeric, string, or timestamp/duration scalars are accepted"
+            )
+        # TODO: Accept type-erased scalar in AST C++ code
+        # Then a lot of this code can be deleted
+        if tid == type_id.INT64:
             self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
-                <numeric_scalar[int64_t] &>dereference(self.c_scalar)
+                <numeric_scalar[int64_t] &>dereference(self.scalar.c_obj)
             ))
-        elif isinstance(value, float):
-            self.c_scalar.reset(new numeric_scalar[double](value, True))
+        elif tid == type_id.INT32:
             self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
-                <numeric_scalar[double] &>dereference(self.c_scalar)
+                <numeric_scalar[int32_t] &>dereference(self.scalar.c_obj)
             ))
-        elif isinstance(value, str):
-            self.c_scalar.reset(new string_scalar(value.encode(), True))
+        elif tid == type_id.FLOAT64:
             self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
-                <string_scalar &>dereference(self.c_scalar)
+                <numeric_scalar[double] &>dereference(self.scalar.c_obj)
             ))
-        elif isinstance(value, np.datetime64):
-            scale, _ = np.datetime_data(value.dtype)
-            int_value = value.astype(np.int64)
-            if scale == "s":
-                self.c_scalar.reset(new timestamp_scalar[timestamp_s](
-                    <int64_t>int_value, True)
-                )
-                self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
-                    <timestamp_scalar[timestamp_s] &>dereference(self.c_scalar)
-                ))
-            elif scale == "ms":
-                self.c_scalar.reset(new timestamp_scalar[timestamp_ms](
-                    <int64_t>int_value, True)
-                )
-                self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
-                    <timestamp_scalar[timestamp_ms] &>dereference(self.c_scalar)
-                ))
-            elif scale == "us":
-                self.c_scalar.reset(new timestamp_scalar[timestamp_us](
-                    <int64_t>int_value, True)
-                )
-                self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
-                    <timestamp_scalar[timestamp_us] &>dereference(self.c_scalar)
-                ))
-            elif scale == "ns":
-                self.c_scalar.reset(new timestamp_scalar[timestamp_ns](
-                    <int64_t>int_value, True)
-                )
-                self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
-                    <timestamp_scalar[timestamp_ns] &>dereference(self.c_scalar)
-                ))
-            else:
-                raise NotImplementedError(
-                    f"Unhandled datetime scale {scale=}"
-                )
-        elif isinstance(value, np.timedelta64):
-            scale, _ = np.datetime_data(value.dtype)
-            int_value = value.astype(np.int64)
-            if scale == "s":
-                self.c_scalar.reset(new duration_scalar[duration_ms](
-                    <int64_t>int_value, True)
-                )
-                self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
-                    <duration_scalar[duration_s] &>dereference(self.c_scalar)
-                ))
-            elif scale == "ms":
-                self.c_scalar.reset(new duration_scalar[duration_ms](
-                    <int64_t>int_value, True)
-                )
-                self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
-                    <duration_scalar[duration_ms] &>dereference(self.c_scalar)
-                ))
-            elif scale == "us":
-                self.c_scalar.reset(new duration_scalar[duration_us](
-                    <int64_t>int_value, True)
-                )
-                self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
-                    <duration_scalar[duration_us] &>dereference(self.c_scalar)
-                ))
-            elif scale == "ns":
-                self.c_scalar.reset(new duration_scalar[duration_ns](
-                    <int64_t>int_value, True)
-                )
-                self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
-                    <duration_scalar[duration_ns] &>dereference(self.c_scalar)
-                ))
-            else:
-                raise NotImplementedError(
-                    f"Unhandled timedelta scale {scale=}"
-                )
+        elif tid == type_id.FLOAT32:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <numeric_scalar[float] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.STRING:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <string_scalar &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.TIMESTAMP_NANOSECONDS:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <timestamp_scalar[timestamp_ns] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.TIMESTAMP_MICROSECONDS:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <timestamp_scalar[timestamp_us] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.TIMESTAMP_MILLISECONDS:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <timestamp_scalar[timestamp_ms] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.TIMESTAMP_MILLISECONDS:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <timestamp_scalar[timestamp_ms] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.TIMESTAMP_SECONDS:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <timestamp_scalar[timestamp_s] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.DURATION_NANOSECONDS:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <duration_scalar[duration_ns] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.DURATION_MICROSECONDS:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <duration_scalar[duration_us] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.DURATION_MILLISECONDS:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <duration_scalar[duration_ms] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.DURATION_MILLISECONDS:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <duration_scalar[duration_ms] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.DURATION_SECONDS:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <duration_scalar[duration_s] &>dereference(self.scalar.c_obj)
+            ))
         else:
             raise NotImplementedError(
-                f"Don't know how to make literal with type {type(value)}"
+                f"Don't know how to make literal with type id {tid}"
             )
-
 
 cdef class ColumnReference(Expression):
     """
-    A expression referring to data from a column in a table.
+    An expression referring to data from a column in a table.
 
     For details, see :cpp:class:`cudf::ast::column_reference`.
 
@@ -193,7 +198,7 @@ cdef class Operation(Expression):
 
 cdef class ColumnNameReference(Expression):
     """
-    A expression referring to data from a column in a table.
+    An expression referring to data from a column in a table.
 
     For details, see :cpp:class:`cudf::ast::column_name_reference`.
 
@@ -204,8 +209,6 @@ cdef class ColumnNameReference(Expression):
         (provided when the expression is evaluated).
     """
     def __cinit__(self, str name):
-        # Keep name alive so it doesn't get GC'ed, which
-        # will cause a segfault
         self.c_obj = <expression_ptr> \
             move(make_unique[libcudf_exp.column_name_reference](
                 <string>(name.encode("utf-8"))

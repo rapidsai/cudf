@@ -1694,12 +1694,7 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
     rhs = cudf.Scalar(cudf.NA, dtype=dtype_r)
 
     result = op(lhs, rhs)
-    assert result.value is (
-        cudf.NaT
-        if cudf.api.types.is_datetime64_dtype(result.dtype)
-        or cudf.api.types.is_timedelta64_dtype(result.dtype)
-        else cudf.NA
-    )
+    assert result.value is (cudf.NaT if result.dtype.kind in "mM" else cudf.NA)
 
     # make sure dtype is the same as had there been a valid scalar
     valid_lhs = cudf.Scalar(1, dtype=dtype_l)
