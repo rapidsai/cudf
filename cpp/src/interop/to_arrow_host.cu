@@ -95,14 +95,12 @@ struct dispatch_to_arrow_host {
   {
     if (!column.has_nulls()) { return NANOARROW_OK; }
 
-    int64_t const mask_size_in_bytes = cudf::bitmask_allocation_size_bytes(column.size());
-
     NANOARROW_RETURN_NOT_OK(ArrowBitmapResize(bitmap, static_cast<int64_t>(column.size()), 0));
     CUDF_CUDA_TRY(cudaMemcpyAsync(bitmap->buffer.data,
                                   (column.offset() > 0)
                                     ? cudf::detail::copy_bitmask(column, stream, mr).data()
                                     : column.null_mask(),
-                                  mask_size_in_bytes,
+                                  bitmap->buffer.size_bytes,
                                   cudaMemcpyDefault,
                                   stream.value()));
     return NANOARROW_OK;
@@ -110,7 +108,7 @@ struct dispatch_to_arrow_host {
 
   template <typename T>
   int populate_data_buffer(device_span<T const> input, ArrowBuffer* buffer) const
-  {    
+  {
     NANOARROW_RETURN_NOT_OK(ArrowBufferResize(buffer, input.size_bytes(), 1));
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       buffer->data, input.data(), input.size_bytes(), cudaMemcpyDefault, stream.value()));
@@ -231,10 +229,10 @@ int dispatch_to_arrow_host::operator()<cudf::list_view>(ArrowArray* out) const
 
   NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
   auto const lcv = cudf::lists_column_view(column);
-  if (column.size() == 0) {    
+  if (column.size() == 0) {
     NANOARROW_RETURN_NOT_OK(
       ArrowBufferAppendInt32(ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx), 0));
-  } else {    
+  } else {
     NANOARROW_RETURN_NOT_OK(
       populate_data_buffer(device_span<int32_t const>(lcv.offsets_begin(), (column.size() + 1)),
                            ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
@@ -330,7 +328,7 @@ unique_device_array_t create_device_array(nanoarrow::UniqueArray&& out)
     CUDF_FAIL("failed to build");
   }
 
-  unique_device_array_t result(new ArrowDeviceArray, [](ArrowDeviceArray* arr) {    
+  unique_device_array_t result(new ArrowDeviceArray, [](ArrowDeviceArray* arr) {
     if (arr->array.release != nullptr) { ArrowArrayRelease(&arr->array); }
     delete arr;
   });
