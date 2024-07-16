@@ -35,3 +35,14 @@ cpdef void write_json(
     str true_value = *,
     str false_value = *
 )
+
+cpdef tuple chunked_read_json(
+    SourceInfo source_info,
+    list dtypes = *,
+    compression_type compression = *,
+    bool keep_quotes = *,
+    bool mixed_types_as_string = *,
+    bool prune_columns = *,
+    json_recovery_mode_t recovery_mode = *,
+    int chunk_size= *,
+)
