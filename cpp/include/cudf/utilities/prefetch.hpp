@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <rmm/device_uvector.hpp>
+
 #include <map>
 #include <string>
 #include <string_view>
@@ -81,6 +83,22 @@ class PrefetchConfig {
  * @param size The size of the memory region to prefetch.
  */
 void prefetch(std::string_view key, void const* ptr, std::size_t size);
+
+/**
+ * @brief Prefetch the data in a device_uvector.
+ *
+ * @note At present this function does not support stream-ordered execution. Prefetching always
+ * occurs on the default stream.
+ *
+ * @param key The key to enable prefetching for.
+ * @param v The device_uvector to prefetch.
+ */
+template <typename T>
+void prefetch(std::string_view key, rmm::device_uvector<T> const& v)
+{
+  if (v.is_empty()) { return; }
+  prefetch(key, v.data(), v.size());
+}
 
 }  // namespace detail
 
