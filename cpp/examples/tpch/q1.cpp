@@ -64,10 +64,10 @@
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   auto const one = cudf::numeric_scalar<double>(1);
-  auto one_minus_discount =
+  auto const one_minus_discount =
     cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type(), stream, mr);
-  auto disc_price_type = cudf::data_type{cudf::type_id::FLOAT64};
-  auto disc_price      = cudf::binary_operation(extendedprice,
+  auto const disc_price_type = cudf::data_type{cudf::type_id::FLOAT64};
+  auto disc_price            = cudf::binary_operation(extendedprice,
                                            one_minus_discount->view(),
                                            cudf::binary_operator::MUL,
                                            disc_price_type,
@@ -91,10 +91,10 @@
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   auto const one = cudf::numeric_scalar<double>(1);
-  auto one_plus_tax =
+  auto const one_plus_tax =
     cudf::binary_operation(one, tax, cudf::binary_operator::ADD, tax.type(), stream, mr);
-  auto charge_type = cudf::data_type{cudf::type_id::FLOAT64};
-  auto charge      = cudf::binary_operation(
+  auto const charge_type = cudf::data_type{cudf::type_id::FLOAT64};
+  auto charge            = cudf::binary_operation(
     disc_price, one_plus_tax->view(), cudf::binary_operator::MUL, charge_type, stream, mr);
   return charge;
 }
@@ -110,20 +110,20 @@ int main(int argc, char const** argv)
   Timer timer;
 
   // Define the column projections and filter predicate for `lineitem` table
-  std::vector<std::string> lineitem_cols = {"l_returnflag",
-                                            "l_linestatus",
-                                            "l_quantity",
-                                            "l_extendedprice",
-                                            "l_discount",
-                                            "l_shipdate",
-                                            "l_orderkey",
-                                            "l_tax"};
-  auto shipdate_ref                      = cudf::ast::column_reference(std::distance(
+  std::vector<std::string> const lineitem_cols = {"l_returnflag",
+                                                  "l_linestatus",
+                                                  "l_quantity",
+                                                  "l_extendedprice",
+                                                  "l_discount",
+                                                  "l_shipdate",
+                                                  "l_orderkey",
+                                                  "l_tax"};
+  auto const shipdate_ref                      = cudf::ast::column_reference(std::distance(
     lineitem_cols.begin(), std::find(lineitem_cols.begin(), lineitem_cols.end(), "l_shipdate")));
   auto shipdate_upper =
     cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1998, 9, 2), true);
-  auto shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
-  auto lineitem_pred          = std::make_unique<cudf::ast::operation>(
+  auto const shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
+  auto lineitem_pred                = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LESS_EQUAL, shipdate_ref, shipdate_upper_literal);
 
   // Read out the `lineitem` table from parquet file
@@ -138,7 +138,7 @@ int main(int argc, char const** argv)
   lineitem->append(charge, "charge");
 
   // Perform the group by operation
-  auto groupedby_table = apply_groupby(
+  auto const groupedby_table = apply_groupby(
     lineitem,
     groupby_context_t{
       {"l_returnflag", "l_linestatus"},
@@ -162,9 +162,9 @@ int main(int argc, char const** argv)
       }});
 
   // Perform the order by operation
-  auto orderedby_table = apply_orderby(groupedby_table,
-                                       {"l_returnflag", "l_linestatus"},
-                                       {cudf::order::ASCENDING, cudf::order::ASCENDING});
+  auto const orderedby_table = apply_orderby(groupedby_table,
+                                             {"l_returnflag", "l_linestatus"},
+                                             {cudf::order::ASCENDING, cudf::order::ASCENDING});
 
   timer.print_elapsed_millis();
 

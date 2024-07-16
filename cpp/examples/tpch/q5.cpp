@@ -72,10 +72,10 @@
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   auto const one = cudf::numeric_scalar<double>(1);
-  auto one_minus_discount =
+  auto const one_minus_discount =
     cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type(), stream, mr);
-  auto revenue_type = cudf::data_type{cudf::type_id::FLOAT64};
-  auto revenue      = cudf::binary_operation(extendedprice,
+  auto const revenue_type = cudf::data_type{cudf::type_id::FLOAT64};
+  auto revenue            = cudf::binary_operation(extendedprice,
                                         one_minus_discount->view(),
                                         cudf::binary_operator::MUL,
                                         revenue_type,
@@ -95,51 +95,51 @@ int main(int argc, char const** argv)
   Timer timer;
 
   // Define the column projection and filter predicate for the `orders` table
-  std::vector<std::string> orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
-  auto o_orderdate_ref                 = cudf::ast::column_reference(std::distance(
+  std::vector<std::string> const orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
+  auto const o_orderdate_ref                 = cudf::ast::column_reference(std::distance(
     orders_cols.begin(), std::find(orders_cols.begin(), orders_cols.end(), "o_orderdate")));
   auto o_orderdate_lower =
     cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
-  auto o_orderdate_lower_limit = cudf::ast::literal(o_orderdate_lower);
-  auto o_orderdate_pred_lower  = cudf::ast::operation(
+  auto const o_orderdate_lower_limit = cudf::ast::literal(o_orderdate_lower);
+  auto const o_orderdate_pred_lower  = cudf::ast::operation(
     cudf::ast::ast_operator::GREATER_EQUAL, o_orderdate_ref, o_orderdate_lower_limit);
   auto o_orderdate_upper =
     cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 1, 1), true);
-  auto o_orderdate_upper_limit = cudf::ast::literal(o_orderdate_upper);
-  auto o_orderdate_pred_upper =
+  auto const o_orderdate_upper_limit = cudf::ast::literal(o_orderdate_upper);
+  auto const o_orderdate_pred_upper =
     cudf::ast::operation(cudf::ast::ast_operator::LESS, o_orderdate_ref, o_orderdate_upper_limit);
   auto orders_pred = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LOGICAL_AND, o_orderdate_pred_lower, o_orderdate_pred_upper);
 
   // Define the column projection and filter predicate for the `region` table
-  std::vector<std::string> region_cols = {"r_regionkey", "r_name"};
-  auto r_name_ref                      = cudf::ast::column_reference(std::distance(
+  std::vector<std::string> const region_cols = {"r_regionkey", "r_name"};
+  auto const r_name_ref                      = cudf::ast::column_reference(std::distance(
     region_cols.begin(), std::find(region_cols.begin(), region_cols.end(), "r_name")));
-  auto r_name_value                    = cudf::string_scalar("ASIA");
-  auto r_name_literal                  = cudf::ast::literal(r_name_value);
-  auto region_pred                     = std::make_unique<cudf::ast::operation>(
+  auto r_name_value                          = cudf::string_scalar("ASIA");
+  auto const r_name_literal                  = cudf::ast::literal(r_name_value);
+  auto region_pred                           = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::EQUAL, r_name_ref, r_name_literal);
 
   // Read out the tables from parquet files
   // while pushing down the column projections and filter predicates
-  auto customer =
+  auto const customer =
     read_parquet(args.dataset_dir + "/customer.parquet", {"c_custkey", "c_nationkey"});
-  auto orders =
+  auto const orders =
     read_parquet(args.dataset_dir + "/orders.parquet", orders_cols, std::move(orders_pred));
-  auto lineitem = read_parquet(args.dataset_dir + "/lineitem.parquet",
-                               {"l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"});
-  auto supplier =
+  auto const lineitem = read_parquet(args.dataset_dir + "/lineitem.parquet",
+                                     {"l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"});
+  auto const supplier =
     read_parquet(args.dataset_dir + "/supplier.parquet", {"s_suppkey", "s_nationkey"});
-  auto nation =
+  auto const nation =
     read_parquet(args.dataset_dir + "/nation.parquet", {"n_nationkey", "n_regionkey", "n_name"});
-  auto region =
+  auto const region =
     read_parquet(args.dataset_dir + "/region.parquet", region_cols, std::move(region_pred));
 
   // Perform the joins
-  auto join_a = apply_inner_join(region, nation, {"r_regionkey"}, {"n_regionkey"});
-  auto join_b = apply_inner_join(join_a, customer, {"n_nationkey"}, {"c_nationkey"});
-  auto join_c = apply_inner_join(join_b, orders, {"c_custkey"}, {"o_custkey"});
-  auto join_d = apply_inner_join(join_c, lineitem, {"o_orderkey"}, {"l_orderkey"});
+  auto const join_a = apply_inner_join(region, nation, {"r_regionkey"}, {"n_regionkey"});
+  auto const join_b = apply_inner_join(join_a, customer, {"n_nationkey"}, {"c_nationkey"});
+  auto const join_c = apply_inner_join(join_b, orders, {"c_custkey"}, {"o_custkey"});
+  auto const join_d = apply_inner_join(join_c, lineitem, {"o_orderkey"}, {"l_orderkey"});
   auto joined_table =
     apply_inner_join(supplier, join_d, {"s_suppkey", "s_nationkey"}, {"l_suppkey", "n_nationkey"});
 
@@ -149,7 +149,7 @@ int main(int argc, char const** argv)
   joined_table->append(revenue, "revenue");
 
   // Perform the groupby operation
-  auto groupedby_table =
+  auto const groupedby_table =
     apply_groupby(joined_table,
                   groupby_context_t{{"n_name"},
                                     {
@@ -157,7 +157,8 @@ int main(int argc, char const** argv)
                                     }});
 
   // Perform the order by operation
-  auto orderedby_table = apply_orderby(groupedby_table, {"revenue"}, {cudf::order::DESCENDING});
+  auto const orderedby_table =
+    apply_orderby(groupedby_table, {"revenue"}, {cudf::order::DESCENDING});
 
   timer.print_elapsed_millis();
 

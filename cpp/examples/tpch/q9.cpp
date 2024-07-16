@@ -86,17 +86,17 @@
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   auto const one = cudf::numeric_scalar<double>(1);
-  auto one_minus_discount =
+  auto const one_minus_discount =
     cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type());
-  auto extendedprice_discounted_type = cudf::data_type{cudf::type_id::FLOAT64};
-  auto extendedprice_discounted      = cudf::binary_operation(extendedprice,
-                                                         one_minus_discount->view(),
-                                                         cudf::binary_operator::MUL,
-                                                         extendedprice_discounted_type,
-                                                         stream,
-                                                         mr);
-  auto supplycost_quantity_type      = cudf::data_type{cudf::type_id::FLOAT64};
-  auto supplycost_quantity           = cudf::binary_operation(
+  auto const extendedprice_discounted_type = cudf::data_type{cudf::type_id::FLOAT64};
+  auto const extendedprice_discounted      = cudf::binary_operation(extendedprice,
+                                                               one_minus_discount->view(),
+                                                               cudf::binary_operator::MUL,
+                                                               extendedprice_discounted_type,
+                                                               stream,
+                                                               mr);
+  auto const supplycost_quantity_type      = cudf::data_type{cudf::type_id::FLOAT64};
+  auto const supplycost_quantity           = cudf::binary_operation(
     supplycost, quantity, cudf::binary_operator::MUL, supplycost_quantity_type);
   auto amount = cudf::binary_operation(extendedprice_discounted->view(),
                                        supplycost_quantity->view(),
@@ -118,30 +118,31 @@ int main(int argc, char const** argv)
   Timer timer;
 
   // Read out the table from parquet files
-  auto lineitem = read_parquet(
+  auto const lineitem = read_parquet(
     args.dataset_dir + "/lineitem.parquet",
     {"l_suppkey", "l_partkey", "l_orderkey", "l_extendedprice", "l_discount", "l_quantity"});
-  auto nation   = read_parquet(args.dataset_dir + "/nation.parquet", {"n_nationkey", "n_name"});
-  auto orders   = read_parquet(args.dataset_dir + "/orders.parquet", {"o_orderkey", "o_orderdate"});
-  auto part     = read_parquet(args.dataset_dir + "/part.parquet", {"p_partkey", "p_name"});
-  auto partsupp = read_parquet(args.dataset_dir + "/partsupp.parquet",
-                               {"ps_suppkey", "ps_partkey", "ps_supplycost"});
-  auto supplier =
+  auto const nation = read_parquet(args.dataset_dir + "/nation.parquet", {"n_nationkey", "n_name"});
+  auto const orders =
+    read_parquet(args.dataset_dir + "/orders.parquet", {"o_orderkey", "o_orderdate"});
+  auto const part     = read_parquet(args.dataset_dir + "/part.parquet", {"p_partkey", "p_name"});
+  auto const partsupp = read_parquet(args.dataset_dir + "/partsupp.parquet",
+                                     {"ps_suppkey", "ps_partkey", "ps_supplycost"});
+  auto const supplier =
     read_parquet(args.dataset_dir + "/supplier.parquet", {"s_suppkey", "s_nationkey"});
 
   // Generating the `profit` table
   // Filter the part table using `p_name like '%green%'`
-  auto p_name = part->table().column(1);
-  auto mask =
+  auto const p_name = part->table().column(1);
+  auto const mask =
     cudf::strings::like(cudf::strings_column_view(p_name), cudf::string_scalar("%green%"));
-  auto part_filtered = apply_mask(part, mask);
+  auto const part_filtered = apply_mask(part, mask);
 
   // Perform the joins
-  auto join_a = apply_inner_join(supplier, nation, {"s_nationkey"}, {"n_nationkey"});
-  auto join_b = apply_inner_join(partsupp, join_a, {"ps_suppkey"}, {"s_suppkey"});
-  auto join_c = apply_inner_join(lineitem, part_filtered, {"l_partkey"}, {"p_partkey"});
-  auto join_d = apply_inner_join(orders, join_c, {"o_orderkey"}, {"l_orderkey"});
-  auto joined_table =
+  auto const join_a = apply_inner_join(supplier, nation, {"s_nationkey"}, {"n_nationkey"});
+  auto const join_b = apply_inner_join(partsupp, join_a, {"ps_suppkey"}, {"s_suppkey"});
+  auto const join_c = apply_inner_join(lineitem, part_filtered, {"l_partkey"}, {"p_partkey"});
+  auto const join_d = apply_inner_join(orders, join_c, {"o_orderkey"}, {"l_orderkey"});
+  auto const joined_table =
     apply_inner_join(join_d, join_b, {"l_suppkey", "l_partkey"}, {"s_suppkey", "ps_partkey"});
 
   // Calculate the `nation`, `o_year`, and `amount` columns
@@ -159,17 +160,17 @@ int main(int argc, char const** argv)
   profit_columns.push_back(std::move(amount));
 
   auto profit_table = std::make_unique<cudf::table>(std::move(profit_columns));
-  auto profit       = std::make_unique<table_with_names>(
+  auto const profit = std::make_unique<table_with_names>(
     std::move(profit_table), std::vector<std::string>{"nation", "o_year", "amount"});
 
   // Perform the groupby operation
-  auto groupedby_table = apply_groupby(
+  auto const groupedby_table = apply_groupby(
     profit,
     groupby_context_t{{"nation", "o_year"},
                       {{"amount", {{cudf::groupby_aggregation::SUM, "sum_profit"}}}}});
 
   // Perform the orderby operation
-  auto orderedby_table = apply_orderby(
+  auto const orderedby_table = apply_orderby(
     groupedby_table, {"nation", "o_year"}, {cudf::order::ASCENDING, cudf::order::DESCENDING});
 
   timer.print_elapsed_millis();

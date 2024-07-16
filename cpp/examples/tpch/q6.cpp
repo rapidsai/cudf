@@ -52,8 +52,8 @@
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
-  auto revenue_type = cudf::data_type{cudf::type_id::FLOAT64};
-  auto revenue      = cudf::binary_operation(
+  auto const revenue_type = cudf::data_type{cudf::type_id::FLOAT64};
+  auto revenue            = cudf::binary_operation(
     extendedprice, discount, cudf::binary_operator::MUL, revenue_type, stream, mr);
   return revenue;
 }
@@ -69,19 +69,19 @@ int main(int argc, char const** argv)
   Timer timer;
 
   // Read out the `lineitem` table from parquet file
-  std::vector<std::string> lineitem_cols = {
+  std::vector<std::string> const lineitem_cols = {
     "l_extendedprice", "l_discount", "l_shipdate", "l_quantity"};
-  auto shipdate_ref = cudf::ast::column_reference(std::distance(
+  auto const shipdate_ref = cudf::ast::column_reference(std::distance(
     lineitem_cols.begin(), std::find(lineitem_cols.begin(), lineitem_cols.end(), "l_shipdate")));
   auto shipdate_lower =
     cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
-  auto shipdate_lower_literal = cudf::ast::literal(shipdate_lower);
+  auto const shipdate_lower_literal = cudf::ast::literal(shipdate_lower);
   auto shipdate_upper =
     cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 1, 1), true);
-  auto shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
-  auto shipdate_pred_a        = cudf::ast::operation(
+  auto const shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
+  auto const shipdate_pred_a        = cudf::ast::operation(
     cudf::ast::ast_operator::GREATER_EQUAL, shipdate_ref, shipdate_lower_literal);
-  auto shipdate_pred_b =
+  auto const shipdate_pred_b =
     cudf::ast::operation(cudf::ast::ast_operator::LESS, shipdate_ref, shipdate_upper_literal);
   auto lineitem_pred = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LOGICAL_AND, shipdate_pred_a, shipdate_pred_b);
@@ -98,36 +98,36 @@ int main(int argc, char const** argv)
   lineitem->append(quantity_float, "l_quantity_float");
 
   // Apply the filters
-  auto discount_ref = cudf::ast::column_reference(lineitem->col_id("l_discount_float"));
-  auto quantity_ref = cudf::ast::column_reference(lineitem->col_id("l_quantity_float"));
+  auto const discount_ref = cudf::ast::column_reference(lineitem->col_id("l_discount_float"));
+  auto const quantity_ref = cudf::ast::column_reference(lineitem->col_id("l_quantity_float"));
 
-  auto discount_lower         = cudf::numeric_scalar<float_t>(0.05);
-  auto discount_lower_literal = cudf::ast::literal(discount_lower);
-  auto discount_upper         = cudf::numeric_scalar<float_t>(0.07);
-  auto discount_upper_literal = cudf::ast::literal(discount_upper);
-  auto quantity_upper         = cudf::numeric_scalar<float_t>(24);
-  auto quantity_upper_literal = cudf::ast::literal(quantity_upper);
+  auto discount_lower               = cudf::numeric_scalar<float_t>(0.05);
+  auto const discount_lower_literal = cudf::ast::literal(discount_lower);
+  auto discount_upper               = cudf::numeric_scalar<float_t>(0.07);
+  auto const discount_upper_literal = cudf::ast::literal(discount_upper);
+  auto quantity_upper               = cudf::numeric_scalar<float_t>(24);
+  auto const quantity_upper_literal = cudf::ast::literal(quantity_upper);
 
-  auto discount_pred_a = cudf::ast::operation(
+  auto const discount_pred_a = cudf::ast::operation(
     cudf::ast::ast_operator::GREATER_EQUAL, discount_ref, discount_lower_literal);
 
-  auto discount_pred_b =
+  auto const discount_pred_b =
     cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, discount_ref, discount_upper_literal);
-  auto discount_pred =
+  auto const discount_pred =
     cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, discount_pred_a, discount_pred_b);
-  auto quantity_pred =
+  auto const quantity_pred =
     cudf::ast::operation(cudf::ast::ast_operator::LESS, quantity_ref, quantity_upper_literal);
-  auto discount_quantity_pred =
+  auto const discount_quantity_pred =
     cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, discount_pred, quantity_pred);
-  auto filtered_table = apply_filter(lineitem, discount_quantity_pred);
+  auto const filtered_table = apply_filter(lineitem, discount_quantity_pred);
 
   // Calculate the `revenue` column
   auto revenue =
     calc_revenue(filtered_table->column("l_extendedprice"), filtered_table->column("l_discount"));
 
   // Sum the `revenue` column
-  auto revenue_view = revenue->view();
-  auto result_table = apply_reduction(revenue_view, cudf::aggregation::Kind::SUM, "revenue");
+  auto const revenue_view = revenue->view();
+  auto const result_table = apply_reduction(revenue_view, cudf::aggregation::Kind::SUM, "revenue");
 
   timer.print_elapsed_millis();
 
