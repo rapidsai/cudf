@@ -53,6 +53,110 @@
 
 namespace cudf::io::json::detail {
 
+struct device_json_column_properties_size {
+  rmm::device_uvector<NodeIndexT> outcol_nodes;
+  size_t string_offsets_size = 0;
+  size_t string_lengths_size = 0;
+  size_t child_offsets_size = 0;
+  size_t num_rows_size = 0;
+};
+
+device_json_column_properties_size estimate_device_json_column_size(rmm::device_uvector<NodeIndexT> const &rowidx, rmm::device_uvector<NodeIndexT> const &colidx, rmm::device_uvector<NodeT> const &categories, cudf::io::json_reader_options reader_options, rmm::cuda_stream_view stream) {
+  // What are the cases in which estimation works?
+  CUDF_EXPECTS(reader_options.is_enabled_mixed_types_as_string() == false,
+               "mixed type as string has not yet been implemented");
+  CUDF_EXPECTS(reader_options.is_enabled_prune_columns() == false,
+               "column pruning has not yet been implemented");
+  // traverse the column tree
+  auto num_columns = rowidx.size() - 1;
+
+  // 1. removing NC_ERR nodes and their descendants i.e. 
+  // removing the entire subtree rooted at the nodes with category NC_ERR
+  auto num_err_nodes = thrust::count_if(rmm::exec_policy(stream),
+                                         categories.begin(),
+                                         categories.end(),
+                                         [] __device__(auto const ctg) { return ctg == NC_ERR; });
+
+  // (Optional) 2. Let's do some validation of the column tree based on some of its properties.
+  // We will be using these properties to filter nodes later on
+  // ===========================================================================
+  // Every node v is of type string, val, field name, list or struct.
+  // String and val cannot have any children. 
+  // If v is a field name, it can have struct, list, string and val as children.
+  // If v is a struct, it can have a field name as child
+  // If v is a list, it can have string, val, list or struct as child
+  // There can only be at most one string and one val child for a given node, but many struct, list and field name children.
+  // Moreover, only string and val children can be leaf nodes. 
+  // When mixed type support is disabled -
+  // 1. A mix of lists and structs in the same column is not supported i.e a field name and list node cannot have both list and struct as children
+  // 2. If there is a mix of str/val and list/struct in the same column, then str/val is discarded
+
+  // for ignore_vals, we need to identify leaf nodes that have non-leaf sibling nodes
+  // i.e. we need to ignore leaf nodes at level above the last level
+  // idea: leaf nodes have adjacency 1. So if there is an adjacency 1 inbetween non-one
+  // adjacencies, then found the leaf node. Corner case: consider the last set of consecutive
+  // ones. If the leftmost of those ones (say node u) has a non-leaf sibling
+  // (can be found by looking at the adjacencies of the siblings
+  // (which are in turn found from the colidx of the parent u), then this leaf node should be
+  // ignored, otherwise all good.
+  rmm::device_uvector<NodeIndexT> adjacency(
+    num_columns + 1,
+    stream);  // since adjacent_difference requires that the output have the same length as input
+  thrust::adjacent_difference(rmm::exec_policy(stream),
+                              rowidx.begin(),
+                              rowidx.end(),
+                              adjacency.begin());
+  auto num_leaf_nodes = thrust::count_if(rmm::exec_policy(stream),
+                                         adjacency.begin() + 1,
+                                         adjacency.end(),
+                                         [] __device__(auto const adj) { return adj == 1; });
+  rmm::device_uvector<NodeIndexT> leaf_nodes(num_leaf_nodes, stream);
+  thrust::copy_if(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(0) + num_columns,
+    leaf_nodes.begin(),
+    [adjacency = adjacency.begin()] __device__(size_t node) { return adjacency[node] == 1; });
+
+  auto rev_node_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(0) + num_columns);
+  auto rev_leaf_nodes_it = thrust::make_reverse_iterator(leaf_nodes.begin());
+  auto is_leftmost_leaf  = thrust::mismatch(
+    rmm::exec_policy(stream), rev_node_it, rev_node_it + num_columns, rev_leaf_nodes_it);
+  // the node number that could be the leftmost leaf node is given by u = *(is_leftmost_leaf.second
+  // - 1)
+  NodeIndexT leftmost_leaf_node = leaf_nodes.element(
+    num_leaf_nodes - thrust::distance(rev_leaf_nodes_it, is_leftmost_leaf.second - 1) - 1, stream);
+
+  // upper_bound search for u in rowidx for parent node v. Now check if any of the other child nodes
+  // of v is non-leaf i.e check if u is the first child of v. If yes, then leafmost_leaf_node is
+  // the leftmost leaf node. Otherwise, discard all children of v after and including u
+
+  auto parent_it              = thrust::upper_bound(rmm::exec_policy(stream),
+                                       rowidx.begin(),
+                                       rowidx.end(),
+                                       leftmost_leaf_node);
+  NodeIndexT parent           = thrust::distance(rowidx.begin(), parent_it - 1);
+  NodeIndexT parent_adj_start = rowidx.element(parent, stream);
+  NodeIndexT parent_adj_end   = rowidx.element(parent + 1, stream);
+  auto childnum_it            = thrust::lower_bound(rmm::exec_policy(stream),
+                                         colidx.begin() + parent_adj_start,
+                                         colidx.begin() + parent_adj_end,
+                                         leftmost_leaf_node);
+
+  auto retained_leaf_nodes_it = leaf_nodes.begin() + num_leaf_nodes -
+                                thrust::distance(rev_leaf_nodes_it, is_leftmost_leaf.second - 1) -
+                                1;
+  if (childnum_it != colidx.begin() + parent_adj_start + 1) {
+    // discarding from u to last child of parent
+    retained_leaf_nodes_it +=
+      thrust::distance(childnum_it, colidx.begin() + parent_adj_end);
+  }
+  // now, all nodes from leaf_nodes.begin() to retained_leaf_nodes_it need to be discarded i.e. they
+  // are part of ignore_vals
+
+  
+}
+
 /**
  * @brief Reduces node tree representation to column tree CSR representation.
  *
@@ -75,6 +179,7 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
   device_span<size_type> row_offsets,
   bool is_array_of_arrays,
   NodeIndexT const row_array_parent_col_id,
+  cudf::io::json_reader_options const& reader_options,
   rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -350,6 +455,8 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
     [] __device__(auto i) { return i + 1; },
     [] __device__(NodeT type) { return type == NC_STRUCT || type == NC_LIST; });
 
+  auto size_estimates = estimate_device_json_column_size(rowidx, colidx, csr_column_categories, reader_options, stream);
+
   return std::tuple{column_tree_csr{std::move(rowidx),
                                     std::move(colidx),
                                     std::move(csr_unique_col_ids),
@@ -422,6 +529,7 @@ void make_device_json_column_csr(device_span<SymbolT const> input,
                                                                       row_offsets,
                                                                       is_array_of_arrays,
                                                                       row_array_parent_col_id,
+                                                                      options,
                                                                       stream);
 
   CUDF_EXPECTS(is_array_of_arrays == false, "array of arrays has not yet been implemented");
@@ -430,73 +538,6 @@ void make_device_json_column_csr(device_span<SymbolT const> input,
   CUDF_EXPECTS(options.is_enabled_prune_columns() == false,
                "column pruning has not yet been implemented");
 
-  // traverse the column tree
-  auto num_columns = d_column_tree.rowidx.size() - 1;
-  d_column_tree.is_mixed_type_column.resize(num_columns, 0);
-  d_column_tree.is_pruned.resize(num_columns, 0);
-
-  // for ignore_vals, we need to identify leaf nodes that have non-leaf sibling nodes
-  // i.e. we need to ignore leaf nodes at level above the last level
-  // idea: leaf nodes have adjacency 1. So if there is an adjacency 1 inbetween non-one
-  // adjacencies, then found the leaf node. Corner case: consider the last set of consecutive
-  // ones. If the leftmost of those ones (say node u) has a non-leaf sibling
-  // (can be found by looking at the adjacencies of the siblings
-  // (which are in turn found from the colidx of the parent u), then this leaf node should be
-  // ignored, otherwise all good.
-  rmm::device_uvector<NodeIndexT> adjacency(
-    num_columns + 1,
-    stream);  // since adjacent_difference requires that the output have the same length as input
-  thrust::adjacent_difference(rmm::exec_policy(stream),
-                              d_column_tree.rowidx.begin(),
-                              d_column_tree.rowidx.end(),
-                              adjacency.begin());
-  auto num_leaf_nodes = thrust::count_if(rmm::exec_policy(stream),
-                                         adjacency.begin() + 1,
-                                         adjacency.end(),
-                                         [] __device__(auto const adj) { return adj == 1; });
-  rmm::device_uvector<NodeIndexT> leaf_nodes(num_leaf_nodes, stream);
-  thrust::copy_if(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(0) + num_columns,
-    leaf_nodes.begin(),
-    [adjacency = adjacency.begin()] __device__(size_t node) { return adjacency[node] == 1; });
-
-  auto rev_node_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(0) + num_columns);
-  auto rev_leaf_nodes_it = thrust::make_reverse_iterator(leaf_nodes.begin());
-  auto is_leftmost_leaf  = thrust::mismatch(
-    rmm::exec_policy(stream), rev_node_it, rev_node_it + num_columns, rev_leaf_nodes_it);
-  // the node number that could be the leftmost leaf node is given by u = *(is_leftmost_leaf.second
-  // - 1)
-  NodeIndexT leftmost_leaf_node = leaf_nodes.element(
-    num_leaf_nodes - thrust::distance(rev_leaf_nodes_it, is_leftmost_leaf.second - 1) - 1, stream);
-
-  // upper_bound search for u in rowidx for parent node v. Now check if any of the other child nodes
-  // of v are non-leaf i.e check if u is the first child of v. If yes, then leafmost_leaf_node is
-  // the leftmost leaf node. Otherwise, discard all children of v after and including u
-  auto parent_it              = thrust::upper_bound(rmm::exec_policy(stream),
-                                       d_column_tree.rowidx.begin(),
-                                       d_column_tree.rowidx.end(),
-                                       leftmost_leaf_node);
-  NodeIndexT parent           = thrust::distance(d_column_tree.rowidx.begin(), parent_it - 1);
-  NodeIndexT parent_adj_start = d_column_tree.rowidx.element(parent, stream);
-  NodeIndexT parent_adj_end   = d_column_tree.rowidx.element(parent + 1, stream);
-  auto childnum_it            = thrust::lower_bound(rmm::exec_policy(stream),
-                                         d_column_tree.colidx.begin() + parent_adj_start,
-                                         d_column_tree.colidx.begin() + parent_adj_end,
-                                         leftmost_leaf_node);
-
-  auto retained_leaf_nodes_it = leaf_nodes.begin() + num_leaf_nodes -
-                                thrust::distance(rev_leaf_nodes_it, is_leftmost_leaf.second - 1) -
-                                1;
-  if (childnum_it != d_column_tree.colidx.begin() + parent_adj_start + 1) {
-    // discarding from u to last child of parent
-    retained_leaf_nodes_it +=
-      thrust::distance(childnum_it, d_column_tree.colidx.begin() + parent_adj_end);
-  }
-
-  // now, all nodes from leaf_nodes.begin() to retained_leaf_nodes_it need to be discarded i.e. they
-  // are part of ignore_vals
 }
 
 }  // namespace cudf::io::json::detail

@@ -366,6 +366,7 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
   device_span<size_type> row_offsets,
   bool is_array_of_arrays,
   NodeIndexT const row_array_parent_col_id,
+  cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream);
 
 void make_device_json_column_csr(device_span<SymbolT const> input,
