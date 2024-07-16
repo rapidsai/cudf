@@ -2361,10 +2361,9 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
     std::vector<size_t> const expected_counts(nsources, num_rows);
 
     EXPECT_EQ(result.metadata.num_rows_per_source.size(), nsources);
-    EXPECT_EQ(std::equal(expected_counts.cbegin(),
+    EXPECT_TRUE(std::equal(expected_counts.cbegin(),
                          expected_counts.cend(),
-                         result.metadata.num_rows_per_source.cbegin()),
-              true);
+                         result.metadata.num_rows_per_source.cbegin()));
   }
 
   // num_rows_per_source.size() must be = 10 and all num_rows_per_source[k] must be = num_rows

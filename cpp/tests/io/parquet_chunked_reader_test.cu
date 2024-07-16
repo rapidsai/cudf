@@ -1821,8 +1821,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
 
     EXPECT_EQ(num_chunks, 1);
     EXPECT_EQ(num_rows_per_source.size(), nsources);
-    EXPECT_EQ(
-      std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()),
-      true);
+    EXPECT_TRUE(
+      std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
   }
 }
