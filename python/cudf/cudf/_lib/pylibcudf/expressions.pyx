@@ -127,7 +127,7 @@ cdef class Literal(Expression):
 
 cdef class ColumnReference(Expression):
     """
-    A expression referring to data from a column in a table.
+    An expression referring to data from a column in a table.
 
     For details, see :cpp:class:`cudf::ast::column_reference`.
 
@@ -178,7 +178,7 @@ cdef class Operation(Expression):
 
 cdef class ColumnNameReference(Expression):
     """
-    A expression referring to data from a column in a table.
+    An expression referring to data from a column in a table.
 
     For details, see :cpp:class:`cudf::ast::column_name_reference`.
 
