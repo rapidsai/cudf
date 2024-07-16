@@ -107,7 +107,7 @@ class table_with_names {
    * @param col The column to append
    * @param col_name The name of the appended column
    */
-  [[nodiscard]] void append(std::unique_ptr<cudf::column>& col, std::string const& col_name)
+  void append(std::unique_ptr<cudf::column>& col, std::string const& col_name)
   {
     CUDF_FUNC_RANGE();
     auto cols = tbl->release();
@@ -178,11 +178,12 @@ std::vector<T> concat(std::vector<T> const& lhs, std::vector<T> const& rhs)
  * @param right_on The columns to join on in the right table
  * @param compare_nulls The null equality policy
  */
-std::unique_ptr<cudf::table> join_and_gather(cudf::table_view const& left_input,
-                                             cudf::table_view const& right_input,
-                                             std::vector<cudf::size_type> const& left_on,
-                                             std::vector<cudf::size_type> const& right_on,
-                                             cudf::null_equality compare_nulls)
+[[nodiscard]] std::unique_ptr<cudf::table> join_and_gather(
+  cudf::table_view const& left_input,
+  cudf::table_view const& right_input,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  cudf::null_equality compare_nulls)
 {
   CUDF_FUNC_RANGE();
   constexpr auto oob_policy                          = cudf::out_of_bounds_policy::DONT_CHECK;
@@ -217,7 +218,7 @@ std::unique_ptr<cudf::table> join_and_gather(cudf::table_view const& left_input,
  * @param right_on The columns to join on in the right table
  * @param compare_nulls The null equality policy
  */
-std::unique_ptr<table_with_names> apply_inner_join(
+[[nodiscard]] std::unique_ptr<table_with_names> apply_inner_join(
   std::unique_ptr<table_with_names> const& left_input,
   std::unique_ptr<table_with_names> const& right_input,
   std::vector<std::string> const& left_on,
@@ -247,8 +248,8 @@ std::unique_ptr<table_with_names> apply_inner_join(
  * @param table The input table
  * @param predicate The filter predicate
  */
-std::unique_ptr<table_with_names> apply_filter(std::unique_ptr<table_with_names> const& table,
-                                               cudf::ast::operation const& predicate)
+[[nodiscard]] std::unique_ptr<table_with_names> apply_filter(
+  std::unique_ptr<table_with_names> const& table, cudf::ast::operation const& predicate)
 {
   CUDF_FUNC_RANGE();
   auto const boolean_mask = cudf::compute_column(table->table(), predicate);
@@ -262,8 +263,8 @@ std::unique_ptr<table_with_names> apply_filter(std::unique_ptr<table_with_names>
  * @param table The input table
  * @param mask The boolean mask
  */
-std::unique_ptr<table_with_names> apply_mask(std::unique_ptr<table_with_names> const& table,
-                                             std::unique_ptr<cudf::column> const& mask)
+[[nodiscard]] std::unique_ptr<table_with_names> apply_mask(
+  std::unique_ptr<table_with_names> const& table, std::unique_ptr<cudf::column> const& mask)
 {
   CUDF_FUNC_RANGE();
   auto result_table = cudf::apply_boolean_mask(table->table(), mask->view());
@@ -282,8 +283,8 @@ struct groupby_context_t {
  * @param table The input table
  * @param ctx The groupby context
  */
-std::unique_ptr<table_with_names> apply_groupby(std::unique_ptr<table_with_names> const& table,
-                                                groupby_context_t const& ctx)
+[[nodiscard]] std::unique_ptr<table_with_names> apply_groupby(
+  std::unique_ptr<table_with_names> const& table, groupby_context_t const& ctx)
 {
   CUDF_FUNC_RANGE();
   auto const keys = table->select(ctx.keys);
@@ -332,9 +333,10 @@ std::unique_ptr<table_with_names> apply_groupby(std::unique_ptr<table_with_names
  * @param sort_keys The sort keys
  * @param sort_key_orders The sort key orders
  */
-std::unique_ptr<table_with_names> apply_orderby(std::unique_ptr<table_with_names> const& table,
-                                                std::vector<std::string> const& sort_keys,
-                                                std::vector<cudf::order> const& sort_key_orders)
+[[nodiscard]] std::unique_ptr<table_with_names> apply_orderby(
+  std::unique_ptr<table_with_names> const& table,
+  std::vector<std::string> const& sort_keys,
+  std::vector<cudf::order> const& sort_key_orders)
 {
   CUDF_FUNC_RANGE();
   std::vector<cudf::column_view> column_views;
@@ -353,9 +355,10 @@ std::unique_ptr<table_with_names> apply_orderby(std::unique_ptr<table_with_names
  * @param agg_kind The aggregation kind
  * @param col_name The name of the output column
  */
-std::unique_ptr<table_with_names> apply_reduction(cudf::column_view const& column,
-                                                  cudf::aggregation::Kind const& agg_kind,
-                                                  std::string const& col_name)
+[[nodiscard]] std::unique_ptr<table_with_names> apply_reduction(
+  cudf::column_view const& column,
+  cudf::aggregation::Kind const& agg_kind,
+  std::string const& col_name)
 {
   CUDF_FUNC_RANGE();
   auto const agg            = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
@@ -376,7 +379,7 @@ std::unique_ptr<table_with_names> apply_reduction(cudf::column_view const& colum
  * @param columns The columns to read
  * @param predicate The filter predicate to pushdown
  */
-std::unique_ptr<table_with_names> read_parquet(
+[[nodiscard]] std::unique_ptr<table_with_names> read_parquet(
   std::string const& filename,
   std::vector<std::string> const& columns                = {},
   std::unique_ptr<cudf::ast::operation> const& predicate = nullptr)
@@ -442,11 +445,13 @@ struct tpch_args_t {
 tpch_args_t parse_args(int argc, char const** argv)
 {
   if (argc < 3) {
-    std::cerr << "Usage: " << argv[0] << " <dataset_dir> <memory_resource_type>" << std::endl;
-    std::cerr << std::endl;
-    std::cerr << "The query result will be saved to a parquet file named "
-              << "q{query_no}.parquet in the current working directory." << std::endl;
-    exit(1);
+    std::string usage_message = R"(
+      Usage: <dataset_dir> <memory_resource_type>
+
+      The query result will be saved to a parquet file named q{query_no}.parquet in the current
+      working directory.
+    )";
+    throw std::runtime_error(usage_message);
   }
   tpch_args_t args;
   args.dataset_dir          = argv[1];

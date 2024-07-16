@@ -57,7 +57,7 @@
  * @param stream The CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-std::unique_ptr<cudf::column> calc_disc_price(
+[[nodiscard]] std::unique_ptr<cudf::column> calc_disc_price(
   cudf::column_view const& discount,
   cudf::column_view const& extendedprice,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -84,7 +84,7 @@ std::unique_ptr<cudf::column> calc_disc_price(
  * @param stream The CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-std::unique_ptr<cudf::column> calc_charge(
+[[nodiscard]] std::unique_ptr<cudf::column> calc_charge(
   cudf::column_view const& tax,
   cudf::column_view const& disc_price,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
