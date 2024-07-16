@@ -35,9 +35,7 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
-#include <chrono>
 #include <ctime>
-#include <iostream>
 
 // RMM memory resource creation utilities
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
@@ -458,34 +456,3 @@ tpch_example_args parse_args(int argc, char const** argv)
   args.memory_resource_type = argv[2];
   return args;
 }
-
-/**
- * @brief Light-weight timer for parquet reader and writer instrumentation
- *
- * Timer object constructed from std::chrono, instrumenting at microseconds
- * precision. Can display elapsed durations at milli and micro second
- * scales. Timer starts at object construction.
- */
-class Timer {
- public:
-  using micros = std::chrono::microseconds;
-  using millis = std::chrono::milliseconds;
-
-  Timer() { reset(); }
-  void reset() { start_time = std::chrono::high_resolution_clock::now(); }
-  auto elapsed() const { return (std::chrono::high_resolution_clock::now() - start_time); }
-  void print_elapsed_micros() const
-  {
-    std::cout << "Elapsed Time: " << std::chrono::duration_cast<micros>(elapsed()).count()
-              << "us\n\n";
-  }
-  void print_elapsed_millis() const
-  {
-    std::cout << "Elapsed Time: " << std::chrono::duration_cast<millis>(elapsed()).count()
-              << "ms\n\n";
-  }
-
- private:
-  using time_point_t = std::chrono::time_point<std::chrono::high_resolution_clock>;
-  time_point_t start_time;
-};

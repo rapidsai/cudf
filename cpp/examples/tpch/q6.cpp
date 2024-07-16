@@ -19,6 +19,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/timer.hpp>
 
 /**
  * @file q6.cpp
@@ -66,7 +67,7 @@ int main(int argc, char const** argv)
   auto resource = create_memory_resource(args.memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
 
-  Timer timer;
+  cudf::timer timer;
 
   // Read out the `lineitem` table from parquet file
   std::vector<std::string> const lineitem_cols = {

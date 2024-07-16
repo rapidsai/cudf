@@ -21,6 +21,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/timer.hpp>
 
 /**
  * @file q9.cpp
@@ -115,7 +116,7 @@ int main(int argc, char const** argv)
   auto resource = create_memory_resource(args.memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
 
-  Timer timer;
+  cudf::timer timer;
 
   // Read out the table from parquet files
   auto const lineitem = read_parquet(
