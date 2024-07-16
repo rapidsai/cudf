@@ -10,6 +10,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils import versions
 
 
 @pytest.fixture(
@@ -97,6 +98,10 @@ def test_scan_unsupported_raises(tmp_path):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+@pytest.mark.xfail(
+    versions.POLARS_VERSION_LT_11,
+    reason="https://github.com/pola-rs/polars/issues/15730",
+)
 def test_scan_row_index_projected_out(tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
 
