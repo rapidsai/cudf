@@ -117,8 +117,7 @@ struct dispatch_to_arrow_host {
   }
 
   template <typename T,
-            CUDF_ENABLE_IF(!is_rep_layout_compatible<T>() &&
-                          !cudf::is_fixed_point<T>()>
+            CUDF_ENABLE_IF(!is_rep_layout_compatible<T>() && !cudf::is_fixed_point<T>())>
   int operator()(ArrowArray*) const
   {
     CUDF_FAIL("Unsupported type for to_arrow_host", cudf::data_type_error);
@@ -147,7 +146,7 @@ struct dispatch_to_arrow_host {
   // supported by Arrow. These types must be fit into 128 bits, the smallest
   // decimal resolution supported by Arrow
   template <typename T,
-            CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() &&
+            CUDF_ENABLE_IF(!is_rep_layout_compatible<T>() &&
                            (std::is_same_v<T, numeric::decimal32> ||
                             std::is_same_v<T, numeric::decimal64>))>
   int operator()(ArrowArray* out) const
