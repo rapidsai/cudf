@@ -111,11 +111,13 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
           // to add the offset to the index in order to get the correct offset into the list
           const int64_t start_offset_expected =
             ArrowArrayViewListChildOffset(expected, expected->offset + expected_start);
-          const int64_t start_offset_actual = ArrowArrayViewListChildOffset(actual, actual->offset + actual_start);
+          const int64_t start_offset_actual =
+            ArrowArrayViewListChildOffset(actual, actual->offset + actual_start);
 
           const int64_t end_offset_expected =
             ArrowArrayViewListChildOffset(expected, expected->offset + expected_start + 1);
-          const int64_t end_offset_actual = ArrowArrayViewListChildOffset(actual, actual->offset + actual_start + 1);
+          const int64_t end_offset_actual =
+            ArrowArrayViewListChildOffset(actual, actual->offset + actual_start + 1);
 
           // verify the list lengths are the same
           EXPECT_EQ(end_offset_expected - start_offset_expected,
@@ -140,8 +142,11 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
 
           for (int64_t child = 0; child < expected->n_children; ++child) {
             SCOPED_TRACE("child: " + std::to_string(child));
-            compare_child_subset(
-              expected->children[child], expected_start + expected->offset, actual->children[child], actual_start + actual->offset, 1);
+            compare_child_subset(expected->children[child],
+                                 expected_start + expected->offset,
+                                 actual->children[child],
+                                 actual_start + actual->offset,
+                                 1);
           }
         }
         break;
@@ -178,7 +183,7 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
         if (expected->n_children == 0) {
           EXPECT_EQ(nullptr, actual->children);
           break;
-        }        
+        }
         // otherwise we can fallthrough and do the same thing we do for lists
       case NANOARROW_TYPE_LIST:
         compare_child_subset(expected, 0, actual, 0, expected->length);
