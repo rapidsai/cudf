@@ -1518,16 +1518,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         -------
         cupy.ndarray: The indices sorted based on input.
         """  # noqa: E501
-        return (
-            super()
-            .argsort(
-                axis=axis,
-                kind=kind,
-                order=order,
-                ascending=ascending,
-                na_position=na_position,
-            )
-            .values
+        return super().argsort(
+            axis=axis,
+            kind=kind,
+            order=order,
+            ascending=ascending,
+            na_position=na_position,
         )
 
     def repeat(self, repeats, axis=None):

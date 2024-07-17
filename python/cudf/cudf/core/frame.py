@@ -1305,7 +1305,7 @@ class Frame(BinaryOperand, Scannable):
         order=None,
         ascending=True,
         na_position="last",
-    ) -> ColumnBase:
+    ) -> cupy.ndarray:
         """Return the integer indices that would sort the Series values.
 
         Parameters
@@ -1381,7 +1381,7 @@ class Frame(BinaryOperand, Scannable):
             by = [by]
         return self._get_sorted_inds(
             by=by, ascending=ascending, na_position=na_position
-        )
+        ).values
 
     @_performance_tracking
     def _get_sorted_inds(

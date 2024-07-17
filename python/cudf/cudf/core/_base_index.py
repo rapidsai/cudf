@@ -99,7 +99,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def argsort(self, *args, **kwargs):
+    def argsort(self, *args, **kwargs) -> cupy.ndarray:
         """Return the integer indices that would sort the index.
 
         Parameters vary by subclass.
@@ -1611,7 +1611,7 @@ class BaseIndex(Serializable):
         index_sorted = self.take(indices)
 
         if return_indexer:
-            return index_sorted, indices.values
+            return index_sorted, indices
         else:
             return index_sorted
 

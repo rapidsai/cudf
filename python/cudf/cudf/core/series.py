@@ -2257,12 +2257,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ascending=True,
         na_position="last",
     ) -> Self:
-        col = super().argsort(
-            axis=axis,
-            kind=kind,
-            order=order,
-            ascending=ascending,
-            na_position=na_position,
+        col = as_column(
+            super().argsort(
+                axis=axis,
+                kind=kind,
+                order=order,
+                ascending=ascending,
+                na_position=na_position,
+            )
         )
         return self._from_data_like_self(
             self._data._from_columns_like_self([col])
