@@ -14,12 +14,12 @@ from collections.abc import Iterator
 from enum import IntEnum
 from typing import Any, Callable, Literal, Mapping
 
-import cupy as cp
 import numpy as np
 
 from ..options import _env_get_bool
 from ..testing import assert_eq
 from .annotation import nvtx
+from .proxy_base import ProxyNDarrayBase
 
 
 def call_operator(fn, args, kwargs):
@@ -46,23 +46,6 @@ _WRAPPER_ASSIGNMENTS = tuple(
     # significant issues).
     if attr not in ("__annotations__", "__doc__")
 )
-
-
-class ProxyNDarrayBase(np.ndarray):
-    def __new__(cls, arr):
-        if isinstance(arr, cp.ndarray):
-            obj = np.asarray(arr.get()).view(cls)
-            return obj
-        elif isinstance(arr, np.ndarray):
-            obj = np.asarray(arr).view(cls)
-            return obj
-        else:
-            raise TypeError(
-                "Unsupported array type. Must be numpy.ndarray or cupy.ndarray"
-            )
-
-    def __array_finalize__(self, obj):
-        self._fsproxy_wrapped = getattr(obj, "_fsproxy_wrapped", None)
 
 
 def callers_module_name():
