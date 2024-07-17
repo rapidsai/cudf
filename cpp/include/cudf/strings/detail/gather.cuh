@@ -319,7 +319,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
     "gather", strings.chars_begin(stream), strings.chars_size(stream), stream);
   auto out_chars_data = gather_chars(
     d_strings->begin<string_view>(), begin, end, offsets_view, total_bytes, stream, mr);
-    
+
   return make_strings_column(output_count,
                              std::move(out_offsets_column),
                              out_chars_data.release(),

@@ -18,16 +18,16 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
-#include <src/io/utilities/multibuffer_memset.hpp>
 
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
+#include <src/io/utilities/multibuffer_memset.hpp>
 
 // Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
-constexpr size_t data_size         = 512 << 20;
+constexpr size_t data_size = 512 << 20;
 
 void parquet_read_common(cudf::size_type num_rows_to_read,
                          cudf::size_type num_cols_to_read,
@@ -59,19 +59,20 @@ void parquet_read_common(cudf::size_type num_rows_to_read,
 }
 
 template <data_type DataType>
-void bench_multibuffer_memset(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
+void bench_multibuffer_memset(nvbench::state& state,
+                              nvbench::type_list<nvbench::enum_type<DataType>>)
 {
   auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
-  auto const num_cols = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  auto const num_cols    = static_cast<cudf::size_type>(state.get_int64("num_cols"));
   auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
   auto const compression = cudf::io::compression_type::NONE;
   cuio_source_sink_pair source_sink(source_type);
-  auto const tbl = create_random_table(
-    cycle_dtypes(d_type, num_cols),
-    table_size_bytes{data_size},
-    data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
+  auto const tbl =
+    create_random_table(cycle_dtypes(d_type, num_cols),
+                        table_size_bytes{data_size},
+                        data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
   auto const view = tbl->view();
 
   cudf::io::parquet_writer_options write_opts =
@@ -79,7 +80,7 @@ void bench_multibuffer_memset(nvbench::state& state, nvbench::type_list<nvbench:
       .compression(compression);
   cudf::io::write_parquet(write_opts);
   auto const num_rows = view.num_rows();
-  
+
   parquet_read_common(num_rows, num_cols, source_sink, state);
 }
 
@@ -95,9 +96,8 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
 NVBENCH_BENCH_TYPES(bench_multibuffer_memset, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("multibufffer_memset")
   .set_type_axes_names({"data_type"})
-  .add_int64_axis("num_cols", {1000, 2000})
-  .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
+  .add_int64_axis("num_cols", {1000})
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
-

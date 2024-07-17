@@ -22,9 +22,6 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
-#include <io/utilities/multibuffer_memset.hpp>
-
-
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
@@ -43,6 +40,8 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 #include <thrust/unique.h>
+
+#include <io/utilities/multibuffer_memset.hpp>
 
 #include <bitset>
 #include <numeric>
@@ -1471,7 +1470,6 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
 
 void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows)
 {
-  CUDF_FUNC_RANGE();
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
@@ -1498,8 +1496,8 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
   // buffers if they are not part of a list hierarchy. mark down
   // if we have any list columns that need further processing.
   bool has_lists = false;
-  std::vector<cudf::device_span<uint8_t>> memset_bufs;
-  std::vector<cudf::device_span<uint8_t>> nullmask_bufs;
+  std::vector<cudf::device_span<uint64_t>> memset_bufs;
+  std::vector<cudf::device_span<uint64_t>> nullmask_bufs;
 
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
     auto const& input_col  = _input_columns[idx];
@@ -1524,8 +1522,10 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
           cudf::mask_state::UNINITIALIZED,
           _stream,
           _mr);
-        memset_bufs.push_back(cudf::device_span<uint8_t>((uint8_t *)(out_buf.data()), out_buf.data_size()));
-        nullmask_bufs.push_back(cudf::device_span<uint8_t>((uint8_t *)(out_buf.null_mask()), out_buf.null_mask_size()));
+        memset_bufs.push_back(cudf::device_span<uint64_t>(static_cast<uint64_t*>(out_buf.data()),
+                                                          out_buf.data_size() / 8));
+        nullmask_bufs.push_back(cudf::device_span<uint64_t>(
+          reinterpret_cast<uint64_t*>(out_buf.null_mask()), out_buf.null_mask_size() / 8));
       }
     }
   }
@@ -1602,16 +1602,16 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
           // allocate
           // we're going to start null mask as all valid and then turn bits off if necessary
           out_buf.create_with_mask(size, cudf::mask_state::UNINITIALIZED, _stream, _mr);
-          memset_bufs.push_back(cudf::device_span<uint8_t>((uint8_t *)(out_buf.data()), out_buf.data_size()));
-          nullmask_bufs.push_back(cudf::device_span<uint8_t>((uint8_t *)(out_buf.null_mask()), out_buf.null_mask_size()));
-
+          memset_bufs.push_back(cudf::device_span<uint64_t>(static_cast<uint64_t*>(out_buf.data()),
+                                                            out_buf.data_size() / 8));
+          nullmask_bufs.push_back(cudf::device_span<uint64_t>(
+            reinterpret_cast<uint64_t*>(out_buf.null_mask()), out_buf.null_mask_size() / 8));
         }
       }
     }
   }
-  multibuffer_memset(memset_bufs, 0, _stream, _mr);
-  multibuffer_memset_validity(nullmask_bufs, 0xFF, _stream, _mr);
-  _stream.synchronize();
+  multibuffer_memset(memset_bufs, 0UL, _stream, _mr);
+  multibuffer_memset(nullmask_bufs, 0xFFFFFFFFFFFFFFFF, _stream, _mr);
 }
 
 std::vector<size_t> reader::impl::calculate_page_string_offsets()
