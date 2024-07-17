@@ -38,7 +38,6 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-#include <iostream>
 #include <numeric>
 
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;

@@ -120,9 +120,10 @@ int dispatch_to_arrow_type::operator()<cudf::string_view>(column_view input,
                                                           ArrowSchema* out)
 {
   return ((input.num_children() == 0 ||
-      input.child(cudf::strings_column_view::offsets_column_index).type().id() == type_id::INT32)) 
-      ? ArrowSchemaSetType(out, NANOARROW_TYPE_STRING) 
-      : ArrowSchemaSetType(out, NANOARROW_TYPE_LARGE_STRING);
+           input.child(cudf::strings_column_view::offsets_column_index).type().id() ==
+             type_id::INT32))
+           ? ArrowSchemaSetType(out, NANOARROW_TYPE_STRING)
+           : ArrowSchemaSetType(out, NANOARROW_TYPE_LARGE_STRING);
 }
 
 // these forward declarations are needed due to the recursive calls to them
