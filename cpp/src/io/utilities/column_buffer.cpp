@@ -98,7 +98,7 @@ void column_buffer_base<string_policy>::create_with_mask(size_type _size,
 {
   size = _size;
   _mr  = mr;
-  
+
   switch (type.id()) {
     case type_id::STRING: static_cast<string_policy*>(this)->allocate_strings_data(stream); break;
 
