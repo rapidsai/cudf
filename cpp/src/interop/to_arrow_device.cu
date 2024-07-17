@@ -214,10 +214,11 @@ int dispatch_to_arrow_device::operator()<cudf::string_view>(cudf::column&& colum
                                                             ArrowArray* out)
 {
   ArrowType nanoarrow_type = NANOARROW_TYPE_STRING;
-  if (column.child(cudf::strings_column_view::offsets_column_index).type().id() == cudf::type_id::INT64) {
+  if (column.child(cudf::strings_column_view::offsets_column_index).type().id() ==
+      cudf::type_id::INT64) {
     nanoarrow_type = NANOARROW_TYPE_LARGE_STRING;
   }
-  
+
   nanoarrow::UniqueArray tmp;
   NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), nanoarrow_type, column));
 
@@ -450,14 +451,15 @@ template <>
 int dispatch_to_arrow_device_view::operator()<cudf::string_view>(ArrowArray* out) const
 {
   ArrowType nanoarrow_type = NANOARROW_TYPE_STRING;
-  if (column.child(cudf::strings_column_view::offsets_column_index).type().id() == cudf::type_id::INT64) {
+  if (column.child(cudf::strings_column_view::offsets_column_index).type().id() ==
+      cudf::type_id::INT64) {
     nanoarrow_type = NANOARROW_TYPE_LARGE_STRING;
   }
 
   nanoarrow::UniqueArray tmp;
   NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), nanoarrow_type, column));
 
-  if (column.size() == 0) {    
+  if (column.size() == 0) {
     // https://github.com/rapidsai/cudf/pull/15047#discussion_r1546528552
     if (nanoarrow_type == NANOARROW_TYPE_LARGE_STRING) {
       auto zero = std::make_unique<rmm::device_scalar<int64_t>>(0, stream, mr);
@@ -466,7 +468,7 @@ int dispatch_to_arrow_device_view::operator()<cudf::string_view>(ArrowArray* out
       auto zero = std::make_unique<rmm::device_scalar<int32_t>>(0, stream, mr);
       NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
     }
-    
+
     ArrowArrayMove(tmp.get(), out);
     return NANOARROW_OK;
   }

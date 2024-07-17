@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "detail/arrow_allocator.hpp"
 #include "arrow_utilities.hpp"
+#include "detail/arrow_allocator.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -158,13 +158,17 @@ std::shared_ptr<arrow::Array> unsupported_decimals_to_arrow(column_view input,
                                                             arrow::MemoryPool* ar_mr,
                                                             rmm::cuda_stream_view stream)
 {
-  auto buf = detail::decimals_to_arrow<DeviceType>(input, stream, rmm::mr::get_current_device_resource());
+  auto buf =
+    detail::decimals_to_arrow<DeviceType>(input, stream, rmm::mr::get_current_device_resource());
 
   auto const buf_size_in_bytes = buf->size();
   auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);
 
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    data_buffer->mutable_data(), buf->data(), buf_size_in_bytes, cudaMemcpyDefault, stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
+                                buf->data(),
+                                buf_size_in_bytes,
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   auto type    = arrow::decimal(precision, -input.type().scale());
   auto mask    = fetch_mask_buffer(input, ar_mr, stream);
