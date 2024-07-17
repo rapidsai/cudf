@@ -1,4 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from . cimport avro, csv, datasource, json, types
+# CSV is removed since it is def not cpdef (to force kw-only arguments)
+from . cimport avro, datasource, json, types
 from .types cimport SourceInfo, TableWithMetadata

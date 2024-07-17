@@ -36,8 +36,10 @@ cdef vector[string] _make_str_vector(list vals):
         res.push_back((<str?>val).encode())
     return res
 
-cpdef TableWithMetadata read_csv(
+
+def read_csv(
     SourceInfo source_info,
+    *,
     compression_type compression = compression_type.AUTO,
     size_t byte_range_offset = 0,
     size_t byte_range_size = 0,
@@ -234,7 +236,6 @@ cpdef TableWithMetadata read_csv(
         options.set_parse_hex(c_parse_hex_names)
         options.set_parse_hex(c_parse_hex_indexes)
 
-    cdef string k_str
     if isinstance(dtypes, list):
         for dtype in dtypes:
             c_dtypes_list.push_back((<DataType?>dtype).c_obj)
@@ -242,8 +243,7 @@ cpdef TableWithMetadata read_csv(
     elif isinstance(dtypes, dict):
         # dtypes_t is dict
         for k, v in dtypes.items():
-            k_str = str(k).encode()
-            c_dtypes_map[k_str] = (<DataType?>v).c_obj
+            c_dtypes_map[str(k).encode()] = (<DataType?>v).c_obj
         options.set_dtypes(c_dtypes_map)
     elif dtypes is not None:
         raise TypeError("dtypes must either by a list/dict")
