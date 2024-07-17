@@ -316,7 +316,7 @@ void segmented_sort(cudf::hash_value_type const* input,
                     rmm::cuda_stream_view stream)
 {
   rmm::device_buffer temp;
-  size_t temp_bytes = 0;
+  std::size_t temp_bytes = 0;
   cub::DeviceSegmentedSort::SortKeys(
     temp.data(), temp_bytes, input, output, items, segments, offsets, offsets + 1, stream.value());
   temp = rmm::device_buffer(temp_bytes, stream);
