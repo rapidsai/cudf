@@ -117,7 +117,7 @@ struct dispatch_to_arrow_host {
   }
 
   template <typename T,
-            CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() &&
+            CUDF_ENABLE_IF(!is_rep_layout_compatible<T>() &&
                            (!std::is_same_v<T, numeric::decimal128> &&
                             !std::is_same_v<T, numeric::decimal32> &&
                             !std::is_same_v<T, numeric::decimal64>))>
