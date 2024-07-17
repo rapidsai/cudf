@@ -22,6 +22,7 @@
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -40,6 +41,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
+#include <thrust/sequence.h>
 #include <thrust/transform.h>
 
 namespace nvtext {
@@ -306,6 +308,22 @@ CUDF_KERNEL void substring_hash_kernel(cudf::column_device_view const d_strings,
   }
 }
 
+void segmented_sort(cudf::hash_value_type const* input,
+                    cudf::hash_value_type* output,
+                    int64_t items,
+                    cudf::size_type segments,
+                    int64_t const* offsets,
+                    rmm::cuda_stream_view stream)
+{
+  rmm::device_buffer temp;
+  size_t temp_bytes = 0;
+  cub::DeviceSegmentedSort::SortKeys(
+    temp.data(), temp_bytes, input, output, items, segments, offsets, offsets + 1, stream.value());
+  temp = rmm::device_buffer(temp_bytes, stream);
+  cub::DeviceSegmentedSort::SortKeys(
+    temp.data(), temp_bytes, input, output, items, segments, offsets, offsets + 1, stream.value());
+}
+
 /**
  * @brief Create hashes for each substring
  *
@@ -338,28 +356,57 @@ std::pair<rmm::device_uvector<uint32_t>, rmm::device_uvector<int64_t>> hash_subs
 
   // sort hashes
   rmm::device_uvector<uint32_t> sorted(total_hashes, stream);
-  rmm::device_buffer d_temp_storage;
-  size_t temp_storage_bytes = 0;
-  cub::DeviceSegmentedSort::SortKeys(d_temp_storage.data(),
-                                     temp_storage_bytes,
-                                     hashes.data(),
-                                     sorted.data(),
-                                     sorted.size(),
-                                     input.size(),
-                                     offsets.begin(),
-                                     offsets.begin() + 1,
-                                     stream.value());
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
-  cub::DeviceSegmentedSort::SortKeys(d_temp_storage.data(),
-                                     temp_storage_bytes,
-                                     hashes.data(),
-                                     sorted.data(),
-                                     sorted.size(),
-                                     input.size(),
-                                     offsets.begin(),
-                                     offsets.begin() + 1,
-                                     stream.value());
+  if (total_hashes < static_cast<int64_t>(std::numeric_limits<int>::max())) {
+    segmented_sort(
+      hashes.begin(), sorted.begin(), sorted.size(), input.size(), offsets.begin(), stream);
+  } else {
+    // The CUB segmented sort can only handle max<int> total values
+    // so this code calls it in sections.
+    auto const section_size   = std::numeric_limits<int>::max() / 2L;
+    auto const sort_sections  = cudf::util::div_rounding_up_safe(total_hashes, section_size);
+    auto const offset_indices = [&] {
+      // build a set of indices that point to offsets subsections
+      auto sub_offsets = rmm::device_uvector<int64_t>(sort_sections + 1, stream);
+      thrust::sequence(
+        rmm::exec_policy(stream), sub_offsets.begin(), sub_offsets.end(), 0L, section_size);
+      auto indices = rmm::device_uvector<int64_t>(sub_offsets.size(), stream);
+      thrust::lower_bound(rmm::exec_policy(stream),
+                          offsets.begin(),
+                          offsets.end(),
+                          sub_offsets.begin(),
+                          sub_offsets.end(),
+                          indices.begin());
+      return cudf::detail::make_std_vector_sync(indices, stream);
+    }();
 
+    // Call segmented sort with the sort sections
+    for (auto i = 0L; i < sort_sections; ++i) {
+      auto const index1 = offset_indices[i];
+      auto const index2 = std::min(offset_indices[i + 1], static_cast<int64_t>(offsets.size() - 1));
+      auto const offset1 = offsets.element(index1, stream);
+      auto const offset2 = offsets.element(index2, stream);
+
+      auto const num_items    = offset2 - offset1;
+      auto const num_segments = index2 - index1;
+
+      // There is a bug in the CUB segmented sort and the workaround is to
+      // shift the offset values so the first offset is 0.
+      // This transform can be removed once the bug is fixed.
+      auto sort_offsets = rmm::device_uvector<int64_t>(num_segments + 1, stream);
+      thrust::transform(rmm::exec_policy(stream),
+                        offsets.begin() + index1,
+                        offsets.begin() + index2 + 1,
+                        sort_offsets.begin(),
+                        [offset1] __device__(auto const o) { return o - offset1; });
+
+      segmented_sort(hashes.begin() + offset1,
+                     sorted.begin() + offset1,
+                     num_items,
+                     num_segments,
+                     sort_offsets.begin(),
+                     stream);
+    }
+  }
   return std::make_pair(std::move(sorted), std::move(offsets));
 }
 
