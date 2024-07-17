@@ -83,7 +83,9 @@ def assert_gpu_result_equal(
     final_cudf_collect_kwargs = collect_kwargs.copy()
     if polars_collect_kwargs is not None:
         final_polars_collect_kwargs.update(polars_collect_kwargs)
-    if cudf_collect_kwargs is not None:
+    if cudf_collect_kwargs is not None:  # pragma: no cover
+        # exclude from coverage since not used ATM
+        # but this is probably still useful
         final_cudf_collect_kwargs.update(cudf_collect_kwargs)
     expect = lazydf.collect(**final_polars_collect_kwargs)
     got = lazydf.collect(

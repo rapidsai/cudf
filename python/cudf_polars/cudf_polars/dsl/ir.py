@@ -207,7 +207,9 @@ class Scan(IR):
         """Validate preconditions."""
         if self.file_options.n_rows is not None:
             raise NotImplementedError("row limit in scan")
-        if self.typ not in ("csv", "parquet", "ndjson"):
+        if self.typ not in ("csv", "parquet", "ndjson"):  # pragma: no cover
+            # This line is unhittable ATM since IPC/Anonymous scan raise
+            # on the polars side
             raise NotImplementedError(f"Unhandled scan type: {self.typ}")
         if self.cloud_options is not None and any(
             self.cloud_options[k] is not None for k in ("aws", "azure", "gcp")
