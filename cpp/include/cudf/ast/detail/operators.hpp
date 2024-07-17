@@ -29,7 +29,7 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 namespace ast {
 

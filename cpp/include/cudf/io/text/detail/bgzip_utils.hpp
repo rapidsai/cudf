@@ -27,7 +27,7 @@
 #include <fstream>
 #include <limits>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io::text::detail::bgzip {
 
 struct header {
@@ -91,7 +91,6 @@ void write_footer(std::ostream& output_stream, host_span<char const> data);
  *                           BGZIP block size subfield
  * @param post_size_subfields Any subfields to be placed after the BGZIP block size subfield
  */
-CUDF_EXPORT
 void write_uncompressed_block(std::ostream& output_stream,
                               host_span<char const> data,
                               host_span<char const> pre_size_subfields  = {},
@@ -107,11 +106,10 @@ void write_uncompressed_block(std::ostream& output_stream,
  *                           BGZIP block size subfield
  * @param post_size_subfields Any subfields to be placed after the BGZIP block size subfield
  */
-CUDF_EXPORT
 void write_compressed_block(std::ostream& output_stream,
                             host_span<char const> data,
                             host_span<char const> pre_size_subfields  = {},
                             host_span<char const> post_size_subfields = {});
 
 }  // namespace io::text::detail::bgzip
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
