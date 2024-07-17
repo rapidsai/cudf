@@ -379,7 +379,6 @@ reduce_to_column_tree(tree_meta_t& tree,
                       NodeIndexT const row_array_parent_col_id,
                       rmm::cuda_stream_view stream);
 
-
 /**
  * @brief Retrieves the parse_options to be used for type inference and type casting
  *

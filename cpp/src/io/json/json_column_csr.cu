@@ -59,11 +59,17 @@ struct device_json_column_properties_size {
   rmm::device_uvector<NodeIndexT> outcol_nodes;
   size_t string_offsets_size = 0;
   size_t string_lengths_size = 0;
-  size_t child_offsets_size = 0;
-  size_t num_rows_size = 0;
+  size_t child_offsets_size  = 0;
+  size_t num_rows_size       = 0;
 };
 
-device_json_column_properties_size estimate_device_json_column_size(rmm::device_uvector<NodeIndexT> const &rowidx, rmm::device_uvector<NodeIndexT> const &colidx, rmm::device_uvector<NodeT> const &categories, cudf::io::json_reader_options reader_options, rmm::cuda_stream_view stream) {
+device_json_column_properties_size estimate_device_json_column_size(
+  rmm::device_uvector<NodeIndexT> const& rowidx,
+  rmm::device_uvector<NodeIndexT> const& colidx,
+  rmm::device_uvector<NodeT> const& categories,
+  cudf::io::json_reader_options reader_options,
+  rmm::cuda_stream_view stream)
+{
   // What are the cases in which estimation works?
   CUDF_EXPECTS(reader_options.is_enabled_mixed_types_as_string() == false,
                "mixed type as string has not yet been implemented");
@@ -72,56 +78,63 @@ device_json_column_properties_size estimate_device_json_column_size(rmm::device_
   // traverse the column tree
   auto num_columns = rowidx.size() - 1;
 
-  // 1. TODO: removing NC_ERR nodes and their descendants i.e. 
+  // 1. TODO: removing NC_ERR nodes and their descendants i.e.
   // removing the entire subtree rooted at the nodes with category NC_ERR
   // for now, we just assert that there are indeed no error nodes
-  auto num_err_nodes = thrust::count_if(rmm::exec_policy(stream),
-                                         categories.begin(),
-                                         categories.end(),
-                                         [] __device__(auto const ctg) { return ctg == NC_ERR; });
+  auto num_err_nodes = thrust::count_if(
+    rmm::exec_policy(stream), categories.begin(), categories.end(), [] __device__(auto const ctg) {
+      return ctg == NC_ERR;
+    });
   CUDF_EXPECTS(num_err_nodes == 0, "oops, there are some error nodes in the column tree!");
 
   // 2. Let's do some validation of the column tree based on its properties.
-  // We will be using these properties to filter nodes later on. 
+  // We will be using these properties to filter nodes later on.
   // ===========================================================================
   // (i) Every node v is of type string, val, field name, list or struct.
   // (ii) String and val cannot have any children i.e. they can only be leaf nodes
   // (iii) If v is a field name, it can have struct, list, string and val as children.
   // (iv) If v is a struct, it can have a field name as child
   // (v) If v is a list, it can have string, val, list or struct as child
-  // (vi) There can only be at most one string and one val child for a given node, but many struct, list and field name children.
-  // (vii) When mixed type support is disabled -
-  //       (a) A mix of lists and structs in the same column is not supported i.e a field name and list node cannot have both list and struct as children
-  //       (b) If there is a mix of str/val and list/struct in the same column, then str/val is discarded
+  // (vi) There can only be at most one string and one val child for a given node, but many struct,
+  // list and field name children. (vii) When mixed type support is disabled -
+  //       (a) A mix of lists and structs in the same column is not supported i.e a field name and
+  //       list node cannot have both list and struct as children (b) If there is a mix of str/val
+  //       and list/struct in the same column, then str/val is discarded
 
   // Validation of (vii)(a)
-  auto num_field_and_list_nodes = thrust::count_if(rmm::exec_policy(stream), categories.begin(), categories.end(), 
-    [] __device__(auto const ctg) { 
-      return ctg == NC_FN || ctg == NC_LIST; 
-  });
+  auto num_field_and_list_nodes = thrust::count_if(
+    rmm::exec_policy(stream), categories.begin(), categories.end(), [] __device__(auto const ctg) {
+      return ctg == NC_FN || ctg == NC_LIST;
+    });
   rmm::device_uvector<NodeIndexT> field_and_list_nodes(num_field_and_list_nodes, stream);
-  thrust::partition_copy(rmm::exec_policy(stream), thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(0) + num_columns, field_and_list_nodes.begin(), 
-    thrust::make_discard_iterator(), 
-    [categories = categories.begin()] __device__(NodeIndexT node) {
-      return categories[node] == NC_LIST || categories[node] == NC_FN;
-  });
-  bool is_valid_tree = thrust::all_of(rmm::exec_policy(stream), field_and_list_nodes.begin(), field_and_list_nodes.end(),
-    [rowidx = rowidx.begin(),
-     colidx = colidx.begin(),
-     categories = categories.begin()] __device__(NodeIndexT node) {
+  thrust::partition_copy(rmm::exec_policy(stream),
+                         thrust::make_counting_iterator(0),
+                         thrust::make_counting_iterator(0) + num_columns,
+                         field_and_list_nodes.begin(),
+                         thrust::make_discard_iterator(),
+                         [categories = categories.begin()] __device__(NodeIndexT node) {
+                           return categories[node] == NC_LIST || categories[node] == NC_FN;
+                         });
+  bool is_valid_tree = thrust::all_of(
+    rmm::exec_policy(stream),
+    field_and_list_nodes.begin(),
+    field_and_list_nodes.end(),
+    [rowidx = rowidx.begin(), colidx = colidx.begin(), categories = categories.begin()] __device__(
+      NodeIndexT node) {
       NodeIndexT first_child_pos = rowidx[node] + 1;
-      NodeIndexT last_child_pos = rowidx[node + 1] - 1;
-      bool has_struct_child = false;
-      bool has_list_child = false;
-      for(NodeIndexT child_pos = first_child_pos; child_pos <= last_child_pos; child_pos++) {
-        if(categories[colidx[child_pos]] == NC_STRUCT) has_struct_child = true;
-        if(categories[colidx[child_pos]] == NC_LIST) has_list_child = true;
+      NodeIndexT last_child_pos  = rowidx[node + 1] - 1;
+      bool has_struct_child      = false;
+      bool has_list_child        = false;
+      for (NodeIndexT child_pos = first_child_pos; child_pos <= last_child_pos; child_pos++) {
+        if (categories[colidx[child_pos]] == NC_STRUCT) has_struct_child = true;
+        if (categories[colidx[child_pos]] == NC_LIST) has_list_child = true;
       }
       return !has_struct_child && !has_list_child;
     });
 
-  CUDF_EXPECTS(is_valid_tree, "Invalidating property 7a i.e. mix of LIST and STRUCT in same column is not supported when mixed type support is disabled");
+  CUDF_EXPECTS(is_valid_tree,
+               "Invalidating property 7a i.e. mix of LIST and STRUCT in same column is not "
+               "supported when mixed type support is disabled");
 
   // Validation of (vii)(b) i.e. ignore_vals in previous implementation
   // We need to identify leaf nodes that have non-leaf sibling nodes
@@ -135,10 +148,8 @@ device_json_column_properties_size estimate_device_json_column_size(rmm::device_
   rmm::device_uvector<NodeIndexT> adjacency(
     num_columns + 1,
     stream);  // since adjacent_difference requires that the output have the same length as input
-  thrust::adjacent_difference(rmm::exec_policy(stream),
-                              rowidx.begin(),
-                              rowidx.end(),
-                              adjacency.begin());
+  thrust::adjacent_difference(
+    rmm::exec_policy(stream), rowidx.begin(), rowidx.end(), adjacency.begin());
   auto num_leaf_nodes = thrust::count_if(rmm::exec_policy(stream),
                                          adjacency.begin() + 1,
                                          adjacency.end(),
@@ -164,10 +175,8 @@ device_json_column_properties_size estimate_device_json_column_size(rmm::device_
   // of v is non-leaf i.e check if u is the first child of v. If yes, then leafmost_leaf_node is
   // the leftmost leaf node. Otherwise, discard all children of v after and including u
 
-  auto parent_it              = thrust::upper_bound(rmm::exec_policy(stream),
-                                       rowidx.begin(),
-                                       rowidx.end(),
-                                       leftmost_leaf_node);
+  auto parent_it =
+    thrust::upper_bound(rmm::exec_policy(stream), rowidx.begin(), rowidx.end(), leftmost_leaf_node);
   NodeIndexT parent           = thrust::distance(rowidx.begin(), parent_it - 1);
   NodeIndexT parent_adj_start = rowidx.element(parent, stream);
   NodeIndexT parent_adj_end   = rowidx.element(parent + 1, stream);
@@ -181,14 +190,13 @@ device_json_column_properties_size estimate_device_json_column_size(rmm::device_
                                 1;
   if (childnum_it != colidx.begin() + parent_adj_start + 1) {
     // discarding from u to last child of parent
-    retained_leaf_nodes_it +=
-      thrust::distance(childnum_it, colidx.begin() + parent_adj_end);
+    retained_leaf_nodes_it += thrust::distance(childnum_it, colidx.begin() + parent_adj_end);
   }
   // now, all nodes from leaf_nodes.begin() to retained_leaf_nodes_it need to be discarded i.e. they
   // are part of ignore_vals
 
   // (Optional?) TODO: Validation of the remaining column tree properties
-  
+
   rmm::device_uvector<NodeIndexT> outcol_nodes(num_columns, stream);
   return device_json_column_properties_size{std::move(outcol_nodes)};
 }
@@ -491,7 +499,8 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
     [] __device__(auto i) { return i + 1; },
     [] __device__(NodeT type) { return type == NC_STRUCT || type == NC_LIST; });
 
-  auto size_estimates = estimate_device_json_column_size(rowidx, colidx, csr_column_categories, reader_options, stream);
+  auto size_estimates =
+    estimate_device_json_column_size(rowidx, colidx, csr_column_categories, reader_options, stream);
 
   return std::tuple{column_tree_csr{std::move(rowidx),
                                     std::move(colidx),
@@ -573,7 +582,6 @@ void make_device_json_column_csr(device_span<SymbolT const> input,
                "mixed type as string has not yet been implemented");
   CUDF_EXPECTS(options.is_enabled_prune_columns() == false,
                "column pruning has not yet been implemented");
-
 }
 
 }  // namespace cudf::io::json::experimental::detail

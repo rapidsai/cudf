@@ -185,7 +185,6 @@ TEST_F(JsonColumnTreeTests, SimpleLines)
                                                                     options,
                                                                     stream);
 
-
   auto iseq = check_equality(d_column_tree, d_column_tree_csr, stream);
   // assert equality between csr and meta formats
   assert(iseq == true);
