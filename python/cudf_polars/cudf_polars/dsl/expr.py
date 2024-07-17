@@ -699,14 +699,14 @@ class StringFunction(Expr):
 
     def _validate_input(self):
         if self.name not in (
-            pl_expr.StringFunction.Lowercase,
-            pl_expr.StringFunction.Uppercase,
-            pl_expr.StringFunction.EndsWith,
-            pl_expr.StringFunction.StartsWith,
             pl_expr.StringFunction.Contains,
+            pl_expr.StringFunction.EndsWith,
+            pl_expr.StringFunction.Lowercase,
             pl_expr.StringFunction.Replace,
             pl_expr.StringFunction.ReplaceMany,
             pl_expr.StringFunction.Slice,
+            pl_expr.StringFunction.StartsWith,
+            pl_expr.StringFunction.Uppercase,
         ):
             raise NotImplementedError(f"String function {self.name}")
         if self.name == pl_expr.StringFunction.Contains:
@@ -724,6 +724,13 @@ class StringFunction(Expr):
             _, literal = self.options
             if not literal:
                 raise NotImplementedError("literal=False is not supported for replace")
+            if not all(isinstance(expr, Literal) for expr in self.children[1:]):
+                raise NotImplementedError("replace only supports scalar target")
+            target = self.children[1]
+            if target.value == pa.scalar("", type=pa.string()):
+                raise NotImplementedError(
+                    "libcudf replace does not support empty strings"
+                )
         elif self.name == pl_expr.StringFunction.ReplaceMany:
             (ascii_case_insensitive,) = self.options
             if ascii_case_insensitive:
@@ -825,7 +832,7 @@ class StringFunction(Expr):
             )
         elif self.name == pl_expr.StringFunction.Replace:
             column, target, repl = columns
-            n, literal = self.options
+            n, _ = self.options
             return Column(
                 plc.strings.replace.replace(
                     column.obj, target.obj_scalar, repl.obj_scalar, maxrepl=n

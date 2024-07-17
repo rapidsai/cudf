@@ -152,9 +152,19 @@ def test_slice_column(slice_column_data):
     assert_ir_translation_raises(query, NotImplementedError)
 
 
-def test_replace_literal(ldf):
-    query = ldf.select(pl.col("a").str.replace("A", "a", literal=True))
+@pytest.mark.parametrize(
+    "target, repl",
+    [("a", "a"), ("Wı", "☺"), ("doesnotexist", "blahblah")],  # noqa: RUF001
+)
+def test_replace_literal(ldf, target, repl):
+    query = ldf.select(pl.col("a").str.replace(target, repl, literal=True))
     assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize("target, repl", [("", ""), ("a", pl.col("a"))])
+def test_replace_literal_unsupported(ldf, target, repl):
+    query = ldf.select(pl.col("a").str.replace(target, repl, literal=True))
+    assert_ir_translation_raises(query, NotImplementedError)
 
 
 def test_replace_re(ldf):
