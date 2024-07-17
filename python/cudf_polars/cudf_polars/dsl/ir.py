@@ -312,7 +312,7 @@ class Scan(IR):
                     if colnames != tbl_w_meta.column_names(include_children=False):
                         raise ValueError("column names must match between files!")
                 pieces.append(tbl_w_meta.tbl)
-            assert colnames is not None
+            assert colnames is not None  # placate mypy
             df = DataFrame.from_table(
                 plc.concatenate.concatenate(pieces),
                 colnames,
