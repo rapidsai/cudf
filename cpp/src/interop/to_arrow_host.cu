@@ -24,6 +24,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
@@ -319,9 +320,11 @@ int dispatch_to_arrow_host::operator()<cudf::struct_view>(ArrowArray* out) const
   NANOARROW_RETURN_NOT_OK(ArrowArrayAllocateChildren(tmp.get(), column.num_children()));
   NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
 
+  auto const scv = cudf::structs_column_view(column);  
+
   for (size_t i = 0; i < size_t(tmp->n_children); ++i) {
     ArrowArray* child_ptr = tmp->children[i];
-    auto const child      = column.child(i);
+    auto const child      = scv.get_sliced_child(i, stream);
     NANOARROW_RETURN_NOT_OK(get_column(child, stream, mr, child_ptr));
   }
 

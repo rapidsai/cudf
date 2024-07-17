@@ -125,6 +125,7 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
         break;
       case NANOARROW_TYPE_STRUCT:
         for (int64_t i = 0; i < length; ++i) {
+          SCOPED_TRACE("idx: " + std::to_string(i));
           const auto expected_start = exp_start_offset + i;
           const auto actual_start   = act_start_offset + i;
 
@@ -133,8 +134,9 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
           if (is_null) continue;
 
           for (int64_t child = 0; child < expected->n_children; ++child) {
+            SCOPED_TRACE("child: " + std::to_string(child));
             compare_child_subset(
-              expected->children[child], expected_start, actual->children[child], actual_start, 1);
+              expected->children[child], expected_start + expected->offset, actual->children[child], actual_start + actual->offset, 1);
           }
         }
         break;
@@ -155,7 +157,7 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
   {
     EXPECT_EQ(expected->length, actual->length);
     EXPECT_EQ(expected->null_count, actual->null_count);
-    // EXPECT_EQ(expected->offset, actual->offset);
+    EXPECT_EQ(expected->offset, actual->offset);
     EXPECT_EQ(expected->n_children, actual->n_children);
     EXPECT_EQ(expected->storage_type, actual->storage_type);
 
