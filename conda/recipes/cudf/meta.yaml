@@ -82,7 +82,7 @@ requirements:
     - pandas >=2.0,<2.2.3dev0
     - cupy >=12.0.0
     - numba >=0.57
-    - {{ pin_compatible('numpy', max_pin='x') }}
+    - numpy >=1.23,<2.0a0
     - {{ pin_compatible('pyarrow', max_pin='x.x') }}
     - libcudf ={{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}
