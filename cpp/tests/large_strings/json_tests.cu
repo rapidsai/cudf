@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "../io/json/json_utils.hpp"
+#include "../io/json/json_utils.cuh"
 #include "large_strings_fixture.hpp"
 
 #include <cudf_test/table_utilities.hpp>

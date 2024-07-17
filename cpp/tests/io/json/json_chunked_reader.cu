@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "json_utils.hpp"
+#include "json_utils.cuh"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
