@@ -451,8 +451,9 @@ template <>
 int dispatch_to_arrow_device_view::operator()<cudf::string_view>(ArrowArray* out) const
 {
   ArrowType nanoarrow_type = NANOARROW_TYPE_STRING;
-  if (column.child(cudf::strings_column_view::offsets_column_index).type().id() ==
-      cudf::type_id::INT64) {
+  if (column.num_children() > 0 &&
+      column.child(cudf::strings_column_view::offsets_column_index).type().id() ==
+        cudf::type_id::INT64) {
     nanoarrow_type = NANOARROW_TYPE_LARGE_STRING;
   }
 
