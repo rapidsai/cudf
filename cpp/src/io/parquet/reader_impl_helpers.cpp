@@ -1015,8 +1015,8 @@ aggregate_reader_metadata::select_row_groups(
           num_rows_per_source[src_idx] += count - chunk_start_row_this_rg;
 
           // We need the unadjusted start index of this row group to correctly initialize
-          // ColumnChunkDesc for this row group in create_global_chunk_info() and correctly
-          // calculate the row offset for the first pass in compute_input_passes().
+          // ColumnChunkDesc for this row group in create_global_chunk_info() and calculate
+          // the row offset for the first pass in compute_input_passes().
           selection.emplace_back(rg_idx, chunk_start_row, src_idx);
 
           // If page-level indexes are present, then collect extra chunk and page info.

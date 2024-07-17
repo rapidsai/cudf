@@ -1573,7 +1573,7 @@ void reader::impl::compute_input_passes()
 {
   // at this point, row_groups has already been filtered down to just the row groups we need to
   // handle optional skip_rows/num_rows parameters.
-  auto& row_groups_info = _file_itm_data.row_groups;
+  auto const& row_groups_info = _file_itm_data.row_groups;
 
   // if the user hasn't specified an input size limit, read everything in a single pass.
   if (_input_pass_read_limit == 0) {
@@ -1606,7 +1606,7 @@ void reader::impl::compute_input_passes()
   int skip_rows = _file_itm_data.global_skip_rows;
 
   for (size_t cur_rg_index = 0; cur_rg_index < row_groups_info.size(); cur_rg_index++) {
-    auto& rgi             = row_groups_info[cur_rg_index];
+    auto const& rgi       = row_groups_info[cur_rg_index];
     auto const& row_group = _metadata->get_row_group(rgi.index, rgi.source_index);
 
     // total compressed size and total size (compressed + uncompressed) for
@@ -1618,13 +1618,8 @@ void reader::impl::compute_input_passes()
     auto row_group_rows =
       (skip_rows) ? rgi.start_row + row_group.num_rows - skip_rows : row_group.num_rows;
 
-    // Adjust the start_row of the first row group which was left unadjusted during
-    // select_row_groups().
-    if (skip_rows) {
-      rgi.start_row = skip_rows;
-      // Set skip_rows = 0 as it is no longer needed for subsequent row_groups
-      skip_rows = 0;
-    }
+    //  Set skip_rows = 0 as it is no longer needed for subsequent row_groups
+    skip_rows = 0;
 
     // can we add this row group
     if (cur_pass_byte_size + compressed_rg_size >= comp_read_limit) {
