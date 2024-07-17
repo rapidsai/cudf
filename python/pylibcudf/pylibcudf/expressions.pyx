@@ -1,7 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-from cudf._lib.pylibcudf.libcudf.expressions import \
+from pylibcudf.libcudf.expressions import \
     ast_operator as ASTOperator  # no-cython-lint
-from cudf._lib.pylibcudf.libcudf.expressions import \
+from pylibcudf.libcudf.expressions import \
     table_reference as TableReference  # no-cython-lint
 
 from cython.operator cimport dereference
@@ -9,22 +9,21 @@ from libc.stdint cimport int32_t, int64_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
-
-from cudf._lib.pylibcudf.libcudf cimport expressions as libcudf_exp
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport (
+from pylibcudf.libcudf cimport expressions as libcudf_exp
+from pylibcudf.libcudf.scalar.scalar cimport (
     duration_scalar,
     numeric_scalar,
     string_scalar,
     timestamp_scalar,
 )
-from cudf._lib.pylibcudf.libcudf.types cimport size_type, type_id
-from cudf._lib.pylibcudf.libcudf.wrappers.durations cimport (
+from pylibcudf.libcudf.types cimport size_type, type_id
+from pylibcudf.libcudf.wrappers.durations cimport (
     duration_ms,
     duration_ns,
     duration_s,
     duration_us,
 )
-from cudf._lib.pylibcudf.libcudf.wrappers.timestamps cimport (
+from pylibcudf.libcudf.wrappers.timestamps cimport (
     timestamp_ms,
     timestamp_ns,
     timestamp_s,

@@ -1,8 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
-
-from cudf._lib.pylibcudf.libcudf.expressions cimport (
+from pylibcudf.libcudf.expressions cimport (
     ast_operator,
     expression,
     table_reference,

@@ -15,10 +15,13 @@
   ],
   "hostRequirements": {"gpu": "optional"},
   "features": {
-    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:24.8": {}
+    // TODO: change this back to rapidsai/devcontainers
+    // once https://github.com/lithomas1/devcontainers/tree/pylibcudf
+    // is merged in
+    "ghcr.io/lithomas1/devcontainers/features/rapids-build-utils:24.8": {}
   },
   "overrideFeatureInstallOrder": [
-    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
+    "ghcr.io/lithomas1/devcontainers/features/rapids-build-utils"
   ],
   "initializeCommand": ["/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda12.5-envs}"],
   "postAttachCommand": ["/bin/bash", "-c", "if [ ${CODESPACES:-false} = 'true' ]; then . devcontainer-utils-post-attach-command; . rapids-post-attach-command; fi"],
