@@ -158,7 +158,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
   data_type offsets_type(type_id::INT32);
   if (schema->type == NANOARROW_TYPE_LARGE_STRING) { offsets_type = data_type(type_id::INT64); }
   auto offsets_view = column_view{offsets_type,
-                                  static_cast<int32_t>(input->offset + input->length) + 1,
+                                  static_cast<size_type>(input->offset + input->length) + 1,
                                   input->buffers[fixed_width_data_buffer_idx],
                                   nullptr,
                                   0,
