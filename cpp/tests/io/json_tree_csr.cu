@@ -66,7 +66,7 @@ void print(std::string str, std::vector<T>& vec)
 }
 
 bool check_equality(cuio_json::tree_meta_t& d_a,
-                    cuio_json::column_tree_csr& d_b,
+                    cuio_json::experimental::column_tree_csr& d_b,
                     rmm::cuda_stream_view stream)
 {
   // convert from tree_meta_t to column_tree_csr
@@ -175,14 +175,16 @@ TEST_F(JsonColumnTreeTests, SimpleLines)
                                                   stream);
 
   auto [d_column_tree_csr, d_max_row_offsets_csr] =
-    cudf::io::json::detail::reduce_to_column_tree_csr(gpu_tree,
-                                                      gpu_col_id,
-                                                      sorted_col_ids,
-                                                      node_ids,
-                                                      gpu_row_offsets,
-                                                      false,
-                                                      row_array_parent_col_id,
-                                                      stream);
+    cudf::io::json::experimental::detail::reduce_to_column_tree_csr(gpu_tree,
+                                                                    gpu_col_id,
+                                                                    sorted_col_ids,
+                                                                    node_ids,
+                                                                    gpu_row_offsets,
+                                                                    false,
+                                                                    row_array_parent_col_id,
+                                                                    options,
+                                                                    stream);
+
 
   auto iseq = check_equality(d_column_tree, d_column_tree_csr, stream);
   // assert equality between csr and meta formats

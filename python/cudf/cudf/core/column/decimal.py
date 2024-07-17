@@ -62,9 +62,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return self
         return libcudf.unary.cast(self, dtype)
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
+    def as_string_column(self) -> cudf.core.column.StringColumn:
         if len(self) > 0:
             return cpp_from_decimal(self)
         else:
@@ -157,7 +155,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                         "Decimal columns only support binary operations with "
                         "integer numerical columns."
                     )
-                other = other.as_decimal_column(
+                other = other.astype(
                     self.dtype.__class__(self.dtype.__class__.MAX_PRECISION, 0)
                 )
             elif not isinstance(other, DecimalBaseColumn):

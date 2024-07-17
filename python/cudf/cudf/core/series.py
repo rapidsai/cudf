@@ -3107,10 +3107,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         # Pandas returns an IntervalIndex as the index of res
         # this condition makes sure we do too if bins is given
         if bins is not None and len(res) == len(res.index.categories):
-            int_index = IntervalColumn.as_interval_column(
-                res.index._column, res.index.categories.dtype
+            interval_col = IntervalColumn.from_struct_column(
+                res.index._column._get_decategorized_column()
             )
-            res.index = int_index
+            res.index = cudf.IntervalIndex._from_data(
+                {res.index.name: interval_col}
+            )
         res.name = result_name
         return res
 
@@ -4729,9 +4731,7 @@ class DatetimeProperties(BaseDatelikeProperties):
                     f"for tracking purposes."
                 )
         return self._return_result_like_self(
-            self.series._column.as_string_column(
-                dtype="str", format=date_format
-            )
+            self.series._column.strftime(format=date_format)
         )
 
     @copy_docstring(DatetimeIndex.tz_localize)

@@ -167,7 +167,6 @@ struct device_json_column {
   {
   }
 };
-
 /**
  * @brief Holds member data pointers of `d_json_column`
  *
@@ -178,34 +177,6 @@ struct json_column_data {
   row_offset_t* string_lengths;
   row_offset_t* child_offsets;
   bitmask_type* validity;
-};
-
-struct column_tree_csr {
-  // position of nnzs
-  rmm::device_uvector<NodeIndexT> rowidx;
-  rmm::device_uvector<NodeIndexT> colidx;
-  // node properties
-  rmm::device_uvector<NodeIndexT> column_ids;
-  rmm::device_uvector<NodeT> categories;
-  rmm::device_uvector<SymbolOffsetT> range_begin;
-  rmm::device_uvector<SymbolOffsetT> range_end;
-  std::vector<uint8_t> ignore_vals;
-  std::vector<uint8_t> is_mixed_type_column;
-  std::vector<uint8_t> is_pruned;
-  // device_json_column properties
-  // Type used to count number of rows
-  /*
-  using row_offset_t = size_type;
-  // The inferred type of this column (list, struct, or value/string column)
-  std::vector<json_col_t> types;
-  rmm::device_uvector<row_offset_t> string_offsets;
-  rmm::device_uvector<row_offset_t> string_lengths;
-  // Row offsets
-  rmm::device_uvector<row_offset_t> child_offsets;
-  // Validity bitmap
-  rmm::device_buffer validity;
-  std::vector<row_offset_t> num_rows;
-  */
 };
 
 /**
@@ -225,6 +196,67 @@ enum class stack_behavior_t : char {
 
 // Default name for a list's child column
 constexpr auto list_child_name{"element"};
+
+namespace experimental {
+struct column_tree_csr {
+  // position of nnzs
+  rmm::device_uvector<NodeIndexT> rowidx;
+  rmm::device_uvector<NodeIndexT> colidx;
+  // node properties
+  rmm::device_uvector<NodeIndexT> column_ids;
+  rmm::device_uvector<NodeT> categories;
+  rmm::device_uvector<SymbolOffsetT> range_begin;
+  rmm::device_uvector<SymbolOffsetT> range_end;
+  // device_json_column properties
+  // Type used to count number of rows
+  /*
+  using row_offset_t = size_type;
+  // The inferred type of this column (list, struct, or value/string column)
+  std::vector<json_col_t> types;
+  rmm::device_uvector<row_offset_t> string_offsets;
+  rmm::device_uvector<row_offset_t> string_lengths;
+  // Row offsets
+  rmm::device_uvector<row_offset_t> child_offsets;
+  // Validity bitmap
+  rmm::device_buffer validity;
+  std::vector<row_offset_t> num_rows;
+  */
+};
+
+namespace detail {
+/**
+ * @brief Reduce node tree into column tree by aggregating each property of column.
+ *
+ * @param tree json node tree to reduce (modified in-place, but restored to original state)
+ * @param col_ids column ids of each node (modified in-place, but restored to original state)
+ * @param row_offsets row offsets of each node (modified in-place, but restored to original state)
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @return A tuple containing the column tree, identifier for each column and the maximum row index
+ * in each column
+ */
+std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tree_csr(
+  tree_meta_t& tree,
+  device_span<NodeIndexT> original_col_ids,
+  device_span<NodeIndexT> sorted_col_ids,
+  device_span<NodeIndexT> ordered_node_ids,
+  device_span<size_type> row_offsets,
+  bool is_array_of_arrays,
+  NodeIndexT const row_array_parent_col_id,
+  cudf::io::json_reader_options const& reader_options,
+  rmm::cuda_stream_view stream);
+
+void make_device_json_column_csr(device_span<SymbolT const> input,
+                                 tree_meta_t& tree,
+                                 device_span<NodeIndexT> col_ids,
+                                 device_span<size_type> row_offsets,
+                                 device_json_column& root,
+                                 bool is_array_of_arrays,
+                                 cudf::io::json_reader_options const& options,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr);
+
+}  // namespace detail
+}  // namespace experimental
 
 namespace detail {
 
@@ -347,37 +379,6 @@ reduce_to_column_tree(tree_meta_t& tree,
                       NodeIndexT const row_array_parent_col_id,
                       rmm::cuda_stream_view stream);
 
-/**
- * @brief Reduce node tree into column tree by aggregating each property of column.
- *
- * @param tree json node tree to reduce (modified in-place, but restored to original state)
- * @param col_ids column ids of each node (modified in-place, but restored to original state)
- * @param row_offsets row offsets of each node (modified in-place, but restored to original state)
- * @param stream The CUDA stream to which kernels are dispatched
- * @return A tuple containing the column tree, identifier for each column and the maximum row index
- * in each column
- */
-
-std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tree_csr(
-  tree_meta_t& tree,
-  device_span<NodeIndexT> original_col_ids,
-  device_span<NodeIndexT> sorted_col_ids,
-  device_span<NodeIndexT> ordered_node_ids,
-  device_span<size_type> row_offsets,
-  bool is_array_of_arrays,
-  NodeIndexT const row_array_parent_col_id,
-  cudf::io::json_reader_options const& options,
-  rmm::cuda_stream_view stream);
-
-void make_device_json_column_csr(device_span<SymbolT const> input,
-                                 tree_meta_t& tree,
-                                 device_span<NodeIndexT> col_ids,
-                                 device_span<size_type> row_offsets,
-                                 device_json_column& root,
-                                 bool is_array_of_arrays,
-                                 cudf::io::json_reader_options const& options,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr);
 
 /**
  * @brief Retrieves the parse_options to be used for type inference and type casting
