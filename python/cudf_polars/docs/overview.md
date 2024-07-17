@@ -34,6 +34,8 @@ pip install --upgrade uv
 uv pip install --upgrade -r py-polars/requirements-dev.txt
 ```
 
+> ![NOTE] plain `pip install` works fine, but `uv` is _much_ faster!
+
 Now we have the necessary machinery to build polars
 ```sh
 cd py-polars
@@ -57,7 +59,7 @@ The executor for the polars logical plan lives in the cudf repo, in
 
 ```sh
 cd cudf/python/cudf_polars
-pip install --no-deps -e .
+uv pip install --no-build-isolation --no-deps -e .
 ```
 
 You should now be able to run the tests in the `cudf_polars` package:
@@ -95,6 +97,21 @@ result = q.collect(post_opt_callback=execute_with_cudf)
 This should either transparently run on the GPU and deliver a polars
 dataframe, or else fail (but be handled) and just run the normal CPU
 execution.
+
+If you want to fail during translation, set the keyword argument
+`raise_on_fail` to `True`:
+
+```python
+from functools import partial
+from cudf_polars.callback import execute_with_cudf
+
+result = q.collect(
+    post_opt_callback=partial(execute_with_cudf, raise_on_fail=True)
+)
+```
+
+This is mostly useful when writing tests, since in that case we want
+any failures to propagate, rather than falling back to the CPU mode.
 
 ## Adding a handler for a new plan node
 
@@ -153,22 +170,102 @@ the logical plan in any case, so is reasonably natural.
 # Containers
 
 Containers should be constructed as relatively lightweight objects
-around their pylibcudf counterparts. We have three (in
+around their pylibcudf counterparts. We have four (in
 `cudf_polars/containers/`):
 
-1. Scalar (a wrapper around a pylibcudf Scalar)
-2. Column (a wrapper around a pylibcudf Column)
-3. DataFrame (a wrapper around a pylibcudf Table)
+1. `Scalar` (a wrapper around a pylibcudf `Scalar`)
+2. `Column` (a wrapper around a pylibcudf `Column`)
+3. `NamedColumn` a `Column` with an additional name
+4. `DataFrame` (a wrapper around a pylibcudf `Table`)
 
 The interfaces offered by these are somewhat in flux, but broadly
-speaking, a `DataFrame` is just a list of `Column`s which each hold
-data plus a string `name`, along with a collection of `Scalar`s (this
-might go away).
+speaking, a `DataFrame` is just a list of `NamedColumn`s which each
+hold a `Column` plus a string `name`. `NamedColumn`s are only ever
+constructed via `NamedExpr`s, which are the top-level expression node
+that lives inside an `IR` node. This means that the expression
+evaluator never has to concern itself with column names: columns are
+only ever decorated with names when constructing a `DataFrame`.
 
 The columns keep track of metadata (for example, whether or not they
-are sorted).
+are sorted). We could imagine tracking more metadata, like minimum and
+maximum, though perhaps that is better left to libcudf itself.
 
 We offer some utility methods for transferring metadata when
 constructing new dataframes and columns, both `DataFrame` and `Column`
-offer a `with_metadata(*, like: Self)` call which copies metadata from
-the template.
+offer a `sorted_like(like: Self)` call which copies metadata from the
+template.
+
+All methods on containers that modify in place should return `self`,
+to facilitate use in a ["fluent"
+style](https://en.wikipedia.org/wiki/Fluent_interface). It makes it
+much easier to write iteration over objects and collect the results if
+everyone always returns a value.
+
+# Writing tests
+
+We use `pytest`, tests live in the `tests/` subdirectory,
+organisationally the top-level test files each handle one of the `IR`
+nodes. The goal is that they are parametrized over all the options
+each node will handle, to have reasonable coverage. Tests of
+expression functionality should live in `tests/expressions/`.
+
+To write a test an assert correctness, build a lazyframe as a query,
+and then use the utility assertion function from
+`cudf_polars.testing.asserts`. This runs the query using both the cudf
+executor and polars CPU, and checks that they match. So:
+
+```python
+from cudf_polars.testing.asserts import assert_gpu_result_equal
+
+
+def test_whatever():
+    query = pl.LazyFrame(...).(...)
+
+    assert_gpu_result_equal(query)
+```
+
+## Test coverage and asserting failure modes
+
+Where translation of a query should fail due to the feature being
+unsupported we should test this. To assert that _translation_ raises
+an exception (usually `NotImplementedError`), use the utility function
+`assert_ir_translation_raises`:
+
+```python
+from cudf_polars.testing.asserts import assert_ir_translation_raises
+
+
+def test_whatever():
+    unsupported_query = ...
+    assert_ir_translation_raises(unsupported_query, NotImplementedError)
+```
+
+This test will fail if translation does not raise.
+
+# Debugging
+
+If the callback execution fails during the polars `collect` call, we
+obtain an error, but are not able to drop into the debugger and
+inspect the stack properly: we can't cross the language barrier.
+
+However, we can drive the translation and execution of the DSL by
+hand. Given some `LazyFrame` representing a query, we can first
+translate it to our intermediate representation (IR), and then execute
+and convert back to polars:
+
+```python
+from cudf_polars.dsl.translate import translate_ir
+
+q = ...
+
+# Convert to our IR
+ir = translate_ir(q._ldf.visit())
+
+# DataFrame living on the device
+result = ir.evaluate(cache={})
+
+# Polars dataframe
+host_result = result.to_polars()
+```
+
+If we get any exceptions, we can then debug as normal in Python.

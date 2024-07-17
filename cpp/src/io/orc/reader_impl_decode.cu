@@ -19,13 +19,13 @@
 #include "io/orc/reader_impl.hpp"
 #include "io/orc/reader_impl_chunking.hpp"
 #include "io/orc/reader_impl_helpers.hpp"
-#include "io/utilities/config_utils.hpp"
 #include "io/utilities/hostdevice_span.hpp"
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/config_utils.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -810,7 +810,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
       cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>(stripe_count, num_lvl_columns, _stream);
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
 
-    const bool use_index =
+    bool const use_index =
       _options.use_index &&
       // Do stripes have row group index
       _metadata.is_row_grp_idx_present() &&

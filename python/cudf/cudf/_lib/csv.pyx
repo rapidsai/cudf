@@ -8,7 +8,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
-from cudf._lib.io.datasource cimport Datasource, NativeFileDatasource
+from cudf._lib.pylibcudf.io.datasource cimport Datasource, NativeFileDatasource
 from cudf._lib.pylibcudf.libcudf.types cimport data_type
 from cudf._lib.types cimport dtype_to_data_type
 
@@ -151,14 +151,14 @@ cdef csv_reader_options make_csv_reader_options(
         )
 
     if quoting == 1:
-        c_quoting = quote_style.QUOTE_ALL
+        c_quoting = quote_style.ALL
     elif quoting == 2:
-        c_quoting = quote_style.QUOTE_NONNUMERIC
+        c_quoting = quote_style.NONNUMERIC
     elif quoting == 3:
-        c_quoting = quote_style.QUOTE_NONE
+        c_quoting = quote_style.NONE
     else:
         # Default value
-        c_quoting = quote_style.QUOTE_MINIMAL
+        c_quoting = quote_style.MINIMAL
 
     cdef csv_reader_options csv_reader_options_c = move(
         csv_reader_options.builder(c_source_info)
@@ -450,7 +450,7 @@ def read_csv(
                     col_name = df._data.names[index]
                     df._data[col_name] = df._data[col_name].astype(col_dtype)
 
-    if names is not None and isinstance(names[0], (int)):
+    if names is not None and len(names) and isinstance(names[0], (int)):
         df.columns = [int(x) for x in df._data]
 
     # Set index if the index_col parameter is passed

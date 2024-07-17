@@ -15,10 +15,10 @@ import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.index import DatetimeIndex
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
 )
@@ -1534,18 +1534,7 @@ def test_date_range_start_end_periods(start, end, periods):
     )
 
 
-def test_date_range_start_end_freq(request, start, end, freq):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                start == "1831-05-08 15:23:21"
-                and end == "1996-11-21 04:05:30"
-                and freq == "110546789ms"
-            ),
-            reason="https://github.com/rapidsai/cudf/issues/12133",
-        )
-    )
-
+def test_date_range_start_end_freq(start, end, freq):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
@@ -1561,7 +1550,7 @@ def test_date_range_start_end_freq(request, start, end, freq):
     )
 
 
-def test_date_range_start_freq_periods(request, start, freq, periods):
+def test_date_range_start_freq_periods(start, freq, periods):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
@@ -2088,25 +2077,6 @@ def test_datetime_constructor(data, dtype):
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [pd.Timestamp("2001-01-01", tz="America/New_York")],
-        pd.Series(["2001-01-01"], dtype="datetime64[ns, America/New_York]"),
-        pd.Index(["2001-01-01"], dtype="datetime64[ns, America/New_York]"),
-    ],
-)
-def test_construction_from_tz_timestamps(data):
-    with pytest.raises(NotImplementedError):
-        _ = cudf.Series(data)
-    with pytest.raises(NotImplementedError):
-        _ = cudf.Index(data)
-    with pytest.raises(NotImplementedError):
-        _ = cudf.DatetimeIndex(data)
-    with pytest.raises(NotImplementedError):
-        cudf.CategoricalIndex(data)
-
-
 @pytest.mark.parametrize("op", _cmpops)
 def test_datetime_binop_tz_timestamp(op):
     s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
@@ -2391,13 +2361,14 @@ def test_datetime_raise_warning(freqstr):
         t.dt.ceil(freqstr)
 
 
-def test_timezone_array_notimplemented():
+def test_timezone_pyarrow_array():
     pa_array = pa.array(
         [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)],
         type=pa.timestamp("ns", "UTC"),
     )
-    with pytest.raises(NotImplementedError):
-        cudf.Series(pa_array)
+    result = cudf.Series(pa_array)
+    expected = pa_array.to_pandas()
+    assert_eq(result, expected)
 
 
 def test_to_datetime_errors_ignore_deprecated():

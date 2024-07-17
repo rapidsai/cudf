@@ -186,10 +186,10 @@ class reprog_device {
    *            Specify -1 to match any virtual positions past the end of the string.
    * @return If match found, returns character positions of the matches.
    */
-  __device__ inline match_result find(int32_t const thread_idx,
-                                      string_view const d_str,
-                                      string_view::const_iterator begin,
-                                      cudf::size_type end = -1) const;
+  __device__ [[nodiscard]] inline match_result find(int32_t const thread_idx,
+                                                    string_view const d_str,
+                                                    string_view::const_iterator begin,
+                                                    cudf::size_type end = -1) const;
 
   /**
    * @brief Does an extract evaluation using the compiled expression on the given string.
@@ -205,11 +205,11 @@ class reprog_device {
    * @param group_id The specific group to return its matching position values.
    * @return If valid, returns the character position of the matched group in the given string,
    */
-  __device__ inline match_result extract(int32_t const thread_idx,
-                                         string_view const d_str,
-                                         string_view::const_iterator begin,
-                                         cudf::size_type end,
-                                         cudf::size_type const group_id) const;
+  __device__ [[nodiscard]] inline match_result extract(int32_t const thread_idx,
+                                                       string_view const d_str,
+                                                       string_view::const_iterator begin,
+                                                       cudf::size_type end,
+                                                       cudf::size_type const group_id) const;
 
  private:
   struct reljunk {
@@ -225,30 +225,31 @@ class reprog_device {
   /**
    * @brief Returns the regex instruction object for a given id.
    */
-  __device__ inline reinst get_inst(int32_t id) const;
+  __device__ [[nodiscard]] inline reinst get_inst(int32_t id) const;
 
   /**
    * @brief Returns the regex class object for a given id.
    */
-  __device__ inline reclass_device get_class(int32_t id) const;
+  __device__ [[nodiscard]] inline reclass_device get_class(int32_t id) const;
 
   /**
    * @brief Executes the regex pattern on the given string.
    */
-  __device__ inline match_result regexec(string_view const d_str,
-                                         reljunk jnk,
-                                         string_view::const_iterator begin,
-                                         cudf::size_type end,
-                                         cudf::size_type const group_id = 0) const;
+  __device__ [[nodiscard]] inline match_result regexec(string_view const d_str,
+                                                       reljunk jnk,
+                                                       string_view::const_iterator begin,
+                                                       cudf::size_type end,
+                                                       cudf::size_type const group_id = 0) const;
 
   /**
    * @brief Utility wrapper to setup state memory structures for calling regexec
    */
-  __device__ inline match_result call_regexec(int32_t const thread_idx,
-                                              string_view const d_str,
-                                              string_view::const_iterator begin,
-                                              cudf::size_type end,
-                                              cudf::size_type const group_id = 0) const;
+  __device__ [[nodiscard]] inline match_result call_regexec(
+    int32_t const thread_idx,
+    string_view const d_str,
+    string_view::const_iterator begin,
+    cudf::size_type end,
+    cudf::size_type const group_id = 0) const;
 
   reprog_device(reprog const&);
 
@@ -300,7 +301,7 @@ __device__ __forceinline__ string_view string_from_match(match_pair const result
                                                          string_view::const_iterator last)
 {
   auto const [begin, end] = match_positions_to_bytes(result, d_str, last);
-  return string_view(d_str.data() + begin, end - begin);
+  return {d_str.data() + begin, end - begin};
 }
 
 }  // namespace detail

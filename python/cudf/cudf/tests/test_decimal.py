@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import decimal
 from decimal import Decimal
@@ -11,12 +11,12 @@ from packaging import version
 import cudf
 from cudf.core.column import Decimal32Column, Decimal64Column, NumericalColumn
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     FLOAT_TYPES,
     INTEGER_TYPES,
     SIGNED_TYPES,
     _decimal_series,
-    assert_eq,
     expect_warning_if,
 )
 
@@ -97,7 +97,7 @@ def test_typecast_from_float_to_decimal(request, data, from_dtype, to_dtype):
         pytest.mark.xfail(
             condition=version.parse(pa.__version__) >= version.parse("13.0.0")
             and from_dtype == np.dtype("float32")
-            and to_dtype.precision > 7,
+            and to_dtype.precision > 12,
             reason="https://github.com/rapidsai/cudf/issues/14169",
         )
     )

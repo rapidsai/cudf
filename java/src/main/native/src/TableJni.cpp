@@ -102,14 +102,14 @@ typedef jni_table_writer_handle<cudf::io::orc_chunked_writer> native_orc_writer_
 
 class native_arrow_ipc_writer_handle final {
  public:
-  explicit native_arrow_ipc_writer_handle(const std::vector<std::string>& col_names,
-                                          const std::string& file_name)
+  explicit native_arrow_ipc_writer_handle(std::vector<std::string> const& col_names,
+                                          std::string const& file_name)
     : initialized(false), column_names(col_names), file_name(file_name)
   {
   }
 
-  explicit native_arrow_ipc_writer_handle(const std::vector<std::string>& col_names,
-                                          const std::shared_ptr<arrow::io::OutputStream>& sink)
+  explicit native_arrow_ipc_writer_handle(std::vector<std::string> const& col_names,
+                                          std::shared_ptr<arrow::io::OutputStream> const& sink)
     : initialized(false), column_names(col_names), file_name(""), sink(sink)
   {
   }
@@ -178,7 +178,7 @@ class native_arrow_ipc_writer_handle final {
     initialized = false;
   }
 
-  std::vector<cudf::column_metadata> get_column_metadata(const cudf::table_view& tview)
+  std::vector<cudf::column_metadata> get_column_metadata(cudf::table_view const& tview)
   {
     if (!column_names.empty() && columns_meta.empty()) {
       // Rebuild the structure of column meta according to table schema.
@@ -200,9 +200,9 @@ class native_arrow_ipc_writer_handle final {
   }
 
  private:
-  cudf::column_metadata build_one_column_meta(const cudf::column_view& cview,
+  cudf::column_metadata build_one_column_meta(cudf::column_view const& cview,
                                               size_t& idx,
-                                              const bool consume_name = true)
+                                              bool const consume_name = true)
   {
     auto col_meta = cudf::column_metadata{};
     if (consume_name) { col_meta.name = get_column_name(idx++); }
@@ -266,16 +266,16 @@ class jni_arrow_output_stream final : public arrow::io::OutputStream {
     host_memory_allocator = nullptr;
   }
 
-  arrow::Status Write(const std::shared_ptr<arrow::Buffer>& data) override
+  arrow::Status Write(std::shared_ptr<arrow::Buffer> const& data) override
   {
     return Write(data->data(), data->size());
   }
 
-  arrow::Status Write(const void* data, int64_t nbytes) override
+  arrow::Status Write(void const* data, int64_t nbytes) override
   {
     JNIEnv* env           = cudf::jni::get_jni_env(jvm);
     int64_t left_to_copy  = nbytes;
-    const char* copy_from = static_cast<const char*>(data);
+    char const* copy_from = static_cast<char const*>(data);
     while (left_to_copy > 0) {
       long buffer_amount_available = current_buffer_len - current_buffer_written;
       if (buffer_amount_available <= 0) {
@@ -440,7 +440,7 @@ class jni_arrow_input_stream final : public arrow::io::InputStream {
 
 class native_arrow_ipc_reader_handle final {
  public:
-  explicit native_arrow_ipc_reader_handle(const std::string& file_name)
+  explicit native_arrow_ipc_reader_handle(std::string const& file_name)
   {
     auto tmp_source = arrow::io::ReadableFile::Open(file_name);
     if (!tmp_source.ok()) { throw std::runtime_error(tmp_source.status().message()); }
@@ -2056,7 +2056,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readAvro(JNIEnv* env,
                                                                 jlong buffer,
                                                                 jlong buffer_length)
 {
-  const bool read_buffer = (buffer != 0);
+  bool const read_buffer = (buffer != 0);
   if (!read_buffer) {
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
   } else if (inputfilepath != NULL) {
@@ -2421,7 +2421,7 @@ Java_ai_rapids_cudf_Table_writeORCBufferBegin(JNIEnv* env,
                    meta_keys.end(),
                    meta_values.begin(),
                    std::inserter(kv_metadata, kv_metadata.end()),
-                   [](const std::string& k, const std::string& v) { return std::make_pair(k, v); });
+                   [](std::string const& k, std::string const& v) { return std::make_pair(k, v); });
 
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
       new cudf::jni::jni_writer_data_sink(env, consumer, host_memory_allocator));
@@ -2495,7 +2495,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(JNIEnv* env,
                    meta_keys.end(),
                    meta_values.begin(),
                    std::inserter(kv_metadata, kv_metadata.end()),
-                   [](const std::string& k, const std::string& v) { return std::make_pair(k, v); });
+                   [](std::string const& k, std::string const& v) { return std::make_pair(k, v); });
 
     sink_info sink{output_path.get()};
     auto stats                      = std::make_shared<cudf::io::writer_compression_statistics>();

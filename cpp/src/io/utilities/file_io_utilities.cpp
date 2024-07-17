@@ -16,16 +16,18 @@
 
 #include "file_io_utilities.hpp"
 
-#include "io/utilities/config_utils.hpp"
+#include "getenv_or.hpp"
 
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/io/config_utils.hpp>
 
 #include <rmm/device_buffer.hpp>
 
 #include <dlfcn.h>
-#include <errno.h>
-#include <string.h>
 
+#include <cerrno>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <numeric>
@@ -39,7 +41,7 @@ void force_init_cuda_context()
   // Workaround for https://github.com/rapidsai/cudf/issues/14140, where cuFileDriverOpen errors
   // out if no CUDA calls have been made before it. This is a no-op if the CUDA context is already
   // initialized.
-  cudaFree(0);
+  cudaFree(nullptr);
 }
 
 [[noreturn]] void throw_on_file_open_failure(std::string const& filepath, bool is_create)
@@ -98,7 +100,7 @@ class cufile_shim {
   decltype(cuFileDriverClose)* driver_close = nullptr;
 
   std::unique_ptr<cudf::logic_error> init_error;
-  auto is_valid() const noexcept { return init_error == nullptr; }
+  [[nodiscard]] auto is_valid() const noexcept { return init_error == nullptr; }
 
  public:
   cufile_shim(cufile_shim const&)            = delete;

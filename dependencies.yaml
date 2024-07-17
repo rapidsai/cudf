@@ -3,7 +3,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["11.8", "12.2"]
+      cuda: ["11.8", "12.5"]
       arch: [x86_64]
     includes:
       - build_base
@@ -243,7 +243,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - &cmake_ver cmake>=3.26.4
+          - &cmake_ver cmake>=3.26.4,!=3.30.0
           - &ninja ninja
   build_all:
     common:
@@ -287,8 +287,8 @@ dependencies:
       - output_types: conda
         packages:
           - fmt>=10.1.1,<11
-          - librmm==24.8.*
-          - libkvikio==24.8.*
+          - librmm==24.8.*,>=0.0.0a0
+          - libkvikio==24.8.*,>=0.0.0a0
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==3.0.6
@@ -402,6 +402,10 @@ dependencies:
               cuda: "12.2"
             packages:
               - cuda-version=12.2
+          - matrix:
+              cuda: "12.5"
+            packages:
+              - cuda-version=12.5
   cuda:
     specific:
       - output_types: conda
@@ -500,7 +504,7 @@ dependencies:
       - output_types: [conda]
         packages:
           - breathe>=4.35.0
-          - dask-cuda==24.8.*
+          - dask-cuda==24.8.*,>=0.0.0a0
           - *doxygen
           - make
           - myst-nb
@@ -582,7 +586,7 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - pynvjitlink
+              - pynvjitlink>=0.0.0a0
           - matrix: {cuda: "11.*"}
             packages:
               - cubinlinker
@@ -592,7 +596,7 @@ dependencies:
           - matrix: {cuda: "12.*"}
             packages:
               - rmm-cu12==24.8.*,>=0.0.0a0
-              - pynvjitlink-cu12
+              - pynvjitlink-cu12>=0.0.0a0
           - matrix: {cuda: "11.*"}
             packages:
               - rmm-cu11==24.8.*,>=0.0.0a0
@@ -603,7 +607,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=0.20.30
+          - polars>=1.0
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -755,7 +759,7 @@ dependencies:
           - {matrix: null, packages: *cupy_packages_cu11}
   test_python_pandas_cudf:
     common:
-      - output_types: pyproject
+      - output_types: [requirements, pyproject]
         packages:
           # dependencies to run pandas tests
           # https://github.com/pandas-dev/pandas/blob/main/environment.yml
@@ -766,7 +770,7 @@ dependencies:
           - pytest-reportlog
   test_python_cudf_pandas:
     common:
-      - output_types: pyproject
+      - output_types: [requirements, pyproject]
         packages:
           - ipython
           - openpyxl

@@ -13,24 +13,55 @@ import cudf._lib.pylibcudf as plc
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-__all__: list[str] = ["Column"]
+    import polars as pl
+
+__all__: list[str] = ["Column", "NamedColumn"]
 
 
 class Column:
-    """A column, a name, and sortedness."""
+    """An immutable column with sortedness metadata."""
 
     obj: plc.Column
-    name: str
     is_sorted: plc.types.Sorted
     order: plc.types.Order
     null_order: plc.types.NullOrder
+    is_scalar: bool
 
-    def __init__(self, column: plc.Column, name: str):
+    def __init__(
+        self,
+        column: plc.Column,
+        *,
+        is_sorted: plc.types.Sorted = plc.types.Sorted.NO,
+        order: plc.types.Order = plc.types.Order.ASCENDING,
+        null_order: plc.types.NullOrder = plc.types.NullOrder.BEFORE,
+    ):
         self.obj = column
-        self.name = name
-        self.is_sorted = plc.types.Sorted.NO
-        self.order = plc.types.Order.ASCENDING
-        self.null_order = plc.types.NullOrder.BEFORE
+        self.is_scalar = self.obj.size() == 1
+        if self.obj.size() <= 1:
+            is_sorted = plc.types.Sorted.YES
+        self.is_sorted = is_sorted
+        self.order = order
+        self.null_order = null_order
+
+    @functools.cached_property
+    def obj_scalar(self) -> plc.Scalar:
+        """
+        A copy of the column object as a pylibcudf Scalar.
+
+        Returns
+        -------
+        pylibcudf Scalar object.
+
+        Raises
+        ------
+        ValueError
+            If the column is not length-1.
+        """
+        if not self.is_scalar:
+            raise ValueError(
+                f"Cannot convert a column of length {self.obj.size()} to scalar"
+            )
+        return plc.copying.get_element(self.obj, 0)
 
     def sorted_like(self, like: Column, /) -> Self:
         """
@@ -47,11 +78,48 @@ class Column:
 
         See Also
         --------
-        set_sorted
+        set_sorted, copy_metadata
         """
         return self.set_sorted(
             is_sorted=like.is_sorted, order=like.order, null_order=like.null_order
         )
+
+    def copy_metadata(self, from_: pl.Series, /) -> Self:
+        """
+        Copy metadata from a host series onto self.
+
+        Parameters
+        ----------
+        from_
+            Polars series to copy metadata from
+
+        Returns
+        -------
+        Self with metadata set.
+
+        See Also
+        --------
+        set_sorted, sorted_like
+        """
+        if len(from_) <= 1:
+            return self
+        ascending = from_.flags["SORTED_ASC"]
+        descending = from_.flags["SORTED_DESC"]
+        if ascending or descending:
+            has_null_first = from_.item(0) is None
+            has_null_last = from_.item(-1) is None
+            order = (
+                plc.types.Order.ASCENDING if ascending else plc.types.Order.DESCENDING
+            )
+            null_order = plc.types.NullOrder.BEFORE
+            if (descending and has_null_first) or (ascending and has_null_last):
+                null_order = plc.types.NullOrder.AFTER
+            return self.set_sorted(
+                is_sorted=plc.types.Sorted.YES,
+                order=order,
+                null_order=null_order,
+            )
+        return self
 
     def set_sorted(
         self,
@@ -76,14 +144,76 @@ class Column:
         -------
         Self with metadata set.
         """
+        if self.obj.size() <= 1:
+            is_sorted = plc.types.Sorted.YES
         self.is_sorted = is_sorted
         self.order = order
         self.null_order = null_order
         return self
 
+    def copy(self) -> Self:
+        """
+        A shallow copy of the column.
+
+        Returns
+        -------
+        New column sharing data with self.
+        """
+        return type(self)(
+            self.obj,
+            is_sorted=self.is_sorted,
+            order=self.order,
+            null_order=self.null_order,
+        )
+
+    def mask_nans(self) -> Self:
+        """Return a shallow copy of self with nans masked out."""
+        if plc.traits.is_floating_point(self.obj.type()):
+            old_count = self.obj.null_count()
+            mask, new_count = plc.transform.nans_to_nulls(self.obj)
+            result = type(self)(self.obj.with_mask(mask, new_count))
+            if old_count == new_count:
+                return result.sorted_like(self)
+            return result
+        return self.copy()
+
+    @functools.cached_property
+    def nan_count(self) -> int:
+        """Return the number of NaN values in the column."""
+        if plc.traits.is_floating_point(self.obj.type()):
+            return plc.interop.to_arrow(
+                plc.reduce.reduce(
+                    plc.unary.is_nan(self.obj),
+                    plc.aggregation.sum(),
+                    # TODO: pylibcudf needs to have a SizeType DataType singleton
+                    plc.DataType(plc.TypeId.INT32),
+                )
+            ).as_py()
+        return 0
+
+
+class NamedColumn(Column):
+    """A column with a name."""
+
+    name: str
+
+    def __init__(
+        self,
+        column: plc.Column,
+        name: str,
+        *,
+        is_sorted: plc.types.Sorted = plc.types.Sorted.NO,
+        order: plc.types.Order = plc.types.Order.ASCENDING,
+        null_order: plc.types.NullOrder = plc.types.NullOrder.BEFORE,
+    ) -> None:
+        super().__init__(
+            column, is_sorted=is_sorted, order=order, null_order=null_order
+        )
+        self.name = name
+
     def copy(self, *, new_name: str | None = None) -> Self:
         """
-        Return a shallow copy of the column.
+        A shallow copy of the column.
 
         Parameters
         ----------
@@ -95,25 +225,23 @@ class Column:
         New column sharing data with self.
         """
         return type(self)(
-            self.obj, self.name if new_name is None else new_name
-        ).sorted_like(self)
+            self.obj,
+            self.name if new_name is None else new_name,
+            is_sorted=self.is_sorted,
+            order=self.order,
+            null_order=self.null_order,
+        )
 
     def mask_nans(self) -> Self:
-        """Return a copy of self with nans masked out."""
-        if self.nan_count > 0:
-            raise NotImplementedError
+        """Return a shallow copy of self with nans masked out."""
+        # Annoying, the inheritance is not right (can't call the
+        # super-type mask_nans), but will sort that by refactoring
+        # later.
+        if plc.traits.is_floating_point(self.obj.type()):
+            old_count = self.obj.null_count()
+            mask, new_count = plc.transform.nans_to_nulls(self.obj)
+            result = type(self)(self.obj.with_mask(mask, new_count), self.name)
+            if old_count == new_count:
+                return result.sorted_like(self)
+            return result
         return self.copy()
-
-    @functools.cached_property
-    def nan_count(self) -> int:
-        """Return the number of NaN values in the column."""
-        if self.obj.type().id() not in (plc.TypeId.FLOAT32, plc.TypeId.FLOAT64):
-            return 0
-        return plc.interop.to_arrow(
-            plc.reduce.reduce(
-                plc.unary.is_nan(self.obj),
-                plc.aggregation.sum(),
-                # TODO: pylibcudf needs to have a SizeType DataType singleton
-                plc.DataType(plc.TypeId.INT32),
-            )
-        ).as_py()

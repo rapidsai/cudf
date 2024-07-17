@@ -18,7 +18,8 @@ from pyarrow import fs as pa_fs
 import cudf
 from cudf import read_csv
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -1190,7 +1191,7 @@ def test_csv_reader_byte_range_type_corner_case(tmpdir):
     ).to_csv(fname, chunksize=100000)
 
     byte_range = (2_147_483_648, 0)
-    with pytest.raises(RuntimeError, match="Offset is past end of file"):
+    with pytest.raises(OverflowError, match="Offset is past end of file"):
         cudf.read_csv(fname, byte_range=byte_range, header=None)
 
 

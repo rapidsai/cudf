@@ -9,16 +9,7 @@ import textwrap
 import warnings
 from collections import abc
 from shutil import get_terminal_size
-from typing import (
-    Any,
-    Dict,
-    Literal,
-    MutableMapping,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Literal, MutableMapping
 
 import cupy
 import numpy as np
@@ -27,17 +18,10 @@ from typing_extensions import Self, assert_never
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import (
-    ColumnLike,
-    DataFrameOrSeries,
-    NotImplementedType,
-    ScalarLike,
-)
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
-    is_bool_dtype,
     is_dict_like,
     is_integer,
     is_integer_dtype,
@@ -63,7 +47,7 @@ from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
-from cudf.core.index import BaseIndex, DatetimeIndex, RangeIndex, as_index
+from cudf.core.index import BaseIndex, DatetimeIndex, RangeIndex, ensure_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -83,7 +67,15 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     to_cudf_compatible_scalar,
 )
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
+
+if TYPE_CHECKING:
+    from cudf._typing import (
+        ColumnLike,
+        DataFrameOrSeries,
+        NotImplementedType,
+        ScalarLike,
+    )
 
 
 def _format_percentile_names(percentiles):
@@ -186,7 +178,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
 
     _frame: cudf.Series
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __getitem__(self, arg):
         indexing_spec = indexing_utils.parse_row_iloc_indexer(
             indexing_utils.destructure_series_iloc_indexer(arg, self._frame),
@@ -194,7 +186,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
         )
         return self._frame._getitem_preprocessed(indexing_spec)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __setitem__(self, key, value):
         if isinstance(key, tuple):
             key = list(key)
@@ -228,10 +220,10 @@ class _SeriesIlocIndexer(_FrameIndexer):
                     f"Cannot assign {value=} to "
                     f"non-float dtype={self._frame.dtype}"
                 )
-            elif (
-                self._frame.dtype.kind == "b"
-                and not is_bool_dtype(value)
-                and value not in {None, cudf.NA}
+            elif self._frame.dtype.kind == "b" and not (
+                value in {None, cudf.NA}
+                or isinstance(value, (np.bool_, bool))
+                or (isinstance(value, cudf.Scalar) and value.dtype.kind == "b")
             ):
                 raise MixedTypeError(
                     f"Cannot assign {value=} to "
@@ -281,8 +273,8 @@ class _SeriesLocIndexer(_FrameIndexer):
     Label-based selection
     """
 
-    @_cudf_nvtx_annotate
-    def __getitem__(self, arg: Any) -> Union[ScalarLike, DataFrameOrSeries]:
+    @_performance_tracking
+    def __getitem__(self, arg: Any) -> ScalarLike | DataFrameOrSeries:
         if isinstance(arg, pd.MultiIndex):
             arg = cudf.from_pandas(arg)
 
@@ -308,7 +300,7 @@ class _SeriesLocIndexer(_FrameIndexer):
 
         return self._frame.iloc[arg]
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __setitem__(self, key, value):
         try:
             key = self._loc_to_iloc(key)
@@ -461,7 +453,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         If ``False``, leaves ``np.nan`` values as is.
     """
 
-    _accessors: Set[Any] = set()
+    _accessors: set[Any] = set()
     _loc_indexer_type = _SeriesLocIndexer
     _iloc_indexer_type = _SeriesIlocIndexer
     _groupby = SeriesGroupBy
@@ -483,7 +475,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return cudf.DataFrame
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def from_categorical(cls, categorical, codes=None):
         """Creates from a pandas.Categorical
 
@@ -524,7 +516,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return Series(data=col)
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def from_masked_array(cls, data, mask, null_count=None):
         """Create a Series with null-mask.
         This is equivalent to:
@@ -573,7 +565,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         col = as_column(data).set_mask(mask)
         return cls(data=col)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __init__(
         self,
         data=None,
@@ -591,14 +583,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             data = {}
 
         if isinstance(data, (pd.Series, pd.Index, BaseIndex, Series)):
-            if copy:
+            if copy and not isinstance(data, (pd.Series, pd.Index)):
                 data = data.copy(deep=True)
             name_from_data = data.name
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
-            if isinstance(data, pd.Series):
-                index_from_data = cudf.Index(data.index)
-            elif isinstance(data, Series):
-                index_from_data = data.index
+            if isinstance(data, (pd.Series, Series)):
+                index_from_data = ensure_index(data.index)
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.Series._from_data for constructing a Series from "
@@ -649,7 +639,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             name = name_from_data
 
         if index is not None:
-            index = cudf.Index(index)
+            index = ensure_index(index)
 
         if index_from_data is not None:
             first_index = index_from_data
@@ -670,11 +660,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         self._check_data_index_length_match()
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _from_data(
         cls,
         data: MutableMapping,
-        index: Optional[BaseIndex] = None,
+        index: BaseIndex | None = None,
         name: Any = no_default,
     ) -> Series:
         out = super()._from_data(data=data, index=index)
@@ -682,12 +672,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             out.name = name
         return out
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
+    def _from_data_like_self(self, data: MutableMapping):
+        out = super()._from_data_like_self(data)
+        out.name = self.name
+        return out
+
+    @_performance_tracking
     def __contains__(self, item):
         return item in self.index
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def from_pandas(cls, s: pd.Series, nan_as_null=no_default):
         """
         Convert from a Pandas Series.
@@ -736,7 +732,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return result
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def is_unique(self):
         """Return boolean if values in the object are unique.
 
@@ -747,7 +743,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return self._column.is_unique
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def dt(self):
         """
         Accessor object for datetime-like properties of the Series values.
@@ -779,9 +775,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ------
             TypeError if the Series does not contain datetimelike values.
         """
-        if isinstance(self._column, DatetimeColumn):
+        if self.dtype.kind == "M":
             return DatetimeProperties(self)
-        elif isinstance(self._column, TimeDeltaColumn):
+        elif self.dtype.kind == "m":
             return TimedeltaProperties(self)
         else:
             raise AttributeError(
@@ -789,7 +785,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def hasnans(self):
         """
         Return True if there are any NaNs or nulls.
@@ -830,7 +826,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self._column.has_nulls(include_nan=True)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def serialize(self):
         header, frames = super().serialize()
 
@@ -843,7 +839,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return header, frames
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def deserialize(cls, header, frames):
         index_nframes = header["index_frame_count"]
         obj = super().deserialize(
@@ -856,21 +852,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return obj
 
-    def _get_columns_by_label(self, labels, *, downcast=False) -> Self:
-        """Return the column specified by `labels`
-
-        For cudf.Series, either the column, or an empty series is returned.
-        Parameter `downcast` does not have effects.
-        """
-        ca = self._data.select_by_label(labels)
-
-        return (
-            self.__class__._from_data(data=ca, index=self.index)
-            if len(ca) > 0
-            else self.__class__(dtype=self.dtype, name=self.name)
-        )
-
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def drop(
         self,
         labels=None,
@@ -899,7 +881,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     to_list = tolist
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def to_dict(self, into: type[dict] = dict) -> dict:
         """
         Convert Series to {label -> value} dict or dict-like object.
@@ -938,7 +920,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self.to_pandas().to_dict(into=into)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def reindex(self, *args, **kwargs):
         """
         Conform Series to new index.
@@ -1011,7 +993,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         series.name = self.name
         return series
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     @docutils.doc_apply(
         doc_reset_index_template.format(
             klass="Series",
@@ -1096,7 +1078,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             inplace=inplace,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def to_frame(self, name=None):
         """Convert Series into a DataFrame
 
@@ -1139,13 +1121,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return cudf.DataFrame({col: self._column}, index=self.index)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def memory_usage(self, index=True, deep=False):
         return self._column.memory_usage + (
             self.index.memory_usage() if index else 0
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __array_function__(self, func, types, args, kwargs):
         if "out" in kwargs or not all(issubclass(t, Series) for t in types):
             return NotImplemented
@@ -1206,7 +1188,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return NotImplemented
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def map(self, arg, na_action=None) -> "Series":
         """
         Map values of Series according to input correspondence.
@@ -1316,7 +1298,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def _getitem_preprocessed(
         self,
         spec: indexing_utils.IndexingSpec,
-    ) -> Union[Self, ScalarLike]:
+    ) -> Self | ScalarLike:
         """Get subset of entries given structured data
 
         Parameters
@@ -1348,7 +1330,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return self._empty_like(keep_index=True)
         assert_never(spec)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             return self.iloc[arg]
@@ -1359,7 +1341,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     items = SingleColumnFrame.__iter__
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __setitem__(self, key, value):
         if isinstance(key, slice):
             self.iloc[key] = value
@@ -1478,12 +1460,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         fill_value: Any = None,
         reflect: bool = False,
         can_reindex: bool = False,
-    ) -> Tuple[
-        Union[
-            Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            NotImplementedType,
-        ],
-        Optional[BaseIndex],
+    ) -> tuple[
+        dict[str | None, tuple[ColumnBase, Any, bool, Any]]
+        | NotImplementedType,
+        BaseIndex | None,
         bool,
     ]:
         # Specialize binops to align indices.
@@ -1512,36 +1492,36 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @copy_docstring(CategoricalAccessor)  # type: ignore
     @property
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def cat(self):
         return CategoricalAccessor(parent=self)
 
     @copy_docstring(StringMethods)  # type: ignore
     @property
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def str(self):
         return StringMethods(parent=self)
 
     @copy_docstring(ListMethods)  # type: ignore
     @property
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def list(self):
         return ListMethods(parent=self)
 
     @copy_docstring(StructMethods)  # type: ignore
     @property
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def struct(self):
         return StructMethods(parent=self)
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def dtype(self):
         """The dtype of the Series."""
         return self._column.dtype
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _concat(cls, objs, axis=0, index=True):
         # Concatenate index if not provided
         if index is True:
@@ -1607,25 +1587,25 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return cls(data=col, index=index, name=name)
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def valid_count(self):
         """Number of non-null values"""
         return len(self) - self._column.null_count
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def null_count(self):
         """Number of null values"""
         return self._column.null_count
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def nullable(self):
         """A boolean indicating whether a null-mask is needed"""
         return self._column.nullable
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def has_nulls(self):
         """
         Indicator whether Series contains null values.
@@ -1654,7 +1634,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self._column.has_nulls()
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def dropna(self, axis=0, inplace=False, how=None):
         """
         Return a Series with null values removed.
@@ -1734,7 +1714,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def drop_duplicates(self, keep="first", inplace=False, ignore_index=False):
         """
         Return Series with duplicate values removed.
@@ -1808,26 +1788,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):
         if isinstance(value, pd.Series):
             value = Series.from_pandas(value)
-
-        if not (is_scalar(value) or isinstance(value, (abc.Mapping, Series))):
-            raise TypeError(
-                f'"value" parameter must be a scalar, dict '
-                f"or Series, but you passed a "
-                f'"{type(value).__name__}"'
-            )
-
-        if isinstance(value, (abc.Mapping, Series)):
+        elif isinstance(value, abc.Mapping):
             value = Series(value)
+        if isinstance(value, cudf.Series):
             if not self.index.equals(value.index):
                 value = value.reindex(self.index)
-            value = value._column
-
+            value = {self.name: value._column}
         return super().fillna(
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
         )
@@ -1921,7 +1893,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
         return self._from_data({self.name: lmask & rmask}, self.index)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
         if bool_only not in (None, True):
             raise NotImplementedError(
@@ -1929,7 +1901,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
         return super().all(axis, skipna, **kwargs)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def any(self, axis=0, bool_only=None, skipna=True, **kwargs):
         if bool_only not in (None, True):
             raise NotImplementedError(
@@ -1937,7 +1909,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
         return super().any(axis, skipna, **kwargs)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def to_pandas(
         self,
         *,
@@ -2029,7 +2001,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def data(self):
         """The gpu buffer for the data
 
@@ -2054,12 +2026,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return self._column.data
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def nullmask(self):
         """The gpu buffer for the null-mask"""
         return cudf.Series(self._column.nullmask)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def astype(
         self,
         dtype,
@@ -2076,13 +2048,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             dtype = {self.name: dtype}
         return super().astype(dtype, copy, errors)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def sort_index(self, axis=0, *args, **kwargs):
         if axis not in (0, "index"):
             raise ValueError("Only axis=0 is valid for Series.")
         return super().sort_index(axis=axis, *args, **kwargs)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def sort_values(
         self,
         axis=0,
@@ -2137,7 +2109,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             ignore_index=ignore_index,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def nlargest(self, n=5, keep="first"):
         """Returns a new Series of the *n* largest element.
 
@@ -2200,7 +2172,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self._n_largest_or_smallest(True, n, [self.name], keep)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def nsmallest(self, n=5, keep="first"):
         """
         Returns a new Series of the *n* smallest element.
@@ -2276,7 +2248,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self._n_largest_or_smallest(False, n, [self.name], keep)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def argsort(
         self,
         axis=0,
@@ -2299,7 +2271,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         obj.name = self.name
         return obj
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def replace(self, to_replace=None, value=no_default, *args, **kwargs):
         if is_dict_like(to_replace) and value not in {None, no_default}:
             raise ValueError(
@@ -2309,7 +2281,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return super().replace(to_replace, value, *args, **kwargs)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def update(self, other):
         """
         Modify Series in place using values from passed Series.
@@ -2415,7 +2387,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         self.mask(mask, other, inplace=True)
 
     # UDF related
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def apply(self, func, convert_dtype=True, args=(), **kwargs):
         """
         Apply a scalar function to the values of a Series.
@@ -2560,7 +2532,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     #
     # Stats
     #
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def count(self):
         """
         Return number of non-NA/null observations in the Series
@@ -2584,7 +2556,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self.valid_count
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def mode(self, dropna=True):
         """
         Return the mode(s) of the dataset.
@@ -2655,7 +2627,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             {self.name: val_counts.index.sort_values()}, name=self.name
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def round(self, decimals=0, how="half_even"):
         if not is_integer(decimals):
             raise ValueError(
@@ -2664,7 +2636,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         decimals = int(decimals)
         return super().round(decimals, how)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def cov(self, other, min_periods=None):
         """
         Compute covariance with Series, excluding missing values.
@@ -2715,7 +2687,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 f"{other.dtype}"
             )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def transpose(self):
         """Return the transpose, which is by definition self."""
 
@@ -2723,7 +2695,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     T = property(transpose, doc=transpose.__doc__)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def duplicated(self, keep="first"):
         """
         Indicate duplicate Series values.
@@ -2803,7 +2775,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return super().duplicated(keep=keep)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
         excluding missing values.
@@ -2855,7 +2827,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 f"cannot perform corr with types {self.dtype}, {other.dtype}"
             )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def autocorr(self, lag=1):
         """Compute the lag-N autocorrelation. This method computes the Pearson
         correlation between the Series and its shifted self.
@@ -2881,7 +2853,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self.corr(self.shift(lag))
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def isin(self, values):
         """Check whether values are contained in Series.
 
@@ -2951,7 +2923,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             {self.name: self._column.isin(values)}, index=self.index
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def unique(self):
         """
         Returns unique values of this Series.
@@ -2986,7 +2958,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return res.values
         return Series(res, name=self.name)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def value_counts(
         self,
         normalize=False,
@@ -3134,14 +3106,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         # Pandas returns an IntervalIndex as the index of res
         # this condition makes sure we do too if bins is given
         if bins is not None and len(res) == len(res.index.categories):
-            int_index = IntervalColumn.as_interval_column(
-                res.index._column, res.index.categories.dtype
+            interval_col = IntervalColumn.from_struct_column(
+                res.index._column._get_decategorized_column()
             )
-            res.index = int_index
+            res.index = cudf.IntervalIndex._from_data(
+                {res.index.name: interval_col}
+            )
         res.name = result_name
         return res
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True
     ):
@@ -3216,11 +3190,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return Series._from_data(
             data={self.name: result},
-            index=as_index(np_array_q) if quant_index else None,
+            index=cudf.Index(np_array_q) if quant_index else None,
         )
 
     @docutils.doc_describe()
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def describe(
         self,
         percentiles=None,
@@ -3246,7 +3220,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             percentiles = np.array([0.25, 0.5, 0.75])
 
         dtype = "str"
-        if is_bool_dtype(self.dtype):
+        if self.dtype.kind == "b":
             data = _describe_categorical(self, percentiles)
         elif isinstance(self._column, cudf.core.column.NumericalColumn):
             data = _describe_numeric(self, percentiles)
@@ -3265,7 +3239,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             name=self.name,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def digitize(self, bins, right=False):
         """Return the indices of the bins to which each value belongs.
 
@@ -3301,7 +3275,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             cudf.core.column.numerical.digitize(self._column, bins, right)
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def diff(self, periods=1):
         """First discrete difference of element.
 
@@ -3372,7 +3346,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return self - self.shift(periods=periods)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     @docutils.doc_apply(
         groupby_doc_template.format(
             ret=textwrap.dedent(
@@ -3410,7 +3384,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             dropna,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def rename(self, index=None, copy=True):
         """
         Alter Series name
@@ -3456,21 +3430,23 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         out_data = self._data.copy(deep=copy)
         return Series._from_data(out_data, self.index, name=index)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def add_prefix(self, prefix):
         return Series._from_data(
+            # TODO: Change to deep=False when copy-on-write is default
             data=self._data.copy(deep=True),
             index=prefix + self.index.astype(str),
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def add_suffix(self, suffix):
         return Series._from_data(
+            # TODO: Change to deep=False when copy-on-write is default
             data=self._data.copy(deep=True),
             index=self.index.astype(str) + suffix,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def keys(self):
         """
         Return alias for index.
@@ -3514,7 +3490,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self.index
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def explode(self, ignore_index=False):
         """
         Transform each element of a list-like to a row, replicating index
@@ -3551,7 +3527,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return super()._explode(self.name, ignore_index)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def pct_change(
         self, periods=1, fill_method=no_default, limit=no_default, freq=None
     ):
@@ -3625,7 +3601,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         change = diff / data.shift(periods=periods, freq=freq)
         return change
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def where(self, cond, other=None, inplace=False):
         result_col = super().where(cond, other, inplace)
         return self._mimic_inplace(
@@ -3694,7 +3670,21 @@ for binop in (
     setattr(Series, binop, make_binop_func(binop))
 
 
-class DatetimeProperties:
+class BaseDatelikeProperties:
+    """
+    Base accessor class for Series values.
+    """
+
+    def __init__(self, series: Series):
+        self.series = series
+
+    def _return_result_like_self(self, column: ColumnBase) -> Series:
+        """Return the method result like self.series"""
+        data = ColumnAccessor({self.series.name: column}, verify=False)
+        return self.series._from_data_like_self(data)
+
+
+class DatetimeProperties(BaseDatelikeProperties):
     """
     Accessor object for datetimelike properties of the Series values.
 
@@ -3744,12 +3734,9 @@ class DatetimeProperties:
     dtype: int16
     """
 
-    def __init__(self, series):
-        self.series = series
-
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def year(self):
+    @_performance_tracking
+    def year(self) -> Series:
         """
         The year of the datetime.
 
@@ -3773,8 +3760,8 @@ class DatetimeProperties:
         return self._get_dt_field("year")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def month(self):
+    @_performance_tracking
+    def month(self) -> Series:
         """
         The month as January=1, December=12.
 
@@ -3798,8 +3785,8 @@ class DatetimeProperties:
         return self._get_dt_field("month")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def day(self):
+    @_performance_tracking
+    def day(self) -> Series:
         """
         The day of the datetime.
 
@@ -3823,8 +3810,8 @@ class DatetimeProperties:
         return self._get_dt_field("day")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def hour(self):
+    @_performance_tracking
+    def hour(self) -> Series:
         """
         The hours of the datetime.
 
@@ -3848,8 +3835,8 @@ class DatetimeProperties:
         return self._get_dt_field("hour")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def minute(self):
+    @_performance_tracking
+    def minute(self) -> Series:
         """
         The minutes of the datetime.
 
@@ -3873,8 +3860,8 @@ class DatetimeProperties:
         return self._get_dt_field("minute")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def second(self):
+    @_performance_tracking
+    def second(self) -> Series:
         """
         The seconds of the datetime.
 
@@ -3898,8 +3885,8 @@ class DatetimeProperties:
         return self._get_dt_field("second")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def microsecond(self):
+    @_performance_tracking
+    def microsecond(self) -> Series:
         """
         The microseconds of the datetime.
 
@@ -3920,22 +3907,18 @@ class DatetimeProperties:
         2    2
         dtype: int32
         """
-        return Series(
-            data=(
-                # Need to manually promote column to int32 because
-                # pandas-matching binop behaviour requires that this
-                # __mul__ returns an int16 column.
-                self.series._column.get_dt_field("millisecond").astype("int32")
-                * cudf.Scalar(1000, dtype="int32")
-            )
-            + self.series._column.get_dt_field("microsecond"),
-            index=self.series.index,
-            name=self.series.name,
-        )
+        micro = self.series._column.get_dt_field("microsecond")
+        # Need to manually promote column to int32 because
+        # pandas-matching binop behaviour requires that this
+        # __mul__ returns an int16 column.
+        extra = self.series._column.get_dt_field("millisecond").astype(
+            "int32"
+        ) * cudf.Scalar(1000, dtype="int32")
+        return self._return_result_like_self(micro + extra)
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def nanosecond(self):
+    @_performance_tracking
+    def nanosecond(self) -> Series:
         """
         The nanoseconds of the datetime.
 
@@ -3959,8 +3942,8 @@ class DatetimeProperties:
         return self._get_dt_field("nanosecond")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def weekday(self):
+    @_performance_tracking
+    def weekday(self) -> Series:
         """
         The day of the week with Monday=0, Sunday=6.
 
@@ -3996,8 +3979,8 @@ class DatetimeProperties:
         return self._get_dt_field("weekday")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def dayofweek(self):
+    @_performance_tracking
+    def dayofweek(self) -> Series:
         """
         The day of the week with Monday=0, Sunday=6.
 
@@ -4033,8 +4016,8 @@ class DatetimeProperties:
         return self._get_dt_field("weekday")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def dayofyear(self):
+    @_performance_tracking
+    def dayofyear(self) -> Series:
         """
         The day of the year, from 1-365 in non-leap years and
         from 1-366 in leap years.
@@ -4071,8 +4054,8 @@ class DatetimeProperties:
         return self._get_dt_field("day_of_year")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def day_of_year(self):
+    @_performance_tracking
+    def day_of_year(self) -> Series:
         """
         The day of the year, from 1-365 in non-leap years and
         from 1-366 in leap years.
@@ -4109,8 +4092,8 @@ class DatetimeProperties:
         return self._get_dt_field("day_of_year")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def is_leap_year(self):
+    @_performance_tracking
+    def is_leap_year(self) -> Series:
         """
         Boolean indicator if the date belongs to a leap year.
 
@@ -4161,15 +4144,11 @@ class DatetimeProperties:
         dtype: bool
         """
         res = libcudf.datetime.is_leap_year(self.series._column).fillna(False)
-        return Series._from_data(
-            ColumnAccessor({None: res}),
-            index=self.series.index,
-            name=self.series.name,
-        )
+        return self._return_result_like_self(res)
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def quarter(self):
+    @_performance_tracking
+    def quarter(self) -> Series:
         """
         Integer indicator for which quarter of the year the date belongs in.
 
@@ -4195,14 +4174,10 @@ class DatetimeProperties:
         res = libcudf.datetime.extract_quarter(self.series._column).astype(
             np.int8
         )
-        return Series._from_data(
-            {None: res},
-            index=self.series.index,
-            name=self.series.name,
-        )
+        return self._return_result_like_self(res)
 
-    @_cudf_nvtx_annotate
-    def day_name(self, locale=None):
+    @_performance_tracking
+    def day_name(self, locale: str | None = None) -> Series:
         """
         Return the day names. Currently supports English locale only.
 
@@ -4233,14 +4208,11 @@ class DatetimeProperties:
         7     Saturday
         dtype: object
         """
-        day_names = self.series._column.get_day_names(locale)
-        return Series._from_data(
-            ColumnAccessor({None: day_names}),
-            index=self.series.index,
-            name=self.series.name,
+        return self._return_result_like_self(
+            self.series._column.get_day_names(locale)
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def month_name(self, locale: str | None = None) -> Series:
         """
         Return the month names. Currently supports English locale only.
@@ -4266,15 +4238,12 @@ class DatetimeProperties:
         5    February
         dtype: object
         """
-        month_names = self.series._column.get_month_names(locale)
-        return Series._from_data(
-            ColumnAccessor({None: month_names}),
-            index=self.series.index,
-            name=self.series.name,
+        return self._return_result_like_self(
+            self.series._column.get_month_names(locale)
         )
 
-    @_cudf_nvtx_annotate
-    def isocalendar(self):
+    @_performance_tracking
+    def isocalendar(self) -> cudf.DataFrame:
         """
         Returns a DataFrame with the year, week, and day
         calculated according to the ISO 8601 standard.
@@ -4315,19 +4284,22 @@ class DatetimeProperties:
         1    <NA>
         Name: year, dtype: object
         """
-        return cudf.core.tools.datetimes._to_iso_calendar(self)
+        ca = ColumnAccessor(self.series._column.isocalendar(), verify=False)
+        return self.series._constructor_expanddim._from_data(
+            ca, index=self.series.index
+        )
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def is_month_start(self):
+    @_performance_tracking
+    def is_month_start(self) -> Series:
         """
         Booleans indicating if dates are the first day of the month.
         """
         return (self.day == 1).fillna(False)
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def days_in_month(self):
+    @_performance_tracking
+    def days_in_month(self) -> Series:
         """
         Get the total number of days in the month that the date falls on.
 
@@ -4370,16 +4342,13 @@ class DatetimeProperties:
         11    31
         dtype: int16
         """
-        res = libcudf.datetime.days_in_month(self.series._column)
-        return Series._from_data(
-            ColumnAccessor({None: res}),
-            index=self.series.index,
-            name=self.series.name,
+        return self._return_result_like_self(
+            libcudf.datetime.days_in_month(self.series._column)
         )
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def is_month_end(self):
+    @_performance_tracking
+    def is_month_end(self) -> Series:
         """
         Boolean indicator if the date is the last day of the month.
 
@@ -4416,17 +4385,13 @@ class DatetimeProperties:
         8    False
         dtype: bool
         """  # noqa: E501
-        last_day = libcudf.datetime.last_day_of_month(self.series._column)
-        last_day = Series._from_data(
-            ColumnAccessor({None: last_day}),
-            index=self.series.index,
-            name=self.series.name,
-        )
+        last_day_col = libcudf.datetime.last_day_of_month(self.series._column)
+        last_day = self._return_result_like_self(last_day_col)
         return (self.day == last_day.dt.day).fillna(False)
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def is_quarter_start(self):
+    @_performance_tracking
+    def is_quarter_start(self) -> Series:
         """
         Boolean indicator if the date is the first day of a quarter.
 
@@ -4467,15 +4432,11 @@ class DatetimeProperties:
         )
 
         result = ((day == cudf.Scalar(1)) & first_month).fillna(False)
-        return Series._from_data(
-            {None: result},
-            index=self.series.index,
-            name=self.series.name,
-        )
+        return self._return_result_like_self(result)
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def is_quarter_end(self):
+    @_performance_tracking
+    def is_quarter_end(self) -> Series:
         """
         Boolean indicator if the date is the last day of a quarter.
 
@@ -4518,15 +4479,11 @@ class DatetimeProperties:
         )
 
         result = ((day == last_day) & last_month).fillna(False)
-        return Series._from_data(
-            {None: result},
-            index=self.series.index,
-            name=self.series.name,
-        )
+        return self._return_result_like_self(result)
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def is_year_start(self):
+    @_performance_tracking
+    def is_year_start(self) -> Series:
         """
         Boolean indicator if the date is the first day of the year.
 
@@ -4553,15 +4510,11 @@ class DatetimeProperties:
         outcol = self.series._column.get_dt_field(
             "day_of_year"
         ) == cudf.Scalar(1)
-        return Series._from_data(
-            {None: outcol.fillna(False)},
-            index=self.series.index,
-            name=self.series.name,
-        )
+        return self._return_result_like_self(outcol.fillna(False))
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def is_year_end(self):
+    @_performance_tracking
+    def is_year_end(self) -> Series:
         """
         Boolean indicator if the date is the last day of the year.
 
@@ -4591,22 +4544,16 @@ class DatetimeProperties:
         leap = day_of_year == cudf.Scalar(366)
         non_leap = day_of_year == cudf.Scalar(365)
         result = cudf._lib.copying.copy_if_else(leap, non_leap, leap_dates)
-        result = result.fillna(False)
-        return Series._from_data(
-            {None: result},
-            index=self.series.index,
-            name=self.series.name,
+        return self._return_result_like_self(result.fillna(False))
+
+    @_performance_tracking
+    def _get_dt_field(self, field: str) -> Series:
+        return self._return_result_like_self(
+            self.series._column.get_dt_field(field)
         )
 
-    @_cudf_nvtx_annotate
-    def _get_dt_field(self, field):
-        out_column = self.series._column.get_dt_field(field)
-        return Series(
-            data=out_column, index=self.series.index, name=self.series.name
-        )
-
-    @_cudf_nvtx_annotate
-    def ceil(self, freq):
+    @_performance_tracking
+    def ceil(self, freq: str) -> Series:
         """
         Perform ceil operation on the data to the specified freq.
 
@@ -4636,14 +4583,10 @@ class DatetimeProperties:
         2   2001-01-01 00:06:00
         dtype: datetime64[ns]
         """
-        out_column = self.series._column.ceil(freq)
+        return self._return_result_like_self(self.series._column.ceil(freq))
 
-        return Series._from_data(
-            data={self.series.name: out_column}, index=self.series.index
-        )
-
-    @_cudf_nvtx_annotate
-    def floor(self, freq):
+    @_performance_tracking
+    def floor(self, freq: str) -> Series:
         """
         Perform floor operation on the data to the specified freq.
 
@@ -4673,14 +4616,10 @@ class DatetimeProperties:
         2   2001-01-01 00:05:00
         dtype: datetime64[ns]
         """
-        out_column = self.series._column.floor(freq)
+        return self._return_result_like_self(self.series._column.floor(freq))
 
-        return Series._from_data(
-            data={self.series.name: out_column}, index=self.series.index
-        )
-
-    @_cudf_nvtx_annotate
-    def round(self, freq):
+    @_performance_tracking
+    def round(self, freq: str) -> Series:
         """
         Perform round operation on the data to the specified freq.
 
@@ -4713,14 +4652,10 @@ class DatetimeProperties:
         2   2001-01-01 00:05:00
         dtype: datetime64[ns]
         """
-        out_column = self.series._column.round(freq)
+        return self._return_result_like_self(self.series._column.round(freq))
 
-        return Series._from_data(
-            data={self.series.name: out_column}, index=self.series.index
-        )
-
-    @_cudf_nvtx_annotate
-    def strftime(self, date_format, *args, **kwargs):
+    @_performance_tracking
+    def strftime(self, date_format: str, *args, **kwargs) -> Series:
         """
         Convert to Series using specified ``date_format``.
 
@@ -4794,11 +4729,8 @@ class DatetimeProperties:
                     f"https://github.com/rapidsai/cudf/issues/5991 "
                     f"for tracking purposes."
                 )
-        str_col = self.series._column.as_string_column(
-            dtype="str", format=date_format
-        )
-        return Series(
-            data=str_col, index=self.series.index, name=self.series.name
+        return self._return_result_like_self(
+            self.series._column.strftime(format=date_format)
         )
 
     @copy_docstring(DatetimeIndex.tz_localize)
@@ -4807,17 +4739,13 @@ class DatetimeProperties:
         tz: str | None,
         ambiguous: Literal["NaT"] = "NaT",
         nonexistent: Literal["NaT"] = "NaT",
-    ):
-        result_col = self.series._column.tz_localize(
-            tz, ambiguous, nonexistent
-        )
-        return Series._from_data(
-            data={self.series.name: result_col},
-            index=self.series.index,
+    ) -> Series:
+        return self._return_result_like_self(
+            self.series._column.tz_localize(tz, ambiguous, nonexistent)
         )
 
     @copy_docstring(DatetimeIndex.tz_convert)
-    def tz_convert(self, tz: str | None):
+    def tz_convert(self, tz: str | None) -> Series:
         """
         Parameters
         ----------
@@ -4827,13 +4755,12 @@ class DatetimeProperties:
             A `tz` of None will convert to UTC and remove the
             timezone information.
         """
-        result_col = self.series._column.tz_convert(tz)
-        return Series._from_data(
-            {self.series.name: result_col}, index=self.series.index
+        return self._return_result_like_self(
+            self.series._column.tz_convert(tz)
         )
 
 
-class TimedeltaProperties:
+class TimedeltaProperties(BaseDatelikeProperties):
     """
     Accessor object for timedelta-like properties of the Series values.
 
@@ -4901,12 +4828,9 @@ class TimedeltaProperties:
     dtype: int64
     """
 
-    def __init__(self, series):
-        self.series = series
-
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def days(self):
+    @_performance_tracking
+    def days(self) -> Series:
         """
         Number of days.
 
@@ -4937,8 +4861,8 @@ class TimedeltaProperties:
         return self._get_td_field("days")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def seconds(self):
+    @_performance_tracking
+    def seconds(self) -> Series:
         """
         Number of seconds (>= 0 and less than 1 day).
 
@@ -4976,8 +4900,8 @@ class TimedeltaProperties:
         return self._get_td_field("seconds")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def microseconds(self):
+    @_performance_tracking
+    def microseconds(self) -> Series:
         """
         Number of microseconds (>= 0 and less than 1 second).
 
@@ -5008,8 +4932,8 @@ class TimedeltaProperties:
         return self._get_td_field("microseconds")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def nanoseconds(self):
+    @_performance_tracking
+    def nanoseconds(self) -> Series:
         """
         Return the number of nanoseconds (n), where 0 <= n < 1 microsecond.
 
@@ -5040,8 +4964,8 @@ class TimedeltaProperties:
         return self._get_td_field("nanoseconds")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def components(self):
+    @_performance_tracking
+    def components(self) -> cudf.DataFrame:
         """
         Return a Dataframe of the components of the Timedeltas.
 
@@ -5067,17 +4991,19 @@ class TimedeltaProperties:
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
         """  # noqa: E501
-        return self.series._column.components(index=self.series.index)
+        ca = ColumnAccessor(self.series._column.components(), verify=False)
+        return self.series._constructor_expanddim._from_data(
+            ca, index=self.series.index
+        )
 
-    @_cudf_nvtx_annotate
-    def _get_td_field(self, field):
-        out_column = getattr(self.series._column, field)
-        return Series(
-            data=out_column, index=self.series.index, name=self.series.name
+    @_performance_tracking
+    def _get_td_field(self, field: str) -> Series:
+        return self._return_result_like_self(
+            getattr(self.series._column, field)
         )
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _align_indices(series_list, how="outer", allow_non_unique=False):
     """
     Internal util to align the indices of a list of Series objects
@@ -5140,7 +5066,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
 
 
 @acquire_spill_lock()
-@_cudf_nvtx_annotate
+@_performance_tracking
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     r"""Returns a boolean array where two arrays are equal within a tolerance.
 
