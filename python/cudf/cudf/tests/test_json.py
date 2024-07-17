@@ -1441,6 +1441,6 @@ def test_chunked_json_reader():
     df.to_json(buf, lines=True, orient="records", engine="cudf")
     buf.seek(0)
     df = df.to_pandas()
-    with cudf.option_context("mode.pandas_compatible", True):
+    with cudf.option_context("io.json.low_memory", True):
         gdf = cudf.read_json(buf, lines=True)
     assert_eq(df, gdf)
