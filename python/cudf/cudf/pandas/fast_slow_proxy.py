@@ -937,45 +937,10 @@ def _fast_slow_function_call(
             domain="cudf_pandas",
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
-            if _env_get_bool("CUDF_PANDAS_SLOW_LOG", False):
-                from ._logger import StructuredMessage, logger
+            if _env_get_bool("LOG_FAST_FALLBACK", False):
+                from ._logger import log_fallback
 
-                def reprify(arg) -> str:
-                    try:
-                        return repr(arg)
-                    except Exception:
-                        return "<REPR FAILED>"
-
-                module = getattr(slow_args[0], "__module__", "")
-                obj_name = getattr(
-                    slow_args[0], "__name__", type(slow_args[0]).__name__
-                )
-                slow_object = f"{module}.{obj_name}"
-                # TODO: maybe use inspect.signature to map called args and kwargs
-                # to their keyword names
-                called_args = ",".join((reprify(val) for val in slow_args[1]))
-                if len(slow_args) == 3:
-                    fmt_kwargs = ",".join(
-                        f"{kwarg}={reprify(value)}"
-                        for kwarg, value in slow_args[2].items()
-                    )
-                    called_args = ",".join((called_args, fmt_kwargs))
-                    passed_kwargs = {
-                        kwarg: reprify(value)
-                        for kwarg, value in slow_args[2].items()
-                    }
-                else:
-                    passed_kwargs = {}
-                message = StructuredMessage(
-                    "CUDF_PANDAS_SLOW_LOG",
-                    failed_call=f"{slow_object}({called_args})",
-                    exception=type(err).__name__,
-                    exception_message=str(err),
-                    pandas_object=slow_object,
-                    passed_args=called_args,
-                    passed_kwargs=passed_kwargs,
-                )
-                logger.info(message)
+                log_fallback(slow_args, slow_kwargs, err)
             with disable_module_accelerator():
                 result = func(*slow_args, **slow_kwargs)
     return _maybe_wrap_result(result, func, *args, **kwargs), fast
