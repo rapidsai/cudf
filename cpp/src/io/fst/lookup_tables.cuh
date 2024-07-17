@@ -802,6 +802,8 @@ class TranslationOp {
  *
  * @tparam FunctorT A function object type that must implement two signatures: (1) with `(state_id,
  * match_id, read_symbol)` and (2) with `(state_id, match_id, relative_offset, read_symbol)`
+ * @tparam MIN_TRANSLATED_SYMBOLS The minimum number of translated output symbols for any given
+ * input symbol
  * @tparam MAX_TRANSLATED_SYMBOLS The maximum number of translated output symbols for any given
  * input symbol
  * @param map_op A function object that must implement two signatures: (1) with `(state_id,
