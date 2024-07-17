@@ -1232,20 +1232,17 @@ void reader::impl::setup_next_pass(read_mode mode)
       pass.skip_rows = _file_itm_data.global_skip_rows;
       pass.num_rows  = _file_itm_data.global_num_rows;
     } else {
-      auto const global_start_row = _file_itm_data.global_skip_rows;
-      auto const global_num_rows  = _file_itm_data.global_num_rows;
       auto const start_row =
         _file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass];
       auto const end_row =
         std::min(_file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass + 1],
-                 global_num_rows);
+                 _file_itm_data.global_num_rows);
 
       // skip_rows is always global in the sense that it is relative to the first row of
       // everything we will be reading, regardless of what pass we are on.
       // num_rows is how many rows we are reading this pass.
-      pass.skip_rows = global_start_row + start_row;
-
-      pass.num_rows = end_row - start_row;
+      pass.skip_rows = _file_itm_data.global_skip_rows + start_row;
+      pass.num_rows  = end_row - start_row;
     }
 
     // load page information for the chunk. this retrieves the compressed bytes for all the
