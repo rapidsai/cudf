@@ -1233,22 +1233,18 @@ void reader::impl::setup_next_pass(read_mode mode)
       pass.num_rows  = _file_itm_data.global_num_rows;
     } else {
       auto const global_start_row = _file_itm_data.global_skip_rows;
-      auto const global_end_row   = global_start_row + _file_itm_data.global_num_rows;
+      auto const global_num_rows  = _file_itm_data.global_num_rows;
       auto const start_row =
-        std::max(_file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass],
-                 global_start_row);
+        _file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass];
       auto const end_row =
         std::min(_file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass + 1],
-                 global_end_row);
+                 global_num_rows);
 
       // skip_rows is always global in the sense that it is relative to the first row of
       // everything we will be reading, regardless of what pass we are on.
       // num_rows is how many rows we are reading this pass.
-      pass.skip_rows =
-        _file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass];
+      pass.skip_rows = global_start_row + start_row;
 
-      // global_start_row should only be added to the first input pass and not to subsequent ones.
-      pass.skip_rows += (_file_itm_data._current_input_pass == 0) ? global_start_row : 0;
       pass.num_rows = end_row - start_row;
     }
 
@@ -1568,14 +1564,8 @@ void reader::impl::create_global_chunk_info()
     remaining_rows -=
       (skip_rows) ? std::min<int>(rg.start_row + row_group.num_rows - skip_rows, remaining_rows)
                   : row_group_rows;
-
-    // Adjust the start_row of the first row group which was left unadjusted during
-    // select_row_groups().
-    if (skip_rows) {
-      rg.start_row = (skip_rows) ? skip_rows : rg.start_row;
-      // Set skip_rows = 0 as it is no longer needed for subsequent row_groups
-      skip_rows = 0;
-    }
+    // Set skip_rows = 0 as it is no longer needed for subsequent row_groups
+    skip_rows = 0;
   }
 }
 
@@ -1583,7 +1573,7 @@ void reader::impl::compute_input_passes()
 {
   // at this point, row_groups has already been filtered down to just the row groups we need to
   // handle optional skip_rows/num_rows parameters.
-  auto const& row_groups_info = _file_itm_data.row_groups;
+  auto& row_groups_info = _file_itm_data.row_groups;
 
   // if the user hasn't specified an input size limit, read everything in a single pass.
   if (_input_pass_read_limit == 0) {
@@ -1612,13 +1602,29 @@ void reader::impl::compute_input_passes()
   _file_itm_data.input_pass_row_group_offsets.push_back(0);
   _file_itm_data.input_pass_start_row_count.push_back(0);
 
+  // To handle global_skip_rows when computing input passes
+  int skip_rows = _file_itm_data.global_skip_rows;
+
   for (size_t cur_rg_index = 0; cur_rg_index < row_groups_info.size(); cur_rg_index++) {
-    auto const& rgi       = row_groups_info[cur_rg_index];
+    auto& rgi             = row_groups_info[cur_rg_index];
     auto const& row_group = _metadata->get_row_group(rgi.index, rgi.source_index);
 
     // total compressed size and total size (compressed + uncompressed) for
     auto const [compressed_rg_size, _ /*compressed + uncompressed*/] =
       get_row_group_size(row_group);
+
+    // We must use the effective size of the first row group we are reading to accurately calculate
+    // the first non-zero input_pass_start_row_count.
+    auto row_group_rows =
+      (skip_rows) ? rgi.start_row + row_group.num_rows - skip_rows : row_group.num_rows;
+
+    // Adjust the start_row of the first row group which was left unadjusted during
+    // select_row_groups().
+    if (skip_rows) {
+      rgi.start_row = skip_rows;
+      // Set skip_rows = 0 as it is no longer needed for subsequent row_groups
+      skip_rows = 0;
+    }
 
     // can we add this row group
     if (cur_pass_byte_size + compressed_rg_size >= comp_read_limit) {
@@ -1627,7 +1633,7 @@ void reader::impl::compute_input_passes()
       // row group
       if (cur_rg_start == cur_rg_index) {
         _file_itm_data.input_pass_row_group_offsets.push_back(cur_rg_index + 1);
-        _file_itm_data.input_pass_start_row_count.push_back(cur_row_count + row_group.num_rows);
+        _file_itm_data.input_pass_start_row_count.push_back(cur_row_count + row_group_rows);
         cur_rg_start       = cur_rg_index + 1;
         cur_pass_byte_size = 0;
       }
@@ -1641,7 +1647,7 @@ void reader::impl::compute_input_passes()
     } else {
       cur_pass_byte_size += compressed_rg_size;
     }
-    cur_row_count += row_group.num_rows;
+    cur_row_count += row_group_rows;
   }
 
   // add the last pass if necessary

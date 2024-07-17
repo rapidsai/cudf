@@ -149,6 +149,33 @@ auto chunked_read(std::string const& filepath,
   return chunked_read(vpath, output_limit, input_limit);
 }
 
+auto const read_table_and_nrows_per_source(cudf::io::chunked_parquet_reader const& reader)
+{
+  auto out_tables       = std::vector<std::unique_ptr<cudf::table>>{};
+  int num_chunks        = 0;
+  auto nrows_per_source = std::vector<size_t>{};
+  while (reader.has_next()) {
+    auto chunk = reader.read_chunk();
+    out_tables.emplace_back(std::move(chunk.tbl));
+    num_chunks++;
+    if (nrows_per_source.empty()) {
+      nrows_per_source = std::move(chunk.metadata.num_rows_per_source);
+    } else {
+      std::transform(chunk.metadata.num_rows_per_source.cbegin(),
+                     chunk.metadata.num_rows_per_source.cend(),
+                     nrows_per_source.begin(),
+                     nrows_per_source.begin(),
+                     std::plus<size_t>());
+    }
+  }
+  auto out_tviews = std::vector<cudf::table_view>{};
+  for (auto const& tbl : out_tables) {
+    out_tviews.emplace_back(tbl->view());
+  }
+
+  return std::tuple(cudf::concatenate(out_tviews), num_chunks, nrows_per_source);
+}
+
 }  // namespace
 
 struct ParquetChunkedReaderTest : public cudf::test::BaseFixture {};
@@ -1498,32 +1525,6 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
                                                cudf::io::default_max_page_size_bytes,
                                                rows_in_row_group);
 
-  auto const read_table_and_nrows_per_source = [](cudf::io::chunked_parquet_reader const& reader) {
-    auto out_tables       = std::vector<std::unique_ptr<cudf::table>>{};
-    int num_chunks        = 0;
-    auto nrows_per_source = std::vector<size_t>{};
-    while (reader.has_next()) {
-      auto chunk = reader.read_chunk();
-      out_tables.emplace_back(std::move(chunk.tbl));
-      num_chunks++;
-      if (nrows_per_source.empty()) {
-        nrows_per_source = std::move(chunk.metadata.num_rows_per_source);
-      } else {
-        std::transform(chunk.metadata.num_rows_per_source.cbegin(),
-                       chunk.metadata.num_rows_per_source.cend(),
-                       nrows_per_source.begin(),
-                       nrows_per_source.begin(),
-                       std::plus<size_t>());
-      }
-    }
-    auto out_tviews = std::vector<cudf::table_view>{};
-    for (auto const& tbl : out_tables) {
-      out_tviews.emplace_back(tbl->view());
-    }
-
-    return std::tuple(cudf::concatenate(out_tviews), num_chunks, nrows_per_source);
-  };
-
   // Chunked-read single data source entirely
   {
     auto constexpr output_read_limit = 1'500;
@@ -1571,8 +1572,8 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
   // Chunked-read two data sources skipping the first entire file completely
   {
     auto constexpr rows_to_skip      = 15'723;
-    auto constexpr output_read_limit = 1'500;
-    auto constexpr pass_read_limit   = 3'500;
+    auto constexpr output_read_limit = 1'024'000;
+    auto constexpr pass_read_limit   = 1'024'000;
 
     auto constexpr nsources = 2;
     std::vector<std::string> const datasources(nsources, filepath);
@@ -1602,7 +1603,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
   {
     auto const rows_to_skip          = 1'237;
     auto constexpr output_read_limit = 1'500;
-    auto constexpr pass_read_limit   = 3'500;
+    auto constexpr pass_read_limit   = 1'800;
 
     auto const options = cudf::io::parquet_reader_options_builder(cudf::io::source_info{filepath})
                            .skip_rows(rows_to_skip)
@@ -1656,10 +1657,31 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_filtered, result->view());
     EXPECT_TRUE(num_rows_per_source.empty());
   }
+}
 
-  // Chunked-read ten data sources entirely
+TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
+{
+  constexpr int num_rows          = 10'723;  // A prime number
+  constexpr int rows_in_row_group = 500;
+
+  // Table with single col of random int64 values
+  auto const int64_data = random_values<int64_t>(num_rows);
+  auto int64_col        = int64s_col(int64_data.begin(), int64_data.end()).release();
+
+  std::vector<std::unique_ptr<cudf::column>> input_columns;
+  input_columns.emplace_back(std::move(int64_col));
+
+  // Write to Parquet
+  auto const [expected, filepath] = write_file(input_columns,
+                                               "num_rows_per_source",
+                                               false,
+                                               false,
+                                               cudf::io::default_max_page_size_bytes,
+                                               rows_in_row_group);
+
+  // Chunked-read six data sources entirely
   {
-    auto const nsources              = 10;
+    auto const nsources              = 6;
     auto constexpr output_read_limit = 15'000;
     auto constexpr pass_read_limit   = 35'000;
     std::vector<std::string> const datasources(nsources, filepath);
@@ -1679,14 +1701,23 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
       std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
   }
 
-  // Chunked-read rows_to_read rows skipping rows_to_skip from ten data sources
+  // Chunked-read rows_to_read rows skipping rows_to_skip from eight data sources
   {
     auto const rows_to_skip          = 25'571;
-    auto const rows_to_read          = 47'232;
+    auto const rows_to_read          = 41'232;
     auto constexpr output_read_limit = 15'000;
     auto constexpr pass_read_limit   = 35'000;
+    auto const nsources              = 8;
+    std::vector<int64_t> int64_selected_data{};
+    int64_selected_data.reserve(nsources * num_rows);
 
-    auto const nsources = 10;
+    std::for_each(
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(nsources),
+      [&](auto const i) {
+        std::copy(int64_data.begin(), int64_data.end(), std::back_inserter(int64_selected_data));
+      });
+
     std::vector<std::string> const datasources(nsources, filepath);
 
     auto const options =
@@ -1726,20 +1757,36 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
       }
     }
 
+    // Initialize expected table
+    auto int64_col_selected = int64s_col(int64_selected_data.begin() + rows_to_skip,
+                                         int64_selected_data.begin() + +rows_to_skip + rows_to_read)
+                                .release();
+
+    cudf::table_view const expected_selected({int64_col_selected->view()});
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_selected, result->view());
     EXPECT_EQ(num_rows_per_source.size(), nsources);
     EXPECT_TRUE(
       std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
   }
 
-  // Chunked-read ten data sources skipping rows_to_skip rows
+  // Chunked-read four data sources skipping three files completely
   {
-    auto const rows_to_skip          = 5'571;
+    auto const nsources              = 4;
+    int constexpr rows_to_skip       = num_rows * 3 + 1;
     auto constexpr output_read_limit = 15'000;
     auto constexpr pass_read_limit   = 35'000;
+    std::vector<int64_t> int64_selected_data{};
+    int64_selected_data.reserve(nsources * num_rows);
 
-    auto const nsources = 10;
+    std::for_each(
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(nsources),
+      [&](auto const i) {
+        std::copy(int64_data.begin(), int64_data.end(), std::back_inserter(int64_selected_data));
+      });
+
     std::vector<std::string> const datasources(nsources, filepath);
-
     auto const options =
       cudf::io::parquet_reader_options_builder(cudf::io::source_info{datasources})
         .skip_rows(rows_to_skip)
@@ -1776,48 +1823,55 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
       }
     }
 
+    // Initialize expected table
+    auto int64_col_selected =
+      int64s_col(int64_selected_data.begin() + rows_to_skip, int64_selected_data.end()).release();
+
+    cudf::table_view const expected_selected({int64_col_selected->view()});
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_selected, result->view());
     EXPECT_EQ(num_rows_per_source.size(), nsources);
     EXPECT_TRUE(
       std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
   }
+}
 
-  // Chunked-read ten empty data sources
-  {
-    auto constexpr output_read_limit = 4'500;
-    auto constexpr pass_read_limit   = 8'500;
-    auto const nsources              = 10;
+TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceEmptyTable)
+{
+  auto constexpr output_read_limit = 4'500;
+  auto constexpr pass_read_limit   = 8'500;
+  auto const nsources              = 10;
 
-    // Table with single col of random int64 values
-    auto int64_empty_col = int64s_col{}.release();
+  // Table with single col of random int64 values
+  auto int64_empty_col = int64s_col{}.release();
 
-    std::vector<std::unique_ptr<cudf::column>> input_empty_columns;
-    input_empty_columns.emplace_back(std::move(int64_empty_col));
+  std::vector<std::unique_ptr<cudf::column>> input_empty_columns;
+  input_empty_columns.emplace_back(std::move(int64_empty_col));
 
-    // Write to Parquet
-    auto const [expected_empty, filepath_empty] = write_file(input_empty_columns,
-                                                             "num_rows_per_source_empty",
-                                                             false,
-                                                             false,
-                                                             cudf::io::default_max_page_size_bytes,
-                                                             rows_in_row_group);
+  // Write to Parquet
+  auto const [expected_empty, filepath_empty] = write_file(input_empty_columns,
+                                                           "num_rows_per_source_empty",
+                                                           false,
+                                                           false,
+                                                           cudf::io::default_max_page_size_bytes,
+                                                           500);
 
-    std::vector<std::string> const datasources(nsources, filepath_empty);
+  std::vector<std::string> const datasources(nsources, filepath_empty);
 
-    auto const options =
-      cudf::io::parquet_reader_options_builder(cudf::io::source_info{datasources}).build();
-    auto const reader = cudf::io::chunked_parquet_reader(
-      output_read_limit, pass_read_limit, options, cudf::get_default_stream());
+  auto const options =
+    cudf::io::parquet_reader_options_builder(cudf::io::source_info{datasources}).build();
+  auto const reader = cudf::io::chunked_parquet_reader(
+    output_read_limit, pass_read_limit, options, cudf::get_default_stream());
 
-    auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
+  auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
 
-    // Initialize expected_counts
-    std::vector<size_t> const expected_counts(nsources, 0);
+  // Initialize expected_counts
+  std::vector<size_t> const expected_counts(nsources, 0);
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_empty->view(), result->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_empty->view(), result->view());
 
-    EXPECT_EQ(num_chunks, 1);
-    EXPECT_EQ(num_rows_per_source.size(), nsources);
-    EXPECT_TRUE(
-      std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
-  }
+  EXPECT_EQ(num_chunks, 1);
+  EXPECT_EQ(num_rows_per_source.size(), nsources);
+  EXPECT_TRUE(
+    std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
 }

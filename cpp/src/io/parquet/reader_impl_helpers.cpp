@@ -1015,9 +1015,12 @@ aggregate_reader_metadata::select_row_groups(
           num_rows_per_source[src_idx] += count - chunk_start_row_this_rg;
 
           // We need the unadjusted start index of this row group to correctly initialize
-          // ColumnChunkDesc for this row group in create_global_chunk_info().
+          // ColumnChunkDesc for this row group in create_global_chunk_info() and correctly
+          // calculate the row offset for the first pass in compute_input_passes().
           selection.emplace_back(rg_idx, chunk_start_row, src_idx);
-          // if page-level indexes are present, then collect extra chunk and page info.
+
+          // If page-level indexes are present, then collect extra chunk and page info.
+          // The page indexes rely on absolute row numbers, not adjusted for skip_rows.
           column_info_for_row_group(selection.back(), chunk_start_row);
         }
         // Adjust the number of rows for the last source file.
