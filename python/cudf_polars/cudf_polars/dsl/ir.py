@@ -313,7 +313,12 @@ class Scan(IR):
             raise NotImplementedError(
                 f"Unhandled scan type: {self.typ}"
             )  # pragma: no cover; post init trips first
-        if row_index is not None:
+        if (
+            row_index is not None
+            # TODO: remove condition when dropping support for polars 1.0
+            # https://github.com/pola-rs/polars/pull/17363
+            and row_index[0] in self.schema
+        ):
             name, offset = row_index
             dtype = self.schema[name]
             step = plc.interop.from_arrow(
