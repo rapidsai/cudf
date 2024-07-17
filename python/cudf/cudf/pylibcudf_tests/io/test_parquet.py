@@ -1,4 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
+import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
 from pyarrow.parquet import read_table
@@ -54,7 +55,7 @@ def test_read_parquet_basic(
             Operation(
                 ASTOperator.GREATER_EQUAL,
                 ColumnNameReference("col_int64"),
-                Literal(10),
+                Literal(plc.interop.from_arrow(pa.scalar(10))),
             ),
         ),
         (
@@ -64,18 +65,22 @@ def test_read_parquet_basic(
                 Operation(
                     ASTOperator.GREATER_EQUAL,
                     ColumnNameReference("col_int64"),
-                    Literal(10),
+                    Literal(plc.interop.from_arrow(pa.scalar(10))),
                 ),
                 Operation(
                     ASTOperator.LESS,
                     ColumnNameReference("col_double"),
-                    Literal(0.0),
+                    Literal(plc.interop.from_arrow(pa.scalar(0.0))),
                 ),
             ),
         ),
         (
             (pc.field(0) == 10),
-            Operation(ASTOperator.EQUAL, ColumnReference(0), Literal(10)),
+            Operation(
+                ASTOperator.EQUAL,
+                ColumnReference(0),
+                Literal(plc.interop.from_arrow(pa.scalar(10))),
+            ),
         ),
     ],
 )
