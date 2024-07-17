@@ -586,7 +586,7 @@ unique_device_array_t create_device_array(nanoarrow::UniqueArray&& out,
   });
   result->device_id          = rmm::get_current_cuda_device().value();
   result->device_type        = ARROW_DEVICE_CUDA;
-  result->sync_event         = private_data->sync_event;
+  result->sync_event         = &private_data->sync_event;
   result->array              = private_data->parent;  // makes a shallow copy
   result->array.private_data = private_data.release();
   result->array.release      = &detail::ArrowDeviceArrayRelease;

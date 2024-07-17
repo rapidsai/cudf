@@ -6235,13 +6235,13 @@ class IndexedFrame(Frame):
 
     def convert_dtypes(
         self,
-        infer_objects=True,
-        convert_string=True,
-        convert_integer=True,
-        convert_boolean=True,
-        convert_floating=True,
+        infer_objects: bool = True,
+        convert_string: bool = True,
+        convert_integer: bool = True,
+        convert_boolean: bool = True,
+        convert_floating: bool = True,
         dtype_backend=None,
-    ):
+    ) -> Self:
         """
         Convert columns to the best possible nullable dtypes.
 
@@ -6252,17 +6252,21 @@ class IndexedFrame(Frame):
         All other dtypes are always returned as-is as all dtypes in
         cudf are nullable.
         """
-        result = self.copy()
-
-        if convert_floating:
-            # cast any floating columns to int64 if
-            # they are all integer data:
-            for name, col in result._data.items():
+        if not (convert_floating and convert_integer):
+            return self.copy()
+        else:
+            cols = []
+            for col in self._columns:
                 if col.dtype.kind == "f":
                     col = col.fillna(0)
-                    if cp.allclose(col, col.astype("int64")):
-                        result._data[name] = col.astype("int64")
-        return result
+                    as_int = col.astype("int64")
+                    if cp.allclose(col, as_int):
+                        cols.append(as_int)
+                        continue
+                cols.append(col)
+            return self._from_data_like_self(
+                self._data._from_columns_like_self(cols, verify=False)
+            )
 
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
