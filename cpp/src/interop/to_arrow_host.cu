@@ -194,13 +194,25 @@ int dispatch_to_arrow_host::operator()<bool>(ArrowArray* out) const
 template <>
 int dispatch_to_arrow_host::operator()<cudf::string_view>(ArrowArray* out) const
 {
+  ArrowType nanoarrow_type = NANOARROW_TYPE_STRING;
+  if (column.child(cudf::strings_column_view::offsets_column_index).type().id() ==
+      cudf::type_id::INT64) {
+    nanoarrow_type = NANOARROW_TYPE_LARGE_STRING;
+  }
+
   nanoarrow::UniqueArray tmp;
-  NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_STRING, column));
+  NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), nanoarrow_type, column));
 
   if (column.size() == 0) {
     // initialize the offset buffer with a single zero by convention
-    NANOARROW_RETURN_NOT_OK(
-      ArrowBufferAppendInt32(ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx), 0));
+    if (nanoarrow_type == NANOARROW_TYPE_LARGE_STRING) {
+      NANOARROW_RETURN_NOT_OK(
+        ArrowBufferAppendInt64(ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx), 0));
+    } else {
+      NANOARROW_RETURN_NOT_OK(
+        ArrowBufferAppendInt32(ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx), 0));
+    }
+
     ArrowArrayMove(tmp.get(), out);
     return NANOARROW_OK;
   }
@@ -209,9 +221,16 @@ int dispatch_to_arrow_host::operator()<cudf::string_view>(ArrowArray* out) const
 
   auto const scv     = cudf::strings_column_view(column);
   auto const offsets = scv.offsets();
-  NANOARROW_RETURN_NOT_OK(
-    populate_data_buffer(device_span<int32_t const>(offsets.data<int32_t>(), offsets.size()),
-                         ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
+  if (offsets.type().id() == cudf::type_id::INT64) {
+    NANOARROW_RETURN_NOT_OK(populate_data_buffer(
+      device_span<int64_t const>(offsets.data<int64_t>() + scv.offset(), scv.size() + 1),
+      ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
+  } else {
+    NANOARROW_RETURN_NOT_OK(populate_data_buffer(
+      device_span<int32_t const>(offsets.data<int32_t>() + scv.offset(), scv.size() + 1),
+      ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
+  }
+
   NANOARROW_RETURN_NOT_OK(
     populate_data_buffer(device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)),
                          ArrowArrayBuffer(tmp.get(), 2)));

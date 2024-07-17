@@ -213,8 +213,13 @@ int dispatch_to_arrow_device::operator()<cudf::string_view>(cudf::column&& colum
                                                             rmm::device_async_resource_ref mr,
                                                             ArrowArray* out)
 {
+  ArrowType nanoarrow_type = NANOARROW_TYPE_STRING;
+  if (column.child(cudf::strings_column_view::offsets_column_index).type().id() == cudf::type_id::INT64) {
+    nanoarrow_type = NANOARROW_TYPE_LARGE_STRING;
+  }
+  
   nanoarrow::UniqueArray tmp;
-  NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_STRING, column));
+  NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), nanoarrow_type, column));
 
   if (column.size() == 0) {
     // the scalar zero here is necessary because the spec for string arrays states
@@ -222,8 +227,14 @@ int dispatch_to_arrow_device::operator()<cudf::string_view>(cudf::column&& colum
     // the case of a 0 length string array, there should be exactly 1 value, zero,
     // in the offsets buffer. While some arrow implementations may accept a zero-sized
     // offsets buffer, best practices would be to allocate the buffer with the single value.
-    auto zero = std::make_unique<rmm::device_scalar<int32_t>>(0, stream, mr);
-    NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
+    if (nanoarrow_type == NANOARROW_TYPE_STRING) {
+      auto zero = std::make_unique<rmm::device_scalar<int32_t>>(0, stream, mr);
+      NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
+    } else {
+      auto zero = std::make_unique<rmm::device_scalar<int64_t>>(0, stream, mr);
+      NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
+    }
+
     ArrowArrayMove(tmp.get(), out);
     return NANOARROW_OK;
   }
@@ -438,13 +449,24 @@ int dispatch_to_arrow_device_view::operator()<bool>(ArrowArray* out) const
 template <>
 int dispatch_to_arrow_device_view::operator()<cudf::string_view>(ArrowArray* out) const
 {
-  nanoarrow::UniqueArray tmp;
-  NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_STRING, column));
+  ArrowType nanoarrow_type = NANOARROW_TYPE_STRING;
+  if (column.child(cudf::strings_column_view::offsets_column_index).type().id() == cudf::type_id::INT64) {
+    nanoarrow_type = NANOARROW_TYPE_LARGE_STRING;
+  }
 
-  if (column.size() == 0) {
+  nanoarrow::UniqueArray tmp;
+  NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), nanoarrow_type, column));
+
+  if (column.size() == 0) {    
     // https://github.com/rapidsai/cudf/pull/15047#discussion_r1546528552
-    auto zero = std::make_unique<rmm::device_scalar<int32_t>>(0, stream, mr);
-    NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
+    if (nanoarrow_type == NANOARROW_TYPE_LARGE_STRING) {
+      auto zero = std::make_unique<rmm::device_scalar<int64_t>>(0, stream, mr);
+      NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
+    } else {
+      auto zero = std::make_unique<rmm::device_scalar<int32_t>>(0, stream, mr);
+      NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
+    }
+    
     ArrowArrayMove(tmp.get(), out);
     return NANOARROW_OK;
   }
