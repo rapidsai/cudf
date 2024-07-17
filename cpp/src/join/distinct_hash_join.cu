@@ -58,6 +58,9 @@ auto prepare_device_equal(
     cudf::experimental::row::equality::two_table_comparator(probe, build);
   auto d_comparator =
     two_table_equal.equal_to(column_types, nullate::DYNAMIC{has_nulls}, compare_nulls);
+
+  // need to wrap types in d_comparator with comparator_adaptor. We can do this with some
+  // metaprogramming but this seems fine for now
   using ret_type = std::variant<
     comparator_adapter<cudf::experimental::row::equality::strong_index_comparator_adapter<
       cudf::experimental::row::equality::device_row_comparator<
@@ -77,8 +80,9 @@ auto prepare_device_equal(
         nullate::DYNAMIC,
         cudf::experimental::row::equality::nan_equal_physical_equality_comparator,
         cudf::experimental::dispatch_void_if_compound_t>>>>;
+
   return std::visit(
-    [&](auto&& comparator) {
+    [&](auto& comparator) {
       return ret_type{
         std::in_place_type<
           comparator_adapter<typename std::remove_reference<decltype(comparator)>::type>>,
@@ -137,29 +141,18 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
     _preprocessed_build{
       cudf::experimental::row::equality::preprocessed_table::create(_build, stream)},
     _preprocessed_probe{
-      cudf::experimental::row::equality::preprocessed_table::create(_probe, stream)},
-    _hash_table{nullptr}
+      cudf::experimental::row::equality::preprocessed_table::create(_probe, stream)}
 {
   std::unordered_set<cudf::type_id> build_column_types;
-  for (auto col : build) {
+  for (auto col : this->_build) {
     build_column_types.insert(col.type().id());
   }
 
-  auto comparators = prepare_device_equal(
+  auto var_comparator_adapter = prepare_device_equal(
     _preprocessed_build, _preprocessed_probe, has_nulls, compare_nulls, build_column_types);
+
   std::visit(
-    [&](auto&& comparator_adapter) {
-      // auto other_static_set =
-      //   cuco::static_set{build.num_rows(),
-      //                    CUCO_DESIRED_LOAD_FACTOR,
-      //                    cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
-      //                                               rhs_index_type{JoinNoneValue}}},
-      //                    comparator_adapter,
-      //                    distinct_hash_join::probing_scheme_type(),
-      //                    cuco::thread_scope_device,
-      //                    cuco_storage_type{},
-      //                    cudf::detail::cuco_allocator{stream},
-      //                    stream.value()};
+    [&](auto& comparator_adapter) {
       using static_set_type =
         cuco::static_set<cuco::pair<hash_value_type, rhs_index_type>,
                          cuco::extent<size_type>,
@@ -168,21 +161,21 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
                          distinct_hash_join::probing_scheme_type,
                          cudf::detail::cuco_allocator,
                          distinct_hash_join::cuco_storage_type>;
-      // static_assert(std::is_same_v<static_set_type, decltype(other_static_set)>);
+
       this->_hash_table = std::make_unique<hash_table_type>(
         std::in_place_type<static_set_type>,
-        cuco::extent{build.num_rows()},
+        build.num_rows(),
         CUCO_DESIRED_LOAD_FACTOR,
         cuco::empty_key{
           cuco::pair{std::numeric_limits<hash_value_type>::max(), rhs_index_type{JoinNoneValue}}},
         comparator_adapter,
-        distinct_hash_join::probing_scheme_type(),
-        cuda::thread_scope_device,
+        distinct_hash_join::probing_scheme_type{},
+        cuco::thread_scope_device,
         distinct_hash_join::cuco_storage_type{},
         cudf::detail::cuco_allocator{stream},
-        stream);
+        stream.value());
     },
-    comparators);
+    var_comparator_adapter);
 
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != this->_build.num_columns(), "Hash join build table is empty");
@@ -194,7 +187,7 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
     row_hasher.device_hasher(build_column_types, nullate::DYNAMIC{this->_has_nulls});
 
   std::visit(
-    [&](auto&& hasher, auto&& hash_table) {
+    [&](auto& hasher, auto& hash_table) {
       auto const iter = cudf::detail::make_counting_transform_iterator(
         0, build_keys_fn<decltype(hasher), rhs_index_type>{hasher});
 
@@ -240,7 +233,7 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
     std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
 
   std::unordered_set<cudf::type_id> probe_column_types;
-  for (auto col : _probe) {
+  for (auto col : this->_probe) {
     probe_column_types.insert(col.type().id());
   }
 
@@ -255,7 +248,7 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
     thrust::make_transform_output_iterator(probe_indices->begin(), output_fn{});
 
   std::visit(
-    [&](auto&& hasher, auto&& hash_table) {
+    [&](auto& hasher, auto& hash_table) {
       auto const iter = cudf::detail::make_counting_transform_iterator(
         0, build_keys_fn<decltype(hasher), lhs_index_type>{hasher});
 
@@ -307,7 +300,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<HasNested>::l
       probe_row_hasher.device_hasher(probe_column_types, nullate::DYNAMIC{this->_has_nulls});
 
     std::visit(
-      [&](auto&& hasher, auto&& hash_table) {
+      [&](auto& hasher, auto& hash_table) {
         auto const iter = cudf::detail::make_counting_transform_iterator(
           0, build_keys_fn<decltype(hasher), lhs_index_type>{hasher});
 
