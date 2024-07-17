@@ -73,26 +73,26 @@ class table_with_names {
   /**
    * @brief Return the table view
    */
-  [[nodiscard]] cudf::table_view const table() { return tbl->view(); }
+  [[nodiscard]] cudf::table_view table() const { return tbl->view(); }
   /**
    * @brief Return the column view for a given column name
    *
    * @param col_name The name of the column
    */
-  [[nodiscard]] cudf::column_view const column(std::string const& col_name)
+  [[nodiscard]] cudf::column_view column(std::string const& col_name) const
   {
     return tbl->view().column(col_id(col_name));
   }
   /**
    * @param Return the column names of the table
    */
-  [[nodiscard]] std::vector<std::string> const column_names() { return col_names; }
+  [[nodiscard]] std::vector<std::string> column_names() const { return col_names; }
   /**
    * @brief Translate a column name to a column index
    *
    * @param col_name The name of the column
    */
-  [[nodiscard]] cudf::size_type const col_id(std::string const& col_name)
+  [[nodiscard]] cudf::size_type col_id(std::string const& col_name) const
   {
     CUDF_FUNC_RANGE();
     auto it = std::find(col_names.begin(), col_names.end(), col_name);
@@ -119,7 +119,7 @@ class table_with_names {
    *
    * @param col_names The names of the columns to select
    */
-  [[nodiscard]] cudf::table_view const select(std::vector<std::string> const& col_names)
+  [[nodiscard]] cudf::table_view select(std::vector<std::string> const& col_names) const
   {
     CUDF_FUNC_RANGE();
     std::vector<cudf::size_type> col_indices;
@@ -133,7 +133,7 @@ class table_with_names {
    *
    * @param filepath The path to the parquet file
    */
-  void to_parquet(std::string const& filepath)
+  void to_parquet(std::string const& filepath) const
   {
     CUDF_FUNC_RANGE();
     auto const sink_info = cudf::io::sink_info(filepath);
