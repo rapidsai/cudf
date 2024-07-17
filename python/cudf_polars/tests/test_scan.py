@@ -98,7 +98,15 @@ def test_scan(tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask):
         q = q.filter(mask)
     if columns is not None:
         q = q.select(*columns)
-    assert_gpu_result_equal(q)
+    polars_collect_kwargs = {}
+    if versions.POLARS_VERSION_LT_12:
+        # https://github.com/pola-rs/polars/issues/17553
+        polars_collect_kwargs = {"projection_pushdown": False}
+    assert_gpu_result_equal(
+        q,
+        polars_collect_kwargs=polars_collect_kwargs,
+        check_column_order=not versions.POLARS_VERSION_LT_12,
+    )
 
 
 def test_scan_unsupported_raises(tmp_path):
