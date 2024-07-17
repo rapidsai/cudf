@@ -43,7 +43,9 @@ std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
       return sum + size;
     });
   }();
-  auto find_first_delimiter_in_chunk = [total_source_size, &sources, &stream](cudf::io::json_reader_options const &reader_opts) -> IndexType {
+  auto find_first_delimiter_in_chunk =
+    [total_source_size, &sources, &stream](
+      cudf::io::json_reader_options const& reader_opts) -> IndexType {
     rmm::device_uvector<char> buffer(total_source_size, stream);
     auto readbufspan = cudf::io::json::detail::ingest_raw_input(buffer,
                                                                 sources,
@@ -53,15 +55,17 @@ std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
                                                                 stream);
     // Note: we cannot reuse cudf::io::json::detail::find_first_delimiter since the
     // return type of that function is size_type. However, when the chunk_size is
-    // larger than INT_MAX, the position of the delimiter can also be larger than 
+    // larger than INT_MAX, the position of the delimiter can also be larger than
     // INT_MAX. We do not encounter this overflow error in the detail function
     // since the batched JSON reader splits the byte_range_size into chunk_sizes
     // smaller than INT_MAX bytes
     auto const first_delimiter_position_it =
       thrust::find(rmm::exec_policy(stream), readbufspan.begin(), readbufspan.end(), '\n');
-    return first_delimiter_position_it != readbufspan.end() ? thrust::distance(readbufspan.begin(), first_delimiter_position_it) : -1;
+    return first_delimiter_position_it != readbufspan.end()
+             ? thrust::distance(readbufspan.begin(), first_delimiter_position_it)
+             : -1;
   };
-  size_t num_chunks          = (total_source_size + chunk_size - 1) / chunk_size;
+  size_t num_chunks                = (total_source_size + chunk_size - 1) / chunk_size;
   constexpr IndexType no_min_value = -1;
 
   // Get the first delimiter in each chunk.
