@@ -379,3 +379,5 @@ get_nanoarrow_cudf_table(cudf::size_type length);
 
 std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, nanoarrow::UniqueArray>
 get_nanoarrow_host_tables(cudf::size_type length);
+
+void slice_host_nanoarrow(ArrowArray* arr, int64_t start, int64_t end);

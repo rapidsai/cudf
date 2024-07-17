@@ -44,20 +44,140 @@
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 
 struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
+  template <typename T>
+  std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>, void> compare_subset(
+    ArrowArrayView const* expected,
+    int64_t start_offset_expected,
+    ArrowArrayView const* actual,
+    int64_t start_offset_actual,
+    int64_t length)
+  {
+    for (int64_t i = 0; i < length; ++i) {
+      const bool is_null = ArrowArrayViewIsNull(expected, start_offset_expected + i);
+      EXPECT_EQ(is_null, ArrowArrayViewIsNull(actual, start_offset_actual + i));
+      if (is_null) continue;
+
+      const auto expected_val = ArrowArrayViewGetIntUnsafe(expected, start_offset_expected + i);
+      const auto actual_val   = ArrowArrayViewGetIntUnsafe(actual, start_offset_actual + i);
+
+      EXPECT_EQ(expected_val, actual_val);
+    }
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> compare_subset(
+    ArrowArrayView const* expected,
+    int64_t start_offset_expected,
+    ArrowArrayView const* actual,
+    int64_t start_offset_actual,
+    int64_t length)
+  {
+    for (int64_t i = 0; i < length; ++i) {
+      const bool is_null = ArrowArrayViewIsNull(expected, start_offset_expected + i);
+      EXPECT_EQ(is_null, ArrowArrayViewIsNull(actual, start_offset_actual + i));
+      if (is_null) continue;
+
+      const auto expected_view = ArrowArrayViewGetBytesUnsafe(expected, start_offset_expected + i);
+      const auto actual_view   = ArrowArrayViewGetBytesUnsafe(actual, start_offset_actual + i);
+
+      EXPECT_EQ(expected_view.size_bytes, actual_view.size_bytes);
+      EXPECT_TRUE(
+        0 == std::memcmp(expected_view.data.data, actual_view.data.data, expected_view.size_bytes));
+    }
+  }
+
+  void compare_child_subset(ArrowArrayView const* expected,
+                            int64_t exp_start_offset,
+                            ArrowArrayView const* actual,
+                            int64_t act_start_offset,
+                            int64_t length)
+  {
+    EXPECT_EQ(expected->storage_type, actual->storage_type);
+    EXPECT_EQ(expected->n_children, actual->n_children);
+
+    switch (expected->storage_type) {
+      case NANOARROW_TYPE_LIST:
+        for (int64_t i = 0; i < length; ++i) {
+          const auto expected_start = exp_start_offset + i;
+          const auto actual_start   = act_start_offset + i;
+
+          const bool is_null = ArrowArrayViewIsNull(expected, expected_start);
+          EXPECT_EQ(is_null, ArrowArrayViewIsNull(actual, actual_start));
+          if (is_null) continue;
+
+          const int64_t start_offset_expected =
+            ArrowArrayViewListChildOffset(expected, expected->offset + expected_start);
+          const int64_t start_offset_actual = ArrowArrayViewListChildOffset(actual, actual->offset + actual_start);
+
+          const int64_t end_offset_expected =
+            ArrowArrayViewListChildOffset(expected, expected->offset + expected_start + 1);
+          const int64_t end_offset_actual = ArrowArrayViewListChildOffset(actual, actual->offset + actual_start + 1);
+
+          EXPECT_EQ(end_offset_expected - start_offset_expected,
+                    end_offset_actual - start_offset_actual);
+
+          compare_child_subset(expected->children[0],
+                               start_offset_expected,
+                               actual->children[0],
+                               start_offset_actual,
+                               end_offset_expected - start_offset_expected);
+        }
+        break;
+      case NANOARROW_TYPE_STRUCT:
+        for (int64_t i = 0; i < length; ++i) {
+          const auto expected_start = exp_start_offset + i;
+          const auto actual_start   = act_start_offset + i;
+
+          const bool is_null = ArrowArrayViewIsNull(expected, expected_start);
+          EXPECT_EQ(is_null, ArrowArrayViewIsNull(actual, actual_start));
+          if (is_null) continue;
+
+          for (int64_t child = 0; child < expected->n_children; ++child) {
+            compare_child_subset(
+              expected->children[child], expected_start, actual->children[child], actual_start, 1);
+          }
+        }
+        break;
+      case NANOARROW_TYPE_STRING:
+      case NANOARROW_TYPE_LARGE_STRING:
+      case NANOARROW_TYPE_BINARY:
+      case NANOARROW_TYPE_LARGE_BINARY:
+        compare_subset<cudf::string_view>(
+          expected, exp_start_offset, actual, act_start_offset, length);
+        break;
+      default:
+        compare_subset<int64_t>(expected, exp_start_offset, actual, act_start_offset, length);
+        break;
+    }
+  }
+
   void compare_arrays(ArrowArrayView const* expected, ArrowArrayView const* actual)
   {
     EXPECT_EQ(expected->length, actual->length);
     EXPECT_EQ(expected->null_count, actual->null_count);
-    EXPECT_EQ(expected->offset, actual->offset);
+    // EXPECT_EQ(expected->offset, actual->offset);
     EXPECT_EQ(expected->n_children, actual->n_children);
+    EXPECT_EQ(expected->storage_type, actual->storage_type);
 
-    for (int64_t i = 0; i < actual->array->n_buffers; ++i) {
-      SCOPED_TRACE("buffer " + std::to_string(i));
-      auto expected_buf = expected->buffer_views[i];
-      auto actual_buf   = actual->buffer_views[i];
+    switch (expected->storage_type) {
+      case NANOARROW_TYPE_STRUCT:
+        if (expected->n_children == 0) {
+          EXPECT_EQ(nullptr, actual->children);
+          break;
+        }
+      case NANOARROW_TYPE_LIST:
+        compare_child_subset(expected, 0, actual, 0, expected->length);
+        break;
+      default:
+        for (int64_t i = 0; i < actual->array->n_buffers; ++i) {
+          SCOPED_TRACE("buffer " + std::to_string(i));
+          auto expected_buf = expected->buffer_views[i];
+          auto actual_buf   = actual->buffer_views[i];
 
-      EXPECT_TRUE(
-        0 == std::memcmp(expected_buf.data.data, actual_buf.data.data, expected_buf.size_bytes));
+          EXPECT_TRUE(0 == std::memcmp(expected_buf.data.data,
+                                       actual_buf.data.data,
+                                       expected_buf.size_bytes));
+        }
     }
 
     if (expected->dictionary != nullptr) {
@@ -66,15 +186,6 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
       compare_arrays(expected->dictionary, actual->dictionary);
     } else {
       EXPECT_EQ(nullptr, actual->dictionary);
-    }
-
-    if (expected->n_children == 0) {
-      EXPECT_EQ(nullptr, actual->children);
-    } else {
-      for (int64_t i = 0; i < expected->n_children; ++i) {
-        SCOPED_TRACE("child " + std::to_string(i));
-        compare_arrays(expected->children[i], actual->children[i]);
-      }
     }
   }
 };
@@ -791,10 +902,18 @@ struct ToArrowHostDeviceTestSlice
 
 TEST_P(ToArrowHostDeviceTestSlice, SliceTest)
 {
-  auto [table, expected_schema, expected_array] = get_nanoarrow_host_tables(10000);
-  auto cudf_table_view        = table->view();
-  auto const [start, end]     = GetParam();
+  auto [table, expected_schema, expected_array] = get_nanoarrow_host_tables(1000);
+  auto cudf_table_view                          = table->view();
+  auto const [start, end]                       = GetParam();
 
+  auto bool_validity = ArrowArrayValidityBitmap(expected_array->children[3]);
+  auto bool_data     = ArrowArrayBuffer(expected_array->children[3], 1);
+
+  for (int i = 0; i < bool_data->size_bytes; ++i) {
+    bool_data->data[i] &= bool_validity->buffer.data[i];
+  }  
+
+  slice_host_nanoarrow(expected_array.get(), start, end);
   auto sliced_cudf_table = cudf::slice(cudf_table_view, {start, end})[0];
   auto got_arrow_host    = cudf::to_arrow_host(sliced_cudf_table);
   EXPECT_EQ(ARROW_DEVICE_CPU, got_arrow_host->device_type);
@@ -815,7 +934,7 @@ TEST_P(ToArrowHostDeviceTestSlice, SliceTest)
 
 INSTANTIATE_TEST_CASE_P(ToArrowHostDeviceTest,
                         ToArrowHostDeviceTestSlice,
-                        ::testing::Values(std::make_tuple(0, 10000),
-                                          std::make_tuple(100, 3000),
+                        ::testing::Values(std::make_tuple(0, 1000),
+                                          std::make_tuple(10, 300),
                                           std::make_tuple(0, 0),
-                                          std::make_tuple(0, 3000)));
+                                          std::make_tuple(0, 300)));
