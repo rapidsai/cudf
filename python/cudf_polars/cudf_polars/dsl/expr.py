@@ -867,8 +867,17 @@ class UnaryFunction(Expr):
         self.name = name
         self.options = options
         self.children = children
-        if self.name not in ("mask_nans", "round", "setsorted", "unique", "dropnull"):
+        if self.name not in (
+            "mask_nans",
+            "round",
+            "setsorted",
+            "unique",
+            "dropnull",
+            "fill_null",
+        ):
             raise NotImplementedError(f"Unary function {name=}")
+        if self.name == "fill_null" and not isinstance(self.children[1], Literal):
+            raise NotImplementedError("fill_null only supports a scalar value")
 
     def do_evaluate(
         self,
@@ -963,6 +972,14 @@ class UnaryFunction(Expr):
                     plc.Table([column.obj]), [0], 1
                 ).columns()[0]
             )
+        elif self.name == "fill_null":
+            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+
+            assert isinstance(self.children[1], Literal)
+            value = plc.interop.from_arrow(self.children[1].value)
+
+            return Column(plc.replace.replace_nulls(column.obj, value))
+
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
         )  # pragma: no cover; init trips first

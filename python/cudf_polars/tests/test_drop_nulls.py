@@ -6,7 +6,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.fixture(
@@ -28,3 +31,16 @@ def null_data(request):
 def test_drop_null(null_data):
     q = null_data.select(pl.col("a").drop_nulls())
     assert_gpu_result_equal(q)
+
+
+def test_fill_null(null_data):
+    q = null_data.select(pl.col("a").fill_null(0))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "strategy", ["forward", "backward", "min", "max", "mean", "zero", "one"]
+)
+def test_fill_null_with_strategy(null_data, strategy):
+    q = null_data.select(pl.col("a").fill_null(strategy=strategy))
+    assert_ir_translation_raises(q, NotImplementedError)
