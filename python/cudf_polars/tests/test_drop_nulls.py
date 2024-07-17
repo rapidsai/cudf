@@ -19,7 +19,10 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
     ]
 )
 def null_data(request):
-    return pl.DataFrame({"a": request.param}).lazy()
+    is_empty = pl.Series(request.param).dtype == pl.Null
+    return pl.DataFrame(
+        {"a": pl.Series(request.param, dtype=pl.Float64 if is_empty else None)}
+    ).lazy()
 
 
 def test_drop_null(null_data):
