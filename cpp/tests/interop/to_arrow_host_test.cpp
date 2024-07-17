@@ -101,10 +101,14 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
           const auto expected_start = exp_start_offset + i;
           const auto actual_start   = act_start_offset + i;
 
+          // ArrowArrayViewIsNull accounts for the array offset, so we can properly
+          // compare the validity of indexes
           const bool is_null = ArrowArrayViewIsNull(expected, expected_start);
           EXPECT_EQ(is_null, ArrowArrayViewIsNull(actual, actual_start));
           if (is_null) continue;
 
+          // ArrowArrayViewListChildOffset does not account for array offset, so we need
+          // to add the offset to the index in order to get the correct offset into the list
           const int64_t start_offset_expected =
             ArrowArrayViewListChildOffset(expected, expected->offset + expected_start);
           const int64_t start_offset_actual = ArrowArrayViewListChildOffset(actual, actual->offset + actual_start);
@@ -113,9 +117,10 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
             ArrowArrayViewListChildOffset(expected, expected->offset + expected_start + 1);
           const int64_t end_offset_actual = ArrowArrayViewListChildOffset(actual, actual->offset + actual_start + 1);
 
+          // verify the list lengths are the same
           EXPECT_EQ(end_offset_expected - start_offset_expected,
                     end_offset_actual - start_offset_actual);
-
+          // compare the list values
           compare_child_subset(expected->children[0],
                                start_offset_expected,
                                actual->children[0],
@@ -161,12 +166,20 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
     EXPECT_EQ(expected->n_children, actual->n_children);
     EXPECT_EQ(expected->storage_type, actual->storage_type);
 
+    // cudf automatically pushes down nulls and purges non-empty, non-zero nulls
+    // from the children columns. So while we can memcmp the buffers for top
+    // level arrays, we need to do an "equivalence" comparison for nested
+    // arrays (lists and structs) by checking each index for null and skipping
+    // comparisons for children if null.
     switch (expected->storage_type) {
       case NANOARROW_TYPE_STRUCT:
+        // if we're a struct with no children, then we just skip
+        // attempting to compare the children
         if (expected->n_children == 0) {
           EXPECT_EQ(nullptr, actual->children);
           break;
-        }
+        }        
+        // otherwise we can fallthrough and do the same thing we do for lists
       case NANOARROW_TYPE_LIST:
         compare_child_subset(expected, 0, actual, 0, expected->length);
         break;
@@ -904,16 +917,9 @@ struct ToArrowHostDeviceTestSlice
 
 TEST_P(ToArrowHostDeviceTestSlice, SliceTest)
 {
-  auto [table, expected_schema, expected_array] = get_nanoarrow_host_tables(1000);
+  auto [table, expected_schema, expected_array] = get_nanoarrow_host_tables(10000);
   auto cudf_table_view                          = table->view();
   auto const [start, end]                       = GetParam();
-
-  auto bool_validity = ArrowArrayValidityBitmap(expected_array->children[3]);
-  auto bool_data     = ArrowArrayBuffer(expected_array->children[3], 1);
-
-  for (int i = 0; i < bool_data->size_bytes; ++i) {
-    bool_data->data[i] &= bool_validity->buffer.data[i];
-  }  
 
   slice_host_nanoarrow(expected_array.get(), start, end);
   auto sliced_cudf_table = cudf::slice(cudf_table_view, {start, end})[0];
@@ -936,7 +942,7 @@ TEST_P(ToArrowHostDeviceTestSlice, SliceTest)
 
 INSTANTIATE_TEST_CASE_P(ToArrowHostDeviceTest,
                         ToArrowHostDeviceTestSlice,
-                        ::testing::Values(std::make_tuple(0, 1000),
-                                          std::make_tuple(10, 300),
+                        ::testing::Values(std::make_tuple(0, 10000),
+                                          std::make_tuple(100, 3000),
                                           std::make_tuple(0, 0),
-                                          std::make_tuple(0, 300)));
+                                          std::make_tuple(0, 3000)));
