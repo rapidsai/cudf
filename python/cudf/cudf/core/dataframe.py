@@ -7852,6 +7852,50 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result.name = "proportion" if normalize else "count"
         return result
 
+    @_performance_tracking
+    def argsort(
+        self,
+        axis=0,
+        kind="quicksort",
+        order=None,
+        ascending=True,
+        na_position="last",
+    ) -> cupy.ndarray:
+        """Return the integer indices that would sort the index.
+
+        Parameters
+        ----------
+        axis : {0 or "index"}
+            Has no effect but is accepted for compatibility with numpy.
+        kind : {'mergesort', 'quicksort', 'heapsort', 'stable'}, default 'quicksort'
+            Choice of sorting algorithm. See :func:`numpy.sort` for more
+            information. 'mergesort' and 'stable' are the only stable
+            algorithms. Only quicksort is supported in cuDF.
+        order : None
+            Has no effect but is accepted for compatibility with numpy.
+        ascending : bool or list of bool, default True
+            If True, sort values in ascending order, otherwise descending.
+        na_position : {'first' or 'last'}, default 'last'
+            Argument 'first' puts NaNs at the beginning, 'last' puts NaNs
+            at the end.
+
+        Returns
+        -------
+        cupy.ndarray: The indices sorted based on input.
+        """  # noqa: E501
+        # Note: pandas.DataFrame does _not_ support .argsort
+        return (
+            super()
+            .argsort(
+                axis=axis,
+                kind=kind,
+                order=order,
+                ascending=ascending,
+                na_position=na_position,
+            )
+            .values
+        )
+
 
 def from_dataframe(df, allow_copy: bool = False) -> DataFrame:
     """

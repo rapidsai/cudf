@@ -1525,7 +1525,7 @@ class BaseIndex(Serializable):
         ascending=True,
         na_position="last",
         key=None,
-    ):
+    ) -> Self | tuple[Self, cupy.ndarray]:
         """
         Return a sorted copy of the index, and optionally return the indices
         that sorted the index itself.
@@ -1611,7 +1611,7 @@ class BaseIndex(Serializable):
         index_sorted = self.take(indices)
 
         if return_indexer:
-            return index_sorted, indices
+            return index_sorted, indices.values
         else:
             return index_sorted
 
