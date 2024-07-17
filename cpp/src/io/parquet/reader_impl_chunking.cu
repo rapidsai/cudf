@@ -1475,9 +1475,9 @@ void reader::impl::setup_next_subpass(read_mode mode)
 
 void reader::impl::create_global_chunk_info()
 {
-  auto const num_rows   = _file_itm_data.global_num_rows;
-  auto& row_groups_info = _file_itm_data.row_groups;
-  auto& chunks          = _file_itm_data.chunks;
+  auto const num_rows         = _file_itm_data.global_num_rows;
+  auto const& row_groups_info = _file_itm_data.row_groups;
+  auto& chunks                = _file_itm_data.chunks;
 
   // Descriptors for all the chunks that make up the selected columns
   auto const num_input_columns = _input_columns.size();
@@ -1508,7 +1508,7 @@ void reader::impl::create_global_chunk_info()
   // Initialize column chunk information
   auto remaining_rows = num_rows;
   auto skip_rows      = _file_itm_data.global_skip_rows;
-  for (auto& rg : row_groups_info) {
+  for (auto const& rg : row_groups_info) {
     auto const& row_group      = _metadata->get_row_group(rg.index, rg.source_index);
     auto const row_group_start = rg.start_row;
     auto const row_group_rows  = std::min<int>(remaining_rows, row_group.num_rows);
