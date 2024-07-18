@@ -1635,7 +1635,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return self._column.has_nulls()
 
     @_performance_tracking
-    def dropna(self, axis=0, inplace=False, how=None):
+    def dropna(
+        self, axis=0, inplace=False, how=None, ignore_index: bool = False
+    ):
         """
         Return a Series with null values removed.
 
@@ -1647,6 +1649,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             If True, do operation inplace and return None.
         how : str, optional
             Not in use. Kept for compatibility.
+        ignore_index : bool, default ``False``
+            If ``True``, the resulting axis will be labeled 0, 1, …, n - 1.
 
         Returns
         -------
@@ -1711,6 +1715,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
 
         result = super().dropna(axis=axis)
+
+        if ignore_index:
+            result.index = RangeIndex(len(result))
 
         return self._mimic_inplace(result, inplace=inplace)
 
@@ -2272,14 +2279,29 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return obj
 
     @_performance_tracking
-    def replace(self, to_replace=None, value=no_default, *args, **kwargs):
+    def replace(
+        self,
+        to_replace=None,
+        value=no_default,
+        inplace=False,
+        limit=None,
+        regex=False,
+        method=no_default,
+    ):
         if is_dict_like(to_replace) and value not in {None, no_default}:
             raise ValueError(
                 "Series.replace cannot use dict-like to_replace and non-None "
                 "value"
             )
 
-        return super().replace(to_replace, value, *args, **kwargs)
+        return super().replace(
+            to_replace,
+            value,
+            inplace=inplace,
+            limit=limit,
+            regex=regex,
+            method=method,
+        )
 
     @_performance_tracking
     def update(self, other):
@@ -2388,7 +2410,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     # UDF related
     @_performance_tracking
-    def apply(self, func, convert_dtype=True, args=(), **kwargs):
+    def apply(
+        self,
+        func,
+        convert_dtype=True,
+        args=(),
+        by_row: Literal[False, "compat"] = "compat",
+        **kwargs,
+    ):
         """
         Apply a scalar function to the values of a Series.
         Similar to ``pandas.Series.apply``.
@@ -2415,6 +2444,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             See examples for details.
         args : tuple
             Positional arguments passed to func after the series value.
+        by_row : False or "compat", default "compat"
+            If ``"compat"`` and func is a callable, func will be passed each element of
+            the Series, like ``Series.map``. If func is a list or dict of
+            callables, will first try to translate each func into pandas methods. If
+            that doesn't work, will try call to apply again with ``by_row="compat"``
+            and if that fails, will call apply again with ``by_row=False``
+            (backward compatible).
+            If False, the func will be passed the whole Series at once.
+
+            ``by_row`` has no effect when ``func`` is a string.
+
+            Currently not implemented.
         **kwargs
             Not supported
 
@@ -2524,6 +2565,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         if convert_dtype is not True:
             raise ValueError("Series.apply only supports convert_dtype=True")
+        elif by_row != "compat":
+            raise NotImplementedError("by_row is currently not supported.")
 
         result = self._apply(func, _get_scalar_kernel, *args, **kwargs)
         result.name = self.name
