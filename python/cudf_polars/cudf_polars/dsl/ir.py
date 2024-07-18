@@ -242,10 +242,6 @@ class Scan(IR):
         with_columns = options.with_columns
         row_index = options.row_index
         if self.typ == "csv":
-            dtype_map = {
-                name: cudf._lib.types.PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[typ.id()]
-                for name, typ in self.schema.items()
-            }
             parse_options = self.reader_options["parse_options"]
             sep = chr(parse_options["separator"])
             quote = chr(parse_options["quote_char"])
@@ -288,11 +284,11 @@ class Scan(IR):
                     while f.readline() == "\n":
                         skiprows += 1
                 tbl_w_meta = plc.io.csv.read_csv(
-                    path,
-                    sep=sep,
+                    plc.io.SourceInfo([path]),
+                    delimiter=sep,
                     quotechar=quote,
                     lineterminator=eol,
-                    names=column_names,
+                    col_names=column_names,
                     header=header,
                     usecols=usecols,
                     na_filter=True,
@@ -301,7 +297,7 @@ class Scan(IR):
                     skiprows=skiprows,
                     comment=comment,
                     decimal=decimal,
-                    dtype=dtype_map,
+                    dtypes=self.schema,
                 )
                 # TODO: Nested column names not passed right now
                 # Do this when cudf-polars supports nested columns
