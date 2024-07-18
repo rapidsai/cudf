@@ -2161,3 +2161,8 @@ def test_nunique(array, dropna):
     result = gidx.nunique(dropna=dropna)
     expected = pidx.nunique(dropna=dropna)
     assert result == expected
+
+
+def test_bool_raises():
+    with pytest.raises(TypeError):
+        bool(cudf.MultiIndex.from_arrays([range(1)]))
