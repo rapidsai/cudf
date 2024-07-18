@@ -262,7 +262,7 @@ CUDF_KERNEL void count_substrings_kernel(cudf::column_device_view const d_string
 CUDF_KERNEL void substring_hash_kernel(cudf::column_device_view const d_strings,
                                        cudf::size_type width,
                                        int64_t const* d_output_offsets,
-                                       cudf::hash_value_type* d_results)
+                                       uint32_t* d_results)
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
   if (idx >= (static_cast<cudf::thread_index_type>(d_strings.size()) * cudf::detail::warp_size)) {
@@ -276,7 +276,7 @@ CUDF_KERNEL void substring_hash_kernel(cudf::column_device_view const d_strings,
   auto const d_str = d_strings.element<cudf::string_view>(str_idx);
   if (d_str.empty()) { return; }
 
-  __shared__ cudf::hash_value_type hvs[block_size];  // temp store for hash values
+  __shared__ uint32_t hvs[block_size];  // temp store for hash values
 
   auto const hasher     = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>{0};
   auto const end        = d_str.data() + d_str.size_bytes();
@@ -285,7 +285,7 @@ CUDF_KERNEL void substring_hash_kernel(cudf::column_device_view const d_strings,
   auto d_hashes = d_results + d_output_offsets[str_idx];
   auto itr      = d_str.data() + lane_idx;
   for (auto i = 0; i < warp_count; ++i) {
-    cudf::hash_value_type hash = 0;
+    uint32_t hash = 0;
     if (itr < end && cudf::strings::detail::is_begin_utf8_char(*itr)) {
       // resolve substring
       auto const sub_str =
@@ -308,8 +308,8 @@ CUDF_KERNEL void substring_hash_kernel(cudf::column_device_view const d_strings,
   }
 }
 
-void segmented_sort(cudf::hash_value_type const* input,
-                    cudf::hash_value_type* output,
+void segmented_sort(uint32_t const* input,
+                    uint32_t* output,
                     int64_t items,
                     cudf::size_type segments,
                     int64_t const* offsets,
