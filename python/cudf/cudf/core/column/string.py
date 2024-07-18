@@ -993,16 +993,18 @@ class StringMethods(ColumnMethods):
                 )
 
             return self._return_or_inplace(
-                libstrings.replace_multi_re(
-                    self._column,
-                    pat,
-                    column.as_column(repl, dtype="str"),
-                )
-                if regex
-                else libstrings.replace_multi(
-                    self._column,
-                    column.as_column(pat, dtype="str"),
-                    column.as_column(repl, dtype="str"),
+                (
+                    libstrings.replace_multi_re(
+                        self._column,
+                        pat,
+                        column.as_column(repl, dtype="str"),
+                    )
+                    if regex
+                    else libstrings.replace_multi(
+                        self._column,
+                        column.as_column(pat, dtype="str"),
+                        column.as_column(repl, dtype="str"),
+                    )
                 ),
             )
         # Pandas treats 0 as all
@@ -1015,15 +1017,17 @@ class StringMethods(ColumnMethods):
 
         # Pandas forces non-regex replace when pat is a single-character
         return self._return_or_inplace(
-            libstrings.replace_re(
-                self._column, pat, cudf.Scalar(repl, "str"), n
-            )
-            if regex is True and len(pat) > 1
-            else libstrings.replace(
-                self._column,
-                cudf.Scalar(pat, "str"),
-                cudf.Scalar(repl, "str"),
-                n,
+            (
+                libstrings.replace_re(
+                    self._column, pat, cudf.Scalar(repl, "str"), n
+                )
+                if regex is True and len(pat) > 1
+                else libstrings.replace(
+                    self._column,
+                    cudf.Scalar(pat, "str"),
+                    cudf.Scalar(repl, "str"),
+                    n,
+                )
             ),
         )
 
@@ -3681,9 +3685,11 @@ class StringMethods(ColumnMethods):
 
         return cudf.Series(
             libstrings.find_multiple(self._column, patterns_column),
-            index=self._parent.index
-            if isinstance(self._parent, cudf.Series)
-            else self._parent,
+            index=(
+                self._parent.index
+                if isinstance(self._parent, cudf.Series)
+                else self._parent
+            ),
             name=self._parent.name,
         )
 
@@ -5349,6 +5355,56 @@ class StringMethods(ColumnMethods):
             libstrings.minhash64(self._column, seeds_column, width)
         )
 
+    def word_minhash(self, seeds: ColumnLike | None = None) -> SeriesOrIndex:
+        """
+        Compute the minhash of a list column of strings.
+        This uses the MurmurHash3_x86_32 algorithm for the hash function.
+
+        Parameters
+        ----------
+        seeds : ColumnLike
+            The seeds used for the hash algorithm.
+            Must be of type uint32.
+
+        """
+        if seeds is None:
+            seeds_column = column.as_column(0, dtype=np.uint32, length=1)
+        else:
+            seeds_column = column.as_column(seeds)
+            if seeds_column.dtype != np.uint32:
+                raise ValueError(
+                    f"Expecting a Series with dtype uint32, got {type(seeds)}"
+                )
+        return self._return_or_inplace(
+            libstrings.word_minhash(self._column, seeds_column)
+        )
+
+    def word_minhash64(self, seeds: ColumnLike | None = None) -> SeriesOrIndex:
+        """
+        Compute the minhash of a list column of strings.
+        This uses the MurmurHash3_x64_128 algorithm for the hash function.
+        This function generates 2 uint64 values but only the first
+        uint64 value is used.
+
+        Parameters
+        ----------
+        seeds : ColumnLike
+            The seeds used for the hash algorithm.
+            Must be of type uint64.
+
+        """
+        if seeds is None:
+            seeds_column = column.as_column(0, dtype=np.uint64, length=1)
+        else:
+            seeds_column = column.as_column(seeds)
+            if seeds_column.dtype != np.uint64:
+                raise ValueError(
+                    f"Expecting a Series with dtype uint64, got {type(seeds)}"
+                )
+        return self._return_or_inplace(
+            libstrings.word_minhash64(self._column, seeds_column)
+        )
+
     def jaccard_index(self, input: cudf.Series, width: int) -> SeriesOrIndex:
         """
         Compute the Jaccard index between this column and the given
@@ -5965,13 +6021,15 @@ def _get_cols_list(parent_obj, others):
         just another Series/Index, great go ahead with concatenation.
         """
         cols_list = [
-            column.as_column(frame.reindex(parent_index), dtype="str")
-            if (
-                parent_index is not None
-                and isinstance(frame, cudf.Series)
-                and not frame.index.equals(parent_index)
+            (
+                column.as_column(frame.reindex(parent_index), dtype="str")
+                if (
+                    parent_index is not None
+                    and isinstance(frame, cudf.Series)
+                    and not frame.index.equals(parent_index)
+                )
+                else column.as_column(frame, dtype="str")
             )
-            else column.as_column(frame, dtype="str")
             for frame in others
         ]
 
