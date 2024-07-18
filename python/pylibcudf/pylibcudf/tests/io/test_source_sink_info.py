@@ -3,10 +3,9 @@
 import io
 
 import pyarrow as pa
+import pylibcudf as plc
 import pytest
-
-import cudf._lib.pylibcudf as plc
-from cudf._lib.pylibcudf.io.datasource import NativeFileDatasource
+from pylibcudf.io.datasource import NativeFileDatasource
 
 
 @pytest.fixture(params=[plc.io.SourceInfo, plc.io.SinkInfo])

@@ -1,9 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
+import pylibcudf as plc
 import pytest
-
-import cudf._lib.pylibcudf as plc
 
 
 def test_list_dtype_roundtrip():

@@ -7,9 +7,9 @@ import os
 import numpy as np
 import pyarrow as pa
 import pytest
+from pylibcudf.io.types import CompressionType
 
 from cudf._lib import pylibcudf as plc
-from cudf._lib.pylibcudf.io.types import CompressionType
 
 
 def metadata_from_arrow_type(

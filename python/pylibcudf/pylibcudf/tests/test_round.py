@@ -1,10 +1,9 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
+import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
-
-import cudf._lib.pylibcudf as plc
 
 
 @pytest.fixture(params=["float32", "float64"])
