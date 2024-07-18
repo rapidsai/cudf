@@ -705,6 +705,7 @@ class StringFunction(Expr):
             pl_expr.StringFunction.StartsWith,
             pl_expr.StringFunction.Contains,
             pl_expr.StringFunction.Slice,
+            pl_expr.StringFunction.Strptime,
         ):
             raise NotImplementedError(f"String function {self.name}")
         if self.name == pl_expr.StringFunction.Contains:
@@ -811,6 +812,9 @@ class StringFunction(Expr):
                     else prefix.obj,
                 )
             )
+        elif self.name == pl_expr.StringFunction.Strptime:
+            # TODO: Implement strptime
+            raise NotImplementedError("Strptime")
         raise NotImplementedError(
             f"StringFunction {self.name}"
         )  # pragma: no cover; handled by init raising

@@ -150,3 +150,29 @@ def test_slice_column(slice_column_data):
     else:
         query = slice_column_data.select(pl.col("a").str.slice(pl.col("start")))
     assert_ir_translation_raises(query, NotImplementedError)
+
+
+@pytest.fixture
+def to_datetime_data():
+    return pl.DataFrame(
+        {
+            "a": [
+                "2021-01-01",
+                "2021-01-02",
+                "2021-01-03",
+                "2021-01-04",
+                "2021-01-05",
+                "2021-01-06",
+                "2021-01-07",
+                "2021-01-08",
+                "2021-01-09",
+                "2021-01-10",
+                "2021-01-11",
+            ]
+        }
+    ).lazy()
+
+
+def test_to_datetime(to_datetime_data):
+    query = to_datetime_data.select(pl.col("a").str.to_datetime(format="%Y-%m-%d"))
+    assert_gpu_result_equal(query)
