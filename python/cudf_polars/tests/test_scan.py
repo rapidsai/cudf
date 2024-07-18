@@ -6,6 +6,7 @@ import pytest
 
 import polars as pl
 
+from cudf_polars.callback import execute_with_cudf
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -127,6 +128,30 @@ def test_scan_csv_column_renames_projection_schema(tmp_path):
     )
 
     assert_gpu_result_equal(q)
+
+
+def test_scan_csv_multi(tmp_path):
+    with (tmp_path / "test1.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+    with (tmp_path / "test2.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+    q = pl.scan_csv(
+        [tmp_path / "test1.csv", tmp_path / "test2.csv"],
+    )
+
+    assert_gpu_result_equal(q)
+
+
+def test_scan_csv_multi_differing_colnames(tmp_path):
+    with (tmp_path / "test1.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+    with (tmp_path / "test2.csv").open("w") as f:
+        f.write("""abc,def,ghi\n1,2\n3,4,5""")
+    q = pl.scan_csv(
+        [tmp_path / "test1.csv", tmp_path / "test2.csv"],
+    )
+    with pytest.raises(pl.exceptions.ComputeError):
+        q.collect(post_opt_callback=execute_with_cudf)
 
 
 def test_scan_csv_skip_after_header_not_implemented(tmp_path):

@@ -277,8 +277,6 @@ class Scan(IR):
             colnames = None
             for p in self.paths:
                 skiprows = self.reader_options["skip_rows"]
-                # TODO: read_csv expands globs which we should not do,
-                # because polars will already have handled them.
                 path = Path(p)
                 with path.open() as f:
                     while f.readline() == "\n":
@@ -302,11 +300,9 @@ class Scan(IR):
                 # TODO: Nested column names not passed right now
                 # Do this when cudf-polars supports nested columns
                 if colnames is None:
+                    # Note: polars will raise on their end if the column names
+                    # of files don't match, so no need to validate here
                     colnames = tbl_w_meta.column_names(include_children=False)
-                else:
-                    # Make sure column names match
-                    if colnames != tbl_w_meta.column_names(include_children=False):
-                        raise ValueError("column names must match between files!")
                 pieces.append(tbl_w_meta.tbl)
             assert colnames is not None  # placate mypy
             df = DataFrame.from_table(
