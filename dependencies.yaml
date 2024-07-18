@@ -3,7 +3,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["11.8", "12.2"]
+      cuda: ["11.8", "12.5"]
       arch: [x86_64]
     includes:
       - build_base
@@ -323,6 +323,7 @@ dependencies:
         packages:
           # Hard pin the patch version used during the build.
           # Sync with conda build constraint & wheel run constraint.
+          # TODO: Change to `2.0.*` for NumPy 2
           - numpy==1.23.*
   build_python_cudf:
     common:
@@ -402,6 +403,10 @@ dependencies:
               cuda: "12.2"
             packages:
               - cuda-version=12.2
+          - matrix:
+              cuda: "12.5"
+            packages:
+              - cuda-version=12.5
   cuda:
     specific:
       - output_types: conda
@@ -547,6 +552,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
+          # TODO: Update `numpy` in `build_python_common` when dropping `<2.0a0`
           - numpy>=1.23,<2.0a0
           - pandas>=2.0,<2.2.3dev0
   run_cudf:
