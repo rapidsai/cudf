@@ -185,8 +185,8 @@ probe_join_hash_table(
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
-  cudf::experimental::prefetch::detail::prefetch("manual_prefetch", left_indices, stream);
-  cudf::experimental::prefetch::detail::prefetch("manual_prefetch", right_indices, stream);
+  cudf::experimental::prefetch::detail::prefetch("manual_prefetch", *left_indices, stream);
+  cudf::experimental::prefetch::detail::prefetch("manual_prefetch", *right_indices, stream);
 
   auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
 
