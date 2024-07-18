@@ -946,6 +946,66 @@ def test_minhash():
         strings.str.minhash64(seeds=seeds)
 
 
+def test_word_minhash():
+    ls = cudf.Series([["this", "is", "my"], ["favorite", "book"]])
+
+    expected = cudf.Series(
+        [
+            cudf.Series([21141582], dtype=np.uint32),
+            cudf.Series([962346254], dtype=np.uint32),
+        ]
+    )
+    actual = ls.str.word_minhash()
+    assert_eq(expected, actual)
+    seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
+    expected = cudf.Series(
+        [
+            cudf.Series([21141582, 1232889953, 1268336794], dtype=np.uint32),
+            cudf.Series([962346254, 2321233602, 1354839212], dtype=np.uint32),
+        ]
+    )
+    actual = ls.str.word_minhash(seeds=seeds)
+    assert_eq(expected, actual)
+
+    expected = cudf.Series(
+        [
+            cudf.Series([2603139454418834912], dtype=np.uint64),
+            cudf.Series([5240044617220523711], dtype=np.uint64),
+        ]
+    )
+    actual = ls.str.word_minhash64()
+    assert_eq(expected, actual)
+    seeds = cudf.Series([0, 1, 2], dtype=np.uint64)
+    expected = cudf.Series(
+        [
+            cudf.Series(
+                [
+                    2603139454418834912,
+                    8644371945174847701,
+                    5541030711534384340,
+                ],
+                dtype=np.uint64,
+            ),
+            cudf.Series(
+                [5240044617220523711, 5847101123925041457, 153762819128779913],
+                dtype=np.uint64,
+            ),
+        ]
+    )
+    actual = ls.str.word_minhash64(seeds=seeds)
+    assert_eq(expected, actual)
+
+    # test wrong seed types
+    with pytest.raises(ValueError):
+        ls.str.word_minhash(seeds="a")
+    with pytest.raises(ValueError):
+        seeds = cudf.Series([0, 1, 2], dtype=np.int32)
+        ls.str.word_minhash(seeds=seeds)
+    with pytest.raises(ValueError):
+        seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
+        ls.str.word_minhash64(seeds=seeds)
+
+
 def test_jaccard_index():
     str1 = cudf.Series(["the brown dog", "jumped about"])
     str2 = cudf.Series(["the black cat", "jumped around"])
