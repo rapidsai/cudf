@@ -202,11 +202,13 @@ cdef class Column:
 
     def _clear_cache(self):
         self._distinct_count = {}
-        try:
-            del self.memory_usage
-        except AttributeError:
-            # `self.memory_usage` was never called before, So ignore.
-            pass
+        attrs = ("memory_usage", "is_monotonic_increasing", "is_monotonic_decreasing")
+        for attr in attrs:
+            try:
+                delattr(self, attr)
+            except AttributeError:
+                # attr was not called yet, so ignore.
+                pass
         self._null_count = None
 
     def set_mask(self, value):
