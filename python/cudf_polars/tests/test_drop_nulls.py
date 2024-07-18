@@ -24,7 +24,10 @@ from cudf_polars.testing.asserts import (
 def null_data(request):
     is_empty = pl.Series(request.param).dtype == pl.Null
     return pl.DataFrame(
-        {"a": pl.Series(request.param, dtype=pl.Float64 if is_empty else None)}
+        {
+            "a": pl.Series(request.param, dtype=pl.Float64 if is_empty else None),
+            "b": pl.Series(request.param, dtype=pl.Float64 if is_empty else None),
+        }
     ).lazy()
 
 
@@ -33,8 +36,13 @@ def test_drop_null(null_data):
     assert_gpu_result_equal(q)
 
 
-def test_fill_null(null_data):
-    q = null_data.select(pl.col("a").fill_null(0))
+@pytest.mark.parametrize(
+    "value",
+    [0, pl.col("a").mean(), pl.col("b")],
+    ids=["scalar", "expression", "column"],
+)
+def test_fill_null(null_data, value):
+    q = null_data.select(pl.col("a").fill_null(value))
     assert_gpu_result_equal(q)
 
 

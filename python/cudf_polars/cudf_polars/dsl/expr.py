@@ -876,8 +876,9 @@ class UnaryFunction(Expr):
             "fill_null",
         ):
             raise NotImplementedError(f"Unary function {name=}")
-        if self.name == "fill_null" and not isinstance(self.children[1], Literal):
-            raise NotImplementedError("fill_null only supports a scalar value")
+        # if self.name == "fill_null" and not isinstance(self.children[1], Literal):
+        #    breakpoint()
+        #    raise NotImplementedError("fill_null only supports a scalar value")
 
     def do_evaluate(
         self,
@@ -974,11 +975,14 @@ class UnaryFunction(Expr):
             )
         elif self.name == "fill_null":
             column = self.children[0].evaluate(df, context=context, mapping=mapping)
-
-            assert isinstance(self.children[1], Literal)
-            value = plc.interop.from_arrow(self.children[1].value)
-
-            return Column(plc.replace.replace_nulls(column.obj, value))
+            if isinstance(self.children[1], Literal):
+                arg = plc.interop.from_arrow(self.children[1].value)
+            else:
+                evaluated = self.children[1].evaluate(
+                    df, context=context, mapping=mapping
+                )
+                arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
+            return Column(plc.replace.replace_nulls(column.obj, arg))
 
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
