@@ -121,10 +121,8 @@ cdef class ChunkedParquetReader:
         -------
         True if we have not finished reading the file.
         """
-        cdef bool res
         with nogil:
-            res = self.reader.get()[0].has_next()
-        return res
+            return self.reader.get()[0].has_next()
 
     cpdef TableWithMetadata read_chunk(self):
         """

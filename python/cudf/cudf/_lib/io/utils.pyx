@@ -146,6 +146,7 @@ cdef cppclass iobase_data_sink(data_sink):
     size_t bytes_written() with gil:
         return buf.tell()
 
+
 cdef add_df_col_struct_names(df, child_names_dict):
     for name, child_names in child_names_dict.items():
         col = df._data[name]

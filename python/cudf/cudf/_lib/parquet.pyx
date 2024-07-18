@@ -18,7 +18,7 @@ from cython.operator cimport dereference
 
 from cudf.api.types import is_list_like
 
-from cudf._lib.utils cimport data_from_pylibcudf_io
+from cudf._lib.utils cimport _data_from_columns, data_from_pylibcudf_io
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
@@ -42,7 +42,6 @@ from cudf._lib.io.utils cimport (
 from cudf._lib.pylibcudf.expressions cimport Expression
 from cudf._lib.pylibcudf.io.datasource cimport NativeFileDatasource
 from cudf._lib.pylibcudf.io.parquet cimport ChunkedParquetReader
-from cudf._lib.pylibcudf.io.types cimport TableWithMetadata
 from cudf._lib.pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_writer_options,
     merge_row_group_metadata as parquet_merge_metadata,
@@ -65,6 +64,7 @@ from cudf._lib.utils cimport table_view_from_table
 from pyarrow.lib import NativeFile
 
 import cudf._lib.pylibcudf as plc
+from cudf._lib.pylibcudf cimport Table
 from cudf.utils.ioutils import _ROW_GROUP_SIZE_BYTES_DEFAULT
 
 
@@ -254,93 +254,73 @@ cdef object _process_metadata(object df,
     return df
 
 
-cdef class CudfChunkedParquetReader(ChunkedParquetReader):
-    """
-    Subclass of the pylibcudf chunked parquet reader
-    """
-    cdef TableWithMetadata tbl_w_meta
-    cdef bint initialized
-    cdef bint use_pandas_metadata
-    cdef bint allow_range_index
-    cdef list row_groups
-    cdef list filepaths_or_buffers
-    cdef list pa_buffers
-    cdef list names
-    cdef dict child_names
-    cdef list per_file_user_data
+def read_parquet_chunked(
+    filepaths_or_buffers,
+    columns=None,
+    row_groups=None,
+    use_pandas_metadata=True,
+    size_t chunk_read_limit=0,
+    size_t pass_read_limit=1024000000
+):
+    # Convert NativeFile buffers to NativeFileDatasource,
+    # but save original buffers in case we need to use
+    # pyarrow for metadata processing
+    # (See: https://github.com/rapidsai/cudf/issues/9599)
 
-    def __init__(
-        self,
-        filepaths_or_buffers,
-        columns=None,
-        row_groups=None,
-        use_pandas_metadata=True,
-        size_t chunk_read_limit=0,
-        size_t pass_read_limit=1024000000
-    ):
-        # Convert NativeFile buffers to NativeFileDatasource,
-        # but save original buffers in case we need to use
-        # pyarrow for metadata processing
-        # (See: https://github.com/rapidsai/cudf/issues/9599)
+    pa_buffers = []
 
-        self.pa_buffers = []
+    new_bufs = []
+    for i, datasource in enumerate(filepaths_or_buffers):
+        if isinstance(datasource, NativeFile):
+            new_bufs.append(NativeFileDatasource(datasource))
+        else:
+            new_bufs.append(datasource)
 
-        for i, datasource in enumerate(filepaths_or_buffers):
-            if isinstance(datasource, NativeFile):
-                self.pa_buffers.append(datasource)
-                filepaths_or_buffers[i] = NativeFileDatasource(datasource)
+    # Note: If this function ever takes accepts filters
+    # allow_range_index needs to be False when a filter is passed
+    # (see read_parquet)
+    allow_range_index = columns is not None and len(columns) != 0
 
-        self.initialized = False
-        self.use_pandas_metadata = use_pandas_metadata
-        self.row_groups = row_groups
+    reader = ChunkedParquetReader(
+        plc.io.SourceInfo(new_bufs),
+        columns,
+        row_groups,
+        use_pandas_metadata,
+        chunk_read_limit=chunk_read_limit,
+        pass_read_limit=pass_read_limit
+    )
 
-        self.filepaths_or_buffers = filepaths_or_buffers
+    tbl_w_meta = reader.read_chunk()
+    column_names = tbl_w_meta.column_names(include_children=False)
+    child_names = tbl_w_meta.child_names
+    per_file_user_data = tbl_w_meta.per_file_user_data
+    concatenated_columns = tbl_w_meta.tbl.columns()
 
-        # TODO: this code might need adjusting to account for filters
-        self.allow_range_index = True
-        if columns is not None and len(columns) == 0:
-            self.allow_range_index = False
+    del tbl_w_meta
 
-        super().__init__(
-            plc.io.SourceInfo(filepaths_or_buffers),
-            columns,
-            row_groups,
-            use_pandas_metadata,
-            chunk_read_limit=chunk_read_limit,
-            pass_read_limit=pass_read_limit
-        )
+    cdef Table tbl
+    while reader.has_next():
+        tbl = reader.read_chunk().tbl
 
-    cpdef _read_chunk(self):
-        tbl_w_meta = ChunkedParquetReader.read_chunk(self)
-
-        if not self.initialized:
-            self.names = tbl_w_meta.column_names(include_children=False)
-            self.child_names = tbl_w_meta.child_names
-            self.per_file_user_data = tbl_w_meta.per_file_user_data
-
-        self.initialized = True
-        return tbl_w_meta
-
-    def read(self):
-        tbl_w_metas = []
-        while self.has_next():
-            tbl_w_metas.append(self._read_chunk())
-        tbl_concated = plc.concatenate.concatenate(
-            [tbl_w_meta.tbl for tbl_w_meta in tbl_w_metas]
-        )
-        df = cudf.DataFrame._from_data(
-            *data_from_pylibcudf_io(
-                plc.io.TableWithMetadata(
-                    tbl_concated,
-                    tbl_w_metas[0].column_names(include_children=True)
-                )
+        for i in range(tbl.num_columns()):
+            concatenated_columns[i] = plc.concatenate.concatenate(
+                [concatenated_columns[i], tbl._columns[i]]
             )
+            # Drop residual columns to save memory
+            tbl._columns[i] = None
+
+    df = cudf.DataFrame._from_data(
+        *_data_from_columns(
+            columns=[Column.from_pylibcudf(plc) for plc in concatenated_columns],
+            column_names=column_names,
+            index_names=None
         )
-        df = _process_metadata(df, self.names, self.child_names,
-                               self.per_file_user_data, self.row_groups,
-                               self.filepaths_or_buffers, self.pa_buffers,
-                               self.allow_range_index, self.use_pandas_metadata)
-        return df
+    )
+    df = _process_metadata(df, column_names, child_names,
+                           per_file_user_data, row_groups,
+                           filepaths_or_buffers, pa_buffers,
+                           allow_range_index, use_pandas_metadata)
+    return df
 
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,

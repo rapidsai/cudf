@@ -7,7 +7,7 @@ import os
 import numpy as np
 import pyarrow as pa
 import pytest
-from pyarrow.parquet import write_table
+from pyarrow.parquet import write_table as pq_write_table
 
 from cudf._lib import pylibcudf as plc
 from cudf._lib.pylibcudf.io.types import CompressionType
@@ -128,14 +128,16 @@ def assert_column_eq(
     if _contains_type(lhs.type, pa.types.is_floating) and _contains_type(
         rhs.type, pa.types.is_floating
     ):
-        # Flatten to do comparisons if nested
+        # Flatten nested arrays to liststo do comparisons if nested
+        # This is so we can do approximate comparisons
+        # for floats in numpy
         def _flatten_arrays(arr):
             flat_arrs = []
             if pa.types.is_nested(arr.type):
                 flattened = arr.flatten()
                 if isinstance(flattened, list):
-                    for arr in flattened:
-                        flat_arrs += _flatten_arrays(arr)
+                    for flat_arr in flattened:
+                        flat_arrs += _flatten_arrays(flat_arr)
                 else:
                     flat_arrs = [flattened]
             else:
@@ -275,7 +277,7 @@ def make_source(path_or_buf, pa_table, format, **kwargs):
         # The conversion to pandas is lossy (doesn't preserve
         # nested types) so we
         # will just use pyarrow directly to write this
-        write_table(
+        pq_write_table(
             pa_table,
             pa.PythonFile(path_or_buf)
             if isinstance(path_or_buf, io.IOBase)
