@@ -1541,20 +1541,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     def __arrow_c_stream__(self, requested_schema=None):
         """
-        Export the pandas DataFrame as an Arrow C stream PyCapsule.
-
-        This relies on pyarrow to convert the pandas DataFrame to the Arrow
-        format (and follows the default behaviour of ``pyarrow.Table.from_pandas``
-        in its handling of the index, i.e. store the index as a column except
-        for RangeIndex).
-        This conversion is not necessarily zero-copy.
+        Export the cudf DataFrame as an Arrow C stream PyCapsule.
 
         Parameters
         ----------
         requested_schema : PyCapsule, default None
             The schema to which the dataframe should be casted, passed as a
             PyCapsule containing a C ArrowSchema representation of the
-            requested schema.
+            requested schema. Currently not implemented.
 
         Returns
         -------
