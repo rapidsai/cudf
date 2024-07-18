@@ -190,7 +190,7 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
     [&](auto&& hasher, auto&& hash_table) {
       auto const iter = cudf::detail::make_counting_transform_iterator(
         0,
-        build_keys_fn<typename std::remove_reference<decltype(hasher)>::type, lhs_index_type>{
+        build_keys_fn<typename std::remove_reference<decltype(hasher)>::type, rhs_index_type>{
           hasher});
 
       size_type const build_table_num_rows{build.num_rows()};
