@@ -5,10 +5,13 @@
 
 from __future__ import annotations
 
+import warnings
 from functools import partial
 from typing import TYPE_CHECKING
 
 import nvtx
+
+from polars.config import Config
 
 from cudf_polars.dsl.translate import translate_ir
 
@@ -61,6 +64,8 @@ def execute_with_cudf(
     try:
         with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
             nt.set_udf(partial(_callback, translate_ir(nt)))
-    except exception:
+    except exception as e:
+        if "POLARS_VERBOSE" in Config.state(if_set=True):
+            warnings.warn(f"cuDF execution failed: {type(e)}: {e}", stacklevel=2)
         if raise_on_fail:
             raise
