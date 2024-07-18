@@ -102,20 +102,6 @@ _cupy_nan_methods_map = {
     "var": "nanvar",
 }
 
-_numeric_reduction_ops = (
-    "mean",
-    "min",
-    "max",
-    "sum",
-    "product",
-    "prod",
-    "std",
-    "var",
-    "kurtosis",
-    "kurt",
-    "skew",
-)
-
 
 def _shape_mismatch_error(x, y):
     raise ValueError(
