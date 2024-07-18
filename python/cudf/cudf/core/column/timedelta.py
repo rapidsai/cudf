@@ -12,7 +12,7 @@ import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
-from cudf.api.types import is_scalar, is_timedelta64_dtype
+from cudf.api.types import is_scalar
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
@@ -153,7 +153,7 @@ class TimeDeltaColumn(ColumnBase):
         this: ColumnBinaryOperand = self
         out_dtype = None
 
-        if is_timedelta64_dtype(other.dtype):
+        if other.dtype.kind == "m":
             # TODO: pandas will allow these operators to work but return false
             # when comparing to non-timedelta dtypes. We should do the same.
             if op in {

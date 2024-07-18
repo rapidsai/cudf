@@ -21,7 +21,6 @@ set(cython_sources
     copying.pyx
     csv.pyx
     datetime.pyx
-    expressions.pyx
     filling.pyx
     groupby.pyx
     hash.pyx

@@ -916,7 +916,7 @@ def _read_parquet(
                 "cudf engine doesn't support the "
                 f"following positional arguments: {list(args)}"
             )
-        if cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("io.parquet.low_memory"):
             return libparquet.ParquetReader(
                 filepaths_or_buffers,
                 columns=columns,
