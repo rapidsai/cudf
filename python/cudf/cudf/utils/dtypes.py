@@ -112,12 +112,6 @@ def np_to_pa_dtype(dtype):
     return _np_pa_dtypes[cudf.dtype(dtype).type]
 
 
-def numeric_normalize_types(*args):
-    """Cast all args to a common type using numpy promotion logic"""
-    dtype = np.result_type(*[a.dtype for a in args])
-    return [a.astype(dtype) for a in args]
-
-
 def _find_common_type_decimal(dtypes):
     # Find the largest scale and the largest difference between
     # precision and scale of the columns to be concatenated

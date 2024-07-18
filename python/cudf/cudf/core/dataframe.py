@@ -84,7 +84,6 @@ from cudf.utils.dtypes import (
     find_common_type,
     is_column_like,
     min_scalar_type,
-    numeric_normalize_types,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin, _external_only_api
@@ -923,7 +922,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             final_index = ensure_index(index)
 
         series_lengths = list(map(len, data))
-        data = numeric_normalize_types(*data)
+        common_dtype = find_common_type([obj.dtype for obj in data])
+        data = [obj.astype(common_dtype) for obj in data]
         if series_lengths.count(series_lengths[0]) == len(series_lengths):
             # Calculating the final dataframe columns by
             # getting union of all `index` of the Series objects.

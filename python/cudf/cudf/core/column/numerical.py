@@ -29,10 +29,10 @@ from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
+    find_common_type,
     min_column_type,
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
-    numeric_normalize_types,
 )
 
 from .numerical_base import NumericalBaseColumn
@@ -517,11 +517,15 @@ class NumericalColumn(NumericalBaseColumn):
             )
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
-        to_replace_col, replacement_col, replaced = numeric_normalize_types(
-            to_replace_col, replacement_col, self
+        common_type = find_common_type(
+            (to_replace_col.dtype, replacement_col.dtype, self.dtype)
         )
+        replaced = self.astype(common_type)
         df = cudf.DataFrame._from_data(
-            {"old": to_replace_col, "new": replacement_col}
+            {
+                "old": to_replace_col.astype(common_type),
+                "new": replacement_col.astype(common_type),
+            }
         )
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:

@@ -55,7 +55,6 @@ from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     find_common_type,
     is_mixed_with_object_dtype,
-    numeric_normalize_types,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf, search_range
@@ -1597,9 +1596,13 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                         f"either one of them to same dtypes."
                     )
 
-                if isinstance(self._values, cudf.core.column.NumericalColumn):
-                    if self.dtype != other.dtype:
-                        this, other = numeric_normalize_types(self, other)
+                if (
+                    isinstance(self._column, cudf.core.column.NumericalColumn)
+                    and self.dtype != other.dtype
+                ):
+                    common_type = find_common_type((self.dtype, other.dtype))
+                    this = this.astype(common_type)
+                    other = other.astype(common_type)
                 to_concat = [this, other]
 
         return self._concat(to_concat)
