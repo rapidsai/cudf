@@ -42,21 +42,34 @@ bool PrefetchConfig::get(std::string_view key)
 }
 void PrefetchConfig::set(std::string_view key, bool value) { config_values[key.data()] = value; }
 
-void prefetch(std::string_view key, void const* ptr, std::size_t size)
+cudaError_t prefetch_noexcept(std::string_view key,
+                              void const* ptr,
+                              std::size_t size,
+                              rmm::cuda_stream_view stream,
+                              rmm::cuda_device_id device_id) noexcept
 {
   if (PrefetchConfig::instance().get(key)) {
     if (PrefetchConfig::instance().debug) {
       std::cerr << "Prefetching " << size << " bytes for key " << key << " at location " << ptr
                 << std::endl;
     }
-    auto result = cudaMemPrefetchAsync(
-      ptr, size, rmm::get_current_cuda_device().value(), cudf::get_default_stream().value());
-    // Ignore cudaErrorInvalidValue because that will be raised if
-    // prefetching is attempted on unmanaged memory.
-    if ((result != cudaErrorInvalidValue) && (result != cudaSuccess)) {
-      std::cerr << "Prefetch failed" << std::endl;
-      CUDF_CUDA_TRY(result);
-    }
+    return cudaMemPrefetchAsync(ptr, size, device_id.value(), stream.value());
+  }
+  return cudaSuccess;
+}
+
+void prefetch(std::string_view key,
+              void const* ptr,
+              std::size_t size,
+              rmm::cuda_stream_view stream,
+              rmm::cuda_device_id device_id)
+{
+  auto result = prefetch_noexcept(key, ptr, size, stream, device_id);
+  // Ignore cudaErrorInvalidValue because that will be raised if
+  // prefetching is attempted on unmanaged memory.
+  if ((result != cudaErrorInvalidValue) && (result != cudaSuccess)) {
+    std::cerr << "Prefetch failed" << std::endl;
+    CUDF_CUDA_TRY(result);
   }
 }
 

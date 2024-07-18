@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/utilities/default_stream.hpp>
+
 #include <rmm/device_uvector.hpp>
 
 #include <map>
@@ -67,22 +69,42 @@ class PrefetchConfig {
   std::map<std::string, bool> config_values;  //< Map of configuration keys to values
 };
 
-// TODO: This function is currently called in noexcept contexts, so it should
-// not throw exceptions, but currently it can. We need to decide what the
-// appropriate behavior is: either we make those contexts (e.g. the data
-// accessors in column_view) not noexcept, or we make this function noexcept
-// and have it silently allow failures to prefetch.
 /**
  * @brief Enable prefetching for a particular structure or algorithm.
- *
- * @note At present this function does not support stream-ordered execution. Prefetching always
- * occurs on the default stream.
  *
  * @param key The key to enable prefetching for.
  * @param ptr The pointer to prefetch.
  * @param size The size of the memory region to prefetch.
+ * @param stream The stream to prefetch on.
+ * @param device_id The device to prefetch on.
  */
-void prefetch(std::string_view key, void const* ptr, std::size_t size);
+void prefetch(std::string_view key,
+              void const* ptr,
+              std::size_t size,
+              rmm::cuda_stream_view stream,
+              rmm::cuda_device_id device_id = rmm::get_current_cuda_device());
+
+/**
+ * @brief Enable prefetching for a particular structure or algorithm.
+ *
+ * @note This function will not throw exceptions, so it is safe to call in
+ * noexcept contexts. If an error occurs, the error code is returned. This
+ * function primarily exists for [mutable_]column_view::get_data and should be
+ * removed once an method for stream-ordered data pointer access is added to
+ * those data structures.
+ *
+ * @param key The key to enable prefetching for.
+ * @param ptr The pointer to prefetch.
+ * @param size The size of the memory region to prefetch.
+ * @param stream The stream to prefetch on.
+ * @param device_id The device to prefetch on.
+ */
+cudaError_t prefetch_noexcept(
+  std::string_view key,
+  void const* ptr,
+  std::size_t size,
+  rmm::cuda_stream_view stream,
+  rmm::cuda_device_id device_id = rmm::get_current_cuda_device()) noexcept;
 
 /**
  * @brief Prefetch the data in a device_uvector.
@@ -92,12 +114,17 @@ void prefetch(std::string_view key, void const* ptr, std::size_t size);
  *
  * @param key The key to enable prefetching for.
  * @param v The device_uvector to prefetch.
+ * @param stream The stream to prefetch on.
+ * @param device_id The device to prefetch on.
  */
 template <typename T>
-void prefetch(std::string_view key, rmm::device_uvector<T> const& v)
+void prefetch(std::string_view key,
+              rmm::device_uvector<T> const& v,
+              rmm::cuda_stream_view stream,
+              rmm::cuda_device_id device_id = rmm::get_current_cuda_device())
 {
   if (v.is_empty()) { return; }
-  prefetch(key, v.data(), v.size());
+  prefetch(key, v.data(), v.size(), stream, device_id);
 }
 
 }  // namespace detail

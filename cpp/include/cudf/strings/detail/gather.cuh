@@ -232,7 +232,7 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
   if (output_count == 0) return rmm::device_uvector<char>(0, stream, mr);
 
   auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
-  cudf::experimental::prefetch::detail::prefetch("manual_prefetch", chars_data);
+  cudf::experimental::prefetch::detail::prefetch("manual_prefetch", chars_data, stream);
   auto d_chars = chars_data.data();
 
   constexpr int warps_per_threadblock = 4;
@@ -316,7 +316,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
   auto const offsets_view =
     cudf::detail::offsetalator_factory::make_input_iterator(out_offsets_column->view());
   cudf::experimental::prefetch::detail::prefetch(
-    "manual_prefetch", strings.chars_begin(stream), strings.chars_size(stream));
+    "manual_prefetch", strings.chars_begin(stream), strings.chars_size(stream), stream);
   auto out_chars_data = gather_chars(
     d_strings->begin<string_view>(), begin, end, offsets_view, total_bytes, stream, mr);
 
