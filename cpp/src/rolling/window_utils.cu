@@ -36,7 +36,7 @@
 namespace cudf {
 namespace detail {
 
-enum class which : bool {
+enum class which : int8_t {
   PRECEDING,
   FOLLOWING,
 };
