@@ -634,10 +634,11 @@ std::unique_ptr<column> rolling_window(
  *
  * This function computes preceding and following window bounds, suitable for passing to
  * `rolling_window` from a pair of scalars providing the window `length` and the `offset` of the
- * window. Consider an element `p[i]` at index `i` of `input`. The window defined by `length` and
+ * window. Consider an element `pi` at index `i` of `input`. The window defined by `length` and
  * `offset` is the ordered set of indices `Sj[i] := {j : input[j] \in [[pi + offset, ..., pi +
  * offset + length]]}`. The returned `preceding_window` column is an INT32 column whose ith entry is
- * `inf Sj[i]`, the returned `following_window` column contains as its ith entry `sup Sj[i]`.
+ * `inf Sj[i] + 1` (the `+ 1` accounts for the usage in `rolling_window`), the returned
+ * `following_window` column contains as its ith entry `sup Sj[i]`.
  *
  * The endpoints of each window can be controlled via the `window_type` parameter:
  * - If the window is `LEFT_CLOSED`, the condition is `input[j] \in [pi + offset, pi + offset +
@@ -647,7 +648,7 @@ std::unique_ptr<column> rolling_window(
  * - If the window is `CLOSED`, the condition is `input[j] \in [pi + offset, pi + offset + length]`
  * - If the window is `OPEN`, the condition is `input[j] \in (pi + offset, pi + offset + length)`
  *
- * The input column can either be a timestamp type in which caselength and offset must be durations
+ * The input column can either be a timestamp type in which case length and offset must be durations
  * of the same resolution as the timestamp; or a signed index type in which case length and offset
  * must have the same index type.
  *
