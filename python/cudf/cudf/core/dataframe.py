@@ -609,6 +609,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     dtype : dtype, default None
         Data type to force. Only a single dtype is allowed.
         If None, infer.
+    copy : bool or None, default None
+        Copy data from inputs.
+        Currently not implemented.
     nan_as_null : bool, Default True
         If ``None``/``True``, converts ``np.nan`` values to
         ``null`` values.
@@ -698,6 +701,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         copy=None,
         nan_as_null=no_default,
     ):
+        if copy is not None:
+            raise NotImplementedError("copy is not currently implemented.")
         super().__init__()
         if nan_as_null is no_default:
             nan_as_null = not cudf.get_option("mode.pandas_compatible")
