@@ -355,12 +355,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def __contains__(self, item):
         hash(item)
-        if isinstance(item, bool) or not isinstance(
-            item, (np.floating, np.integer, int, float)
-        ):
+        if not isinstance(item, (np.floating, np.integer, int, float)):
             return False
-        elif isinstance(item, (np.timedelta64, np.datetime64)):
-            # Are instances of np.integer
+        elif isinstance(item, (np.timedelta64, np.datetime64, bool)):
+            # Cases that would pass the above check
             return False
         try:
             int_item = int(item)
