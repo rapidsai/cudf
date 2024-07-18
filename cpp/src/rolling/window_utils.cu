@@ -133,7 +133,7 @@ struct window_offset_impl {
     auto const d_length          = dynamic_cast<ScalarType const&>(length).data();
     auto const d_offset          = dynamic_cast<ScalarType const&>(offset).data();
     auto copy_n                  = [&](auto kernel) {
-      thrust::copy_n(rmm::exec_policy(stream),
+      thrust::copy_n(rmm::exec_policy_nosync(stream),
                      cudf::detail::make_counting_transform_iterator(0, kernel),
                      input.size(),
                      result->mutable_view().begin<size_type>());
@@ -235,8 +235,10 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> windows_from_offset(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::windows_from_offset(
-    input, length, offset, window_type, only_preceding, stream, mr);
+  auto result =
+    detail::windows_from_offset(input, length, offset, window_type, only_preceding, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf
