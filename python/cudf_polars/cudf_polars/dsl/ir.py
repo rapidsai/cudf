@@ -306,9 +306,14 @@ class Scan(IR):
                 )
             df = DataFrame.from_cudf(cudf.concat(pieces))
         elif self.typ == "parquet":
-            cdf = cudf.read_parquet(self.paths, columns=with_columns)
-            assert isinstance(cdf, cudf.DataFrame)
-            df = DataFrame.from_cudf(cdf)
+            tbl_w_meta = plc.io.parquet.read_parquet(
+                plc.io.SourceInfo(self.paths), columns=with_columns
+            )
+            df = DataFrame.from_table(
+                tbl_w_meta.tbl,
+                # TODO: consider nested column names?
+                tbl_w_meta.column_names(include_children=False),
+            )
         else:
             raise NotImplementedError(
                 f"Unhandled scan type: {self.typ}"
