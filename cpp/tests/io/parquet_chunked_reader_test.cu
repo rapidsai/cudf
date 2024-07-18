@@ -1679,6 +1679,39 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
                                                cudf::io::default_max_page_size_bytes,
                                                rows_in_row_group);
 
+  // Function to initialize a vector of expected counts per source
+  auto initialize_expected_counts =
+    [](int const nsources, int const num_rows, int const rows_to_skip, int const rows_to_read) {
+      // Initialize expected_counts
+      std::vector<size_t> expected_counts(nsources, num_rows);
+
+      // Adjust expected_counts for rows_to_skip
+      int64_t counter = 0;
+      for (auto& nrows : expected_counts) {
+        if (counter < rows_to_skip) {
+          counter += nrows;
+          nrows = (counter >= rows_to_skip) ? counter - rows_to_skip : 0;
+        } else {
+          break;
+        }
+      }
+
+      // Reset the counter
+      counter = 0;
+
+      // Adjust expected_counts for rows_to_read
+      for (auto& nrows : expected_counts) {
+        if (counter < rows_to_read) {
+          counter += nrows;
+          nrows = (counter >= rows_to_read) ? rows_to_read - counter + nrows : nrows;
+        } else if (counter > rows_to_read) {
+          nrows = 0;
+        }
+      }
+
+      return expected_counts;
+    };
+
   // Chunked-read six data sources entirely
   {
     auto const nsources              = 6;
@@ -1731,31 +1764,8 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
     auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
 
     // Initialize expected_counts
-    std::vector<size_t> expected_counts(nsources, num_rows);
-
-    // Adjust expected_counts for rows_to_skip
-    int64_t counter = 0;
-    for (auto& nrows : expected_counts) {
-      if (counter < rows_to_skip) {
-        counter += nrows;
-        nrows = (counter >= rows_to_skip) ? counter - rows_to_skip : 0;
-      } else {
-        break;
-      }
-    }
-
-    // Reset the counter
-    counter = 0;
-
-    // Adjust expected_counts for rows_to_read
-    for (auto& nrows : expected_counts) {
-      if (counter < rows_to_read) {
-        counter += nrows;
-        nrows = (counter >= rows_to_read) ? rows_to_read - counter + nrows : nrows;
-      } else if (counter > rows_to_read) {
-        nrows = 0;
-      }
-    }
+    auto const expected_counts =
+      initialize_expected_counts(nsources, num_rows, rows_to_skip, rows_to_read);
 
     // Initialize expected table
     auto int64_col_selected = int64s_col(int64_selected_data.begin() + rows_to_skip,
@@ -1797,31 +1807,8 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
     auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
 
     // Initialize expected_counts
-    std::vector<size_t> expected_counts(nsources, num_rows);
-
-    // Adjust expected_counts for rows_to_skip
-    int64_t counter = 0;
-    for (auto& nrows : expected_counts) {
-      if (counter < rows_to_skip) {
-        counter += nrows;
-        nrows = (counter >= rows_to_skip) ? counter - rows_to_skip : 0;
-      } else {
-        break;
-      }
-    }
-
-    // Reset the counter
-    counter = 0;
-
-    // Adjust expected_counts for rows_to_read
-    for (auto& nrows : expected_counts) {
-      if (counter < num_rows * nsources) {
-        counter += nrows;
-        nrows = (counter >= num_rows * nsources) ? (num_rows * nsources) - counter + nrows : nrows;
-      } else if (counter > num_rows * nsources) {
-        nrows = 0;
-      }
-    }
+    auto const expected_counts =
+      initialize_expected_counts(nsources, num_rows, rows_to_skip, num_rows * nsources);
 
     // Initialize expected table
     auto int64_col_selected =

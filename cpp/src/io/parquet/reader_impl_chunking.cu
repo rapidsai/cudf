@@ -1612,7 +1612,7 @@ void reader::impl::compute_input_passes()
 
     // We must use the effective size of the first row group we are reading to accurately calculate
     // the first non-zero input_pass_start_row_count.
-    auto row_group_rows =
+    auto const row_group_rows =
       (skip_rows) ? rgi.start_row + row_group.num_rows - skip_rows : row_group.num_rows;
 
     //  Set skip_rows = 0 as it is no longer needed for subsequent row_groups
