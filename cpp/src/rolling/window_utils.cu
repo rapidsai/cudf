@@ -19,6 +19,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/rolling.hpp>
 #include <cudf/rolling.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
