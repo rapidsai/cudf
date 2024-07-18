@@ -114,7 +114,7 @@ def assert_column_eq(
         rhs_nans = pa.compute.is_nan(rhs)
         assert lhs_nans.equals(rhs_nans)
 
-        if any(lhs_nans.to_pylist()) or any(rhs_nans.to_pylist()):
+        if pa.compute.any(lhs_nans) or pa.compute.any(rhs_nans):
             # masks must be equal at this point
             mask = pa.compute.fill_null(pa.compute.invert(lhs_nans), True)
             lhs = lhs.filter(mask)

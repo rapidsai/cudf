@@ -95,24 +95,22 @@ cpdef bool is_supported_operation(
 ):
     """Check if an operation is supported for the given data types.
 
+    For details, see :cpp:func:`cudf::binops::is_supported_operation`.
+
     Parameters
     ----------
-    out
-        Output data type
-    lhs
-        Left operand type
-    rhs
-        Right operand type
-    op
-        Binary operation to check
-
+    out : DataType
+        The output data type.
+    lhs : DataType
+        The left hand side data type.
+    rhs : DataType
+        The right hand side data type.
+    op : BinaryOperator
+        The operation to check.
     Returns
     -------
-    True if the operation is supported for the requested types.
-
-    See Also
-    --------
-    :cpp:func:`is_supported_operation`
+    bool
+        True if the operation is supported, False otherwise
     """
 
     return cpp_binaryop.is_supported_operation(

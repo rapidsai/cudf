@@ -43,10 +43,10 @@ def make_col(dtype, nulls):
         pa_type = pa.int32()
     elif dtype == "uint64":
         data = [1, 2, 3, 4, 5]
-        pa_type = pa.uint32()
+        pa_type = pa.uint64()
     elif dtype == "float64":
         data = [1.0, 2.0, 3.0, 4.0, 5.0]
-        pa_type = pa.float32()
+        pa_type = pa.float64()
     elif dtype == "bool":
         data = [True, False, True, False, True]
         pa_type = pa.bool_()
@@ -94,10 +94,10 @@ def _test_binaryop_inner(pa_data, plc_data, pyop, plc_op):
     ):
         with pytest.raises(TypeError):
             get_result()
-        return
-    expect = pyop(lhs_py, rhs_py).cast(outty_py)
-    got = get_result()
-    assert_column_eq(expect, got)
+    else:
+        expect = pyop(lhs_py, rhs_py).cast(outty_py)
+        got = get_result()
+        assert_column_eq(expect, got)
 
 
 @pytest.mark.parametrize(
