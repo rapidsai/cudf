@@ -41,6 +41,40 @@ enum class which : bool {
   FOLLOWING,
 };
 
+/*
+ * Select the appropriate ordering comparator for the window type and if we're computing the
+ * preceding or following window.
+ */
+template <typename T, which Which, window_type WindowType>
+struct op_impl {};
+
+template <typename T, which Which>
+struct op_impl<T, Which, window_type::LEFT_CLOSED> {
+  using type = std::less<T>;
+};
+template <typename T, which Which>
+struct op_impl<T, Which, window_type::RIGHT_CLOSED> {
+  using type = std::less_equal<T>;
+};
+template <typename T>
+struct op_impl<T, which::PRECEDING, window_type::OPEN> {
+  using type = std::less_equal<T>;
+};
+template <typename T>
+struct op_impl<T, which::FOLLOWING, window_type::OPEN> {
+  using type = std::less<T>;
+};
+template <typename T>
+struct op_impl<T, which::PRECEDING, window_type::CLOSED> {
+  using type = std::less<T>;
+};
+template <typename T>
+struct op_impl<T, which::FOLLOWING, window_type::CLOSED> {
+  using type = std::less_equal<T>;
+};
+template <typename T, which Which, window_type WindowType>
+using op_t = typename op_impl<T, Which, WindowType>::type;
+
 template <which Which>
 struct window_offset_impl {
   template <typename T,
@@ -81,41 +115,52 @@ struct window_offset_impl {
     }
   };
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_timestamp<T>())>
-  std::unique_ptr<column> operator()(column_view const& input,
-                                     scalar const& length,
-                                     scalar const& offset,
-                                     window_type const window_type,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+  template <typename T, typename OffsetType, typename ScalarType>
+  [[nodiscard]] std::unique_ptr<column> compute_window_bounds(
+    column_view const& input,
+    scalar const& length,
+    scalar const& offset,
+    window_type const window_type,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const
   {
-    using OffsetType = typename T::duration;
-    CUDF_EXPECTS(cudf::is_duration(length.type()), "Length and offset must be duration types.");
-    CUDF_EXPECTS(length.type().id() == type_to_id<OffsetType>(),
-                 "Length must have same resolution as input.");
     auto result = cudf::make_numeric_column(
       cudf::data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
     auto const d_input_device_view = cudf::column_device_view::create(input, stream);
     auto input_begin               = d_input_device_view->begin<T>();
     auto input_end                 = d_input_device_view->end<T>();
-    auto const d_length = dynamic_cast<duration_scalar<OffsetType> const&>(length).data();
-    auto const d_offset = dynamic_cast<duration_scalar<OffsetType> const&>(offset).data();
+    auto const d_length            = dynamic_cast<ScalarType const&>(length).data();
+    auto const d_offset            = dynamic_cast<ScalarType const&>(offset).data();
     switch (window_type) {
       case window_type::LEFT_CLOSED:
+        thrust::copy_n(rmm::exec_policy(stream),
+                       cudf::detail::make_counting_transform_iterator(
+                         0,
+                         distance_kernel<T, OffsetType, op_t<T, Which, window_type::LEFT_CLOSED>>{
+                           d_length, d_offset, input_begin, input_end}),
+                       input.size(),
+                       result->mutable_view().begin<size_type>());
       case window_type::OPEN:
         thrust::copy_n(rmm::exec_policy(stream),
                        cudf::detail::make_counting_transform_iterator(
                          0,
-                         distance_kernel<T, OffsetType, thrust::less<T>>{
+                         distance_kernel<T, OffsetType, op_t<T, Which, window_type::OPEN>>{
                            d_length, d_offset, input_begin, input_end}),
                        input.size(),
                        result->mutable_view().begin<size_type>());
       case window_type::RIGHT_CLOSED:
+        thrust::copy_n(rmm::exec_policy(stream),
+                       cudf::detail::make_counting_transform_iterator(
+                         0,
+                         distance_kernel<T, OffsetType, op_t<T, Which, window_type::RIGHT_CLOSED>>{
+                           d_length, d_offset, input_begin, input_end}),
+                       input.size(),
+                       result->mutable_view().begin<size_type>());
       case window_type::CLOSED:
         thrust::copy_n(rmm::exec_policy(stream),
                        cudf::detail::make_counting_transform_iterator(
                          0,
-                         distance_kernel<T, OffsetType, thrust::less_equal<T>>{
+                         distance_kernel<T, OffsetType, op_t<T, Which, window_type::CLOSED>>{
                            d_length, d_offset, input_begin, input_end}),
                        input.size(),
                        result->mutable_view().begin<size_type>());
@@ -123,43 +168,37 @@ struct window_offset_impl {
     return result;
   }
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_index_type<T>() and !cudf::is_unsigned<T>())>
-  std::unique_ptr<column> operator()(column_view const& input,
-                                     scalar const& length,
-                                     scalar const& offset,
-                                     window_type const window_type,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+  template <typename T, CUDF_ENABLE_IF(cudf::is_timestamp<T>())>
+  [[nodiscard]] std::unique_ptr<column> operator()(column_view const& input,
+                                                   scalar const& length,
+                                                   scalar const& offset,
+                                                   window_type const window_type,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr) const
   {
+    using OffsetType = typename T::duration;
+    using ScalarType = duration_scalar<OffsetType>;
+    CUDF_EXPECTS(cudf::is_duration(length.type()), "Length and offset must be duration types.");
+    CUDF_EXPECTS(length.type().id() == type_to_id<OffsetType>(),
+                 "Length must have same the resolution as the input.");
+    return compute_window_bounds<T, OffsetType, ScalarType>(
+      input, length, offset, window_type, stream, mr);
+  }
+
+  template <typename T, CUDF_ENABLE_IF(cudf::is_index_type<T>() and !cudf::is_unsigned<T>())>
+  [[nodiscard]] std::unique_ptr<column> operator()(column_view const& input,
+                                                   scalar const& length,
+                                                   scalar const& offset,
+                                                   window_type const window_type,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr) const
+  {
+    using OffsetType = T;
+    using ScalarType = numeric_scalar<OffsetType>;
     CUDF_EXPECTS(have_same_types(input, length),
-                 "Input column, length, and offset must have same type.");
-    auto result = cudf::make_numeric_column(
-      cudf::data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
-    auto const d_input_device_view = cudf::column_device_view::create(input, stream);
-    auto input_begin               = d_input_device_view->begin<T>();
-    auto input_end                 = d_input_device_view->end<T>();
-    auto const d_length            = dynamic_cast<numeric_scalar<T> const&>(length).data();
-    auto const d_offset            = dynamic_cast<numeric_scalar<T> const&>(offset).data();
-    switch (window_type) {
-      case window_type::LEFT_CLOSED:
-      case window_type::OPEN:
-        thrust::copy_n(
-          rmm::exec_policy(stream),
-          cudf::detail::make_counting_transform_iterator(
-            0, distance_kernel<T, T, thrust::less<T>>{d_length, d_offset, input_begin, input_end}),
-          input.size(),
-          result->mutable_view().begin<size_type>());
-      case window_type::RIGHT_CLOSED:
-      case window_type::CLOSED:
-        thrust::copy_n(rmm::exec_policy(stream),
-                       cudf::detail::make_counting_transform_iterator(
-                         0,
-                         distance_kernel<T, T, thrust::less_equal<T>>{
-                           d_length, d_offset, input_begin, input_end}),
-                       input.size(),
-                       result->mutable_view().begin<size_type>());
-    }
-    return result;
+                 "Input column, length, and offset must have the same type.");
+    return compute_window_bounds<T, OffsetType, ScalarType>(
+      input, length, offset, window_type, stream, mr);
   }
 };
 
