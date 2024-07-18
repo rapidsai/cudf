@@ -161,6 +161,18 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
   return hashes;
 }
 
+/**
+ * @brief Compute the minhash of each list row of strings for each seed
+ *
+ * This is a warp-per-row algorithm where parallel threads within a warp
+ * work on strings in a single list row.
+ *
+ * @tparam HashFunction hash function to use on each string
+ *
+ * @param d_input List of strings to process
+ * @param seeds Seeds for hashing each string
+ * @param d_hashes Minhash output values (one per row)
+ */
 template <
   typename HashFunction,
   typename hash_value_type = std::
@@ -169,9 +181,9 @@ CUDF_KERNEL void minhash_word_kernel(cudf::detail::lists_column_device_view cons
                                      cudf::device_span<hash_value_type const> seeds,
                                      hash_value_type* d_hashes)
 {
-  auto const idx = static_cast<std::size_t>(threadIdx.x + blockIdx.x * blockDim.x);
-  if (idx >= (static_cast<std::size_t>(d_input.size()) *
-              static_cast<std::size_t>(cudf::detail::warp_size))) {
+  auto const idx = cudf::detail::grid_1d::global_thread_id();
+  if (idx >= (static_cast<cudf::thread_index_type>(d_input.size()) *
+              static_cast<cudf::thread_index_type>(cudf::detail::warp_size))) {
     return;
   }
 
@@ -183,19 +195,12 @@ CUDF_KERNEL void minhash_word_kernel(cudf::detail::lists_column_device_view cons
   auto const d_row    = cudf::list_device_view(d_input, row_idx);
   auto const d_output = d_hashes + (row_idx * seeds.size());
 
-  // initialize hashes output for this string
+  // initialize hashes output for this row
   if (lane_idx == 0) {
     auto const init = d_row.size() == 0 ? 0 : std::numeric_limits<hash_value_type>::max();
     thrust::fill(thrust::seq, d_output, d_output + seeds.size(), init);
   }
   __syncwarp();
-
-  // TODO
-  // Perhaps use shared memory to hold a warp of minhash values and then min across the warp.
-  // There would be an upper limit since each seed requires a unique block of mins and we
-  // would run out of shared memory. We could optionally use shared memory depending on the
-  // number of seeds or execute over chunks of seeds to reuse the shared memory.
-  // This may not be faster than the atomic-min however.
 
   // each lane hashes a string from the input row
   for (auto str_idx = lane_idx; str_idx < d_row.size(); str_idx += cudf::detail::warp_size) {
@@ -392,19 +397,19 @@ std::unique_ptr<cudf::column> minhash64(cudf::strings_column_view const& input,
   return detail::minhash64(input, seeds, width, stream, mr);
 }
 
-std::unique_ptr<cudf::column> minhash(cudf::lists_column_view const& input,
-                                      cudf::device_span<uint32_t const> seeds,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> word_minhash(cudf::lists_column_view const& input,
+                                           cudf::device_span<uint32_t const> seeds,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::minhash(input, seeds, stream, mr);
 }
 
-std::unique_ptr<cudf::column> minhash64(cudf::lists_column_view const& input,
-                                        cudf::device_span<uint64_t const> seeds,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> word_minhash64(cudf::lists_column_view const& input,
+                                             cudf::device_span<uint64_t const> seeds,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::minhash64(input, seeds, stream, mr);

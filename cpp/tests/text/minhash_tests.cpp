@@ -154,7 +154,7 @@ TEST_F(MinHashTest, WordsMinHash)
   auto view = cudf::lists_column_view(input);
 
   auto seeds   = cudf::test::fixed_width_column_wrapper<uint32_t>({1, 2});
-  auto results = nvtext::minhash(view, cudf::column_view(seeds));
+  auto results = nvtext::word_minhash(view, cudf::column_view(seeds));
   using LCW32  = cudf::test::lists_column_wrapper<uint32_t>;
   LCW32 expected({LCW32{2069617641u, 1975382903u},
                   LCW32{},
@@ -164,7 +164,7 @@ TEST_F(MinHashTest, WordsMinHash)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   auto seeds64   = cudf::test::fixed_width_column_wrapper<uint64_t>({11, 22});
-  auto results64 = nvtext::minhash64(view, cudf::column_view(seeds64));
+  auto results64 = nvtext::word_minhash64(view, cudf::column_view(seeds64));
   using LCW64    = cudf::test::lists_column_wrapper<uint64_t>;
   LCW64 expected64({LCW64{1940333969930105370ul, 272615362982418219ul},
                     LCW64{},

@@ -173,7 +173,7 @@ std::unique_ptr<cudf::column> minhash64(
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return List column of minhash values for each string per seed
  */
-std::unique_ptr<cudf::column> minhash(
+std::unique_ptr<cudf::column> word_minhash(
   cudf::lists_column_view const& input,
   cudf::device_span<uint32_t const> seeds,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
@@ -201,7 +201,7 @@ std::unique_ptr<cudf::column> minhash(
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return List column of minhash values for each string per seed
  */
-std::unique_ptr<cudf::column> minhash64(
+std::unique_ptr<cudf::column> word_minhash64(
   cudf::lists_column_view const& input,
   cudf::device_span<uint64_t const> seeds,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
