@@ -5249,7 +5249,6 @@ class IndexedFrame(Frame):
         as_index=True,
         sort=no_default,
         group_keys=False,
-        squeeze=False,
         observed=True,
         dropna=True,
     ):
@@ -5258,11 +5257,6 @@ class IndexedFrame(Frame):
 
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
-
-        if squeeze is not False:
-            raise NotImplementedError(
-                "squeeze parameter is not yet implemented"
-            )
 
         if not observed:
             raise NotImplementedError(
