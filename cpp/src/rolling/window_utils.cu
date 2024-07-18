@@ -17,6 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/rolling.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/utilities/error.hpp>
@@ -196,4 +197,19 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> windows_from_offset(
   }
 }
 }  // namespace detail
+
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> windows_from_offset(
+  column_view const& input,
+  scalar const& length,
+  scalar const& offset,
+  window_type const window_type,
+  bool only_preceding,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::windows_from_offset(
+    input, length, offset, window_type, only_preceding, stream, mr);
+}
+
 }  // namespace cudf

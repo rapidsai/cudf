@@ -80,18 +80,4 @@ std::unique_ptr<column> rolling_window(column_view const& input,
     input, preceding_window, following_window, min_periods, agg, stream, mr);
 }
 
-std::pair<std::unique_ptr<column>, std::unique_ptr<column>> windows_from_offset(
-  column_view const& input,
-  scalar const& length,
-  scalar const& offset,
-  window_type const window_type,
-  bool only_preceding,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::windows_from_offset(
-    input, length, offset, window_type, only_preceding, stream, mr);
-}
-
 }  // namespace cudf
