@@ -218,6 +218,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> windows_from_offset(
                                    stream,
                                    mr);
   if (only_preceding) {
+    stream.synchronize();
     return {std::move(preceding), nullptr};
   } else {
     auto following = type_dispatcher(input.type(),
@@ -228,6 +229,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> windows_from_offset(
                                      window_type,
                                      stream,
                                      mr);
+    stream.synchronize();
     return {std::move(preceding), std::move(following)};
   }
 }
@@ -243,10 +245,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> windows_from_offset(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto result =
-    detail::windows_from_offset(input, length, offset, window_type, only_preceding, stream, mr);
-  stream.synchronize();
-  return result;
+  return detail::windows_from_offset(
+    input, length, offset, window_type, only_preceding, stream, mr);
 }
 
 }  // namespace cudf
