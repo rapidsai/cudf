@@ -655,6 +655,11 @@ std::unique_ptr<column> rolling_window(
  * The input column must be sorted in ascending order (not checked), behaviour is undefined if this
  * is not upheld.
  *
+ * @throw cudf::data_type_error if input column is not a timestamp type or a signed integer type.
+ * @throw std::invalid_argument if the input column is nullable
+ * @throw cudf::data_type_error if the input column, length, and offset arguments have incompatible
+ * types (as described above).
+ *
  * @param[in] input The input column, must be non-nullable.
  * @param[in] length The length of the windows.
  * @param[in] offset The offset of the windows.

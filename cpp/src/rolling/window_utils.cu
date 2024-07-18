@@ -32,6 +32,7 @@
 #include <thrust/functional.h>
 
 #include <memory>
+#include <stdexcept>
 #include <utility>
 
 namespace cudf {
@@ -88,7 +89,7 @@ struct window_offset_impl {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
   {
-    CUDF_FAIL("Unsupported rolling window type.");
+    CUDF_FAIL("Unsupported rolling window type.", cudf::data_type_error);
   }
 
   template <typename InputType, typename OffsetType, typename StrictWeakOrdering>
@@ -151,6 +152,7 @@ struct window_offset_impl {
       copy_n(distance_kernel<T, OffsetType, op_t<Which, window_type::CLOSED>>{
         d_length, d_offset, input_begin, input_end});
     } else {
+      // Unreachable.
       CUDF_FAIL("Unhandled window type.");
     }
     return result;
@@ -166,9 +168,12 @@ struct window_offset_impl {
   {
     using OffsetType = typename T::duration;
     using ScalarType = duration_scalar<OffsetType>;
-    CUDF_EXPECTS(cudf::is_duration(length.type()), "Length and offset must be duration types.");
+    CUDF_EXPECTS(cudf::is_duration(length.type()),
+                 "Length and offset must be duration types.",
+                 cudf::data_type_error);
     CUDF_EXPECTS(length.type().id() == type_to_id<OffsetType>(),
-                 "Length must have same the resolution as the input.");
+                 "Length must have same the resolution as the input.",
+                 cudf::data_type_error);
     return compute_window_bounds<T, OffsetType, ScalarType>(
       input, length, offset, window_type, stream, mr);
   }
@@ -184,7 +189,8 @@ struct window_offset_impl {
     using OffsetType = T;
     using ScalarType = numeric_scalar<OffsetType>;
     CUDF_EXPECTS(have_same_types(input, length),
-                 "Input column, length, and offset must have the same type.");
+                 "Input column, length, and offset must have the same type.",
+                 cudf::data_type_error);
     return compute_window_bounds<T, OffsetType, ScalarType>(
       input, length, offset, window_type, stream, mr);
   }
@@ -199,8 +205,10 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> windows_from_offset(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(!input.has_nulls(), "Input column cannot have nulls.");
-  CUDF_EXPECTS(have_same_types(length, offset), "Length and offset must have the same type.");
+  CUDF_EXPECTS(!input.has_nulls(), "Input column cannot have nulls.", std::invalid_argument);
+  CUDF_EXPECTS(have_same_types(length, offset),
+               "Length and offset must have the same type.",
+               cudf::data_type_error);
   auto preceding = type_dispatcher(input.type(),
                                    window_offset_impl<which::PRECEDING>{},
                                    input,
