@@ -38,6 +38,17 @@ from .types cimport DataType
 # Aliases for simplicity
 ctypedef unique_ptr[libcudf_exp.expression] expression_ptr
 
+# Define this class just to have a docstring for it
+cdef class Expression:
+    """
+    The base class for all expression types.
+    This class cannot be instantiated directly, please
+    instantiate one of its child classes instead.
+
+    For details, see :cpp:class:`cudf::ast::expression`.
+    """
+    pass
+
 cdef class Literal(Expression):
     """
     A literal value used in an abstract syntax tree.
