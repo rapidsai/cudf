@@ -566,18 +566,17 @@ void infer_column_types(parse_options const& parse_opts,
   }
 }
 
-std::vector<column_buffer> decode_data(
-  parse_options const& parse_opts,
-  cudf::detail::host_vector<column_parse::flags> const& column_flags,
-  std::vector<std::string> const& column_names,
-  device_span<char const> data,
-  device_span<uint64_t const> row_offsets,
-  cudf::detail::host_vector<data_type> const& column_types,
-  int32_t num_records,
-  int32_t num_actual_columns,
-  int32_t num_active_columns,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+std::vector<column_buffer> decode_data(parse_options const& parse_opts,
+                                       host_span<column_parse::flags const> column_flags,
+                                       std::vector<std::string> const& column_names,
+                                       device_span<char const> data,
+                                       device_span<uint64_t const> row_offsets,
+                                       host_span<data_type const> column_types,
+                                       int32_t num_records,
+                                       int32_t num_actual_columns,
+                                       int32_t num_active_columns,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
 {
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<column_buffer> out_buffers;

@@ -1135,7 +1135,7 @@ void init_row_group_fragments(cudf::detail::hostdevice_2dvector<PageFragment>& f
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void calculate_page_fragments(device_span<PageFragment> frag,
-                              cudf::detail::host_vector<size_type> const& frag_sizes,
+                              host_span<size_type const> frag_sizes,
                               rmm::cuda_stream_view stream)
 {
   auto d_frag_sz = cudf::detail::make_device_uvector_async(
