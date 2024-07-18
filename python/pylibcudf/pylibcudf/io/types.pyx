@@ -177,7 +177,7 @@ cdef class SourceInfo:
                     raise ValueError("All sources must be of the same type!")
                 new_sources.append(buffer.read().encode())
             sources = new_sources
-
+            self.byte_sources = sources
         if isinstance(sources[0], bytes):
             empty_buffer = True
             for buffer in sources:
