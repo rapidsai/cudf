@@ -23,6 +23,7 @@ jobs:
       - static-configure
       - conda-notebook-tests
       - docs-build
+      - wheel-build-pylibcudf
       - wheel-build-cudf
       - wheel-tests-cudf
       - wheel-build-cudf-polars
@@ -120,8 +121,15 @@ jobs:
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/build_docs.sh"
-  wheel-build-cudf:
+  wheel-build-pylibcudf:
     needs: checks
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@cuda-12.5.1
+    with:
+      build_type: pull-request
+      script: "ci/build_wheel_pylibcudf.sh"
+  wheel-build-cudf:
+    needs: wheel-build-pylibcudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@cuda-12.5.1
     with:
