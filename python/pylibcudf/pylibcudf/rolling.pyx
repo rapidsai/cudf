@@ -83,6 +83,30 @@ cpdef tuple[Column, Column] windows_from_offset(
     window_type typ,
     bool only_preceding,
 ):
+    """Compute rolling window bounds from a length and offset pair.
+
+    For details, see :cpp:func:`windows_from_offset`.
+
+    Parameters
+    ----------
+    input : Column
+        Column that will be rolled over to define the windows.
+    length : Scalar
+        Length of the window at each element.
+    offset : Scalar
+        Offset to start of the window at each element.
+    typ : WindowType
+        Type of window, indicating which endpoints are contained.
+    only_preceding : bool
+        If true, avoid calculating the following window column.
+
+    Returns
+    -------
+    tuple[Column, Column]
+        A two-tuple of the preceding and following window columns
+        suitable for passing to :func:`rolling_window`.
+        If `only_preceding` is true, then the second entry is ``None``.
+    """
     cdef pair[unique_ptr[column], unique_ptr[column]] result
     with nogil:
         result = cpp_rolling.windows_from_offset(
