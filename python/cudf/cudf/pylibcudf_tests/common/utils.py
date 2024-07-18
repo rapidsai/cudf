@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import os
 
+import numpy as np
 import pyarrow as pa
 import pytest
 
@@ -109,7 +110,10 @@ def assert_column_eq(
         lhs_type = _make_fields_nullable(lhs.type)
         lhs = rhs.cast(lhs_type)
 
-    assert lhs.equals(rhs)
+    if pa.types.is_floating(lhs.type) and pa.types.is_floating(rhs.type):
+        np.testing.assert_array_almost_equal(lhs, rhs)
+    else:
+        assert lhs.equals(rhs)
 
 
 def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
@@ -125,6 +129,8 @@ def assert_table_and_meta_eq(
     pa_table: pa.Table,
     plc_table_w_meta: plc.io.types.TableWithMetadata,
     check_field_nullability=True,
+    check_types_if_empty=True,
+    check_names=True,
 ) -> None:
     """Verify that the pylibcudf TableWithMetadata and PyArrow table are equal"""
 
@@ -135,11 +141,17 @@ def assert_table_and_meta_eq(
         plc_shape == pa_table.shape
     ), f"{plc_shape} is not equal to {pa_table.shape}"
 
+    if not check_types_if_empty and plc_table.num_rows() == 0:
+        return
+
     for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
         assert_column_eq(pa_col, plc_col, check_field_nullability)
 
     # Check column name equality
-    assert plc_table_w_meta.column_names() == pa_table.column_names
+    if check_names:
+        assert (
+            plc_table_w_meta.column_names() == pa_table.column_names
+        ), f"{plc_table_w_meta.column_names()} != {pa_table.column_names}"
 
 
 def cudf_raises(expected_exception: BaseException, *args, **kwargs):
@@ -174,6 +186,48 @@ def is_nested_list(typ):
     return nesting_level(typ)[0] > 1
 
 
+def _convert_numeric_types_to_floating(pa_table):
+    """
+    Useful little helper for testing the
+    dtypes option in I/O readers.
+
+    Returns a tuple containing the pylibcudf dtypes
+    and the new pyarrow schema
+    """
+    dtypes = []
+    new_fields = []
+    for i in range(len(pa_table.schema)):
+        field = pa_table.schema.field(i)
+        child_types = []
+
+        plc_type = plc.interop.from_arrow(field.type)
+        if pa.types.is_integer(field.type) or pa.types.is_unsigned_integer(
+            field.type
+        ):
+            plc_type = plc.interop.from_arrow(pa.float64())
+            field = field.with_type(pa.float64())
+
+        dtypes.append((field.name, plc_type, child_types))
+
+        new_fields.append(field)
+    return dtypes, new_fields
+
+
+def write_source_str(source, input_str):
+    """
+    Write a string to the source
+    (useful for testing CSV/JSON I/O)
+    """
+    if not isinstance(source, io.IOBase):
+        with open(source, "w") as source_f:
+            source_f.write(input_str)
+    else:
+        if isinstance(source, io.BytesIO):
+            input_str = input_str.encode("utf-8")
+        source.write(input_str)
+        source.seek(0)
+
+
 def sink_to_str(sink):
     """
     Takes a sink (e.g. StringIO/BytesIO, filepath, etc.)
@@ -190,6 +244,31 @@ def sink_to_str(sink):
         sink.seek(0)
         str_result = sink.read()
     return str_result
+
+
+def make_source(path_or_buf, pa_table, format, **kwargs):
+    """
+    Write a pyarrow Table to a specific format using pandas
+    by dispatching to the appropriate to_* call.
+    The caller is responsible for making sure that no arguments
+    unsupported by pandas are passed in.
+    """
+    df = pa_table.to_pandas()
+    mode = "w"
+    if "compression" in kwargs:
+        kwargs["compression"] = COMPRESSION_TYPE_TO_PANDAS[
+            kwargs["compression"]
+        ]
+        if kwargs["compression"] is not None and format != "json":
+            # pandas json method only supports mode="w"/"a"
+            mode = "wb"
+    if format == "json":
+        df.to_json(path_or_buf, mode=mode, **kwargs)
+    elif format == "csv":
+        df.to_csv(path_or_buf, mode=mode, **kwargs)
+    if isinstance(path_or_buf, io.IOBase):
+        path_or_buf.seek(0)
+    return path_or_buf
 
 
 NUMERIC_PA_TYPES = [pa.int64(), pa.float64(), pa.uint64()]

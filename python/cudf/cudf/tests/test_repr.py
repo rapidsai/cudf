@@ -186,13 +186,11 @@ def test_MI():
         }
     )
     levels = [["a", "b", "c", "d"], ["w", "x", "y", "z"], ["m", "n"]]
-    codes = cudf.DataFrame(
-        {
-            "a": [0, 0, 0, 0, 1, 1, 2, 2, 3, 3],
-            "b": [0, 1, 2, 3, 0, 1, 2, 3, 0, 1],
-            "c": [0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-        }
-    )
+    codes = [
+        [0, 0, 0, 0, 1, 1, 2, 2, 3, 3],
+        [0, 1, 2, 3, 0, 1, 2, 3, 0, 1],
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    ]
     pd.options.display.max_rows = 999
     pd.options.display.max_columns = 0
     gdf = gdf.set_index(cudf.MultiIndex(levels=levels, codes=codes))

@@ -2,7 +2,7 @@
 
 from cython.operator cimport dereference
 from libcpp.functional cimport reference_wrapper
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -22,7 +22,7 @@ from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from .aggregation cimport Aggregation
 from .column cimport Column
 from .table cimport Table
-from .types cimport null_policy, sorted
+from .types cimport null_order, null_policy, order, sorted
 from .utils cimport _as_vector
 
 
@@ -87,17 +87,43 @@ cdef class GroupBy:
     keys : Table
         The columns to group by.
     null_handling : null_policy, optional
-        Whether or not to include null rows in ``keys``. Default is null_policy.EXCLUDE.
+        Whether or not to include null rows in `keys`.
+        Default is ``null_policy.EXCLUDE``.
     keys_are_sorted : sorted, optional
-        Whether the keys are already sorted. Default is sorted.NO.
+        Whether the keys are already sorted. Default is ``sorted.NO``.
+    column_order : list[order]
+        Indicates the order of each column. Default is ``order.ASCENDING``.
+        Ignored if `keys_are_sorted` is ``sorted.NO``.
+    null_precedence : list[null_order]
+        Indicates the ordering of null values in each column.
+        Default is ``null_order.AFTER``. Ignored if `keys_are_sorted` is ``sorted.NO``.
     """
     def __init__(
         self,
         Table keys,
         null_policy null_handling=null_policy.EXCLUDE,
-        sorted keys_are_sorted=sorted.NO
+        sorted keys_are_sorted=sorted.NO,
+        list column_order=None,
+        list null_precedence=None,
     ):
-        self.c_obj.reset(new groupby(keys.view(), null_handling, keys_are_sorted))
+        self._column_order = make_unique[vector[order]]()
+        self._null_precedence = make_unique[vector[null_order]]()
+        if column_order is not None:
+            for o in column_order:
+                dereference(self._column_order).push_back(<order?>o)
+        if null_precedence is not None:
+            for o in null_precedence:
+                dereference(self._null_precedence).push_back(<null_order?>o)
+
+        self.c_obj.reset(
+            new groupby(
+                keys.view(),
+                null_handling,
+                keys_are_sorted,
+                dereference(self._column_order.get()),
+                dereference(self._null_precedence.get()),
+            )
+        )
         # keep a reference to the keys table so it doesn't get
         # deallocated from under us:
         self._keys = keys
