@@ -876,9 +876,6 @@ class UnaryFunction(Expr):
             "fill_null",
         ):
             raise NotImplementedError(f"Unary function {name=}")
-        # if self.name == "fill_null" and not isinstance(self.children[1], Literal):
-        #    breakpoint()
-        #    raise NotImplementedError("fill_null only supports a scalar value")
 
     def do_evaluate(
         self,

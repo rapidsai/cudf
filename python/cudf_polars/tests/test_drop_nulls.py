@@ -39,7 +39,7 @@ def test_drop_null(null_data):
 @pytest.mark.parametrize(
     "value",
     [0, pl.col("a").mean(), pl.col("b")],
-    ids=["scalar", "expression", "column"],
+    ids=["scalar", "aggregation", "column_expression"],
 )
 def test_fill_null(null_data, value):
     q = null_data.select(pl.col("a").fill_null(value))
@@ -51,4 +51,6 @@ def test_fill_null(null_data, value):
 )
 def test_fill_null_with_strategy(null_data, strategy):
     q = null_data.select(pl.col("a").fill_null(strategy=strategy))
+
+    # Not yet exposed to python from rust
     assert_ir_translation_raises(q, NotImplementedError)
