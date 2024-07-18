@@ -3294,3 +3294,8 @@ def test_index_assignment_no_shallow_copy(index):
     df = cudf.DataFrame(range(1))
     df.index = index
     assert df.index is index
+
+
+def test_bool_rangeindex_raises():
+    with pytest.raises(TypeError):
+        bool(cudf.RangeIndex(0))

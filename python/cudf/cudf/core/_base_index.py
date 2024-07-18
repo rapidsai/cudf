@@ -62,6 +62,12 @@ class BaseIndex(Serializable):
     def __len__(self):
         raise NotImplementedError
 
+    def __bool__(self):
+        raise TypeError(
+            f"The truth value of a {type(self).__name__} is ambiguous. Use "
+            "a.empty, a.bool(), a.item(), a.any() or a.all()."
+        )
+
     @property
     def size(self):
         # The size of an index is always its length irrespective of dimension.
