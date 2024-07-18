@@ -192,11 +192,9 @@ class new_delete_memory_resource {
   {
     try {
       return rmm::detail::aligned_host_allocate(
-        bytes, rmm::CUDA_ALLOCATION_ALIGNMENT, [](std::size_t size) {
-          return ::operator new(size);
-        });
+        bytes, alignment, [](std::size_t size) { return ::operator new(size); });
     } catch (std::bad_alloc const& e) {
-      RMM_FAIL("Failed to allocate memory: " + std::string{e.what()}, rmm::out_of_memory);
+      CUDF_FAIL("Failed to allocate memory: " + std::string{e.what()}, rmm::out_of_memory);
     }
   }
 
@@ -217,13 +215,13 @@ class new_delete_memory_resource {
                   std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
   {
     rmm::detail::aligned_host_deallocate(
-      ptr, bytes, rmm::CUDA_ALLOCATION_ALIGNMENT, [](void* ptr) { ::operator delete(ptr); });
+      ptr, bytes, alignment, [](void* ptr) { ::operator delete(ptr); });
   }
 
   void deallocate_async(void* ptr,
                         std::size_t bytes,
                         std::size_t alignment,
-                        cuda::stream_ref stream)
+                        [[maybe_unused]] cuda::stream_ref stream)
   {
     deallocate(ptr, bytes, alignment);
   }
