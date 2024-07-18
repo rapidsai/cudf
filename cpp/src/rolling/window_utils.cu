@@ -126,43 +126,29 @@ struct window_offset_impl {
   {
     auto result = cudf::make_numeric_column(
       cudf::data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
-    auto const d_input_device_view = cudf::column_device_view::create(input, stream);
-    auto input_begin               = d_input_device_view->begin<T>();
-    auto input_end                 = d_input_device_view->end<T>();
-    auto const d_length            = dynamic_cast<ScalarType const&>(length).data();
-    auto const d_offset            = dynamic_cast<ScalarType const&>(offset).data();
+    auto const input_device_view = cudf::column_device_view::create(input, stream);
+    auto input_begin             = input_device_view->begin<T>();
+    auto input_end               = input_device_view->end<T>();
+    auto const d_length          = dynamic_cast<ScalarType const&>(length).data();
+    auto const d_offset          = dynamic_cast<ScalarType const&>(offset).data();
+    auto copy_n                  = [&](auto kernel) {
+      thrust::copy_n(rmm::exec_policy(stream),
+                     cudf::detail::make_counting_transform_iterator(0, kernel),
+                     input.size(),
+                     result->mutable_view().begin<size_type>());
+    };
     if (window_type == window_type::LEFT_CLOSED) {
-      thrust::copy_n(rmm::exec_policy(stream),
-                     cudf::detail::make_counting_transform_iterator(
-                       0,
-                       distance_kernel<T, OffsetType, op_t<Which, window_type::LEFT_CLOSED>>{
-                         d_length, d_offset, input_begin, input_end}),
-                     input.size(),
-                     result->mutable_view().begin<size_type>());
+      copy_n(distance_kernel<T, OffsetType, op_t<Which, window_type::LEFT_CLOSED>>{
+        d_length, d_offset, input_begin, input_end});
     } else if (window_type == window_type::OPEN) {
-      thrust::copy_n(rmm::exec_policy(stream),
-                     cudf::detail::make_counting_transform_iterator(
-                       0,
-                       distance_kernel<T, OffsetType, op_t<Which, window_type::OPEN>>{
-                         d_length, d_offset, input_begin, input_end}),
-                     input.size(),
-                     result->mutable_view().begin<size_type>());
+      copy_n(distance_kernel<T, OffsetType, op_t<Which, window_type::OPEN>>{
+        d_length, d_offset, input_begin, input_end});
     } else if (window_type == window_type::RIGHT_CLOSED) {
-      thrust::copy_n(rmm::exec_policy(stream),
-                     cudf::detail::make_counting_transform_iterator(
-                       0,
-                       distance_kernel<T, OffsetType, op_t<Which, window_type::RIGHT_CLOSED>>{
-                         d_length, d_offset, input_begin, input_end}),
-                     input.size(),
-                     result->mutable_view().begin<size_type>());
+      copy_n(distance_kernel<T, OffsetType, op_t<Which, window_type::RIGHT_CLOSED>>{
+        d_length, d_offset, input_begin, input_end});
     } else if (window_type == window_type::CLOSED) {
-      thrust::copy_n(rmm::exec_policy(stream),
-                     cudf::detail::make_counting_transform_iterator(
-                       0,
-                       distance_kernel<T, OffsetType, op_t<Which, window_type::CLOSED>>{
-                         d_length, d_offset, input_begin, input_end}),
-                     input.size(),
-                     result->mutable_view().begin<size_type>());
+      copy_n(distance_kernel<T, OffsetType, op_t<Which, window_type::CLOSED>>{
+        d_length, d_offset, input_begin, input_end});
     } else {
       CUDF_FAIL("Unhandled window type.");
     }
