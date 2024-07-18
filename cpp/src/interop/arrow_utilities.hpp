@@ -24,7 +24,6 @@
 #include <rmm/resource_ref.hpp>
 
 #include <nanoarrow/nanoarrow.h>
-#include <nanoarrow/nanoarrow_types.h>
 
 namespace cudf {
 namespace detail {
