@@ -297,8 +297,6 @@ class Scan(IR):
                     decimal=decimal,
                     dtypes=self.schema,
                 )
-                # TODO: Nested column names not passed right now
-                # Do this when cudf-polars supports nested columns
                 if colnames is None:
                     # Note: polars will raise on their end if the column names
                     # of files don't match, so no need to validate here
