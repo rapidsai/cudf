@@ -359,6 +359,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
             item, (np.floating, np.integer, int, float)
         ):
             return False
+        elif isinstance(item, (np.timedelta64, np.datetime64)):
+            # Are instances of np.integer
+            return False
         try:
             int_item = int(item)
             return int_item == item and int_item in self._range
