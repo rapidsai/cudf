@@ -45,35 +45,35 @@ enum class which : bool {
  * Select the appropriate ordering comparator for the window type and if we're computing the
  * preceding or following window.
  */
-template <typename T, which Which, window_type WindowType>
+template <which Which, window_type WindowType>
 struct op_impl {};
 
-template <typename T, which Which>
-struct op_impl<T, Which, window_type::LEFT_CLOSED> {
-  using type = std::less<T>;
+template <which Which>
+struct op_impl<Which, window_type::LEFT_CLOSED> {
+  using type = std::less<>;
 };
-template <typename T, which Which>
-struct op_impl<T, Which, window_type::RIGHT_CLOSED> {
-  using type = std::less_equal<T>;
+template <which Which>
+struct op_impl<Which, window_type::RIGHT_CLOSED> {
+  using type = std::less_equal<>;
 };
-template <typename T>
-struct op_impl<T, which::PRECEDING, window_type::OPEN> {
-  using type = std::less_equal<T>;
+template <>
+struct op_impl<which::PRECEDING, window_type::OPEN> {
+  using type = std::less_equal<>;
 };
-template <typename T>
-struct op_impl<T, which::FOLLOWING, window_type::OPEN> {
-  using type = std::less<T>;
+template <>
+struct op_impl<which::FOLLOWING, window_type::OPEN> {
+  using type = std::less<>;
 };
-template <typename T>
-struct op_impl<T, which::PRECEDING, window_type::CLOSED> {
-  using type = std::less<T>;
+template <>
+struct op_impl<which::PRECEDING, window_type::CLOSED> {
+  using type = std::less<>;
 };
-template <typename T>
-struct op_impl<T, which::FOLLOWING, window_type::CLOSED> {
-  using type = std::less_equal<T>;
+template <>
+struct op_impl<which::FOLLOWING, window_type::CLOSED> {
+  using type = std::less_equal<>;
 };
-template <typename T, which Which, window_type WindowType>
-using op_t = typename op_impl<T, Which, WindowType>::type;
+template <which Which, window_type WindowType>
+using op_t = typename op_impl<Which, WindowType>::type;
 
 template <which Which>
 struct window_offset_impl {
@@ -131,39 +131,40 @@ struct window_offset_impl {
     auto input_end                 = d_input_device_view->end<T>();
     auto const d_length            = dynamic_cast<ScalarType const&>(length).data();
     auto const d_offset            = dynamic_cast<ScalarType const&>(offset).data();
-    switch (window_type) {
-      case window_type::LEFT_CLOSED:
-        thrust::copy_n(rmm::exec_policy(stream),
-                       cudf::detail::make_counting_transform_iterator(
-                         0,
-                         distance_kernel<T, OffsetType, op_t<T, Which, window_type::LEFT_CLOSED>>{
-                           d_length, d_offset, input_begin, input_end}),
-                       input.size(),
-                       result->mutable_view().begin<size_type>());
-      case window_type::OPEN:
-        thrust::copy_n(rmm::exec_policy(stream),
-                       cudf::detail::make_counting_transform_iterator(
-                         0,
-                         distance_kernel<T, OffsetType, op_t<T, Which, window_type::OPEN>>{
-                           d_length, d_offset, input_begin, input_end}),
-                       input.size(),
-                       result->mutable_view().begin<size_type>());
-      case window_type::RIGHT_CLOSED:
-        thrust::copy_n(rmm::exec_policy(stream),
-                       cudf::detail::make_counting_transform_iterator(
-                         0,
-                         distance_kernel<T, OffsetType, op_t<T, Which, window_type::RIGHT_CLOSED>>{
-                           d_length, d_offset, input_begin, input_end}),
-                       input.size(),
-                       result->mutable_view().begin<size_type>());
-      case window_type::CLOSED:
-        thrust::copy_n(rmm::exec_policy(stream),
-                       cudf::detail::make_counting_transform_iterator(
-                         0,
-                         distance_kernel<T, OffsetType, op_t<T, Which, window_type::CLOSED>>{
-                           d_length, d_offset, input_begin, input_end}),
-                       input.size(),
-                       result->mutable_view().begin<size_type>());
+    if (window_type == window_type::LEFT_CLOSED) {
+      thrust::copy_n(rmm::exec_policy(stream),
+                     cudf::detail::make_counting_transform_iterator(
+                       0,
+                       distance_kernel<T, OffsetType, op_t<Which, window_type::LEFT_CLOSED>>{
+                         d_length, d_offset, input_begin, input_end}),
+                     input.size(),
+                     result->mutable_view().begin<size_type>());
+    } else if (window_type == window_type::OPEN) {
+      thrust::copy_n(rmm::exec_policy(stream),
+                     cudf::detail::make_counting_transform_iterator(
+                       0,
+                       distance_kernel<T, OffsetType, op_t<Which, window_type::OPEN>>{
+                         d_length, d_offset, input_begin, input_end}),
+                     input.size(),
+                     result->mutable_view().begin<size_type>());
+    } else if (window_type == window_type::RIGHT_CLOSED) {
+      thrust::copy_n(rmm::exec_policy(stream),
+                     cudf::detail::make_counting_transform_iterator(
+                       0,
+                       distance_kernel<T, OffsetType, op_t<Which, window_type::RIGHT_CLOSED>>{
+                         d_length, d_offset, input_begin, input_end}),
+                     input.size(),
+                     result->mutable_view().begin<size_type>());
+    } else if (window_type == window_type::CLOSED) {
+      thrust::copy_n(rmm::exec_policy(stream),
+                     cudf::detail::make_counting_transform_iterator(
+                       0,
+                       distance_kernel<T, OffsetType, op_t<Which, window_type::CLOSED>>{
+                         d_length, d_offset, input_begin, input_end}),
+                     input.size(),
+                     result->mutable_view().begin<size_type>());
+    } else {
+      CUDF_FAIL("Unhandled window type.");
     }
     return result;
   }
