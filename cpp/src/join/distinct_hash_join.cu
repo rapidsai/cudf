@@ -52,7 +52,7 @@ auto prepare_device_equal(
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> probe,
   bool has_nulls,
   cudf::null_equality compare_nulls,
-  std::unordered_set<cudf::type_id> column_types)
+  std::unordered_set<cudf::type_id> const& column_types)
 {
   auto const two_table_equal =
     cudf::experimental::row::equality::two_table_comparator(probe, build);
@@ -152,7 +152,7 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
     _preprocessed_build, _preprocessed_probe, has_nulls, compare_nulls, build_column_types);
 
   std::visit(
-    [&](auto& comparator_adapter) {
+    [&](auto&& comparator_adapter) {
       using static_set_type =
         cuco::static_set<cuco::pair<hash_value_type, rhs_index_type>,
                          cuco::extent<size_type>,
@@ -187,9 +187,11 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
     row_hasher.device_hasher(build_column_types, nullate::DYNAMIC{this->_has_nulls});
 
   std::visit(
-    [&](auto& hasher, auto& hash_table) {
+    [&](auto&& hasher, auto&& hash_table) {
       auto const iter = cudf::detail::make_counting_transform_iterator(
-        0, build_keys_fn<decltype(hasher), rhs_index_type>{hasher});
+        0,
+        build_keys_fn<typename std::remove_reference<decltype(hasher)>::type, lhs_index_type>{
+          hasher});
 
       size_type const build_table_num_rows{build.num_rows()};
       if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(this->_build))) {
@@ -248,9 +250,11 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
     thrust::make_transform_output_iterator(probe_indices->begin(), output_fn{});
 
   std::visit(
-    [&](auto& hasher, auto& hash_table) {
+    [&](auto&& hasher, auto&& hash_table) {
       auto const iter = cudf::detail::make_counting_transform_iterator(
-        0, build_keys_fn<decltype(hasher), lhs_index_type>{hasher});
+        0,
+        build_keys_fn<typename std::remove_reference<decltype(hasher)>::type, lhs_index_type>{
+          hasher});
 
       auto const [probe_indices_end, _] = hash_table.retrieve(iter,
                                                               iter + probe_table_num_rows,
@@ -300,9 +304,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<HasNested>::l
       probe_row_hasher.device_hasher(probe_column_types, nullate::DYNAMIC{this->_has_nulls});
 
     std::visit(
-      [&](auto& hasher, auto& hash_table) {
+      [&](auto&& hasher, auto&& hash_table) {
         auto const iter = cudf::detail::make_counting_transform_iterator(
-          0, build_keys_fn<decltype(hasher), lhs_index_type>{hasher});
+          0,
+          build_keys_fn<typename std::remove_reference<decltype(hasher)>::type, lhs_index_type>{
+            hasher});
 
         auto const output_begin =
           thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});
