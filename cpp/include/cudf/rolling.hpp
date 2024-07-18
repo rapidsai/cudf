@@ -16,10 +16,16 @@
 
 #pragma once
 
+#include <cudf/aggregation.hpp>
 #include <cudf/rolling/range_window_bounds.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -141,6 +147,16 @@ struct window_bounds {
 
   bool const _is_unbounded;  ///< Whether the window boundary is unbounded
   size_type const _value;    ///< Finite window boundary value (in days or rows)
+};
+
+/**
+ * @brief Indicates which endpoints a rolling window contains.
+ */
+enum class window_type : int32_t {
+  LEFT_CLOSED,   ///< Window is closed on the left, open on the right.
+  RIGHT_CLOSED,  ///< Window is open on the left, closed on the right.
+  CLOSED,        ///< Window is closed on the left and the right.
+  OPEN,          ///< Window is open on the left and the right.
 };
 
 /**
@@ -610,6 +626,52 @@ std::unique_ptr<column> rolling_window(
   column_view const& following_window,
   size_type min_periods,
   rolling_aggregation const& agg,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Computes preceding and following window bounds from an input column.
+ *
+ * This function computes preceding and following window bounds, suitable for passing to
+ * `rolling_window` from a pair of scalars providing the window `length` and the `offset` of the
+ * window. Consider an element `p[i]` at index `i` of `input`. The window defined by `length` and
+ * `offset` is the ordered set of indices `Sj[i] := {j : input[j] \in [[pi + offset, ..., pi +
+ * offset + length]]}`. The returned `preceding_window` column is an INT32 column whose ith entry is
+ * `inf Sj[i]`, the returned `following_window` column contains as its ith entry `sup Sj[i]`.
+ *
+ * The endpoints of each window can be controlled via the `window_type` parameter:
+ * - If the window is `LEFT_CLOSED`, the condition is `input[j] \in [pi + offset, pi + offset +
+ * length)`
+ * - If the window is `RIGHT_CLOSED`, the condition is `input[j] \in (pi + offset, pi + offset +
+ * length]`
+ * - If the window is `CLOSED`, the condition is `input[j] \in [pi + offset, pi + offset + length]`
+ * - If the window is `OPEN`, the condition is `input[j] \in (pi + offset, pi + offset + length)`
+ *
+ * The input column can either be a timestamp type in which caselength and offset must be durations
+ * of the same resolution as the timestamp; or a signed index type in which case length and offset
+ * must have the same index type.
+ *
+ * The input column must be sorted in ascending order (not checked), behaviour is undefined if this
+ * is not upheld.
+ *
+ * @param[in] input The input column, must be non-nullable.
+ * @param[in] length The length of the windows.
+ * @param[in] offset The offset of the windows.
+ * @param[in] window_type The type of the windows, indicating which endpoints they contain.
+ * @param[in] only_preceding If true, avoid calculating the `following_window` column.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @returns  A pair of non-nullable INT32 columns for the `preceding_window` and `following_window`
+ * arguments to `rolling_window`. If `only_preceding` is true, then the `following_window` return
+ * value will be a `nullptr`.
+ */
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> windows_from_offset(
+  column_view const& input,
+  scalar const& length,
+  scalar const& offset,
+  window_type const window_type,
+  bool const only_preceding,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
