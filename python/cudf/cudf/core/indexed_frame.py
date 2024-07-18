@@ -3302,7 +3302,7 @@ class IndexedFrame(Frame):
         )
         return self.ffill(value=value, axis=axis, inplace=inplace, limit=limit)
 
-    def add_prefix(self, prefix):
+    def add_prefix(self, prefix, axis=None):
         """
         Prefix labels with string `prefix`.
 
@@ -3464,6 +3464,7 @@ class IndexedFrame(Frame):
         kind="quicksort",
         na_position="last",
         ignore_index=False,
+        key=None,
     ):
         """Sort by the values along either axis.
 
@@ -3479,6 +3480,14 @@ class IndexedFrame(Frame):
             'first' puts nulls at the beginning, 'last' puts nulls at the end
         ignore_index : bool, default False
             If True, index will not be sorted.
+        key : callable, optional
+            Apply the key function to the values
+            before sorting. This is similar to the `key` argument in the
+            builtin :meth:`sorted` function, with the notable difference that
+            this `key` function should be *vectorized*. It should expect a
+            ``Series`` and return a Series with the same shape as the input.
+            It will be applied to each column in `by` independently.
+            Currently not supported.
 
         Returns
         -------
@@ -3518,6 +3527,8 @@ class IndexedFrame(Frame):
             )
         if axis != 0:
             raise NotImplementedError("`axis` not currently implemented.")
+        if key is not None:
+            raise NotImplementedError("key is not currently supported.")
 
         if len(self) == 0:
             return self

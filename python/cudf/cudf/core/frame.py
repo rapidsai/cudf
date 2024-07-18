@@ -389,7 +389,7 @@ class Frame(BinaryOperand, Scannable):
         return self.to_numpy()
 
     @_performance_tracking
-    def __array__(self, dtype=None):
+    def __array__(self, dtype=None, copy=None):
         raise TypeError(
             "Implicit conversion to a host NumPy array via __array__ is not "
             "allowed, To explicitly construct a GPU matrix, consider using "
