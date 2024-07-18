@@ -32,8 +32,6 @@ from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
-    is_bool_dtype,
-    is_datetime_dtype,
     is_dict_like,
     is_dtype_equal,
     is_list_like,
@@ -172,7 +170,7 @@ class _DataFrameIndexer(_FrameIndexer):
             ):
                 return False
             else:
-                if is_bool_dtype(as_column(arg[0]).dtype) and not isinstance(
+                if as_column(arg[0]).dtype.kind == "b" and not isinstance(
                     arg[1], slice
                 ):
                     return True
@@ -321,7 +319,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     tmp_arg[1],
                 )
 
-                if is_bool_dtype(tmp_arg[0].dtype):
+                if tmp_arg[0].dtype.kind == "b":
                     df = columns_df._apply_boolean_mask(
                         BooleanMask(tmp_arg[0], len(columns_df))
                     )
@@ -430,7 +428,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
             else:
                 value = cupy.asarray(value)
-                if cupy.ndim(value) == 2:
+                if value.ndim == 2:
                     # If the inner dimension is 1, it's broadcastable to
                     # all columns of the dataframe.
                     indexed_shape = columns_df.loc[key[0]].shape
@@ -567,7 +565,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             # TODO: consolidate code path with identical counterpart
             # in `_DataFrameLocIndexer._setitem_tuple_arg`
             value = cupy.asarray(value)
-            if cupy.ndim(value) == 2:
+            if value.ndim == 2:
                 indexed_shape = columns_df.iloc[key[0]].shape
                 if value.shape[1] == 1:
                     if value.shape[0] != indexed_shape[0]:
@@ -2200,8 +2198,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         orient = orient.lower()
         if orient == "index":
-            if len(data) > 0 and isinstance(
-                next(iter(data.values())), (cudf.Series, cupy.ndarray)
+            if isinstance(
+                next(iter(data.values()), None), (cudf.Series, cupy.ndarray)
             ):
                 result = cls(data).T
                 result.columns = (
@@ -3593,15 +3591,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             if level is not None and isinstance(self.index, MultiIndex):
                 level = self.index._get_level_label(level)
-                out_index = self.index.copy(deep=copy)
-                level_values = out_index.get_level_values(level)
-                level_values.to_frame().replace(
+                level_values = self.index.get_level_values(level)
+                ca = self.index._data.copy(deep=copy)
+                ca[level] = level_values._column.find_and_replace(
                     to_replace=list(index.keys()),
-                    value=list(index.values()),
-                    inplace=True,
+                    replacement=list(index.values()),
                 )
-                out_index._data[level] = column.as_column(level_values)
-                out_index._compute_levels_and_codes()
+                out_index = type(self.index)._from_data(
+                    ca, name=self.index.name
+                )
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())
@@ -3679,8 +3677,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         dtypes = [self[col].dtype for col in self._column_names]
         common_dtype = find_common_type(dtypes)
-        if not is_bool_dtype(common_dtype) and any(
-            is_bool_dtype(dtype) for dtype in dtypes
+        if common_dtype.kind != "b" and any(
+            dtype.kind == "b" for dtype in dtypes
         ):
             raise MixedTypeError("Cannot create a column with mixed types")
 
@@ -5699,7 +5697,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @classmethod
     @_performance_tracking
-    def _from_arrays(cls, data, index=None, columns=None, nan_as_null=False):
+    def _from_arrays(
+        cls,
+        data: np.ndarray | cupy.ndarray,
+        index=None,
+        columns=None,
+        nan_as_null=False,
+    ):
         """Convert a numpy/cupy array to DataFrame.
 
         Parameters
@@ -5717,8 +5721,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
         """
-
-        data = cupy.asarray(data)
         if data.ndim != 1 and data.ndim != 2:
             raise ValueError(
                 f"records dimension expected 1 or 2 but found: {data.ndim}"
@@ -6113,7 +6115,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             filtered = self.copy(deep=False)
 
-        is_pure_dt = all(is_datetime_dtype(dt) for dt in filtered.dtypes)
+        is_pure_dt = all(dt.kind == "M" for dt in filtered.dtypes)
 
         common_dtype = find_common_type(filtered.dtypes)
         if (
@@ -6302,8 +6304,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     and any(
                         not is_object_dtype(dtype) for dtype in source_dtypes
                     )
-                    or not is_bool_dtype(common_dtype)
-                    and any(is_bool_dtype(dtype) for dtype in source_dtypes)
+                    or common_dtype.kind != "b"
+                    and any(dtype.kind == "b" for dtype in source_dtypes)
                 ):
                     raise TypeError(
                         "Columns must all have the same dtype to "
@@ -6510,7 +6512,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         cudf.utils.dtypes.get_min_float_dtype(
                             prepared._data[col]
                         )
-                        if not is_datetime_dtype(common_dtype)
+                        if common_dtype.kind != "M"
                         else cudf.dtype("float64")
                     )
                     .fillna(np.nan)
@@ -6537,7 +6539,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             result_dtype = (
                 common_dtype
                 if method in type_coerced_methods
-                or is_datetime_dtype(common_dtype)
+                or (common_dtype is not None and common_dtype.kind == "M")
                 else None
             )
             result = column.as_column(result, dtype=result_dtype)
@@ -7058,12 +7060,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # Assemble the final index
         new_index_columns = [*repeated_index._columns, *tiled_index]
         index_names = [*self.index.names, *unique_named_levels.names]
-        new_index = MultiIndex.from_frame(
-            DataFrame._from_data(
-                dict(zip(range(0, len(new_index_columns)), new_index_columns))
-            ),
-            names=index_names,
-        )
+        new_index = MultiIndex._from_data(dict(enumerate(new_index_columns)))
+        new_index.names = index_names
 
         # Compute the column indices that serves as the input for
         # `interleave_columns`
@@ -7849,7 +7847,26 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return result
 
 
-def from_dataframe(df, allow_copy=False):
+def from_dataframe(df, allow_copy: bool = False) -> DataFrame:
+    """
+    Build a :class:`DataFrame` from an object supporting the dataframe interchange protocol.
+
+    .. note::
+
+        If you have a ``pandas.DataFrame``, use :func:`from_pandas` instead.
+
+    Parameters
+    ----------
+    df : DataFrameXchg
+        Object supporting the interchange protocol, i.e. ``__dataframe__`` method.
+    allow_copy : bool, default: True
+        Whether to allow copying the memory to perform the conversion
+        (if false then zero-copy approach is requested).
+
+    Returns
+    -------
+    :class:`DataFrame`
+    """
     return df_protocol.from_dataframe(df, allow_copy=allow_copy)
 
 

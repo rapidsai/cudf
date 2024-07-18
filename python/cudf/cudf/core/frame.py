@@ -1189,7 +1189,7 @@ class Frame(BinaryOperand, Scannable):
         side: Literal["left", "right"] = "left",
         ascending: bool = True,
         na_position: Literal["first", "last"] = "last",
-    ):
+    ) -> ScalarLike | cupy.ndarray:
         """Find indices where elements should be inserted to maintain order
 
         Parameters
@@ -1527,7 +1527,7 @@ class Frame(BinaryOperand, Scannable):
     @acquire_spill_lock()
     def _apply_cupy_ufunc_to_operands(
         self, ufunc, cupy_func, operands, **kwargs
-    ):
+    ) -> list[dict[Any, ColumnBase]]:
         # Note: There are some operations that may be supported by libcudf but
         # are not supported by pandas APIs. In particular, libcudf binary
         # operations support logical and/or operations as well as
@@ -1538,7 +1538,7 @@ class Frame(BinaryOperand, Scannable):
         # without cupy.
 
         mask = None
-        data = [{} for _ in range(ufunc.nout)]
+        data: list[dict[Any, ColumnBase]] = [{} for _ in range(ufunc.nout)]
         for name, (left, right, _, _) in operands.items():
             cupy_inputs = []
             for inp in (left, right) if ufunc.nin == 2 else (left,):

@@ -41,7 +41,6 @@ from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_pandas_nullable_extension_dtype,
     infer_dtype,
-    is_bool_dtype,
     is_dtype_equal,
     is_scalar,
     is_string_dtype,
@@ -275,7 +274,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return libcudf.reduce.reduce("any", self, dtype=np.bool_)
 
     def dropna(self) -> Self:
-        return drop_nulls([self])[0]._with_type_metadata(self.dtype)
+        if self.has_nulls():
+            return drop_nulls([self])[0]._with_type_metadata(self.dtype)
+        else:
+            return self.copy()
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -619,7 +621,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         key: cudf.core.column.NumericalColumn,
         value: cudf.core.scalar.Scalar | ColumnBase,
     ) -> Self:
-        if is_bool_dtype(key.dtype):
+        if key.dtype.kind == "b":
             # `key` is boolean mask
             if len(key) != len(self):
                 raise ValueError(
@@ -644,7 +646,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         self._check_scatter_key_length(num_keys, value)
 
-        if is_bool_dtype(key.dtype):
+        if key.dtype.kind == "b":
             return libcudf.copying.boolean_mask_scatter([value], [self], key)[
                 0
             ]._with_type_metadata(self.dtype)
@@ -700,6 +702,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def isnull(self) -> ColumnBase:
         """Identify missing values in a Column."""
+        if not self.has_nulls(include_nan=self.dtype.kind == "f"):
+            return as_column(False, length=len(self))
+
         result = libcudf.unary.is_null(self)
 
         if self.dtype.kind == "f":
@@ -711,6 +716,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column."""
+        if not self.has_nulls(include_nan=self.dtype.kind == "f"):
+            return as_column(True, length=len(self))
+
         result = libcudf.unary.is_valid(self)
 
         if self.dtype.kind == "f":
@@ -721,7 +729,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return result
 
     def indices_of(
-        self, value: ScalarLike | Self
+        self, value: ScalarLike
     ) -> cudf.core.column.NumericalColumn:
         """
         Find locations of value in the column
@@ -735,10 +743,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         -------
         Column of indices that match value
         """
-        if not isinstance(value, ColumnBase):
-            value = as_column([value], dtype=self.dtype)
+        if not is_scalar(value):
+            raise ValueError("value must be a scalar")
         else:
-            assert len(value) == 1
+            value = as_column(value, dtype=self.dtype, length=1)
         mask = libcudf.search.contains(value, self)
         return apply_boolean_mask(
             [as_column(range(0, len(self)), dtype=size_type_dtype)], mask
@@ -923,15 +931,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @property
     def is_unique(self) -> bool:
+        # distinct_count might already be cached
         return self.distinct_count(dropna=False) == len(self)
 
-    @property
+    @cached_property
     def is_monotonic_increasing(self) -> bool:
         return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [True], None
         )
 
-    @property
+    @cached_property
     def is_monotonic_decreasing(self) -> bool:
         return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [False], None
@@ -942,6 +951,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         ascending: bool = True,
         na_position: str = "last",
     ) -> ColumnBase:
+        if (not ascending and self.is_monotonic_decreasing) or (
+            ascending and self.is_monotonic_increasing
+        ):
+            return self.copy()
         return libcudf.sort.sort(
             [self], column_order=[ascending], null_precedence=[na_position]
         )[0]
@@ -1003,7 +1016,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                         f"Casting to {dtype} is not supported, use "
                         "`.astype('str')` instead."
                     )
-                result = self.as_string_column(dtype)
+                result = self.as_string_column()
             else:
                 result = self.as_numerical_column(dtype)
 
@@ -1059,8 +1072,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         raise NotImplementedError
 
     def as_datetime_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.DatetimeColumn":
+        self, dtype: Dtype
+    ) -> cudf.core.column.DatetimeColumn:
         raise NotImplementedError
 
     def as_interval_column(
@@ -1069,13 +1082,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         raise NotImplementedError
 
     def as_timedelta_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.TimeDeltaColumn":
+        self, dtype: Dtype
+    ) -> cudf.core.column.TimeDeltaColumn:
         raise NotImplementedError
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
+    def as_string_column(self) -> cudf.core.column.StringColumn:
         raise NotImplementedError
 
     def as_decimal_column(
@@ -1085,7 +1096,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
         mask = as_column(mask)
-        if not is_bool_dtype(mask.dtype):
+        if mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
         return apply_boolean_mask([self], mask)[0]._with_type_metadata(
@@ -1093,11 +1104,22 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         )
 
     def argsort(
-        self, ascending: bool = True, na_position: str = "last"
-    ) -> "cudf.core.column.NumericalColumn":
-        return libcudf.sort.order_by(
-            [self], [ascending], na_position, stable=True
-        )
+        self,
+        ascending: bool = True,
+        na_position: Literal["first", "last"] = "last",
+    ) -> cudf.core.column.NumericalColumn:
+        if (ascending and self.is_monotonic_increasing) or (
+            not ascending and self.is_monotonic_decreasing
+        ):
+            return as_column(range(len(self)))
+        elif (ascending and self.is_monotonic_decreasing) or (
+            not ascending and self.is_monotonic_increasing
+        ):
+            return as_column(range(len(self) - 1, -1, -1))
+        else:
+            return libcudf.sort.order_by(
+                [self], [ascending], na_position, stable=True
+            )
 
     def __arrow_array__(self, type=None):
         raise TypeError(
@@ -1160,9 +1182,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         Get unique values in the data
         """
-        return drop_duplicates([self], keep="first")[0]._with_type_metadata(
-            self.dtype
-        )
+        if self.is_unique:
+            return self.copy()
+        else:
+            return drop_duplicates([self], keep="first")[
+                0
+            ]._with_type_metadata(self.dtype)
 
     def serialize(self) -> tuple[dict, list]:
         # data model:
