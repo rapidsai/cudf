@@ -47,7 +47,7 @@ build_example() {
   build_dir="${example_dir}/build"
 
   # Configure
-  cmake -S ${example_dir} -B ${build_dir} -Dcudf_ROOT="${LIB_BUILD_DIR}" -DCMAKE_BUILD_TYPE=Debug
+  cmake -S ${example_dir} -B ${build_dir} -Dcudf_ROOT="${LIB_BUILD_DIR}"
   # Build
   cmake --build ${build_dir} -j${PARALLEL_LEVEL}
   # Install if needed
