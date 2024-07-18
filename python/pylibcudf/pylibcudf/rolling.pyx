@@ -1,22 +1,28 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
+from libcpp.utility cimport move, pair
+
 from pylibcudf.libcudf cimport rolling as cpp_rolling
 from pylibcudf.libcudf.aggregation cimport rolling_aggregation
 from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.rolling cimport window_type
 from pylibcudf.libcudf.types cimport size_type
 
 from .aggregation cimport Aggregation
 from .column cimport Column
+from .scalar cimport Scalar
+
+from pylibcudf.libcudf.rolling import window_type as WindowType  # no-cython-lint, isort: skip
 
 __all__ = ["rolling_window"]
 
 cpdef Column rolling_window(
     Column source,
-    WindowType preceding_window,
-    WindowType following_window,
+    WindowArg preceding_window,
+    WindowArg following_window,
     size_type min_periods,
     Aggregation agg,
 ):
@@ -48,7 +54,7 @@ cpdef Column rolling_window(
     # TODO: Consider making all the conversion functions nogil functions that
     # reclaim the GIL internally for just the necessary scope like column.view()
     cdef const rolling_aggregation *c_agg = agg.view_underlying_as_rolling()
-    if WindowType is Column:
+    if WindowArg is Column:
         with nogil:
             result = cpp_rolling.rolling_window(
                 source.view(),
@@ -68,3 +74,28 @@ cpdef Column rolling_window(
             )
 
     return Column.from_libcudf(move(result))
+
+
+cpdef tuple[Column, Column] windows_from_offset(
+    Column input,
+    Scalar length,
+    Scalar offset,
+    window_type typ,
+    bool only_preceding,
+):
+    cdef pair[unique_ptr[column], unique_ptr[column]] result
+    with nogil:
+        result = cpp_rolling.windows_from_offset(
+            input.view(),
+            dereference(length.c_obj),
+            dereference(offset.c_obj),
+            typ,
+            only_preceding,
+        )
+    if only_preceding:
+        return (Column.from_libcudf(move(result.first)), None)
+    else:
+        return (
+            Column.from_libcudf(move(result.first)),
+            Column.from_libcudf(move(result.second)),
+        )
