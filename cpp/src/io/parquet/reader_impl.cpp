@@ -551,8 +551,8 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
 
   // no work to do (this can happen on the first pass if we have no rows to read)
   if (!has_more_work()) {
-    // Compute number of rows per source if no AST filters
-    if (not _expr_conv.get_converted_expr().has_value()) {
+    // Check if number of rows per source should be included in output metadata.
+    if (include_output_num_rows_per_source()) {
       // Empty dataframe case: Simply initialize to a list of zeros
       out_metadata.num_rows_per_source =
         std::vector<size_t>(_file_itm_data.num_rows_per_source.size(), 0);
@@ -596,8 +596,8 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
     }
   }
 
-  // Compute number of rows per source if no AST filters
-  if (not _expr_conv.get_converted_expr().has_value()) {
+  // Check if number of rows per source should be included in output metadata.
+  if (include_output_num_rows_per_source()) {
     // For chunked reading, compute the output number of rows per source
     if (mode == read_mode::CHUNKED_READ) {
       out_metadata.num_rows_per_source =
@@ -605,7 +605,7 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
     }
     // Simply move the number of rows per file if reading all at once
     else {
-      // Move is okay here we are reading in one go.
+      // Move is okay here as we are reading in one go.
       out_metadata.num_rows_per_source = std::move(_file_itm_data.num_rows_per_source);
     }
   }

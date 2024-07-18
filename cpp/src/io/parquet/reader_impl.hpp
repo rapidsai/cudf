@@ -349,6 +349,16 @@ class reader::impl {
   }
 
   /**
+   * @brief Check if number of rows per source should be included in output metadata.
+   *
+   * @return True if AST filter is not present
+   */
+  [[nodiscard]] bool include_output_num_rows_per_source() const
+  {
+    return not _expr_conv.get_converted_expr().has_value();
+  }
+
+  /**
    * @brief Calculate the number of rows read from each source in the output chunk
    *
    * @param chunk_start_row The offset of the first row in the output chunk
