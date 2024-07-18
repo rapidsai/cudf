@@ -1588,7 +1588,7 @@ class Frame(BinaryOperand, Scannable):
         return self._unaryop("abs")
 
     def __bool__(self):
-        raise TypeError(
+        raise ValueError(
             f"The truth value of a {type(self).__name__} is ambiguous. Use "
             "a.empty, a.bool(), a.item(), a.any() or a.all()."
         )

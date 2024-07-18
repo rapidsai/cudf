@@ -2164,5 +2164,9 @@ def test_nunique(array, dropna):
 
 
 def test_bool_raises():
-    with pytest.raises(TypeError):
-        bool(cudf.MultiIndex.from_arrays([range(1)]))
+    assert_exceptions_equal(
+        lfunc=bool,
+        rfunc=bool,
+        lfunc_args_and_kwargs=[[cudf.MultiIndex.from_arrays([range(1)])]],
+        rfunc_args_and_kwargs=[[pd.MultiIndex.from_arrays([range(1)])]],
+    )

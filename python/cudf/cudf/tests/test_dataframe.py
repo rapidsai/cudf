@@ -11103,5 +11103,9 @@ def test_from_records_with_index_no_shallow_copy():
 
 
 def test_bool_raises():
-    with pytest.raises(TypeError):
-        bool(cudf.DataFrame())
+    assert_exceptions_equal(
+        lfunc=bool,
+        rfunc=bool,
+        lfunc_args_and_kwargs=[[cudf.DataFrame()]],
+        rfunc_args_and_kwargs=[[pd.DataFrame()]],
+    )
