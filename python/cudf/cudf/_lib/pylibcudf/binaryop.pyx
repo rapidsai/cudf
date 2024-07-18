@@ -95,7 +95,7 @@ cpdef bool is_supported_operation(
 ):
     """Check if an operation is supported for the given data types.
 
-    For details, see :cpp:func:`cudf::binops::is_supported_operation`.
+    For details, see :cpp:func::is_supported_operation`.
 
     Parameters
     ----------
