@@ -506,7 +506,7 @@ void get_data_types_from_column_names(std::map<std::string, data_type> const& us
 }
 
 void infer_column_types(parse_options const& parse_opts,
-                        cudf::detail::host_vector<column_parse::flags> const& column_flags,
+                        host_span<column_parse::flags const> column_flags,
                         device_span<char const> data,
                         device_span<uint64_t const> row_offsets,
                         int32_t num_records,
@@ -630,7 +630,7 @@ cudf::detail::host_vector<data_type> determine_column_types(
   device_span<char const> data,
   device_span<uint64_t const> row_offsets,
   int32_t num_records,
-  cudf::detail::host_vector<column_parse::flags>& column_flags,
+  host_span<column_parse::flags> column_flags,
   cudf::size_type num_active_columns,
   rmm::cuda_stream_view stream)
 {

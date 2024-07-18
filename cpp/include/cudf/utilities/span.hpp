@@ -218,10 +218,6 @@ template <typename T, typename Alloc>
 struct is_host_span_supported_container<  //
   thrust::host_vector<T, Alloc>> : std::true_type {};
 
-template <typename T>
-struct is_host_span_supported_container<  //
-  cudf::detail::host_vector<T>> : std::true_type {};
-
 template <typename T, typename Alloc>
 struct is_host_span_supported_container<  //
   std::basic_string<T, std::char_traits<T>, Alloc>> : std::true_type {};
@@ -263,6 +259,26 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   {
   }
 
+  /// Constructor from a host_vector
+  /// @param in The host_vector to construct the span from
+  template <typename OtherT,
+            // Only supported containers of types convertible to T
+            std::enable_if_t<std::is_convertible_v<OtherT (*)[], T (*)[]>>* = nullptr>
+  constexpr host_span(cudf::detail::host_vector<OtherT>& in)
+    : base(in.data(), in.size()), _is_device_accessible{in.get_allocator().is_device_accessible()}
+  {
+  }
+
+  /// Constructor from a const host_vector
+  /// @param in The host_vector to construct the span from
+  template <typename OtherT,
+            // Only supported containers of types convertible to T
+            std::enable_if_t<std::is_convertible_v<OtherT (*)[], T (*)[]>>* = nullptr>
+  constexpr host_span(cudf::detail::host_vector<OtherT> const& in)
+    : base(in.data(), in.size()), _is_device_accessible{in.get_allocator().is_device_accessible()}
+  {
+  }
+
   // Copy construction to support const conversion
   /// @param other The span to copy
   template <typename OtherT,
@@ -274,6 +290,16 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
     : base(other.data(), other.size())
   {
   }
+
+  /**
+   * @brief Returns whether the data is device accessible (e.g. pinned memory)
+   *
+   * @return true if the data is device accessible
+   */
+  [[nodiscard]] bool is_device_accessible() const { return _is_device_accessible; }
+
+ private:
+  bool _is_device_accessible{false};
 };
 
 // ===== device_span ===============================================================================

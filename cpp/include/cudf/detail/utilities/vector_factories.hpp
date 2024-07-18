@@ -100,11 +100,12 @@ rmm::device_uvector<T> make_device_uvector_async(host_span<T const> source_data,
                                                  rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<T> ret(source_data.size(), stream, mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(ret.data(),
-                                source_data.data(),
-                                source_data.size() * sizeof(T),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  auto const is_pinned = source_data.is_device_accessible();
+  cuda_memcpy_async(ret.data(),
+                    source_data.data(),
+                    source_data.size() * sizeof(T),
+                    is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
+                    stream);
   return ret;
 }
 
@@ -179,55 +180,6 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
 {
   return make_device_uvector_async(
     device_span<typename Container::value_type const>{c}, stream, mr);
-}
-
-/**
- * @brief Asynchronously construct a `device_uvector` containing a deep copy of data from a
- * `host_vector`
- *
- * @note This function does not synchronize `stream` after the copy.
- *
- * @tparam T The type of the data to copy
- * @param v The host_vector of data to deep copy
- * @param stream The stream on which to allocate memory and perform the copy
- * @param mr The memory resource to use for allocating the returned device_uvector
- * @return A device_uvector containing the copied data
- */
-template <typename T>
-rmm::device_uvector<T> make_device_uvector_async(host_vector<T> const& v,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::device_async_resource_ref mr)
-{
-  rmm::device_uvector<T> ret(v.size(), stream, mr);
-  auto const is_pinned = v.get_allocator().is_device_accessible();
-  cuda_memcpy_async(ret.data(),
-                    v.data(),
-                    v.size() * sizeof(T),
-                    is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
-                    stream);
-  return ret;
-}
-
-/**
- * @brief Synchronously construct a `device_uvector` containing a deep copy of data from a
- * `host_vector`
- *
- * @note This function synchronizes `stream` after the copy.
- *
- * @tparam T The type of the data to copy
- * @param v The host_vector of data to deep copy
- * @param stream The stream on which to allocate memory and perform the copy
- * @param mr The memory resource to use for allocating the returned device_uvector
- * @return A device_uvector containing the copied data
- */
-template <typename T>
-rmm::device_uvector<T> make_device_uvector_sync(host_vector<T> const& v,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
-{
-  auto ret = make_device_uvector_async(v, stream, mr);
-  stream.synchronize();
-  return ret;
 }
 
 /**
