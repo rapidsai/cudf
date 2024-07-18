@@ -128,8 +128,7 @@ files:
     extras:
       table: project
     includes:
-      - run_common
-      - run_cudf
+      - run_pylibcudf
       - pyarrow_run
   # py_test_pylibcudf:
   #   output: pyproject
@@ -583,6 +582,41 @@ dependencies:
           # TODO: Update `numpy` in `build_python_common` when dropping `<2.0a0`
           - numpy>=1.23,<2.0a0
           - pandas>=2.0,<2.2.3dev0
+  run_pylibcudf:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - nvtx>=0.2.1
+          - packaging
+          - typing_extensions>=4.0.0
+      - output_types: conda
+        packages:
+          - *rmm_conda
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          # This index is needed for rmm.
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [conda, requirements, pyproject]
+        matrices:
+          - matrix: {cuda: "12.*"}
+            packages:
+              - cuda-python>=12.0,<13.0a0
+          - matrix: {cuda: "11.*"}
+            packages: &run_pylibcudf_packages_all_cu11
+              - cuda-python>=11.7.1,<12.0a0
+          - {matrix: null, packages: *run_pylibcudf_packages_all_cu11}
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix: {cuda: "12.*"}
+            packages:
+              - rmm-cu12==24.8.*,>=0.0.0a0
+          - matrix: {cuda: "11.*"}
+            packages:
+              - rmm-cu11==24.8.*,>=0.0.0a0
+          - {matrix: null, packages: [*rmm_conda]}
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
