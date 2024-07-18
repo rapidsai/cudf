@@ -9,11 +9,7 @@ import numpy as np
 import cudf
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.dtypes import CategoricalDtype
-from cudf.utils.dtypes import (
-    _can_cast,
-    find_common_type,
-    is_mixed_with_object_dtype,
-)
+from cudf.utils.dtypes import find_common_type, is_mixed_with_object_dtype
 
 if TYPE_CHECKING:
     from cudf._typing import ScalarLike
@@ -85,17 +81,9 @@ def _check_and_cast_columns_with_other(
             )
         return _normalize_categorical(source_col, other.astype(source_dtype))
 
-    if (
-        _is_non_decimal_numeric_dtype(source_dtype)
-        and not other_is_scalar  # can-cast fails for Python scalars
-        and _can_cast(other, source_dtype)
-    ):
-        common_dtype = source_dtype
-    elif (
-        isinstance(source_col, cudf.core.column.NumericalColumn)
-        and other_is_scalar
-        and as_column(other, length=1).can_cast_safely(source_dtype)
-    ):
+    if _is_non_decimal_numeric_dtype(source_dtype) and as_column(
+        other
+    ).can_cast_safely(source_dtype):
         common_dtype = source_dtype
     else:
         common_dtype = find_common_type(
@@ -131,3 +119,58 @@ def _make_categorical_like(result, column):
             ordered=column.ordered,
         )
     return result
+
+
+def _can_cast(from_dtype, to_dtype):
+    """
+    Utility function to determine if we can cast
+    from `from_dtype` to `to_dtype`. This function primarily calls
+    `np.can_cast` but with some special handling around
+    cudf specific dtypes.
+    """
+    if cudf.utils.utils.is_na_like(from_dtype):
+        return True
+    if isinstance(from_dtype, type):
+        from_dtype = cudf.dtype(from_dtype)
+    if isinstance(to_dtype, type):
+        to_dtype = cudf.dtype(to_dtype)
+
+    # TODO : Add precision & scale checking for
+    # decimal types in future
+
+    if isinstance(from_dtype, cudf.core.dtypes.DecimalDtype):
+        if isinstance(to_dtype, cudf.core.dtypes.DecimalDtype):
+            return True
+        elif isinstance(to_dtype, np.dtype):
+            if to_dtype.kind in {"i", "f", "u", "U", "O"}:
+                return True
+            else:
+                return False
+    elif isinstance(from_dtype, np.dtype):
+        if isinstance(to_dtype, np.dtype):
+            return np.can_cast(from_dtype, to_dtype)
+        elif isinstance(to_dtype, cudf.core.dtypes.DecimalDtype):
+            if from_dtype.kind in {"i", "f", "u", "U", "O"}:
+                return True
+            else:
+                return False
+        elif isinstance(to_dtype, cudf.core.types.CategoricalDtype):
+            return True
+        else:
+            return False
+    elif isinstance(from_dtype, cudf.core.dtypes.ListDtype):
+        # TODO: Add level based checks too once casting of
+        # list columns is supported
+        if isinstance(to_dtype, cudf.core.dtypes.ListDtype):
+            return np.can_cast(from_dtype.leaf_type, to_dtype.leaf_type)
+        else:
+            return False
+    elif isinstance(from_dtype, cudf.core.dtypes.CategoricalDtype):
+        if isinstance(to_dtype, cudf.core.dtypes.CategoricalDtype):
+            return True
+        elif isinstance(to_dtype, np.dtype):
+            return np.can_cast(from_dtype._categories.dtype, to_dtype)
+        else:
+            return False
+    else:
+        return np.can_cast(from_dtype, to_dtype)
