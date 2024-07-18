@@ -322,10 +322,6 @@ def can_convert_to_column(obj):
     return is_column_like(obj) or cudf.api.types.is_list_like(obj)
 
 
-def min_scalar_type(a, min_size=8):
-    return min_signed_type(a, min_size=min_size)
-
-
 def min_signed_type(x: int, min_size: int = 8) -> np.dtype:
     """
     Return the smallest *signed* integer dtype

@@ -83,7 +83,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
     find_common_type,
     is_column_like,
-    min_scalar_type,
+    min_signed_type,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin, _external_only_api
@@ -8291,7 +8291,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             )._column.unique()
             # Set the column dtype to the codes' dtype. The categories
             # will be re-assigned at the end
-            dtypes[idx] = min_scalar_type(len(categories[idx]))
+            dtypes[idx] = min_signed_type(len(categories[idx]))
         # Otherwise raise an error if columns have different dtypes
         elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
             raise ValueError("All columns must be the same type")
