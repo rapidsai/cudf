@@ -66,18 +66,21 @@ cdef class ChunkedParquetReader:
         The names of the columns to be read
     row_groups : list[list[size_type]], default None
         List of row groups to be read.
-    filters : Expression, default None
-        An AST :py:class:`cudf._lib.pylibcudf.expression.Expression`
-        to use for predicate pushdown.
-    convert_strings_to_categories : bool, default False
-        Whether to convert string columns to the category type
     use_pandas_metadata : bool, default True
         If True, return metadata about the index column in
         the per-file user metadata of the ``TableWithMetadata``
+    convert_strings_to_categories : bool, default False
+        Whether to convert string columns to the category type
     skip_rows : int64_t, default 0
         The number of rows to skip from the start of the file.
     num_rows : size_type, default -1
         The number of rows to read. By default, read the entire file.
+    chunk_read_limit : size_t, default 0
+        Limit on total number of bytes to be returned per read,
+        or 0 if there is no limit.
+    pass_read_limit : size_t, default 1024000000
+        Limit on the amount of memory used for reading and decompressing data
+        or 0 if there is no limit.
     """
     def __init__(
         self,
@@ -166,7 +169,7 @@ cpdef read_parquet(
     row_groups : list[list[size_type]], default None
         List of row groups to be read.
     filters : Expression, default None
-        An AST :py:class:`cudf._lib.pylibcudf.expression.Expression`
+        An AST :py:class:`cudf._lib.pylibcudf.expressions.Expression`
         to use for predicate pushdown.
     convert_strings_to_categories : bool, default False
         Whether to convert string columns to the category type
