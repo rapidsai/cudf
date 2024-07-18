@@ -29,6 +29,7 @@
 
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
+#include <thrust/functional.h>
 
 #include <memory>
 #include <utility>
@@ -50,27 +51,27 @@ struct op_impl {};
 
 template <which Which>
 struct op_impl<Which, window_type::LEFT_CLOSED> {
-  using type = std::less<>;
+  using type = thrust::less<>;
 };
 template <which Which>
 struct op_impl<Which, window_type::RIGHT_CLOSED> {
-  using type = std::less_equal<>;
+  using type = thrust::less_equal<>;
 };
 template <>
 struct op_impl<which::PRECEDING, window_type::OPEN> {
-  using type = std::less_equal<>;
+  using type = thrust::less_equal<>;
 };
 template <>
 struct op_impl<which::FOLLOWING, window_type::OPEN> {
-  using type = std::less<>;
+  using type = thrust::less<>;
 };
 template <>
 struct op_impl<which::PRECEDING, window_type::CLOSED> {
-  using type = std::less<>;
+  using type = thrust::less<>;
 };
 template <>
 struct op_impl<which::FOLLOWING, window_type::CLOSED> {
-  using type = std::less_equal<>;
+  using type = thrust::less_equal<>;
 };
 template <which Which, window_type WindowType>
 using op_t = typename op_impl<Which, WindowType>::type;
