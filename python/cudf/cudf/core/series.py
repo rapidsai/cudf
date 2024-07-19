@@ -2084,7 +2084,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             this ``key`` function should be *vectorized*. It should expect a
             ``Series`` and return a Series with the same shape as the input.
             It will be applied to each column in `by` independently.
-            Current not supported.
+            Currently not supported.
 
         Returns
         -------
