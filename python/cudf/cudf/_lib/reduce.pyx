@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+import warnings
 
 import cudf
 from cudf.core.buffer import acquire_spill_lock
@@ -26,11 +27,15 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
         A numpy data type to use for the output, defaults
         to the same type as the input column
     """
-
-    col_dtype = (
-        dtype if dtype is not None
-        else incol._reduction_result_dtype(reduction_op)
-    )
+    if dtype is not None:
+        warnings.warn(
+            "dtype is deprecated and will be remove in a future release. "
+            "Cast the result (e.g. .astype) after the operation instead.",
+            FutureWarning
+        )
+        col_dtype = dtype
+    else:
+        col_dtype = incol._reduction_result_dtype(reduction_op)
 
     # check empty case
     if len(incol) <= incol.null_count:

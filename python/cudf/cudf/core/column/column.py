@@ -71,7 +71,7 @@ from cudf.utils.dtypes import (
     get_time_unit,
     is_column_like,
     is_mixed_with_object_dtype,
-    min_scalar_type,
+    min_signed_type,
     min_unsigned_type,
 )
 from cudf.utils.utils import _array_ufunc, mask_dtype
@@ -261,7 +261,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.null_count == self.size:
             return True
 
-        return libcudf.reduce.reduce("all", self, dtype=np.bool_)
+        return libcudf.reduce.reduce("all", self)
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
@@ -271,7 +271,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         elif skipna and self.null_count == self.size:
             return False
 
-        return libcudf.reduce.reduce("any", self, dtype=np.bool_)
+        return libcudf.reduce.reduce("any", self)
 
     def dropna(self) -> Self:
         if self.has_nulls():
@@ -1305,7 +1305,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             skipna=skipna, min_count=min_count
         )
         if isinstance(preprocessed, ColumnBase):
-            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
+            dtype = kwargs.pop("dtype", None)
+            return libcudf.reduce.reduce(
+                op, preprocessed, dtype=dtype, **kwargs
+            )
         return preprocessed
 
     def _process_for_reduction(
@@ -1336,6 +1339,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         Determine the correct dtype to pass to libcudf based on
         the input dtype, data dtype, and specific reduction op
         """
+        if reduction_op in {"any", "all"}:
+            return np.dtype(np.bool_)
         return self.dtype
 
     def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
@@ -1351,7 +1356,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         self,
         cats: ColumnBase,
         dtype: Dtype | None = None,
-        na_sentinel: ScalarLike | None = None,
+        na_sentinel: cudf.Scalar | None = None,
     ):
         """
         Convert each value in `self` into an integer code, with `cats`
@@ -1391,7 +1396,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return as_column(na_sentinel, dtype=dtype, length=len(self))
 
         if dtype is None:
-            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
+            dtype = min_signed_type(max(len(cats), na_sentinel.value), 8)
 
         if is_mixed_with_object_dtype(self, cats):
             return _return_sentinel_column()

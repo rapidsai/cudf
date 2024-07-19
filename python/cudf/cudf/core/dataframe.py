@@ -83,8 +83,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
     find_common_type,
     is_column_like,
-    min_scalar_type,
-    numeric_normalize_types,
+    min_signed_type,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin, _external_only_api
@@ -102,20 +101,6 @@ _cupy_nan_methods_map = {
     "std": "nanstd",
     "var": "nanvar",
 }
-
-_numeric_reduction_ops = (
-    "mean",
-    "min",
-    "max",
-    "sum",
-    "product",
-    "prod",
-    "std",
-    "var",
-    "kurtosis",
-    "kurt",
-    "skew",
-)
 
 
 def _shape_mismatch_error(x, y):
@@ -923,7 +908,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             final_index = ensure_index(index)
 
         series_lengths = list(map(len, data))
-        data = numeric_normalize_types(*data)
+        common_dtype = find_common_type([obj.dtype for obj in data])
+        data = [obj.astype(common_dtype) for obj in data]
         if series_lengths.count(series_lengths[0]) == len(series_lengths):
             # Calculating the final dataframe columns by
             # getting union of all `index` of the Series objects.
@@ -4306,7 +4292,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         as_index=True,
         sort=no_default,
         group_keys=False,
-        squeeze=False,
         observed=True,
         dropna=True,
     ):
@@ -4317,7 +4302,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             as_index,
             sort,
             group_keys,
-            squeeze,
             observed,
             dropna,
         )
@@ -8306,7 +8290,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             )._column.unique()
             # Set the column dtype to the codes' dtype. The categories
             # will be re-assigned at the end
-            dtypes[idx] = min_scalar_type(len(categories[idx]))
+            dtypes[idx] = min_signed_type(len(categories[idx]))
         # Otherwise raise an error if columns have different dtypes
         elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
             raise ValueError("All columns must be the same type")
