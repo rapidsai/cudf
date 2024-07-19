@@ -91,12 +91,6 @@ class SingleColumnFrame(Frame, NotIterable):
         """Get a tuple representing the dimensionality of the Index."""
         return (len(self),)
 
-    def __bool__(self):
-        raise TypeError(
-            f"The truth value of a {type(self)} is ambiguous. Use "
-            "a.empty, a.bool(), a.item(), a.any() or a.all()."
-        )
-
     @property  # type: ignore
     @_performance_tracking
     def _num_columns(self) -> int:
