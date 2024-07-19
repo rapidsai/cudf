@@ -274,7 +274,6 @@ class Scan(IR):
 
             # polars skips blank lines at the beginning of the file
             pieces = []
-            colnames = None
             for p in self.paths:
                 skiprows = self.reader_options["skip_rows"]
                 path = Path(p)
@@ -298,14 +297,14 @@ class Scan(IR):
                     dtypes=self.schema,
                 )
                 pieces.append(tbl_w_meta)
-            tbls, colnames = zip(
+            tables, colnames = zip(
                 *(
                     (piece.tbl, piece.column_names(include_children=False))
                     for piece in pieces
                 )
             )
             df = DataFrame.from_table(
-                plc.concatenate.concatenate(list(tbls)),
+                plc.concatenate.concatenate(list(tables)),
                 colnames[0],
             )
         elif self.typ == "parquet":

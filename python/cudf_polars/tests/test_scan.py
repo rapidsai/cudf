@@ -8,7 +8,6 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.callback import execute_with_cudf
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -132,14 +131,26 @@ def test_scan_csv_column_renames_projection_schema(tmp_path):
     assert_gpu_result_equal(q)
 
 
-@pytest.mark.parametrize("filename", [["test1.csv", "test2.csv"], "test*.csv"])
-def test_scan_csv_multi(tmp_path, filename):
+@pytest.mark.parametrize(
+    "filename,glob",
+    [
+        (["test1.csv", "test2.csv"], True),
+        ("test*.csv", True),
+        # Make sure we don't expand glob when
+        # trying to read a file like test*.csv
+        # when glob=False
+        ("test*.csv", False),
+    ],
+)
+def test_scan_csv_multi(tmp_path, filename, glob):
     with (tmp_path / "test1.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2\n3,4,5""")
     with (tmp_path / "test2.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2\n3,4,5""")
+    with (tmp_path / "test*.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2\n3,4,5""")
     os.chdir(tmp_path)
-    q = pl.scan_csv(filename)
+    q = pl.scan_csv(filename, glob=glob)
 
     assert_gpu_result_equal(q)
 
@@ -153,7 +164,7 @@ def test_scan_csv_multi_differing_colnames(tmp_path):
         [tmp_path / "test1.csv", tmp_path / "test2.csv"],
     )
     with pytest.raises(pl.exceptions.ComputeError):
-        q.collect(post_opt_callback=execute_with_cudf)
+        q.explain()
 
 
 def test_scan_csv_skip_after_header_not_implemented(tmp_path):
