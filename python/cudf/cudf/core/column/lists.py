@@ -73,10 +73,15 @@ class ListColumn(ColumnBase):
             child0_size = (
                 current_base_child.size + 1 - current_offset
             ) * current_base_child.base_children[0].dtype.itemsize
-            current_offset = current_base_child.base_children[
-                0
-            ].element_indexing(current_offset)
             n += child0_size
+            current_offset_col = current_base_child.base_children[0]
+            if not len(current_offset_col):
+                # See https://github.com/rapidsai/cudf/issues/16164 why
+                # offset column can be uninitialized
+                break
+            current_offset = current_offset_col.element_indexing(
+                current_offset
+            )
             current_base_child = current_base_child.base_children[1]
 
         n += (
@@ -248,15 +253,11 @@ class ListColumn(ColumnBase):
         )
         return res
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
+    def as_string_column(self) -> cudf.core.column.StringColumn:
         """
         Create a strings column from a list column
         """
-        lc = self._transform_leaves(
-            lambda col, dtype: col.as_string_column(dtype), dtype
-        )
+        lc = self._transform_leaves(lambda col: col.as_string_column())
 
         # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])
@@ -645,9 +646,17 @@ class ListMethods(ColumnMethods):
         dtype: list
 
         .. pandas-compat::
-            **ListMethods.sort_values**
+            `pandas.Series.list.sort_values`
 
-            The ``inplace`` and ``kind`` arguments are currently not supported.
+            This method does not exist in pandas but it can be run
+            as:
+
+            >>> import pandas as pd
+            >>> s = pd.Series([[3, 2, 1], [2, 4, 3]])
+            >>> print(s.apply(sorted))
+            0    [1, 2, 3]
+            1    [2, 3, 4]
+            dtype: object
         """
         if inplace:
             raise NotImplementedError("`inplace` not currently implemented.")

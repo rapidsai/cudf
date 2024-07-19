@@ -22,6 +22,11 @@ import errno
 import io
 import os
 
+from cudf._lib.pylibcudf.libcudf.io.json import \
+    json_recovery_mode_t as JSONRecoveryMode  # no-cython-lint
+from cudf._lib.pylibcudf.libcudf.io.types import \
+    compression_type as CompressionType  # no-cython-lint
+
 
 cdef class TableWithMetadata:
     """A container holding a table and its associated metadata
@@ -69,16 +74,44 @@ cdef class TableWithMetadata:
         """
         return self.tbl.columns()
 
-    @property
-    def column_names(self):
+    cdef list _make_columns_list(self, dict child_dict):
+        cdef list names = []
+        for child in child_dict:
+            grandchildren = self._make_columns_list(child_dict[child])
+            names.append((child, grandchildren))
+        return names
+
+    def column_names(self, include_children=False):
         """
         Return a list containing the column names of the table
         """
         cdef list names = []
+        cdef str name
+        cdef dict child_names = self.child_names
         for col_info in self.metadata.schema_info:
-            # TODO: Handle nesting (columns with child columns)
-            assert col_info.children.size() == 0, "Child column names are not handled!"
-            names.append(col_info.name.decode())
+            name = col_info.name.decode()
+            if include_children:
+                children = self._make_columns_list(child_names[name])
+                names.append((name, children))
+            else:
+                names.append(name)
+        return names
+
+    @property
+    def child_names(self):
+        """
+        Return a dictionary mapping the names of columns with children
+        to the names of their child columns
+        """
+        return TableWithMetadata._parse_col_names(self.metadata.schema_info)
+
+    @staticmethod
+    cdef dict _parse_col_names(vector[column_name_info] infos):
+        cdef dict child_names = dict()
+        cdef dict names = dict()
+        for col_info in infos:
+            child_names = TableWithMetadata._parse_col_names(col_info.children)
+            names[col_info.name.decode()] = child_names
         return names
 
     @staticmethod
@@ -137,6 +170,15 @@ cdef class SourceInfo:
         cdef vector[host_buffer] c_host_buffers
         cdef const unsigned char[::1] c_buffer
         cdef bint empty_buffer = False
+        cdef list new_sources = []
+
+        if isinstance(sources[0], io.StringIO):
+            for buffer in sources:
+                if not isinstance(buffer, io.StringIO):
+                    raise ValueError("All sources must be of the same type!")
+                new_sources.append(buffer.read().encode())
+            sources = new_sources
+            self.byte_sources = sources
         if isinstance(sources[0], bytes):
             empty_buffer = True
             for buffer in sources:
@@ -156,7 +198,10 @@ cdef class SourceInfo:
                                                      c_buffer.shape[0]))
         else:
             raise ValueError("Sources must be a list of str/paths, "
-                             "bytes, io.BytesIO, or a Datasource")
+                             "bytes, io.BytesIO, io.StringIO, or a Datasource")
+
+        if empty_buffer is True:
+            c_host_buffers.push_back(host_buffer(<char*>NULL, 0))
 
         self.c_obj = source_info(c_host_buffers)
 

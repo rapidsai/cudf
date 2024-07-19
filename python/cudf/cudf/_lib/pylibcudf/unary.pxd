@@ -1,5 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from libcpp cimport bool
+
 from cudf._lib.pylibcudf.libcudf.unary cimport unary_operator
 
 from .column cimport Column
@@ -17,3 +19,5 @@ cpdef Column cast(Column input, DataType data_type)
 cpdef Column is_nan(Column input)
 
 cpdef Column is_not_nan(Column input)
+
+cpdef bool is_supported_cast(DataType from_, DataType to)

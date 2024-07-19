@@ -4,17 +4,19 @@ from __future__ import annotations
 import io
 import os
 
+import numpy as np
 import pyarrow as pa
 import pytest
 
 from cudf._lib import pylibcudf as plc
+from cudf._lib.pylibcudf.io.types import CompressionType
 
 
 def metadata_from_arrow_type(
     pa_type: pa.Array,
     name: str = "",
 ) -> plc.interop.ColumnMetadata | None:
-    metadata = plc.interop.ColumnMetadata(name)  # None
+    metadata = plc.interop.ColumnMetadata(name)
     if pa.types.is_list(pa_type):
         child_meta = [plc.interop.ColumnMetadata("offsets")]
         for i in range(pa_type.num_fields):
@@ -39,9 +41,25 @@ def metadata_from_arrow_type(
 
 
 def assert_column_eq(
-    lhs: pa.Array | plc.Column, rhs: pa.Array | plc.Column
+    lhs: pa.Array | plc.Column,
+    rhs: pa.Array | plc.Column,
+    check_field_nullability=True,
 ) -> None:
-    """Verify that a pylibcudf array and PyArrow array are equal."""
+    """Verify that a pylibcudf array and PyArrow array are equal.
+
+    Parameters
+    ----------
+    lhs: Union[pa.Array, plc.Column]
+        The array with the expected values
+    rhs: Union[pa.Array, plc.Column]
+        The array to check
+    check_field_nullability:
+        For list/struct dtypes, whether to check if the nullable attributes
+        on child fields are equal.
+
+        Useful for checking roundtripping of lossy formats like JSON that may not
+        preserve this information.
+    """
     # Nested types require children metadata to be passed to the conversion function.
     if isinstance(lhs, (pa.Array, pa.ChunkedArray)) and isinstance(
         rhs, plc.Column
@@ -65,7 +83,37 @@ def assert_column_eq(
     if isinstance(rhs, pa.ChunkedArray):
         rhs = rhs.combine_chunks()
 
-    assert lhs.equals(rhs)
+    def _make_fields_nullable(typ):
+        new_fields = []
+        for i in range(typ.num_fields):
+            child_field = typ.field(i)
+            if not child_field.nullable:
+                child_type = child_field.type
+                if isinstance(child_field.type, (pa.StructType, pa.ListType)):
+                    child_type = _make_fields_nullable(child_type)
+                new_fields.append(
+                    pa.field(child_field.name, child_type, nullable=True)
+                )
+            else:
+                new_fields.append(child_field)
+
+        if isinstance(typ, pa.StructType):
+            return pa.struct(new_fields)
+        elif isinstance(typ, pa.ListType):
+            return pa.list_(new_fields[0])
+        return typ
+
+    if not check_field_nullability:
+        rhs_type = _make_fields_nullable(rhs.type)
+        rhs = rhs.cast(rhs_type)
+
+        lhs_type = _make_fields_nullable(lhs.type)
+        lhs = rhs.cast(lhs_type)
+
+    if pa.types.is_floating(lhs.type) and pa.types.is_floating(rhs.type):
+        np.testing.assert_array_almost_equal(lhs, rhs)
+    else:
+        assert lhs.equals(rhs)
 
 
 def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
@@ -78,20 +126,32 @@ def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
 
 
 def assert_table_and_meta_eq(
-    plc_table_w_meta: plc.io.types.TableWithMetadata, pa_table: pa.Table
+    pa_table: pa.Table,
+    plc_table_w_meta: plc.io.types.TableWithMetadata,
+    check_field_nullability=True,
+    check_types_if_empty=True,
+    check_names=True,
 ) -> None:
     """Verify that the pylibcudf TableWithMetadata and PyArrow table are equal"""
 
     plc_table = plc_table_w_meta.tbl
 
     plc_shape = (plc_table.num_rows(), plc_table.num_columns())
-    assert plc_shape == pa_table.shape
+    assert (
+        plc_shape == pa_table.shape
+    ), f"{plc_shape} is not equal to {pa_table.shape}"
+
+    if not check_types_if_empty and plc_table.num_rows() == 0:
+        return
 
     for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
-        assert_column_eq(plc_col, pa_col)
+        assert_column_eq(pa_col, plc_col, check_field_nullability)
 
     # Check column name equality
-    assert plc_table_w_meta.column_names == pa_table.column_names
+    if check_names:
+        assert (
+            plc_table_w_meta.column_names() == pa_table.column_names
+        ), f"{plc_table_w_meta.column_names()} != {pa_table.column_names}"
 
 
 def cudf_raises(expected_exception: BaseException, *args, **kwargs):
@@ -102,47 +162,8 @@ def cudf_raises(expected_exception: BaseException, *args, **kwargs):
     return pytest.raises(expected_exception, *args, **kwargs)
 
 
-# TODO: Consider moving these type utilities into pylibcudf.types itself.
-def is_signed_integer(plc_dtype: plc.DataType):
-    return (
-        plc.TypeId.INT8.value <= plc_dtype.id().value <= plc.TypeId.INT64.value
-    )
-
-
-def is_integer(plc_dtype: plc.DataType):
-    return plc_dtype.id() in (
-        plc.TypeId.INT8,
-        plc.TypeId.INT16,
-        plc.TypeId.INT32,
-        plc.TypeId.INT64,
-        plc.TypeId.UINT8,
-        plc.TypeId.UINT16,
-        plc.TypeId.UINT32,
-        plc.TypeId.UINT64,
-    )
-
-
-def is_floating(plc_dtype: plc.DataType):
-    return plc_dtype.id() in (
-        plc.TypeId.FLOAT32,
-        plc.TypeId.FLOAT64,
-    )
-
-
-def is_boolean(plc_dtype: plc.DataType):
-    return plc_dtype.id() == plc.TypeId.BOOL8
-
-
 def is_string(plc_dtype: plc.DataType):
     return plc_dtype.id() == plc.TypeId.STRING
-
-
-def is_fixed_width(plc_dtype: plc.DataType):
-    return (
-        is_integer(plc_dtype)
-        or is_floating(plc_dtype)
-        or is_boolean(plc_dtype)
-    )
 
 
 def nesting_level(typ) -> tuple[int, int]:
@@ -165,6 +186,48 @@ def is_nested_list(typ):
     return nesting_level(typ)[0] > 1
 
 
+def _convert_numeric_types_to_floating(pa_table):
+    """
+    Useful little helper for testing the
+    dtypes option in I/O readers.
+
+    Returns a tuple containing the pylibcudf dtypes
+    and the new pyarrow schema
+    """
+    dtypes = []
+    new_fields = []
+    for i in range(len(pa_table.schema)):
+        field = pa_table.schema.field(i)
+        child_types = []
+
+        plc_type = plc.interop.from_arrow(field.type)
+        if pa.types.is_integer(field.type) or pa.types.is_unsigned_integer(
+            field.type
+        ):
+            plc_type = plc.interop.from_arrow(pa.float64())
+            field = field.with_type(pa.float64())
+
+        dtypes.append((field.name, plc_type, child_types))
+
+        new_fields.append(field)
+    return dtypes, new_fields
+
+
+def write_source_str(source, input_str):
+    """
+    Write a string to the source
+    (useful for testing CSV/JSON I/O)
+    """
+    if not isinstance(source, io.IOBase):
+        with open(source, "w") as source_f:
+            source_f.write(input_str)
+    else:
+        if isinstance(source, io.BytesIO):
+            input_str = input_str.encode("utf-8")
+        source.write(input_str)
+        source.seek(0)
+
+
 def sink_to_str(sink):
     """
     Takes a sink (e.g. StringIO/BytesIO, filepath, etc.)
@@ -181,6 +244,31 @@ def sink_to_str(sink):
         sink.seek(0)
         str_result = sink.read()
     return str_result
+
+
+def make_source(path_or_buf, pa_table, format, **kwargs):
+    """
+    Write a pyarrow Table to a specific format using pandas
+    by dispatching to the appropriate to_* call.
+    The caller is responsible for making sure that no arguments
+    unsupported by pandas are passed in.
+    """
+    df = pa_table.to_pandas()
+    mode = "w"
+    if "compression" in kwargs:
+        kwargs["compression"] = COMPRESSION_TYPE_TO_PANDAS[
+            kwargs["compression"]
+        ]
+        if kwargs["compression"] is not None and format != "json":
+            # pandas json method only supports mode="w"/"a"
+            mode = "wb"
+    if format == "json":
+        df.to_json(path_or_buf, mode=mode, **kwargs)
+    elif format == "csv":
+        df.to_csv(path_or_buf, mode=mode, **kwargs)
+    if isinstance(path_or_buf, io.IOBase):
+        path_or_buf.seek(0)
+    return path_or_buf
 
 
 NUMERIC_PA_TYPES = [pa.int64(), pa.float64(), pa.uint64()]
@@ -221,4 +309,26 @@ DEFAULT_PA_TYPES = (
     + DEFAULT_PA_STRUCT_TESTING_TYPES
 )
 
+# Map pylibcudf compression types to pandas ones
+# Not all compression types map cleanly, read the comments to learn more!
+# If a compression type is unsupported, it maps to False.
+
+COMPRESSION_TYPE_TO_PANDAS = {
+    CompressionType.NONE: None,
+    # Users of this dict will have to special case
+    # AUTO
+    CompressionType.AUTO: None,
+    CompressionType.GZIP: "gzip",
+    CompressionType.BZIP2: "bz2",
+    CompressionType.ZIP: "zip",
+    CompressionType.XZ: "xz",
+    CompressionType.ZSTD: "zstd",
+    # Unsupported
+    CompressionType.ZLIB: False,
+    CompressionType.LZ4: False,
+    CompressionType.LZO: False,
+    # These only work for parquet
+    CompressionType.SNAPPY: "snappy",
+    CompressionType.BROTLI: "brotli",
+}
 ALL_PA_TYPES = DEFAULT_PA_TYPES

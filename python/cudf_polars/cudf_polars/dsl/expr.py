@@ -32,7 +32,7 @@ from cudf_polars.utils import dtypes, sorting
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    import polars.polars as plrs
+    import polars as pl
     import polars.type_aliases as pl_types
 
     from cudf_polars.containers import DataFrame
@@ -44,6 +44,7 @@ __all__ = [
     "Col",
     "BooleanFunction",
     "StringFunction",
+    "TemporalFunction",
     "Sort",
     "SortBy",
     "Gather",
@@ -369,6 +370,10 @@ class Literal(Expr):
         # datatype of pyarrow scalar is correct by construction.
         return Column(plc.Column.from_scalar(plc.interop.from_arrow(self.value), 1))
 
+    def collect_agg(self, *, depth: int) -> AggInfo:
+        """Collect information about aggregations in groupbys."""
+        return AggInfo([])
+
 
 class LiteralColumn(Expr):
     __slots__ = ("value",)
@@ -376,10 +381,17 @@ class LiteralColumn(Expr):
     value: pa.Array[Any, Any]
     children: tuple[()]
 
-    def __init__(self, dtype: plc.DataType, value: plrs.PySeries) -> None:
+    def __init__(self, dtype: plc.DataType, value: pl.Series) -> None:
         super().__init__(dtype)
         data = value.to_arrow()
         self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
+
+    def get_hash(self) -> int:
+        """Compute a hash of the column."""
+        # This is stricter than necessary, but we only need this hash
+        # for identity in groupby replacements so it's OK. And this
+        # way we avoid doing potentially expensive compute.
+        return hash((type(self), self.dtype, id(self.value)))
 
     def do_evaluate(
         self,
@@ -391,6 +403,10 @@ class LiteralColumn(Expr):
         """Evaluate this expression given a dataframe for context."""
         # datatype of pyarrow array is correct by construction.
         return Column(plc.interop.from_arrow(self.value))
+
+    def collect_agg(self, *, depth: int) -> AggInfo:
+        """Collect information about aggregations in groupbys."""
+        return AggInfo([])
 
 
 class Col(Expr):
@@ -703,6 +719,7 @@ class StringFunction(Expr):
             pl_expr.StringFunction.EndsWith,
             pl_expr.StringFunction.StartsWith,
             pl_expr.StringFunction.Contains,
+            pl_expr.StringFunction.Slice,
         ):
             raise NotImplementedError(f"String function {self.name}")
         if self.name == pl_expr.StringFunction.Contains:
@@ -716,6 +733,11 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
+        elif self.name == pl_expr.StringFunction.Slice:
+            if not all(isinstance(child, Literal) for child in self.children[1:]):
+                raise NotImplementedError(
+                    "Slice only supports literal start and stop values"
+                )
 
     def do_evaluate(
         self,
@@ -744,6 +766,36 @@ class StringFunction(Expr):
                 flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
             )
             return Column(plc.strings.contains.contains_re(column.obj, prog))
+        elif self.name == pl_expr.StringFunction.Slice:
+            child, expr_offset, expr_length = self.children
+            assert isinstance(expr_offset, Literal)
+            assert isinstance(expr_length, Literal)
+
+            column = child.evaluate(df, context=context, mapping=mapping)
+            # libcudf slices via [start,stop).
+            # polars slices with offset + length where start == offset
+            # stop = start + length. Negative values for start look backward
+            # from the last element of the string. If the end index would be
+            # below zero, an empty string is returned.
+            # Do this maths on the host
+            start = expr_offset.value.as_py()
+            length = expr_length.value.as_py()
+
+            if length == 0:
+                stop = start
+            else:
+                # No length indicates a scan to the end
+                # The libcudf equivalent is a null stop
+                stop = start + length if length else None
+                if length and start < 0 and length >= -start:
+                    stop = None
+            return Column(
+                plc.strings.slice.slice_strings(
+                    column.obj,
+                    plc.interop.from_arrow(pa.scalar(start, type=pa.int32())),
+                    plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
+                )
+            )
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
@@ -777,6 +829,159 @@ class StringFunction(Expr):
         raise NotImplementedError(
             f"StringFunction {self.name}"
         )  # pragma: no cover; handled by init raising
+
+
+class TemporalFunction(Expr):
+    __slots__ = ("name", "options", "children")
+    _non_child = ("dtype", "name", "options")
+    children: tuple[Expr, ...]
+
+    def __init__(
+        self,
+        dtype: plc.DataType,
+        name: pl_expr.TemporalFunction,
+        options: tuple[Any, ...],
+        *children: Expr,
+    ) -> None:
+        super().__init__(dtype)
+        self.options = options
+        self.name = name
+        self.children = children
+        if self.name != pl_expr.TemporalFunction.Year:
+            raise NotImplementedError(f"String function {self.name}")
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        columns = [
+            child.evaluate(df, context=context, mapping=mapping)
+            for child in self.children
+        ]
+        if self.name == pl_expr.TemporalFunction.Year:
+            (column,) = columns
+            return Column(plc.datetime.extract_year(column.obj))
+        raise NotImplementedError(
+            f"TemporalFunction {self.name}"
+        )  # pragma: no cover; init trips first
+
+
+class UnaryFunction(Expr):
+    __slots__ = ("name", "options", "children")
+    _non_child = ("dtype", "name", "options")
+    children: tuple[Expr, ...]
+
+    def __init__(
+        self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
+    ) -> None:
+        super().__init__(dtype)
+        self.name = name
+        self.options = options
+        self.children = children
+        if self.name not in ("mask_nans", "round", "setsorted", "unique"):
+            raise NotImplementedError(f"Unary function {name=}")
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        if self.name == "mask_nans":
+            (child,) = self.children
+            return child.evaluate(df, context=context, mapping=mapping).mask_nans()
+        if self.name == "round":
+            (decimal_places,) = self.options
+            (values,) = (
+                child.evaluate(df, context=context, mapping=mapping)
+                for child in self.children
+            )
+            return Column(
+                plc.round.round(
+                    values.obj, decimal_places, plc.round.RoundingMethod.HALF_UP
+                )
+            ).sorted_like(values)
+        elif self.name == "unique":
+            (maintain_order,) = self.options
+            (values,) = (
+                child.evaluate(df, context=context, mapping=mapping)
+                for child in self.children
+            )
+            # Only one column, so keep_any is the same as keep_first
+            # for stable distinct
+            keep = plc.stream_compaction.DuplicateKeepOption.KEEP_ANY
+            if values.is_sorted:
+                maintain_order = True
+                result = plc.stream_compaction.unique(
+                    plc.Table([values.obj]),
+                    [0],
+                    keep,
+                    plc.types.NullEquality.EQUAL,
+                )
+            else:
+                distinct = (
+                    plc.stream_compaction.stable_distinct
+                    if maintain_order
+                    else plc.stream_compaction.distinct
+                )
+                result = distinct(
+                    plc.Table([values.obj]),
+                    [0],
+                    keep,
+                    plc.types.NullEquality.EQUAL,
+                    plc.types.NanEquality.ALL_EQUAL,
+                )
+            (column,) = result.columns()
+            if maintain_order:
+                return Column(column).sorted_like(values)
+            return Column(column)
+        elif self.name == "setsorted":
+            (column,) = (
+                child.evaluate(df, context=context, mapping=mapping)
+                for child in self.children
+            )
+            (asc,) = self.options
+            order = (
+                plc.types.Order.ASCENDING
+                if asc == "ascending"
+                else plc.types.Order.DESCENDING
+            )
+            null_order = plc.types.NullOrder.BEFORE
+            if column.obj.null_count() > 0 and (n := column.obj.size()) > 1:
+                # PERF: This invokes four stream synchronisations!
+                has_nulls_first = not plc.copying.get_element(column.obj, 0).is_valid()
+                has_nulls_last = not plc.copying.get_element(
+                    column.obj, n - 1
+                ).is_valid()
+                if (order == plc.types.Order.DESCENDING and has_nulls_first) or (
+                    order == plc.types.Order.ASCENDING and has_nulls_last
+                ):
+                    null_order = plc.types.NullOrder.AFTER
+            return column.set_sorted(
+                is_sorted=plc.types.Sorted.YES,
+                order=order,
+                null_order=null_order,
+            )
+        raise NotImplementedError(
+            f"Unimplemented unary function {self.name=}"
+        )  # pragma: no cover; init trips first
+
+    def collect_agg(self, *, depth: int) -> AggInfo:
+        """Collect information about aggregations in groupbys."""
+        if depth == 1:
+            # inside aggregation, need to pre-evaluate, groupby
+            # construction has checked that we don't have nested aggs,
+            # so stop the recursion and return ourselves for pre-eval
+            return AggInfo([(self, plc.aggregation.collect_list(), self)])
+        else:
+            (child,) = self.children
+            return child.collect_agg(depth=depth)
 
 
 class Sort(Expr):
@@ -1055,12 +1260,19 @@ class Agg(Expr):
             raise NotImplementedError(
                 "Nested aggregations in groupby"
             )  # pragma: no cover; check_agg trips first
+        if (isminmax := self.name in {"min", "max"}) and self.options:
+            raise NotImplementedError("Nan propagation in groupby for min/max")
         (child,) = self.children
         ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
         if self.request is None:
             raise NotImplementedError(
                 f"Aggregation {self.name} in groupby"
             )  # pragma: no cover; __init__ trips first
+        if isminmax and plc.traits.is_floating_point(self.dtype):
+            assert expr is not None
+            # Ignore nans in these groupby aggs, do this by masking
+            # nans in the input
+            expr = UnaryFunction(self.dtype, "mask_nans", (), expr)
         return AggInfo([(expr, self.request, self)])
 
     def _reduce(
@@ -1182,7 +1394,8 @@ class BinOp(Expr):
         self.children = (left, right)
         if (
             op in (plc.binaryop.BinaryOperator.ADD, plc.binaryop.BinaryOperator.SUB)
-            and ({left.dtype.id(), right.dtype.id()}.issubset(dtypes.TIMELIKE_TYPES))
+            and plc.traits.is_chrono(left.dtype)
+            and plc.traits.is_chrono(right.dtype)
             and not dtypes.have_compatible_resolution(left.dtype.id(), right.dtype.id())
         ):
             raise NotImplementedError("Casting rules for timelike types")

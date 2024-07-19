@@ -182,5 +182,3 @@ docstring-code-format = true
 [tool.rapids-build-backend]
 build-backend = "setuptools.build_meta"
 dependencies-file = "../../dependencies.yaml"
-# Pure python
-disable-cuda = true

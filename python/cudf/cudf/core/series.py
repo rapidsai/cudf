@@ -22,7 +22,6 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
-    is_bool_dtype,
     is_dict_like,
     is_integer,
     is_integer_dtype,
@@ -221,10 +220,10 @@ class _SeriesIlocIndexer(_FrameIndexer):
                     f"Cannot assign {value=} to "
                     f"non-float dtype={self._frame.dtype}"
                 )
-            elif (
-                self._frame.dtype.kind == "b"
-                and not is_bool_dtype(value)
-                and value not in {None, cudf.NA}
+            elif self._frame.dtype.kind == "b" and not (
+                value in {None, cudf.NA}
+                or isinstance(value, (np.bool_, bool))
+                or (isinstance(value, cudf.Scalar) and value.dtype.kind == "b")
             ):
                 raise MixedTypeError(
                     f"Cannot assign {value=} to "
@@ -961,7 +960,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         .. pandas-compat::
-            **Series.reindex**
+            :meth:`pandas.Series.reindex`
 
             Note: One difference from Pandas is that ``NA`` is used for rows
             that do not match, rather than ``NaN``. One side effect of this is
@@ -1244,7 +1243,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         .. pandas-compat::
-            **Series.map**
+            :meth:`pandas.Series.map`
 
             Please note map currently only supports fixed-width numeric
             type functions.
@@ -2095,7 +2094,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         .. pandas-compat::
-            **Series.sort_values**
+            :meth:`pandas.Series.sort_values`
 
             * Support axis='index' only.
             * The inplace and kind argument is currently unsupported
@@ -2551,7 +2550,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         5
 
         .. pandas-compat::
-            **Series.count**
+            :meth:`pandas.Series.count`
 
             Parameters currently not supported is `level`.
         """
@@ -2662,7 +2661,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         -0.015750000000000004
 
         .. pandas-compat::
-            **Series.cov**
+            :meth:`pandas.Series.cov`
 
             `min_periods` parameter is not yet supported.
         """
@@ -3221,7 +3220,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             percentiles = np.array([0.25, 0.5, 0.75])
 
         dtype = "str"
-        if is_bool_dtype(self.dtype):
+        if self.dtype.kind == "b":
             data = _describe_categorical(self, percentiles)
         elif isinstance(self._column, cudf.core.column.NumericalColumn):
             data = _describe_numeric(self, percentiles)
@@ -3423,7 +3422,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         'numeric_series'
 
         .. pandas-compat::
-            **Series.rename**
+            :meth:`pandas.Series.rename`
 
             - Supports scalar values only for changing name attribute
             - The ``inplace`` and ``level`` is not supported
@@ -4703,7 +4702,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: object
 
         .. pandas-compat::
-            **series.DatetimeProperties.strftime**
+            :meth:`pandas.DatetimeIndex.strftime`
 
             The following date format identifiers are not yet
             supported: ``%c``, ``%x``,``%X``
@@ -4731,9 +4730,7 @@ class DatetimeProperties(BaseDatelikeProperties):
                     f"for tracking purposes."
                 )
         return self._return_result_like_self(
-            self.series._column.as_string_column(
-                dtype="str", format=date_format
-            )
+            self.series._column.strftime(format=date_format)
         )
 
     @copy_docstring(DatetimeIndex.tz_localize)
