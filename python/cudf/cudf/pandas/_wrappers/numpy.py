@@ -119,7 +119,6 @@ ndarray = make_final_proxy_type(
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
         "__array_interface__": array_interface,
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         # ndarrays are unhashable
         "__hash__": None,
         # iter(cupy-array) produces an iterable of zero-dim device
