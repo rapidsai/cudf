@@ -960,7 +960,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         .. pandas-compat::
-            **Series.reindex**
+            :meth:`pandas.Series.reindex`
 
             Note: One difference from Pandas is that ``NA`` is used for rows
             that do not match, rather than ``NaN``. One side effect of this is
@@ -1243,7 +1243,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         .. pandas-compat::
-            **Series.map**
+            :meth:`pandas.Series.map`
 
             Please note map currently only supports fixed-width numeric
             type functions.
@@ -2094,7 +2094,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         .. pandas-compat::
-            **Series.sort_values**
+            :meth:`pandas.Series.sort_values`
 
             * Support axis='index' only.
             * The inplace and kind argument is currently unsupported
@@ -2550,7 +2550,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         5
 
         .. pandas-compat::
-            **Series.count**
+            :meth:`pandas.Series.count`
 
             Parameters currently not supported is `level`.
         """
@@ -2661,7 +2661,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         -0.015750000000000004
 
         .. pandas-compat::
-            **Series.cov**
+            :meth:`pandas.Series.cov`
 
             `min_periods` parameter is not yet supported.
         """
@@ -3422,7 +3422,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         'numeric_series'
 
         .. pandas-compat::
-            **Series.rename**
+            :meth:`pandas.Series.rename`
 
             - Supports scalar values only for changing name attribute
             - The ``inplace`` and ``level`` is not supported
@@ -4702,7 +4702,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: object
 
         .. pandas-compat::
-            **series.DatetimeProperties.strftime**
+            :meth:`pandas.DatetimeIndex.strftime`
 
             The following date format identifiers are not yet
             supported: ``%c``, ``%x``,``%X``
