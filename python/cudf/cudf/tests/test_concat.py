@@ -1,7 +1,7 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import warnings
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from decimal import Decimal
 
 import numpy as np
@@ -104,7 +104,11 @@ def test_concat_dataframe(index, nulls, axis):
         )
 
     # Index
-    res = cudf.concat([gdf.index, gdf2.index], axis=axis).to_pandas()
+    with pytest.warns(
+        FutureWarning,
+        match="index concatenation will be deprecated in a future release",
+    ):
+        res = cudf.concat([gdf.index, gdf2.index], axis=axis).to_pandas()
     sol = df.index.append(df2.index)
     assert_eq(res, sol, check_names=False, check_categorical=False)
 
@@ -151,12 +155,16 @@ def test_concat_errors():
     )
 
     # Mismatched types
-    assert_exceptions_equal(
-        lfunc=pd.concat,
-        rfunc=cudf.concat,
-        lfunc_args_and_kwargs=([], {"objs": [df, df.index, df.x]}),
-        rfunc_args_and_kwargs=([], {"objs": [gdf, gdf.index, gdf.x]}),
-    )
+    with pytest.warns(
+        FutureWarning,
+        match="index concatenation will be deprecated in a future release",
+    ):
+        assert_exceptions_equal(
+            lfunc=pd.concat,
+            rfunc=cudf.concat,
+            lfunc_args_and_kwargs=([], {"objs": [df, df.index, df.x]}),
+            rfunc_args_and_kwargs=([], {"objs": [gdf, gdf.index, gdf.x]}),
+        )
 
     # Unknown type
     assert_exceptions_equal(
@@ -1997,3 +2005,52 @@ def test_concat_dict_incorrect_type_index(d):
         match="cannot concatenate a dictionary containing indices",
     ):
         cudf.concat(d, axis=1)
+
+
+@pytest.mark.parametrize(
+    "axis,exception",
+    [
+        (0, nullcontext()),
+        (
+            1,
+            pytest.raises(
+                ValueError, match="cannot concatenate indices across axis 1"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "idx",
+    [
+        [(cudf.Index, {"data": [1, 2, 3]})],
+        [(cudf.Index, {"data": [1, 2, 3]}), (cudf.Index, {"data": [4, 5, 6]})],
+        [
+            (
+                cudf.MultiIndex,
+                {
+                    "levels": [[1, 2], ["blue", "red"]],
+                    "codes": [[0, 0, 1, 1], [1, 0, 1, 0]],
+                },
+            )
+        ],
+        [(cudf.CategoricalIndex, {"data": [1, 2, 3]})],
+        [
+            (cudf.RangeIndex, {"start": 2, "stop": 4, "step": 1}),
+            (cudf.RangeIndex, {"start": 2, "stop": 9, "step": 3}),
+        ],
+    ],
+)
+def test_concat_index(idx, axis, exception):
+    idx = [c(**d) for c, d in idx]
+    with pytest.warns(
+        FutureWarning,
+        match="index concatenation will be deprecated in a future release",
+    ):
+        with exception as e:
+            result = cudf.concat(idx, axis=axis)
+    if not e:
+        assert isinstance(result, cudf.Index)
+    with pytest.raises(
+        TypeError, match="only Series and DataFrame objs are valid"
+    ):
+        pd.concat([i.to_pandas() for i in idx], axis=axis)
