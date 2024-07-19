@@ -188,8 +188,7 @@ CUDF_KERNEL void count_char_ngrams_kernel(cudf::column_device_view const d_strin
   using warp_reduce = cub::WarpReduce<cudf::size_type>;
   __shared__ typename warp_reduce::TempStorage temp_storage;
 
-  auto const str_idx  = idx / cudf::detail::warp_size;
-  auto const lane_idx = idx % cudf::detail::warp_size;
+  auto const str_idx = idx / cudf::detail::warp_size;
   if (d_strings.is_null(str_idx)) {
     d_counts[str_idx] = 0;
     return;
@@ -197,6 +196,7 @@ CUDF_KERNEL void count_char_ngrams_kernel(cudf::column_device_view const d_strin
   auto const d_str = d_strings.element<cudf::string_view>(str_idx);
   auto const end   = d_str.data() + d_str.size_bytes();
 
+  auto const lane_idx   = idx % cudf::detail::warp_size;
   cudf::size_type count = 0;
   for (auto itr = d_str.data() + (lane_idx * bytes_per_thread); itr < end;
        itr += cudf::detail::warp_size * bytes_per_thread) {
@@ -301,13 +301,11 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
                                              cudf::hash_value_type* d_results)
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
-  if (idx >= (static_cast<cudf::thread_index_type>(d_strings.size()) *
-              static_cast<cudf::thread_index_type>(cudf::detail::warp_size))) {
+  if (idx >= (static_cast<cudf::thread_index_type>(d_strings.size()) * cudf::detail::warp_size)) {
     return;
   }
 
-  auto const str_idx  = idx / cudf::detail::warp_size;
-  auto const lane_idx = idx % cudf::detail::warp_size;
+  auto const str_idx = idx / cudf::detail::warp_size;
 
   if (d_strings.is_null(str_idx)) { return; }
   auto const d_str = d_strings.element<cudf::string_view>(str_idx);
@@ -320,6 +318,7 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
 
   auto const end        = d_str.data() + d_str.size_bytes();
   auto const warp_count = (d_str.size_bytes() / cudf::detail::warp_size) + 1;
+  auto const lane_idx   = idx % cudf::detail::warp_size;
 
   auto d_hashes = d_results + ngram_offset;
   auto itr      = d_str.data() + lane_idx;
