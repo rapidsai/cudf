@@ -11100,3 +11100,12 @@ def test_from_records_with_index_no_shallow_copy():
     data = np.array([(1.0, 2), (3.0, 4)], dtype=[("x", "<f8"), ("y", "<i8")])
     df = cudf.DataFrame(data.view(np.recarray), index=idx)
     assert df.index is idx
+
+
+def test_bool_raises():
+    assert_exceptions_equal(
+        lfunc=bool,
+        rfunc=bool,
+        lfunc_args_and_kwargs=[[cudf.DataFrame()]],
+        rfunc_args_and_kwargs=[[pd.DataFrame()]],
+    )

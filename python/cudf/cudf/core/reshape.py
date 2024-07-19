@@ -1060,7 +1060,7 @@ def pivot(data, columns=None, index=no_default, values=no_default):
     return result
 
 
-def unstack(df, level, fill_value=None):
+def unstack(df, level, fill_value=None, sort: bool = True):
     """
     Pivot one or more levels of the (necessarily hierarchical) index labels.
 
@@ -1080,6 +1080,9 @@ def unstack(df, level, fill_value=None):
         levels of the index to pivot
     fill_value
         Non-functional argument provided for compatibility with Pandas.
+    sort : bool, default True
+        Sort the level(s) in the resulting MultiIndex columns.
+
 
     Returns
     -------
@@ -1156,6 +1159,8 @@ def unstack(df, level, fill_value=None):
 
     if fill_value is not None:
         raise NotImplementedError("fill_value is not supported.")
+    elif sort is False:
+        raise NotImplementedError(f"{sort=} is not supported.")
     if pd.api.types.is_list_like(level):
         if not level:
             return df

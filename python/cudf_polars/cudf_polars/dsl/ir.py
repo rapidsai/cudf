@@ -546,7 +546,7 @@ class GroupBy(IR):
             return max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, expr.Agg):
             return 1 + max(GroupBy.check_agg(child) for child in agg.children)
-        elif isinstance(agg, (expr.Len, expr.Col, expr.Literal)):
+        elif isinstance(agg, (expr.Len, expr.Col, expr.Literal, expr.LiteralColumn)):
             return 0
         else:
             raise NotImplementedError(f"No handler for {agg=}")
@@ -606,7 +606,7 @@ class GroupBy(IR):
         results = [
             req.evaluate(result_subs, mapping=mapping) for req in self.agg_requests
         ]
-        return DataFrame([*result_keys, *results]).slice(self.options.slice)
+        return DataFrame(broadcast(*result_keys, *results)).slice(self.options.slice)
 
 
 @dataclasses.dataclass
@@ -685,6 +685,59 @@ class Join(IR):
         else:
             assert_never(how)
 
+    def _reorder_maps(
+        self,
+        left_rows: int,
+        lg: plc.Column,
+        left_policy: plc.copying.OutOfBoundsPolicy,
+        right_rows: int,
+        rg: plc.Column,
+        right_policy: plc.copying.OutOfBoundsPolicy,
+    ) -> list[plc.Column]:
+        """
+        Reorder gather maps to satisfy polars join order restrictions.
+
+        Parameters
+        ----------
+        left_rows
+            Number of rows in left table
+        lg
+            Left gather map
+        left_policy
+            Nullify policy for left map
+        right_rows
+            Number of rows in right table
+        rg
+            Right gather map
+        right_policy
+            Nullify policy for right map
+
+        Returns
+        -------
+        list of reordered left and right gather maps.
+
+        Notes
+        -----
+        For a left join, the polars result preserves the order of the
+        left keys, and is stable wrt the right keys. For all other
+        joins, there is no order obligation.
+        """
+        dt = plc.interop.to_arrow(plc.types.SIZE_TYPE)
+        init = plc.interop.from_arrow(pa.scalar(0, type=dt))
+        step = plc.interop.from_arrow(pa.scalar(1, type=dt))
+        left_order = plc.copying.gather(
+            plc.Table([plc.filling.sequence(left_rows, init, step)]), lg, left_policy
+        )
+        right_order = plc.copying.gather(
+            plc.Table([plc.filling.sequence(right_rows, init, step)]), rg, right_policy
+        )
+        return plc.sorting.stable_sort_by_key(
+            plc.Table([lg, rg]),
+            plc.Table([*left_order.columns(), *right_order.columns()]),
+            [plc.types.Order.ASCENDING, plc.types.Order.ASCENDING],
+            [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
+        ).columns()
+
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         left = self.left.evaluate(cache=cache)
@@ -725,6 +778,11 @@ class Join(IR):
             result = DataFrame.from_table(table, left.column_names)
         else:
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
+            if how == "left":
+                # Order of left table is preserved
+                lg, rg = self._reorder_maps(
+                    left.num_rows, lg, left_policy, right.num_rows, rg, right_policy
+                )
             if coalesce and how == "inner":
                 right = right.discard_columns(right_on.column_names_set)
             left = DataFrame.from_table(

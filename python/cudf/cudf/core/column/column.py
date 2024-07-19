@@ -71,7 +71,7 @@ from cudf.utils.dtypes import (
     get_time_unit,
     is_column_like,
     is_mixed_with_object_dtype,
-    min_scalar_type,
+    min_signed_type,
     min_unsigned_type,
 )
 from cudf.utils.utils import _array_ufunc, mask_dtype
@@ -261,7 +261,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.null_count == self.size:
             return True
 
-        return libcudf.reduce.reduce("all", self, dtype=np.bool_)
+        return libcudf.reduce.reduce("all", self)
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
@@ -271,10 +271,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         elif skipna and self.null_count == self.size:
             return False
 
-        return libcudf.reduce.reduce("any", self, dtype=np.bool_)
+        return libcudf.reduce.reduce("any", self)
 
     def dropna(self) -> Self:
-        return drop_nulls([self])[0]._with_type_metadata(self.dtype)
+        if self.has_nulls():
+            return drop_nulls([self])[0]._with_type_metadata(self.dtype)
+        else:
+            return self.copy()
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -699,6 +702,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def isnull(self) -> ColumnBase:
         """Identify missing values in a Column."""
+        if not self.has_nulls(include_nan=self.dtype.kind == "f"):
+            return as_column(False, length=len(self))
+
         result = libcudf.unary.is_null(self)
 
         if self.dtype.kind == "f":
@@ -710,6 +716,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column."""
+        if not self.has_nulls(include_nan=self.dtype.kind == "f"):
+            return as_column(True, length=len(self))
+
         result = libcudf.unary.is_valid(self)
 
         if self.dtype.kind == "f":
@@ -922,15 +931,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @property
     def is_unique(self) -> bool:
+        # distinct_count might already be cached
         return self.distinct_count(dropna=False) == len(self)
 
-    @property
+    @cached_property
     def is_monotonic_increasing(self) -> bool:
         return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [True], None
         )
 
-    @property
+    @cached_property
     def is_monotonic_decreasing(self) -> bool:
         return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [False], None
@@ -941,6 +951,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         ascending: bool = True,
         na_position: str = "last",
     ) -> ColumnBase:
+        if (not ascending and self.is_monotonic_decreasing) or (
+            ascending and self.is_monotonic_increasing
+        ):
+            return self.copy()
         return libcudf.sort.sort(
             [self], column_order=[ascending], null_precedence=[na_position]
         )[0]
@@ -1090,11 +1104,22 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         )
 
     def argsort(
-        self, ascending: bool = True, na_position: str = "last"
-    ) -> "cudf.core.column.NumericalColumn":
-        return libcudf.sort.order_by(
-            [self], [ascending], na_position, stable=True
-        )
+        self,
+        ascending: bool = True,
+        na_position: Literal["first", "last"] = "last",
+    ) -> cudf.core.column.NumericalColumn:
+        if (ascending and self.is_monotonic_increasing) or (
+            not ascending and self.is_monotonic_decreasing
+        ):
+            return as_column(range(len(self)))
+        elif (ascending and self.is_monotonic_decreasing) or (
+            not ascending and self.is_monotonic_increasing
+        ):
+            return as_column(range(len(self) - 1, -1, -1))
+        else:
+            return libcudf.sort.order_by(
+                [self], [ascending], na_position, stable=True
+            )
 
     def __arrow_array__(self, type=None):
         raise TypeError(
@@ -1157,9 +1182,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         Get unique values in the data
         """
-        return drop_duplicates([self], keep="first")[0]._with_type_metadata(
-            self.dtype
-        )
+        if self.is_unique:
+            return self.copy()
+        else:
+            return drop_duplicates([self], keep="first")[
+                0
+            ]._with_type_metadata(self.dtype)
 
     def serialize(self) -> tuple[dict, list]:
         # data model:
@@ -1277,7 +1305,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             skipna=skipna, min_count=min_count
         )
         if isinstance(preprocessed, ColumnBase):
-            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
+            dtype = kwargs.pop("dtype", None)
+            return libcudf.reduce.reduce(
+                op, preprocessed, dtype=dtype, **kwargs
+            )
         return preprocessed
 
     def _process_for_reduction(
@@ -1308,6 +1339,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         Determine the correct dtype to pass to libcudf based on
         the input dtype, data dtype, and specific reduction op
         """
+        if reduction_op in {"any", "all"}:
+            return np.dtype(np.bool_)
         return self.dtype
 
     def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
@@ -1323,7 +1356,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         self,
         cats: ColumnBase,
         dtype: Dtype | None = None,
-        na_sentinel: ScalarLike | None = None,
+        na_sentinel: cudf.Scalar | None = None,
     ):
         """
         Convert each value in `self` into an integer code, with `cats`
@@ -1363,7 +1396,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return as_column(na_sentinel, dtype=dtype, length=len(self))
 
         if dtype is None:
-            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
+            dtype = min_signed_type(max(len(cats), na_sentinel.value), 8)
 
         if is_mixed_with_object_dtype(self, cats):
             return _return_sentinel_column()
@@ -1425,9 +1458,10 @@ def column_empty_like(
     return column_empty(row_count, dtype, masked)
 
 
-def _has_any_nan(arbitrary):
+def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
+    """Check if an object dtype Series or array contains NaN."""
     return any(
-        ((isinstance(x, float) or isinstance(x, np.floating)) and np.isnan(x))
+        isinstance(x, (float, np.floating)) and np.isnan(x)
         for x in np.asarray(arbitrary)
     )
 
@@ -2279,9 +2313,8 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # Notice, we can always cast pure null columns
     not_null_col_dtypes = [o.dtype for o in objs if o.null_count != len(o)]
     if len(not_null_col_dtypes) and all(
-        _is_non_decimal_numeric_dtype(dtyp)
-        and np.issubdtype(dtyp, np.datetime64)
-        for dtyp in not_null_col_dtypes
+        _is_non_decimal_numeric_dtype(dtype) and dtype.kind == "M"
+        for dtype in not_null_col_dtypes
     ):
         common_dtype = find_common_type(not_null_col_dtypes)
         # Cast all columns to the common dtype
