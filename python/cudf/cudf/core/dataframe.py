@@ -4306,7 +4306,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         as_index=True,
         sort=no_default,
         group_keys=False,
-        squeeze=False,
         observed=True,
         dropna=True,
     ):
@@ -4317,7 +4316,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             as_index,
             sort,
             group_keys,
-            squeeze,
             observed,
             dropna,
         )
