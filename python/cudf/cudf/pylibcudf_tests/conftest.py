@@ -141,6 +141,20 @@ def table_data(request):
     ), pa_table
 
 
+@pytest.fixture(params=[(0, 0), ("half", 0), (-1, "half")])
+def nrows_skiprows(table_data, request):
+    """
+    Parametrized nrows fixture that accompanies table_data
+    """
+    _, pa_table = table_data
+    nrows, skiprows = request.param
+    if nrows == "half":
+        nrows = len(pa_table) // 2
+    if skiprows == "half":
+        skiprows = (len(pa_table) - nrows) // 2
+    return nrows, skiprows
+
+
 @pytest.fixture(
     params=["a.txt", pathlib.Path("a.txt"), io.BytesIO, io.StringIO],
 )
