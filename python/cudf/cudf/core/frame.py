@@ -389,7 +389,7 @@ class Frame(BinaryOperand, Scannable):
         return self.to_numpy()
 
     @_performance_tracking
-    def __array__(self, dtype=None):
+    def __array__(self, dtype=None, copy=None):
         raise TypeError(
             "Implicit conversion to a host NumPy array via __array__ is not "
             "allowed, To explicitly construct a GPU matrix, consider using "
@@ -1586,6 +1586,12 @@ class Frame(BinaryOperand, Scannable):
     @_performance_tracking
     def __abs__(self):
         return self._unaryop("abs")
+
+    def __bool__(self):
+        raise ValueError(
+            f"The truth value of a {type(self).__name__} is ambiguous. Use "
+            "a.empty, a.bool(), a.item(), a.any() or a.all()."
+        )
 
     # Reductions
     @classmethod

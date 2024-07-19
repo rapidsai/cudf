@@ -24,7 +24,6 @@ from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_dict_like,
     is_integer,
-    is_integer_dtype,
     is_scalar,
 )
 from cudf.core import indexing_utils
@@ -213,7 +212,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
                         and self._frame.dtype.categories.dtype.kind == "f"
                     )
                 )
-                and isinstance(value, (np.float32, np.float64))
+                and isinstance(value, np.floating)
                 and np.isnan(value)
             ):
                 raise MixedTypeError(
@@ -356,12 +355,10 @@ class _SeriesLocIndexer(_FrameIndexer):
             )
             if not _is_non_decimal_numeric_dtype(index_dtype) and not (
                 isinstance(index_dtype, cudf.CategoricalDtype)
-                and is_integer_dtype(index_dtype.categories.dtype)
+                and index_dtype.categories.dtype.kind in "iu"
             ):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
-                if isinstance(arg, cudf.Scalar) and is_integer_dtype(
-                    arg.dtype
-                ):
+                if isinstance(arg, cudf.Scalar) and arg.dtype.kind in "iu":
                     # Do not remove until pandas 3.0 support is added.
                     assert (
                         PANDAS_LT_300
@@ -2063,6 +2060,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         kind="quicksort",
         na_position="last",
         ignore_index=False,
+        key=None,
     ):
         """Sort by the values along either axis.
 
@@ -2076,6 +2074,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             'first' puts nulls at the beginning, 'last' puts nulls at the end
         ignore_index : bool, default False
             If True, index will not be sorted.
+        key : callable, optional
+            Apply the key function to the values
+            before sorting. This is similar to the ``key`` argument in the
+            builtin ``sorted`` function, with the notable difference that
+            this ``key`` function should be *vectorized*. It should expect a
+            ``Series`` and return a Series with the same shape as the input.
+            It will be applied to each column in `by` independently.
+            Currently not supported.
 
         Returns
         -------
@@ -2107,6 +2113,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             kind=kind,
             na_position=na_position,
             ignore_index=ignore_index,
+            key=key,
         )
 
     @_performance_tracking
@@ -3429,7 +3436,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return Series._from_data(out_data, self.index, name=index)
 
     @_performance_tracking
-    def add_prefix(self, prefix):
+    def add_prefix(self, prefix, axis=None):
+        if axis is not None:
+            raise NotImplementedError("axis is currently not implemented.")
         return Series._from_data(
             # TODO: Change to deep=False when copy-on-write is default
             data=self._data.copy(deep=True),
@@ -3527,7 +3536,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_performance_tracking
     def pct_change(
-        self, periods=1, fill_method=no_default, limit=no_default, freq=None
+        self,
+        periods=1,
+        fill_method=no_default,
+        limit=no_default,
+        freq=None,
+        **kwargs,
     ):
         """
         Calculates the percent change between sequential elements
@@ -3552,6 +3566,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
+        **kwargs
+            Additional keyword arguments are passed into
+            `Series.shift`.
 
         Returns
         -------
@@ -3596,11 +3613,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             warnings.simplefilter("ignore")
             data = self.fillna(method=fill_method, limit=limit)
         diff = data.diff(periods=periods)
-        change = diff / data.shift(periods=periods, freq=freq)
+        change = diff / data.shift(periods=periods, freq=freq, **kwargs)
         return change
 
     @_performance_tracking
-    def where(self, cond, other=None, inplace=False):
+    def where(self, cond, other=None, inplace=False, axis=None, level=None):
+        if axis is not None:
+            raise NotImplementedError("axis is not supported.")
+        elif level is not None:
+            raise NotImplementedError("level is not supported.")
         result_col = super().where(cond, other, inplace)
         return self._mimic_inplace(
             self._from_data_like_self(

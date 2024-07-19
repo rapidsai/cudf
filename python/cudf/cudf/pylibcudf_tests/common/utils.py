@@ -153,6 +153,18 @@ def assert_column_eq(
             rhs = [rhs]
 
         for lh_arr, rh_arr in zip(lhs, rhs):
+            # Check NaNs positions match
+            # and then filter out nans
+            lhs_nans = pa.compute.is_nan(lh_arr)
+            rhs_nans = pa.compute.is_nan(rh_arr)
+            assert lhs_nans.equals(rhs_nans)
+
+            if pa.compute.any(lhs_nans) or pa.compute.any(rhs_nans):
+                # masks must be equal at this point
+                mask = pa.compute.fill_null(pa.compute.invert(lhs_nans), True)
+                lh_arr = lh_arr.filter(mask)
+                rh_arr = rh_arr.filter(mask)
+
             np.testing.assert_array_almost_equal(lh_arr, rh_arr)
     else:
         assert lhs.equals(rhs)

@@ -1456,18 +1456,19 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     notnull = notna
 
     def _is_numeric(self):
-        return isinstance(
-            self._values, cudf.core.column.NumericalColumn
-        ) and self.dtype != cudf.dtype("bool")
+        return (
+            isinstance(self._values, cudf.core.column.NumericalColumn)
+            and self.dtype.kind != "b"
+        )
 
     def _is_boolean(self):
-        return self.dtype == cudf.dtype("bool")
+        return self.dtype.kind == "b"
 
     def _is_integer(self):
-        return cudf.api.types.is_integer_dtype(self.dtype)
+        return self.dtype.kind in "iu"
 
     def _is_floating(self):
-        return cudf.api.types.is_float_dtype(self.dtype)
+        return self.dtype.kind == "f"
 
     def _is_object(self):
         return isinstance(self._values, cudf.core.column.StringColumn)

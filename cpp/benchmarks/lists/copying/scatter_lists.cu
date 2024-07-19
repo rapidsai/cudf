@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,5 +143,5 @@ void BM_lists_scatter(::benchmark::State& state)
     ->Ranges({{1 << 10, 1 << 25}, {64, 2048}}) /* 1K-1B rows, 64-2048 elements */ \
     ->UseManualTime();
 
-SBM_BENCHMARK_DEFINE(double_type_colesce_o, double, true);
-SBM_BENCHMARK_DEFINE(double_type_colesce_x, double, false);
+SBM_BENCHMARK_DEFINE(double_coalesced, double, true);
+SBM_BENCHMARK_DEFINE(double_shuffled, double, false);

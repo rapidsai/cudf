@@ -1458,9 +1458,10 @@ def column_empty_like(
     return column_empty(row_count, dtype, masked)
 
 
-def _has_any_nan(arbitrary):
+def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
+    """Check if an object dtype Series or array contains NaN."""
     return any(
-        ((isinstance(x, float) or isinstance(x, np.floating)) and np.isnan(x))
+        isinstance(x, (float, np.floating)) and np.isnan(x)
         for x in np.asarray(arbitrary)
     )
 
@@ -2218,25 +2219,26 @@ def as_column(
                 and arbitrary.null_count > 0
             ):
                 arbitrary = arbitrary.cast(pa.float64())
-            if cudf.get_option(
-                "default_integer_bitwidth"
-            ) and pa.types.is_integer(arbitrary.type):
-                dtype = _maybe_convert_to_default_type("int")
-            elif cudf.get_option(
-                "default_float_bitwidth"
-            ) and pa.types.is_floating(arbitrary.type):
-                dtype = _maybe_convert_to_default_type("float")
+            if (
+                cudf.get_option("default_integer_bitwidth")
+                and pa.types.is_integer(arbitrary.type)
+            ) or (
+                cudf.get_option("default_float_bitwidth")
+                and pa.types.is_floating(arbitrary.type)
+            ):
+                dtype = _maybe_convert_to_default_type(
+                    cudf.dtype(arbitrary.type.to_pandas_dtype())
+                )
         except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
             arbitrary = pd.Series(arbitrary)
-            if cudf.get_option(
-                "default_integer_bitwidth"
-            ) and arbitrary.dtype.kind in set("iu"):
-                dtype = _maybe_convert_to_default_type("int")
-            elif (
+            if (
+                cudf.get_option("default_integer_bitwidth")
+                and arbitrary.dtype.kind in set("iu")
+            ) or (
                 cudf.get_option("default_float_bitwidth")
                 and arbitrary.dtype.kind == "f"
             ):
-                dtype = _maybe_convert_to_default_type("float")
+                dtype = _maybe_convert_to_default_type(arbitrary.dtype)
         return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
 
 
@@ -2312,9 +2314,8 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # Notice, we can always cast pure null columns
     not_null_col_dtypes = [o.dtype for o in objs if o.null_count != len(o)]
     if len(not_null_col_dtypes) and all(
-        _is_non_decimal_numeric_dtype(dtyp)
-        and np.issubdtype(dtyp, np.datetime64)
-        for dtyp in not_null_col_dtypes
+        _is_non_decimal_numeric_dtype(dtype) and dtype.kind == "M"
+        for dtype in not_null_col_dtypes
     ):
         common_dtype = find_common_type(not_null_col_dtypes)
         # Cast all columns to the common dtype

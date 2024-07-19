@@ -12,12 +12,7 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import pylibcudf
-from cudf.api.types import (
-    is_float_dtype,
-    is_integer,
-    is_integer_dtype,
-    is_scalar,
-)
+from cudf.api.types import is_integer, is_scalar
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -225,25 +220,17 @@ class NumericalColumn(NumericalBaseColumn):
                 tmp = self if reflect else other
                 # Guard against division by zero for integers.
                 if (
-                    (tmp.dtype.type in int_float_dtype_mapping)
-                    and (tmp.dtype.type != np.bool_)
-                    and (
-                        (
-                            (
-                                np.isscalar(tmp)
-                                or (
-                                    isinstance(tmp, cudf.Scalar)
-                                    # host to device copy
-                                    and tmp.is_valid()
-                                )
-                            )
-                            and (0 == tmp)
-                        )
-                        or ((isinstance(tmp, NumericalColumn)) and (0 in tmp))
-                    )
+                    tmp.dtype.type in int_float_dtype_mapping
+                    and tmp.dtype.kind != "b"
                 ):
-                    out_dtype = cudf.dtype("float64")
-
+                    if isinstance(tmp, NumericalColumn) and 0 in tmp:
+                        out_dtype = cudf.dtype("float64")
+                    elif isinstance(tmp, cudf.Scalar):
+                        if tmp.is_valid() and tmp == 0:
+                            # tmp == 0 can return NA
+                            out_dtype = cudf.dtype("float64")
+                    elif is_scalar(tmp) and tmp == 0:
+                        out_dtype = cudf.dtype("float64")
         if op in {
             "__lt__",
             "__gt__",
@@ -257,7 +244,7 @@ class NumericalColumn(NumericalBaseColumn):
             out_dtype = "bool"
 
         if op in {"__and__", "__or__", "__xor__"}:
-            if is_float_dtype(self.dtype) or is_float_dtype(other.dtype):
+            if self.dtype.kind == "f" or other.dtype.kind == "f":
                 raise TypeError(
                     f"Operation 'bitwise {op[2:-2]}' not supported between "
                     f"{self.dtype.type.__name__} and "
@@ -268,8 +255,8 @@ class NumericalColumn(NumericalBaseColumn):
 
         if (
             op == "__pow__"
-            and is_integer_dtype(self.dtype)
-            and (is_integer(other) or is_integer_dtype(other.dtype))
+            and self.dtype.kind in "iu"
+            and (is_integer(other) or other.dtype.kind in "iu")
         ):
             op = "INT_POW"
 
