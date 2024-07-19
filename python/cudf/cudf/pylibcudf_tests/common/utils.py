@@ -132,9 +132,9 @@ def assert_column_eq(
         # This is so we can do approximate comparisons
         # for floats in numpy
         def _flatten_arrays(arr):
-            flat_arrs = []
             if pa.types.is_nested(arr.type):
                 flattened = arr.flatten()
+                flat_arrs = []
                 if isinstance(flattened, list):
                     for flat_arr in flattened:
                         flat_arrs += _flatten_arrays(flat_arr)
