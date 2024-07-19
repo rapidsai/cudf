@@ -242,10 +242,6 @@ class Scan(IR):
         with_columns = options.with_columns
         row_index = options.row_index
         if self.typ == "csv":
-            dtype_map = {
-                name: cudf._lib.types.PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[typ.id()]
-                for name, typ in self.schema.items()
-            }
             parse_options = self.reader_options["parse_options"]
             sep = chr(parse_options["separator"])
             quote = chr(parse_options["quote_char"])
@@ -280,31 +276,37 @@ class Scan(IR):
             pieces = []
             for p in self.paths:
                 skiprows = self.reader_options["skip_rows"]
-                # TODO: read_csv expands globs which we should not do,
-                # because polars will already have handled them.
                 path = Path(p)
                 with path.open() as f:
                     while f.readline() == "\n":
                         skiprows += 1
-                pieces.append(
-                    cudf.read_csv(
-                        path,
-                        sep=sep,
-                        quotechar=quote,
-                        lineterminator=eol,
-                        names=column_names,
-                        header=header,
-                        usecols=usecols,
-                        na_filter=True,
-                        na_values=null_values,
-                        keep_default_na=False,
-                        skiprows=skiprows,
-                        comment=comment,
-                        decimal=decimal,
-                        dtype=dtype_map,
-                    )
+                tbl_w_meta = plc.io.csv.read_csv(
+                    plc.io.SourceInfo([path]),
+                    delimiter=sep,
+                    quotechar=quote,
+                    lineterminator=eol,
+                    col_names=column_names,
+                    header=header,
+                    usecols=usecols,
+                    na_filter=True,
+                    na_values=null_values,
+                    keep_default_na=False,
+                    skiprows=skiprows,
+                    comment=comment,
+                    decimal=decimal,
+                    dtypes=self.schema,
                 )
-            df = DataFrame.from_cudf(cudf.concat(pieces))
+                pieces.append(tbl_w_meta)
+            tables, colnames = zip(
+                *(
+                    (piece.tbl, piece.column_names(include_children=False))
+                    for piece in pieces
+                )
+            )
+            df = DataFrame.from_table(
+                plc.concatenate.concatenate(list(tables)),
+                colnames[0],
+            )
         elif self.typ == "parquet":
             cdf = cudf.read_parquet(self.paths, columns=with_columns)
             assert isinstance(cdf, cudf.DataFrame)
