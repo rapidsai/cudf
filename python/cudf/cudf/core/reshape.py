@@ -123,7 +123,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     objs : list or dictionary of DataFrame, Series, or Index
     axis : {0/'index', 1/'columns'}, default 0
         The axis to concatenate along.
-        `axis=1` must be passed if a dictionary is passed.
     join : {'inner', 'outer'}, default 'outer'
         How to handle indexes on other axis (or axes).
     ignore_index : bool, default False
@@ -231,7 +230,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     0      a       1    bird   polly
     1      b       2  monkey  george
 
-    Combine a dictionary of DataFrame objects horizontally:
+    Combine a dictionary of DataFrame objects horizontally or vertically:
 
     >>> d = {'first': df1, 'second': df2}
     >>> cudf.concat(d, axis=1)
@@ -239,6 +238,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
       letter  number  letter  number
     0      a       1       c       3
     1      b       2       d       4
+    >>> cudf.concat(d, axis=0)
+                    letter  number
+    first       0       a       1
+                1       b       2
+    second      0       c       3
+                1       d       4
     """
     # TODO: Do we really need to have different error messages for an empty
     # list and a list of None?
@@ -252,13 +257,19 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         )
 
     if isinstance(objs, dict):
-        if axis != 1:
-            raise NotImplementedError(
-                f"Can only concatenate dictionary input along axis=1, not {axis}"
-            )
         objs = {k: obj for k, obj in objs.items() if obj is not None}
         keys = list(objs)
         objs = list(objs.values())
+        has_multiple_level_types = (
+            len({type(name) for o in objs for name in o._data.keys()}) > 1
+        )
+        # All levels in the multiindex label must have the same type
+        if has_multiple_level_types:
+            raise NotImplementedError(
+                "Cannot construct a MultiIndex column with multiple "
+                "label types in cuDF at this time. You must convert "
+                "the labels to the same type."
+            )
         if any(isinstance(o, cudf.BaseIndex) for o in objs):
             raise TypeError(
                 "cannot concatenate a dictionary containing indices"
@@ -273,12 +284,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     # Retrieve the base types of `objs`. In order to support sub-types
     # and object wrappers, we use `isinstance()` instead of comparing
     # types directly
-    allowed_typs = {
+    allowed_typs = (
         cudf.Series,
         cudf.DataFrame,
         cudf.BaseIndex,
-    }
-    if not all(isinstance(o, tuple(allowed_typs)) for o in objs):
+    )
+    if not all(isinstance(o, allowed_typs) for o in objs):
         raise TypeError(
             f"can only concatenate objects which are instances of "
             f"{allowed_typs}, instead received {[type(o) for o in objs]}"
@@ -325,6 +336,18 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         else:
             if axis == 0:
                 result = obj.copy()
+                if keys is not None:
+                    if isinstance(result, cudf.DataFrame):
+                        result.index = cudf.MultiIndex.from_tuples(
+                            [
+                                (k, v)
+                                for k, vh in zip(
+                                    keys,
+                                    [obj.index.values_host for obj in objs],
+                                )
+                                for v in vh
+                            ]
+                        )
             else:
                 data = obj._data.copy(deep=True)
                 if isinstance(obj, cudf.Series) and obj.name is None:
@@ -415,16 +438,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         # need to create a MultiIndex column
         else:
-            # All levels in the multiindex label must have the same type
-            has_multiple_level_types = (
-                len({type(name) for o in objs for name in o._data.keys()}) > 1
-            )
-            if has_multiple_level_types:
-                raise NotImplementedError(
-                    "Cannot construct a MultiIndex column with multiple "
-                    "label types in cuDF at this time. You must convert "
-                    "the labels to the same type."
-                )
             for k, o in zip(keys, objs):
                 for name, col in o._data.items():
                     # if only series, then only keep keys as column labels
@@ -494,6 +507,16 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 # Explicitly cast rather than relying on None being falsy.
                 sort=bool(sort),
             )
+            if keys is not None:
+                result.index = cudf.MultiIndex.from_tuples(
+                    [
+                        (k, v)
+                        for k, vh in zip(
+                            keys, [obj.index.values_host for obj in objs]
+                        )
+                        for v in vh
+                    ]
+                )
         return result
 
     elif typ is cudf.Series:
@@ -501,9 +524,20 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         if len(new_objs) == 1 and not ignore_index:
             return new_objs[0]
         else:
-            return cudf.Series._concat(
+            result = cudf.Series._concat(
                 objs, axis=axis, index=None if ignore_index else True
             )
+            if keys is not None:
+                result.index = cudf.MultiIndex.from_tuples(
+                    [
+                        (k, v)
+                        for k, vh in zip(
+                            keys, [obj.index.values_host for obj in objs]
+                        )
+                        for v in vh
+                    ]
+                )
+            return result
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, cudf.Index):
