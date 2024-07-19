@@ -407,7 +407,20 @@ def _all_bools_with_nulls(lhs, rhs, bool_fill_value):
 
 
 @contextmanager
-def maybe_filter_deprecation(condition, message, category):
+def maybe_filter_deprecation(
+    condition: bool, message: str, category: type[Warning]
+):
+    """Conditionally filter a warning category.
+
+    Parameters
+    ----------
+    condition
+        If true, filter the warning
+    message
+        Message to match, passed to :func:`warnings.filterwarnings`
+    category
+        Category of warning, passed to :func:`warnings.filterwarnings`
+    """
     with warnings.catch_warnings():
         if condition:
             warnings.filterwarnings(

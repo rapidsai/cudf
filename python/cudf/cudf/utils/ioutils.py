@@ -1748,7 +1748,7 @@ def get_reader_filepath_or_buffer(
 
     path_or_data = stringify_pathlike(path_or_data)
 
-    if use_python_file_object == no_default:
+    if use_python_file_object is no_default:
         use_python_file_object = False
     elif use_python_file_object is not None:
         warnings.warn(

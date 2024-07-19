@@ -670,7 +670,6 @@ def read_parquet(
 
     # Don't want to warn if use_python_file_object causes us to get
     # a NativeFile (there is a separate deprecation warning for that)
-    # with filtered_deprecation(
     with maybe_filter_deprecation(
         not have_nativefile,
         message="Support for reading pyarrow's NativeFile is deprecated",
