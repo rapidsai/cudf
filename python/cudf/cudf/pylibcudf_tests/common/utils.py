@@ -111,6 +111,16 @@ def assert_column_eq(
         lhs = rhs.cast(lhs_type)
 
     if pa.types.is_floating(lhs.type) and pa.types.is_floating(rhs.type):
+        lhs_nans = pa.compute.is_nan(lhs)
+        rhs_nans = pa.compute.is_nan(rhs)
+        assert lhs_nans.equals(rhs_nans)
+
+        if pa.compute.any(lhs_nans) or pa.compute.any(rhs_nans):
+            # masks must be equal at this point
+            mask = pa.compute.fill_null(pa.compute.invert(lhs_nans), True)
+            lhs = lhs.filter(mask)
+            rhs = rhs.filter(mask)
+
         np.testing.assert_array_almost_equal(lhs, rhs)
     else:
         assert lhs.equals(rhs)
