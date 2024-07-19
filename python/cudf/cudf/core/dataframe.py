@@ -32,8 +32,6 @@ from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
-    is_bool_dtype,
-    is_datetime_dtype,
     is_dict_like,
     is_dtype_equal,
     is_list_like,
@@ -58,7 +56,12 @@ from cudf.core.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask
 from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
-from cudf.core.index import BaseIndex, RangeIndex, _index_from_data, as_index
+from cudf.core.index import (
+    BaseIndex,
+    RangeIndex,
+    _index_from_data,
+    ensure_index,
+)
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -83,7 +86,7 @@ from cudf.utils.dtypes import (
     min_scalar_type,
     numeric_normalize_types,
 )
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin, _external_only_api
 
 if TYPE_CHECKING:
@@ -145,7 +148,7 @@ class _DataFrameIndexer(_FrameIndexer):
             key = (key, slice(None))
         return self._setitem_tuple_arg(key, value)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _can_downcast_to_series(self, df, arg):
         """
         This method encapsulates the logic used
@@ -167,7 +170,7 @@ class _DataFrameIndexer(_FrameIndexer):
             ):
                 return False
             else:
-                if is_bool_dtype(as_column(arg[0]).dtype) and not isinstance(
+                if as_column(arg[0]).dtype.kind == "b" and not isinstance(
                     arg[1], slice
                 ):
                     return True
@@ -188,7 +191,7 @@ class _DataFrameIndexer(_FrameIndexer):
                 return True
         return False
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _downcast_to_series(self, df, arg):
         """
         "Downcast" from a DataFrame to a Series
@@ -233,11 +236,11 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
     For selection by label.
     """
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _getitem_scalar(self, arg):
         return self._frame[arg[1]].loc[arg[0]]
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _getitem_tuple_arg(self, arg):
         from uuid import uuid4
 
@@ -316,7 +319,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     tmp_arg[1],
                 )
 
-                if is_bool_dtype(tmp_arg[0].dtype):
+                if tmp_arg[0].dtype.kind == "b":
                     df = columns_df._apply_boolean_mask(
                         BooleanMask(tmp_arg[0], len(columns_df))
                     )
@@ -338,7 +341,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                                 range(len(tmp_arg[0]))
                             )
                         },
-                        index=as_index(tmp_arg[0]),
+                        index=cudf.Index(tmp_arg[0]),
                     )
                     columns_df[cantor_name] = column.as_column(
                         range(len(columns_df))
@@ -363,7 +366,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             return self._downcast_to_series(df, arg)
         return df
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _setitem_tuple_arg(self, key, value):
         if (
             isinstance(self._frame.index, MultiIndex)
@@ -425,7 +428,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
             else:
                 value = cupy.asarray(value)
-                if cupy.ndim(value) == 2:
+                if value.ndim == 2:
                     # If the inner dimension is 1, it's broadcastable to
                     # all columns of the dataframe.
                     indexed_shape = columns_df.loc[key[0]].shape
@@ -455,6 +458,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     else:
                         for i, col in enumerate(columns_df._column_names):
                             self._frame[col].loc[key[0]] = value[i]
+
+
+class _DataFrameAtIndexer(_DataFrameLocIndexer):
+    pass
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
@@ -532,7 +539,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return frame._empty_like(keep_index=True)
         assert_never(row_spec)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _setitem_tuple_arg(self, key, value):
         columns_df = self._frame._from_data(
             self._frame._data.select_by_index(key[1]), self._frame.index
@@ -558,7 +565,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             # TODO: consolidate code path with identical counterpart
             # in `_DataFrameLocIndexer._setitem_tuple_arg`
             value = cupy.asarray(value)
-            if cupy.ndim(value) == 2:
+            if value.ndim == 2:
                 indexed_shape = columns_df.iloc[key[0]].shape
                 if value.shape[1] == 1:
                     if value.shape[0] != indexed_shape[0]:
@@ -577,6 +584,10 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 else:
                     for i, col in enumerate(columns_df._column_names):
                         self._frame[col].iloc[key[0]] = value[i]
+
+
+class _DataFrameiAtIndexer(_DataFrameIlocIndexer):
+    pass
 
 
 class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
@@ -677,7 +688,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     _groupby = DataFrameGroupBy
     _resampler = DataFrameResampler
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __init__(
         self,
         data=None,
@@ -702,7 +713,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     data = data.reindex(index)
                     index = data.index
                 else:
-                    index = cudf.Index(index)
+                    index = ensure_index(index)
             else:
                 index = data.index
 
@@ -751,7 +762,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if index is None:
                 self._index = RangeIndex(0)
             else:
-                self._index = cudf.Index(index)
+                self._index = ensure_index(index)
             if columns is not None:
                 rangeindex = isinstance(
                     columns, (range, pd.RangeIndex, cudf.RangeIndex)
@@ -859,7 +870,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             columns, pd.MultiIndex
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _init_from_series_list(self, data, columns, index):
         if index is None:
             # When `index` is `None`, the final index of
@@ -909,7 +920,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         f"not match length of index ({index_length})"
                     )
 
-            final_index = cudf.Index(index)
+            final_index = ensure_index(index)
 
         series_lengths = list(map(len, data))
         data = numeric_normalize_types(*data)
@@ -972,14 +983,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             self._data.rangeindex = True
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _init_from_list_like(self, data, index=None, columns=None):
         if index is None:
             index = RangeIndex(start=0, stop=len(data))
         else:
-            index = cudf.Index(index)
+            index = ensure_index(index)
 
-        self._index = cudf.Index(index)
+        self._index = index
         # list-of-dicts case
         if len(data) > 0 and isinstance(data[0], dict):
             data = DataFrame.from_pandas(pd.DataFrame(data))
@@ -1030,7 +1041,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
             self._data.label_dtype = getattr(columns, "dtype", None)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _init_from_dict_like(
         self, data, index=None, columns=None, nan_as_null=None
     ):
@@ -1085,7 +1096,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             self._index = RangeIndex(0, num_rows)
         else:
-            self._index = cudf.Index(index)
+            self._index = ensure_index(index)
 
         if len(data):
             self._data.multiindex = True
@@ -1119,10 +1130,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return out
 
     @staticmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _align_input_series_indices(data, index):
-        data = data.copy()
-
         input_series = [
             Series(val)
             for val in data.values()
@@ -1142,6 +1151,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 index = aligned_input_series[0].index
 
+            data = data.copy()
             for name, val in data.items():
                 if isinstance(val, (pd.Series, Series, dict)):
                     data[name] = aligned_input_series.pop(0)
@@ -1188,7 +1198,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return obj
 
     @property
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def shape(self):
         """Returns a tuple representing the dimensionality of the DataFrame."""
         return self._num_rows, self._num_columns
@@ -1271,7 +1281,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             super().__setattr__(key, col)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __getitem__(self, arg):
         """
         If *arg* is a ``str`` or ``int`` type, return the column Series.
@@ -1365,7 +1375,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 f"__getitem__ on type {type(arg)} is not supported"
             )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __setitem__(self, arg, value):
         """Add/set column by *arg or DataFrame*"""
         if isinstance(arg, DataFrame):
@@ -1483,7 +1493,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def __delitem__(self, name):
         self._drop_column(name)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def memory_usage(self, index=True, deep=False):
         mem_usage = [col.memory_usage for col in self._data.columns]
         names = [str(name) for name in self._data.names]
@@ -1492,10 +1502,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             names.append("Index")
         return Series._from_data(
             data={None: as_column(mem_usage)},
-            index=as_index(names),
+            index=cudf.Index(names),
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __array_function__(self, func, types, args, kwargs):
         if "out" in kwargs or not all(
             issubclass(t, (Series, DataFrame)) for t in types
@@ -1529,7 +1539,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return NotImplemented
 
     # The _get_numeric_data method is necessary for dask compatibility.
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _get_numeric_data(self):
         """Return a dataframe with only numeric data types"""
         columns = [
@@ -1539,7 +1549,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ]
         return self[columns]
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def assign(self, **kwargs: Callable[[Self], Any] | Any):
         """
         Assign columns to DataFrame from keyword arguments.
@@ -1572,7 +1582,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return new_df
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _concat(
         cls, objs, axis=0, join="outer", ignore_index=False, sort=False
     ):
@@ -1964,12 +1974,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return output
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __repr__(self):
         output = self._get_renderable_dataframe()
         return self._clean_renderable_dataframe(output)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _repr_html_(self):
         lines = (
             self._get_renderable_dataframe()
@@ -1985,7 +1995,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             lines.append("</div>")
         return "\n".join(lines)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _repr_latex_(self):
         return self._get_renderable_dataframe().to_pandas()._repr_latex_()
 
@@ -2099,7 +2109,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return operands, index, can_use_self_column_name
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def from_dict(
         cls,
         data: dict,
@@ -2188,8 +2198,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         orient = orient.lower()
         if orient == "index":
-            if len(data) > 0 and isinstance(
-                next(iter(data.values())), (cudf.Series, cupy.ndarray)
+            if isinstance(
+                next(iter(data.values()), None), (cudf.Series, cupy.ndarray)
             ):
                 result = cls(data).T
                 result.columns = (
@@ -2234,7 +2244,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 f"parameter. Got '{orient}' instead"
             )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def to_dict(
         self,
         orient: str = "dict",
@@ -2355,7 +2365,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return self.to_pandas().to_dict(orient=orient, into=into)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def scatter_by_map(
         self, map_index, map_size=None, keep_index=True, debug: bool = False
     ):
@@ -2400,7 +2410,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if isinstance(map_index, cudf.core.column.StringColumn):
             cat_index = cast(
                 cudf.core.column.CategoricalColumn,
-                map_index.as_categorical_column("category"),
+                map_index.astype("category"),
             )
             map_index = cat_index.codes
             warnings.warn(
@@ -2448,7 +2458,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return result
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def update(
         self,
         other,
@@ -2543,23 +2553,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         self._mimic_inplace(source_df, inplace=True)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __iter__(self):
         return iter(self._column_names)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __contains__(self, item):
         # This must check against containment in the pandas Index and not
         # self._column_names to handle NA, None, nan, etc. correctly.
         return item in self._data.to_pandas_index()
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def items(self):
         """Iterate over column names and series pairs"""
         for k in self:
             yield (k, self[k])
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def equals(self, other) -> bool:
         ret = super().equals(other)
         # If all other checks matched, validate names.
@@ -2577,14 +2587,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         Alias for ``DataFrame.iloc``; provided for compatibility with Pandas.
         """
-        return self.iloc
+        return _DataFrameiAtIndexer(self)
 
     @property
     def at(self):
         """
         Alias for ``DataFrame.loc``; provided for compatibility with Pandas.
         """
-        return self.loc
+        return _DataFrameAtIndexer(self)
 
     @property  # type: ignore
     @_external_only_api(
@@ -2592,13 +2602,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         "index is absolutely necessary. For checking if the columns are a "
         "MultiIndex, use _data.multiindex."
     )
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def columns(self):
         """Returns a tuple of columns"""
         return self._data.to_pandas_index()
 
     @columns.setter  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def columns(self, columns):
         multiindex = False
         rangeindex = False
@@ -2666,7 +2676,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             verify=False,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def reindex(
         self,
         labels=None,
@@ -2740,7 +2750,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Chrome                200          0.02
 
         .. pandas-compat::
-            **DataFrame.reindex**
+            :meth:`pandas.DataFrame.reindex`
 
             Note: One difference from Pandas is that ``NA`` is used for rows
             that do not match, rather than ``NaN``. One side effect of this is
@@ -2814,7 +2824,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             fill_value=fill_value,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def set_index(
         self,
         keys,
@@ -2969,6 +2979,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             idx = MultiIndex._from_data(dict(enumerate(data_to_add)))
             idx.names = names
 
+        # TODO: Change to deep=False when copy-on-write is default
         df = self if inplace else self.copy(deep=True)
 
         if verify_integrity and not idx.is_unique:
@@ -2980,7 +2991,33 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df.index = idx
         return df if not inplace else None
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
+    def fillna(
+        self, value=None, method=None, axis=None, inplace=False, limit=None
+    ):  # noqa: D102
+        if isinstance(value, (pd.Series, pd.DataFrame)):
+            value = cudf.from_pandas(value)
+        if isinstance(value, cudf.Series):
+            # Align value.index to self.columns
+            value = value.reindex(self._column_names)
+        elif isinstance(value, cudf.DataFrame):
+            if not self.index.equals(value.index):
+                # Align value.index to self.index
+                value = value.reindex(self.index)
+            value = dict(value.items())
+        elif isinstance(value, abc.Mapping):
+            # Align value.indexes to self.index
+            value = {
+                key: value.reindex(self.index)
+                if isinstance(value, cudf.Series)
+                else value
+                for key, value in value.items()
+            }
+        return super().fillna(
+            value=value, method=method, axis=axis, inplace=inplace, limit=limit
+        )
+
+    @_performance_tracking
     def where(self, cond, other=None, inplace=False):
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
@@ -3137,7 +3174,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             inplace=inplace,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def insert(self, loc, name, value, nan_as_null=no_default):
         """Add a column to DataFrame at the index specified by loc.
 
@@ -3163,7 +3200,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             ignore_index=False,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _insert(self, loc, name, value, nan_as_null=None, ignore_index=True):
         """
         Same as `insert`, with additional `ignore_index` param.
@@ -3245,7 +3282,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self._data.insert(name, value, loc=loc)
 
     @property  # type:ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def axes(self):
         """
         Return a list representing the axes of the DataFrame.
@@ -3313,7 +3350,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         5     2     5    20
 
         .. pandas-compat::
-            **DataFrame.diff**
+            :meth:`pandas.DataFrame.diff`
 
             Diff currently only supports numeric dtype columns.
         """
@@ -3337,7 +3374,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return self - self.shift(periods=periods)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def drop_duplicates(
         self,
         subset=None,
@@ -3425,14 +3462,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return self._mimic_inplace(outdf, inplace=inplace)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def pop(self, item):
         """Return a column and drop it from the DataFrame."""
         popped = self[item]
         del self[item]
         return popped
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def rename(
         self,
         mapper=None,
@@ -3518,7 +3555,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         30  3  6
 
         .. pandas-compat::
-            **DataFrame.rename**
+            :meth:`pandas.DataFrame.rename`
 
             * Not Supporting: level
 
@@ -3539,6 +3576,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             mapper if columns is None and axis in (1, "columns") else columns
         )
 
+        result = self if inplace else self.copy(deep=copy)
+
+        out_index = None
         if index:
             if (
                 any(isinstance(item, str) for item in index.values())
@@ -3551,60 +3591,61 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             if level is not None and isinstance(self.index, MultiIndex):
                 level = self.index._get_level_label(level)
-                out_index = self.index.copy(deep=copy)
-                level_values = out_index.get_level_values(level)
-                level_values.to_frame().replace(
+                level_values = self.index.get_level_values(level)
+                ca = self.index._data.copy(deep=copy)
+                ca[level] = level_values._column.find_and_replace(
                     to_replace=list(index.keys()),
-                    value=list(index.values()),
-                    inplace=True,
+                    replacement=list(index.values()),
                 )
-                out_index._data[level] = column.as_column(level_values)
-                out_index._compute_levels_and_codes()
-                out = DataFrame(index=out_index)
+                out_index = type(self.index)._from_data(
+                    ca, name=self.index.name
+                )
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())
                 is_all_na = vals.count(None) == len(vals)
 
                 try:
-                    index_data = {
-                        name: col.find_and_replace(to_replace, vals, is_all_na)
-                        for name, col in self.index._data.items()
-                    }
+                    out_index = _index_from_data(
+                        {
+                            name: col.find_and_replace(
+                                to_replace, vals, is_all_na
+                            )
+                            for name, col in self.index._data.items()
+                        }
+                    )
                 except OverflowError:
-                    index_data = self.index._data.copy(deep=True)
+                    pass
 
-                out = DataFrame(index=_index_from_data(index_data))
-        else:
-            out = DataFrame(index=self.index)
+        if out_index is not None:
+            result.index = out_index
 
         if columns:
-            out._data = self._data.rename_levels(mapper=columns, level=level)
-        else:
-            out._data = self._data.copy(deep=copy)
+            result._data = result._data.rename_levels(
+                mapper=columns, level=level
+            )
 
-        if inplace:
-            self._data = out._data
-        else:
-            return out.copy(deep=copy)
+        return result
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def add_prefix(self, prefix):
+        # TODO: Change to deep=False when copy-on-write is default
         out = self.copy(deep=True)
         out.columns = [
             prefix + col_name for col_name in list(self._data.keys())
         ]
         return out
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def add_suffix(self, suffix):
+        # TODO: Change to deep=False when copy-on-write is default
         out = self.copy(deep=True)
         out.columns = [
             col_name + suffix for col_name in list(self._data.keys())
         ]
         return out
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def agg(self, aggs, axis=None):
         """
         Aggregate using one or more operations over the specified axis.
@@ -3629,15 +3670,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             ``DataFrame`` is returned.
 
         .. pandas-compat::
-            **DataFrame.agg**
+            :meth:`pandas.DataFrame.agg`
 
             * Not supporting: ``axis``, ``*args``, ``**kwargs``
 
         """
         dtypes = [self[col].dtype for col in self._column_names]
         common_dtype = find_common_type(dtypes)
-        if not is_bool_dtype(common_dtype) and any(
-            is_bool_dtype(dtype) for dtype in dtypes
+        if common_dtype.kind != "b" and any(
+            dtype.kind == "b" for dtype in dtypes
         ):
             raise MixedTypeError("Cannot create a column with mixed types")
 
@@ -3740,7 +3781,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             raise ValueError("argument must be a string, list or dict")
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def nlargest(self, n, columns, keep="first"):
         """Return the first *n* rows ordered by *columns* in descending order.
 
@@ -3802,7 +3843,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Brunei      434000    12128      BN
 
         .. pandas-compat::
-            **DataFrame.nlargest**
+            :meth:`pandas.DataFrame.nlargest`
 
             - Only a single column is supported in *columns*
         """
@@ -3874,13 +3915,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Nauru         337000  182      NR
 
         .. pandas-compat::
-            **DataFrame.nsmallest**
+            :meth:`pandas.DataFrame.nsmallest`
 
             - Only a single column is supported in *columns*
         """
         return self._n_largest_or_smallest(False, n, columns, keep)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def swaplevel(self, i=-2, j=-1, axis=0):
         """
         Swap level i with level j.
@@ -3930,7 +3971,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                            weight    1.0    0.8
                            length    0.3    0.2
         """
-        result = self.copy()
+        # TODO: Change to deep=False when copy-on-write is default
+        result = self.copy(deep=True)
 
         # To get axis number
         axis = self._get_axis_from_axis_arg(axis)
@@ -3946,7 +3988,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return result
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def transpose(self):
         """Transpose index and columns.
 
@@ -3955,7 +3997,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         a new (ncol x nrow) dataframe. self is (nrow x ncol)
 
         .. pandas-compat::
-            **DataFrame.transpose, DataFrame.T**
+            :meth:`pandas.DataFrame.transpose`, :attr:`pandas.DataFrame.T`
 
             Not supporting *copy* because default and only behavior is
             copy=True
@@ -4001,8 +4043,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Set the old column names as the new index
         result = self.__class__._from_data(
-            {i: col for i, col in enumerate(result_columns)},
-            index=as_index(index),
+            ColumnAccessor(dict(enumerate(result_columns)), verify=False),
+            index=cudf.Index(index),
         )
         # Set the old index as the new column names
         result.columns = columns
@@ -4010,7 +4052,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     T = property(transpose, doc=transpose.__doc__)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def melt(self, **kwargs):
         """Unpivots a DataFrame from wide format to long format,
         optionally leaving identifier variables set.
@@ -4040,7 +4082,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return melt(self, **kwargs)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def merge(
         self,
         right,
@@ -4146,7 +4188,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         from both sides.
 
         .. pandas-compat::
-            **DataFrame.merge**
+            :meth:`pandas.DataFrame.merge`
 
             DataFrames merges in cuDF result in non-deterministic row
             ordering.
@@ -4193,7 +4235,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             suffixes=suffixes,
         ).perform_merge()
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def join(
         self,
         other,
@@ -4221,7 +4263,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         joined : DataFrame
 
         .. pandas-compat::
-            **DataFrame.join**
+            :meth:`pandas.DataFrame.join`
 
             - *other* must be a single DataFrame for now.
             - *on* is not supported yet due to lack of multi-index support.
@@ -4242,7 +4284,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
         return df
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     @docutils.doc_apply(
         groupby_doc_template.format(
             ret=textwrap.dedent(
@@ -4343,7 +4385,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1 2018-10-08
 
         .. pandas-compat::
-            **DataFrame.query**
+            :meth:`pandas.DataFrame.query`
 
             One difference from pandas is that ``query`` currently only
             supports numeric, datetime, timedelta, or bool dtypes.
@@ -4376,7 +4418,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 BooleanMask.from_column_unchecked(boolmask)
             )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def apply(
         self, func, axis=1, raw=False, result_type=None, args=(), **kwargs
     ):
@@ -4660,7 +4702,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return DataFrame._from_data(result, index=self.index)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     @applyutils.doc_apply()
     def apply_rows(
         self,
@@ -4739,7 +4781,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             cache_key=cache_key,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     @applyutils.doc_applychunks()
     def apply_chunks(
         self,
@@ -4806,7 +4848,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             tpb=tpb,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.
 
@@ -5150,7 +5192,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         cudf.utils.ioutils.buffer_write_lines(buf, lines)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     @docutils.doc_describe()
     def describe(
         self,
@@ -5212,7 +5254,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
             return res
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.DataFrame:
@@ -5302,7 +5344,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return out_df
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def from_pandas(cls, dataframe, nan_as_null=no_default):
         """
         Convert from a Pandas DataFrame.
@@ -5375,7 +5417,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def from_arrow(cls, table):
         """
         Convert from PyArrow Table to DataFrame.
@@ -5405,10 +5447,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2  3  6
 
         .. pandas-compat::
-            **DataFrame.from_arrow**
+            `pandas.DataFrame.from_arrow`
 
-            -   Does not support automatically setting index column(s) similar
-                to how ``to_pandas`` works for PyArrow Tables.
+            This method does not exist in pandas but it is similar to
+            how :meth:`pyarrow.Table.to_pandas` works for PyArrow Tables i.e.
+            it does not support automatically setting index column(s).
         """
         index_col = None
         col_index_names = None
@@ -5461,7 +5504,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return out
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def to_arrow(self, preserve_index=None):
         """
         Convert to a PyArrow Table.
@@ -5502,7 +5545,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b: [[4,5,6]]
         """
 
-        data = self.copy(deep=False)
+        data = self
         index_descr = []
         write_index = preserve_index is not False
         keep_range_index = write_index and preserve_index is None
@@ -5530,6 +5573,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     index_descr = (
                         index.names if index.name is not None else ("index",)
                     )
+                data = data.copy(deep=False)
                 for gen_name, col_name in zip(index_descr, index._data.names):
                     data._insert(
                         data.shape[1],
@@ -5550,7 +5594,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return out.replace_schema_metadata(metadata)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def to_records(self, index=True):
         """Convert to a numpy recarray
 
@@ -5574,7 +5618,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return ret
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def from_records(cls, data, index=None, columns=None, nan_as_null=False):
         """
         Convert structured or record ndarray to DataFrame.
@@ -5625,7 +5669,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             }
 
         if not is_scalar(index):
-            new_index = cudf.Index(index)
+            new_index = ensure_index(index)
         else:
             new_index = None
 
@@ -5653,8 +5697,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return df
 
     @classmethod
-    @_cudf_nvtx_annotate
-    def _from_arrays(cls, data, index=None, columns=None, nan_as_null=False):
+    @_performance_tracking
+    def _from_arrays(
+        cls,
+        data: np.ndarray | cupy.ndarray,
+        index=None,
+        columns=None,
+        nan_as_null=False,
+    ):
         """Convert a numpy/cupy array to DataFrame.
 
         Parameters
@@ -5672,8 +5722,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
         """
-
-        data = cupy.asarray(data)
         if data.ndim != 1 and data.ndim != 2:
             raise ValueError(
                 f"records dimension expected 1 or 2 but found: {data.ndim}"
@@ -5709,7 +5757,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             }
 
         if index is not None:
-            index = cudf.Index(index)
+            index = ensure_index(index)
 
         if isinstance(columns, (pd.Index, cudf.Index)):
             level_names = tuple(columns.names)
@@ -5731,7 +5779,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             index=index,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def interpolate(
         self,
         method="linear",
@@ -5761,7 +5809,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             **kwargs,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def quantile(
         self,
         q=0.5,
@@ -5837,7 +5885,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         0.5  2.5  55.0
 
         .. pandas-compat::
-            **DataFrame.quantile**
+            :meth:`pandas.DataFrame.quantile`
 
             One notable difference from Pandas is when DataFrame is of
             non-numeric types and result is expected to be a Series in case of
@@ -5904,7 +5952,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result.index = cudf.Index(list(map(float, qs)), dtype="float64")
         return result
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def isin(self, values):
         """
         Whether each element in the DataFrame is contained in values.
@@ -6048,7 +6096,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     #
     # Stats
     #
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _prepare_for_rowwise_op(self, method, skipna, numeric_only):
         """Prepare a DataFrame for CuPy-based row-wise operations."""
 
@@ -6068,7 +6116,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             filtered = self.copy(deep=False)
 
-        is_pure_dt = all(is_datetime_dtype(dt) for dt in filtered.dtypes)
+        is_pure_dt = all(dt.kind == "M" for dt in filtered.dtypes)
 
         common_dtype = find_common_type(filtered.dtypes)
         if (
@@ -6100,7 +6148,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             coerced = coerced.astype("int64", copy=False)
         return coerced, mask, common_dtype
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def count(self, axis=0, numeric_only=False):
         """
         Count ``non-NA`` cells for each column or row.
@@ -6127,7 +6175,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dtype: int64
 
         .. pandas-compat::
-            **DataFrame.count**
+            :meth:`pandas.DataFrame.count`
 
             Parameters currently not supported are `axis` and `numeric_only`.
         """
@@ -6152,7 +6200,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         "columns": 1,
     }
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _reduce(
         self,
         op,
@@ -6257,8 +6305,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     and any(
                         not is_object_dtype(dtype) for dtype in source_dtypes
                     )
-                    or not is_bool_dtype(common_dtype)
-                    and any(is_bool_dtype(dtype) for dtype in source_dtypes)
+                    or common_dtype.kind != "b"
+                    and any(dtype.kind == "b" for dtype in source_dtypes)
                 ):
                     raise TypeError(
                         "Columns must all have the same dtype to "
@@ -6276,7 +6324,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             raise ValueError(f"Invalid value of {axis=} received for {op}")
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _scan(
         self,
         op,
@@ -6293,7 +6341,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif axis == 1:
             return self._apply_cupy_method_axis_1(op, **kwargs)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def mode(self, axis=0, numeric_only=False, dropna=True):
         """
         Get the mode(s) of each element along the selected axis.
@@ -6365,7 +6413,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1  <NA>    2.0
 
         .. pandas-compat::
-            **DataFrame.mode**
+            :meth:`pandas.DataFrame.transpose`
 
             ``axis`` parameter is currently not supported.
         """
@@ -6400,17 +6448,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return df
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
         obj = self.select_dtypes(include="bool") if bool_only else self
         return super(DataFrame, obj).all(axis, skipna, **kwargs)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def any(self, axis=0, bool_only=None, skipna=True, **kwargs):
         obj = self.select_dtypes(include="bool") if bool_only else self
         return super(DataFrame, obj).any(axis, skipna, **kwargs)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _apply_cupy_method_axis_1(self, method, *args, **kwargs):
         # This method uses cupy to perform scans and reductions along rows of a
         # DataFrame. Since cuDF is designed around columnar storage and
@@ -6465,7 +6513,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         cudf.utils.dtypes.get_min_float_dtype(
                             prepared._data[col]
                         )
-                        if not is_datetime_dtype(common_dtype)
+                        if common_dtype.kind != "M"
                         else cudf.dtype("float64")
                     )
                     .fillna(np.nan)
@@ -6492,7 +6540,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             result_dtype = (
                 common_dtype
                 if method in type_coerced_methods
-                or is_datetime_dtype(common_dtype)
+                or (common_dtype is not None and common_dtype.kind == "M")
                 else None
             )
             result = column.as_column(result, dtype=result_dtype)
@@ -6510,7 +6558,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             result_df._set_columns_like(prepared._data)
             return result_df
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _columns_view(self, columns):
         """
         Return a subset of the DataFrame's columns as a view.
@@ -6519,7 +6567,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             {col: self._data[col] for col in columns}, index=self.index
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame's columns based on the column dtypes.
 
@@ -6784,7 +6832,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             index=index,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def stack(self, level=-1, dropna=no_default, future_stack=False):
         """Stack the prescribed level(s) from columns to index
 
@@ -7013,12 +7061,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # Assemble the final index
         new_index_columns = [*repeated_index._columns, *tiled_index]
         index_names = [*self.index.names, *unique_named_levels.names]
-        new_index = MultiIndex.from_frame(
-            DataFrame._from_data(
-                dict(zip(range(0, len(new_index_columns)), new_index_columns))
-            ),
-            names=index_names,
-        )
+        new_index = MultiIndex._from_data(dict(enumerate(new_index_columns)))
+        new_index.names = index_names
 
         # Compute the column indices that serves as the input for
         # `interleave_columns`
@@ -7129,7 +7173,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             return result
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def cov(self, **kwargs):
         """Compute the covariance matrix of a DataFrame.
 
@@ -7184,7 +7228,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df._set_columns_like(self._data)
         return df
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def to_struct(self, name=None):
         """
         Return a struct Series composed of the columns of the DataFrame.
@@ -7218,7 +7262,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             name=name,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def keys(self):
         """
         Get the columns.
@@ -7278,14 +7322,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             "if you wish to iterate over each row."
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     @copy_docstring(reshape.pivot)
     def pivot(self, *, columns, index=no_default, values=no_default):
         return cudf.core.reshape.pivot(
             self, index=index, columns=columns, values=values
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     @copy_docstring(reshape.pivot_table)
     def pivot_table(
         self,
@@ -7314,14 +7358,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             sort=sort,
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     @copy_docstring(reshape.unstack)
     def unstack(self, level=-1, fill_value=None):
         return cudf.core.reshape.unstack(
             self, level=level, fill_value=fill_value
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def explode(self, column, ignore_index=False):
         """
         Transform each element of a list-like to a row, replicating index
@@ -7517,7 +7561,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result._set_columns_like(self._data)
         return result
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def interleave_columns(self):
         """
         Interleave Series columns of a table into a single column.
@@ -7551,7 +7595,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         The interleaved columns as a single column
 
         .. pandas-compat::
-            **DataFrame.interleave_columns**
+            `pandas.DataFrame.interleave_columns`
 
             This method does not exist in pandas but it can be run
             as ``pd.Series(np.vstack(df.to_numpy()).reshape((-1,)))``.
@@ -7565,7 +7609,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             {None: libcudf.reshape.interleave_columns([*self._columns])}
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def eval(self, expr: str, inplace: bool = False, **kwargs):
         """Evaluate a string describing operations on DataFrame columns.
 
@@ -7653,7 +7697,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         4  5   2   7  3
 
         .. pandas-compat::
-            **DataFrame.eval**
+            :meth:`pandas.DataFrame.eval`
 
             * Additional kwargs are not supported.
             * Bitwise and logical operators are not dtype-dependent.
@@ -7804,7 +7848,26 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return result
 
 
-def from_dataframe(df, allow_copy=False):
+def from_dataframe(df, allow_copy: bool = False) -> DataFrame:
+    """
+    Build a :class:`DataFrame` from an object supporting the dataframe interchange protocol.
+
+    .. note::
+
+        If you have a ``pandas.DataFrame``, use :func:`from_pandas` instead.
+
+    Parameters
+    ----------
+    df : DataFrameXchg
+        Object supporting the interchange protocol, i.e. ``__dataframe__`` method.
+    allow_copy : bool, default: True
+        Whether to allow copying the memory to perform the conversion
+        (if false then zero-copy approach is requested).
+
+    Returns
+    -------
+    :class:`DataFrame`
+    """
     return df_protocol.from_dataframe(df, allow_copy=allow_copy)
 
 
@@ -7921,7 +7984,7 @@ for binop in [
     )
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def from_pandas(obj, nan_as_null=no_default):
     """
     Convert certain Pandas objects into the cudf equivalent.
@@ -8048,7 +8111,7 @@ def from_pandas(obj, nan_as_null=no_default):
         )
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def merge(left, right, *args, **kwargs):
     if isinstance(left, Series):
         left = left.to_frame()

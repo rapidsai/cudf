@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, Any, Callable, Sequence, cast
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 from typing_extensions import Self
@@ -13,9 +12,7 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import pylibcudf
-from cudf._lib.types import size_type_dtype
 from cudf.api.types import (
-    is_bool_dtype,
     is_float_dtype,
     is_integer,
     is_integer_dtype,
@@ -131,12 +128,8 @@ class NumericalColumn(NumericalBaseColumn):
             and self.dtype.kind in {"c", "f"}
             and np.isnan(value)
         ):
-            return column.as_column(
-                cp.argwhere(
-                    cp.isnan(self.data_array_view(mode="read"))
-                ).flatten(),
-                dtype=size_type_dtype,
-            )
+            nan_col = libcudf.unary.is_nan(self)
+            return nan_col.indices_of(True)
         else:
             return super().indices_of(value)
 
@@ -165,7 +158,7 @@ class NumericalColumn(NumericalBaseColumn):
             else as_column(value)
         )
 
-        if not is_bool_dtype(self.dtype) and is_bool_dtype(device_value.dtype):
+        if self.dtype.kind != "b" and device_value.dtype.kind == "b":
             raise TypeError(f"Invalid value {value} for dtype {self.dtype}")
         else:
             device_value = device_value.astype(self.dtype)
@@ -270,7 +263,7 @@ class NumericalColumn(NumericalBaseColumn):
                     f"{self.dtype.type.__name__} and "
                     f"{other.dtype.type.__name__}"
                 )
-            if is_bool_dtype(self.dtype) or is_bool_dtype(other.dtype):
+            if self.dtype.kind == "b" or other.dtype.kind == "b":
                 out_dtype = "bool"
 
         if (
@@ -301,15 +294,28 @@ class NumericalColumn(NumericalBaseColumn):
         if isinstance(other, cudf.Scalar):
             if self.dtype == other.dtype:
                 return other
+
             # expensive device-host transfer just to
             # adjust the dtype
             other = other.value
+
+            # NumPy 2 needs a Python scalar to do weak promotion, but
+            # pandas forces weak promotion always
+            # TODO: We could use 0, 0.0, and 0j for promotion to avoid copies.
+            if other.dtype.kind in "ifc":
+                other = other.item()
+        elif not isinstance(other, (int, float, complex)):
+            # Go via NumPy to get the value
+            other = np.array(other)
+            if other.dtype.kind in "ifc":
+                other = other.item()
+
         # Try and match pandas and hence numpy. Deduce the common
-        # dtype via the _value_ of other, and the dtype of self. TODO:
-        # When NEP50 is accepted, this might want changed or
-        # simplified.
-        # This is not at all simple:
-        # np.result_type(np.int64(0), np.uint8)
+        # dtype via the _value_ of other, and the dtype of self on NumPy 1.x
+        # with NumPy 2, we force weak promotion even for our/NumPy scalars
+        # to match pandas 2.2.
+        # Weak promotion is not at all simple:
+        # np.result_type(0, np.uint8)
         #   => np.uint8
         # np.result_type(np.asarray([0], dtype=np.int64), np.uint8)
         #   => np.int64
@@ -331,9 +337,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return libcudf.string_casting.int2ip(self)
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
+    def as_string_column(self) -> cudf.core.column.StringColumn:
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
                 cudf.dtype(self.dtype)
@@ -345,8 +349,8 @@ class NumericalColumn(NumericalBaseColumn):
             )
 
     def as_datetime_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.DatetimeColumn":
+        self, dtype: Dtype
+    ) -> cudf.core.column.DatetimeColumn:
         return cast(
             "cudf.core.column.DatetimeColumn",
             build_column(
@@ -359,8 +363,8 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_timedelta_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.TimeDeltaColumn":
+        self, dtype: Dtype
+    ) -> cudf.core.column.TimeDeltaColumn:
         return cast(
             "cudf.core.column.TimeDeltaColumn",
             build_column(
@@ -532,57 +536,26 @@ class NumericalColumn(NumericalBaseColumn):
             replaced, df._data["old"], df._data["new"]
         )
 
-    def fillna(
-        self,
-        fill_value: Any = None,
-        method: str | None = None,
-    ) -> Self:
-        """
-        Fill null values with *fill_value*
-        """
-        col = self.nans_to_nulls()
-
-        if col.null_count == 0:
-            return col
-
-        if method is not None:
-            return super().fillna(fill_value, method)
-
-        if fill_value is None:
-            raise ValueError("Must specify either 'fill_value' or 'method'")
-
-        if (
-            isinstance(fill_value, cudf.Scalar)
-            and fill_value.dtype == col.dtype
-        ):
-            return super().fillna(fill_value, method)
-
-        if np.isscalar(fill_value):
-            # cast safely to the same dtype as self
-            fill_value_casted = col.dtype.type(fill_value)
-            if not np.isnan(fill_value) and (fill_value_casted != fill_value):
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> cudf.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
+        if is_scalar(fill_value):
+            cudf_obj = cudf.Scalar(fill_value)
+            if not as_column(cudf_obj).can_cast_safely(self.dtype):
                 raise TypeError(
                     f"Cannot safely cast non-equivalent "
-                    f"{type(fill_value).__name__} to {col.dtype.name}"
+                    f"{type(fill_value).__name__} to {self.dtype.name}"
                 )
-            fill_value = cudf.Scalar(fill_value_casted)
         else:
-            fill_value = column.as_column(fill_value, nan_as_null=False)
-            if is_integer_dtype(col.dtype):
-                # cast safely to the same dtype as self
-                if fill_value.dtype != col.dtype:
-                    new_fill_value = fill_value.astype(col.dtype)
-                    if not (new_fill_value == fill_value).all():
-                        raise TypeError(
-                            f"Cannot safely cast non-equivalent "
-                            f"{fill_value.dtype.type.__name__} to "
-                            f"{col.dtype.type.__name__}"
-                        )
-                    fill_value = new_fill_value
-            else:
-                fill_value = fill_value.astype(col.dtype)
-
-        return super().fillna(fill_value, method)
+            cudf_obj = as_column(fill_value, nan_as_null=False)
+            if not cudf_obj.can_cast_safely(self.dtype):  # type: ignore[attr-defined]
+                raise TypeError(
+                    f"Cannot safely cast non-equivalent "
+                    f"{cudf_obj.dtype.type.__name__} to "
+                    f"{self.dtype.type.__name__}"
+                )
+        return cudf_obj.astype(self.dtype)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         """
@@ -659,7 +632,9 @@ class NumericalColumn(NumericalBaseColumn):
             min_, max_ = iinfo.min, iinfo.max
 
             # best we can do is hope to catch it here and avoid compare
-            if (self.min() >= min_) and (self.max() <= max_):
+            # Use Python floats, which have precise comparison for float64.
+            # NOTE(seberg): it would make sense to limit to the mantissa range.
+            if (float(self.min()) >= min_) and (float(self.max()) <= max_):
                 filled = self.fillna(0)
                 return (cudf.Series(filled) % 1 == 0).all()
             else:

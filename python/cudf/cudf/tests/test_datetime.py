@@ -15,10 +15,10 @@ import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.index import DatetimeIndex
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
 )
@@ -1534,18 +1534,7 @@ def test_date_range_start_end_periods(start, end, periods):
     )
 
 
-def test_date_range_start_end_freq(request, start, end, freq):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                start == "1831-05-08 15:23:21"
-                and end == "1996-11-21 04:05:30"
-                and freq == "110546789ms"
-            ),
-            reason="https://github.com/rapidsai/cudf/issues/12133",
-        )
-    )
-
+def test_date_range_start_end_freq(start, end, freq):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
@@ -1561,7 +1550,7 @@ def test_date_range_start_end_freq(request, start, end, freq):
     )
 
 
-def test_date_range_start_freq_periods(request, start, freq, periods):
+def test_date_range_start_freq_periods(start, freq, periods):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:

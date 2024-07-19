@@ -30,14 +30,12 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
-from cudf.testing import _utils as utils
+from cudf.testing import _utils as utils, assert_eq, assert_neq
 from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    assert_eq,
     assert_exceptions_equal,
-    assert_neq,
     does_not_raise,
     expect_warning_if,
     gen_rand,
@@ -3660,6 +3658,12 @@ def test_dataframe_mulitindex_sort_index(
         assert_eq(expected, got)
 
 
+def test_sort_index_axis_1_ignore_index_true_columnaccessor_state_names():
+    gdf = cudf.DataFrame([[1, 2, 3]], columns=["b", "a", "c"])
+    result = gdf.sort_index(axis=1, ignore_index=True)
+    assert result._data.names == tuple(result._data.keys())
+
+
 @pytest.mark.parametrize("dtype", dtypes + ["category"])
 def test_dataframe_0_row_dtype(dtype):
     if dtype == "category":
@@ -5230,7 +5234,7 @@ def test_rowwise_ops(data, op, skipna, numeric_only):
             else (pdf[column].notna().count() == 0)
         )
         or cudf.api.types.is_numeric_dtype(pdf[column].dtype)
-        or cudf.api.types.is_bool_dtype(pdf[column].dtype)
+        or pdf[column].dtype.kind == "b"
         for column in pdf
     ):
         with pytest.raises(TypeError):
@@ -5453,9 +5457,7 @@ def test_rowwise_ops_datetime_dtypes(data, op, skipna, numeric_only):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    if not numeric_only and not all(
-        cudf.api.types.is_datetime64_dtype(dt) for dt in gdf.dtypes
-    ):
+    if not numeric_only and not all(dt.kind == "M" for dt in gdf.dtypes):
         with pytest.raises(TypeError):
             got = getattr(gdf, op)(
                 axis=1, skipna=skipna, numeric_only=numeric_only
@@ -10020,6 +10022,14 @@ def test_dataframe_rename_duplicate_column():
         gdf.rename(columns={"a": "b"}, inplace=True)
 
 
+def test_dataframe_rename_columns_keep_type():
+    gdf = cudf.DataFrame([[1, 2, 3]])
+    gdf.columns = cudf.Index([4, 5, 6], dtype=np.int8)
+    result = gdf.rename({4: 50}, axis="columns").columns
+    expected = pd.Index([50, 5, 6], dtype=np.int8)
+    assert_eq(result, expected)
+
+
 @pytest_unmark_spilling
 @pytest.mark.skipif(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
@@ -11066,3 +11076,27 @@ def test_dataframe_loc_int_float(dtype1, dtype2):
     expected = pdf.loc[pidx]
 
     assert_eq(actual, expected, check_index_type=True, check_dtype=True)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        cudf.DataFrame(range(2)),
+        None,
+        [cudf.Series(range(2))],
+        [[0], [1]],
+        {1: range(2)},
+        cupy.arange(2),
+    ],
+)
+def test_init_with_index_no_shallow_copy(data):
+    idx = cudf.RangeIndex(2)
+    df = cudf.DataFrame(data, index=idx)
+    assert df.index is idx
+
+
+def test_from_records_with_index_no_shallow_copy():
+    idx = cudf.RangeIndex(2)
+    data = np.array([(1.0, 2), (3.0, 4)], dtype=[("x", "<f8"), ("y", "<i8")])
+    df = cudf.DataFrame(data.view(np.recarray), index=idx)
+    assert df.index is idx

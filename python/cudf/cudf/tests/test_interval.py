@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -188,3 +188,9 @@ def test_from_pandas_intervaldtype():
     result = cudf.from_pandas(dtype)
     expected = cudf.IntervalDtype("int64", closed="left")
     assert_eq(result, expected)
+
+
+def test_intervaldtype_eq_string_with_attributes():
+    dtype = cudf.IntervalDtype("int64", closed="left")
+    assert dtype == "interval"
+    assert dtype == "interval[int64, left]"

@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 pytestmark = pytest.mark.spilling
 

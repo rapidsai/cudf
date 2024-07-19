@@ -51,16 +51,14 @@ TEST_F(JsonWriterTest, EmptyInput)
                        .build();
 
   // Empty columns in table
-  cudf::io::write_json(
-    out_options, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+  cudf::io::write_json(out_options, cudf::test::get_default_stream());
   std::string const expected = R"([])";
   EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
 
   // Empty columns in table - JSON Lines
   out_buffer.clear();
   out_options.enable_lines(true);
-  cudf::io::write_json(
-    out_options, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+  cudf::io::write_json(out_options, cudf::test::get_default_stream());
   std::string const expected_lines = "\n";
   EXPECT_EQ(expected_lines, std::string(out_buffer.data(), out_buffer.size()));
 
@@ -68,8 +66,7 @@ TEST_F(JsonWriterTest, EmptyInput)
   cudf::table_view tbl_view2{};
   out_options.set_table(tbl_view2);
   out_buffer.clear();
-  cudf::io::write_json(
-    out_options, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+  cudf::io::write_json(out_options, cudf::test::get_default_stream());
   EXPECT_EQ(expected_lines, std::string(out_buffer.data(), out_buffer.size()));
 }
 
@@ -94,22 +91,17 @@ TEST_F(JsonWriterTest, ErrorCases)
                        .build();
 
   // not enough column names
-  EXPECT_THROW(
-    cudf::io::write_json(
-      out_options, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
-    cudf::logic_error);
+  EXPECT_THROW(cudf::io::write_json(out_options, cudf::test::get_default_stream()),
+               cudf::logic_error);
 
   mt.schema_info.emplace_back("int16");
   out_options.set_metadata(mt);
-  EXPECT_NO_THROW(cudf::io::write_json(
-    out_options, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()));
+  EXPECT_NO_THROW(cudf::io::write_json(out_options, cudf::test::get_default_stream()));
 
   // chunk_rows must be at least 8
   out_options.set_rows_per_chunk(0);
-  EXPECT_THROW(
-    cudf::io::write_json(
-      out_options, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
-    cudf::logic_error);
+  EXPECT_THROW(cudf::io::write_json(out_options, cudf::test::get_default_stream()),
+               cudf::logic_error);
 }
 
 TEST_F(JsonWriterTest, PlainTable)
@@ -131,9 +123,7 @@ TEST_F(JsonWriterTest, PlainTable)
                            .lines(false)
                            .na_rep("null");
 
-  cudf::io::write_json(options_builder.build(),
-                       cudf::test::get_default_stream(),
-                       rmm::mr::get_current_device_resource());
+  cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
 
   std::string const expected =
     R"([{"col1":"a","col2":"d","int":1,"float":1.5,"int16":null},{"col1":"b","col2":"e","int":2,"float":2.5,"int16":2},{"col1":"c","col2":"f","int":3,"float":3.5,"int16":null}])";
@@ -163,9 +153,7 @@ TEST_F(JsonWriterTest, SimpleNested)
                            .lines(true)
                            .na_rep("null");
 
-  cudf::io::write_json(options_builder.build(),
-                       cudf::test::get_default_stream(),
-                       rmm::mr::get_current_device_resource());
+  cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
   std::string const expected = R"({"a":1,"b":2,"c":{"d":3},"f":5.5,"g":[1]}
 {"a":6,"b":7,"c":{"d":8},"f":10.5}
 {"a":1,"b":2,"c":{"e":4},"f":5.5,"g":[2,null]}
@@ -197,9 +185,7 @@ TEST_F(JsonWriterTest, MixedNested)
                            .lines(false)
                            .na_rep("null");
 
-  cudf::io::write_json(options_builder.build(),
-                       cudf::test::get_default_stream(),
-                       rmm::mr::get_current_device_resource());
+  cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
   std::string const expected =
     R"([{"a":1,"b":2,"c":{"d":[3]},"f":5.5,"g":[{"h":1}]},)"
     R"({"a":6,"b":7,"c":{"d":[8]},"f":10.5},)"
@@ -232,8 +218,7 @@ TEST_F(JsonWriterTest, WriteReadNested)
                        .na_rep("null")
                        .build();
 
-  cudf::io::write_json(
-    out_options, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+  cudf::io::write_json(out_options, cudf::test::get_default_stream());
   std::string const expected = R"({"a":1,"b":2,"c":{"d":3},"f":5.5,"g":[1]}
 {"a":6,"b":7,"c":{"d":8},"f":10.5}
 {"a":1,"b":2,"c":{"e":4},"f":5.5,"g":[2,null]}
@@ -308,8 +293,7 @@ TEST_F(JsonWriterTest, WriteReadNested)
   mt.schema_info[2].children.clear();
   out_options.set_metadata(mt);
   out_buffer.clear();
-  cudf::io::write_json(
-    out_options, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+  cudf::io::write_json(out_options, cudf::test::get_default_stream());
 
   in_options = cudf::io::json_reader_options::builder(
                  cudf::io::source_info{out_buffer.data(), out_buffer.size()})
@@ -332,8 +316,7 @@ TEST_F(JsonWriterTest, WriteReadNested)
   // without column names
   out_options.set_metadata(cudf::io::table_metadata{});
   out_buffer.clear();
-  cudf::io::write_json(
-    out_options, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+  cudf::io::write_json(out_options, cudf::test::get_default_stream());
   in_options = cudf::io::json_reader_options::builder(
                  cudf::io::source_info{out_buffer.data(), out_buffer.size()})
                  .lines(true)
@@ -371,8 +354,7 @@ TEST_F(JsonWriterTest, SpecialChars)
                        .na_rep("null")
                        .build();
 
-  cudf::io::write_json(
-    out_options, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+  cudf::io::write_json(out_options, cudf::test::get_default_stream());
   std::string const expected = R"({"\"a\"":1,"'b'":"abcd"}
 {"\"a\"":6,"'b'":"b\b\f\n\r\t"}
 {"\"a\"":1,"'b'":"\"c\""}
@@ -405,9 +387,7 @@ TEST_F(JsonWriterTest, NullList)
                            .lines(true)
                            .na_rep("null");
 
-  cudf::io::write_json(options_builder.build(),
-                       cudf::test::get_default_stream(),
-                       rmm::mr::get_current_device_resource());
+  cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
   std::string const expected = R"({"a":[null],"b":[[1,2,3],[null],[null,null,null],[4,null,5]]}
 {"a":[2,null,null,3],"b":null}
 {"a":[null,null,4],"b":[[2,null],null]}
@@ -446,9 +426,7 @@ TEST_F(JsonWriterTest, ChunkedNested)
                            .na_rep("null")
                            .rows_per_chunk(8);
 
-  cudf::io::write_json(options_builder.build(),
-                       cudf::test::get_default_stream(),
-                       rmm::mr::get_current_device_resource());
+  cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
   std::string const expected =
     R"({"a":1,"b":-2,"c":{},"e":[{"f":1}]}
 {"a":2,"b":-2,"c":{}}
@@ -504,9 +482,7 @@ TEST_F(JsonWriterTest, StructAllNullCombinations)
                            .lines(true)
                            .na_rep("null");
 
-  cudf::io::write_json(options_builder.build(),
-                       cudf::test::get_default_stream(),
-                       rmm::mr::get_current_device_resource());
+  cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
   std::string const expected = R"({}
 {"e":1}
 {"d":1}
@@ -568,9 +544,7 @@ TEST_F(JsonWriterTest, Unicode)
                            .lines(true)
                            .na_rep("null");
 
-  cudf::io::write_json(options_builder.build(),
-                       cudf::test::get_default_stream(),
-                       rmm::mr::get_current_device_resource());
+  cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
 
   std::string const expected =
     R"({"col1":"\"\\\/\b\f\n\r\t","col2":"C\u10ae\u226a\u31f3\u434f\u51f9\u6ca6\u738b\u8fbf\u9fb8\ua057\ubbdc\uc2a4\ud3f6\ue4fe\ufd20","int16":null}

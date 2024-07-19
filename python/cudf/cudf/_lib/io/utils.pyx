@@ -8,7 +8,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-from cudf._lib.io.datasource cimport Datasource
+from cudf._lib.pylibcudf.io.datasource cimport Datasource
 from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
 from cudf._lib.pylibcudf.libcudf.io.datasource cimport datasource
 from cudf._lib.pylibcudf.libcudf.io.types cimport (
@@ -147,10 +147,37 @@ cdef cppclass iobase_data_sink(data_sink):
         return buf.tell()
 
 
+cdef add_df_col_struct_names(df, child_names_dict):
+    for name, child_names in child_names_dict.items():
+        col = df._data[name]
+
+        df._data[name] = update_col_struct_field_names(col, child_names)
+
+
+cdef update_col_struct_field_names(Column col, child_names):
+    if col.children:
+        children = list(col.children)
+        for i, (child, names) in enumerate(zip(children, child_names.values())):
+            children[i] = update_col_struct_field_names(
+                child,
+                names
+            )
+        col.set_base_children(tuple(children))
+
+    if isinstance(col.dtype, StructDtype):
+        col = col._rename_fields(
+            child_names.keys()
+        )
+
+    return col
+
+
 cdef update_struct_field_names(
     table,
     vector[column_name_info]& schema_info
 ):
+    # Deprecated, remove in favor of add_col_struct_names
+    # when a reader is ported to pylibcudf
     for i, (name, col) in enumerate(table._data.items()):
         table._data[name] = update_column_struct_field_names(
             col, schema_info[i]
