@@ -1360,7 +1360,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         if isinstance(chunk_results, ColumnBase) or cudf.api.types.is_scalar(
             chunk_results[0]
         ):
-            data = {None: as_column(chunk_results)}
+            data = ColumnAccessor(
+                {None: as_column(chunk_results)}, verify=False
+            )
             ty = cudf.Series if self._as_index else cudf.DataFrame
             result = ty._from_data(data, index=group_names)
             result.index.names = self.grouping.names
