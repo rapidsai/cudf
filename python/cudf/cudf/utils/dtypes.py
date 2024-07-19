@@ -1,7 +1,9 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 import cupy as cp
 import numpy as np
@@ -10,7 +12,9 @@ import pyarrow as pa
 from pandas.core.dtypes.common import infer_dtype_from_object
 
 import cudf
-from cudf._typing import DtypeObj
+
+if TYPE_CHECKING:
+    from cudf._typing import DtypeObj
 
 """Map numpy dtype to pyarrow types.
 Note that np.bool_ bitwidth (8) is different from pa.bool_ (1). Special
