@@ -261,7 +261,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.null_count == self.size:
             return True
 
-        return libcudf.reduce.reduce("all", self, dtype=np.bool_)
+        return libcudf.reduce.reduce("all", self)
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
@@ -271,7 +271,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         elif skipna and self.null_count == self.size:
             return False
 
-        return libcudf.reduce.reduce("any", self, dtype=np.bool_)
+        return libcudf.reduce.reduce("any", self)
 
     def dropna(self) -> Self:
         if self.has_nulls():
@@ -1305,7 +1305,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             skipna=skipna, min_count=min_count
         )
         if isinstance(preprocessed, ColumnBase):
-            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
+            dtype = kwargs.pop("dtype", None)
+            return libcudf.reduce.reduce(
+                op, preprocessed, dtype=dtype, **kwargs
+            )
         return preprocessed
 
     def _process_for_reduction(
@@ -1336,6 +1339,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         Determine the correct dtype to pass to libcudf based on
         the input dtype, data dtype, and specific reduction op
         """
+        if reduction_op in {"any", "all"}:
+            return np.dtype(np.bool_)
         return self.dtype
 
     def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:

@@ -485,13 +485,11 @@ class DatetimeColumn(column.ColumnBase):
                 format = format.split(" ")[0]
         return self.strftime(format)
 
-    def mean(
-        self, skipna=None, min_count: int = 0, dtype=np.float64
-    ) -> ScalarLike:
+    def mean(self, skipna=None, min_count: int = 0) -> ScalarLike:
         return pd.Timestamp(
             cast(
                 "cudf.core.column.NumericalColumn", self.astype("int64")
-            ).mean(skipna=skipna, min_count=min_count, dtype=dtype),
+            ).mean(skipna=skipna, min_count=min_count),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
@@ -499,12 +497,11 @@ class DatetimeColumn(column.ColumnBase):
         self,
         skipna: bool | None = None,
         min_count: int = 0,
-        dtype: Dtype = np.float64,
         ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
             cast("cudf.core.column.NumericalColumn", self.astype("int64")).std(
-                skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
+                skipna=skipna, min_count=min_count, ddof=ddof
             )
             * _unit_to_nanoseconds_conversion[self.time_unit],
         ).as_unit(self.time_unit)
