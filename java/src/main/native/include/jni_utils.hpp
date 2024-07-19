@@ -284,7 +284,7 @@ class native_jArray {
     return data()[index];
   }
 
-  const N_TYPE* const data() const
+  N_TYPE const* data() const
   {
     init_data_ptr();
     return data_ptr;
@@ -296,15 +296,15 @@ class native_jArray {
     return data_ptr;
   }
 
-  const N_TYPE* const begin() const { return data(); }
+  N_TYPE const* begin() const { return data(); }
 
   N_TYPE* begin() { return data(); }
 
-  const N_TYPE* const end() const { return data() + size(); }
+  N_TYPE const* end() const { return data() + size(); }
 
   N_TYPE* end() { return data() + size(); }
 
-  const J_ARRAY_TYPE get_jArray() const { return orig; }
+  J_ARRAY_TYPE const get_jArray() const { return orig; }
 
   J_ARRAY_TYPE get_jArray() { return orig; }
 
@@ -430,9 +430,7 @@ class native_jpointerArray {
   T* const* begin() const { return data(); }
   T* const* end() const { return data() + size(); }
 
-  const jlongArray get_jArray() const { return wrapped.get_jArray(); }
-
-  jlongArray get_jArray() { return wrapped.get_jArray(); }
+  jlongArray get_jArray() const { return wrapped.get_jArray(); }
 
   void assert_no_nulls() const
   {
@@ -624,7 +622,7 @@ class native_jstring {
     return true;
   }
 
-  const jstring get_jstring() const { return orig; }
+  jstring get_jstring() const { return orig; }
 
   ~native_jstring()
   {
@@ -753,13 +751,13 @@ class native_jstringArray {
     return cache[index];
   }
 
-  char const** const as_c_array() const
+  char const** as_c_array() const
   {
     init_c_cache();
     return c_cache.data();
   }
 
-  const std::vector<std::string> as_cpp_vector() const
+  std::vector<std::string> as_cpp_vector() const
   {
     init_cpp_cache();
     return cpp_cache;
