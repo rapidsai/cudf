@@ -637,12 +637,12 @@ std::vector<size_t> reader::impl::calculate_output_num_rows_per_source(size_t co
   auto const& partial_sum_nrows_source = _file_itm_data.exclusive_sum_num_rows_per_source;
 
   // Binary search start_row and end_row in exclusive_sum_num_rows_per_source vector
-  auto const start_iter = thrust::upper_bound(
-    partial_sum_nrows_source.cbegin(), partial_sum_nrows_source.cend(), start_row);
+  auto const start_iter =
+    std::upper_bound(partial_sum_nrows_source.cbegin(), partial_sum_nrows_source.cend(), start_row);
   auto const end_iter =
     (end_row == _file_itm_data.global_skip_rows + _file_itm_data.global_num_rows)
       ? partial_sum_nrows_source.cend() - 1
-      : thrust::upper_bound(start_iter, partial_sum_nrows_source.cend(), end_row);
+      : std::upper_bound(start_iter, partial_sum_nrows_source.cend(), end_row);
 
   // Compute the array offset index for both iterators
   auto const start_idx = std::distance(partial_sum_nrows_source.cbegin(), start_iter);
@@ -660,9 +660,9 @@ std::vector<size_t> reader::impl::calculate_output_num_rows_per_source(size_t co
     // Compute the number of rows from the last source file
     num_rows_per_source[end_idx] = end_row - partial_sum_nrows_source[end_idx - 1];
     // Simply copy the number of rows for each source in range: (start_idx, end_idx)
-    thrust::copy(_file_itm_data.num_rows_per_source.cbegin() + start_idx + 1,
-                 _file_itm_data.num_rows_per_source.cbegin() + end_idx,
-                 num_rows_per_source.begin() + start_idx + 1);
+    std::copy(_file_itm_data.num_rows_per_source.cbegin() + start_idx + 1,
+              _file_itm_data.num_rows_per_source.cbegin() + end_idx,
+              num_rows_per_source.begin() + start_idx + 1);
   }
 
   return num_rows_per_source;

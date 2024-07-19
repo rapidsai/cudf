@@ -1010,9 +1010,8 @@ aggregate_reader_metadata::select_row_groups(
         if (count > rows_to_skip || count == 0) {
           // start row of this row group adjusted with rows_to_skip
           num_rows_per_source[src_idx] += count;
-          num_rows_per_source[src_idx] -= (chunk_start_row <= rows_to_skip and count > rows_to_skip)
-                                            ? rows_to_skip
-                                            : chunk_start_row;
+          num_rows_per_source[src_idx] -=
+            (chunk_start_row <= rows_to_skip) ? rows_to_skip : chunk_start_row;
 
           // We need the unadjusted start index of this row group to correctly initialize
           // ColumnChunkDesc for this row group in create_global_chunk_info() and calculate

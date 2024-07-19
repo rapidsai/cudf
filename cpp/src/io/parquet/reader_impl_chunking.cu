@@ -1232,17 +1232,22 @@ void reader::impl::setup_next_pass(read_mode mode)
       pass.skip_rows = _file_itm_data.global_skip_rows;
       pass.num_rows  = _file_itm_data.global_num_rows;
     } else {
-      auto const start_row =
+      // pass_start_row and pass_end_row are computed from the selected row groups relative to the
+      // global_skip_rows.
+      auto const pass_start_row =
         _file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass];
-      auto const end_row =
+      auto const pass_end_row =
         std::min(_file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass + 1],
                  _file_itm_data.global_num_rows);
 
-      // skip_rows is always global in the sense that it is relative to the first row of
-      // everything we will be reading, regardless of what pass we are on.
-      // num_rows is how many rows we are reading this pass.
-      pass.skip_rows = _file_itm_data.global_skip_rows + start_row;
-      pass.num_rows  = end_row - start_row;
+      // pass.skip_rows is always global in the sense that it is relative to the first row of
+      // the data source (global row number 0), regardless of what pass we are on. Therefore,
+      // we must re-add global_skip_rows to the pass_start_row which is relative to the
+      // global_skip_rows.
+      pass.skip_rows = _file_itm_data.global_skip_rows + pass_start_row;
+      // num_rows is how many rows we are reading this pass. Since this is a difference, adding
+      // global_skip_rows to both variables is redundant.
+      pass.num_rows = pass_end_row - pass_start_row;
     }
 
     // load page information for the chunk. this retrieves the compressed bytes for all the
