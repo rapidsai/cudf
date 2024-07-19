@@ -65,9 +65,12 @@ void prefetch(std::string_view key,
               rmm::cuda_device_id device_id)
 {
   auto result = prefetch_noexcept(key, ptr, size, stream, device_id);
-  // Ignore cudaErrorInvalidValue because that will be raised if
-  // prefetching is attempted on unmanaged memory.
-  if ((result != cudaErrorInvalidValue) && (result != cudaSuccess)) {
+  // Ignore cudaErrorInvalidValue because that will be raised if prefetching is
+  // attempted on unmanaged memory. Need to flush the CUDA error so that the
+  // context is not corrupted.
+  if (result == cudaErrorInvalidValue) {
+    cudaGetLastError();
+  } else if (result != cudaSuccess) {
     std::cerr << "Prefetch failed" << std::endl;
     CUDF_CUDA_TRY(result);
   }
