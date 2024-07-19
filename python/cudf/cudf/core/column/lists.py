@@ -646,9 +646,17 @@ class ListMethods(ColumnMethods):
         dtype: list
 
         .. pandas-compat::
-            **ListMethods.sort_values**
+            `pandas.Series.list.sort_values`
 
-            The ``inplace`` and ``kind`` arguments are currently not supported.
+            This method does not exist in pandas but it can be run
+            as:
+
+            >>> import pandas as pd
+            >>> s = pd.Series([[3, 2, 1], [2, 4, 3]])
+            >>> print(s.apply(sorted))
+            0    [1, 2, 3]
+            1    [2, 3, 4]
+            dtype: object
         """
         if inplace:
             raise NotImplementedError("`inplace` not currently implemented.")
