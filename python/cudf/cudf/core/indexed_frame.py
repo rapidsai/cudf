@@ -905,7 +905,7 @@ class IndexedFrame(Frame):
         return self._mimic_inplace(result, inplace=inplace)
 
     @_performance_tracking
-    def clip(self, lower=None, upper=None, inplace=False, axis=1):
+    def clip(self, lower=None, upper=None, axis=1, inplace=False):
         """
         Trim values at input threshold(s).
 
@@ -1782,7 +1782,14 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def mask(self, cond, other=None, inplace: bool = False) -> Self | None:
+    def mask(
+        self,
+        cond,
+        other=None,
+        inplace: bool = False,
+        axis=None,
+        level=None,
+    ) -> Self | None:
         """
         Replace values where the condition is True.
 
@@ -1834,6 +1841,10 @@ class IndexedFrame(Frame):
         4       0
         dtype: int64
         """
+        if axis is not None:
+            raise NotImplementedError("axis is not supported.")
+        elif level is not None:
+            raise NotImplementedError("level is not supported.")
 
         if not hasattr(cond, "__invert__"):
             # We Invert `cond` below and call `where`, so
@@ -3241,7 +3252,9 @@ class IndexedFrame(Frame):
         ]
 
     @_performance_tracking
-    def bfill(self, value=None, axis=None, inplace=None, limit=None):
+    def bfill(
+        self, value=None, axis=None, inplace=None, limit=None, limit_area=None
+    ):
         """
         Synonym for :meth:`Series.fillna` with ``method='bfill'``.
 
@@ -3249,6 +3262,9 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
+        if limit_area is not None:
+            raise NotImplementedError("limit_area is currently not supported.")
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
             return self.fillna(
@@ -3280,7 +3296,14 @@ class IndexedFrame(Frame):
         return self.bfill(value=value, axis=axis, inplace=inplace, limit=limit)
 
     @_performance_tracking
-    def ffill(self, value=None, axis=None, inplace=None, limit=None):
+    def ffill(
+        self,
+        value=None,
+        axis=None,
+        inplace=None,
+        limit=None,
+        limit_area: Literal["inside", "outside", None] = None,
+    ):
         """
         Synonym for :meth:`Series.fillna` with ``method='ffill'``.
 
@@ -3288,6 +3311,9 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
+        if limit_area is not None:
+            raise NotImplementedError("limit_area is currently not supported.")
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
             return self.fillna(
@@ -3379,7 +3405,7 @@ class IndexedFrame(Frame):
                 Use `Series.add_prefix` or `DataFrame.add_prefix`"
         )
 
-    def add_suffix(self, suffix):
+    def add_suffix(self, suffix, axis=None):
         """
         Suffix labels with string `suffix`.
 

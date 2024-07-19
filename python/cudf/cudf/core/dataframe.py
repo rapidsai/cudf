@@ -3676,7 +3676,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return out
 
     @_performance_tracking
-    def add_suffix(self, suffix):
+    def add_suffix(self, suffix, axis=None):
+        if axis is not None:
+            raise NotImplementedError("axis is currently not implemented.")
         # TODO: Change to deep=False when copy-on-write is default
         out = self.copy(deep=True)
         out.columns = [

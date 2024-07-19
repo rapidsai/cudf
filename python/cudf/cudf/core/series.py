@@ -2727,7 +2727,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().round(decimals, how)
 
     @_performance_tracking
-    def cov(self, other, min_periods=None):
+    def cov(self, other, min_periods=None, ddof: int | None = None):
         """
         Compute covariance with Series, excluding missing values.
 
@@ -2760,6 +2760,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             raise NotImplementedError(
                 "min_periods parameter is not implemented yet"
             )
+        if ddof is not None:
+            raise NotImplementedError("ddof parameter is not implemented yet")
 
         if self.empty or other.empty:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
@@ -3476,6 +3478,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def rename(
         self,
         index=None,
+        axis=None,
         copy: bool = True,
         inplace: bool = False,
         level=None,
@@ -3490,6 +3493,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ----------
         index : Scalar, optional
             Scalar to alter the Series.name attribute
+        axis : {0 or 'index'}
+            Unused. Parameter needed for compatibility with DataFrame.
         copy : boolean, default True
             Also copy underlying data
         inplace : bool, default False
@@ -3552,7 +3557,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
 
     @_performance_tracking
-    def add_suffix(self, suffix):
+    def add_suffix(self, suffix, axis=None):
+        if axis is not None:
+            raise NotImplementedError("axis is currently not implemented.")
         return Series._from_data(
             # TODO: Change to deep=False when copy-on-write is default
             data=self._data.copy(deep=True),
