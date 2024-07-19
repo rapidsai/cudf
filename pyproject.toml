@@ -26,7 +26,69 @@ quiet-level = 3
 line-length = 79
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "D201", "D204", "D206", "D207", "D208", "D209", "D210", "D211", "D214", "D215", "D300", "D301", "D403", "D405", "D406", "D407", "D408", "D409", "D410", "D411", "D412", "D414", "D418", "TCH", "FA", "UP006", "UP007"]
+typing-modules = ["cudf._typing"]
+select = [
+    # pycodestyle Error
+    "E",
+    # Pyflakes
+    "F",
+    # pycodestyle Warning
+    "W",
+    # no-blank-line-before-function
+    "D201",
+    # one-blank-line-after-class
+    "D204",
+    # indent-with-spaces
+    "D206",
+    # under-indentation
+    "D207",
+    # over-indentation
+    "D208",
+    # new-line-after-last-paragraph
+    "D209",
+    # surrounding-whitespace
+    "D210",
+    # blank-line-before-class
+    "D211",
+    # section-not-over-indented
+    "D214",
+    # section-underline-not-over-indented
+    "D215",
+    # triple-single-quotes
+    "D300",
+    # escape-sequence-in-docstring
+    "D301",
+    # first-line-capitalized
+    "D403",
+    # capitalize-section-name
+    "D405",
+    # new-line-after-section-name
+    "D406",
+    # dashed-underline-after-section
+    "D407",
+    # section-underline-after-name
+    "D408",
+    # section-underline-matches-section-length
+    "D409",
+    # no-blank-line-after-section
+    "D410",
+    # no-blank-line-before-section
+    "D411",
+    # blank-lines-between-header-and-content
+    "D412",
+    # empty-docstring-section
+    "D414",
+    # overload-with-docstring
+    "D418",
+    # flake8-type-checking
+    "TCH",
+    # flake8-future-annotations
+    "FA",
+    # non-pep585-annotation
+    "UP006",
+    # non-pep604-annotation
+    "UP007"
+]
 ignore = [
     # whitespace before :
     "E203",
