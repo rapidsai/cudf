@@ -744,7 +744,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             Computed {op} of values within each group.
 
         .. pandas-compat::
-            **{cls}.{op}**
+            :meth:`pandas.core.groupby.DataFrameGroupBy.{op}`,
+             :meth:`pandas.core.groupby.SeriesGroupBy.{op}`
 
             The numeric_only, min_count
         """
@@ -1482,7 +1483,8 @@ class GroupBy(Serializable, Reducible, Scannable):
           6    2    6   12
 
         .. pandas-compat::
-            **GroupBy.apply**
+            :meth:`pandas.core.groupby.DataFrameGroupBy.apply`,
+             :meth:`pandas.core.groupby.SeriesGroupBy.apply`
 
             cuDF's ``groupby.apply`` is limited compared to pandas.
             In some situations, Pandas returns the grouped keys as part of
@@ -2358,7 +2360,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             Object shifted within each group.
 
         .. pandas-compat::
-            **GroupBy.shift**
+            :meth:`pandas.core.groupby.DataFrameGroupBy.shift`,
+             :meth:`pandas.core.groupby.SeriesGroupBy.shift`
 
             Parameter ``freq`` is unsupported.
         """
