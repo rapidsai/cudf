@@ -3368,7 +3368,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         as_index=True,
         sort=no_default,
         group_keys=False,
-        squeeze=False,
         observed=True,
         dropna=True,
     ):
@@ -3379,7 +3378,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             as_index,
             sort,
             group_keys,
-            squeeze,
             observed,
             dropna,
         )
