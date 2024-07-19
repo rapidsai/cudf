@@ -297,15 +297,16 @@ class Scan(IR):
                     decimal=decimal,
                     dtypes=self.schema,
                 )
-                if colnames is None:
-                    # Note: polars will raise on their end if the column names
-                    # of files don't match, so no need to validate here
-                    colnames = tbl_w_meta.column_names(include_children=False)
-                pieces.append(tbl_w_meta.tbl)
-            assert colnames is not None  # placate mypy
+                pieces.append(tbl_w_meta)
+            tbls, colnames = zip(
+                *(
+                    (piece.tbl, piece.column_names(include_children=False))
+                    for piece in pieces
+                )
+            )
             df = DataFrame.from_table(
-                plc.concatenate.concatenate(pieces),
-                colnames,
+                plc.concatenate.concatenate(list(tbls)),
+                colnames[0],
             )
         elif self.typ == "parquet":
             cdf = cudf.read_parquet(self.paths, columns=with_columns)

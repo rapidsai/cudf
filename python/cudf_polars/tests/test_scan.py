@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import os
+
 import pytest
 
 import polars as pl
@@ -130,14 +132,14 @@ def test_scan_csv_column_renames_projection_schema(tmp_path):
     assert_gpu_result_equal(q)
 
 
-def test_scan_csv_multi(tmp_path):
+@pytest.mark.parametrize("filename", [["test1.csv", "test2.csv"], "test*.csv"])
+def test_scan_csv_multi(tmp_path, filename):
     with (tmp_path / "test1.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2\n3,4,5""")
     with (tmp_path / "test2.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2\n3,4,5""")
-    q = pl.scan_csv(
-        [tmp_path / "test1.csv", tmp_path / "test2.csv"],
-    )
+    os.chdir(tmp_path)
+    q = pl.scan_csv(filename)
 
     assert_gpu_result_equal(q)
 
