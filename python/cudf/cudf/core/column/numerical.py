@@ -225,25 +225,17 @@ class NumericalColumn(NumericalBaseColumn):
                 tmp = self if reflect else other
                 # Guard against division by zero for integers.
                 if (
-                    (tmp.dtype.type in int_float_dtype_mapping)
-                    and (tmp.dtype.type != np.bool_)
-                    and (
-                        (
-                            (
-                                np.isscalar(tmp)
-                                or (
-                                    isinstance(tmp, cudf.Scalar)
-                                    # host to device copy
-                                    and tmp.is_valid()
-                                )
-                            )
-                            and (0 == tmp)
-                        )
-                        or ((isinstance(tmp, NumericalColumn)) and (0 in tmp))
-                    )
+                    tmp.dtype.type in int_float_dtype_mapping
+                    and tmp.dtype.kind != "b"
                 ):
-                    out_dtype = cudf.dtype("float64")
-
+                    if isinstance(tmp, NumericalColumn) and 0 in tmp:
+                        out_dtype = cudf.dtype("float64")
+                    elif isinstance(tmp, cudf.Scalar):
+                        if tmp.is_valid() and tmp == 0:
+                            # tmp == 0 can return NA
+                            out_dtype = cudf.dtype("float64")
+                    elif is_scalar(tmp) and tmp == 0:
+                        out_dtype = cudf.dtype("float64")
         if op in {
             "__lt__",
             "__gt__",

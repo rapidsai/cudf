@@ -1458,9 +1458,10 @@ def column_empty_like(
     return column_empty(row_count, dtype, masked)
 
 
-def _has_any_nan(arbitrary):
+def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
+    """Check if an object dtype Series or array contains NaN."""
     return any(
-        ((isinstance(x, float) or isinstance(x, np.floating)) and np.isnan(x))
+        isinstance(x, (float, np.floating)) and np.isnan(x)
         for x in np.asarray(arbitrary)
     )
 
@@ -2312,9 +2313,8 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # Notice, we can always cast pure null columns
     not_null_col_dtypes = [o.dtype for o in objs if o.null_count != len(o)]
     if len(not_null_col_dtypes) and all(
-        _is_non_decimal_numeric_dtype(dtyp)
-        and np.issubdtype(dtyp, np.datetime64)
-        for dtyp in not_null_col_dtypes
+        _is_non_decimal_numeric_dtype(dtype) and dtype.kind == "M"
+        for dtype in not_null_col_dtypes
     ):
         common_dtype = find_common_type(not_null_col_dtypes)
         # Cast all columns to the common dtype

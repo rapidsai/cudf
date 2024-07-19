@@ -639,7 +639,7 @@ class DatetimeColumn(column.ColumnBase):
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        if np.issubdtype(to_dtype, np.datetime64):
+        if to_dtype.kind == "M":  # type: ignore[union-attr]
             to_res, _ = np.datetime_data(to_dtype)
             self_res, _ = np.datetime_data(self.dtype)
 
