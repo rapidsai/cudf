@@ -71,7 +71,7 @@ from cudf.utils.dtypes import (
     get_time_unit,
     is_column_like,
     is_mixed_with_object_dtype,
-    min_scalar_type,
+    min_signed_type,
     min_unsigned_type,
 )
 from cudf.utils.utils import _array_ufunc, mask_dtype
@@ -1356,7 +1356,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         self,
         cats: ColumnBase,
         dtype: Dtype | None = None,
-        na_sentinel: ScalarLike | None = None,
+        na_sentinel: cudf.Scalar | None = None,
     ):
         """
         Convert each value in `self` into an integer code, with `cats`
@@ -1396,7 +1396,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return as_column(na_sentinel, dtype=dtype, length=len(self))
 
         if dtype is None:
-            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
+            dtype = min_signed_type(max(len(cats), na_sentinel.value), 8)
 
         if is_mixed_with_object_dtype(self, cats):
             return _return_sentinel_column()
