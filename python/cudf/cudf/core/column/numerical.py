@@ -395,7 +395,7 @@ class NumericalColumn(NumericalBaseColumn):
         if result_col.null_count == result_col.size:
             return True
 
-        return libcudf.reduce.reduce("all", result_col, dtype=np.bool_)
+        return libcudf.reduce.reduce("all", result_col)
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
@@ -406,7 +406,7 @@ class NumericalColumn(NumericalBaseColumn):
         elif skipna and result_col.null_count == result_col.size:
             return False
 
-        return libcudf.reduce.reduce("any", result_col, dtype=np.bool_)
+        return libcudf.reduce.reduce("any", result_col)
 
     @functools.cached_property
     def nan_count(self) -> int:
@@ -684,15 +684,16 @@ class NumericalColumn(NumericalBaseColumn):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
-        col_dtype = self.dtype
         if reduction_op in {"sum", "product"}:
-            col_dtype = (
-                col_dtype if col_dtype.kind == "f" else np.dtype("int64")
-            )
+            if self.dtype.kind == "f":
+                return self.dtype
+            return np.dtype("int64")
         elif reduction_op == "sum_of_squares":
-            col_dtype = np.result_dtype(col_dtype, np.dtype("uint64"))
+            return np.result_dtype(self.dtype, np.dtype("uint64"))
+        elif reduction_op in {"var", "std", "mean"}:
+            return np.dtype("float64")
 
-        return col_dtype
+        return super()._reduction_result_dtype(reduction_op)
 
 
 def _normalize_find_and_replace_input(
