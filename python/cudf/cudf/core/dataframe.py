@@ -2822,6 +2822,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             index=index,
             inplace=False,
             fill_value=fill_value,
+            level=level,
+            method=method,
+            limit=limit,
+            tolerance=tolerance,
         )
 
     @_performance_tracking
@@ -3160,7 +3164,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
     )
     def reset_index(
-        self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
+        self,
+        level=None,
+        drop=False,
+        inplace=False,
+        col_level=0,
+        col_fill="",
+        allow_duplicates: bool = False,
+        names: abc.Hashable | abc.Sequence[abc.Hashable] | None = None,
     ):
         return self._mimic_inplace(
             DataFrame._from_data(
@@ -3169,6 +3180,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     drop=drop,
                     col_level=col_level,
                     col_fill=col_fill,
+                    allow_duplicates=allow_duplicates,
+                    names=names,
                 )
             ),
             inplace=inplace,

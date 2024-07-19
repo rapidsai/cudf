@@ -921,7 +921,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return self.to_pandas().to_dict(into=into)
 
     @_performance_tracking
-    def reindex(self, *args, **kwargs):
+    def reindex(
+        self,
+        index=None,
+        *,
+        axis=None,
+        method: str | None = None,
+        copy: bool = True,
+        level=None,
+        fill_value: ScalarLike | None = None,
+        limit: int | None = None,
+        tolerance=None,
+    ):
         """
         Conform Series to new index.
 
@@ -930,6 +941,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         index : Index, Series-convertible, default None
             New labels / index to conform to,
             should be specified using keywords.
+        axis: int, default None
+            Unused.
         method: Not Supported
         copy : boolean, default True
         level: Not Supported
@@ -968,27 +981,23 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             where it is cast to float in Pandas.
 
         """
-        if len(args) > 1:
-            raise TypeError(
-                "Only one positional argument ('index') is allowed"
-            )
-        if args:
-            (index,) = args
-            if "index" in kwargs:
-                raise TypeError(
-                    "'index' passed as both positional and keyword argument"
-                )
-        else:
-            index = kwargs.get("index", self.index)
+        if index is None:
+            index = self.index
+        if fill_value is None:
+            fill_value = cudf.NA
 
         name = self.name or 0
         series = self._reindex(
-            deep=kwargs.get("copy", True),
+            deep=copy,
             dtypes={name: self.dtype},
             index=index,
             column_names=[name],
             inplace=False,
-            fill_value=kwargs.get("fill_value", cudf.NA),
+            fill_value=fill_value,
+            level=level,
+            method=method,
+            limit=limit,
+            tolerance=tolerance,
         )
         series.name = self.name
         return series
@@ -1057,14 +1066,21 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
     )
     def reset_index(
-        self, level=None, drop=False, name=no_default, inplace=False
+        self,
+        level=None,
+        drop=False,
+        name=no_default,
+        inplace=False,
+        allow_duplicates=False,
     ):
         if not drop and inplace:
             raise TypeError(
                 "Cannot reset_index inplace on a Series "
                 "to create a DataFrame"
             )
-        data, index = self._reset_index(level=level, drop=drop)
+        data, index = self._reset_index(
+            level=level, drop=drop, allow_duplicates=allow_duplicates
+        )
         if not drop:
             if name is no_default:
                 name = 0 if self.name is None else self.name
@@ -2056,10 +2072,31 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().astype(dtype, copy, errors)
 
     @_performance_tracking
-    def sort_index(self, axis=0, *args, **kwargs):
+    def sort_index(
+        self,
+        axis=0,
+        level=None,
+        ascending=True,
+        inplace=False,
+        kind=None,
+        na_position="last",
+        sort_remaining=True,
+        ignore_index=False,
+        key=None,
+    ):
         if axis not in (0, "index"):
             raise ValueError("Only axis=0 is valid for Series.")
-        return super().sort_index(axis=axis, *args, **kwargs)
+        return super().sort_index(
+            axis=axis,
+            level=level,
+            ascending=ascending,
+            inplace=inplace,
+            kind=kind,
+            na_position=na_position,
+            sort_remaining=sort_remaining,
+            ignore_index=ignore_index,
+            key=key,
+        )
 
     @_performance_tracking
     def sort_values(
@@ -3428,7 +3465,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
 
     @_performance_tracking
-    def rename(self, index=None, copy=True):
+    def rename(
+        self,
+        index=None,
+        copy: bool = True,
+        inplace: bool = False,
+        level=None,
+        errors: Literal["ignore", "raise"] = "ignore",
+    ):
         """
         Alter Series name
 
@@ -3440,6 +3484,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Scalar to alter the Series.name attribute
         copy : boolean, default True
             Also copy underlying data
+        inplace : bool, default False
+            Whether to return a new Series. If True the value of copy is ignored.
+            Currently not supported.
+        level : int or level name, default None
+            In case of MultiIndex, only rename labels in the specified level.
+            Currently not supported.
+        errors : {'ignore', 'raise'}, default 'ignore'
+            If 'raise', raise `KeyError` when a `dict-like mapper` or
+            `index` contains labels that are not present in the index being transformed.
+            If 'ignore', existing keys will be renamed and extra keys will be ignored.
+            Currently not supported.
 
         Returns
         -------
@@ -3468,8 +3523,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             **Series.rename**
 
             - Supports scalar values only for changing name attribute
-            - The ``inplace`` and ``level`` is not supported
         """
+        if inplace is not False:
+            raise NotImplementedError("inplace is currently not supported.")
+        if level is not None:
+            raise NotImplementedError("level is currently not supported.")
+        if errors != "ignore":
+            raise NotImplementedError("errors is currently not supported.")
         out_data = self._data.copy(deep=copy)
         return Series._from_data(out_data, self.index, name=index)
 
@@ -3645,7 +3705,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return change
 
     @_performance_tracking
-    def where(self, cond, other=None, inplace=False):
+    def where(self, cond, other=None, inplace=False, axis=None, level=None):
+        if axis is not None:
+            raise NotImplementedError("axis is not supported.")
+        elif level is not None:
+            raise NotImplementedError("level is not supported.")
+
         result_col = super().where(cond, other, inplace)
         return self._mimic_inplace(
             self._from_data_like_self(
