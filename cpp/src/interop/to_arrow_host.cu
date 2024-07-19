@@ -247,7 +247,9 @@ int dispatch_to_arrow_host::operator()<cudf::list_view>(ArrowArray* out) const
 
   NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
   auto const lcv = cudf::lists_column_view(column);
+
   if (column.size() == 0) {
+    // initialize the offsets buffer with a single zero by convention for 0 length
     NANOARROW_RETURN_NOT_OK(
       ArrowBufferAppendInt32(ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx), 0));
   } else {

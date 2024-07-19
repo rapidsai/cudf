@@ -150,10 +150,11 @@ struct column_metadata {
  * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
  * converted to Arrow decimal128 of the precision 38.
  */
-std::shared_ptr<arrow::Table> to_arrow(table_view input,
-                                       std::vector<column_metadata> const& metadata = {},
-                                       rmm::cuda_stream_view stream = cudf::get_default_stream(),
-                                       arrow::MemoryPool* ar_mr     = arrow::default_memory_pool());
+[[deprecated]] std::shared_ptr<arrow::Table> to_arrow(
+  table_view input,
+  std::vector<column_metadata> const& metadata = {},
+  rmm::cuda_stream_view stream                 = cudf::get_default_stream(),
+  arrow::MemoryPool* ar_mr                     = arrow::default_memory_pool());
 
 /**
  * @brief Create `arrow::Scalar` from cudf scalar `input`
@@ -172,10 +173,11 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
  * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
  * converted to Arrow decimal128 of the precision 38.
  */
-std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
-                                        column_metadata const& metadata = {},
-                                        rmm::cuda_stream_view stream = cudf::get_default_stream(),
-                                        arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
+[[deprecated]] std::shared_ptr<arrow::Scalar> to_arrow(
+  cudf::scalar const& input,
+  column_metadata const& metadata = {},
+  rmm::cuda_stream_view stream    = cudf::get_default_stream(),
+  arrow::MemoryPool* ar_mr        = arrow::default_memory_pool());
 
 /**
  * @brief typedef for a unique_ptr to an ArrowSchema with custom deleter
@@ -387,7 +389,7 @@ unique_device_array_t to_arrow_host(
  * @param mr    Device memory resource used to allocate `cudf::table`
  * @return cudf table generated from given arrow Table
  */
-std::unique_ptr<table> from_arrow(
+[[deprecated]] std::unique_ptr<table> from_arrow(
   arrow::Table const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
@@ -400,7 +402,7 @@ std::unique_ptr<table> from_arrow(
  * @param mr    Device memory resource used to allocate `cudf::scalar`
  * @return cudf scalar generated from given arrow Scalar
  */
-std::unique_ptr<cudf::scalar> from_arrow(
+[[deprecated]] std::unique_ptr<cudf::scalar> from_arrow(
   arrow::Scalar const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());

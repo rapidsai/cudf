@@ -133,10 +133,10 @@ struct dispatch_to_arrow_device {
 };
 
 template <typename DeviceType>
-int decimals_to_arrow(cudf::column_view input,
-                      rmm::cuda_stream_view stream,
-                      rmm::device_async_resource_ref mr,
-                      ArrowArray* out)
+int construct_decimals(cudf::column_view input,
+                       rmm::cuda_stream_view stream,
+                       rmm::device_async_resource_ref mr,
+                       ArrowArray* out)
 {
   nanoarrow::UniqueArray tmp;
   NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, input));
@@ -155,7 +155,7 @@ int dispatch_to_arrow_device::operator()<numeric::decimal32>(cudf::column&& colu
                                                              ArrowArray* out)
 {
   using DeviceType = int32_t;
-  NANOARROW_RETURN_NOT_OK(decimals_to_arrow<DeviceType>(column.view(), stream, mr, out));
+  NANOARROW_RETURN_NOT_OK(construct_decimals<DeviceType>(column.view(), stream, mr, out));
   auto contents = column.release();
   NANOARROW_RETURN_NOT_OK(set_null_mask(contents, out));
   return NANOARROW_OK;
@@ -168,7 +168,7 @@ int dispatch_to_arrow_device::operator()<numeric::decimal64>(cudf::column&& colu
                                                              ArrowArray* out)
 {
   using DeviceType = int64_t;
-  NANOARROW_RETURN_NOT_OK(decimals_to_arrow<DeviceType>(column.view(), stream, mr, out));
+  NANOARROW_RETURN_NOT_OK(construct_decimals<DeviceType>(column.view(), stream, mr, out));
   auto contents = column.release();
   NANOARROW_RETURN_NOT_OK(set_null_mask(contents, out));
   return NANOARROW_OK;
@@ -406,7 +406,7 @@ template <>
 int dispatch_to_arrow_device_view::operator()<numeric::decimal32>(ArrowArray* out) const
 {
   using DeviceType = int32_t;
-  NANOARROW_RETURN_NOT_OK(decimals_to_arrow<DeviceType>(column, stream, mr, out));
+  NANOARROW_RETURN_NOT_OK(construct_decimals<DeviceType>(column, stream, mr, out));
   NANOARROW_RETURN_NOT_OK(set_null_mask(column, out));
   return NANOARROW_OK;
 }
@@ -415,7 +415,7 @@ template <>
 int dispatch_to_arrow_device_view::operator()<numeric::decimal64>(ArrowArray* out) const
 {
   using DeviceType = int64_t;
-  NANOARROW_RETURN_NOT_OK(decimals_to_arrow<DeviceType>(column, stream, mr, out));
+  NANOARROW_RETURN_NOT_OK(construct_decimals<DeviceType>(column, stream, mr, out));
   NANOARROW_RETURN_NOT_OK(set_null_mask(column, out));
   return NANOARROW_OK;
 }
