@@ -1428,3 +1428,19 @@ def test_json_reader_on_bad_lines(on_bad_lines):
                 orient="records",
                 on_bad_lines=on_bad_lines,
             )
+
+
+def test_chunked_json_reader():
+    df = cudf.DataFrame(
+        {
+            "a": ["aaaa"] * 9_00_00_00,
+            "b": list(range(0, 9_00_00_00)),
+        }
+    )
+    buf = BytesIO()
+    df.to_json(buf, lines=True, orient="records", engine="cudf")
+    buf.seek(0)
+    df = df.to_pandas()
+    with cudf.option_context("io.json.low_memory", True):
+        gdf = cudf.read_json(buf, lines=True)
+    assert_eq(df, gdf)
