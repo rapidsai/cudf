@@ -12,16 +12,20 @@
 # the License.
 # =============================================================================
 
-set(cython_sources avro.pyx csv.pyx datasource.pyx json.pyx types.pyx)
+# This function finds rmm and sets any additional necessary environment variables.
+function(find_and_configure_thread_pool)
+  rapids_cpm_find(
+    BS_thread_pool 4.1.0
+    CPM_ARGS
+    GIT_REPOSITORY https://github.com/bshoshany/thread-pool.git
+    GIT_TAG 097aa718f25d44315cadb80b407144ad455ee4f9
+    GIT_SHALLOW TRUE
+  )
+  if(NOT TARGET BS_thread_pool)
+    add_library(BS_thread_pool INTERFACE)
+    target_include_directories(BS_thread_pool INTERFACE ${BS_thread_pool_SOURCE_DIR}/include)
+    target_compile_definitions(BS_thread_pool INTERFACE "BS_THREAD_POOL_ENABLE_PAUSE=1")
+  endif()
+endfunction()
 
-set(linked_libraries cudf::cudf)
-rapids_cython_create_modules(
-  CXX
-  SOURCE_FILES "${cython_sources}"
-  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_io_ ASSOCIATED_TARGETS cudf
-)
-
-set(targets_using_arrow_headers pylibcudf_io_avro pylibcudf_io_csv pylibcudf_io_datasource
-                                pylibcudf_io_json pylibcudf_io_types
-)
-link_to_pyarrow_headers("${targets_using_arrow_headers}")
+find_and_configure_thread_pool()

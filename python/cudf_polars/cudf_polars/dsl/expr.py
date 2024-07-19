@@ -370,6 +370,10 @@ class Literal(Expr):
         # datatype of pyarrow scalar is correct by construction.
         return Column(plc.Column.from_scalar(plc.interop.from_arrow(self.value), 1))
 
+    def collect_agg(self, *, depth: int) -> AggInfo:
+        """Collect information about aggregations in groupbys."""
+        return AggInfo([])
+
 
 class LiteralColumn(Expr):
     __slots__ = ("value",)
@@ -382,6 +386,13 @@ class LiteralColumn(Expr):
         data = value.to_arrow()
         self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
 
+    def get_hash(self) -> int:
+        """Compute a hash of the column."""
+        # This is stricter than necessary, but we only need this hash
+        # for identity in groupby replacements so it's OK. And this
+        # way we avoid doing potentially expensive compute.
+        return hash((type(self), self.dtype, id(self.value)))
+
     def do_evaluate(
         self,
         df: DataFrame,
@@ -392,6 +403,10 @@ class LiteralColumn(Expr):
         """Evaluate this expression given a dataframe for context."""
         # datatype of pyarrow array is correct by construction.
         return Column(plc.interop.from_arrow(self.value))
+
+    def collect_agg(self, *, depth: int) -> AggInfo:
+        """Collect information about aggregations in groupbys."""
+        return AggInfo([])
 
 
 class Col(Expr):

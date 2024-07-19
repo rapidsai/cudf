@@ -155,3 +155,20 @@ def test_groupby_nan_minmax_raises(op):
     q = df.group_by("key").agg(op(pl.col("value")))
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize("key", [1, pl.col("key1")])
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.lit(1).alias("value"),
+        pl.lit([[4, 5, 6]]).alias("value"),
+        pl.col("float") * (1 - pl.col("int")),
+        [pl.lit(2).alias("value"), pl.col("float") * 2],
+    ],
+)
+def test_groupby_literal_in_agg(df, key, expr):
+    # check_row_order=False doesn't work for list aggregations
+    # so just sort by the group key
+    q = df.group_by(key).agg(expr).sort(key, maintain_order=True)
+    assert_gpu_result_equal(q)
