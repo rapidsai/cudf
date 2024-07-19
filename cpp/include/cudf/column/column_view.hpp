@@ -456,7 +456,6 @@ class column_view : public detail::column_view_base {
   }
 
  protected:
-  // TODO: Fix noexcept, see notes in prefetch.hpp
   /**
    * @brief Returns pointer to the base device memory allocation.
    *
@@ -687,7 +686,6 @@ class mutable_column_view : public detail::column_view_base {
   operator column_view() const;
 
  protected:
-  // TODO: Fix noexcept, see info in prefetch.hpp
   /**
    * @brief Returns pointer to the base device memory allocation.
    *

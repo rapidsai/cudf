@@ -34,6 +34,32 @@
 
 namespace cudf {
 namespace detail {
+namespace {
+
+template <typename ColumnView>
+void prefetch_col_data(ColumnView& col, void const* data_ptr, std::string_view key) noexcept
+{
+  if (cudf::experimental::prefetch::detail::PrefetchConfig::instance().get(key)) {
+    if (cudf::is_fixed_width(col.type())) {
+      cudf::experimental::prefetch::detail::prefetch_noexcept(
+        key, data_ptr, col.size() * size_of(col.type()), cudf::get_default_stream());
+    } else if (col.type().id() == type_id::STRING) {
+      strings_column_view scv{col};
+
+      cudf::experimental::prefetch::detail::prefetch_noexcept(
+        key,
+        data_ptr,
+        scv.chars_size(cudf::get_default_stream()) * sizeof(char),
+        cudf::get_default_stream());
+    } else {
+      std::cout << key << ": Unsupported type: " << static_cast<int32_t>(col.type().id())
+                << std::endl;
+    }
+  }
+}
+
+}  // namespace
+
 column_view_base::column_view_base(data_type type,
                                    size_type size,
                                    void const* data,
@@ -181,47 +207,13 @@ mutable_column_view::operator column_view() const
 
 void const* column_view::get_data() const noexcept
 {
-  std::string key{"column_view::get_data"};
-  if (cudf::experimental::prefetch::detail::PrefetchConfig::instance().get(key)) {
-    if (cudf::is_fixed_width(type())) {
-      cudf::experimental::prefetch::detail::prefetch_noexcept(
-        key, _data, size() * size_of(type()), cudf::get_default_stream());
-    } else if (type().id() == type_id::STRING) {
-      strings_column_view scv{*this};
-
-      cudf::experimental::prefetch::detail::prefetch(
-        key,
-        _data,
-        scv.chars_size(cudf::get_default_stream()) * sizeof(char),
-        cudf::get_default_stream());
-    } else {
-      std::cout << "column_view::get_data: Unsupported type: " << static_cast<int32_t>(type().id())
-                << std::endl;
-    }
-  }
+  detail::prefetch_col_data(*this, _data, "column_view::get_data");
   return _data;
 }
 
 void const* mutable_column_view::get_data() const noexcept
 {
-  std::string key{"mutable_column_view::get_data"};
-  if (cudf::experimental::prefetch::detail::PrefetchConfig::instance().get(key)) {
-    if (cudf::is_fixed_width(type())) {
-      cudf::experimental::prefetch::detail::prefetch_noexcept(
-        key, _data, size() * size_of(type()), cudf::get_default_stream());
-    } else if (type().id() == type_id::STRING) {
-      strings_column_view scv{*this};
-
-      cudf::experimental::prefetch::detail::prefetch(
-        key,
-        _data,
-        scv.chars_size(cudf::get_default_stream()) * sizeof(char),
-        cudf::get_default_stream());
-    } else {
-      std::cout << "mutable_column_view::get_data: Unsupported type: "
-                << static_cast<int32_t>(type().id()) << std::endl;
-    }
-  }
+  detail::prefetch_col_data(*this, _data, "mutable_column_view::get_data");
   return _data;
 }
 
