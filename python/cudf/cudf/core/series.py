@@ -2079,9 +2079,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             If True, index will not be sorted.
         key : callable, optional
             Apply the key function to the values
-            before sorting. This is similar to the `key` argument in the
-            builtin :meth:`sorted` function, with the notable difference that
-            this `key` function should be *vectorized*. It should expect a
+            before sorting. This is similar to the ``key`` argument in the
+            builtin ``sorted`` function, with the notable difference that
+            this ``key`` function should be *vectorized*. It should expect a
             ``Series`` and return a Series with the same shape as the input.
             It will be applied to each column in `by` independently.
             Current not supported.
