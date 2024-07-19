@@ -303,7 +303,7 @@ ConfigureBench(TEXT_BENCH text/ngrams.cpp text/subword.cpp)
 
 ConfigureNVBench(
   TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
-  text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp
+  text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp text/word_minhash.cpp
 )
 
 # ##################################################################################################
