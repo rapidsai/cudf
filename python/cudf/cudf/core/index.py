@@ -52,11 +52,9 @@ from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    _NUMPY_SCTYPES,
     _maybe_convert_to_default_type,
     find_common_type,
     is_mixed_with_object_dtype,
-    numeric_normalize_types,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf, search_range
@@ -357,12 +355,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def __contains__(self, item):
         hash(item)
-        if isinstance(item, bool) or not isinstance(
-            item,
-            tuple(
-                _NUMPY_SCTYPES["int"] + _NUMPY_SCTYPES["float"] + [int, float]
-            ),
-        ):
+        if not isinstance(item, (np.floating, np.integer, int, float)):
+            return False
+        elif isinstance(item, (np.timedelta64, np.datetime64, bool)):
+            # Cases that would pass the above check
             return False
         try:
             int_item = int(item)
@@ -1601,9 +1597,13 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                         f"either one of them to same dtypes."
                     )
 
-                if isinstance(self._values, cudf.core.column.NumericalColumn):
-                    if self.dtype != other.dtype:
-                        this, other = numeric_normalize_types(self, other)
+                if (
+                    isinstance(self._column, cudf.core.column.NumericalColumn)
+                    and self.dtype != other.dtype
+                ):
+                    common_type = find_common_type((self.dtype, other.dtype))
+                    this = this.astype(common_type)
+                    other = other.astype(common_type)
                 to_concat = [this, other]
 
         return self._concat(to_concat)

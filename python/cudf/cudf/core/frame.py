@@ -389,7 +389,7 @@ class Frame(BinaryOperand, Scannable):
         return self.to_numpy()
 
     @_performance_tracking
-    def __array__(self, dtype=None):
+    def __array__(self, dtype=None, copy=None):
         raise TypeError(
             "Implicit conversion to a host NumPy array via __array__ is not "
             "allowed, To explicitly construct a GPU matrix, consider using "
@@ -591,7 +591,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: int64
 
         .. pandas-compat::
-            **DataFrame.where, Series.where**
+            :meth:`pandas.DataFrame.where`, :meth:`pandas.Series.where`
 
             Note that ``where`` treats missing values as falsy,
             in parallel with pandas treatment of nullable data:
@@ -1587,6 +1587,12 @@ class Frame(BinaryOperand, Scannable):
     def __abs__(self):
         return self._unaryop("abs")
 
+    def __bool__(self):
+        raise ValueError(
+            f"The truth value of a {type(self).__name__} is ambiguous. Use "
+            "a.empty, a.bool(), a.item(), a.any() or a.all()."
+        )
+
     # Reductions
     @classmethod
     @_performance_tracking
@@ -1641,7 +1647,7 @@ class Frame(BinaryOperand, Scannable):
         1
 
         .. pandas-compat::
-            **DataFrame.min, Series.min**
+            :meth:`pandas.DataFrame.min`, :meth:`pandas.Series.min`
 
             Parameters currently not supported are `level`, `numeric_only`.
         """
@@ -1689,7 +1695,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: int64
 
         .. pandas-compat::
-            **DataFrame.max, Series.max**
+            :meth:`pandas.DataFrame.max`, :meth:`pandas.Series.max`
 
             Parameters currently not supported are `level`, `numeric_only`.
         """
@@ -1742,7 +1748,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: bool
 
         .. pandas-compat::
-            **DataFrame.all, Series.all**
+            :meth:`pandas.DataFrame.all`, :meth:`pandas.Series.all`
 
             Parameters currently not supported are `axis`, `bool_only`,
             `level`.
@@ -1795,7 +1801,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: bool
 
         .. pandas-compat::
-            **DataFrame.any, Series.any**
+            :meth:`pandas.DataFrame.any`, :meth:`pandas.Series.any`
 
             Parameters currently not supported are `axis`, `bool_only`,
             `level`.

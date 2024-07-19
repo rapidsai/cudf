@@ -1617,7 +1617,7 @@ def test_csv_reader_partial_dtype(dtype):
         StringIO('"A","B","C"\n0,1,2'), dtype=dtype, usecols=["A", "C"]
     )
 
-    assert names_df == header_df
+    assert_eq(names_df, header_df)
     assert all(names_df.dtypes == ["int16", "int64"])
 
 
