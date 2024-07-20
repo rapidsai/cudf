@@ -186,6 +186,16 @@ def test_extract_list_element_column(list_column):
     assert_column_eq(expect, res)
 
 
+def test_count_elements(test_data):
+    arr = pa.array(test_data[0][1])
+    plc_column = plc.interop.from_arrow(arr)
+    res = plc.lists.count_elements(plc_column)
+
+    expect = pa.array([1, 1, 0, 3], type=pa.int32())
+
+    assert_column_eq(expect, res)
+
+
 def test_apply_boolean_mask(list_column, bool_column):
     arr = pa.array(list_column)
     plc_column = plc.interop.from_arrow(arr)

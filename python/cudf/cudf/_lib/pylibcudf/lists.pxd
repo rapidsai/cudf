@@ -34,6 +34,8 @@ cpdef Column segmented_gather(Column, Column)
 
 cpdef Column extract_list_element(Column, ColumnOrSizeType)
 
+cpdef Column count_elements(Column)
+
 cpdef Column apply_boolean_mask(Column, Column)
 
 cpdef Column distinct(Column, bool, bool)

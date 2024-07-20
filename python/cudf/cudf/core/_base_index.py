@@ -19,15 +19,7 @@ from cudf._lib.stream_compaction import (
 )
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
-from cudf.api.types import (
-    is_bool_dtype,
-    is_integer,
-    is_integer_dtype,
-    is_list_like,
-    is_scalar,
-    is_signed_integer_dtype,
-    is_unsigned_integer_dtype,
-)
+from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.errors import MixedTypeError
@@ -37,6 +29,8 @@ from cudf.utils.utils import _is_same_name
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+
+    import cupy
 
     from cudf.core.column_accessor import ColumnAccessor
 
@@ -60,6 +54,12 @@ class BaseIndex(Serializable):
 
     def __len__(self):
         raise NotImplementedError
+
+    def __bool__(self):
+        raise ValueError(
+            f"The truth value of a {type(self).__name__} is ambiguous. Use "
+            "a.empty, a.bool(), a.item(), a.any() or a.all()."
+        )
 
     @property
     def size(self):
@@ -98,7 +98,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def argsort(self, *args, **kwargs):
+    def argsort(self, *args, **kwargs) -> cupy.ndarray:
         """Return the integer indices that would sort the index.
 
         Parameters vary by subclass.
@@ -608,20 +608,14 @@ class BaseIndex(Serializable):
             )
 
         if cudf.get_option("mode.pandas_compatible"):
-            if (
-                is_bool_dtype(self.dtype) and not is_bool_dtype(other.dtype)
-            ) or (
-                not is_bool_dtype(self.dtype) and is_bool_dtype(other.dtype)
+            if (self.dtype.kind == "b" and other.dtype.kind != "b") or (
+                self.dtype.kind != "b" and other.dtype.kind == "b"
             ):
                 # Bools + other types will result in mixed type.
                 # This is not yet consistent in pandas and specific to APIs.
                 raise MixedTypeError("Cannot perform union with mixed types")
-            if (
-                is_signed_integer_dtype(self.dtype)
-                and is_unsigned_integer_dtype(other.dtype)
-            ) or (
-                is_unsigned_integer_dtype(self.dtype)
-                and is_signed_integer_dtype(other.dtype)
+            if (self.dtype.kind == "i" and other.dtype.kind == "u") or (
+                self.dtype.kind == "u" and other.dtype.kind == "i"
             ):
                 # signed + unsigned types will result in
                 # mixed type for union in pandas.
@@ -1526,7 +1520,7 @@ class BaseIndex(Serializable):
         ascending=True,
         na_position="last",
         key=None,
-    ):
+    ) -> Self | tuple[Self, cupy.ndarray]:
         """
         Return a sorted copy of the index, and optionally return the indices
         that sorted the index itself.
@@ -2001,7 +1995,7 @@ class BaseIndex(Serializable):
             self._column_names,
         )
 
-    def duplicated(self, keep="first"):
+    def duplicated(self, keep="first") -> cupy.ndarray:
         """
         Indicate duplicate index values.
 
@@ -2098,7 +2092,7 @@ class BaseIndex(Serializable):
 
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
-        if not is_integer_dtype(gather_map.dtype):
+        if gather_map.dtype.kind not in "iu":
             gather_map = gather_map.astype(size_type_dtype)
 
         if not _gather_map_is_valid(
@@ -2152,7 +2146,7 @@ class BaseIndex(Serializable):
         Rows corresponding to `False` is dropped.
         """
         boolean_mask = cudf.core.column.as_column(boolean_mask)
-        if not is_bool_dtype(boolean_mask.dtype):
+        if boolean_mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
         return self._from_columns_like_self(
