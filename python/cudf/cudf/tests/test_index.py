@@ -16,7 +16,6 @@ import pytest
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.api.types import is_bool_dtype
 from cudf.core.index import CategoricalIndex, DatetimeIndex, Index, RangeIndex
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
@@ -2397,8 +2396,8 @@ def test_intersection_index(idx1, idx2, sort, pandas_compatible):
             expected,
             actual,
             exact=False
-            if (is_bool_dtype(idx1.dtype) and not is_bool_dtype(idx2.dtype))
-            or (not is_bool_dtype(idx1.dtype) or is_bool_dtype(idx2.dtype))
+            if (idx1.dtype.kind == "b" and idx2.dtype.kind != "b")
+            or (idx1.dtype.kind != "b" or idx2.dtype.kind == "b")
             else True,
         )
 
@@ -3295,3 +3294,12 @@ def test_index_assignment_no_shallow_copy(index):
     df = cudf.DataFrame(range(1))
     df.index = index
     assert df.index is index
+
+
+def test_bool_rangeindex_raises():
+    assert_exceptions_equal(
+        lfunc=bool,
+        rfunc=bool,
+        lfunc_args_and_kwargs=[[pd.RangeIndex(0)]],
+        rfunc_args_and_kwargs=[[cudf.RangeIndex(0)]],
+    )

@@ -52,11 +52,9 @@ from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    _NUMPY_SCTYPES,
     _maybe_convert_to_default_type,
     find_common_type,
     is_mixed_with_object_dtype,
-    numeric_normalize_types,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf, search_range
@@ -103,7 +101,7 @@ class IndexMeta(type):
 
 def _lexsorted_equal_range(
     idx: Index | cudf.MultiIndex,
-    key_as_table: Frame,
+    keys: list[ColumnBase],
     is_sorted: bool,
 ) -> tuple[int, int, ColumnBase | None]:
     """Get equal range for key in lexicographically sorted index. If index
@@ -118,13 +116,13 @@ def _lexsorted_equal_range(
         sort_vals = idx
     lower_bound = search_sorted(
         [*sort_vals._data.columns],
-        [*key_as_table._columns],
+        keys,
         side="left",
         ascending=sort_vals.is_monotonic_increasing,
     ).element_indexing(0)
     upper_bound = search_sorted(
         [*sort_vals._data.columns],
-        [*key_as_table._columns],
+        keys,
         side="right",
         ascending=sort_vals.is_monotonic_increasing,
     ).element_indexing(0)
@@ -260,7 +258,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         ), "Invalid ascending flag"
         return search_range(value, self._range, side=side)
 
-    def factorize(self, sort: bool = False, use_na_sentinel: bool = True):
+    def factorize(
+        self, sort: bool = False, use_na_sentinel: bool = True
+    ) -> tuple[cupy.ndarray, Self]:
         if sort and self.step < 0:
             codes = cupy.arange(len(self) - 1, -1, -1)
             uniques = self[::-1]
@@ -355,12 +355,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def __contains__(self, item):
         hash(item)
-        if isinstance(item, bool) or not isinstance(
-            item,
-            tuple(
-                _NUMPY_SCTYPES["int"] + _NUMPY_SCTYPES["float"] + [int, float]
-            ),
-        ):
+        if not isinstance(item, (np.floating, np.integer, int, float)):
+            return False
+        elif isinstance(item, (np.timedelta64, np.datetime64, bool)):
+            # Cases that would pass the above check
             return False
         try:
             int_item = int(item)
@@ -753,15 +751,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
             super().difference(other, sort=sort)
         )
 
-    def _try_reconstruct_range_index(self, index):
-        if isinstance(index, RangeIndex) or index.dtype.kind == "f":
+    def _try_reconstruct_range_index(
+        self, index: BaseIndex
+    ) -> Self | BaseIndex:
+        if isinstance(index, RangeIndex) or index.dtype.kind not in "iu":
             return index
         # Evenly spaced values can return a
         # RangeIndex instead of a materialized Index.
-        if not index._column.has_nulls():
+        if not index._column.has_nulls():  # type: ignore[attr-defined]
             uniques = cupy.unique(cupy.diff(index.values))
-            if len(uniques) == 1 and uniques[0].get() != 0:
-                diff = uniques[0].get()
+            if len(uniques) == 1 and (diff := uniques[0].get()) != 0:
                 new_range = range(index[0], index[-1] + diff, diff)
                 return type(self)(new_range, name=index.name)
         return index
@@ -1309,7 +1308,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return _return_get_indexer_result(result_series.to_cupy())
 
     @_performance_tracking
-    def get_loc(self, key):
+    def get_loc(self, key) -> int | slice | cupy.ndarray:
         if not is_scalar(key):
             raise TypeError("Should be a scalar-like")
 
@@ -1317,9 +1316,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             self.is_monotonic_increasing or self.is_monotonic_decreasing
         )
 
-        target_as_table = cudf.core.frame.Frame({"None": as_column([key])})
         lower_bound, upper_bound, sort_inds = _lexsorted_equal_range(
-            self, target_as_table, is_sorted
+            self, [as_column([key])], is_sorted
         )
 
         if lower_bound == upper_bound:
@@ -1330,7 +1328,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             return (
                 lower_bound
                 if is_sorted
-                else sort_inds.element_indexing(lower_bound)
+                else sort_inds.element_indexing(lower_bound)  # type: ignore[union-attr]
             )
 
         if is_sorted:
@@ -1339,8 +1337,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             return slice(lower_bound, upper_bound)
 
         # Not sorted and not unique. Return a boolean mask
-        mask = cupy.full(self._data.nrows, False)
-        true_inds = sort_inds.slice(lower_bound, upper_bound).values
+        mask = cupy.full(len(self), False)
+        true_inds = sort_inds.slice(lower_bound, upper_bound).values  # type: ignore[union-attr]
         mask[true_inds] = True
         return mask
 
@@ -1458,18 +1456,19 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     notnull = notna
 
     def _is_numeric(self):
-        return isinstance(
-            self._values, cudf.core.column.NumericalColumn
-        ) and self.dtype != cudf.dtype("bool")
+        return (
+            isinstance(self._values, cudf.core.column.NumericalColumn)
+            and self.dtype.kind != "b"
+        )
 
     def _is_boolean(self):
-        return self.dtype == cudf.dtype("bool")
+        return self.dtype.kind == "b"
 
     def _is_integer(self):
-        return cudf.api.types.is_integer_dtype(self.dtype)
+        return self.dtype.kind in "iu"
 
     def _is_floating(self):
-        return cudf.api.types.is_float_dtype(self.dtype)
+        return self.dtype.kind == "f"
 
     def _is_object(self):
         return isinstance(self._values, cudf.core.column.StringColumn)
@@ -1599,9 +1598,13 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                         f"either one of them to same dtypes."
                     )
 
-                if isinstance(self._values, cudf.core.column.NumericalColumn):
-                    if self.dtype != other.dtype:
-                        this, other = numeric_normalize_types(self, other)
+                if (
+                    isinstance(self._column, cudf.core.column.NumericalColumn)
+                    and self.dtype != other.dtype
+                ):
+                    common_type = find_common_type((self.dtype, other.dtype))
+                    this = this.astype(common_type)
+                    other = other.astype(common_type)
                 to_concat = [this, other]
 
         return self._concat(to_concat)
@@ -2076,7 +2079,7 @@ class DatetimeIndex(Index):
 
     @property  # type: ignore
     @_performance_tracking
-    def is_leap_year(self):
+    def is_leap_year(self) -> cupy.ndarray:
         """
         Boolean indicator if the date belongs to a leap year.
 
