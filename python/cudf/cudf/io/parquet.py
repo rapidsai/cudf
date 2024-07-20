@@ -929,12 +929,12 @@ def _read_parquet(
                 f"following positional arguments: {list(args)}"
             )
         if cudf.get_option("io.parquet.low_memory"):
-            return libparquet.ParquetReader(
+            return libparquet.read_parquet_chunked(
                 filepaths_or_buffers,
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
-            ).read()
+            )
         else:
             return libparquet.read_parquet(
                 filepaths_or_buffers,

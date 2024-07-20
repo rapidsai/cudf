@@ -22,7 +22,7 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
-from cudf._lib.parquet import ParquetReader
+from cudf._lib.parquet import read_parquet_chunked
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -3755,7 +3755,7 @@ def test_parquet_chunked_reader(
     )
     buffer = BytesIO()
     df.to_parquet(buffer)
-    reader = ParquetReader(
+    actual = read_parquet_chunked(
         [buffer],
         chunk_read_limit=chunk_read_limit,
         pass_read_limit=pass_read_limit,
@@ -3765,7 +3765,6 @@ def test_parquet_chunked_reader(
     expected = cudf.read_parquet(
         buffer, use_pandas_metadata=use_pandas_metadata, row_groups=row_groups
     )
-    actual = reader.read()
     assert_eq(expected, actual)
 
 
