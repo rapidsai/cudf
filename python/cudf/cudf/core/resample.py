@@ -13,9 +13,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import pickle
 import warnings
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -23,13 +25,15 @@ import pandas as pd
 import cudf
 import cudf._lib.labeling
 import cudf.core.index
-from cudf._typing import DataFrameOrSeries
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
     GroupBy,
     SeriesGroupBy,
     _Grouping,
 )
+
+if TYPE_CHECKING:
+    from cudf._typing import DataFrameOrSeries
 
 
 class _Resampler(GroupBy):

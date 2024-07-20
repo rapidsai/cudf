@@ -53,7 +53,7 @@ def test_join(how, coalesce, join_nulls, join_expr):
     query = left.join(
         right, on=join_expr, how=how, join_nulls=join_nulls, coalesce=coalesce
     )
-    assert_gpu_result_equal(query, check_row_order=False)
+    assert_gpu_result_equal(query, check_row_order=how == "left")
 
 
 def test_cross_join():

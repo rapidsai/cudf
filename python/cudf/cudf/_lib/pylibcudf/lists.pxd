@@ -34,4 +34,6 @@ cpdef Column segmented_gather(Column, Column)
 
 cpdef Column extract_list_element(Column, ColumnOrSizeType)
 
+cpdef Column count_elements(Column)
+
 cpdef Column sort_lists(Column, bool, null_order, bool stable = *)

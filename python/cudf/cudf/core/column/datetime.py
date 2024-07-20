@@ -18,7 +18,6 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.labeling import label_bins
 from cudf._lib.search import search_sorted
-from cudf.api.types import is_datetime64_dtype, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals.timezones import (
     check_ambiguous_and_nonexistent,
@@ -486,13 +485,11 @@ class DatetimeColumn(column.ColumnBase):
                 format = format.split(" ")[0]
         return self.strftime(format)
 
-    def mean(
-        self, skipna=None, min_count: int = 0, dtype=np.float64
-    ) -> ScalarLike:
+    def mean(self, skipna=None, min_count: int = 0) -> ScalarLike:
         return pd.Timestamp(
             cast(
                 "cudf.core.column.NumericalColumn", self.astype("int64")
-            ).mean(skipna=skipna, min_count=min_count, dtype=dtype),
+            ).mean(skipna=skipna, min_count=min_count),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
@@ -500,12 +497,11 @@ class DatetimeColumn(column.ColumnBase):
         self,
         skipna: bool | None = None,
         min_count: int = 0,
-        dtype: Dtype = np.float64,
         ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
             cast("cudf.core.column.NumericalColumn", self.astype("int64")).std(
-                skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
+                skipna=skipna, min_count=min_count, ddof=ddof
             )
             * _unit_to_nanoseconds_conversion[self.time_unit],
         ).as_unit(self.time_unit)
@@ -565,10 +561,8 @@ class DatetimeColumn(column.ColumnBase):
 
         # We check this on `other` before reflection since we already know the
         # dtype of `self`.
-        other_is_timedelta = is_timedelta64_dtype(other.dtype)
-        other_is_datetime64 = not other_is_timedelta and is_datetime64_dtype(
-            other.dtype
-        )
+        other_is_timedelta = other.dtype.kind == "m"
+        other_is_datetime64 = other.dtype.kind == "M"
         lhs, rhs = (other, self) if reflect else (self, other)
         out_dtype = None
 
@@ -632,9 +626,9 @@ class DatetimeColumn(column.ColumnBase):
     def indices_of(
         self, value: ScalarLike
     ) -> cudf.core.column.NumericalColumn:
-        value = column.as_column(
-            pd.to_datetime(value), dtype=self.dtype
-        ).astype("int64")
+        value = (
+            pd.to_datetime(value).to_numpy().astype(self.dtype).astype("int64")
+        )
         return self.astype("int64").indices_of(value)
 
     @property
@@ -645,7 +639,7 @@ class DatetimeColumn(column.ColumnBase):
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        if np.issubdtype(to_dtype, np.datetime64):
+        if to_dtype.kind == "M":  # type: ignore[union-attr]
             to_res, _ = np.datetime_data(to_dtype)
             self_res, _ = np.datetime_data(self.dtype)
 
