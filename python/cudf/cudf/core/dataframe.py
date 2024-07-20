@@ -475,6 +475,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                     {key: ca._data[key] for key in column_names},
                     multiindex=ca.multiindex,
                     level_names=ca.level_names,
+                    verify=False,
                 ),
                 index=index,
             )
@@ -485,6 +486,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                     {key: ca._data[key] for key in column_names},
                     multiindex=ca.multiindex,
                     level_names=ca.level_names,
+                    verify=False,
                 ),
                 index=index,
             )
@@ -771,6 +773,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     else None,
                     rangeindex=rangeindex,
                     label_dtype=label_dtype,
+                    verify=False,
                 )
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
@@ -931,7 +934,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
                 if not series.index.equals(final_columns):
                     series = series.reindex(final_columns)
-                self._data[idx] = column.as_column(series._column)
+                self._data[idx] = series._column
 
             # Setting `final_columns` to self._index so
             # that the resulting `transpose` will be have
@@ -2958,7 +2961,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # label-like
             if is_scalar(col) or isinstance(col, tuple):
                 if col in self._column_names:
-                    data_to_add.append(self[col])
+                    data_to_add.append(self[col]._column)
                     names.append(col)
                     if drop:
                         to_drop.append(col)
@@ -2973,7 +2976,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             elif isinstance(
                 col, (cudf.Series, cudf.Index, pd.Series, pd.Index)
             ):
-                data_to_add.append(col)
+                data_to_add.append(as_column(col))
                 names.append(col.name)
             else:
                 try:
@@ -4769,7 +4772,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result = {}
         for name, col in self._data.items():
             apply_sr = Series._from_data({None: col})
-            result[name] = apply_sr.apply(_func)
+            result[name] = apply_sr.apply(_func)._column
 
         return DataFrame._from_data(result, index=self.index)
 
@@ -5806,6 +5809,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 ),
                 level_names=level_names,
                 label_dtype=getattr(columns, "dtype", None),
+                verify=False,
             ),
             index=new_index,
         )
@@ -5892,6 +5896,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 ),
                 level_names=level_names,
                 label_dtype=getattr(columns, "dtype", None),
+                verify=False,
             ),
             index=index,
         )
@@ -6302,10 +6307,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         length = len(self)
         return Series._from_data(
             {
-                None: [
-                    length - self._data[col].null_count
-                    for col in self._data.names
-                ]
+                None: as_column(
+                    [length - col.null_count for col in self._columns]
+                )
             },
             cudf.Index(self._data.names),
         )
@@ -7374,7 +7378,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             offset=0,
         )
         return cudf.Series._from_data(
-            cudf.core.column_accessor.ColumnAccessor({name: col}),
+            cudf.core.column_accessor.ColumnAccessor(
+                {name: col}, verify=False
+            ),
             index=self.index,
             name=name,
         )

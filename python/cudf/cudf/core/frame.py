@@ -1305,7 +1305,7 @@ class Frame(BinaryOperand, Scannable):
         order=None,
         ascending=True,
         na_position="last",
-    ):
+    ) -> cupy.ndarray:
         """Return the integer indices that would sort the Series values.
 
         Parameters
