@@ -6229,6 +6229,7 @@ class IndexedFrame(Frame):
                     multiindex=self._data.multiindex,
                     level_names=self._data.level_names,
                     label_dtype=self._data.label_dtype,
+                    verify=False,
                 ),
             )
         else:
