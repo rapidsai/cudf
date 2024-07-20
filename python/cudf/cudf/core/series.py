@@ -2695,14 +2695,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
 
     @_performance_tracking
-    def transpose(self):
-        """Return the transpose, which is by definition self."""
-
-        return self
-
-    T = property(transpose, doc=transpose.__doc__)
-
-    @_performance_tracking
     def duplicated(self, keep="first"):
         """
         Indicate duplicate Series values.

@@ -1149,6 +1149,15 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def to_numpy(self):
         return self.values_host
 
+    def to_flat_index(self):
+        """
+        Convert a MultiIndex to an Index of Tuples containing the level values.
+
+        This is not currently implemented
+        """
+        # TODO: Could implement as Index of ListDtype?
+        raise NotImplementedError("to_flat_index is not currently supported.")
+
     @property  # type: ignore
     @_performance_tracking
     def values_host(self):
@@ -1712,8 +1721,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return super().fillna(value=value)
 
     @_performance_tracking
-    def unique(self):
-        return self.drop_duplicates(keep="first")
+    def unique(self, level: int | None = None) -> Self | cudf.Index:
+        if level is None:
+            return self.drop_duplicates(keep="first")
+        else:
+            return self.get_level_values(level).unique()
 
     @_performance_tracking
     def nunique(self, dropna: bool = True) -> int:

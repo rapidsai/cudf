@@ -868,6 +868,24 @@ class BaseIndex(Serializable):
         """Convert to a numpy array."""
         raise NotImplementedError
 
+    def to_flat_index(self) -> Self:
+        """
+        Identity method.
+
+        This is implemented for compatibility with subclass implementations
+        when chaining.
+
+        Returns
+        -------
+        pd.Index
+            Caller.
+
+        See Also
+        --------
+        MultiIndex.to_flat_index : Subclass implementation.
+        """
+        return self
+
     def any(self):
         """
         Return whether any elements is True in Index.
@@ -979,7 +997,7 @@ class BaseIndex(Serializable):
         # ColumnBase.isin).
         raise NotImplementedError
 
-    def unique(self):
+    def unique(self, level: int | None = None):
         """
         Return unique values in the index.
 
