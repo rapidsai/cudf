@@ -3,7 +3,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["11.8", "12.2"]
+      cuda: ["11.8", "12.5"]
       arch: [x86_64]
     includes:
       - build_base
@@ -243,7 +243,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - &cmake_ver cmake>=3.26.4
+          - &cmake_ver cmake>=3.26.4,!=3.30.0
           - &ninja ninja
   build_all:
     common:
@@ -323,6 +323,7 @@ dependencies:
         packages:
           # Hard pin the patch version used during the build.
           # Sync with conda build constraint & wheel run constraint.
+          # TODO: Change to `2.0.*` for NumPy 2
           - numpy==1.23.*
   build_python_cudf:
     common:
@@ -402,6 +403,10 @@ dependencies:
               cuda: "12.2"
             packages:
               - cuda-version=12.2
+          - matrix:
+              cuda: "12.5"
+            packages:
+              - cuda-version=12.5
   cuda:
     specific:
       - output_types: conda
@@ -547,6 +552,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
+          # TODO: Update `numpy` in `build_python_common` when dropping `<2.0a0`
           - numpy>=1.23,<2.0a0
           - pandas>=2.0,<2.2.3dev0
   run_cudf:
@@ -755,7 +761,7 @@ dependencies:
           - {matrix: null, packages: *cupy_packages_cu11}
   test_python_pandas_cudf:
     common:
-      - output_types: pyproject
+      - output_types: [requirements, pyproject]
         packages:
           # dependencies to run pandas tests
           # https://github.com/pandas-dev/pandas/blob/main/environment.yml
@@ -766,7 +772,7 @@ dependencies:
           - pytest-reportlog
   test_python_cudf_pandas:
     common:
-      - output_types: pyproject
+      - output_types: [requirements, pyproject]
         packages:
           - ipython
           - openpyxl

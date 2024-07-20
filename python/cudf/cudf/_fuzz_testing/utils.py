@@ -192,8 +192,7 @@ def convert_nulls_to_none(records, df):
         col
         for col in df.columns
         if df[col].dtype in pandas_dtypes_to_np_dtypes
-        or pd.api.types.is_datetime64_dtype(df[col].dtype)
-        or pd.api.types.is_timedelta64_dtype(df[col].dtype)
+        or df[col].dtype.kind in "mM"
     ]
 
     for record in records:

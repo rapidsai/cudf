@@ -13,11 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include "nvcomp_adapter.hpp"
 
-#include "io/utilities/config_utils.hpp"
 #include "nvcomp_adapter.cuh"
 
+#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/io/config_utils.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <nvcomp/lz4.h>
@@ -33,6 +35,13 @@
 #define NVCOMP_ZSTD_HEADER <nvcomp/zstd.h>
 #if __has_include(NVCOMP_ZSTD_HEADER)
 #include NVCOMP_ZSTD_HEADER
+#endif
+
+// When building with nvcomp 4.0 or newer, map the new version macros to the old ones
+#ifndef NVCOMP_MAJOR_VERSION
+#define NVCOMP_MAJOR_VERSION NVCOMP_VER_MAJOR
+#define NVCOMP_MINOR_VERSION NVCOMP_VER_MINOR
+#define NVCOMP_PATCH_VERSION NVCOMP_VER_PATCH
 #endif
 
 #define NVCOMP_HAS_ZSTD_DECOMP(MAJOR, MINOR, PATCH) (MAJOR > 2 or (MAJOR == 2 and MINOR >= 3))
@@ -472,8 +481,8 @@ feature_status_parameters::feature_status_parameters()
   : lib_major_version{NVCOMP_MAJOR_VERSION},
     lib_minor_version{NVCOMP_MINOR_VERSION},
     lib_patch_version{NVCOMP_PATCH_VERSION},
-    are_all_integrations_enabled{detail::nvcomp_integration::is_all_enabled()},
-    are_stable_integrations_enabled{detail::nvcomp_integration::is_stable_enabled()}
+    are_all_integrations_enabled{nvcomp_integration::is_all_enabled()},
+    are_stable_integrations_enabled{nvcomp_integration::is_stable_enabled()}
 {
   int device;
   CUDF_CUDA_TRY(cudaGetDevice(&device));

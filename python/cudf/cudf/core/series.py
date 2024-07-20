@@ -22,10 +22,8 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
-    is_bool_dtype,
     is_dict_like,
     is_integer,
-    is_integer_dtype,
     is_scalar,
 )
 from cudf.core import indexing_utils
@@ -214,17 +212,17 @@ class _SeriesIlocIndexer(_FrameIndexer):
                         and self._frame.dtype.categories.dtype.kind == "f"
                     )
                 )
-                and isinstance(value, (np.float32, np.float64))
+                and isinstance(value, np.floating)
                 and np.isnan(value)
             ):
                 raise MixedTypeError(
                     f"Cannot assign {value=} to "
                     f"non-float dtype={self._frame.dtype}"
                 )
-            elif (
-                self._frame.dtype.kind == "b"
-                and not is_bool_dtype(value)
-                and value not in {None, cudf.NA}
+            elif self._frame.dtype.kind == "b" and not (
+                value in {None, cudf.NA}
+                or isinstance(value, (np.bool_, bool))
+                or (isinstance(value, cudf.Scalar) and value.dtype.kind == "b")
             ):
                 raise MixedTypeError(
                     f"Cannot assign {value=} to "
@@ -357,12 +355,10 @@ class _SeriesLocIndexer(_FrameIndexer):
             )
             if not _is_non_decimal_numeric_dtype(index_dtype) and not (
                 isinstance(index_dtype, cudf.CategoricalDtype)
-                and is_integer_dtype(index_dtype.categories.dtype)
+                and index_dtype.categories.dtype.kind in "iu"
             ):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
-                if isinstance(arg, cudf.Scalar) and is_integer_dtype(
-                    arg.dtype
-                ):
+                if isinstance(arg, cudf.Scalar) and arg.dtype.kind in "iu":
                     # Do not remove until pandas 3.0 support is added.
                     assert (
                         PANDAS_LT_300
@@ -961,7 +957,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         .. pandas-compat::
-            **Series.reindex**
+            :meth:`pandas.Series.reindex`
 
             Note: One difference from Pandas is that ``NA`` is used for rows
             that do not match, rather than ``NaN``. One side effect of this is
@@ -1244,7 +1240,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         .. pandas-compat::
-            **Series.map**
+            :meth:`pandas.Series.map`
 
             Please note map currently only supports fixed-width numeric
             type functions.
@@ -2064,6 +2060,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         kind="quicksort",
         na_position="last",
         ignore_index=False,
+        key=None,
     ):
         """Sort by the values along either axis.
 
@@ -2077,6 +2074,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             'first' puts nulls at the beginning, 'last' puts nulls at the end
         ignore_index : bool, default False
             If True, index will not be sorted.
+        key : callable, optional
+            Apply the key function to the values
+            before sorting. This is similar to the ``key`` argument in the
+            builtin ``sorted`` function, with the notable difference that
+            this ``key`` function should be *vectorized*. It should expect a
+            ``Series`` and return a Series with the same shape as the input.
+            It will be applied to each column in `by` independently.
+            Currently not supported.
 
         Returns
         -------
@@ -2095,7 +2100,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         .. pandas-compat::
-            **Series.sort_values**
+            :meth:`pandas.Series.sort_values`
 
             * Support axis='index' only.
             * The inplace and kind argument is currently unsupported
@@ -2108,6 +2113,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             kind=kind,
             na_position=na_position,
             ignore_index=ignore_index,
+            key=key,
         )
 
     @_performance_tracking
@@ -2257,20 +2263,19 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         order=None,
         ascending=True,
         na_position="last",
-    ):
-        obj = self.__class__._from_data(
-            {
-                None: super().argsort(
-                    axis=axis,
-                    kind=kind,
-                    order=order,
-                    ascending=ascending,
-                    na_position=na_position,
-                )
-            }
+    ) -> Self:
+        col = as_column(
+            super().argsort(
+                axis=axis,
+                kind=kind,
+                order=order,
+                ascending=ascending,
+                na_position=na_position,
+            )
         )
-        obj.name = self.name
-        return obj
+        return self._from_data_like_self(
+            self._data._from_columns_like_self([col])
+        )
 
     @_performance_tracking
     def replace(self, to_replace=None, value=no_default, *args, **kwargs):
@@ -2551,7 +2556,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         5
 
         .. pandas-compat::
-            **Series.count**
+            :meth:`pandas.Series.count`
 
             Parameters currently not supported is `level`.
         """
@@ -2625,7 +2630,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             val_counts = val_counts[val_counts == val_counts.iloc[0]]
 
         return Series._from_data(
-            {self.name: val_counts.index.sort_values()}, name=self.name
+            {self.name: val_counts.index.sort_values()._column}, name=self.name
         )
 
     @_performance_tracking
@@ -2662,7 +2667,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         -0.015750000000000004
 
         .. pandas-compat::
-            **Series.cov**
+            :meth:`pandas.Series.cov`
 
             `min_periods` parameter is not yet supported.
         """
@@ -3221,7 +3226,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             percentiles = np.array([0.25, 0.5, 0.75])
 
         dtype = "str"
-        if is_bool_dtype(self.dtype):
+        if self.dtype.kind == "b":
             data = _describe_categorical(self, percentiles)
         elif isinstance(self._column, cudf.core.column.NumericalColumn):
             data = _describe_numeric(self, percentiles)
@@ -3369,7 +3374,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         as_index=True,
         sort=no_default,
         group_keys=False,
-        squeeze=False,
         observed=True,
         dropna=True,
     ):
@@ -3380,7 +3384,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             as_index,
             sort,
             group_keys,
-            squeeze,
             observed,
             dropna,
         )
@@ -3423,7 +3426,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         'numeric_series'
 
         .. pandas-compat::
-            **Series.rename**
+            :meth:`pandas.Series.rename`
 
             - Supports scalar values only for changing name attribute
             - The ``inplace`` and ``level`` is not supported
@@ -3432,7 +3435,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return Series._from_data(out_data, self.index, name=index)
 
     @_performance_tracking
-    def add_prefix(self, prefix):
+    def add_prefix(self, prefix, axis=None):
+        if axis is not None:
+            raise NotImplementedError("axis is currently not implemented.")
         return Series._from_data(
             # TODO: Change to deep=False when copy-on-write is default
             data=self._data.copy(deep=True),
@@ -3530,7 +3535,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_performance_tracking
     def pct_change(
-        self, periods=1, fill_method=no_default, limit=no_default, freq=None
+        self,
+        periods=1,
+        fill_method=no_default,
+        limit=no_default,
+        freq=None,
+        **kwargs,
     ):
         """
         Calculates the percent change between sequential elements
@@ -3555,6 +3565,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
+        **kwargs
+            Additional keyword arguments are passed into
+            `Series.shift`.
 
         Returns
         -------
@@ -3599,11 +3612,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             warnings.simplefilter("ignore")
             data = self.fillna(method=fill_method, limit=limit)
         diff = data.diff(periods=periods)
-        change = diff / data.shift(periods=periods, freq=freq)
+        change = diff / data.shift(periods=periods, freq=freq, **kwargs)
         return change
 
     @_performance_tracking
-    def where(self, cond, other=None, inplace=False):
+    def where(self, cond, other=None, inplace=False, axis=None, level=None):
+        if axis is not None:
+            raise NotImplementedError("axis is not supported.")
+        elif level is not None:
+            raise NotImplementedError("level is not supported.")
         result_col = super().where(cond, other, inplace)
         return self._mimic_inplace(
             self._from_data_like_self(
@@ -4703,7 +4720,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: object
 
         .. pandas-compat::
-            **series.DatetimeProperties.strftime**
+            :meth:`pandas.DatetimeIndex.strftime`
 
             The following date format identifiers are not yet
             supported: ``%c``, ``%x``,``%X``
@@ -4731,9 +4748,7 @@ class DatetimeProperties(BaseDatelikeProperties):
                     f"for tracking purposes."
                 )
         return self._return_result_like_self(
-            self.series._column.as_string_column(
-                dtype="str", format=date_format
-            )
+            self.series._column.strftime(format=date_format)
         )
 
     @copy_docstring(DatetimeIndex.tz_localize)

@@ -136,6 +136,63 @@ def test_index_of_list_column(test_data, column):
     assert_column_eq(expect, res)
 
 
+def test_reverse(test_data):
+    list_column = test_data[0][0]
+    arr = pa.array(list_column)
+    plc_column = plc.interop.from_arrow(arr)
+
+    res = plc.lists.reverse(plc_column)
+
+    expect = pa.array([lst[::-1] for lst in list_column])
+
+    assert_column_eq(expect, res)
+
+
+def test_segmented_gather(test_data):
+    list_column1 = test_data[0][0]
+    list_column2 = test_data[0][1]
+
+    plc_column1 = plc.interop.from_arrow(pa.array(list_column1))
+    plc_column2 = plc.interop.from_arrow(pa.array(list_column2))
+
+    res = plc.lists.segmented_gather(plc_column2, plc_column1)
+
+    expect = pa.array([[8, 9], [14], [0], [0, 0]])
+
+    assert_column_eq(expect, res)
+
+
+def test_extract_list_element_scalar(test_data):
+    arr = pa.array(test_data[0][0])
+    plc_column = plc.interop.from_arrow(arr)
+
+    res = plc.lists.extract_list_element(plc_column, 0)
+    expect = pa.compute.list_element(test_data[0][0], 0)
+
+    assert_column_eq(expect, res)
+
+
+def test_extract_list_element_column(test_data):
+    arr = pa.array(test_data[0][0])
+    plc_column = plc.interop.from_arrow(arr)
+    indices = plc.interop.from_arrow(pa.array([0, 1, -4, -1]))
+
+    res = plc.lists.extract_list_element(plc_column, indices)
+    expect = pa.array([0, None, None, 7])
+
+    assert_column_eq(expect, res)
+
+
+def test_count_elements(test_data):
+    arr = pa.array(test_data[0][1])
+    plc_column = plc.interop.from_arrow(arr)
+    res = plc.lists.count_elements(plc_column)
+
+    expect = pa.array([1, 1, 0, 3], type=pa.int32())
+
+    assert_column_eq(expect, res)
+
+
 def test_sequences():
     starts = plc.interop.from_arrow(pa.array([0, 1, 2, 3, 4]))
     steps = plc.interop.from_arrow(pa.array([2, 1, 1, 1, -3]))

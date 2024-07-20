@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint8_t
+from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.functional cimport reference_wrapper
 from libcpp.map cimport map
@@ -27,8 +27,11 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
 
         # setter
 
+        void set_filter(expression &filter) except +
         void set_columns(vector[string] col_names) except +
+        void set_num_rows(size_type val) except +
         void set_row_groups(vector[vector[size_type]] row_grp) except +
+        void set_skip_rows(int64_t val) except +
         void enable_use_arrow_schema(bool val) except +
         void enable_use_pandas_metadata(bool val) except +
         void set_timestamp_type(data_type type) except +
@@ -48,6 +51,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
         parquet_reader_options_builder& row_groups(
             vector[vector[size_type]] row_grp
+        ) except +
+        parquet_reader_options_builder& convert_strings_to_categories(
+            bool val
         ) except +
         parquet_reader_options_builder& use_pandas_metadata(
             bool val
@@ -78,6 +84,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         size_t get_max_page_size_bytes() except +
         size_type get_max_page_size_rows() except +
         size_t get_max_dictionary_size() except +
+        bool is_enabled_write_arrow_schema() except +
 
         void set_metadata(
             cudf_io_types.table_input_metadata m
@@ -103,6 +110,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_max_page_size_rows(size_type val) except +
         void set_max_dictionary_size(size_t val) except +
         void enable_write_v2_headers(bool val) except +
+        void enable_write_arrow_schema(bool val) except +
         void set_dictionary_policy(cudf_io_types.dictionary_policy policy) except +
 
     cdef cppclass parquet_writer_options(parquet_writer_options_base):
@@ -141,6 +149,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             bool enabled
         ) except +
         BuilderT& utc_timestamps(
+            bool enabled
+        ) except +
+        BuilderT& write_arrow_schema(
             bool enabled
         ) except +
         BuilderT& row_group_size_bytes(
