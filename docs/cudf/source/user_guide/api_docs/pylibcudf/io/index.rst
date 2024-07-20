@@ -18,3 +18,4 @@ I/O Functions
     avro
     csv
     json
+    parquet
