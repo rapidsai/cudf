@@ -18,6 +18,9 @@ from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_null_policy,
     concatenate_rows as cpp_concatenate_rows,
 )
+from cudf._lib.pylibcudf.libcudf.lists.count_elements cimport (
+    count_elements as cpp_count_elements,
+)
 from cudf._lib.pylibcudf.libcudf.lists.extract cimport (
     extract_list_element as cpp_extract_list_element,
 )
@@ -300,6 +303,30 @@ cpdef Column extract_list_element(Column input, ColumnOrSizeType index):
     return Column.from_libcudf(move(c_result))
 
 
+cpdef Column count_elements(Column input):
+    """Count the number of rows in each
+    list element in the given lists column.
+    For details, see :cpp:func:`count_elements`.
+
+    Parameters
+    ----------
+    input : Column
+        The input column
+
+    Returns
+    -------
+    Column
+        A new Column of the lengths of each list element
+    """
+    cdef ListColumnView list_view = input.list_view()
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(cpp_count_elements(list_view.view()))
+
+    return Column.from_libcudf(move(c_result))
+
+
 cpdef Column difference_distinct(
     Column lhs,
     Column rhs,
@@ -308,7 +335,9 @@ cpdef Column difference_distinct(
 ):
     """Create a column of index values indicating the position of a search
     key row within the corresponding list row in the lists column.
+
     For details, see :cpp:func:`difference_distinct`.
+
     Parameters
     ----------
     lhs : Column
@@ -320,6 +349,7 @@ cpdef Column difference_distinct(
     nans_equal : bool, default True
         If true, libcudf will treat nan elements from {-nan, +nan}
         as equal. Otherwise, unequal. Otherwise, unequal.
+
     Returns
     -------
     Column
@@ -353,7 +383,9 @@ cpdef Column have_overlap(
     bool nans_equal=True
 ):
     """Check if lists at each row of the given lists columns overlap.
+
     For details, see :cpp:func:`have_overlap`.
+
     Parameters
     ----------
     lhs : Column
@@ -365,10 +397,11 @@ cpdef Column have_overlap(
     nans_equal : bool, default True
         If true, libcudf will treat nan elements from {-nan, +nan}
         as equal. Otherwise, unequal. Otherwise, unequal.
+
     Returns
     -------
     Column
-       A column containing the check results.
+        A column containing the check results.
     """
     cdef unique_ptr[column] c_result
     cdef ListColumnView lhs_view = lhs.list_view()
@@ -398,7 +431,9 @@ cpdef Column intersect_distinct(
     bool nans_equal=True
 ):
     """Create a lists column of distinct elements common to two input lists columns.
+
     For details, see :cpp:func:`intersect_distinct`.
+
     Parameters
     ----------
     lhs : Column
@@ -410,6 +445,7 @@ cpdef Column intersect_distinct(
     nans_equal : bool, default True
         If true, libcudf will treat nan elements from {-nan, +nan}
         as equal. Otherwise, unequal. Otherwise, unequal.
+
     Returns
     -------
     Column
@@ -444,7 +480,9 @@ cpdef Column union_distinct(
 ):
     """Create a lists column of distinct elements found in
     either of two input lists columns.
+
     For details, see :cpp:func:`union_distinct`.
+
     Parameters
     ----------
     lhs : Column
@@ -456,6 +494,7 @@ cpdef Column union_distinct(
     nans_equal : bool, default True
         If true, libcudf will treat nan elements from {-nan, +nan}
         as equal. Otherwise, unequal. Otherwise, unequal.
+
     Returns
     -------
     Column

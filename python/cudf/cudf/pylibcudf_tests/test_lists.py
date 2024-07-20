@@ -190,6 +190,16 @@ def test_extract_list_element_column(test_data):
     assert_column_eq(expect, res)
 
 
+def test_count_elements(test_data):
+    arr = pa.array(test_data[0][1])
+    plc_column = plc.interop.from_arrow(arr)
+    res = plc.lists.count_elements(plc_column)
+
+    expect = pa.array([1, 1, 0, 3], type=pa.int32())
+
+    assert_column_eq(expect, res)
+
+
 @pytest.mark.parametrize(
     "set_operation,nans_equal,nulls_equal,expected",
     [
@@ -231,4 +241,5 @@ def test_set_operations(
         nulls_equal,
     )
     expect = pa.array(expected)
+
     assert_column_eq(expect, res)

@@ -4,8 +4,10 @@ from __future__ import annotations
 import io
 import os
 
+import numpy as np
 import pyarrow as pa
 import pytest
+from pyarrow.parquet import write_table as pq_write_table
 
 from cudf._lib import pylibcudf as plc
 from cudf._lib.pylibcudf.io.types import CompressionType
@@ -102,14 +104,70 @@ def assert_column_eq(
             return pa.list_(new_fields[0])
         return typ
 
+    def _contains_type(parent_typ, typ_checker):
+        """
+        Check whether the parent or one of the children
+        satisfies the typ_checker.
+        """
+        if typ_checker(parent_typ):
+            return True
+        if pa.types.is_nested(parent_typ):
+            for i in range(parent_typ.num_fields):
+                if _contains_type(parent_typ.field(i).type, typ_checker):
+                    return True
+        return False
+
     if not check_field_nullability:
         rhs_type = _make_fields_nullable(rhs.type)
         rhs = rhs.cast(rhs_type)
 
         lhs_type = _make_fields_nullable(lhs.type)
-        lhs = rhs.cast(lhs_type)
+        lhs = lhs.cast(lhs_type)
 
-    assert lhs.equals(rhs)
+    assert lhs.type == rhs.type, f"{lhs.type} != {rhs.type}"
+    if _contains_type(lhs.type, pa.types.is_floating) and _contains_type(
+        rhs.type, pa.types.is_floating
+    ):
+        # Flatten nested arrays to liststo do comparisons if nested
+        # This is so we can do approximate comparisons
+        # for floats in numpy
+        def _flatten_arrays(arr):
+            if pa.types.is_nested(arr.type):
+                flattened = arr.flatten()
+                flat_arrs = []
+                if isinstance(flattened, list):
+                    for flat_arr in flattened:
+                        flat_arrs += _flatten_arrays(flat_arr)
+                else:
+                    flat_arrs = [flattened]
+            else:
+                flat_arrs = [arr]
+            return flat_arrs
+
+        if isinstance(lhs, (pa.ListArray, pa.StructArray)):
+            lhs = _flatten_arrays(lhs)
+            rhs = _flatten_arrays(rhs)
+        else:
+            # Just a regular doublearray
+            lhs = [lhs]
+            rhs = [rhs]
+
+        for lh_arr, rh_arr in zip(lhs, rhs):
+            # Check NaNs positions match
+            # and then filter out nans
+            lhs_nans = pa.compute.is_nan(lh_arr)
+            rhs_nans = pa.compute.is_nan(rh_arr)
+            assert lhs_nans.equals(rhs_nans)
+
+            if pa.compute.any(lhs_nans) or pa.compute.any(rhs_nans):
+                # masks must be equal at this point
+                mask = pa.compute.fill_null(pa.compute.invert(lhs_nans), True)
+                lh_arr = lh_arr.filter(mask)
+                rh_arr = rh_arr.filter(mask)
+
+            np.testing.assert_array_almost_equal(lh_arr, rh_arr)
+    else:
+        assert lhs.equals(rhs)
 
 
 def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
@@ -125,6 +183,8 @@ def assert_table_and_meta_eq(
     pa_table: pa.Table,
     plc_table_w_meta: plc.io.types.TableWithMetadata,
     check_field_nullability=True,
+    check_types_if_empty=True,
+    check_names=True,
 ) -> None:
     """Verify that the pylibcudf TableWithMetadata and PyArrow table are equal"""
 
@@ -135,11 +195,17 @@ def assert_table_and_meta_eq(
         plc_shape == pa_table.shape
     ), f"{plc_shape} is not equal to {pa_table.shape}"
 
+    if not check_types_if_empty and plc_table.num_rows() == 0:
+        return
+
     for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
         assert_column_eq(pa_col, plc_col, check_field_nullability)
 
     # Check column name equality
-    assert plc_table_w_meta.column_names() == pa_table.column_names
+    if check_names:
+        assert (
+            plc_table_w_meta.column_names() == pa_table.column_names
+        ), f"{plc_table_w_meta.column_names()} != {pa_table.column_names}"
 
 
 def cudf_raises(expected_exception: BaseException, *args, **kwargs):
@@ -172,6 +238,33 @@ def is_nested_struct(typ):
 
 def is_nested_list(typ):
     return nesting_level(typ)[0] > 1
+
+
+def _convert_numeric_types_to_floating(pa_table):
+    """
+    Useful little helper for testing the
+    dtypes option in I/O readers.
+
+    Returns a tuple containing the pylibcudf dtypes
+    and the new pyarrow schema
+    """
+    dtypes = []
+    new_fields = []
+    for i in range(len(pa_table.schema)):
+        field = pa_table.schema.field(i)
+        child_types = []
+
+        plc_type = plc.interop.from_arrow(field.type)
+        if pa.types.is_integer(field.type) or pa.types.is_unsigned_integer(
+            field.type
+        ):
+            plc_type = plc.interop.from_arrow(pa.float64())
+            field = field.with_type(pa.float64())
+
+        dtypes.append((field.name, plc_type, child_types))
+
+        new_fields.append(field)
+    return dtypes, new_fields
 
 
 def write_source_str(source, input_str):
@@ -227,6 +320,16 @@ def make_source(path_or_buf, pa_table, format, **kwargs):
         df.to_json(path_or_buf, mode=mode, **kwargs)
     elif format == "csv":
         df.to_csv(path_or_buf, mode=mode, **kwargs)
+    elif format == "parquet":
+        # The conversion to pandas is lossy (doesn't preserve
+        # nested types) so we
+        # will just use pyarrow directly to write this
+        pq_write_table(
+            pa_table,
+            pa.PythonFile(path_or_buf)
+            if isinstance(path_or_buf, io.IOBase)
+            else path_or_buf,
+        )
     if isinstance(path_or_buf, io.IOBase):
         path_or_buf.seek(0)
     return path_or_buf

@@ -34,6 +34,8 @@ cpdef Column segmented_gather(Column, Column)
 
 cpdef Column extract_list_element(Column, ColumnOrSizeType)
 
+cpdef Column count_elements(Column)
+
 cpdef Column difference_distinct(Column, Column, bool nulls_equal=*, bool nans_equal=*)
 
 cpdef Column have_overlap(Column, Column, bool nulls_equal=*, bool nans_equal=*)
