@@ -18,7 +18,7 @@
 #include "join_common_utils.hpp"
 #include "mixed_join_kernels.cuh"
 
-#include <cudf/ast/detail/expression_parser.hpp>
+#include <cudf/ast/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/helper_functions.cuh>
@@ -112,7 +112,7 @@ mixed_join(
     cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
     binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream)};
 
-  auto const parser = ast::detail::expression_parser{
+  auto const parser = ast::expression_parser{
     binary_predicate, left_conditional, right_conditional, has_nulls, stream, mr};
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
                "The expression must produce a boolean output.");
@@ -377,7 +377,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
     cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
     binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream)};
 
-  auto const parser = ast::detail::expression_parser{
+  auto const parser = ast::expression_parser{
     binary_predicate, left_conditional, right_conditional, has_nulls, stream, mr};
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
                "The expression must produce a boolean output.");

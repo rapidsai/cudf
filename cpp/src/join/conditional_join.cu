@@ -19,7 +19,7 @@
 #include "join/join_common_utils.cuh"
 #include "join/join_common_utils.hpp"
 
-#include <cudf/ast/detail/expression_parser.hpp>
+#include <cudf/ast/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>
@@ -64,8 +64,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
 
   auto const has_nulls = binary_predicate.may_evaluate_null(left, right, stream);
 
-  auto const parser =
-    ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
+  auto const parser = ast::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
                "The expression must produce a Boolean output.");
 
@@ -175,8 +174,7 @@ conditional_join(table_view const& left,
   // path.
   auto const has_nulls = binary_predicate.may_evaluate_null(left, right, stream);
 
-  auto const parser =
-    ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
+  auto const parser = ast::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
                "The expression must produce a boolean output.");
 
@@ -327,8 +325,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   // performance, so we capture that information as well.
   auto const has_nulls = binary_predicate.may_evaluate_null(left, right, stream);
 
-  auto const parser =
-    ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
+  auto const parser = ast::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
                "The expression must produce a boolean output.");
 

@@ -29,9 +29,7 @@
 #include <numeric>
 #include <optional>
 
-namespace cudf {
-namespace ast {
-namespace detail {
+namespace cudf::ast {
 
 /**
  * @brief Node data reference types.
@@ -52,21 +50,40 @@ enum class device_data_reference_type {
  * by the `row_evaluator`.
  */
 struct alignas(8) device_data_reference {
+  /** @brief Construct a new device_data_reference object from input
+   *
+   * @param reference_type The reference type to represent
+   * @param data_type The cudf data-type at the provided index
+   * @param data_index The column index of a table, index of a literal, or index of an intermediate
+   * @param table_source Which table ( left, right, output )
+   */
   device_data_reference(device_data_reference_type reference_type,
                         cudf::data_type data_type,
                         cudf::size_type data_index,
                         table_reference table_source);
 
+  /** @brief Construct a new device_data_reference object from input.
+   *
+   * @param reference_type The reference type to represent
+   * @param data_type The cudf data-type at the provided index in the left table
+   * @param data_index The column index of a table, index of a literal, or index of an intermediate
+   */
   device_data_reference(device_data_reference_type reference_type,
                         cudf::data_type data_type,
                         cudf::size_type data_index);
 
-  device_data_reference_type const reference_type;  // Source of data
-  cudf::data_type const data_type;                  // Type of data
-  cudf::size_type const data_index;                 // The column index of a table, index of a
-                                                    // literal, or index of an intermediate
-  table_reference const table_source;
+  device_data_reference_type const reference_type;  ///< Source of data
+  cudf::data_type const data_type;                  ///< Type of data
+  cudf::size_type const
+    data_index;  ///< The column index of a table, index of a literal, or index of an intermediate
+  table_reference const table_source;  ///< Which table to reference
 
+  /**
+   * @brief Compares two device_data_reference structs for equality
+   *
+   * @param rhs device_data_reference to compare against
+   * @return boolean indicating if this and rhs are equal
+   */
   bool operator==(device_data_reference const& rhs) const
   {
     return std::tie(data_index, data_type, reference_type, table_source) ==
@@ -76,7 +93,7 @@ struct alignas(8) device_data_reference {
 
 // Type used for intermediate storage in expression evaluation.
 template <bool has_nulls>
-using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
+using IntermediateDataType = detail::possibly_null_value_t<std::int64_t, has_nulls>;
 
 /**
  * @brief A container of all device data required to evaluate an expression on tables.
@@ -87,11 +104,11 @@ using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
  *
  */
 struct expression_device_view {
-  device_span<detail::device_data_reference const> data_references;
-  device_span<generic_scalar_device_view const> literals;
-  device_span<ast_operator const> operators;
-  device_span<cudf::size_type const> operator_source_indices;
-  cudf::size_type num_intermediates;
+  device_span<device_data_reference const> data_references;    ///< Span of device data references
+  device_span<generic_scalar_device_view const> literals;      ///< Span of device literal views
+  device_span<ast_operator const> operators;                   ///< Span of ast operators
+  device_span<cudf::size_type const> operator_source_indices;  ///< Span of ast operator indices
+  cudf::size_type num_intermediates;                           ///< Length of all the spans
 };
 
 /**
@@ -114,6 +131,9 @@ class expression_parser {
    * @param expr The expression to create an evaluable expression_parser for.
    * @param left The left table used for evaluating the abstract syntax tree.
    * @param right The right table used for evaluating the abstract syntax tree.
+   * @param has_nulls Indicates if either input table contains nulls.
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
    */
   expression_parser(expression const& expr,
                     cudf::table_view const& left,
@@ -136,6 +156,9 @@ class expression_parser {
    *
    * @param expr The expression to create an evaluable expression_parser for.
    * @param table The table used for evaluating the abstract syntax tree.
+   * @param has_nulls Indicates if the input table contains nulls.
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
    */
   expression_parser(expression const& expr,
                     cudf::table_view const& table,
@@ -199,8 +222,26 @@ class expression_parser {
   class intermediate_counter {
    public:
     intermediate_counter() : used_values() {}
+
+    /**
+     * @brief Take the next chunk of intermediate storage that can be used
+     *
+     * @return cudf::size_type Index of chunk of shared memory to use
+     */
     cudf::size_type take();
+
+    /**
+     * @brief Return a chunk of intermediate storage
+     *
+     * @param value Index of chunk of shared memory to return
+     */
     void give(cudf::size_type value);
+
+    /**
+     * @brief Get the high water shared memory usage
+     *
+     * @return cudf::size_type largest slot of memory used
+     */
     [[nodiscard]] cudf::size_type get_max_used() const { return max_used; }
 
    private:
@@ -221,7 +262,7 @@ class expression_parser {
 
   expression_device_view device_expression_data;  ///< The collection of data required to evaluate
                                                   ///< the expression on the device.
-  int shmem_per_thread;
+  int shmem_per_thread;                           ///< Amount of shared memory each thread requires
 
  private:
   /**
@@ -268,9 +309,8 @@ class expression_parser {
 
     // Create device pointers to components of plan
     auto device_data_buffer_ptr            = static_cast<char const*>(_device_data_buffer.data());
-    device_expression_data.data_references = device_span<detail::device_data_reference const>(
-      reinterpret_cast<detail::device_data_reference const*>(device_data_buffer_ptr +
-                                                             buffer_offsets[0]),
+    device_expression_data.data_references = device_span<device_data_reference const>(
+      reinterpret_cast<device_data_reference const*>(device_data_buffer_ptr + buffer_offsets[0]),
       _data_references.size());
     device_expression_data.literals = device_span<generic_scalar_device_view const>(
       reinterpret_cast<generic_scalar_device_view const*>(device_data_buffer_ptr +
@@ -311,7 +351,7 @@ class expression_parser {
    *
    * @return The index of the added data reference in the internal data references list.
    */
-  cudf::size_type add_data_reference(detail::device_data_reference data_ref);
+  cudf::size_type add_data_reference(device_data_reference data_ref);
 
   rmm::device_buffer
     _device_data_buffer;  ///< The device-side data buffer containing the plan information, which is
@@ -322,14 +362,10 @@ class expression_parser {
   cudf::size_type _expression_count;
   intermediate_counter _intermediate_counter;
   bool _has_nulls;
-  std::vector<detail::device_data_reference> _data_references;
+  std::vector<device_data_reference> _data_references;
   std::vector<ast_operator> _operators;
   std::vector<cudf::size_type> _operator_source_indices;
   std::vector<generic_scalar_device_view> _literals;
 };
 
-}  // namespace detail
-
-}  // namespace ast
-
-}  // namespace cudf
+}  // namespace cudf::ast

@@ -20,7 +20,8 @@
 #include "join/join_common_utils.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
-#include <cudf/ast/detail/expression_parser.hpp>
+#include <cudf/ast/expression_parser.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
 
@@ -156,7 +157,7 @@ CUDF_KERNEL void compute_conditional_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
   join_kind join_type,
-  ast::detail::expression_device_view device_expression_data,
+  cudf::ast::expression_device_view device_expression_data,
   bool const swap_tables,
   std::size_t* output_size)
 {
@@ -165,8 +166,8 @@ CUDF_KERNEL void compute_conditional_join_output_size(
   // workaround is to declare an arbitrary (here char) array type then cast it
   // after the fact to the appropriate type.
   extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
+  cudf::ast::IntermediateDataType<has_nulls>* intermediate_storage =
+    reinterpret_cast<cudf::ast::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
@@ -248,7 +249,7 @@ CUDF_KERNEL void conditional_join(table_device_view left_table,
                                   cudf::size_type* join_output_l,
                                   cudf::size_type* join_output_r,
                                   std::size_t* current_idx,
-                                  cudf::ast::detail::expression_device_view device_expression_data,
+                                  cudf::ast::expression_device_view device_expression_data,
                                   std::size_t const max_size,
                                   bool const swap_tables)
 {
@@ -262,8 +263,8 @@ CUDF_KERNEL void conditional_join(table_device_view left_table,
   // used to circumvent conflicts between arrays of different types between
   // different template instantiations due to the extern specifier.
   extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
+  cudf::ast::IntermediateDataType<has_nulls>* intermediate_storage =
+    reinterpret_cast<cudf::ast::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
@@ -382,7 +383,7 @@ CUDF_KERNEL void conditional_join_anti_semi(
   join_kind join_type,
   cudf::size_type* join_output_l,
   std::size_t* current_idx,
-  cudf::ast::detail::expression_device_view device_expression_data,
+  cudf::ast::expression_device_view device_expression_data,
   std::size_t const max_size)
 {
   constexpr int num_warps = block_size / detail::warp_size;
@@ -390,8 +391,8 @@ CUDF_KERNEL void conditional_join_anti_semi(
   __shared__ cudf::size_type join_shared_l[num_warps][output_cache_size];
 
   extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
+  cudf::ast::IntermediateDataType<has_nulls>* intermediate_storage =
+    reinterpret_cast<cudf::ast::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 

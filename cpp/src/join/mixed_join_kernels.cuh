@@ -19,7 +19,6 @@
 #include "join/join_common_utils.hpp"
 #include "join/mixed_join_common_utils.cuh"
 
-#include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/span.hpp>
 
@@ -68,7 +67,7 @@ __global__ void compute_mixed_join_output_size(
   row_equality const equality_probe,
   join_kind const join_type,
   cudf::detail::mixed_multimap_type::device_view hash_table_view,
-  ast::detail::expression_device_view device_expression_data,
+  cudf::ast::expression_device_view device_expression_data,
   bool const swap_tables,
   std::size_t* output_size,
   cudf::device_span<cudf::size_type> matches_per_row);
@@ -115,7 +114,7 @@ __global__ void mixed_join(table_device_view left_table,
                            cudf::detail::mixed_multimap_type::device_view hash_table_view,
                            size_type* join_output_l,
                            size_type* join_output_r,
-                           cudf::ast::detail::expression_device_view device_expression_data,
+                           cudf::ast::expression_device_view device_expression_data,
                            cudf::size_type const* join_result_offsets,
                            bool const swap_tables);
 

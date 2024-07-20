@@ -19,7 +19,8 @@
 #include "join/mixed_join_common_utils.cuh"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
-#include <cudf/ast/detail/expression_parser.hpp>
+#include <cudf/ast/expression_parser.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/export.hpp>
@@ -44,15 +45,15 @@ CUDF_HIDDEN __launch_bounds__(block_size) __global__
                        row_equality const equality_probe,
                        cudf::detail::semi_map_type::device_view hash_table_view,
                        cudf::device_span<bool> left_table_keep_mask,
-                       cudf::ast::detail::expression_device_view device_expression_data)
+                       cudf::ast::expression_device_view device_expression_data)
 {
   // Normally the casting of a shared memory array is used to create multiple
   // arrays of different types from the shared memory buffer, but here it is
   // used to circumvent conflicts between arrays of different types between
   // different template instantiations due to the extern specifier.
   extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
+  cudf::ast::IntermediateDataType<has_nulls>* intermediate_storage =
+    reinterpret_cast<cudf::ast::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
@@ -84,7 +85,7 @@ template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>(
   row_equality const equality_probe,
   cudf::detail::semi_map_type::device_view hash_table_view,
   cudf::device_span<bool> left_table_keep_mask,
-  cudf::ast::detail::expression_device_view device_expression_data);
+  cudf::ast::expression_device_view device_expression_data);
 
 template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>(
   table_device_view left_table,
@@ -95,7 +96,7 @@ template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>(
   row_equality const equality_probe,
   cudf::detail::semi_map_type::device_view hash_table_view,
   cudf::device_span<bool> left_table_keep_mask,
-  cudf::ast::detail::expression_device_view device_expression_data);
+  cudf::ast::expression_device_view device_expression_data);
 
 }  // namespace detail
 
