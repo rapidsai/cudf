@@ -208,19 +208,17 @@ struct column_tree_csr {
   rmm::device_uvector<SymbolOffsetT> range_begin;
   rmm::device_uvector<SymbolOffsetT> range_end;
   // device_json_column properties
-  // Type used to count number of rows
-  /*
   using row_offset_t = size_type;
-  // The inferred type of this column (list, struct, or value/string column)
-  std::vector<json_col_t> types;
+  // Indicator array for the device column subtree
+  // Stores the number of rows in the column if the node is part of device column subtree
+  // Stores zero otherwise
+  rmm::device_uvector<row_offset_t> subtree_nrows;
   rmm::device_uvector<row_offset_t> string_offsets;
   rmm::device_uvector<row_offset_t> string_lengths;
   // Row offsets
   rmm::device_uvector<row_offset_t> child_offsets;
   // Validity bitmap
   rmm::device_buffer validity;
-  std::vector<row_offset_t> num_rows;
-  */
 };
 
 namespace detail {
