@@ -307,6 +307,26 @@ TEST_F(StringsSplitTest, SplitRecordWhitespaceWithMaxSplit)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
+TEST_F(StringsSplitTest, SplitRecordAllEmpty)
+{
+  auto input     = cudf::test::strings_column_wrapper({"", "", "", ""});
+  auto sv        = cudf::strings_column_view(input);
+  auto delimiter = cudf::string_scalar("s");
+  auto empty     = cudf::string_scalar("");
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected({LCW{}, LCW{}, LCW{}, LCW{}});
+  auto result = cudf::strings::split_record(sv, delimiter);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+  result = cudf::strings::split_record(sv, empty);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+
+  result = cudf::strings::rsplit_record(sv, delimiter);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+  result = cudf::strings::rsplit_record(sv, empty);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
 TEST_F(StringsSplitTest, MultiByteDelimiters)
 {
   // Overlapping delimiters
