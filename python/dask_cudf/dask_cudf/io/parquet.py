@@ -102,7 +102,9 @@ class CudfEngine(ArrowDatasetEngine):
             # Non-local filesystem handling
             paths_or_fobs = paths
             if not _is_local_filesystem(fs):
-                if kwargs.get("use_python_file_object", False):
+                if open_file_options or kwargs.get(
+                    "use_python_file_object", False
+                ):
                     # Use deprecated NativeFile code path in cudf
                     paths_or_fobs = _open_remote_files(
                         paths_or_fobs,

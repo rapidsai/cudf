@@ -120,7 +120,7 @@ def test_read_csv(s3_base, s3so):
         {"open_file_func": None},
     ],
 )
-def test_read_parquet(s3_base, s3so, open_file_options):
+def test_read_parquet_deprecated(s3_base, s3so, open_file_options):
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2.1, 2.2, 2.3, 2.4]})
     buffer = BytesIO()
     pdf.to_parquet(path=buffer)
@@ -142,3 +142,19 @@ def test_read_parquet(s3_base, s3so, open_file_options):
             assert df.a.sum().compute() == 10
         with pytest.warns(FutureWarning):
             assert df.b.sum().compute() == 9
+
+
+def test_read_parquet_remote(s3_base, s3so):
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2.1, 2.2, 2.3, 2.4]})
+    buffer = BytesIO()
+    pdf.to_parquet(path=buffer)
+    buffer.seek(0)
+    with s3_context(
+        s3_base=s3_base, bucket="daskparquet", files={"file.parq": buffer}
+    ):
+        df = dask_cudf.read_parquet(
+            "s3://daskparquet/*.parq",
+            storage_options=s3so,
+        )
+        assert df.a.sum().compute() == 10
+        assert df.b.sum().compute() == 9
