@@ -15,6 +15,7 @@ This page provides API documentation for pylibcudf.
     concatenate
     copying
     datetime
+    expressions
     filling
     gpumemoryview
     groupby
@@ -34,6 +35,7 @@ This page provides API documentation for pylibcudf.
     stream_compaction
     table
     traits
+    transform
     types
     unary
 

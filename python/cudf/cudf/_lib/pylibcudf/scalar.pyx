@@ -2,11 +2,16 @@
 
 from cython cimport no_gc_clear
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 
 from rmm._lib.memory_resource cimport get_current_device_resource
 
 from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from cudf._lib.pylibcudf.libcudf.scalar.scalar_factories cimport (
+    make_empty_scalar_like,
+)
 
+from .column cimport Column
 from .types cimport DataType
 
 
@@ -45,6 +50,21 @@ cdef class Scalar:
     cpdef bool is_valid(self):
         """True if the scalar is valid, false if not"""
         return self.get().is_valid()
+
+    @staticmethod
+    cdef Scalar empty_like(Column column):
+        """Construct a null scalar with the same type as column.
+
+        Parameters
+        ----------
+        column
+            Column to take type from
+
+        Returns
+        -------
+        New empty (null) scalar of the given type.
+        """
+        return Scalar.from_libcudf(move(make_empty_scalar_like(column.view())))
 
     @staticmethod
     cdef Scalar from_libcudf(unique_ptr[scalar] libcudf_scalar, dtype=None):

@@ -216,6 +216,8 @@ include(cmake/thirdparty/get_fmt.cmake)
 include(cmake/thirdparty/get_spdlog.cmake)
 # find nanoarrow
 include(cmake/thirdparty/get_nanoarrow.cmake)
+# find thread_pool
+include(cmake/thirdparty/get_thread_pool.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
@@ -409,6 +411,7 @@ add_library(
   src/io/orc/stripe_init.cu
   src/datetime/timezone.cpp
   src/io/orc/writer_impl.cu
+  src/io/parquet/arrow_schema_writer.cpp
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
@@ -425,6 +428,7 @@ add_library(
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu
+  src/io/parquet/writer_impl_helpers.cpp
   src/io/parquet/decode_fixed.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
@@ -670,6 +674,7 @@ add_library(
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/pinned_memory.cpp
+  src/utilities/prefetch.cpp
   src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
@@ -802,7 +807,7 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
+  PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS_thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
           kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
 )

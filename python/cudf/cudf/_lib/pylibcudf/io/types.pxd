@@ -38,6 +38,9 @@ cdef class TableWithMetadata:
 
 cdef class SourceInfo:
     cdef source_info c_obj
+    # Keep the bytes converted from stringio alive
+    # (otherwise we end up with a use after free when they get gc'ed)
+    cdef list byte_sources
 
 cdef class SinkInfo:
     # This vector just exists to keep the unique_ptrs to the sinks alive

@@ -5234,7 +5234,7 @@ def test_rowwise_ops(data, op, skipna, numeric_only):
             else (pdf[column].notna().count() == 0)
         )
         or cudf.api.types.is_numeric_dtype(pdf[column].dtype)
-        or cudf.api.types.is_bool_dtype(pdf[column].dtype)
+        or pdf[column].dtype.kind == "b"
         for column in pdf
     ):
         with pytest.raises(TypeError):
@@ -5457,9 +5457,7 @@ def test_rowwise_ops_datetime_dtypes(data, op, skipna, numeric_only):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    if not numeric_only and not all(
-        cudf.api.types.is_datetime64_dtype(dt) for dt in gdf.dtypes
-    ):
+    if not numeric_only and not all(dt.kind == "M" for dt in gdf.dtypes):
         with pytest.raises(TypeError):
             got = getattr(gdf, op)(
                 axis=1, skipna=skipna, numeric_only=numeric_only
@@ -10835,7 +10833,7 @@ def test_dataframe_contains(name, contains, other_names):
         expectation = contains is cudf.NA and name is cudf.NA
         assert (contains in pdf) == expectation
         assert (contains in gdf) == expectation
-    elif pd.api.types.is_float_dtype(gdf.columns.dtype):
+    elif gdf.columns.dtype.kind == "f":
         # In some cases, the columns are converted to an Index[float] based on
         # the other column names. That casts name values from None to np.nan.
         expectation = contains is np.nan and (name is None or name is np.nan)
@@ -11102,3 +11100,12 @@ def test_from_records_with_index_no_shallow_copy():
     data = np.array([(1.0, 2), (3.0, 4)], dtype=[("x", "<f8"), ("y", "<i8")])
     df = cudf.DataFrame(data.view(np.recarray), index=idx)
     assert df.index is idx
+
+
+def test_bool_raises():
+    assert_exceptions_equal(
+        lfunc=bool,
+        rfunc=bool,
+        lfunc_args_and_kwargs=[[cudf.DataFrame()]],
+        rfunc_args_and_kwargs=[[pd.DataFrame()]],
+    )
