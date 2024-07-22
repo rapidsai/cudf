@@ -229,8 +229,8 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   if (null_or_empty_count == 0) {
     // performance penalty to run the below loop if there are no nulls or empty lists.
     // run simple explode instead
-    return include_position ? explode_position(input_table, explode_column_idx, stream, mr)
-                            : explode(input_table, explode_column_idx, stream, mr);
+    return include_position ? detail::explode_position(input_table, explode_column_idx, stream, mr)
+                            : detail::explode(input_table, explode_column_idx, stream, mr);
   }
 
   auto gather_map_size = sliced_child.size() + null_or_empty_count;
