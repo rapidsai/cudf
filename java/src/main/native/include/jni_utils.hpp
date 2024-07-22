@@ -304,7 +304,7 @@ class native_jArray {
 
   N_TYPE* end() { return data() + size(); }
 
-  J_ARRAY_TYPE get_jArray() { return orig; }
+  J_ARRAY_TYPE get_jArray() const { return orig; }
 
   /**
    * @brief Conversion to std::vector
