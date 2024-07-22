@@ -17,26 +17,6 @@ import cudf._lib.pylibcudf as plc
 __all__ = ["from_polars", "downcast_arrow_lists", "have_compatible_resolution"]
 
 
-TIMELIKE_TYPES: frozenset[plc.TypeId] = frozenset(
-    [
-        plc.TypeId.TIMESTAMP_MILLISECONDS,
-        plc.TypeId.TIMESTAMP_MICROSECONDS,
-        plc.TypeId.TIMESTAMP_NANOSECONDS,
-        plc.TypeId.TIMESTAMP_DAYS,
-        plc.TypeId.DURATION_MILLISECONDS,
-        plc.TypeId.DURATION_MICROSECONDS,
-        plc.TypeId.DURATION_NANOSECONDS,
-    ]
-)
-
-FLOATING_TYPES = frozenset(
-    [
-        plc.TypeId.FLOAT32,
-        plc.TypeId.FLOAT64,
-    ]
-)
-
-
 def have_compatible_resolution(lid: plc.TypeId, rid: plc.TypeId):
     """
     Do two datetime typeids have matching resolution for a binop.
@@ -173,7 +153,8 @@ def from_polars(dtype: pl.DataType) -> plc.DataType:
         # TODO: Hopefully
         return plc.DataType(plc.TypeId.EMPTY)
     elif isinstance(dtype, pl.List):
-        # TODO: This doesn't consider the value type.
+        # Recurse to catch unsupported inner types
+        _ = from_polars(dtype.inner)
         return plc.DataType(plc.TypeId.LIST)
     else:
         raise NotImplementedError(f"{dtype=} conversion not supported")

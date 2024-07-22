@@ -41,8 +41,8 @@ static constexpr size_type warp_size{32};
  */
 class grid_1d {
  public:
-  int const num_threads_per_block;
-  int const num_blocks;
+  thread_index_type const num_threads_per_block;
+  thread_index_type const num_blocks;
   /**
    * @param overall_num_elements The number of elements the kernel needs to
    * handle/process, in its main, one-dimensional/linear input (e.g. one or more
@@ -55,9 +55,9 @@ class grid_1d {
    * than a single element; this affects the number of threads the grid must
    * contain
    */
-  grid_1d(cudf::size_type overall_num_elements,
-          cudf::size_type num_threads_per_block,
-          cudf::size_type elements_per_thread = 1)
+  grid_1d(thread_index_type overall_num_elements,
+          thread_index_type num_threads_per_block,
+          thread_index_type elements_per_thread = 1)
     : num_threads_per_block(num_threads_per_block),
       num_blocks(util::div_rounding_up_safe(overall_num_elements,
                                             elements_per_thread * num_threads_per_block))

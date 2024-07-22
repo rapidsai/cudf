@@ -136,11 +136,6 @@ repos:
             .*test.*|
             ^CHANGELOG.md$
           )
-  - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.13.11
-    hooks:
-      - id: rapids-dependency-file-generator
-        args: ["--clean"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.4.8
     hooks:
@@ -159,6 +154,11 @@ repos:
             cpp/src/io/parquet/ipc/Schema_generated[.]h$
           )
       - id: verify-alpha-spec
+  - repo: https://github.com/rapidsai/dependency-file-generator
+    rev: v1.13.11
+    hooks:
+      - id: rapids-dependency-file-generator
+        args: ["--clean"]
 
 default_language_version:
       python: python3

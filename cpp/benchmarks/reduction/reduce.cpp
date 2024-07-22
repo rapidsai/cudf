@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/benchmark_utilities.hpp>
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/table_utilities.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
@@ -46,6 +48,10 @@ void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::reduce_aggregat
     cuda_event_timer timer(state, true);
     auto result = cudf::reduce(*input_column, *agg, output_dtype);
   }
+
+  // The benchmark takes a column and produces two scalars.
+  set_items_processed(state, column_size + 1);
+  set_bytes_processed(state, estimate_size(input_column->view()) + cudf::size_of(output_dtype));
 }
 
 #define concat(a, b, c) a##b##c
