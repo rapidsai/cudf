@@ -287,11 +287,11 @@ class TimeDeltaColumn(ColumnBase):
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
-    def mean(self, skipna=None, dtype: Dtype = np.float64) -> pd.Timedelta:
+    def mean(self, skipna=None) -> pd.Timedelta:
         return pd.Timedelta(
             cast(
                 "cudf.core.column.NumericalColumn", self.astype("int64")
-            ).mean(skipna=skipna, dtype=dtype),
+            ).mean(skipna=skipna),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
@@ -345,12 +345,11 @@ class TimeDeltaColumn(ColumnBase):
         self,
         skipna: bool | None = None,
         min_count: int = 0,
-        dtype: Dtype = np.float64,
         ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
             cast("cudf.core.column.NumericalColumn", self.astype("int64")).std(
-                skipna=skipna, min_count=min_count, ddof=ddof, dtype=dtype
+                skipna=skipna, min_count=min_count, ddof=ddof
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)

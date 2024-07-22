@@ -80,7 +80,7 @@ def to_numeric(arg, errors="raise", downcast=None):
     dtype: float64
 
     .. pandas-compat::
-        **cudf.to_numeric**
+        :func:`pandas.to_numeric`
 
         An important difference from pandas is that this function does not
         accept mixed numeric/non-numeric type sequences.

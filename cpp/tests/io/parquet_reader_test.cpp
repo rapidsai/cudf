@@ -2243,6 +2243,209 @@ TEST_F(ParquetReaderTest, StringsWithPageStats)
   }
 }
 
+TEST_F(ParquetReaderTest, NumRowsPerSource)
+{
+  int constexpr num_rows          = 10'723;  // A prime number
+  int constexpr rows_in_row_group = 500;
+
+  // Table with single col of random int64 values
+  auto const int64_data = random_values<int64_t>(num_rows);
+  column_wrapper<int64_t> const int64_col{
+    int64_data.begin(), int64_data.end(), cudf::test::iterators::no_nulls()};
+  cudf::table_view const expected({int64_col});
+
+  // Write to Parquet
+  auto const filepath = temp_env->get_temp_filepath("NumRowsPerSource.parquet");
+  auto const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .row_group_size_rows(rows_in_row_group)
+      .build();
+  cudf::io::write_parquet(out_opts);
+
+  // Read single data source entirely
+  {
+    auto const in_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
+    auto const result = cudf::io::read_parquet(in_opts);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+    EXPECT_EQ(result.metadata.num_rows_per_source.size(), 1);
+    EXPECT_EQ(result.metadata.num_rows_per_source[0], num_rows);
+  }
+
+  // Read rows_to_read rows skipping rows_to_skip from single data source
+  {
+    auto constexpr rows_to_skip = 557;  // a prime number != rows_in_row_group
+    auto constexpr rows_to_read = 7'232;
+    auto const in_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                           .skip_rows(rows_to_skip)
+                           .num_rows(rows_to_read)
+                           .build();
+    auto const result = cudf::io::read_parquet(in_opts);
+    column_wrapper<int64_t> int64_col_selected{int64_data.begin() + rows_to_skip,
+                                               int64_data.begin() + rows_to_skip + rows_to_read,
+                                               cudf::test::iterators::no_nulls()};
+
+    cudf::table_view const expected_selected({int64_col_selected});
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_selected, result.tbl->view());
+    EXPECT_EQ(result.metadata.num_rows_per_source.size(), 1);
+    EXPECT_EQ(result.metadata.num_rows_per_source[0], rows_to_read);
+  }
+
+  // Filtered read from single data source
+  {
+    auto constexpr max_value = 100;
+    auto literal_value       = cudf::numeric_scalar<int64_t>{max_value};
+    auto literal             = cudf::ast::literal{literal_value};
+    auto col_ref             = cudf::ast::column_reference(0);
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, col_ref, literal);
+
+    auto const in_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                           .filter(filter_expression)
+                           .build();
+
+    std::vector<int64_t> int64_data_filtered;
+    int64_data_filtered.reserve(num_rows);
+    std::copy_if(
+      int64_data.begin(), int64_data.end(), std::back_inserter(int64_data_filtered), [=](auto val) {
+        return val <= max_value;
+      });
+    column_wrapper<int64_t> int64_col_filtered{
+      int64_data_filtered.begin(), int64_data_filtered.end(), cudf::test::iterators::no_nulls()};
+
+    cudf::table_view expected_filtered({int64_col_filtered});
+
+    auto const result = cudf::io::read_parquet(in_opts);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_filtered, result.tbl->view());
+    EXPECT_EQ(result.metadata.num_rows_per_source.size(), 0);
+  }
+
+  // Read two data sources skipping the first entire file completely
+  {
+    auto constexpr rows_to_skip = 15'723;
+    auto constexpr nsources     = 2;
+    std::vector<std::string> const datasources(nsources, filepath);
+
+    auto const in_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{datasources})
+        .skip_rows(rows_to_skip)
+        .build();
+
+    auto const result = cudf::io::read_parquet(in_opts);
+
+    column_wrapper<int64_t> int64_col_selected{int64_data.begin() + rows_to_skip - num_rows,
+                                               int64_data.end(),
+                                               cudf::test::iterators::no_nulls()};
+
+    cudf::table_view const expected_selected({int64_col_selected});
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_selected, result.tbl->view());
+    EXPECT_EQ(result.metadata.num_rows_per_source.size(), 2);
+    EXPECT_EQ(result.metadata.num_rows_per_source[0], 0);
+    EXPECT_EQ(result.metadata.num_rows_per_source[1], nsources * num_rows - rows_to_skip);
+  }
+
+  // Read ten data sources entirely
+  {
+    auto constexpr nsources = 10;
+    std::vector<std::string> const datasources(nsources, filepath);
+
+    auto const in_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{datasources}).build();
+    auto const result = cudf::io::read_parquet(in_opts);
+
+    // Initialize expected_counts
+    std::vector<size_t> const expected_counts(nsources, num_rows);
+
+    EXPECT_EQ(result.metadata.num_rows_per_source.size(), nsources);
+    EXPECT_TRUE(std::equal(expected_counts.cbegin(),
+                           expected_counts.cend(),
+                           result.metadata.num_rows_per_source.cbegin()));
+  }
+
+  // Read rows_to_read rows skipping rows_to_skip (> two sources) from ten data sources
+  {
+    auto constexpr rows_to_skip = 25'999;
+    auto constexpr rows_to_read = 47'232;
+
+    auto constexpr nsources = 10;
+    std::vector<std::string> const datasources(nsources, filepath);
+
+    auto const in_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{datasources})
+        .skip_rows(rows_to_skip)
+        .num_rows(rows_to_read)
+        .build();
+
+    auto const result = cudf::io::read_parquet(in_opts);
+
+    // Initialize expected_counts
+    std::vector<size_t> expected_counts(nsources, num_rows);
+
+    // Adjust expected_counts for rows_to_skip
+    int64_t counter = 0;
+    for (auto& nrows : expected_counts) {
+      if (counter < rows_to_skip) {
+        counter += nrows;
+        nrows = (counter >= rows_to_skip) ? counter - rows_to_skip : 0;
+      } else {
+        break;
+      }
+    }
+
+    // Reset the counter
+    counter = 0;
+
+    // Adjust expected_counts for rows_to_read
+    for (auto& nrows : expected_counts) {
+      if (counter < rows_to_read) {
+        counter += nrows;
+        nrows = (counter >= rows_to_read) ? rows_to_read - counter + nrows : nrows;
+      } else if (counter > rows_to_read) {
+        nrows = 0;
+      }
+    }
+
+    EXPECT_EQ(result.metadata.num_rows_per_source.size(), nsources);
+    EXPECT_TRUE(std::equal(expected_counts.cbegin(),
+                           expected_counts.cend(),
+                           result.metadata.num_rows_per_source.cbegin()));
+  }
+}
+
+TEST_F(ParquetReaderTest, NumRowsPerSourceEmptyTable)
+{
+  auto const nsources = 10;
+
+  column_wrapper<int64_t> const int64_empty_col{};
+  cudf::table_view const expected_empty({int64_empty_col});
+
+  // Write to Parquet
+  auto const filepath_empty = temp_env->get_temp_filepath("NumRowsPerSourceEmpty.parquet");
+  auto const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath_empty}, expected_empty)
+      .build();
+  cudf::io::write_parquet(out_opts);
+
+  // Read from Parquet
+  std::vector<std::string> const datasources(nsources, filepath_empty);
+
+  auto const in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{datasources}).build();
+  auto const result = cudf::io::read_parquet(in_opts);
+
+  // Initialize expected_counts
+  std::vector<size_t> const expected_counts(nsources, 0);
+
+  EXPECT_EQ(result.metadata.num_rows_per_source.size(), nsources);
+  EXPECT_TRUE(std::equal(expected_counts.cbegin(),
+                         expected_counts.cend(),
+                         result.metadata.num_rows_per_source.cbegin()));
+}
+
 ///////////////////
 // metadata tests
 

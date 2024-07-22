@@ -20,6 +20,7 @@ set(cython_sources
     concatenate.pyx
     copying.pyx
     datetime.pyx
+    experimental.pyx
     expressions.pyx
     filling.pyx
     gpumemoryview.pyx

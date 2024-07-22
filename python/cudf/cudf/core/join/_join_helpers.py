@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 
 import cudf
-from cudf.api.types import is_decimal_dtype, is_dtype_equal
+from cudf.api.types import is_decimal_dtype, is_dtype_equal, is_numeric_dtype
 from cudf.core.column import CategoricalColumn
 from cudf.core.dtypes import CategoricalDtype
 
@@ -88,38 +88,25 @@ def _match_join_keys(
         )
 
     if (
-        np.issubdtype(ltype, np.number)
-        and np.issubdtype(rtype, np.number)
-        and not (
-            np.issubdtype(ltype, np.timedelta64)
-            or np.issubdtype(rtype, np.timedelta64)
-        )
+        is_numeric_dtype(ltype)
+        and is_numeric_dtype(rtype)
+        and not (ltype.kind == "m" or rtype.kind == "m")
     ):
         common_type = (
             max(ltype, rtype)
             if ltype.kind == rtype.kind
             else np.result_type(ltype, rtype)
         )
-    elif (
-        np.issubdtype(ltype, np.datetime64)
-        and np.issubdtype(rtype, np.datetime64)
-    ) or (
-        np.issubdtype(ltype, np.timedelta64)
-        and np.issubdtype(rtype, np.timedelta64)
+    elif (ltype.kind == "M" and rtype.kind == "M") or (
+        ltype.kind == "m" and rtype.kind == "m"
     ):
         common_type = max(ltype, rtype)
-    elif (
-        np.issubdtype(ltype, np.datetime64)
-        or np.issubdtype(ltype, np.timedelta64)
-    ) and not rcol.fillna(0).can_cast_safely(ltype):
+    elif ltype.kind in "mM" and not rcol.fillna(0).can_cast_safely(ltype):
         raise TypeError(
             f"Cannot join between {ltype} and {rtype}, please type-cast both "
             "columns to the same type."
         )
-    elif (
-        np.issubdtype(rtype, np.datetime64)
-        or np.issubdtype(rtype, np.timedelta64)
-    ) and not lcol.fillna(0).can_cast_safely(rtype):
+    elif rtype.kind in "mM" and not lcol.fillna(0).can_cast_safely(rtype):
         raise TypeError(
             f"Cannot join between {rtype} and {ltype}, please type-cast both "
             "columns to the same type."

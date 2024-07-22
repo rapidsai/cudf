@@ -256,6 +256,28 @@ cdef class Column:
         return Column.from_libcudf(move(c_result))
 
     @staticmethod
+    def all_null_like(Column like, size_type size):
+        """Create an all null column from a template.
+
+        Parameters
+        ----------
+        like : Column
+            Column whose type we should mimic
+        size : int
+            Number of rows in the resulting column.
+
+        Returns
+        -------
+        Column
+            An all-null column of `size` rows and type matching `like`.
+        """
+        cdef Scalar slr = Scalar.empty_like(like)
+        cdef unique_ptr[column] c_result
+        with nogil:
+            c_result = move(make_column_from_scalar(dereference(slr.get()), size))
+        return Column.from_libcudf(move(c_result))
+
+    @staticmethod
     def from_cuda_array_interface_obj(object obj):
         """Create a Column from an object with a CUDA array interface.
 

@@ -12,7 +12,6 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_integer,
-    is_integer_dtype,
     is_numeric_dtype,
 )
 from cudf.core.column import ColumnBase, as_column
@@ -90,12 +89,6 @@ class SingleColumnFrame(Frame, NotIterable):
     def shape(self) -> tuple[int]:
         """Get a tuple representing the dimensionality of the Index."""
         return (len(self),)
-
-    def __bool__(self):
-        raise TypeError(
-            f"The truth value of a {type(self)} is ambiguous. Use "
-            "a.empty, a.bool(), a.item(), a.any() or a.all()."
-        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -358,7 +351,7 @@ class SingleColumnFrame(Frame, NotIterable):
             arg = as_column(arg)
             if len(arg) == 0:
                 arg = cudf.core.column.column_empty(0, dtype="int32")
-            if is_integer_dtype(arg.dtype):
+            if arg.dtype.kind in "iu":
                 return self._column.take(arg)
             if arg.dtype.kind == "b":
                 if (bn := len(arg)) != (n := len(self)):

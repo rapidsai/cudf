@@ -71,7 +71,7 @@ from cudf.utils.dtypes import (
     get_time_unit,
     is_column_like,
     is_mixed_with_object_dtype,
-    min_scalar_type,
+    min_signed_type,
     min_unsigned_type,
 )
 from cudf.utils.utils import _array_ufunc, mask_dtype
@@ -261,7 +261,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.null_count == self.size:
             return True
 
-        return libcudf.reduce.reduce("all", self, dtype=np.bool_)
+        return libcudf.reduce.reduce("all", self)
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
@@ -271,7 +271,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         elif skipna and self.null_count == self.size:
             return False
 
-        return libcudf.reduce.reduce("any", self, dtype=np.bool_)
+        return libcudf.reduce.reduce("any", self)
 
     def dropna(self) -> Self:
         if self.has_nulls():
@@ -1305,7 +1305,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             skipna=skipna, min_count=min_count
         )
         if isinstance(preprocessed, ColumnBase):
-            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
+            dtype = kwargs.pop("dtype", None)
+            return libcudf.reduce.reduce(
+                op, preprocessed, dtype=dtype, **kwargs
+            )
         return preprocessed
 
     def _process_for_reduction(
@@ -1336,6 +1339,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         Determine the correct dtype to pass to libcudf based on
         the input dtype, data dtype, and specific reduction op
         """
+        if reduction_op in {"any", "all"}:
+            return np.dtype(np.bool_)
         return self.dtype
 
     def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
@@ -1351,7 +1356,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         self,
         cats: ColumnBase,
         dtype: Dtype | None = None,
-        na_sentinel: ScalarLike | None = None,
+        na_sentinel: cudf.Scalar | None = None,
     ):
         """
         Convert each value in `self` into an integer code, with `cats`
@@ -1391,7 +1396,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return as_column(na_sentinel, dtype=dtype, length=len(self))
 
         if dtype is None:
-            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
+            dtype = min_signed_type(max(len(cats), na_sentinel.value), 8)
 
         if is_mixed_with_object_dtype(self, cats):
             return _return_sentinel_column()
@@ -1453,9 +1458,10 @@ def column_empty_like(
     return column_empty(row_count, dtype, masked)
 
 
-def _has_any_nan(arbitrary):
+def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
+    """Check if an object dtype Series or array contains NaN."""
     return any(
-        ((isinstance(x, float) or isinstance(x, np.floating)) and np.isnan(x))
+        isinstance(x, (float, np.floating)) and np.isnan(x)
         for x in np.asarray(arbitrary)
     )
 
@@ -2213,25 +2219,26 @@ def as_column(
                 and arbitrary.null_count > 0
             ):
                 arbitrary = arbitrary.cast(pa.float64())
-            if cudf.get_option(
-                "default_integer_bitwidth"
-            ) and pa.types.is_integer(arbitrary.type):
-                dtype = _maybe_convert_to_default_type("int")
-            elif cudf.get_option(
-                "default_float_bitwidth"
-            ) and pa.types.is_floating(arbitrary.type):
-                dtype = _maybe_convert_to_default_type("float")
+            if (
+                cudf.get_option("default_integer_bitwidth")
+                and pa.types.is_integer(arbitrary.type)
+            ) or (
+                cudf.get_option("default_float_bitwidth")
+                and pa.types.is_floating(arbitrary.type)
+            ):
+                dtype = _maybe_convert_to_default_type(
+                    cudf.dtype(arbitrary.type.to_pandas_dtype())
+                )
         except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
             arbitrary = pd.Series(arbitrary)
-            if cudf.get_option(
-                "default_integer_bitwidth"
-            ) and arbitrary.dtype.kind in set("iu"):
-                dtype = _maybe_convert_to_default_type("int")
-            elif (
+            if (
+                cudf.get_option("default_integer_bitwidth")
+                and arbitrary.dtype.kind in set("iu")
+            ) or (
                 cudf.get_option("default_float_bitwidth")
                 and arbitrary.dtype.kind == "f"
             ):
-                dtype = _maybe_convert_to_default_type("float")
+                dtype = _maybe_convert_to_default_type(arbitrary.dtype)
         return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
 
 
@@ -2307,9 +2314,8 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # Notice, we can always cast pure null columns
     not_null_col_dtypes = [o.dtype for o in objs if o.null_count != len(o)]
     if len(not_null_col_dtypes) and all(
-        _is_non_decimal_numeric_dtype(dtyp)
-        and np.issubdtype(dtyp, np.datetime64)
-        for dtyp in not_null_col_dtypes
+        _is_non_decimal_numeric_dtype(dtype) and dtype.kind == "M"
+        for dtype in not_null_col_dtypes
     ):
         common_dtype = find_common_type(not_null_col_dtypes)
         # Cast all columns to the common dtype

@@ -122,6 +122,14 @@ cdef class TableWithMetadata:
         out.metadata = tbl_with_meta.metadata
         return out
 
+    @property
+    def per_file_user_data(self):
+        """
+        Returns a list containing a dict
+        containing file-format specific metadata,
+        for each file being read in.
+        """
+        return self.metadata.per_file_user_data
 
 cdef class SourceInfo:
     """A class containing details on a source to read from.

@@ -144,32 +144,27 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         self,
         skipna: bool | None = None,
         min_count: int = 0,
-        dtype=np.float64,
     ):
-        return self._reduce(
-            "mean", skipna=skipna, min_count=min_count, dtype=dtype
-        )
+        return self._reduce("mean", skipna=skipna, min_count=min_count)
 
     def var(
         self,
         skipna: bool | None = None,
         min_count: int = 0,
-        dtype=np.float64,
         ddof=1,
     ):
         return self._reduce(
-            "var", skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
+            "var", skipna=skipna, min_count=min_count, ddof=ddof
         )
 
     def std(
         self,
         skipna: bool | None = None,
         min_count: int = 0,
-        dtype=np.float64,
         ddof=1,
     ):
         return self._reduce(
-            "std", skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
+            "std", skipna=skipna, min_count=min_count, ddof=ddof
         )
 
     def median(self, skipna: bool | None = None) -> NumericalBaseColumn:

@@ -17,3 +17,12 @@ def test_hconcat():
     ldf2 = ldf.select((pl.col("a") + pl.col("b")).alias("c"))
     query = pl.concat([ldf, ldf2], how="horizontal")
     assert_gpu_result_equal(query)
+
+
+def test_hconcat_different_heights():
+    left = pl.LazyFrame({"a": [1, 2, 3, 4]})
+
+    right = pl.LazyFrame({"b": [[1], [2]], "c": ["a", "bcde"]})
+
+    q = pl.concat([left, right], how="horizontal")
+    assert_gpu_result_equal(q)

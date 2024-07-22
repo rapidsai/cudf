@@ -138,5 +138,7 @@ def test_read_parquet(s3_base, s3so, open_file_options):
             storage_options=s3so,
             open_file_options=open_file_options,
         )
-        assert df.a.sum().compute() == 10
-        assert df.b.sum().compute() == 9
+        with pytest.warns(FutureWarning):
+            assert df.a.sum().compute() == 10
+        with pytest.warns(FutureWarning):
+            assert df.b.sum().compute() == 9

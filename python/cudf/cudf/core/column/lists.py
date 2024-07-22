@@ -564,10 +564,11 @@ class ListMethods(ColumnMethods):
             raise ValueError(
                 "lists_indices and list column is of different " "size."
             )
-        if not _is_non_decimal_numeric_dtype(
-            lists_indices_col.children[1].dtype
-        ) or not np.issubdtype(
-            lists_indices_col.children[1].dtype, np.integer
+        if (
+            not _is_non_decimal_numeric_dtype(
+                lists_indices_col.children[1].dtype
+            )
+            or lists_indices_col.children[1].dtype.kind not in "iu"
         ):
             raise TypeError(
                 "lists_indices should be column of values of index types."
@@ -646,9 +647,17 @@ class ListMethods(ColumnMethods):
         dtype: list
 
         .. pandas-compat::
-            **ListMethods.sort_values**
+            `pandas.Series.list.sort_values`
 
-            The ``inplace`` and ``kind`` arguments are currently not supported.
+            This method does not exist in pandas but it can be run
+            as:
+
+            >>> import pandas as pd
+            >>> s = pd.Series([[3, 2, 1], [2, 4, 3]])
+            >>> print(s.apply(sorted))
+            0    [1, 2, 3]
+            1    [2, 3, 4]
+            dtype: object
         """
         if inplace:
             raise NotImplementedError("`inplace` not currently implemented.")

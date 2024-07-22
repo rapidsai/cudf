@@ -291,6 +291,17 @@ cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
 namespace binops {
 
 /**
+ * @brief Returns true if the binary operator is supported for the given input types.
+ *
+ * @param out The output data type
+ * @param lhs The left-hand cudf::data_type
+ * @param rhs The right-hand cudf::data_type
+ * @param op The binary operator
+ * @return true if the binary operator is supported for the given input types
+ */
+bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op);
+
+/**
  * @brief Computes output valid mask for op between a column and a scalar
  *
  * @param col     Column to compute the valid mask from
