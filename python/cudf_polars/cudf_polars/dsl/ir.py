@@ -1101,9 +1101,48 @@ class HConcat(IR):
     dfs: list[IR]
     """List of inputs."""
 
+    @staticmethod
+    def _extend_with_nulls(table: plc.Table, *, nrows: int) -> plc.Table:
+        """
+        Extend a table with nulls.
+
+        Parameters
+        ----------
+        table
+            Table to extend
+        nrows
+            Number of additional rows
+
+        Returns
+        -------
+        New pylibcudf table.
+        """
+        return plc.concatenate.concatenate(
+            [
+                table,
+                plc.Table(
+                    [
+                        plc.Column.all_null_like(column, nrows)
+                        for column in table.columns()
+                    ]
+                ),
+            ]
+        )
+
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
+        max_rows = max(df.num_rows for df in dfs)
+        # Horizontal concatenation extends shorter tables with nulls
+        dfs = [
+            df
+            if df.num_rows == max_rows
+            else DataFrame.from_table(
+                self._extend_with_nulls(df.table, nrows=max_rows - df.num_rows),
+                df.column_names,
+            )
+            for df in dfs
+        ]
         return DataFrame(
             list(itertools.chain.from_iterable(df.columns for df in dfs)),
         )
