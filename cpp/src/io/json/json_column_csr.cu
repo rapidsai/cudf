@@ -49,8 +49,8 @@
 #include <thrust/logical.h>
 #include <thrust/partition.h>
 #include <thrust/reduce.h>
-#include <thrust/set_operations.h>
 #include <thrust/scan.h>
+#include <thrust/set_operations.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 #include <thrust/unique.h>
@@ -204,39 +204,77 @@ device_column_subtree allocation_for_device_column_subtree_annotation(
   // (Optional?) TODO: Validation of the remaining column tree properties
 
   // Now we annotate the extracted subtree
-  using row_offset_t = size_type;
+  using row_offset_t     = size_type;
   auto num_subtree_nodes = thrust::distance(retained_leaf_nodes_it, leaf_nodes.end());
   rmm::device_uvector<row_offset_t> subtree_nrows(max_row_offsets, stream);
-  thrust::scatter(rmm::exec_policy(stream), thrust::make_constant_iterator(-1), thrust::make_constant_iterator(-1) + num_columns - num_subtree_nodes, leaf_nodes.begin(), subtree_nrows.begin());
-  thrust::transform(rmm::exec_policy(stream), thrust::make_constant_iterator(1), thrust::make_constant_iterator(1) + num_columns, subtree_nrows.begin(), subtree_nrows.begin(), thrust::plus<size_type>());
+  thrust::scatter(rmm::exec_policy(stream),
+                  thrust::make_constant_iterator(-1),
+                  thrust::make_constant_iterator(-1) + num_columns - num_subtree_nodes,
+                  leaf_nodes.begin(),
+                  subtree_nrows.begin());
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::make_constant_iterator(1),
+                    thrust::make_constant_iterator(1) + num_columns,
+                    subtree_nrows.begin(),
+                    subtree_nrows.begin(),
+                    thrust::plus<size_type>());
 
   // For the subtree, we allocate memory for device column subtree properties
   rmm::device_uvector<NodeIndexT> subtree_properties_map(num_columns, stream);
-  thrust::sequence(rmm::exec_policy(stream), subtree_properties_map.begin(), subtree_properties_map.end(), 0);
-  auto partitioning_idx_it = thrust::partition(rmm::exec_policy(stream), subtree_properties_map.begin(), subtree_properties_map.end(), subtree_nrows.begin(), thrust::identity<NodeIndexT>());
-  auto str_partitioning_idx_it = thrust::partition(rmm::exec_policy(stream), subtree_properties_map.begin(), partitioning_idx_it, 
-    [categories = categories.begin()] __device__(NodeIndexT node) {
-      return categories[node] == NC_STR || categories[node] == NC_VAL;
-  });
+  thrust::sequence(
+    rmm::exec_policy(stream), subtree_properties_map.begin(), subtree_properties_map.end(), 0);
+  auto partitioning_idx_it = thrust::partition(rmm::exec_policy(stream),
+                                               subtree_properties_map.begin(),
+                                               subtree_properties_map.end(),
+                                               subtree_nrows.begin(),
+                                               thrust::identity<NodeIndexT>());
+  auto str_partitioning_idx_it =
+    thrust::partition(rmm::exec_policy(stream),
+                      subtree_properties_map.begin(),
+                      partitioning_idx_it,
+                      [categories = categories.begin()] __device__(NodeIndexT node) {
+                        return categories[node] == NC_STR || categories[node] == NC_VAL;
+                      });
   auto str_val_end = thrust::distance(subtree_properties_map.begin(), str_partitioning_idx_it);
-  auto max_row_offsets_perm_it = thrust::make_permutation_iterator(max_row_offsets.begin(), subtree_properties_map.begin());
-  size_type string_offsets_size = thrust::reduce(rmm::exec_policy(stream), max_row_offsets_perm_it, max_row_offsets_perm_it + str_val_end) + str_val_end;
+  auto max_row_offsets_perm_it =
+    thrust::make_permutation_iterator(max_row_offsets.begin(), subtree_properties_map.begin());
+  size_type string_offsets_size =
+    thrust::reduce(
+      rmm::exec_policy(stream), max_row_offsets_perm_it, max_row_offsets_perm_it + str_val_end) +
+    str_val_end;
   rmm::device_uvector<row_offset_t> string_offsets(string_offsets_size, stream);
   rmm::device_uvector<row_offset_t> string_lengths(string_offsets_size, stream);
 
-  auto list_partitioning_idx_it = thrust::partition(rmm::exec_policy(stream), str_partitioning_idx_it, partitioning_idx_it, 
-    [categories = categories.begin()] __device__(NodeIndexT node) {
-      return categories[node] == NC_LIST;
-  });
+  auto list_partitioning_idx_it =
+    thrust::partition(rmm::exec_policy(stream),
+                      str_partitioning_idx_it,
+                      partitioning_idx_it,
+                      [categories = categories.begin()] __device__(NodeIndexT node) {
+                        return categories[node] == NC_LIST;
+                      });
   auto list_end = thrust::distance(subtree_properties_map.begin(), list_partitioning_idx_it);
-  max_row_offsets_perm_it = thrust::make_permutation_iterator(max_row_offsets.begin(), subtree_properties_map.begin()) + str_val_end;
-  size_type child_offsets_size = thrust::reduce(rmm::exec_policy(stream), max_row_offsets_perm_it, max_row_offsets_perm_it + (list_end - str_val_end)) + 2 * (list_end - str_val_end);
+  max_row_offsets_perm_it =
+    thrust::make_permutation_iterator(max_row_offsets.begin(), subtree_properties_map.begin()) +
+    str_val_end;
+  size_type child_offsets_size =
+    thrust::reduce(rmm::exec_policy(stream),
+                   max_row_offsets_perm_it,
+                   max_row_offsets_perm_it + (list_end - str_val_end)) +
+    2 * (list_end - str_val_end);
   rmm::device_uvector<row_offset_t> child_offsets(child_offsets_size, stream);
 
-  auto validity_buffer_size = thrust::reduce(rmm::exec_policy(stream), subtree_nrows.begin(), subtree_nrows.end());
-  auto validity = cudf::detail::create_null_mask(validity_buffer_size, cudf::mask_state::ALL_NULL, stream, rmm::mr::get_current_device_resource());
+  auto validity_buffer_size =
+    thrust::reduce(rmm::exec_policy(stream), subtree_nrows.begin(), subtree_nrows.end());
+  auto validity = cudf::detail::create_null_mask(validity_buffer_size,
+                                                 cudf::mask_state::ALL_NULL,
+                                                 stream,
+                                                 rmm::mr::get_current_device_resource());
 
-  return device_column_subtree{std::move(subtree_nrows), std::move(string_offsets), std::move(string_lengths), std::move(child_offsets), std::move(validity)};
+  return device_column_subtree{std::move(subtree_nrows),
+                               std::move(string_offsets),
+                               std::move(string_lengths),
+                               std::move(child_offsets),
+                               std::move(validity)};
 }
 
 /**
@@ -538,54 +576,91 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
     [] __device__(NodeT type) { return type == NC_STRUCT || type == NC_LIST; });
 
   // this function allocates memory for the annotation
-  auto device_column_subtree_obj =
-    allocation_for_device_column_subtree_annotation(rowidx, colidx, csr_column_categories, csr_max_row_offsets, reader_options, stream);
+  auto device_column_subtree_obj = allocation_for_device_column_subtree_annotation(
+    rowidx, colidx, csr_column_categories, csr_max_row_offsets, reader_options, stream);
   // now we actually do the annotation
-  // relabel original_col_ids with the positions of the csr_unique_col_ids with same element. How do we accomplish this?
-  // one idea is to sort the row offsets by node level. Just the way we did this for the csr_column_ids
-  // sort original_col_ids, extract subtree based on the annotation above, 
+  // relabel original_col_ids with the positions of the csr_unique_col_ids with same element. How do
+  // we accomplish this? one idea is to sort the row offsets by node level. Just the way we did this
+  // for the csr_column_ids sort original_col_ids, extract subtree based on the annotation above,
   using row_offset_t = size_type;
-  auto [sorted_node_levels, sorted_node_levels_order] = cudf::io::json::detail::stable_sorted_key_order<size_t, TreeDepthT>(tree.node_levels, stream);
+  auto [sorted_node_levels, sorted_node_levels_order] =
+    cudf::io::json::detail::stable_sorted_key_order<size_t, TreeDepthT>(tree.node_levels, stream);
   auto num_nodes = original_col_ids.size();
-  auto row_offsets_it = thrust::make_permutation_iterator(row_offsets.begin(), sorted_node_levels_order.begin());
-  auto node_range_begin_it = thrust::make_permutation_iterator(tree.node_range_begin.begin(), sorted_node_levels_order.begin());
-  auto node_range_end_it = thrust::make_permutation_iterator(tree.node_range_end.begin(), sorted_node_levels_order.begin());
-  auto node_col_ids_it = thrust::make_permutation_iterator(original_col_ids.begin(), sorted_node_levels_order.begin());
-  auto node_categories_it = thrust::make_permutation_iterator(tree.node_categories.begin(), sorted_node_levels_order.begin());
+  auto row_offsets_it =
+    thrust::make_permutation_iterator(row_offsets.begin(), sorted_node_levels_order.begin());
+  auto node_range_begin_it = thrust::make_permutation_iterator(tree.node_range_begin.begin(),
+                                                               sorted_node_levels_order.begin());
+  auto node_range_end_it   = thrust::make_permutation_iterator(tree.node_range_end.begin(),
+                                                             sorted_node_levels_order.begin());
+  auto node_col_ids_it =
+    thrust::make_permutation_iterator(original_col_ids.begin(), sorted_node_levels_order.begin());
+  auto node_categories_it = thrust::make_permutation_iterator(tree.node_categories.begin(),
+                                                              sorted_node_levels_order.begin());
 
-  rmm::device_uvector<row_offset_t> sorted_subtree_nrows(device_column_subtree_obj.subtree_nrows, stream);
+  rmm::device_uvector<row_offset_t> sorted_subtree_nrows(device_column_subtree_obj.subtree_nrows,
+                                                         stream);
   rmm::device_uvector<NodeIndexT> sorted_csr_unique_col_ids(csr_unique_col_ids, stream);
-  thrust::sort_by_key(rmm::exec_policy(stream), sorted_csr_unique_col_ids.begin(), sorted_csr_unique_col_ids.end(), sorted_subtree_nrows.begin());
-  thrust::copy_if(rmm::exec_policy(stream), node_range_begin_it, node_range_begin_it + num_nodes, thrust::make_counting_iterator(0), device_column_subtree_obj.string_offsets.begin(),
+  thrust::sort_by_key(rmm::exec_policy(stream),
+                      sorted_csr_unique_col_ids.begin(),
+                      sorted_csr_unique_col_ids.end(),
+                      sorted_subtree_nrows.begin());
+  thrust::copy_if(
+    rmm::exec_policy(stream),
+    node_range_begin_it,
+    node_range_begin_it + num_nodes,
+    thrust::make_counting_iterator(0),
+    device_column_subtree_obj.string_offsets.begin(),
     [sorted_subtree_nrows = sorted_subtree_nrows.begin(),
-     node_col_ids_it, node_categories_it] __device__(NodeIndexT node) {
-      return sorted_subtree_nrows[node_col_ids_it[node]] && (node_categories_it[node] == NC_STR || node_categories_it[node] == NC_VAL);
-  });
+     node_col_ids_it,
+     node_categories_it] __device__(NodeIndexT node) {
+      return sorted_subtree_nrows[node_col_ids_it[node]] &&
+             (node_categories_it[node] == NC_STR || node_categories_it[node] == NC_VAL);
+    });
 
-  auto node_range_lengths_it = thrust::make_transform_iterator(thrust::make_zip_iterator(node_range_begin_it, node_range_end_it), 
+  auto node_range_lengths_it = thrust::make_transform_iterator(
+    thrust::make_zip_iterator(node_range_begin_it, node_range_end_it),
     cuda::proclaim_return_type<row_offset_t>([] __device__(auto range_it) {
       return thrust::get<1>(range_it) - thrust::get<0>(range_it);
-  }));
-  thrust::copy_if(rmm::exec_policy(stream), node_range_lengths_it, node_range_lengths_it + num_nodes, thrust::make_counting_iterator(0), device_column_subtree_obj.string_lengths.begin(),
+    }));
+  thrust::copy_if(
+    rmm::exec_policy(stream),
+    node_range_lengths_it,
+    node_range_lengths_it + num_nodes,
+    thrust::make_counting_iterator(0),
+    device_column_subtree_obj.string_lengths.begin(),
     [sorted_subtree_nrows = sorted_subtree_nrows.begin(),
-     node_col_ids_it, node_categories_it] __device__(NodeIndexT node) {
-      return sorted_subtree_nrows[node_col_ids_it[node]] && (node_categories_it[node] == NC_STR || node_categories_it[node] == NC_VAL);
-  });
+     node_col_ids_it,
+     node_categories_it] __device__(NodeIndexT node) {
+      return sorted_subtree_nrows[node_col_ids_it[node]] &&
+             (node_categories_it[node] == NC_STR || node_categories_it[node] == NC_VAL);
+    });
 
   // row_offsets need to be prefix summed across columns!
-  thrust::replace_if(rmm::exec_policy(stream), row_offsets_it, row_offsets_it + num_nodes, thrust::make_counting_iterator(0), 
+  thrust::replace_if(
+    rmm::exec_policy(stream),
+    row_offsets_it,
+    row_offsets_it + num_nodes,
+    thrust::make_counting_iterator(0),
+    [sorted_subtree_nrows = sorted_subtree_nrows.begin(), node_col_ids_it] __device__(
+      NodeIndexT node) { return sorted_subtree_nrows[node_col_ids_it[node]] > 0; },
+    0);
+  thrust::inclusive_scan(
+    rmm::exec_policy(stream), row_offsets_it, row_offsets_it + num_nodes, row_offsets_it);
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    num_nodes,
     [sorted_subtree_nrows = sorted_subtree_nrows.begin(),
-     node_col_ids_it] __device__(NodeIndexT node) {
-      return sorted_subtree_nrows[node_col_ids_it[node]] > 0;
-    }, 0);
-  thrust::inclusive_scan(rmm::exec_policy(stream), row_offsets_it, row_offsets_it + num_nodes, row_offsets_it);
-  thrust::for_each_n(rmm::exec_policy(stream), thrust::make_counting_iterator(0), num_nodes, 
-    [sorted_subtree_nrows = sorted_subtree_nrows.begin(), 
-     node_col_ids_it, node_categories_it, row_offsets_it,
-     validity = static_cast<bitmask_type*>(device_column_subtree_obj.validity.data())] __device__(NodeIndexT node) {
-      if(sorted_subtree_nrows[node_col_ids_it[node]] && node_categories_it[node] != NC_LIST)
+     node_col_ids_it,
+     node_categories_it,
+     row_offsets_it,
+     validity = static_cast<bitmask_type*>(
+       device_column_subtree_obj.validity.data())] __device__(NodeIndexT node) {
+      if (sorted_subtree_nrows[node_col_ids_it[node]] && node_categories_it[node] != NC_LIST)
         cudf::set_bit(validity, row_offsets_it[node]);
-  });
+    });
+
+  // scatter list offsets
 
   return std::tuple{column_tree_csr{std::move(rowidx),
                                     std::move(colidx),
