@@ -204,8 +204,6 @@ class Scan(IR):
 
     def __post_init__(self) -> None:
         """Validate preconditions."""
-        if self.typ == "json" and self.file_options.n_rows is not None:
-            raise NotImplementedError("row limit in scan")
         if self.typ not in ("csv", "parquet"):
             raise NotImplementedError(f"Unhandled scan type: {self.typ}")
         if self.cloud_options is not None and any(
@@ -345,13 +343,9 @@ class Scan(IR):
                 null_order=plc.types.NullOrder.AFTER,
             )
             df = DataFrame([index, *df.columns])
-        # TODO: should be true, but not the case until we get
-        # cudf-classic out of the loop for IO since it converts date32
-        # to datetime.
-        # assert all(
-        #     c.obj.type() == dtype
-        #     for c, dtype in zip(df.columns, self.schema.values())
-        # )
+        assert all(
+            c.obj.type() == dtype for c, dtype in zip(df.columns, self.schema.values())
+        )
         if self.predicate is None:
             return df
         else:
