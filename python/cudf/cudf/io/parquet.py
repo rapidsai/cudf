@@ -15,6 +15,7 @@ from uuid import uuid4
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pyarrow import dataset as ds
 
 import cudf
@@ -23,6 +24,7 @@ from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
+from cudf.utils.utils import maybe_filter_deprecation
 
 BYTE_SIZES = {
     "kb": 1000,
@@ -350,7 +352,7 @@ def read_parquet_metadata(filepath_or_buffer):
             path_or_data=source,
             compression=None,
             fs=fs,
-            use_python_file_object=True,
+            use_python_file_object=None,
             open_file_options=None,
             storage_options=None,
             bytes_per_thread=None,
@@ -532,7 +534,7 @@ def read_parquet(
     filters=None,
     row_groups=None,
     use_pandas_metadata=True,
-    use_python_file_object=True,
+    use_python_file_object=None,
     categorical_partitions=True,
     open_file_options=None,
     bytes_per_thread=None,
@@ -615,6 +617,9 @@ def read_parquet(
             row_groups=row_groups,
             fs=fs,
         )
+    have_nativefile = any(
+        isinstance(source, pa.NativeFile) for source in filepath_or_buffer
+    )
     for source in filepath_or_buffer:
         tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
@@ -662,19 +667,26 @@ def read_parquet(
         )
 
     # Convert parquet data to a cudf.DataFrame
-    df = _parquet_to_frame(
-        filepaths_or_buffers,
-        engine,
-        *args,
-        columns=columns,
-        row_groups=row_groups,
-        use_pandas_metadata=use_pandas_metadata,
-        partition_keys=partition_keys,
-        partition_categories=partition_categories,
-        dataset_kwargs=dataset_kwargs,
-        **kwargs,
-    )
 
+    # Don't want to warn if use_python_file_object causes us to get
+    # a NativeFile (there is a separate deprecation warning for that)
+    with maybe_filter_deprecation(
+        not have_nativefile,
+        message="Support for reading pyarrow's NativeFile is deprecated",
+        category=FutureWarning,
+    ):
+        df = _parquet_to_frame(
+            filepaths_or_buffers,
+            engine,
+            *args,
+            columns=columns,
+            row_groups=row_groups,
+            use_pandas_metadata=use_pandas_metadata,
+            partition_keys=partition_keys,
+            partition_categories=partition_categories,
+            dataset_kwargs=dataset_kwargs,
+            **kwargs,
+        )
     # Apply filters row-wise (if any are defined), and return
     df = _apply_post_filters(df, filters)
     if projected_columns:
@@ -916,13 +928,13 @@ def _read_parquet(
                 "cudf engine doesn't support the "
                 f"following positional arguments: {list(args)}"
             )
-        if cudf.get_option("mode.pandas_compatible"):
-            return libparquet.ParquetReader(
+        if cudf.get_option("io.parquet.low_memory"):
+            return libparquet.read_parquet_chunked(
                 filepaths_or_buffers,
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
-            ).read()
+            )
         else:
             return libparquet.read_parquet(
                 filepaths_or_buffers,

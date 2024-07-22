@@ -122,6 +122,14 @@ cdef class TableWithMetadata:
         out.metadata = tbl_with_meta.metadata
         return out
 
+    @property
+    def per_file_user_data(self):
+        """
+        Returns a list containing a dict
+        containing file-format specific metadata,
+        for each file being read in.
+        """
+        return self.metadata.per_file_user_data
 
 cdef class SourceInfo:
     """A class containing details on a source to read from.
@@ -178,7 +186,7 @@ cdef class SourceInfo:
                     raise ValueError("All sources must be of the same type!")
                 new_sources.append(buffer.read().encode())
             sources = new_sources
-
+            self.byte_sources = sources
         if isinstance(sources[0], bytes):
             empty_buffer = True
             for buffer in sources:

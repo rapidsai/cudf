@@ -378,13 +378,11 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
   auto children_meta =
     metadata.children_meta.empty() ? std::vector<column_metadata>{{}, {}} : metadata.children_meta;
   auto child_arrays = fetch_child_array(input_view, children_meta, ar_mr, stream);
-  if (child_arrays.empty()) {
-    // Empty list will have only one value in offset of 4 bytes
-    auto tmp_offset_buffer = allocate_arrow_buffer(sizeof(int32_t), ar_mr);
-    memset(tmp_offset_buffer->mutable_data(), 0, sizeof(int32_t));
-
-    return std::make_shared<arrow::ListArray>(
-      arrow::list(arrow::null()), 0, std::move(tmp_offset_buffer), nullptr);
+  if (child_arrays.empty() || child_arrays[0]->data()->length == 0) {
+    auto element_type = child_arrays.empty() ? arrow::null() : child_arrays[1]->type();
+    auto result       = arrow::MakeEmptyArray(arrow::list(element_type), ar_mr);
+    CUDF_EXPECTS(result.ok(), "Failed to construct empty arrow list array\n");
+    return result.ValueUnsafe();
   }
 
   auto offset_buffer = child_arrays[0]->data()->buffers[1];
