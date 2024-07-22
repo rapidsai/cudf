@@ -3794,9 +3794,13 @@ def test_parquet_chunked_reader(
     "nrows,skip_rows",
     [
         # These are OK
-        # (0, 0),
-        # (1000, 0),
-        # This one is not OK
+        # Note: there is a bug if we read the buffer with read_parquet_chunked
+        # before cudf.read_parquet, where the cudf.read_parquet call will
+        # produce an invalid DF
+        (0, 0),
+        (1000, 0),
+        (0, 1000),
+        # segfault in the chunked parquet reader (invalid device ordinal)
         (1000, 10000),
     ],
 )
@@ -3808,7 +3812,7 @@ def test_parquet_chunked_reader_nrows_skiprows(
     )
     buffer = BytesIO()
     df.to_parquet(buffer)
-    reader = read_parquet_chunked(
+    actual = read_parquet_chunked(
         [buffer],
         chunk_read_limit=chunk_read_limit,
         pass_read_limit=pass_read_limit,
@@ -3817,7 +3821,6 @@ def test_parquet_chunked_reader_nrows_skiprows(
     )
     buffer.seek(0)
     expected = cudf.read_parquet(buffer, nrows=nrows, skip_rows=skip_rows)
-    actual = reader.read()
     assert_eq(expected, actual)
 
 
