@@ -296,6 +296,7 @@ def read_parquet_chunked(
     per_file_user_data = tbl_w_meta.per_file_user_data
     concatenated_columns = tbl_w_meta.tbl.columns()
 
+    # save memory
     del tbl_w_meta
 
     cdef Table tbl
