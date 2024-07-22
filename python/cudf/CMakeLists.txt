@@ -84,9 +84,17 @@ if(NOT cudf_FOUND)
   # downloaded by CPM during the build, not libraries that were found on the system.  However, in
   # practice right this would only be a problem is if libcudf was not found but some of the
   # dependencies were, and we have no real use cases where that happens.
+  set(nvcomp_possible_targets
+      nvcom::nvcomp # For all nvcomp versions
+      nvcomp::nvcomp_bitcomp # For nvcomp < 4
+      nvcomp::nvcomp_cpu # For nvcomp >= 4
+      nvcomp::nvcomp_cpu_static # For nvcomp >= 4
+      nvcomp::nvcomp_device_static # For nvcomp >= 4
+      nvcomp::nvcomp_gdeflate # For nvcomp < 4
+      nvcomp::nvcomp_static # For nvcomp >= 4
+  )
   install_aliased_imported_targets(
-    TARGETS cudf arrow_shared nvcomp::nvcomp
-    DESTINATION ${cython_lib_dir}
+    TARGETS cudf arrow_shared ${nvcomp_possible_targets} DESTINATION ${cython_lib_dir}
   )
 endif()
 
