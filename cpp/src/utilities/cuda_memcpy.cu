@@ -16,6 +16,7 @@
 
 #include "cudf/detail/utilities/integer_utils.hpp"
 
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
@@ -28,9 +29,10 @@ namespace cudf::detail {
 
 namespace {
 
-__global__ void copy_kernel(char const* src, char* dst, size_t n)
+// Simple kernel to copy between device buffers
+CUDF_KERNEL void copy_kernel(char const* src, char* dst, size_t n)
 {
-  auto const idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  auto const idx = cudf::detail::grid_1d::global_thread_id();
   if (idx < n) { dst[idx] = src[idx]; }
 }
 
@@ -41,6 +43,8 @@ void copy_pinned(void* dst, void const* src, std::size_t size, rmm::cuda_stream_
   if (size < get_kernel_pinned_copy_threshold()) {
     const int block_size = 256;
     auto const grid_size = cudf::util::div_rounding_up_safe<size_t>(size, block_size);
+    // We are explicitly launching the kernel here instead of calling a thrust function because the
+    // thrust function can potentially call cudaMemcpyAsync instead of using a kernel
     copy_kernel<<<grid_size, block_size, 0, stream.value()>>>(
       static_cast<char const*>(src), static_cast<char*>(dst), size);
   } else {
