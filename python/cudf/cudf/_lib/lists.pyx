@@ -3,18 +3,9 @@
 from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
-from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
-from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
-    lists_column_view,
-)
-from cudf._lib.pylibcudf.libcudf.lists.sorting cimport (
-    sort_lists as cpp_sort_lists,
-)
-from cudf._lib.pylibcudf.libcudf.types cimport null_order, order, size_type
+from cudf._lib.pylibcudf.libcudf.types cimport null_order, size_type
 from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 from cudf._lib import pylibcudf
@@ -53,24 +44,14 @@ def distinct(Column col, bool nulls_equal, bool nans_all_equal):
 
 @acquire_spill_lock()
 def sort_lists(Column col, bool ascending, str na_position):
-    cdef shared_ptr[lists_column_view] list_view = (
-        make_shared[lists_column_view](col.view())
-    )
-    cdef order c_sort_order = (
-        order.ASCENDING if ascending else order.DESCENDING
-    )
-    cdef null_order c_null_prec = (
-        null_order.BEFORE if na_position == "first" else null_order.AFTER
-    )
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_sort_lists(list_view.get()[0], c_sort_order, c_null_prec)
+    return Column.from_pylibcudf(
+        pylibcudf.lists.sort_lists(
+            col.to_pylibcudf(mode="read"),
+            ascending,
+            null_order.BEFORE if na_position == "first" else null_order.AFTER,
+            False,
         )
-
-    return Column.from_unique_ptr(move(c_result))
+    )
 
 
 @acquire_spill_lock()
