@@ -65,7 +65,7 @@ def execute_with_cudf(
         with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
             nt.set_udf(partial(_callback, translate_ir(nt)))
     except exception as e:
-        if "POLARS_VERBOSE" in Config.state(if_set=True):
+        if bool(int(os.environ.get("POLARS_VERBOSE", 0)):
             warnings.warn(f"cuDF execution failed: {type(e)}: {e}", stacklevel=2)
         if raise_on_fail:
             raise
