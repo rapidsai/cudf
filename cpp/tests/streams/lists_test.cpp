@@ -21,6 +21,7 @@
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/count_elements.hpp>
+#include <cudf/lists/explode.hpp>
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/filling.hpp>
 #include <cudf/lists/gather.hpp>
@@ -28,6 +29,9 @@
 #include <cudf/lists/set_operations.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/lists/stream_compaction.hpp>
+
+using FCW = cudf::test::fixed_width_column_wrapper<int32_t>;
+using LCW = cudf::test::lists_column_wrapper<int32_t>;
 
 class ListTest : public cudf::test::BaseFixture {};
 
@@ -211,4 +215,46 @@ TEST_F(ListTest, HaveOverlap)
                             cudf::null_equality::EQUAL,
                             cudf::nan_equality::ALL_EQUAL,
                             cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, Explode)
+{
+  FCW a{100, 200, 300};
+  LCW b{LCW{1, 2, 7}, LCW{5, 6}, LCW{0, 3}};
+  cudf::test::strings_column_wrapper c{"string0", "string1", "string2"};
+  cudf::table_view table({a, b, c});
+  cudf::explode(table, 1, cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, ExplodePosition)
+{
+  FCW a{100, 200, 300};
+  LCW b{LCW{1, 2, 7}, LCW{5, 6}, LCW{0, 3}};
+  cudf::test::strings_column_wrapper c{"string0", "string1", "string2"};
+  cudf::table_view table({a, b, c});
+  cudf::explode_position(table, 1, cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, ExplodeOuter)
+{
+  constexpr auto null = 0;
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  LCW a{
+    LCW({1, null, 7}, valids), LCW({5, null, 0, null}, valids), LCW{}, LCW({0, null, 8}, valids)};
+  FCW b{100, 200, 300, 400};
+  cudf::table_view table({a, b});
+  cudf::explode_outer(table, 0, cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, ExplodeOuterPosition)
+{
+  constexpr auto null = 0;
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  LCW a{
+    LCW({1, null, 7}, valids), LCW({5, null, 0, null}, valids), LCW{}, LCW({0, null, 8}, valids)};
+  FCW b{100, 200, 300, 400};
+  cudf::table_view table({a, b});
+  cudf::explode_outer_position(table, 0, cudf::test::get_default_stream());
 }
