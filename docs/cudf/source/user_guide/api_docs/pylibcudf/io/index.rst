@@ -16,4 +16,6 @@ I/O Functions
     :maxdepth: 1
 
     avro
+    csv
     json
+    parquet

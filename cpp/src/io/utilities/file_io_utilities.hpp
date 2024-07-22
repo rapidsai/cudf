@@ -19,8 +19,7 @@
 #ifdef CUFILE_FOUND
 #include <cudf_test/file_utilities.hpp>
 
-#include <cudf/utilities/thread_pool.hpp>
-
+#include <BS_thread_pool.hpp>
 #include <cufile.h>
 #endif
 
@@ -151,7 +150,7 @@ class cufile_input_impl final : public cufile_input {
  private:
   cufile_shim const* shim = nullptr;
   cufile_registered_file const cf_file;
-  cudf::detail::thread_pool pool;
+  BS::thread_pool pool;
 };
 
 /**
@@ -168,7 +167,7 @@ class cufile_output_impl final : public cufile_output {
  private:
   cufile_shim const* shim = nullptr;
   cufile_registered_file const cf_file;
-  cudf::detail::thread_pool pool;
+  BS::thread_pool pool;
 };
 #else
 

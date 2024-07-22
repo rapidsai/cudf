@@ -277,6 +277,9 @@ struct column_name_info {
 struct table_metadata {
   std::vector<column_name_info>
     schema_info;  //!< Detailed name information for the entire output hierarchy
+  std::vector<size_t> num_rows_per_source;  //!< Number of rows read from each data source.
+                                            //!< Currently only computed for Parquet readers if no
+                                            //!< AST filters being used. Empty vector otherwise.
   std::map<std::string, std::string> user_data;  //!< Format-dependent metadata of the first input
                                                  //!< file as key-values pairs (deprecated)
   std::vector<std::unordered_map<std::string, std::string>>

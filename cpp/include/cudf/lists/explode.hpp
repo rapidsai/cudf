@@ -66,6 +66,7 @@ namespace CUDF_EXPORT cudf {
  *
  * @param input_table Table to explode.
  * @param explode_column_idx Column index to explode inside the table.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
  * @return A new table with explode_col exploded.
@@ -73,6 +74,7 @@ namespace CUDF_EXPORT cudf {
 std::unique_ptr<table> explode(
   table_view const& input_table,
   size_type explode_column_idx,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -109,6 +111,7 @@ std::unique_ptr<table> explode(
  *
  * @param input_table Table to explode.
  * @param explode_column_idx Column index to explode inside the table.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
  * @return A new table with exploded value and position. The column order of return table is
@@ -117,6 +120,7 @@ std::unique_ptr<table> explode(
 std::unique_ptr<table> explode_position(
   table_view const& input_table,
   size_type explode_column_idx,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -152,6 +156,7 @@ std::unique_ptr<table> explode_position(
  *
  * @param input_table Table to explode.
  * @param explode_column_idx Column index to explode inside the table.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
  * @return A new table with explode_col exploded.
@@ -159,6 +164,7 @@ std::unique_ptr<table> explode_position(
 std::unique_ptr<table> explode_outer(
   table_view const& input_table,
   size_type explode_column_idx,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -196,6 +202,7 @@ std::unique_ptr<table> explode_outer(
  *
  * @param input_table Table to explode.
  * @param explode_column_idx Column index to explode inside the table.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
  * @return A new table with explode_col exploded.
@@ -203,6 +210,7 @@ std::unique_ptr<table> explode_outer(
 std::unique_ptr<table> explode_outer_position(
   table_view const& input_table,
   size_type explode_column_idx,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

@@ -84,8 +84,8 @@ template <typename Rep,
           Radix Base,
           typename T,
           typename cuda::std::enable_if_t<(cuda::std::is_same_v<int32_t, T> &&
-                                           is_supported_representation_type<Rep>())>* = nullptr>
-CUDF_HOST_DEVICE inline Rep ipow(T exponent)
+                                           cuda::std::is_integral_v<Rep>)>* = nullptr>
+CUDF_HOST_DEVICE inline constexpr Rep ipow(T exponent)
 {
   cudf_assert(exponent >= 0 && "integer exponentiation with negative exponent is not possible.");
 

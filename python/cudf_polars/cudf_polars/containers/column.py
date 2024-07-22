@@ -185,8 +185,7 @@ class Column:
                 plc.reduce.reduce(
                     plc.unary.is_nan(self.obj),
                     plc.aggregation.sum(),
-                    # TODO: pylibcudf needs to have a SizeType DataType singleton
-                    plc.DataType(plc.TypeId.INT32),
+                    plc.types.SIZE_TYPE,
                 )
             ).as_py()
         return 0

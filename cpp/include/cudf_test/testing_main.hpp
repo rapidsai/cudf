@@ -183,8 +183,8 @@ inline auto make_stream_mode_adaptor(cxxopts::ParseResult const& cmd_opts)
   auto const stream_error_mode       = cmd_opts["stream_error_mode"].as<std::string>();
   auto const error_on_invalid_stream = (stream_error_mode == "error");
   auto const check_default_stream    = (stream_mode == "new_cudf_default");
-  auto adaptor =
-    make_stream_checking_resource_adaptor(resource, error_on_invalid_stream, check_default_stream);
+  auto adaptor                       = cudf::test::make_stream_checking_resource_adaptor(
+    resource, error_on_invalid_stream, check_default_stream);
   if ((stream_mode == "new_cudf_default") || (stream_mode == "new_testing_default")) {
     rmm::mr::set_current_device_resource(&adaptor);
   }
