@@ -345,7 +345,7 @@ cpdef Column sequences(Column starts, Column sizes, Column steps = None):
     """
     cdef unique_ptr[column] c_result
 
-    if (steps):
+    if steps is not None:
         with nogil:
             c_result = move(cpp_filling.sequences(
                 starts.view(),
