@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 
 import nvtx
 
+from polars.exceptions import PerformanceWarning
+
 from cudf_polars.dsl.translate import translate_ir
 
 if TYPE_CHECKING:
@@ -67,6 +69,7 @@ def execute_with_cudf(
         if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
             warnings.warn(
                 f"Query execution with GPU not supported, reason: {type(e)}: {e}",
+                PerformanceWarning,
                 stacklevel=2,
             )
         if raise_on_fail:
