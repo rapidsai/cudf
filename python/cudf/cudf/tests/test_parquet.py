@@ -22,7 +22,7 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
-from cudf._lib.parquet import ParquetReader
+from cudf._lib.parquet import read_parquet_chunked
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -711,7 +711,8 @@ def test_parquet_reader_arrow_nativefile(parquet_path_or_buf):
     expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
     fs, path = pa_fs.FileSystem.from_uri(parquet_path_or_buf("filepath"))
     with fs.open_input_file(path) as fil:
-        got = cudf.read_parquet(fil)
+        with pytest.warns(FutureWarning):
+            got = cudf.read_parquet(fil)
 
     assert_eq(expect, got)
 
@@ -726,16 +727,18 @@ def test_parquet_reader_use_python_file_object(
     fs, _, paths = get_fs_token_paths(parquet_path_or_buf("filepath"))
 
     # Pass open fsspec file
-    with fs.open(paths[0], mode="rb") as fil:
-        got1 = cudf.read_parquet(
-            fil, use_python_file_object=use_python_file_object
-        )
+    with pytest.warns(FutureWarning):
+        with fs.open(paths[0], mode="rb") as fil:
+            got1 = cudf.read_parquet(
+                fil, use_python_file_object=use_python_file_object
+            )
     assert_eq(expect, got1)
 
     # Pass path only
-    got2 = cudf.read_parquet(
-        paths[0], use_python_file_object=use_python_file_object
-    )
+    with pytest.warns(FutureWarning):
+        got2 = cudf.read_parquet(
+            paths[0], use_python_file_object=use_python_file_object
+        )
     assert_eq(expect, got2)
 
 
@@ -3772,7 +3775,7 @@ def test_parquet_chunked_reader(
     )
     buffer = BytesIO()
     df.to_parquet(buffer)
-    reader = ParquetReader(
+    actual = read_parquet_chunked(
         [buffer],
         chunk_read_limit=chunk_read_limit,
         pass_read_limit=pass_read_limit,
@@ -3782,7 +3785,6 @@ def test_parquet_chunked_reader(
     expected = cudf.read_parquet(
         buffer, use_pandas_metadata=use_pandas_metadata, row_groups=row_groups
     )
-    actual = reader.read()
     assert_eq(expected, actual)
 
 
@@ -3806,7 +3808,7 @@ def test_parquet_chunked_reader_nrows_skiprows(
     )
     buffer = BytesIO()
     df.to_parquet(buffer)
-    reader = ParquetReader(
+    reader = read_parquet_chunked(
         [buffer],
         chunk_read_limit=chunk_read_limit,
         pass_read_limit=pass_read_limit,
@@ -3825,7 +3827,7 @@ def test_parquet_reader_pandas_compatibility():
     )
     buffer = BytesIO()
     df.to_parquet(buffer)
-    with cudf.option_context("mode.pandas_compatible", True):
+    with cudf.option_context("io.parquet.low_memory", True):
         expected = cudf.read_parquet(buffer)
     assert_eq(expected, df)
 
