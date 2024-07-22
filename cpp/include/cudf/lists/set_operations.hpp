@@ -53,8 +53,8 @@ namespace cudf::lists {
  * @param nulls_equal Flag to specify whether null elements should be considered as equal, default
  *        to be `UNEQUAL` which means only non-null elements are checked for overlapping
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
- * @param mr Device memory resource used to allocate the returned object
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned object
  * @return A column of type BOOL containing the check results
  */
 std::unique_ptr<column> have_overlap(

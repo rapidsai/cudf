@@ -389,7 +389,7 @@ class Frame(BinaryOperand, Scannable):
         return self.to_numpy()
 
     @_performance_tracking
-    def __array__(self, dtype=None):
+    def __array__(self, dtype=None, copy=None):
         raise TypeError(
             "Implicit conversion to a host NumPy array via __array__ is not "
             "allowed, To explicitly construct a GPU matrix, consider using "
@@ -1187,6 +1187,7 @@ class Frame(BinaryOperand, Scannable):
         self,
         values,
         side: Literal["left", "right"] = "left",
+        sorter=None,
         ascending: bool = True,
         na_position: Literal["first", "last"] = "last",
     ) -> ScalarLike | cupy.ndarray:
@@ -1199,6 +1200,10 @@ class Frame(BinaryOperand, Scannable):
         side : str {'left', 'right'} optional, default 'left'
             If 'left', the index of the first suitable location found is given
             If 'right', return the last such index
+        sorter : 1-D array-like, optional
+            Optional array of integer indices that sort `self` into ascending
+            order. They are typically the result of ``np.argsort``.
+            Currently not supported.
         ascending : bool optional, default True
             Sorted Frame is in ascending order (otherwise descending)
         na_position : str {'last', 'first'} optional, default 'last'
@@ -1245,10 +1250,12 @@ class Frame(BinaryOperand, Scannable):
         >>> df.searchsorted(values_df, ascending=False)
         array([4, 4, 4, 0], dtype=int32)
         """
-        # Call libcudf search_sorted primitive
+        # Note: pandas.DataFrame does not support searchsorted
 
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
+        elif sorter is not None:
+            raise NotImplementedError("sorter is currently not supported.")
 
         scalar_flag = None
         if is_scalar(values):
@@ -1305,7 +1312,7 @@ class Frame(BinaryOperand, Scannable):
         order=None,
         ascending=True,
         na_position="last",
-    ):
+    ) -> cupy.ndarray:
         """Return the integer indices that would sort the Series values.
 
         Parameters
@@ -1586,6 +1593,12 @@ class Frame(BinaryOperand, Scannable):
     @_performance_tracking
     def __abs__(self):
         return self._unaryop("abs")
+
+    def __bool__(self):
+        raise ValueError(
+            f"The truth value of a {type(self).__name__} is ambiguous. Use "
+            "a.empty, a.bool(), a.item(), a.any() or a.all()."
+        )
 
     # Reductions
     @classmethod
