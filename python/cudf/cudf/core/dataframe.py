@@ -2844,6 +2844,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             index=index,
             inplace=False,
             fill_value=fill_value,
+            level=level,
+            method=method,
+            limit=limit,
+            tolerance=tolerance,
         )
 
     @_performance_tracking
@@ -3187,7 +3191,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
     )
     def reset_index(
-        self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
+        self,
+        level=None,
+        drop=False,
+        inplace=False,
+        col_level=0,
+        col_fill="",
+        allow_duplicates: bool = False,
+        names: abc.Hashable | abc.Sequence[abc.Hashable] | None = None,
     ):
         return self._mimic_inplace(
             DataFrame._from_data(
@@ -3196,6 +3207,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     drop=drop,
                     col_level=col_level,
                     col_fill=col_fill,
+                    allow_duplicates=allow_duplicates,
+                    names=names,
                 )
             ),
             inplace=inplace,
@@ -3666,7 +3679,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return out
 
     @_performance_tracking
-    def add_suffix(self, suffix):
+    def add_suffix(self, suffix, axis=None):
+        if axis is not None:
+            raise NotImplementedError("axis is currently not implemented.")
         # TODO: Change to deep=False when copy-on-write is default
         out = self.copy(deep=True)
         out.columns = [

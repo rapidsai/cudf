@@ -84,6 +84,9 @@ doc_reset_index_template = """
 {argument}
         inplace : bool, default False
             Modify the DataFrame in place (do not create a new object).
+        allow_duplicates : bool, default False
+            Allow duplicate column labels to be created.
+            Currently not supported.
 
         Returns
         -------
@@ -902,7 +905,7 @@ class IndexedFrame(Frame):
         return self._mimic_inplace(result, inplace=inplace)
 
     @_performance_tracking
-    def clip(self, lower=None, upper=None, inplace=False, axis=1):
+    def clip(self, lower=None, upper=None, axis=1, inplace=False):
         """
         Trim values at input threshold(s).
 
@@ -1779,7 +1782,14 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def mask(self, cond, other=None, inplace: bool = False) -> Self | None:
+    def mask(
+        self,
+        cond,
+        other=None,
+        inplace: bool = False,
+        axis=None,
+        level=None,
+    ) -> Self | None:
         """
         Replace values where the condition is True.
 
@@ -1831,6 +1841,10 @@ class IndexedFrame(Frame):
         4       0
         dtype: int64
         """
+        if axis is not None:
+            raise NotImplementedError("axis is not supported.")
+        elif level is not None:
+            raise NotImplementedError("level is not supported.")
 
         if not hasattr(cond, "__invert__"):
             # We Invert `cond` below and call `where`, so
@@ -2042,13 +2056,26 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+    def shift(
+        self,
+        periods=1,
+        freq=None,
+        axis=0,
+        fill_value=None,
+        suffix: str | None = None,
+    ):
         """Shift values by `periods` positions."""
         axis = self._get_axis_from_axis_arg(axis)
         if axis != 0:
-            raise ValueError("Only axis=0 is supported.")
+            raise NotImplementedError("Only axis=0 is supported.")
         if freq is not None:
-            raise ValueError("The freq argument is not yet supported.")
+            raise NotImplementedError(
+                "The freq argument is not yet supported."
+            )
+        if suffix is not None:
+            raise NotImplementedError(
+                "The suffix argument is not yet supported."
+            )
 
         data_columns = (
             col.shift(periods, fill_value) for col in self._columns
@@ -3225,7 +3252,9 @@ class IndexedFrame(Frame):
         ]
 
     @_performance_tracking
-    def bfill(self, value=None, axis=None, inplace=None, limit=None):
+    def bfill(
+        self, value=None, axis=None, inplace=None, limit=None, limit_area=None
+    ):
         """
         Synonym for :meth:`Series.fillna` with ``method='bfill'``.
 
@@ -3233,6 +3262,9 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
+        if limit_area is not None:
+            raise NotImplementedError("limit_area is currently not supported.")
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
             return self.fillna(
@@ -3264,7 +3296,14 @@ class IndexedFrame(Frame):
         return self.bfill(value=value, axis=axis, inplace=inplace, limit=limit)
 
     @_performance_tracking
-    def ffill(self, value=None, axis=None, inplace=None, limit=None):
+    def ffill(
+        self,
+        value=None,
+        axis=None,
+        inplace=None,
+        limit=None,
+        limit_area: Literal["inside", "outside", None] = None,
+    ):
         """
         Synonym for :meth:`Series.fillna` with ``method='ffill'``.
 
@@ -3272,6 +3311,9 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
+        if limit_area is not None:
+            raise NotImplementedError("limit_area is currently not supported.")
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
             return self.fillna(
@@ -3363,7 +3405,7 @@ class IndexedFrame(Frame):
                 Use `Series.add_prefix` or `DataFrame.add_prefix`"
         )
 
-    def add_suffix(self, suffix):
+    def add_suffix(self, suffix, axis=None):
         """
         Suffix labels with string `suffix`.
 
@@ -3653,6 +3695,10 @@ class IndexedFrame(Frame):
         index=None,
         inplace=False,
         fill_value=NA,
+        level=None,
+        method=None,
+        limit=None,
+        tolerance=None,
     ):
         """
         Helper for `.reindex`
@@ -3677,6 +3723,15 @@ class IndexedFrame(Frame):
         -------
         Series or DataFrame
         """
+        if method is not None:
+            raise NotImplementedError("method is not currently supported.")
+        if level is not None:
+            raise NotImplementedError("level is not currently supported.")
+        if limit is not None:
+            raise NotImplementedError("limit is not currently supported.")
+        if tolerance is not None:
+            raise NotImplementedError("tolerance is not currently supported.")
+
         if dtypes is None:
             dtypes = {}
 
@@ -4303,8 +4358,22 @@ class IndexedFrame(Frame):
 
         return self._gather(GatherMap(indices, len(self), nullify=False))
 
-    def _reset_index(self, level, drop, col_level=0, col_fill=""):
+    def _reset_index(
+        self,
+        level,
+        drop,
+        col_level=0,
+        col_fill="",
+        allow_duplicates: bool = False,
+        names: abc.Hashable | abc.Sequence[abc.Hashable] | None = None,
+    ):
         """Shared path for DataFrame.reset_index and Series.reset_index."""
+        if allow_duplicates is not False:
+            raise NotImplementedError(
+                "allow_duplicates is not currently supported."
+            )
+        elif names is not None:
+            raise NotImplementedError("names is not currently supported.")
         if level is not None:
             if (
                 isinstance(level, int)
