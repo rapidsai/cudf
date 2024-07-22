@@ -1235,8 +1235,10 @@ void reader::impl::preprocess_file(read_mode mode)
                    [](auto const& col) { return col.type; });
   }
 
-  std::tie(
-    _file_itm_data.global_skip_rows, _file_itm_data.global_num_rows, _file_itm_data.row_groups) =
+  std::tie(_file_itm_data.global_skip_rows,
+           _file_itm_data.global_num_rows,
+           _file_itm_data.row_groups,
+           _file_itm_data.num_rows_per_source) =
     _metadata->select_row_groups(_options.row_group_indices,
                                  _options.skip_rows,
                                  _options.num_rows,
@@ -1245,9 +1247,18 @@ void reader::impl::preprocess_file(read_mode mode)
                                  _expr_conv.get_converted_expr(),
                                  _stream);
 
+  // Inclusive scan the number of rows per source
+  if (not _expr_conv.get_converted_expr().has_value() and mode == read_mode::CHUNKED_READ) {
+    _file_itm_data.exclusive_sum_num_rows_per_source.resize(
+      _file_itm_data.num_rows_per_source.size());
+    thrust::inclusive_scan(_file_itm_data.num_rows_per_source.cbegin(),
+                           _file_itm_data.num_rows_per_source.cend(),
+                           _file_itm_data.exclusive_sum_num_rows_per_source.begin());
+  }
+
   // check for page indexes
-  _has_page_index = std::all_of(_file_itm_data.row_groups.begin(),
-                                _file_itm_data.row_groups.end(),
+  _has_page_index = std::all_of(_file_itm_data.row_groups.cbegin(),
+                                _file_itm_data.row_groups.cend(),
                                 [](auto const& row_group) { return row_group.has_page_index(); });
 
   if (_file_itm_data.global_num_rows > 0 && not _file_itm_data.row_groups.empty() &&

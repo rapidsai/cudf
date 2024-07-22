@@ -50,7 +50,7 @@ def read_csv(
     comment=None,
     delim_whitespace=False,
     byte_range=None,
-    use_python_file_object=False,
+    use_python_file_object=None,
     storage_options=None,
     bytes_per_thread=None,
     prefetch_read_ahead=None,
