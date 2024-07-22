@@ -23,8 +23,6 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    import cudf
-
     from cudf_polars.containers import Column
 
 
@@ -82,16 +80,6 @@ class DataFrame:
     def num_rows(self) -> int:
         """Number of rows."""
         return 0 if len(self.columns) == 0 else self.table.num_rows()
-
-    @classmethod
-    def from_cudf(cls, df: cudf.DataFrame) -> Self:
-        """Create from a cudf dataframe."""
-        return cls(
-            [
-                NamedColumn(c.to_pylibcudf(mode="read"), name)
-                for name, c in df._data.items()
-            ]
-        )
 
     @classmethod
     def from_polars(cls, df: pl.DataFrame) -> Self:

@@ -2,7 +2,7 @@
 
 from libcpp cimport bool
 
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.types cimport null_order, size_type
 
 from .column cimport Column
 from .scalar cimport Scalar
@@ -35,3 +35,5 @@ cpdef Column segmented_gather(Column, Column)
 cpdef Column extract_list_element(Column, ColumnOrSizeType)
 
 cpdef Column count_elements(Column)
+
+cpdef Column sort_lists(Column, bool, null_order, bool stable = *)
