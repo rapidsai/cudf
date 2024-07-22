@@ -12,20 +12,37 @@ from cudf_polars.testing.asserts import (
 )
 
 
-@pytest.mark.parametrize(
-    "how",
-    [
-        "inner",
-        "left",
-        "semi",
-        "anti",
-        "full",
-    ],
-)
-@pytest.mark.parametrize("coalesce", [False, True])
-@pytest.mark.parametrize(
-    "join_nulls", [False, True], ids=["nulls_not_equal", "nulls_equal"]
-)
+@pytest.fixture(params=[False, True], ids=["nulls_not_equal", "nulls_equal"])
+def join_nulls(request):
+    return request.param
+
+
+@pytest.fixture(params=["inner", "left", "semi", "anti", "full"])
+def how(request):
+    return request.param
+
+
+@pytest.fixture
+def left():
+    return pl.LazyFrame(
+        {
+            "a": [1, 2, 3, 1, None],
+            "b": [1, 2, 3, 4, 5],
+            "c": [2, 3, 4, 5, 6],
+        }
+    )
+
+
+@pytest.fixture
+def right():
+    return pl.LazyFrame(
+        {
+            "a": [1, 4, 3, 7, None, None],
+            "c": [2, 3, 4, 5, 6, 7],
+        }
+    )
+
+
 @pytest.mark.parametrize(
     "join_expr",
     [
@@ -35,42 +52,28 @@ from cudf_polars.testing.asserts import (
         ["c", "a"],
     ],
 )
-def test_join(how, coalesce, join_nulls, join_expr):
-    left = pl.DataFrame(
-        {
-            "a": [1, 2, 3, 1, None],
-            "b": [1, 2, 3, 4, 5],
-            "c": [2, 3, 4, 5, 6],
-        }
-    ).lazy()
-    right = pl.DataFrame(
-        {
-            "a": [1, 4, 3, 7, None, None],
-            "c": [2, 3, 4, 5, 6, 7],
-        }
-    ).lazy()
-
+def test_non_coalesce_join(left, right, how, join_nulls, join_expr):
     query = left.join(
-        right, on=join_expr, how=how, join_nulls=join_nulls, coalesce=coalesce
+        right, on=join_expr, how=how, join_nulls=join_nulls, coalesce=False
     )
     assert_gpu_result_equal(query, check_row_order=how == "left")
 
 
-def test_cross_join():
-    left = pl.DataFrame(
-        {
-            "a": [1, 2, 3, 1, None],
-            "b": [1, 2, 3, 4, 5],
-            "c": [2, 3, 4, 5, 6],
-        }
-    ).lazy()
-    right = pl.DataFrame(
-        {
-            "a": [1, 4, 3, 7, None, None],
-            "c": [2, 3, 4, 5, 6, 7],
-        }
-    ).lazy()
+@pytest.mark.parametrize(
+    "join_expr",
+    [
+        pl.col("a"),
+        ["c", "a"],
+    ],
+)
+def test_coalesce_join(left, right, how, join_nulls, join_expr):
+    query = left.join(
+        right, on=join_expr, how=how, join_nulls=join_nulls, coalesce=True
+    )
+    assert_gpu_result_equal(query, check_row_order=False)
 
+
+def test_cross_join(left, right):
     q = left.join(right, how="cross")
 
     assert_gpu_result_equal(q)
@@ -79,9 +82,7 @@ def test_cross_join():
 @pytest.mark.parametrize(
     "left_on,right_on", [(pl.col("a"), pl.lit(2)), (pl.lit(2), pl.col("a"))]
 )
-def test_join_literal_key_unsupported(left_on, right_on):
-    left = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
-    right = pl.LazyFrame({"a": [1, 2, 3], "b": [5, 6, 7]})
+def test_join_literal_key_unsupported(left, right, left_on, right_on):
     q = left.join(right, left_on=left_on, right_on=right_on, how="inner")
 
     assert_ir_translation_raises(q, NotImplementedError)
