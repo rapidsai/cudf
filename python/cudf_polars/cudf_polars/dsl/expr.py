@@ -1398,7 +1398,7 @@ class BinOp(Expr):
             raise NotImplementedError(
                 f"Operation {op.name} not supported "
                 f"for types {left.dtype.id().name} and {right.dtype.id().name} "
-                f"with output type {self.dtype}"
+                f"with output type {self.dtype.id().name}"
             )
 
     _MAPPING: ClassVar[dict[pl_expr.Operator, plc.binaryop.BinaryOperator]] = {
