@@ -7,6 +7,7 @@ import os
 import numpy as np
 import pyarrow as pa
 import pytest
+from pyarrow.parquet import write_table as pq_write_table
 
 from cudf._lib import pylibcudf as plc
 from cudf._lib.pylibcudf.io.types import CompressionType
@@ -103,25 +104,68 @@ def assert_column_eq(
             return pa.list_(new_fields[0])
         return typ
 
+    def _contains_type(parent_typ, typ_checker):
+        """
+        Check whether the parent or one of the children
+        satisfies the typ_checker.
+        """
+        if typ_checker(parent_typ):
+            return True
+        if pa.types.is_nested(parent_typ):
+            for i in range(parent_typ.num_fields):
+                if _contains_type(parent_typ.field(i).type, typ_checker):
+                    return True
+        return False
+
     if not check_field_nullability:
         rhs_type = _make_fields_nullable(rhs.type)
         rhs = rhs.cast(rhs_type)
 
         lhs_type = _make_fields_nullable(lhs.type)
-        lhs = rhs.cast(lhs_type)
+        lhs = lhs.cast(lhs_type)
 
-    if pa.types.is_floating(lhs.type) and pa.types.is_floating(rhs.type):
-        lhs_nans = pa.compute.is_nan(lhs)
-        rhs_nans = pa.compute.is_nan(rhs)
-        assert lhs_nans.equals(rhs_nans)
+    assert lhs.type == rhs.type, f"{lhs.type} != {rhs.type}"
+    if _contains_type(lhs.type, pa.types.is_floating) and _contains_type(
+        rhs.type, pa.types.is_floating
+    ):
+        # Flatten nested arrays to liststo do comparisons if nested
+        # This is so we can do approximate comparisons
+        # for floats in numpy
+        def _flatten_arrays(arr):
+            if pa.types.is_nested(arr.type):
+                flattened = arr.flatten()
+                flat_arrs = []
+                if isinstance(flattened, list):
+                    for flat_arr in flattened:
+                        flat_arrs += _flatten_arrays(flat_arr)
+                else:
+                    flat_arrs = [flattened]
+            else:
+                flat_arrs = [arr]
+            return flat_arrs
 
-        if pa.compute.any(lhs_nans) or pa.compute.any(rhs_nans):
-            # masks must be equal at this point
-            mask = pa.compute.fill_null(pa.compute.invert(lhs_nans), True)
-            lhs = lhs.filter(mask)
-            rhs = rhs.filter(mask)
+        if isinstance(lhs, (pa.ListArray, pa.StructArray)):
+            lhs = _flatten_arrays(lhs)
+            rhs = _flatten_arrays(rhs)
+        else:
+            # Just a regular doublearray
+            lhs = [lhs]
+            rhs = [rhs]
 
-        np.testing.assert_array_almost_equal(lhs, rhs)
+        for lh_arr, rh_arr in zip(lhs, rhs):
+            # Check NaNs positions match
+            # and then filter out nans
+            lhs_nans = pa.compute.is_nan(lh_arr)
+            rhs_nans = pa.compute.is_nan(rh_arr)
+            assert lhs_nans.equals(rhs_nans)
+
+            if pa.compute.any(lhs_nans) or pa.compute.any(rhs_nans):
+                # masks must be equal at this point
+                mask = pa.compute.fill_null(pa.compute.invert(lhs_nans), True)
+                lh_arr = lh_arr.filter(mask)
+                rh_arr = rh_arr.filter(mask)
+
+            np.testing.assert_array_almost_equal(lh_arr, rh_arr)
     else:
         assert lhs.equals(rhs)
 
@@ -276,6 +320,16 @@ def make_source(path_or_buf, pa_table, format, **kwargs):
         df.to_json(path_or_buf, mode=mode, **kwargs)
     elif format == "csv":
         df.to_csv(path_or_buf, mode=mode, **kwargs)
+    elif format == "parquet":
+        # The conversion to pandas is lossy (doesn't preserve
+        # nested types) so we
+        # will just use pyarrow directly to write this
+        pq_write_table(
+            pa_table,
+            pa.PythonFile(path_or_buf)
+            if isinstance(path_or_buf, io.IOBase)
+            else path_or_buf,
+        )
     if isinstance(path_or_buf, io.IOBase):
         path_or_buf.seek(0)
     return path_or_buf

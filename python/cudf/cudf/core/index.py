@@ -349,7 +349,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def _data(self):
         return cudf.core.column_accessor.ColumnAccessor(
-            {self.name: self._values}
+            {self.name: self._values}, verify=False
         )
 
     @_performance_tracking
@@ -1492,7 +1492,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         order=None,
         ascending=True,
         na_position="last",
-    ):
+    ) -> cupy.ndarray:
         """Return the integer indices that would sort the index.
 
         Parameters

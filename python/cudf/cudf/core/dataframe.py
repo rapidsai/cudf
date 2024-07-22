@@ -475,6 +475,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                     {key: ca._data[key] for key in column_names},
                     multiindex=ca.multiindex,
                     level_names=ca.level_names,
+                    verify=False,
                 ),
                 index=index,
             )
@@ -485,6 +486,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                     {key: ca._data[key] for key in column_names},
                     multiindex=ca.multiindex,
                     level_names=ca.level_names,
+                    verify=False,
                 ),
                 index=index,
             )
@@ -771,6 +773,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     else None,
                     rangeindex=rangeindex,
                     label_dtype=label_dtype,
+                    verify=False,
                 )
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
@@ -931,7 +934,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
                 if not series.index.equals(final_columns):
                     series = series.reindex(final_columns)
-                self._data[idx] = column.as_column(series._column)
+                self._data[idx] = series._column
 
             # Setting `final_columns` to self._index so
             # that the resulting `transpose` will be have
@@ -2841,6 +2844,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             index=index,
             inplace=False,
             fill_value=fill_value,
+            level=level,
+            method=method,
+            limit=limit,
+            tolerance=tolerance,
         )
 
     @_performance_tracking
@@ -2958,7 +2965,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # label-like
             if is_scalar(col) or isinstance(col, tuple):
                 if col in self._column_names:
-                    data_to_add.append(self[col])
+                    data_to_add.append(self[col]._column)
                     names.append(col)
                     if drop:
                         to_drop.append(col)
@@ -2973,7 +2980,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             elif isinstance(
                 col, (cudf.Series, cudf.Index, pd.Series, pd.Index)
             ):
-                data_to_add.append(col)
+                data_to_add.append(as_column(col))
                 names.append(col.name)
             else:
                 try:
@@ -3184,7 +3191,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
     )
     def reset_index(
-        self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
+        self,
+        level=None,
+        drop=False,
+        inplace=False,
+        col_level=0,
+        col_fill="",
+        allow_duplicates: bool = False,
+        names: abc.Hashable | abc.Sequence[abc.Hashable] | None = None,
     ):
         return self._mimic_inplace(
             DataFrame._from_data(
@@ -3193,6 +3207,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     drop=drop,
                     col_level=col_level,
                     col_fill=col_fill,
+                    allow_duplicates=allow_duplicates,
+                    names=names,
                 )
             ),
             inplace=inplace,
@@ -3663,7 +3679,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return out
 
     @_performance_tracking
-    def add_suffix(self, suffix):
+    def add_suffix(self, suffix, axis=None):
+        if axis is not None:
+            raise NotImplementedError("axis is currently not implemented.")
         # TODO: Change to deep=False when copy-on-write is default
         out = self.copy(deep=True)
         out.columns = [
@@ -4769,7 +4787,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result = {}
         for name, col in self._data.items():
             apply_sr = Series._from_data({None: col})
-            result[name] = apply_sr.apply(_func)
+            result[name] = apply_sr.apply(_func)._column
 
         return DataFrame._from_data(result, index=self.index)
 
@@ -5806,6 +5824,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 ),
                 level_names=level_names,
                 label_dtype=getattr(columns, "dtype", None),
+                verify=False,
             ),
             index=new_index,
         )
@@ -5892,6 +5911,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 ),
                 level_names=level_names,
                 label_dtype=getattr(columns, "dtype", None),
+                verify=False,
             ),
             index=index,
         )
@@ -6302,10 +6322,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         length = len(self)
         return Series._from_data(
             {
-                None: [
-                    length - self._data[col].null_count
-                    for col in self._data.names
-                ]
+                None: as_column(
+                    [length - col.null_count for col in self._columns]
+                )
             },
             cudf.Index(self._data.names),
         )
@@ -7374,7 +7393,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             offset=0,
         )
         return cudf.Series._from_data(
-            cudf.core.column_accessor.ColumnAccessor({name: col}),
+            cudf.core.column_accessor.ColumnAccessor(
+                {name: col}, verify=False
+            ),
             index=self.index,
             name=name,
         )
