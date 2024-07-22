@@ -25,7 +25,6 @@ from typing_extensions import assert_never
 
 import polars as pl
 
-import cudf
 import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
@@ -205,8 +204,6 @@ class Scan(IR):
 
     def __post_init__(self) -> None:
         """Validate preconditions."""
-        if self.file_options.n_rows is not None:
-            raise NotImplementedError("row limit in scan")
         if self.typ not in ("csv", "parquet"):
             raise NotImplementedError(f"Unhandled scan type: {self.typ}")
         if self.cloud_options is not None and any(
@@ -241,6 +238,7 @@ class Scan(IR):
         options = self.file_options
         with_columns = options.with_columns
         row_index = options.row_index
+        nrows = self.file_options.n_rows if self.file_options.n_rows is not None else -1
         if self.typ == "csv":
             parse_options = self.reader_options["parse_options"]
             sep = chr(parse_options["separator"])
@@ -295,6 +293,7 @@ class Scan(IR):
                     comment=comment,
                     decimal=decimal,
                     dtypes=self.schema,
+                    nrows=nrows,
                 )
                 pieces.append(tbl_w_meta)
             tables, colnames = zip(
@@ -308,9 +307,16 @@ class Scan(IR):
                 colnames[0],
             )
         elif self.typ == "parquet":
-            cdf = cudf.read_parquet(self.paths, columns=with_columns)
-            assert isinstance(cdf, cudf.DataFrame)
-            df = DataFrame.from_cudf(cdf)
+            tbl_w_meta = plc.io.parquet.read_parquet(
+                plc.io.SourceInfo(self.paths),
+                columns=with_columns,
+                num_rows=nrows,
+            )
+            df = DataFrame.from_table(
+                tbl_w_meta.tbl,
+                # TODO: consider nested column names?
+                tbl_w_meta.column_names(include_children=False),
+            )
         else:
             raise NotImplementedError(
                 f"Unhandled scan type: {self.typ}"
@@ -337,13 +343,7 @@ class Scan(IR):
                 null_order=plc.types.NullOrder.AFTER,
             )
             df = DataFrame([index, *df.columns])
-        # TODO: should be true, but not the case until we get
-        # cudf-classic out of the loop for IO since it converts date32
-        # to datetime.
-        # assert all(
-        #     c.obj.type() == dtype
-        #     for c, dtype in zip(df.columns, self.schema.values())
-        # )
+        assert all(c.obj.type() == self.schema[c.name] for c in df.columns)
         if self.predicate is None:
             return df
         else:
