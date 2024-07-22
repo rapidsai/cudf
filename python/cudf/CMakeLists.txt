@@ -85,7 +85,7 @@ if(NOT cudf_FOUND)
   # practice right this would only be a problem is if libcudf was not found but some of the
   # dependencies were, and we have no real use cases where that happens.
   install_aliased_imported_targets(
-    TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp
+    TARGETS cudf arrow_shared nvcomp::nvcomp
     DESTINATION ${cython_lib_dir}
   )
 endif()
