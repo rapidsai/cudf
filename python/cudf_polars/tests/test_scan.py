@@ -24,15 +24,7 @@ def row_index(request):
 
 
 @pytest.fixture(
-    params=[
-        None,
-        pytest.param(
-            2, marks=pytest.mark.xfail(reason="No handling of row limit in scan")
-        ),
-        pytest.param(
-            3, marks=pytest.mark.xfail(reason="No handling of row limit in scan")
-        ),
-    ],
+    params=[None, 2, 3],
     ids=["all-rows", "n_rows-with-skip", "n_rows-no-skip"],
 )
 def n_rows(request):
