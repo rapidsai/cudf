@@ -40,9 +40,6 @@ class preprocessed_table;
 namespace cudf {
 namespace detail {
 
-// Forward declaration
-class cuco_allocator;
-
 constexpr int DEFAULT_JOIN_CG_SIZE = 2;
 
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
