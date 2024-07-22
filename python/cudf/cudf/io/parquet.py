@@ -949,8 +949,8 @@ def _read_parquet(
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
-                nrows=nrows,
-                skip_rows=skip_rows,
+                nrows=nrows if nrows is not None else -1,
+                skip_rows=skip_rows if skip_rows is not None else 0,
             )
         else:
             if nrows is None:
