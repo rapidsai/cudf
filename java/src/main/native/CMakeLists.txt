@@ -236,12 +236,7 @@ if(CUDF_JNI_LIBCUDF_STATIC)
   set(CUDF_LINK PRIVATE -Wl,--whole-archive cudf::cudf -Wl,--no-whole-archive PUBLIC cudf::cudf)
 endif()
 
-# When nvcomp is installed we need to use nvcomp::nvcomp but from the cudf build directory it will
-# just be nvcomp.
-target_link_libraries(
-  cudfjni ${CUDF_LINK} PRIVATE nvtx3::nvtx3-cpp $<TARGET_NAME_IF_EXISTS:nvcomp>
-                               $<TARGET_NAME_IF_EXISTS:nvcomp::nvcomp>
-)
+target_link_libraries(cudfjni ${CUDF_LINK} PRIVATE nvtx3::nvtx3-cpp)
 
 # ##################################################################################################
 # * cudart options --------------------------------------------------------------------------------
@@ -254,16 +249,4 @@ if(CUDA_STATIC_RUNTIME)
 else()
   # Tell CMake what CUDA language runtime to use
   set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
-endif()
-
-# ##################################################################################################
-# * install shared libraries ----------------------------------------------------------------------
-if(TARGET nvcomp::nvcomp)
-  add_custom_command(
-    TARGET cudfjni
-    PRE_LINK
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:nvcomp::nvcomp>
-            "${PROJECT_BINARY_DIR}/libnvcomp.so"
-    COMMENT "Copying nvcomp libraries to ${PROJECT_BINARY_DIR}"
-  )
 endif()
