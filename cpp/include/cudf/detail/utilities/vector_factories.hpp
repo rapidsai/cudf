@@ -356,7 +356,7 @@ std::vector<typename Container::value_type> make_std_vector_sync(Container const
 }
 
 /**
- * @brief Construct a `thrust::host_vector` of the given size.
+ * @brief Construct a `cudf::detail::host_vector` of the given size.
  *
  * @note The returned vector may be using a pinned memory resource.
  *
@@ -372,7 +372,7 @@ host_vector<T> make_host_vector(size_t size, rmm::cuda_stream_view stream)
 }
 
 /**
- * @brief Construct an empty `thrust::host_vector` with the given capacity.
+ * @brief Construct an empty `cudf::detail::host_vector` with the given capacity.
  *
  * @note The returned vector may be using a pinned memory resource.
  *

@@ -33,17 +33,19 @@ namespace cudf::detail {
 CUDF_EXPORT rmm::host_async_resource_ref get_pageable_memory_resource();
 
 /**
- * @brief Get the memory resource to be used for the host memory allocation.
+ * @brief Get the allocator to be used for the host memory allocation.
  *
  * @param size The number of elements of type T to allocate
- * @return The memory resource to be used for the host memory allocation
+ * @param stream The stream to use for the allocation
+ * @return The allocator to be used for the host memory allocation
  */
 template <typename T>
-rmm_host_allocator<T> get_host_allocator(std::size_t size, rmm::cuda_stream_view _stream)
+rmm_host_allocator<T> get_host_allocator(std::size_t size, rmm::cuda_stream_view stream)
 {
-  return { size * sizeof(T) <= get_allocate_host_as_pinned_threshold() ? 
-                 get_pinned_memory_resource() : get_pageable_memory_resource(),
-                _stream};
+  return {size * sizeof(T) <= get_allocate_host_as_pinned_threshold()
+            ? get_pinned_memory_resource()
+            : get_pageable_memory_resource(),
+          stream};
 }
 
 }  // namespace cudf::detail
