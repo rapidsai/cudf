@@ -304,8 +304,6 @@ class native_jArray {
 
   N_TYPE* end() { return data() + size(); }
 
-  J_ARRAY_TYPE const get_jArray() const { return orig; }
-
   J_ARRAY_TYPE get_jArray() { return orig; }
 
   /**
