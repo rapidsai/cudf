@@ -618,7 +618,7 @@ dependencies:
           - matrix:
               cuda: "12.*"
               cuda_suffixed: "false"
-            packages: &run_cudf_cu12_unsuffixed
+            packages:
               - *rmm_conda
               # for as long as 'pynvjitlink' is not built from source in
               # RAPIDS devcontainers / DLFW, it needs to be the fully-suffixed name
@@ -634,13 +634,11 @@ dependencies:
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "false"
-            packages:
+            packages: &run_cudf_cu11_unsuffixed
               - *cubinlinker_conda
               - *ptxcompiler_conda
               - *rmm_conda
-          # when no CUDA version is specified, fall back to
-          # CUDA 12 dependencies (but without -cuXY suffixes)
-          - {matrix: null, packages: *run_cudf_cu12_unsuffixed}
+          - {matrix: null, packages: *run_cudf_cu11_unsuffixed}
   run_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -760,7 +758,7 @@ dependencies:
           - matrix:
               cuda: "12.*"
               cuda_suffixed: "false"
-            packages: &depends_on_cudf_cu12_unsuffixed
+            packages:
               - *cudf_conda
           - matrix:
               cuda: "11.*"
@@ -770,9 +768,9 @@ dependencies:
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "false"
-            packages:
+            packages: &depends_on_cudf_cu11_unsuffixed
               - *cudf_conda
-          - {matrix: null, packages: *depends_on_cudf_cu12_unsuffixed}
+          - {matrix: null, packages: *depends_on_cudf_cu11_unsuffixed}
   depends_on_cudf_kafka:
     common:
       - output_types: conda
