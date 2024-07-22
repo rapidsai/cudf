@@ -674,6 +674,7 @@ add_library(
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/pinned_memory.cpp
+  src/utilities/prefetch.cpp
   src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
