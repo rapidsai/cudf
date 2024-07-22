@@ -256,7 +256,7 @@ cdef class Column:
         return Column.from_libcudf(move(c_result))
 
     @staticmethod
-    def empty_like(Column like, size_type size):
+    def all_null_like(Column like, size_type size):
         """Create an all null column from a template.
 
         Parameters

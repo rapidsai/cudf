@@ -1061,7 +1061,10 @@ class HConcat(IR):
             [
                 table,
                 plc.Table(
-                    [plc.Column.empty_like(column, nrows) for column in table.columns()]
+                    [
+                        plc.Column.all_null_like(column, nrows)
+                        for column in table.columns()
+                    ]
                 ),
             ]
         )
