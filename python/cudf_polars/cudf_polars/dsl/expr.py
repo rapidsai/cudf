@@ -370,6 +370,10 @@ class Literal(Expr):
         # datatype of pyarrow scalar is correct by construction.
         return Column(plc.Column.from_scalar(plc.interop.from_arrow(self.value), 1))
 
+    def collect_agg(self, *, depth: int) -> AggInfo:
+        """Collect information about aggregations in groupbys."""
+        return AggInfo([])
+
 
 class LiteralColumn(Expr):
     __slots__ = ("value",)
@@ -382,6 +386,13 @@ class LiteralColumn(Expr):
         data = value.to_arrow()
         self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
 
+    def get_hash(self) -> int:
+        """Compute a hash of the column."""
+        # This is stricter than necessary, but we only need this hash
+        # for identity in groupby replacements so it's OK. And this
+        # way we avoid doing potentially expensive compute.
+        return hash((type(self), self.dtype, id(self.value)))
+
     def do_evaluate(
         self,
         df: DataFrame,
@@ -392,6 +403,10 @@ class LiteralColumn(Expr):
         """Evaluate this expression given a dataframe for context."""
         # datatype of pyarrow array is correct by construction.
         return Column(plc.interop.from_arrow(self.value))
+
+    def collect_agg(self, *, depth: int) -> AggInfo:
+        """Collect information about aggregations in groupbys."""
+        return AggInfo([])
 
 
 class Col(Expr):
@@ -867,7 +882,7 @@ class UnaryFunction(Expr):
         self.name = name
         self.options = options
         self.children = children
-        if self.name not in ("round", "unique"):
+        if self.name not in ("mask_nans", "round", "setsorted", "unique"):
             raise NotImplementedError(f"Unary function {name=}")
 
     def do_evaluate(
@@ -878,6 +893,9 @@ class UnaryFunction(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
+        if self.name == "mask_nans":
+            (child,) = self.children
+            return child.evaluate(df, context=context, mapping=mapping).mask_nans()
         if self.name == "round":
             (decimal_places,) = self.options
             (values,) = (
@@ -923,6 +941,33 @@ class UnaryFunction(Expr):
             if maintain_order:
                 return Column(column).sorted_like(values)
             return Column(column)
+        elif self.name == "setsorted":
+            (column,) = (
+                child.evaluate(df, context=context, mapping=mapping)
+                for child in self.children
+            )
+            (asc,) = self.options
+            order = (
+                plc.types.Order.ASCENDING
+                if asc == "ascending"
+                else plc.types.Order.DESCENDING
+            )
+            null_order = plc.types.NullOrder.BEFORE
+            if column.obj.null_count() > 0 and (n := column.obj.size()) > 1:
+                # PERF: This invokes four stream synchronisations!
+                has_nulls_first = not plc.copying.get_element(column.obj, 0).is_valid()
+                has_nulls_last = not plc.copying.get_element(
+                    column.obj, n - 1
+                ).is_valid()
+                if (order == plc.types.Order.DESCENDING and has_nulls_first) or (
+                    order == plc.types.Order.ASCENDING and has_nulls_last
+                ):
+                    null_order = plc.types.NullOrder.AFTER
+            return column.set_sorted(
+                is_sorted=plc.types.Sorted.YES,
+                order=order,
+                null_order=null_order,
+            )
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
         )  # pragma: no cover; init trips first
@@ -1215,12 +1260,19 @@ class Agg(Expr):
             raise NotImplementedError(
                 "Nested aggregations in groupby"
             )  # pragma: no cover; check_agg trips first
+        if (isminmax := self.name in {"min", "max"}) and self.options:
+            raise NotImplementedError("Nan propagation in groupby for min/max")
         (child,) = self.children
         ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
         if self.request is None:
             raise NotImplementedError(
                 f"Aggregation {self.name} in groupby"
             )  # pragma: no cover; __init__ trips first
+        if isminmax and plc.traits.is_floating_point(self.dtype):
+            assert expr is not None
+            # Ignore nans in these groupby aggs, do this by masking
+            # nans in the input
+            expr = UnaryFunction(self.dtype, "mask_nans", (), expr)
         return AggInfo([(expr, self.request, self)])
 
     def _reduce(
