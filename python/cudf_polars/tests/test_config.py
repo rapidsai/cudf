@@ -32,3 +32,10 @@ def test_polars_verbose_warns(monkeypatch):
     ):
         # And ensure that collecting issues the correct warning.
         assert_gpu_result_equal(q)
+
+
+def test_unsupported_config_raises():
+    q = pl.LazyFrame({})
+
+    with pytest.raises(pl.exceptions.ComputeError):
+        q.collect(engine=pl.GPUEngine(unknown_key=True))
