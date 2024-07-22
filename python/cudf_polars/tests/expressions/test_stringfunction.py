@@ -156,8 +156,9 @@ def test_slice_column(slice_column_data):
     "target, repl",
     [("a", "a"), ("Wı", "☺"), ("doesnotexist", "blahblah")],  # noqa: RUF001
 )
-def test_replace_literal(ldf, target, repl):
-    query = ldf.select(pl.col("a").str.replace(target, repl, literal=True))
+@pytest.mark.parametrize("n", [0, 3, -1])
+def test_replace_literal(ldf, target, repl, n):
+    query = ldf.select(pl.col("a").str.replace(target, repl, literal=True, n=n))
     assert_gpu_result_equal(query)
 
 
