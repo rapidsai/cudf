@@ -343,9 +343,7 @@ class Scan(IR):
                 null_order=plc.types.NullOrder.AFTER,
             )
             df = DataFrame([index, *df.columns])
-        assert all(
-            c.obj.type() == dtype for c, dtype in zip(df.columns, self.schema.values())
-        )
+        assert all(c.obj.type() == self.schema[c.name] for c in df.columns)
         if self.predicate is None:
             return df
         else:
