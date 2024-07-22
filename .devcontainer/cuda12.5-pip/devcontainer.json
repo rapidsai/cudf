@@ -9,7 +9,7 @@
     }
   },
   "containerEnv": {
-      "RAPIDS_MATRIX_ENTRY": "cuda=${localEnv:CUDA_VERSION};cuda_suffixed=true",
+      "RAPIDS_MATRIX_ENTRY": "cuda=12.5;cuda_suffixed=true"
   },
   "runArgs": [
     "--rm",
