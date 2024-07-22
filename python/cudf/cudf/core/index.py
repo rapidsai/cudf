@@ -964,8 +964,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return as_column(i, dtype=size_type_dtype)
 
     def isin(self, values, level=None):
-        if level is not None:
-            raise NotImplementedError("level is not supported.")
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
@@ -1625,8 +1627,10 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
 
     def isin(self, values, level=None):
-        if level is not None:
-            raise NotImplementedError("level is not supported.")
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
