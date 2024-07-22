@@ -59,22 +59,10 @@ cudf::table construct_table()
   cudf::test::fixed_width_column_wrapper<int32_t> col3(zeros_iterator, zeros_iterator + num_rows);
   cudf::test::fixed_width_column_wrapper<float> col4(zeros_iterator, zeros_iterator + num_rows);
   cudf::test::fixed_width_column_wrapper<double> col5(zeros_iterator, zeros_iterator + num_rows);
-
-  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col6 = [&ones_iterator] {
-    auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-      return numeric::decimal128{ones_iterator[i], numeric::scale_type{12}};
-    });
-    return cudf::test::fixed_width_column_wrapper<numeric::decimal128>(col6_data,
-                                                                       col6_data + num_rows);
-  }();
-
-  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col7 = [&ones_iterator] {
-    auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-      return numeric::decimal128{ones_iterator[i], numeric::scale_type{-12}};
-    });
-    return cudf::test::fixed_width_column_wrapper<numeric::decimal128>(col7_data,
-                                                                       col7_data + num_rows);
-  }();
+  cudf::test::fixed_point_column_wrapper<numeric::decimal128::rep> col6(
+    ones_iterator, ones_iterator + num_rows, numeric::scale_type{12});
+  cudf::test::fixed_point_column_wrapper<numeric::decimal128::rep> col7(
+    ones_iterator, ones_iterator + num_rows, numeric::scale_type{-12});
 
   cudf::test::lists_column_wrapper<int64_t> col8 = [] {
     auto col8_mask =

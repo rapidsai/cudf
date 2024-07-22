@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,12 @@
 namespace cudf {
 namespace io {
 namespace text {
+
+/**
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
 
 /**
  * @brief A contract guaranteeing stream-ordered memory access to the underlying device data.
@@ -109,6 +115,8 @@ class data_chunk_source {
    */
   [[nodiscard]] virtual std::unique_ptr<data_chunk_reader> create_reader() const = 0;
 };
+
+/** @} */  // end of group
 
 }  // namespace text
 }  // namespace io

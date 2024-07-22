@@ -389,7 +389,7 @@ class Frame(BinaryOperand, Scannable):
         return self.to_numpy()
 
     @_performance_tracking
-    def __array__(self, dtype=None):
+    def __array__(self, dtype=None, copy=None):
         raise TypeError(
             "Implicit conversion to a host NumPy array via __array__ is not "
             "allowed, To explicitly construct a GPU matrix, consider using "
@@ -591,7 +591,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: int64
 
         .. pandas-compat::
-            **DataFrame.where, Series.where**
+            :meth:`pandas.DataFrame.where`, :meth:`pandas.Series.where`
 
             Note that ``where`` treats missing values as falsy,
             in parallel with pandas treatment of nullable data:
@@ -927,7 +927,7 @@ class Frame(BinaryOperand, Scannable):
                 # of column is 0 (i.e., empty) then we will have an
                 # int8 column in result._data[name] returned by libcudf,
                 # which needs to be type-casted to 'category' dtype.
-                result[name] = result[name].as_categorical_column("category")
+                result[name] = result[name].astype("category")
             elif (
                 pandas_dtypes.get(name) == "empty"
                 and np_dtypes.get(name) == "object"
@@ -936,7 +936,7 @@ class Frame(BinaryOperand, Scannable):
                 # is specified as 'empty' and np_dtypes as 'object',
                 # hence handling this special case to type-cast the empty
                 # float column to str column.
-                result[name] = result[name].as_string_column(cudf.dtype("str"))
+                result[name] = result[name].astype(cudf.dtype("str"))
             elif name in data.column_names and isinstance(
                 data[name].type,
                 (
@@ -1187,9 +1187,10 @@ class Frame(BinaryOperand, Scannable):
         self,
         values,
         side: Literal["left", "right"] = "left",
+        sorter=None,
         ascending: bool = True,
         na_position: Literal["first", "last"] = "last",
-    ):
+    ) -> ScalarLike | cupy.ndarray:
         """Find indices where elements should be inserted to maintain order
 
         Parameters
@@ -1199,6 +1200,10 @@ class Frame(BinaryOperand, Scannable):
         side : str {'left', 'right'} optional, default 'left'
             If 'left', the index of the first suitable location found is given
             If 'right', return the last such index
+        sorter : 1-D array-like, optional
+            Optional array of integer indices that sort `self` into ascending
+            order. They are typically the result of ``np.argsort``.
+            Currently not supported.
         ascending : bool optional, default True
             Sorted Frame is in ascending order (otherwise descending)
         na_position : str {'last', 'first'} optional, default 'last'
@@ -1245,10 +1250,12 @@ class Frame(BinaryOperand, Scannable):
         >>> df.searchsorted(values_df, ascending=False)
         array([4, 4, 4, 0], dtype=int32)
         """
-        # Call libcudf search_sorted primitive
+        # Note: pandas.DataFrame does not support searchsorted
 
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
+        elif sorter is not None:
+            raise NotImplementedError("sorter is currently not supported.")
 
         scalar_flag = None
         if is_scalar(values):
@@ -1305,7 +1312,7 @@ class Frame(BinaryOperand, Scannable):
         order=None,
         ascending=True,
         na_position="last",
-    ):
+    ) -> cupy.ndarray:
         """Return the integer indices that would sort the Series values.
 
         Parameters
@@ -1527,7 +1534,7 @@ class Frame(BinaryOperand, Scannable):
     @acquire_spill_lock()
     def _apply_cupy_ufunc_to_operands(
         self, ufunc, cupy_func, operands, **kwargs
-    ):
+    ) -> list[dict[Any, ColumnBase]]:
         # Note: There are some operations that may be supported by libcudf but
         # are not supported by pandas APIs. In particular, libcudf binary
         # operations support logical and/or operations as well as
@@ -1538,7 +1545,7 @@ class Frame(BinaryOperand, Scannable):
         # without cupy.
 
         mask = None
-        data = [{} for _ in range(ufunc.nout)]
+        data: list[dict[Any, ColumnBase]] = [{} for _ in range(ufunc.nout)]
         for name, (left, right, _, _) in operands.items():
             cupy_inputs = []
             for inp in (left, right) if ufunc.nin == 2 else (left,):
@@ -1586,6 +1593,12 @@ class Frame(BinaryOperand, Scannable):
     @_performance_tracking
     def __abs__(self):
         return self._unaryop("abs")
+
+    def __bool__(self):
+        raise ValueError(
+            f"The truth value of a {type(self).__name__} is ambiguous. Use "
+            "a.empty, a.bool(), a.item(), a.any() or a.all()."
+        )
 
     # Reductions
     @classmethod
@@ -1641,7 +1654,7 @@ class Frame(BinaryOperand, Scannable):
         1
 
         .. pandas-compat::
-            **DataFrame.min, Series.min**
+            :meth:`pandas.DataFrame.min`, :meth:`pandas.Series.min`
 
             Parameters currently not supported are `level`, `numeric_only`.
         """
@@ -1689,7 +1702,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: int64
 
         .. pandas-compat::
-            **DataFrame.max, Series.max**
+            :meth:`pandas.DataFrame.max`, :meth:`pandas.Series.max`
 
             Parameters currently not supported are `level`, `numeric_only`.
         """
@@ -1742,7 +1755,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: bool
 
         .. pandas-compat::
-            **DataFrame.all, Series.all**
+            :meth:`pandas.DataFrame.all`, :meth:`pandas.Series.all`
 
             Parameters currently not supported are `axis`, `bool_only`,
             `level`.
@@ -1795,7 +1808,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: bool
 
         .. pandas-compat::
-            **DataFrame.any, Series.any**
+            :meth:`pandas.DataFrame.any`, :meth:`pandas.Series.any`
 
             Parameters currently not supported are `axis`, `bool_only`,
             `level`.

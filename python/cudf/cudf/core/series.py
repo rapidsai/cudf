@@ -22,10 +22,8 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
-    is_bool_dtype,
     is_dict_like,
     is_integer,
-    is_integer_dtype,
     is_scalar,
 )
 from cudf.core import indexing_utils
@@ -214,17 +212,17 @@ class _SeriesIlocIndexer(_FrameIndexer):
                         and self._frame.dtype.categories.dtype.kind == "f"
                     )
                 )
-                and isinstance(value, (np.float32, np.float64))
+                and isinstance(value, np.floating)
                 and np.isnan(value)
             ):
                 raise MixedTypeError(
                     f"Cannot assign {value=} to "
                     f"non-float dtype={self._frame.dtype}"
                 )
-            elif (
-                self._frame.dtype.kind == "b"
-                and not is_bool_dtype(value)
-                and value not in {None, cudf.NA}
+            elif self._frame.dtype.kind == "b" and not (
+                value in {None, cudf.NA}
+                or isinstance(value, (np.bool_, bool))
+                or (isinstance(value, cudf.Scalar) and value.dtype.kind == "b")
             ):
                 raise MixedTypeError(
                     f"Cannot assign {value=} to "
@@ -357,12 +355,10 @@ class _SeriesLocIndexer(_FrameIndexer):
             )
             if not _is_non_decimal_numeric_dtype(index_dtype) and not (
                 isinstance(index_dtype, cudf.CategoricalDtype)
-                and is_integer_dtype(index_dtype.categories.dtype)
+                and index_dtype.categories.dtype.kind in "iu"
             ):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
-                if isinstance(arg, cudf.Scalar) and is_integer_dtype(
-                    arg.dtype
-                ):
+                if isinstance(arg, cudf.Scalar) and arg.dtype.kind in "iu":
                     # Do not remove until pandas 3.0 support is added.
                     assert (
                         PANDAS_LT_300
@@ -922,7 +918,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return self.to_pandas().to_dict(into=into)
 
     @_performance_tracking
-    def reindex(self, *args, **kwargs):
+    def reindex(
+        self,
+        index=None,
+        *,
+        axis=None,
+        method: str | None = None,
+        copy: bool = True,
+        level=None,
+        fill_value: ScalarLike | None = None,
+        limit: int | None = None,
+        tolerance=None,
+    ):
         """
         Conform Series to new index.
 
@@ -931,6 +938,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         index : Index, Series-convertible, default None
             New labels / index to conform to,
             should be specified using keywords.
+        axis: int, default None
+            Unused.
         method: Not Supported
         copy : boolean, default True
         level: Not Supported
@@ -961,7 +970,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         .. pandas-compat::
-            **Series.reindex**
+            :meth:`pandas.Series.reindex`
 
             Note: One difference from Pandas is that ``NA`` is used for rows
             that do not match, rather than ``NaN``. One side effect of this is
@@ -969,27 +978,23 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             where it is cast to float in Pandas.
 
         """
-        if len(args) > 1:
-            raise TypeError(
-                "Only one positional argument ('index') is allowed"
-            )
-        if args:
-            (index,) = args
-            if "index" in kwargs:
-                raise TypeError(
-                    "'index' passed as both positional and keyword argument"
-                )
-        else:
-            index = kwargs.get("index", self.index)
+        if index is None:
+            index = self.index
+        if fill_value is None:
+            fill_value = cudf.NA
 
         name = self.name or 0
         series = self._reindex(
-            deep=kwargs.get("copy", True),
+            deep=copy,
             dtypes={name: self.dtype},
             index=index,
             column_names=[name],
             inplace=False,
-            fill_value=kwargs.get("fill_value", cudf.NA),
+            fill_value=fill_value,
+            level=level,
+            method=method,
+            limit=limit,
+            tolerance=tolerance,
         )
         series.name = self.name
         return series
@@ -1058,14 +1063,21 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
     )
     def reset_index(
-        self, level=None, drop=False, name=no_default, inplace=False
+        self,
+        level=None,
+        drop=False,
+        name=no_default,
+        inplace=False,
+        allow_duplicates=False,
     ):
         if not drop and inplace:
             raise TypeError(
                 "Cannot reset_index inplace on a Series "
                 "to create a DataFrame"
             )
-        data, index = self._reset_index(level=level, drop=drop)
+        data, index = self._reset_index(
+            level=level, drop=drop, allow_duplicates=allow_duplicates
+        )
         if not drop:
             if name is no_default:
                 name = 0 if self.name is None else self.name
@@ -1244,7 +1256,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         .. pandas-compat::
-            **Series.map**
+            :meth:`pandas.Series.map`
 
             Please note map currently only supports fixed-width numeric
             type functions.
@@ -1636,7 +1648,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return self._column.has_nulls()
 
     @_performance_tracking
-    def dropna(self, axis=0, inplace=False, how=None):
+    def dropna(
+        self, axis=0, inplace=False, how=None, ignore_index: bool = False
+    ):
         """
         Return a Series with null values removed.
 
@@ -1648,6 +1662,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             If True, do operation inplace and return None.
         how : str, optional
             Not in use. Kept for compatibility.
+        ignore_index : bool, default ``False``
+            If ``True``, the resulting axis will be labeled 0, 1, …, n - 1.
 
         Returns
         -------
@@ -1712,6 +1728,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
 
         result = super().dropna(axis=axis)
+
+        if ignore_index:
+            result.index = RangeIndex(len(result))
 
         return self._mimic_inplace(result, inplace=inplace)
 
@@ -2050,10 +2069,31 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().astype(dtype, copy, errors)
 
     @_performance_tracking
-    def sort_index(self, axis=0, *args, **kwargs):
+    def sort_index(
+        self,
+        axis=0,
+        level=None,
+        ascending=True,
+        inplace=False,
+        kind=None,
+        na_position="last",
+        sort_remaining=True,
+        ignore_index=False,
+        key=None,
+    ):
         if axis not in (0, "index"):
             raise ValueError("Only axis=0 is valid for Series.")
-        return super().sort_index(axis=axis, *args, **kwargs)
+        return super().sort_index(
+            axis=axis,
+            level=level,
+            ascending=ascending,
+            inplace=inplace,
+            kind=kind,
+            na_position=na_position,
+            sort_remaining=sort_remaining,
+            ignore_index=ignore_index,
+            key=key,
+        )
 
     @_performance_tracking
     def sort_values(
@@ -2064,6 +2104,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         kind="quicksort",
         na_position="last",
         ignore_index=False,
+        key=None,
     ):
         """Sort by the values along either axis.
 
@@ -2077,6 +2118,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             'first' puts nulls at the beginning, 'last' puts nulls at the end
         ignore_index : bool, default False
             If True, index will not be sorted.
+        key : callable, optional
+            Apply the key function to the values
+            before sorting. This is similar to the ``key`` argument in the
+            builtin ``sorted`` function, with the notable difference that
+            this ``key`` function should be *vectorized*. It should expect a
+            ``Series`` and return a Series with the same shape as the input.
+            It will be applied to each column in `by` independently.
+            Currently not supported.
 
         Returns
         -------
@@ -2095,7 +2144,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         .. pandas-compat::
-            **Series.sort_values**
+            :meth:`pandas.Series.sort_values`
 
             * Support axis='index' only.
             * The inplace and kind argument is currently unsupported
@@ -2108,6 +2157,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             kind=kind,
             na_position=na_position,
             ignore_index=ignore_index,
+            key=key,
         )
 
     @_performance_tracking
@@ -2257,30 +2307,44 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         order=None,
         ascending=True,
         na_position="last",
-    ):
-        obj = self.__class__._from_data(
-            {
-                None: super().argsort(
-                    axis=axis,
-                    kind=kind,
-                    order=order,
-                    ascending=ascending,
-                    na_position=na_position,
-                )
-            }
+    ) -> Self:
+        col = as_column(
+            super().argsort(
+                axis=axis,
+                kind=kind,
+                order=order,
+                ascending=ascending,
+                na_position=na_position,
+            )
         )
-        obj.name = self.name
-        return obj
+        return self._from_data_like_self(
+            self._data._from_columns_like_self([col])
+        )
 
     @_performance_tracking
-    def replace(self, to_replace=None, value=no_default, *args, **kwargs):
+    def replace(
+        self,
+        to_replace=None,
+        value=no_default,
+        inplace=False,
+        limit=None,
+        regex=False,
+        method=no_default,
+    ):
         if is_dict_like(to_replace) and value not in {None, no_default}:
             raise ValueError(
                 "Series.replace cannot use dict-like to_replace and non-None "
                 "value"
             )
 
-        return super().replace(to_replace, value, *args, **kwargs)
+        return super().replace(
+            to_replace,
+            value,
+            inplace=inplace,
+            limit=limit,
+            regex=regex,
+            method=method,
+        )
 
     @_performance_tracking
     def update(self, other):
@@ -2389,7 +2453,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     # UDF related
     @_performance_tracking
-    def apply(self, func, convert_dtype=True, args=(), **kwargs):
+    def apply(
+        self,
+        func,
+        convert_dtype=True,
+        args=(),
+        by_row: Literal[False, "compat"] = "compat",
+        **kwargs,
+    ):
         """
         Apply a scalar function to the values of a Series.
         Similar to ``pandas.Series.apply``.
@@ -2416,6 +2487,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             See examples for details.
         args : tuple
             Positional arguments passed to func after the series value.
+        by_row : False or "compat", default "compat"
+            If ``"compat"`` and func is a callable, func will be passed each element of
+            the Series, like ``Series.map``. If func is a list or dict of
+            callables, will first try to translate each func into pandas methods. If
+            that doesn't work, will try call to apply again with ``by_row="compat"``
+            and if that fails, will call apply again with ``by_row=False``
+            (backward compatible).
+            If False, the func will be passed the whole Series at once.
+
+            ``by_row`` has no effect when ``func`` is a string.
+
+            Currently not implemented.
         **kwargs
             Not supported
 
@@ -2525,6 +2608,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         if convert_dtype is not True:
             raise ValueError("Series.apply only supports convert_dtype=True")
+        elif by_row != "compat":
+            raise NotImplementedError("by_row is currently not supported.")
 
         result = self._apply(func, _get_scalar_kernel, *args, **kwargs)
         result.name = self.name
@@ -2551,7 +2636,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         5
 
         .. pandas-compat::
-            **Series.count**
+            :meth:`pandas.Series.count`
 
             Parameters currently not supported is `level`.
         """
@@ -2625,7 +2710,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             val_counts = val_counts[val_counts == val_counts.iloc[0]]
 
         return Series._from_data(
-            {self.name: val_counts.index.sort_values()}, name=self.name
+            {self.name: val_counts.index.sort_values()._column}, name=self.name
         )
 
     @_performance_tracking
@@ -2638,7 +2723,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().round(decimals, how)
 
     @_performance_tracking
-    def cov(self, other, min_periods=None):
+    def cov(self, other, min_periods=None, ddof: int | None = None):
         """
         Compute covariance with Series, excluding missing values.
 
@@ -2662,7 +2747,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         -0.015750000000000004
 
         .. pandas-compat::
-            **Series.cov**
+            :meth:`pandas.Series.cov`
 
             `min_periods` parameter is not yet supported.
         """
@@ -2671,6 +2756,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             raise NotImplementedError(
                 "min_periods parameter is not implemented yet"
             )
+        if ddof is not None:
+            raise NotImplementedError("ddof parameter is not implemented yet")
 
         if self.empty or other.empty:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
@@ -3107,10 +3194,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         # Pandas returns an IntervalIndex as the index of res
         # this condition makes sure we do too if bins is given
         if bins is not None and len(res) == len(res.index.categories):
-            int_index = IntervalColumn.as_interval_column(
-                res.index._column, res.index.categories.dtype
+            interval_col = IntervalColumn.from_struct_column(
+                res.index._column._get_decategorized_column()
             )
-            res.index = int_index
+            res.index = cudf.IntervalIndex._from_data(
+                {res.index.name: interval_col}
+            )
         res.name = result_name
         return res
 
@@ -3219,7 +3308,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             percentiles = np.array([0.25, 0.5, 0.75])
 
         dtype = "str"
-        if is_bool_dtype(self.dtype):
+        if self.dtype.kind == "b":
             data = _describe_categorical(self, percentiles)
         elif isinstance(self._column, cudf.core.column.NumericalColumn):
             data = _describe_numeric(self, percentiles)
@@ -3367,7 +3456,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         as_index=True,
         sort=no_default,
         group_keys=False,
-        squeeze=False,
         observed=True,
         dropna=True,
     ):
@@ -3378,13 +3466,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             as_index,
             sort,
             group_keys,
-            squeeze,
             observed,
             dropna,
         )
 
     @_performance_tracking
-    def rename(self, index=None, copy=True):
+    def rename(
+        self,
+        index=None,
+        axis=None,
+        copy: bool = True,
+        inplace: bool = False,
+        level=None,
+        errors: Literal["ignore", "raise"] = "ignore",
+    ):
         """
         Alter Series name
 
@@ -3394,8 +3489,21 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ----------
         index : Scalar, optional
             Scalar to alter the Series.name attribute
+        axis : {0 or 'index'}
+            Unused. Parameter needed for compatibility with DataFrame.
         copy : boolean, default True
             Also copy underlying data
+        inplace : bool, default False
+            Whether to return a new Series. If True the value of copy is ignored.
+            Currently not supported.
+        level : int or level name, default None
+            In case of MultiIndex, only rename labels in the specified level.
+            Currently not supported.
+        errors : {'ignore', 'raise'}, default 'ignore'
+            If 'raise', raise `KeyError` when a `dict-like mapper` or
+            `index` contains labels that are not present in the index being transformed.
+            If 'ignore', existing keys will be renamed and extra keys will be ignored.
+            Currently not supported.
 
         Returns
         -------
@@ -3421,16 +3529,23 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         'numeric_series'
 
         .. pandas-compat::
-            **Series.rename**
+            :meth:`pandas.Series.rename`
 
             - Supports scalar values only for changing name attribute
-            - The ``inplace`` and ``level`` is not supported
         """
+        if inplace is not False:
+            raise NotImplementedError("inplace is currently not supported.")
+        if level is not None:
+            raise NotImplementedError("level is currently not supported.")
+        if errors != "ignore":
+            raise NotImplementedError("errors is currently not supported.")
         out_data = self._data.copy(deep=copy)
         return Series._from_data(out_data, self.index, name=index)
 
     @_performance_tracking
-    def add_prefix(self, prefix):
+    def add_prefix(self, prefix, axis=None):
+        if axis is not None:
+            raise NotImplementedError("axis is currently not implemented.")
         return Series._from_data(
             # TODO: Change to deep=False when copy-on-write is default
             data=self._data.copy(deep=True),
@@ -3438,7 +3553,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
 
     @_performance_tracking
-    def add_suffix(self, suffix):
+    def add_suffix(self, suffix, axis=None):
+        if axis is not None:
+            raise NotImplementedError("axis is currently not implemented.")
         return Series._from_data(
             # TODO: Change to deep=False when copy-on-write is default
             data=self._data.copy(deep=True),
@@ -3528,7 +3645,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_performance_tracking
     def pct_change(
-        self, periods=1, fill_method=no_default, limit=no_default, freq=None
+        self,
+        periods=1,
+        fill_method=no_default,
+        limit=no_default,
+        freq=None,
+        **kwargs,
     ):
         """
         Calculates the percent change between sequential elements
@@ -3553,6 +3675,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
+        **kwargs
+            Additional keyword arguments are passed into
+            `Series.shift`.
 
         Returns
         -------
@@ -3597,11 +3722,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             warnings.simplefilter("ignore")
             data = self.fillna(method=fill_method, limit=limit)
         diff = data.diff(periods=periods)
-        change = diff / data.shift(periods=periods, freq=freq)
+        change = diff / data.shift(periods=periods, freq=freq, **kwargs)
         return change
 
     @_performance_tracking
-    def where(self, cond, other=None, inplace=False):
+    def where(self, cond, other=None, inplace=False, axis=None, level=None):
+        if axis is not None:
+            raise NotImplementedError("axis is not supported.")
+        elif level is not None:
+            raise NotImplementedError("level is not supported.")
         result_col = super().where(cond, other, inplace)
         return self._mimic_inplace(
             self._from_data_like_self(
@@ -4701,7 +4830,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: object
 
         .. pandas-compat::
-            **series.DatetimeProperties.strftime**
+            :meth:`pandas.DatetimeIndex.strftime`
 
             The following date format identifiers are not yet
             supported: ``%c``, ``%x``,``%X``
@@ -4729,9 +4858,7 @@ class DatetimeProperties(BaseDatelikeProperties):
                     f"for tracking purposes."
                 )
         return self._return_result_like_self(
-            self.series._column.as_string_column(
-                dtype="str", format=date_format
-            )
+            self.series._column.strftime(format=date_format)
         )
 
     @copy_docstring(DatetimeIndex.tz_localize)
