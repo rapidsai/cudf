@@ -1160,6 +1160,10 @@ class Cast(Expr):
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
         super().__init__(dtype)
         self.children = (value,)
+        if not plc.unary.is_supported_cast(self.dtype, value.dtype):
+            raise NotImplementedError(
+                f"Can't cast {self.dtype.id().name} to {value.dtype.id().name}"
+            )
         if (
             self.dtype.id() == plc.TypeId.STRING
             or value.dtype.id() == plc.TypeId.STRING
@@ -1167,8 +1171,6 @@ class Cast(Expr):
             raise NotImplementedError(
                 "Need to implement cast to/from string separately."
             )
-        elif plc.traits.is_chrono(self.dtype) and plc.traits.is_numeric(value.dtype):
-            raise NotImplementedError("Can't cast duration to numeric")
 
     def do_evaluate(
         self,
