@@ -963,7 +963,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             i = []
         return as_column(i, dtype=size_type_dtype)
 
-    def isin(self, values):
+    def isin(self, values, level=None):
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
@@ -1622,7 +1622,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             {self.name: self._values.unique()}, name=self.name
         )
 
-    def isin(self, values):
+    def isin(self, values, level=None):
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "

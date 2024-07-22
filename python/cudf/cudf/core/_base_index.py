@@ -963,7 +963,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def isin(self, values):
+    def isin(self, values, level=None):
         """Return a boolean array where the index values are in values.
 
         Compute boolean array of whether each index value is found in
@@ -974,6 +974,9 @@ class BaseIndex(Serializable):
         ----------
         values : set, list-like, Index
             Sought values.
+        level : str or int, optional
+            Name or position of the index level to use (if the index is a
+            `MultiIndex`).
 
         Returns
         -------
