@@ -54,3 +54,12 @@ def test_fill_null_with_strategy(null_data, strategy):
 
     # Not yet exposed to python from rust
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize("strategy", ["forward", "backward"])
+@pytest.mark.parametrize("limit", [0, 1, 2])
+def test_fill_null_with_limit(null_data, strategy, limit):
+    q = null_data.select(pl.col("a").fill_null(strategy=strategy, limit=limit))
+
+    # Not yet exposed to python from rust
+    assert_ir_translation_raises(q, NotImplementedError)
