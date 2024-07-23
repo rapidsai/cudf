@@ -3794,9 +3794,6 @@ def test_parquet_chunked_reader(
     "nrows,skip_rows",
     [
         # These are OK
-        # Note: there is a bug if we read the buffer with read_parquet_chunked
-        # before cudf.read_parquet, where the cudf.read_parquet call will
-        # produce an invalid DF
         (0, 0),
         (1000, 0),
         (0, 1000),
@@ -3835,7 +3832,7 @@ def test_parquet_reader_pandas_compatibility():
     assert_eq(expected, df)
 
 
-@pytest.mark.parametrize("row_group_size", [1, 4, 33])
+@pytest.mark.parametrize("row_group_size", [None, 1, 4, 33])
 def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     if len(pdf) > 100:
         pytest.skip("Skipping long setup test")
@@ -3847,6 +3844,7 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
 
     num_rows = total_rows // 4
     skip_rows = (total_rows - num_rows) // 2
+    print(num_rows, skip_rows)
     gdf = cudf.read_parquet(fname, skip_rows=skip_rows, nrows=num_rows)
 
     # cudf doesn't preserve category dtype

@@ -132,7 +132,10 @@ cdef object _process_metadata(object df,
                               object filepaths_or_buffers,
                               list pa_buffers,
                               bool allow_range_index,
-                              bool use_pandas_metadata):
+                              bool use_pandas_metadata,
+                              size_type num_rows=-1,
+                              int64_t skip_rows=0,
+                              ):
 
     add_df_col_struct_names(df, child_names)
     index_col = None
@@ -221,9 +224,13 @@ cdef object _process_metadata(object df,
                 else:
                     idx = cudf.Index(cudf.core.column.column_empty(0))
             else:
+                start = range_index_meta["start"] + skip_rows
+                stop = range_index_meta["stop"]
+                if num_rows != -1:
+                    stop = start + num_rows
                 idx = cudf.RangeIndex(
-                    start=range_index_meta['start'],
-                    stop=range_index_meta['stop'],
+                    start=start,
+                    stop=stop,
                     step=range_index_meta['step'],
                     name=range_index_meta['name']
                 )
@@ -324,7 +331,8 @@ def read_parquet_chunked(
     df = _process_metadata(df, column_names, child_names,
                            per_file_user_data, row_groups,
                            filepaths_or_buffers, pa_buffers,
-                           allow_range_index, use_pandas_metadata)
+                           allow_range_index, use_pandas_metadata,
+                           num_rows=nrows, skip_rows=skip_rows)
     return df
 
 
@@ -379,7 +387,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     df = _process_metadata(df, tbl_w_meta.column_names(include_children=False),
                            tbl_w_meta.child_names, tbl_w_meta.per_file_user_data,
                            row_groups, filepaths_or_buffers, pa_buffers,
-                           allow_range_index, use_pandas_metadata)
+                           allow_range_index, use_pandas_metadata,
+                           num_rows=nrows, skip_rows=skip_rows)
     return df
 
 cpdef read_parquet_metadata(filepaths_or_buffers):
