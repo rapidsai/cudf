@@ -54,7 +54,6 @@ def install():
         elif rmm_mode == "managed":
             mr = rmm.mr.PrefetchResourceAdaptor(rmm.mr.ManagedMemoryResource())
             rmm.mr.set_current_device_resource(mr)
-            enable_prefetching = True
         elif rmm_mode == "managed_pool":
             mr = rmm.mr.PrefetchResourceAdaptor(
                 rmm.mr.PoolMemoryResource(
@@ -63,12 +62,12 @@ def install():
                 )
             )
             rmm.mr.set_current_device_resource(mr)
-            enable_prefetching = True
         else:
             raise ValueError(f"Unsupported rmm mode: {rmm_mode}")
-        from cudf._lib import pylibcudf
 
         if enable_prefetching:
+            from cudf._lib import pylibcudf
+
             for key in {
                 "column_view::get_data",
                 "mutable_column_view::get_data",
