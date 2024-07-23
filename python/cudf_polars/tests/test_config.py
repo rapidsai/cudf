@@ -3,30 +3,32 @@
 
 from __future__ import annotations
 
-import os
+import pytest
 
 import polars as pl
 
-from cudf_polars.dsl.expr import Expr
-import cudf._lib.pylibcudf as plc
+from cudf_polars.dsl.ir import IR
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
-class NotImplementedExpr(Expr):
-    def do_evaluate(self, df, *, context, mapping):
-        raise NotImplementedError("Example Unsupported cuDF operation")
+def test_polars_verbose_warns(monkeypatch):
+    def raise_unimplemented(self):
+        raise NotImplementedError("We don't support this")
 
-
-def invoke_unimplemented_op(df):
-    # TODO: does not work
-    # df.select(NotImplementedExpr(plc.DataType(plc.TypeId.INT64)))
-    pass
-
-
-def test_polars_verbose_warns():
-    old_val = os.environ.get("POLARS_VERBOSE")
-    os.environ["POLARS_VERBOSE"] = "1"
-    df = pl.DataFrame({"a": [1, 2, 3]}).lazy()
-
-    invoke_unimplemented_op(df)
-
-    os.environ["POLARS_VERBOSE"] = old_val
+    monkeypatch.setattr(IR, "__post_init__", raise_unimplemented)
+    q = pl.LazyFrame({})
+    # Ensure that things raise
+    assert_ir_translation_raises(q, NotImplementedError)
+    with (
+        pl.Config(verbose=True),
+        pytest.raises(pl.exceptions.ComputeError),
+        pytest.warns(
+            pl.exceptions.PerformanceWarning,
+            match="Query execution with GPU not supported",
+        ),
+    ):
+        # And ensure that collecting issues the correct warning.
+        assert_gpu_result_equal(q)
