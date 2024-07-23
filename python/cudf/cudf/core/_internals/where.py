@@ -47,7 +47,7 @@ def _check_and_cast_columns_with_other(
 
     other_is_scalar = is_scalar(other)
     if other_is_scalar:
-        if isinstance(other, float) and not np.isnan(other):
+        if isinstance(other, (float, np.floating)) and not np.isnan(other):
             try:
                 is_safe = source_dtype.type(other) == other
             except OverflowError:
