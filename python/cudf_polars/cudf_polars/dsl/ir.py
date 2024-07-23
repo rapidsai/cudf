@@ -211,7 +211,7 @@ class Scan(IR):
         if self.typ == "json" and self.file_options.n_rows is not None:
             raise NotImplementedError("row limit in scan")
         if self.cloud_options is not None and any(
-            self.cloud_options[k] is not None for k in ("aws", "azure", "gcp")
+            self.cloud_options.get(k) is not None for k in ("aws", "azure", "gcp")
         ):
             raise NotImplementedError(
                 "Read from cloud storage"
