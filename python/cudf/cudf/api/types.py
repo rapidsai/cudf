@@ -90,7 +90,7 @@ def is_integer(obj):
     bool
     """
     if isinstance(obj, cudf.Scalar):
-        return pd.api.types.is_integer_dtype(obj.dtype)
+        return obj.dtype.kind in "iu"
     return pd.api.types.is_integer(obj)
 
 

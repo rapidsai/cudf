@@ -25,7 +25,6 @@ from typing_extensions import assert_never
 
 import polars as pl
 
-import cudf
 import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
@@ -205,12 +204,12 @@ class Scan(IR):
 
     def __post_init__(self) -> None:
         """Validate preconditions."""
-        if self.file_options.n_rows is not None:
-            raise NotImplementedError("row limit in scan")
         if self.typ not in ("csv", "parquet", "ndjson"):  # pragma: no cover
             # This line is unhittable ATM since IPC/Anonymous scan raise
             # on the polars side
             raise NotImplementedError(f"Unhandled scan type: {self.typ}")
+        if self.typ == "json" and self.file_options.n_rows is not None:
+            raise NotImplementedError("row limit in scan")
         if self.cloud_options is not None and any(
             self.cloud_options[k] is not None for k in ("aws", "azure", "gcp")
         ):
@@ -240,10 +239,6 @@ class Scan(IR):
         elif self.typ == "ndjson":
             # TODO: consider handling the low memory option here
             # (maybe use chunked JSON reader)
-            if self.reader_options["infer_schema_length"] != 100:
-                raise NotImplementedError(
-                    "infer_schema_length is not supported in the JSON reader"
-                )
             if self.reader_options["ignore_errors"]:
                 raise NotImplementedError(
                     "ignore_errors is not supported in the JSON reader"
@@ -254,11 +249,8 @@ class Scan(IR):
         options = self.file_options
         with_columns = options.with_columns
         row_index = options.row_index
+        nrows = self.file_options.n_rows if self.file_options.n_rows is not None else -1
         if self.typ == "csv":
-            dtype_map = {
-                name: cudf._lib.types.PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[typ.id()]
-                for name, typ in self.schema.items()
-            }
             parse_options = self.reader_options["parse_options"]
             sep = chr(parse_options["separator"])
             quote = chr(parse_options["quote_char"])
@@ -293,35 +285,49 @@ class Scan(IR):
             pieces = []
             for p in self.paths:
                 skiprows = self.reader_options["skip_rows"]
-                # TODO: read_csv expands globs which we should not do,
-                # because polars will already have handled them.
                 path = Path(p)
                 with path.open() as f:
                     while f.readline() == "\n":
                         skiprows += 1
-                pieces.append(
-                    cudf.read_csv(
-                        path,
-                        sep=sep,
-                        quotechar=quote,
-                        lineterminator=eol,
-                        names=column_names,
-                        header=header,
-                        usecols=usecols,
-                        na_filter=True,
-                        na_values=null_values,
-                        keep_default_na=False,
-                        skiprows=skiprows,
-                        comment=comment,
-                        decimal=decimal,
-                        dtype=dtype_map,
-                    )
+                tbl_w_meta = plc.io.csv.read_csv(
+                    plc.io.SourceInfo([path]),
+                    delimiter=sep,
+                    quotechar=quote,
+                    lineterminator=eol,
+                    col_names=column_names,
+                    header=header,
+                    usecols=usecols,
+                    na_filter=True,
+                    na_values=null_values,
+                    keep_default_na=False,
+                    skiprows=skiprows,
+                    comment=comment,
+                    decimal=decimal,
+                    dtypes=self.schema,
+                    nrows=nrows,
                 )
-            df = DataFrame.from_cudf(cudf.concat(pieces))
+                pieces.append(tbl_w_meta)
+            tables, colnames = zip(
+                *(
+                    (piece.tbl, piece.column_names(include_children=False))
+                    for piece in pieces
+                )
+            )
+            df = DataFrame.from_table(
+                plc.concatenate.concatenate(list(tables)),
+                colnames[0],
+            )
         elif self.typ == "parquet":
-            cdf = cudf.read_parquet(self.paths, columns=with_columns)
-            assert isinstance(cdf, cudf.DataFrame)
-            df = DataFrame.from_cudf(cdf)
+            tbl_w_meta = plc.io.parquet.read_parquet(
+                plc.io.SourceInfo(self.paths),
+                columns=with_columns,
+                num_rows=nrows,
+            )
+            df = DataFrame.from_table(
+                tbl_w_meta.tbl,
+                # TODO: consider nested column names?
+                tbl_w_meta.column_names(include_children=False),
+            )
         elif self.typ == "ndjson":
             json_schema: list[tuple[str, str, list]] = [
                 (name, typ, []) for name, typ in self.schema.items()
@@ -337,10 +343,11 @@ class Scan(IR):
             df = DataFrame.from_table(
                 plc_tbl_w_meta.tbl, plc_tbl_w_meta.column_names(include_children=False)
             )
-            # TODO: libcudf doesn't support column-projection (like usecols)
-            # We should change the prune_columns param to usecols there to support this
-            if with_columns is not None:
-                df = df.select(with_columns)
+            col_order = list(self.schema.keys())
+            if row_index is not None and row_index[0] in self.schema:
+                col_order.remove(row_index[0])
+            if col_order is not None:
+                df = df.select(col_order)
         else:
             raise NotImplementedError(
                 f"Unhandled scan type: {self.typ}"
@@ -367,13 +374,7 @@ class Scan(IR):
                 null_order=plc.types.NullOrder.AFTER,
             )
             df = DataFrame([index, *df.columns])
-        # TODO: should be true, but not the case until we get
-        # cudf-classic out of the loop for IO since it converts date32
-        # to datetime.
-        # assert all(
-        #     c.obj.type() == dtype
-        #     for c, dtype in zip(df.columns, self.schema.values())
-        # )
+        assert all(c.obj.type() == self.schema[c.name] for c in df.columns)
         if self.predicate is None:
             return df
         else:
@@ -1131,9 +1132,48 @@ class HConcat(IR):
     dfs: list[IR]
     """List of inputs."""
 
+    @staticmethod
+    def _extend_with_nulls(table: plc.Table, *, nrows: int) -> plc.Table:
+        """
+        Extend a table with nulls.
+
+        Parameters
+        ----------
+        table
+            Table to extend
+        nrows
+            Number of additional rows
+
+        Returns
+        -------
+        New pylibcudf table.
+        """
+        return plc.concatenate.concatenate(
+            [
+                table,
+                plc.Table(
+                    [
+                        plc.Column.all_null_like(column, nrows)
+                        for column in table.columns()
+                    ]
+                ),
+            ]
+        )
+
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
+        max_rows = max(df.num_rows for df in dfs)
+        # Horizontal concatenation extends shorter tables with nulls
+        dfs = [
+            df
+            if df.num_rows == max_rows
+            else DataFrame.from_table(
+                self._extend_with_nulls(df.table, nrows=max_rows - df.num_rows),
+                df.column_names,
+            )
+            for df in dfs
+        ]
         return DataFrame(
             list(itertools.chain.from_iterable(df.columns for df in dfs)),
         )

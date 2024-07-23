@@ -19,14 +19,7 @@ from cudf._lib.stream_compaction import (
 )
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
-from cudf.api.types import (
-    is_integer,
-    is_integer_dtype,
-    is_list_like,
-    is_scalar,
-    is_signed_integer_dtype,
-    is_unsigned_integer_dtype,
-)
+from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.errors import MixedTypeError
@@ -105,7 +98,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def argsort(self, *args, **kwargs):
+    def argsort(self, *args, **kwargs) -> cupy.ndarray:
         """Return the integer indices that would sort the index.
 
         Parameters vary by subclass.
@@ -621,12 +614,8 @@ class BaseIndex(Serializable):
                 # Bools + other types will result in mixed type.
                 # This is not yet consistent in pandas and specific to APIs.
                 raise MixedTypeError("Cannot perform union with mixed types")
-            if (
-                is_signed_integer_dtype(self.dtype)
-                and is_unsigned_integer_dtype(other.dtype)
-            ) or (
-                is_unsigned_integer_dtype(self.dtype)
-                and is_signed_integer_dtype(other.dtype)
+            if (self.dtype.kind == "i" and other.dtype.kind == "u") or (
+                self.dtype.kind == "u" and other.dtype.kind == "i"
             ):
                 # signed + unsigned types will result in
                 # mixed type for union in pandas.
@@ -1531,7 +1520,7 @@ class BaseIndex(Serializable):
         ascending=True,
         na_position="last",
         key=None,
-    ):
+    ) -> Self | tuple[Self, cupy.ndarray]:
         """
         Return a sorted copy of the index, and optionally return the indices
         that sorted the index itself.
@@ -2103,7 +2092,7 @@ class BaseIndex(Serializable):
 
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
-        if not is_integer_dtype(gather_map.dtype):
+        if gather_map.dtype.kind not in "iu":
             gather_map = gather_map.astype(size_type_dtype)
 
         if not _gather_map_is_valid(

@@ -2219,25 +2219,26 @@ def as_column(
                 and arbitrary.null_count > 0
             ):
                 arbitrary = arbitrary.cast(pa.float64())
-            if cudf.get_option(
-                "default_integer_bitwidth"
-            ) and pa.types.is_integer(arbitrary.type):
-                dtype = _maybe_convert_to_default_type("int")
-            elif cudf.get_option(
-                "default_float_bitwidth"
-            ) and pa.types.is_floating(arbitrary.type):
-                dtype = _maybe_convert_to_default_type("float")
+            if (
+                cudf.get_option("default_integer_bitwidth")
+                and pa.types.is_integer(arbitrary.type)
+            ) or (
+                cudf.get_option("default_float_bitwidth")
+                and pa.types.is_floating(arbitrary.type)
+            ):
+                dtype = _maybe_convert_to_default_type(
+                    cudf.dtype(arbitrary.type.to_pandas_dtype())
+                )
         except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
             arbitrary = pd.Series(arbitrary)
-            if cudf.get_option(
-                "default_integer_bitwidth"
-            ) and arbitrary.dtype.kind in set("iu"):
-                dtype = _maybe_convert_to_default_type("int")
-            elif (
+            if (
+                cudf.get_option("default_integer_bitwidth")
+                and arbitrary.dtype.kind in set("iu")
+            ) or (
                 cudf.get_option("default_float_bitwidth")
                 and arbitrary.dtype.kind == "f"
             ):
-                dtype = _maybe_convert_to_default_type("float")
+                dtype = _maybe_convert_to_default_type(arbitrary.dtype)
         return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
 
 

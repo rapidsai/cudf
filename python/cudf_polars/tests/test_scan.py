@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import os
+
 import pytest
 
 import polars as pl
@@ -22,15 +24,7 @@ def row_index(request):
 
 
 @pytest.fixture(
-    params=[
-        None,
-        pytest.param(
-            2, marks=pytest.mark.xfail(reason="No handling of row limit in scan")
-        ),
-        pytest.param(
-            3, marks=pytest.mark.xfail(reason="No handling of row limit in scan")
-        ),
-    ],
+    params=[None, 2, 3],
     ids=["all-rows", "n_rows-with-skip", "n_rows-no-skip"],
 )
 def n_rows(request):
@@ -42,9 +36,9 @@ def df():
     # TODO: more dtypes
     return pl.DataFrame(
         {
-            "a": [1, 2, 3, None],
-            "b": ["ẅ", "x", "y", "z"],
-            "c": [None, None, 4, 5],
+            "a": [1, 2, 3, None, 4, 5],
+            "b": ["ẅ", "x", "y", "z", "123", "abcd"],
+            "c": [None, None, 4, 5, -1, 0],
         }
     )
 
@@ -85,9 +79,15 @@ def make_source(df, path, format):
         ("parquet", pl.scan_parquet),
     ],
 )
-def test_scan(tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask):
+def test_scan(tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask, request):
     name, offset = row_index
     make_source(df, tmp_path / "file", format)
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(n_rows is not None and scan_fn is pl.scan_ndjson),
+            reason="libcudf does not support n_rows",
+        )
+    )
     q = scan_fn(
         tmp_path / "file",
         row_index_name=name,
@@ -146,6 +146,42 @@ def test_scan_csv_column_renames_projection_schema(tmp_path):
     )
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "filename,glob",
+    [
+        (["test1.csv", "test2.csv"], True),
+        ("test*.csv", True),
+        # Make sure we don't expand glob when
+        # trying to read a file like test*.csv
+        # when glob=False
+        ("test*.csv", False),
+    ],
+)
+def test_scan_csv_multi(tmp_path, filename, glob):
+    with (tmp_path / "test1.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+    with (tmp_path / "test2.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+    with (tmp_path / "test*.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+    os.chdir(tmp_path)
+    q = pl.scan_csv(filename, glob=glob)
+
+    assert_gpu_result_equal(q)
+
+
+def test_scan_csv_multi_differing_colnames(tmp_path):
+    with (tmp_path / "test1.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+    with (tmp_path / "test2.csv").open("w") as f:
+        f.write("""abc,def,ghi\n1,2\n3,4,5""")
+    q = pl.scan_csv(
+        [tmp_path / "test1.csv", tmp_path / "test2.csv"],
+    )
+    with pytest.raises(pl.exceptions.ComputeError):
+        q.explain()
 
 
 def test_scan_csv_skip_after_header_not_implemented(tmp_path):
@@ -216,7 +252,6 @@ def test_scan_csv_skip_initial_empty_rows(tmp_path):
     assert_gpu_result_equal(q)
 
 
-# @pytest.mark.xfail(reason="schema not getting passed through correctly in the polars IR")
 @pytest.mark.parametrize(
     "schema",
     [
@@ -229,12 +264,10 @@ def test_scan_ndjson_schema(df, tmp_path, schema):
     q = pl.scan_ndjson(tmp_path / "file", schema=schema)
     # TODO: can remove check_column_order once libcudf read_json supports
     # usecols
-    assert_gpu_result_equal(q, check_column_order=False)
+    assert_gpu_result_equal(q, check_column_order=True)
 
 
-@pytest.mark.parametrize(
-    "kwargs", [{"ignore_errors": True}, {"infer_schema_length": 200}]
-)
+@pytest.mark.parametrize("kwargs", [{"ignore_errors": True}])
 def test_scan_ndjson_unsupported(df, tmp_path, kwargs):
     make_source(df, tmp_path / "file", "ndjson")
     q = pl.scan_ndjson(tmp_path / "file", **kwargs)
