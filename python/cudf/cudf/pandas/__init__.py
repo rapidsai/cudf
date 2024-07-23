@@ -37,24 +37,18 @@ def install():
 
     free_memory, _ = rmm.mr.available_device_memory()
     free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
-
+    new_mr = current_mr
     if rmm_mode == "pool":
-        current_mr = rmm.mr.set_current_device_resource(
-            rmm.mr.PoolMemoryResource(
-                current_mr,
-                initial_pool_size=free_memory,
-            )
+        new_mr = rmm.mr.PoolMemoryResource(
+            current_mr,
+            initial_pool_size=free_memory,
         )
     elif rmm_mode == "async":
-        current_mr = rmm.mr.CudaAsyncMemoryResource(
-            initial_pool_size=free_memory
-        )
+        new_mr = rmm.mr.CudaAsyncMemoryResource(initial_pool_size=free_memory)
     elif rmm_mode == "managed":
-        current_mr = rmm.mr.PrefetchResourceAdaptor(
-            rmm.mr.ManagedMemoryResource()
-        )
+        new_mr = rmm.mr.PrefetchResourceAdaptor(rmm.mr.ManagedMemoryResource())
     elif rmm_mode == "managed_pool":
-        current_mr = rmm.mr.PrefetchResourceAdaptor(
+        new_mr = rmm.mr.PrefetchResourceAdaptor(
             rmm.mr.PoolMemoryResource(
                 rmm.mr.ManagedMemoryResource(),
                 initial_pool_size=free_memory,
@@ -62,7 +56,7 @@ def install():
         )
     elif rmm_mode != "cuda":
         raise ValueError(f"Unsupported {rmm_mode=}")
-    rmm.mr.set_current_device_resource(current_mr)
+    rmm.mr.set_current_device_resource(new_mr)
     return rmm_mode
 
 
