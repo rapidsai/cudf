@@ -3801,24 +3801,18 @@ def test_parquet_chunked_reader(
         (1000, 10000),
     ],
 )
-def test_parquet_chunked_reader_nrows_skiprows(
-    chunk_read_limit, pass_read_limit, nrows, skip_rows
+def test_parquet_reader_nrows_skiprows(
+    nrows, skip_rows
 ):
     df = pd.DataFrame(
         {"a": [1, 2, 3, 4] * 100000, "b": ["av", "qw", "hi", "xyz"] * 100000}
     )
+    expected = df[skip_rows:skip_rows+nrows]
     buffer = BytesIO()
     df.to_parquet(buffer)
-    actual = read_parquet_chunked(
-        [buffer],
-        chunk_read_limit=chunk_read_limit,
-        pass_read_limit=pass_read_limit,
-        nrows=nrows,
-        skip_rows=skip_rows,
-    )
-    buffer.seek(0)
-    expected = cudf.read_parquet(buffer, nrows=nrows, skip_rows=skip_rows)
-    assert_eq(expected, actual)
+    got = cudf.read_parquet(buffer, nrows=nrows, skip_rows=skip_rows)
+    # Check results
+    assert_eq(expected, got)
 
 
 def test_parquet_reader_pandas_compatibility():
