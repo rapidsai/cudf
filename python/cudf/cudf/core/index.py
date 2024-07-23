@@ -1815,6 +1815,20 @@ class DatetimeIndex(Index):
             value, side=side, ascending=ascending, na_position=na_position
         )
 
+    def as_unit(self, unit: str, round_ok: bool = True) -> Self:
+        """
+        Convert to a dtype with the given unit resolution.
+
+        Currently not implemented.
+
+        Parameters
+        ----------
+        unit : {'s', 'ms', 'us', 'ns'}
+        round_ok : bool, default True
+            If False and the conversion requires rounding, raise ValueError.
+        """
+        raise NotImplementedError("as_unit is currently not implemented")
+
     def mean(self, *, skipna: bool = True, axis: int | None = 0):
         return self._column.mean(skipna=skipna)
 
@@ -1842,12 +1856,27 @@ class DatetimeIndex(Index):
         return self._column.astype("int64").values
 
     @property
+    def inferred_freq(self) -> cudf.DateOffset | None:
+        raise NotImplementedError("inferred_freq is currently not implemented")
+
+    @property
     def freq(self) -> cudf.DateOffset | None:
         return self._freq
 
     @freq.setter
     def freq(self) -> None:
         raise NotImplementedError("Setting freq is currently not supported.")
+
+    @property
+    def freqstr(self) -> str:
+        raise NotImplementedError("freqstr is currently not implemented")
+
+    @property
+    def resolution(self) -> str:
+        """
+        Returns day, hour, minute, second, millisecond or microsecond
+        """
+        raise NotImplementedError("resolution is currently not implemented")
 
     @property
     def unit(self) -> str:
@@ -1882,6 +1911,20 @@ class DatetimeIndex(Index):
             An ndarray of ``datetime.datetime`` objects.
         """
         return self.to_pandas().to_pydatetime()
+
+    def to_julian_date(self) -> Index:
+        return Index._from_data({self.name: self._column.to_julian_date()})
+
+    def to_period(self, freq) -> pd.PeriodIndex:
+        return self.to_pandas().to_period(freq=freq)
+
+    def normalize(self) -> Self:
+        """
+        Convert times to midnight.
+
+        Currently not implemented.
+        """
+        return type(self)._from_data({self.name: self._column.normalize()})
 
     @property
     def time(self) -> np.ndarray:
@@ -1954,6 +1997,13 @@ class DatetimeIndex(Index):
         return self._column.is_year_start.values
 
     @property
+    def is_normalized(self) -> bool:
+        """
+        Returns True if all of the dates are at midnight ("no time")
+        """
+        return self._column.is_normalized
+
+    @property
     def days_in_month(self) -> Index:
         """
         Get the total number of days in the month that the date falls on.
@@ -1961,6 +2011,13 @@ class DatetimeIndex(Index):
         return Index._from_data({self.name: self._column.days_in_month})
 
     daysinmonth = days_in_month
+
+    @property
+    def day_of_week(self) -> Index:
+        """
+        Get the day of week that the date falls on.
+        """
+        return Index._from_data({self.name: self._column.day_of_week})
 
     @property  # type: ignore
     @_performance_tracking

@@ -332,6 +332,24 @@ class DatetimeColumn(column.ColumnBase):
         return libcudf.datetime.days_in_month(self)
 
     @property
+    def day_of_week(self) -> ColumnBase:
+        raise NotImplementedError("day_of_week is currently not implemented.")
+
+    @property
+    def is_normalized(self) -> bool:
+        raise NotImplementedError(
+            "is_normalized is currently not implemented."
+        )
+
+    def to_julian_date(self) -> ColumnBase:
+        raise NotImplementedError(
+            "to_julian_date is currently not implemented."
+        )
+
+    def normalize(self) -> ColumnBase:
+        raise NotImplementedError("normalize is currently not implemented.")
+
+    @property
     def values(self):
         """
         Return a CuPy representation of the DateTimeColumn.
