@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import os
+
 import pytest
 
 import polars as pl
@@ -10,6 +12,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils import versions
 
 
 @pytest.fixture(
@@ -21,15 +24,7 @@ def row_index(request):
 
 
 @pytest.fixture(
-    params=[
-        None,
-        pytest.param(
-            2, marks=pytest.mark.xfail(reason="No handling of row limit in scan")
-        ),
-        pytest.param(
-            3, marks=pytest.mark.xfail(reason="No handling of row limit in scan")
-        ),
-    ],
+    params=[None, 2, 3],
     ids=["all-rows", "n_rows-with-skip", "n_rows-no-skip"],
 )
 def n_rows(request):
@@ -97,6 +92,10 @@ def test_scan_unsupported_raises(tmp_path):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+@pytest.mark.xfail(
+    versions.POLARS_VERSION_LT_11,
+    reason="https://github.com/pola-rs/polars/issues/15730",
+)
 def test_scan_row_index_projected_out(tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
 
@@ -122,6 +121,42 @@ def test_scan_csv_column_renames_projection_schema(tmp_path):
     )
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "filename,glob",
+    [
+        (["test1.csv", "test2.csv"], True),
+        ("test*.csv", True),
+        # Make sure we don't expand glob when
+        # trying to read a file like test*.csv
+        # when glob=False
+        ("test*.csv", False),
+    ],
+)
+def test_scan_csv_multi(tmp_path, filename, glob):
+    with (tmp_path / "test1.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+    with (tmp_path / "test2.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+    with (tmp_path / "test*.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+    os.chdir(tmp_path)
+    q = pl.scan_csv(filename, glob=glob)
+
+    assert_gpu_result_equal(q)
+
+
+def test_scan_csv_multi_differing_colnames(tmp_path):
+    with (tmp_path / "test1.csv").open("w") as f:
+        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+    with (tmp_path / "test2.csv").open("w") as f:
+        f.write("""abc,def,ghi\n1,2\n3,4,5""")
+    q = pl.scan_csv(
+        [tmp_path / "test1.csv", tmp_path / "test2.csv"],
+    )
+    with pytest.raises(pl.exceptions.ComputeError):
+        q.explain()
 
 
 def test_scan_csv_skip_after_header_not_implemented(tmp_path):

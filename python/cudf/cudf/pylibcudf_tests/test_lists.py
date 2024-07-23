@@ -22,6 +22,11 @@ def column():
     return pa.array([3, 2, 5, 6]), pa.array([-1, 0, 0, 0], type=pa.int32())
 
 
+@pytest.fixture
+def lists_column():
+    return [[4, 2, 3, 1], [1, 2, None, 4], [-10, 10, 10, 0]]
+
+
 def test_concatenate_rows(test_data):
     arrow_tbl = pa.Table.from_arrays(test_data[0], names=["a", "b"])
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
@@ -181,3 +186,54 @@ def test_extract_list_element_column(test_data):
     expect = pa.array([0, None, None, 7])
 
     assert_column_eq(expect, res)
+
+
+def test_count_elements(test_data):
+    arr = pa.array(test_data[0][1])
+    plc_column = plc.interop.from_arrow(arr)
+    res = plc.lists.count_elements(plc_column)
+
+    expect = pa.array([1, 1, 0, 3], type=pa.int32())
+
+    assert_column_eq(expect, res)
+
+
+@pytest.mark.parametrize(
+    "ascending,na_position,expected",
+    [
+        (
+            True,
+            plc.types.NullOrder.BEFORE,
+            [[1, 2, 3, 4], [None, 1, 2, 4], [-10, 0, 10, 10]],
+        ),
+        (
+            True,
+            plc.types.NullOrder.AFTER,
+            [[1, 2, 3, 4], [1, 2, 4, None], [-10, 0, 10, 10]],
+        ),
+        (
+            False,
+            plc.types.NullOrder.BEFORE,
+            [[4, 3, 2, 1], [4, 2, 1, None], [10, 10, 0, -10]],
+        ),
+        (
+            False,
+            plc.types.NullOrder.AFTER,
+            [[4, 3, 2, 1], [None, 4, 2, 1], [10, 10, 0, -10]],
+        ),
+        (
+            False,
+            plc.types.NullOrder.AFTER,
+            [[4, 3, 2, 1], [None, 4, 2, 1], [10, 10, 0, -10]],
+        ),
+    ],
+)
+def test_sort_lists(lists_column, ascending, na_position, expected):
+    plc_column = plc.interop.from_arrow(pa.array(lists_column))
+    res = plc.lists.sort_lists(plc_column, ascending, na_position, False)
+    res_stable = plc.lists.sort_lists(plc_column, ascending, na_position, True)
+
+    expect = pa.array(expected)
+
+    assert_column_eq(expect, res)
+    assert_column_eq(expect, res_stable)
