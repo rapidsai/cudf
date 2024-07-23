@@ -154,7 +154,7 @@ def test_slice_column(slice_column_data):
 
 @pytest.mark.parametrize(
     "target, repl",
-    [("a", "a"), ("Wı", "☺"), ("doesnotexist", "blahblah")],  # noqa: RUF001
+    [("a", "a"), ("Wı", "☺"), ("FG", ""), ("doesnotexist", "blahblah")],  # noqa: RUF001
 )
 @pytest.mark.parametrize("n", [0, 3, -1])
 def test_replace_literal(ldf, target, repl, n):
@@ -177,9 +177,9 @@ def test_replace_re(ldf):
     "target,repl",
     [
         (["A", "de", "kLm", "awef"], "a"),
+        (["A", "de", "kLm", "awef"], ""),
         (["A", "de", "kLm", "awef"], ["a", "b", "c", "d"]),
-        # Test an expression, cannot use pl.col('a') since it contains nulls
-        # which replace_many doesn't support
+        (["A", "de", "kLm", "awef"], ["a", "b", "c", ""]),
         (
             pl.lit(pl.Series(["A", "de", "kLm", "awef"])),
             pl.lit(pl.Series(["a", "b", "c", "d"])),

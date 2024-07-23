@@ -752,6 +752,14 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "ascii_case_insensitive not implemented for replace_many"
                 )
+            target = self.children[1]
+            if target.value == pa.scalar("", type=pa.string()):
+                # libcudf ignores empty strings for replace_many
+                # polars inserts the replacement after every character
+                raise NotImplementedError(
+                    "libcudf replace_many is implemented differently from polars "
+                    "for empty strings"
+                )
         elif self.name == pl_expr.StringFunction.Slice:
             if not all(isinstance(child, Literal) for child in self.children[1:]):
                 raise NotImplementedError(
