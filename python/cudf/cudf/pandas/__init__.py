@@ -33,8 +33,8 @@ def install():
             f"cudf.pandas detected an already configured memory resource, ignoring 'CUDF_PANDAS_RMM_MODE'={str(rmm_mode)}",
             UserWarning,
         )
-        return
-    enable_prefetching = "managed" in rmm_mode
+        return rmm_mode
+
     free_memory, _ = rmm.mr.available_device_memory()
     free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
 
@@ -63,14 +63,7 @@ def install():
     elif rmm_mode != "cuda":
         raise ValueError(f"Unsupported {rmm_mode=}")
     rmm.mr.set_current_device_resource(current_mr)
-    if enable_prefetching:
-        for key in {
-            "column_view::get_data",
-            "mutable_column_view::get_data",
-            "gather",
-            "hash_join",
-        }:
-            pylibcudf.experimental.enable_prefetching(key)
+    return rmm_mode
 
 
 def pytest_load_initial_conftests(early_config, parser, args):
