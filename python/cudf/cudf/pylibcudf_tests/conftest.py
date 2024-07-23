@@ -141,10 +141,39 @@ def table_data(request):
     ), pa_table
 
 
+@pytest.fixture(params=[(0, 0), ("half", 0), (-1, "half")])
+def nrows_skiprows(table_data, request):
+    """
+    Parametrized nrows fixture that accompanies table_data
+    """
+    _, pa_table = table_data
+    nrows, skiprows = request.param
+    if nrows == "half":
+        nrows = len(pa_table) // 2
+    if skiprows == "half":
+        skiprows = (len(pa_table) - nrows) // 2
+    return nrows, skiprows
+
+
 @pytest.fixture(
     params=["a.txt", pathlib.Path("a.txt"), io.BytesIO, io.StringIO],
 )
 def source_or_sink(request, tmp_path):
+    fp_or_buf = request.param
+    if isinstance(fp_or_buf, str):
+        return f"{tmp_path}/{fp_or_buf}"
+    elif isinstance(fp_or_buf, os.PathLike):
+        return tmp_path.joinpath(fp_or_buf)
+    elif issubclass(fp_or_buf, io.IOBase):
+        # Must construct io.StringIO/io.BytesIO inside
+        # fixture, or we'll end up re-using it
+        return fp_or_buf()
+
+
+@pytest.fixture(
+    params=["a.txt", pathlib.Path("a.txt"), io.BytesIO],
+)
+def binary_source_or_sink(request, tmp_path):
     fp_or_buf = request.param
     if isinstance(fp_or_buf, str):
         return f"{tmp_path}/{fp_or_buf}"

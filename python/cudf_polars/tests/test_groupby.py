@@ -12,6 +12,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils import versions
 
 
 @pytest.fixture
@@ -100,7 +101,7 @@ def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs):
         with pytest.raises(AssertionError):
             # https://github.com/pola-rs/polars/issues/17556
             assert_gpu_result_equal(q, check_exact=False)
-        if schema[sort_keys[1]] == pl.Boolean():
+        if versions.POLARS_VERSION_LT_12 and schema[sort_keys[1]] == pl.Boolean():
             # https://github.com/pola-rs/polars/issues/17557
             with pytest.raises(AssertionError):
                 assert_gpu_result_equal(qsorted, check_exact=False)
@@ -154,3 +155,31 @@ def test_groupby_nan_minmax_raises(op):
     q = df.group_by("key").agg(op(pl.col("value")))
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        pytest.param(
+            1,
+            marks=pytest.mark.xfail(
+                versions.POLARS_VERSION_GE_121, reason="polars 1.2.1 disallows this"
+            ),
+        ),
+        pl.col("key1"),
+    ],
+)
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.lit(1).alias("value"),
+        pl.lit([[4, 5, 6]]).alias("value"),
+        pl.col("float") * (1 - pl.col("int")),
+        [pl.lit(2).alias("value"), pl.col("float") * 2],
+    ],
+)
+def test_groupby_literal_in_agg(df, key, expr):
+    # check_row_order=False doesn't work for list aggregations
+    # so just sort by the group key
+    q = df.group_by(key).agg(expr).sort(key, maintain_order=True)
+    assert_gpu_result_equal(q)

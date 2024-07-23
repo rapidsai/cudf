@@ -1,5 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from libcpp cimport bool
+
 from cudf._lib.pylibcudf.libcudf.binaryop cimport binary_operator
 
 from .column cimport Column
@@ -21,4 +23,11 @@ cpdef Column binary_operation(
     RightBinaryOperand rhs,
     binary_operator op,
     DataType output_type
+)
+
+cpdef bool is_supported_operation(
+    DataType out,
+    DataType lhs,
+    DataType rhs,
+    binary_operator op
 )
