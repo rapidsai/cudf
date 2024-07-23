@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+import numpy as np
 import pyarrow as pa
 import pytest
 from utils import assert_column_eq
@@ -216,16 +217,36 @@ def test_apply_boolean_mask(list_column, bool_column):
 @pytest.mark.parametrize(
     "nans_equal,nulls_equal,expected",
     [
-        (True, True, [[0, 1, 2, 3], [3, 1, 2], None, [4, None, 5]]),
+        (True, True, [[np.nan, 0, 1, 2, 3], [3, 1, 2], None, [4, None, 5]]),
         (
             False,
             True,
-            [[0, 1, 2, 3], [3, 1, 2], None, [4, None, None, 5]],
+            [[np.nan, 0, 1, 2, 3], [3, 1, 2], None, [4, None, None, 5]],
+        ),
+        (
+            True,
+            False,
+            [[np.nan, np.nan, 0, 1, 2, 3], [3, 1, 2], None, [4, None, 5]],
+        ),
+        (
+            False,
+            False,
+            [
+                [np.nan, np.nan, 0, 1, 2, 3],
+                [3, 1, 2],
+                None,
+                [4, None, None, 5],
+            ],
         ),
     ],
 )
-def test_distinct(nans_equal, nulls_equal, expected):
-    list_column = [[0, 1, 2, 3, 2], [3, 1, 2], None, [4, None, None, 5]]
+def test_distinct(list_column, nans_equal, nulls_equal, expected):
+    list_column = [
+        [np.nan, np.nan, 0, 1, 2, 3, 2],
+        [3, 1, 2],
+        None,
+        [4, None, None, 5],
+    ]
     arr = pa.array(list_column)
     plc_column = plc.interop.from_arrow(arr)
 
