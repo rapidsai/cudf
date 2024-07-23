@@ -23,7 +23,7 @@ def scalar():
 
 
 @pytest.fixture
-def column():
+def search_key_column():
     return pa.array([3, 2, 5, 6]), pa.array([-1, 0, 0, 0], type=pa.int32())
 
 
@@ -86,9 +86,9 @@ def test_contains_scalar(list_column, scalar):
     assert_column_eq(expect, res)
 
 
-def test_contains_list_column(list_column, column):
+def test_contains_list_column(list_column, search_key_column):
     list_column1 = list_column
-    list_column2, _ = column
+    list_column2, _ = search_key_column
     arr1 = pa.array(list_column1)
     arr2 = pa.array(list_column2)
 
@@ -136,14 +136,14 @@ def test_index_of_scalar(list_column, scalar):
     assert_column_eq(expect, res)
 
 
-def test_index_of_list_column(list_column, column):
+def test_index_of_list_column(list_column, search_key_column):
     arr1 = pa.array(list_column)
-    arr2, expect = column
+    arr2, expect = search_key_column
     plc_column1 = plc.interop.from_arrow(arr1)
     plc_column2 = plc.interop.from_arrow(arr2)
     res = plc.lists.index_of(plc_column1, plc_column2, True)
 
-    expect = pa.array(column[1], type=pa.int32())
+    expect = pa.array(search_key_column[1], type=pa.int32())
 
     assert_column_eq(expect, res)
 
@@ -213,14 +213,25 @@ def test_apply_boolean_mask(list_column, bool_column):
     assert_column_eq(expect, res)
 
 
-def test_distinct():
+@pytest.mark.parametrize(
+    "nans_equal,nulls_equal,expected",
+    [
+        (True, True, [[0, 1, 2, 3], [3, 1, 2], None, [4, None, 5]]),
+        (
+            False,
+            True,
+            [[0, 1, 2, 3], [3, 1, 2], None, [4, None, None, 5]],
+        ),
+    ],
+)
+def test_distinct(nans_equal, nulls_equal, expected):
     list_column = [[0, 1, 2, 3, 2], [3, 1, 2], None, [4, None, None, 5]]
     arr = pa.array(list_column)
     plc_column = plc.interop.from_arrow(arr)
 
-    res = plc.lists.distinct(plc_column, True, True)
+    res = plc.lists.distinct(plc_column, nans_equal, nulls_equal)
 
-    expect = pa.array([[0, 1, 2, 3], [3, 1, 2], None, [4, None, 5]])
+    expect = pa.array(expected)
 
     assert_column_eq(expect, res)
 
