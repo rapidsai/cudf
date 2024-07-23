@@ -2680,6 +2680,10 @@ class CategoricalIndex(Index):
             data = data.as_ordered(ordered=False)
         super().__init__(data, name=name)
 
+    @property
+    def ordered(self) -> bool:
+        return self._column.ordered
+
     @property  # type: ignore
     @_performance_tracking
     def codes(self):
@@ -2701,6 +2705,118 @@ class CategoricalIndex(Index):
 
     def _is_categorical(self):
         return True
+
+    def add_categories(self, new_categories) -> Self:
+        """
+        Add new categories.
+
+        `new_categories` will be included at the last/highest place in the
+        categories and will be unused directly after this call.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.add_categories(new_categories)}
+        )
+
+    def as_ordered(self) -> Self:
+        """
+        Set the Categorical to be ordered.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.as_ordered(ordered=True)}
+        )
+
+    def as_unordered(self) -> Self:
+        """
+        Set the Categorical to be unordered.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.as_ordered(ordered=False)}
+        )
+
+    def remove_categories(self, removals) -> Self:
+        """
+        Remove the specified categories.
+
+        `removals` must be included in the old categories.
+
+        Parameters
+        ----------
+        removals : category or list of categories
+           The categories which should be removed.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.remove_categories(removals)}
+        )
+
+    def remove_unused_categories(self) -> Self:
+        """
+        Remove categories which are not used.
+
+        This method is currently not supported.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.remove_unused_categories()}
+        )
+
+    def rename_categories(self, new_categories) -> Self:
+        """
+        Rename categories.
+
+        This method is currently not supported.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.rename_categories(new_categories)}
+        )
+
+    def reorder_categories(self, new_categories, ordered=None) -> Self:
+        """
+        Reorder categories as specified in new_categories.
+
+        ``new_categories`` need to include all old categories and no new category
+        items.
+
+        Parameters
+        ----------
+        new_categories : Index-like
+           The categories in new order.
+        ordered : bool, optional
+           Whether or not the categorical is treated as a ordered categorical.
+           If not given, do not change the ordered information.
+        """
+        return type(self)._from_data(
+            {
+                self.name: self._column.reorder_categories(
+                    new_categories, ordered=ordered
+                )
+            }
+        )
+
+    def set_categories(
+        self, new_categories, ordered=None, rename: bool = False
+    ) -> Self:
+        """
+        Set the categories to the specified new_categories.
+
+        Parameters
+        ----------
+        new_categories : list-like
+            The categories in new order.
+        ordered : bool, default None
+            Whether or not the categorical is treated as
+            a ordered categorical. If not given, do
+            not change the ordered information.
+        rename : bool, default False
+            Whether or not the `new_categories` should be
+            considered as a rename of the old categories
+            or as reordered categories.
+        """
+        return type(self)._from_data(
+            {
+                self.name: self._column.set_categories(
+                    new_categories, ordered=ordered, rename=rename
+                )
+            }
+        )
 
 
 @_performance_tracking
