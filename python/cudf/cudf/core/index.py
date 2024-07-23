@@ -2513,6 +2513,37 @@ class TimedeltaIndex(Index):
             return pd.Timedelta(value)
         return value
 
+    @property
+    def unit(self) -> str:
+        return self._column.time_unit
+
+    def to_pytimedelta(self) -> np.ndarray:
+        """
+        Return an ndarray of ``datetime.timedelta`` objects.
+
+        Returns
+        -------
+        numpy.ndarray
+            An ndarray of ``datetime.timedelta`` objects.
+        """
+        return self.to_pandas().to_pytimedelta()
+
+    @property
+    def asi8(self) -> cupy.ndarray:
+        return self._column.astype("int64").values
+
+    def sum(self, *, skipna: bool = True, axis: int | None = 0):
+        return self._column.sum(skipna=skipna)
+
+    def mean(self, *, skipna: bool = True, axis: int | None = 0):
+        return self._column.mean(skipna=skipna)
+
+    def median(self, *, skipna: bool = True, axis: int | None = 0):
+        return self._column.median(skipna=skipna)
+
+    def std(self, *, skipna: bool = True, axis: int | None = 0, ddof: int = 1):
+        return self._column.std(skipna=skipna, ddof=ddof)
+
     @property  # type: ignore
     @_performance_tracking
     def days(self):
