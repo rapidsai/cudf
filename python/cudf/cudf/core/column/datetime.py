@@ -293,7 +293,7 @@ class DatetimeColumn(column.ColumnBase):
     @property
     def is_month_end(self) -> ColumnBase:
         last_day_col = libcudf.datetime.last_day_of_month(self)
-        return (self.day == last_day_col).fillna(False)
+        return (self.day == last_day_col.day).fillna(False)
 
     @property
     def is_quarter_end(self) -> ColumnBase:
