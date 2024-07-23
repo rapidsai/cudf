@@ -27,12 +27,12 @@ else()
 endif()
 
 if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS-${RAPIDS_VERSION_MAJOR_MINOR}.cmake")
-  set(rapids-cmake-repo KyleFromNVIDIA/rapids-cmake)
-  set(rapids-cmake-branch bs-thread-pool)
   file(
     DOWNLOAD
     "https://raw.githubusercontent.com/KyleFromNVIDIA/rapids-cmake/bs-thread-pool/RAPIDS.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS-${RAPIDS_VERSION_MAJOR_MINOR}.cmake"
   )
 endif()
+set(rapids-cmake-repo KyleFromNVIDIA/rapids-cmake)
+set(rapids-cmake-branch bs-thread-pool)
 include("${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS-${RAPIDS_VERSION_MAJOR_MINOR}.cmake")
