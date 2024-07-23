@@ -1512,9 +1512,10 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
           _stream,
           _mr);
         memset_bufs.push_back(cudf::device_span<uint64_t>(static_cast<uint64_t*>(out_buf.data()),
-                                                          out_buf.data_size() / 8));
-        nullmask_bufs.push_back(cudf::device_span<uint64_t>(
-          reinterpret_cast<uint64_t*>(out_buf.null_mask()), out_buf.null_mask_size() / 8));
+                                                          out_buf.data_size() / sizeof(uint64_t)));
+        nullmask_bufs.push_back(
+          cudf::device_span<uint64_t>(reinterpret_cast<uint64_t*>(out_buf.null_mask()),
+                                      out_buf.null_mask_size() / sizeof(uint64_t)));
       }
     }
   }
@@ -1591,16 +1592,18 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
           // allocate
           // we're going to start null mask as all valid and then turn bits off if necessary
           out_buf.create_with_mask(size, cudf::mask_state::UNINITIALIZED, _stream, _mr);
-          memset_bufs.push_back(cudf::device_span<uint64_t>(static_cast<uint64_t*>(out_buf.data()),
-                                                            out_buf.data_size() / 8));
-          nullmask_bufs.push_back(cudf::device_span<uint64_t>(
-            reinterpret_cast<uint64_t*>(out_buf.null_mask()), out_buf.null_mask_size() / 8));
+          memset_bufs.push_back(cudf::device_span<uint64_t>(
+            static_cast<uint64_t*>(out_buf.data()), out_buf.data_size() / sizeof(uint64_t)));
+          nullmask_bufs.push_back(
+            cudf::device_span<uint64_t>(reinterpret_cast<uint64_t*>(out_buf.null_mask()),
+                                        out_buf.null_mask_size() / sizeof(uint64_t)));
         }
       }
     }
   }
   multibuffer_memset(memset_bufs, 0UL, _stream, _mr);
-  multibuffer_memset(nullmask_bufs, 0xFFFFFFFFFFFFFFFF, _stream, _mr);
+  // Need to set null mask bufs to all high bits
+  multibuffer_memset(nullmask_bufs, ULLONG_MAX, _stream, _mr);
 }
 
 std::vector<size_t> reader::impl::calculate_page_string_offsets()
