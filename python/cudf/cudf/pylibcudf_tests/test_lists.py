@@ -5,6 +5,7 @@ import pytest
 from utils import assert_column_eq
 
 from cudf._lib import pylibcudf as plc
+import numpy as np
 
 
 @pytest.fixture
@@ -24,9 +25,14 @@ def column():
 
 @pytest.fixture
 def set_lists_column():
-    lhs = [[2, 1, 2], [1, 2, 3], None, [4, None, 5]]
-    rhs = [[1, 2, 3], [4, 5], [None, 7, 8], [None, None]]
+    lhs = [[np.nan, np.nan, 2, 1, 2], [1, 2, 3], None, [4, None, 5]]
+    rhs = [[np.nan, 1, 2, 3], [4, 5], [None, 7, 8], [None, None]]
     return lhs, rhs
+
+
+@pytest.fixture
+def lists_column():
+    return [[4, 2, 3, 1], [1, 2, None, 4], [-10, 10, 10, 0]]
 
 
 def test_concatenate_rows(test_data):
@@ -201,6 +207,47 @@ def test_count_elements(test_data):
 
 
 @pytest.mark.parametrize(
+    "ascending,na_position,expected",
+    [
+        (
+            True,
+            plc.types.NullOrder.BEFORE,
+            [[1, 2, 3, 4], [None, 1, 2, 4], [-10, 0, 10, 10]],
+        ),
+        (
+            True,
+            plc.types.NullOrder.AFTER,
+            [[1, 2, 3, 4], [1, 2, 4, None], [-10, 0, 10, 10]],
+        ),
+        (
+            False,
+            plc.types.NullOrder.BEFORE,
+            [[4, 3, 2, 1], [4, 2, 1, None], [10, 10, 0, -10]],
+        ),
+        (
+            False,
+            plc.types.NullOrder.AFTER,
+            [[4, 3, 2, 1], [None, 4, 2, 1], [10, 10, 0, -10]],
+        ),
+        (
+            False,
+            plc.types.NullOrder.AFTER,
+            [[4, 3, 2, 1], [None, 4, 2, 1], [10, 10, 0, -10]],
+        ),
+    ],
+)
+def test_sort_lists(lists_column, ascending, na_position, expected):
+    plc_column = plc.interop.from_arrow(pa.array(lists_column))
+    res = plc.lists.sort_lists(plc_column, ascending, na_position, False)
+    res_stable = plc.lists.sort_lists(plc_column, ascending, na_position, True)
+
+    expect = pa.array(expected)
+
+    assert_column_eq(expect, res)
+    assert_column_eq(expect, res_stable)
+
+
+@pytest.mark.parametrize(
     "set_operation,nans_equal,nulls_equal,expected",
     [
         (
@@ -210,22 +257,46 @@ def test_count_elements(test_data):
             [[], [1, 2, 3], None, [4, 5]],
         ),
         (
+            plc.lists.difference_distinct,
+            False,
+            True,
+            [[], [1, 2, 3], None, [4, None, 5]],
+        ),
+        (
             plc.lists.have_overlap,
             True,
             True,
             [True, False, None, True],
         ),
         (
+            plc.lists.have_overlap,
+            False,
+            False,
+            [True, False, None, False],
+        ),
+        (
             plc.lists.intersect_distinct,
             True,
             True,
+            [[np.nan, 1, 2], [], None, [None]],
+        ),
+        (
+            plc.lists.intersect_distinct,
+            True,
+            False,
             [[1, 2], [], None, [None]],
         ),
         (
             plc.lists.union_distinct,
             False,
             True,
-            [[2, 1, 3], [1, 2, 3, 4, 5], None, [4, None, 5, None, None]],
+            [[np.nan, 2, 1, 3], [1, 2, 3, 4, 5], None, [4, None, 5, None, None]],
+        ),
+        (
+            plc.lists.union_distinct,
+            False,
+            False,
+            [[np.nan, np.nan, 2, 1, np.nan, 3], [1, 2, 3, 4, 5], None, [4, None, 5, None, None]],
         ),
     ],
 )
@@ -240,6 +311,9 @@ def test_set_operations(
         nans_equal,
         nulls_equal,
     )
-    expect = pa.array(expected)
 
+    if (set_operation != plc.lists.have_overlap):
+        expect = pa.array(expected, type=pa.list_(pa.float64()))
+    else:
+        expect = pa.array(expected)
     assert_column_eq(expect, res)
