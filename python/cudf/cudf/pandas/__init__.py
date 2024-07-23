@@ -25,7 +25,11 @@ def install():
     global LOADED
     LOADED = loader is not None
 
-    if (rmm_mode := os.getenv("CUDF_PANDAS_RMM_MODE", None)) is not None:
+    if (
+        rmm_mode := os.getenv("CUDF_PANDAS_RMM_MODE", "managed_pool")
+    ) is not None:
+        if rmm_mode == "disable":
+            return
         # Check if a non-default memory resource is set
         current_mr = rmm.mr.get_current_device_resource()
         if not isinstance(current_mr, rmm.mr.CudaMemoryResource):
@@ -62,6 +66,15 @@ def install():
             rmm.mr.set_current_device_resource(mr)
         else:
             raise ValueError(f"Unsupported rmm mode: {rmm_mode}")
+        from cudf._lib import pylibcudf
+
+        for item in {
+            "column_view::get_data",
+            "mutable_column_view::get_data",
+            "gather",
+            "hash_join",
+        }:
+            pylibcudf.experimental.enable_prefetching(item)
 
 
 def pytest_load_initial_conftests(early_config, parser, args):
