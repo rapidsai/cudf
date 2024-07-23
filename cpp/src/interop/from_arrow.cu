@@ -78,6 +78,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
       }
     }
     case arrow::Type::STRING: return data_type(type_id::STRING);
+    case arrow::Type::LARGE_STRING: return data_type(type_id::STRING);
     case arrow::Type::DICTIONARY: return data_type(type_id::DICTIONARY32);
     case arrow::Type::LIST: return data_type(type_id::LIST);
     case arrow::Type::DECIMAL: {
@@ -276,21 +277,42 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
   rmm::device_async_resource_ref mr)
 {
   if (array.length() == 0) { return make_empty_column(type_id::STRING); }
-  auto str_array    = static_cast<arrow::StringArray const*>(&array);
-  auto offset_array = std::make_unique<arrow::Int32Array>(
-    str_array->value_offsets()->size() / sizeof(int32_t), str_array->value_offsets(), nullptr);
-  auto char_array = std::make_unique<arrow::Int8Array>(
-    str_array->value_data()->size(), str_array->value_data(), nullptr);
 
-  auto offsets_column = dispatch_to_cudf_column{}.operator()<int32_t>(
-    *offset_array, data_type(type_id::INT32), true, stream, mr);
-  auto chars_column = dispatch_to_cudf_column{}.operator()<int8_t>(
-    *char_array, data_type(type_id::INT8), true, stream, mr);
+  std::unique_ptr<column> offsets_column;
+  std::unique_ptr<arrow::Array> char_array;
+
+  if (array.type_id() == arrow::Type::LARGE_STRING) {
+    auto str_array    = static_cast<arrow::LargeStringArray const*>(&array);
+    auto offset_array = std::make_unique<arrow::Int64Array>(
+      str_array->value_offsets()->size() / sizeof(int64_t), str_array->value_offsets(), nullptr);
+    offsets_column = dispatch_to_cudf_column{}.operator()<int64_t>(
+      *offset_array, data_type(type_id::INT64), true, stream, mr);
+    char_array = std::make_unique<arrow::Int8Array>(
+      str_array->value_data()->size(), str_array->value_data(), nullptr);
+  } else if (array.type_id() == arrow::Type::STRING) {
+    auto str_array    = static_cast<arrow::StringArray const*>(&array);
+    auto offset_array = std::make_unique<arrow::Int32Array>(
+      str_array->value_offsets()->size() / sizeof(int32_t), str_array->value_offsets(), nullptr);
+    offsets_column = dispatch_to_cudf_column{}.operator()<int32_t>(
+      *offset_array, data_type(type_id::INT32), true, stream, mr);
+    char_array = std::make_unique<arrow::Int8Array>(
+      str_array->value_data()->size(), str_array->value_data(), nullptr);
+  } else {
+    throw std::runtime_error("Unsupported array type");
+  }
+
+  rmm::device_buffer chars(char_array->length(), stream, mr);
+  auto data_buffer = char_array->data()->buffers[1];
+  CUDF_CUDA_TRY(cudaMemcpyAsync(chars.data(),
+                                reinterpret_cast<uint8_t const*>(data_buffer->address()),
+                                chars.size(),
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   auto const num_rows = offsets_column->size() - 1;
   auto out_col        = make_strings_column(num_rows,
                                      std::move(offsets_column),
-                                     std::move(chars_column->release().data.release()[0]),
+                                     std::move(chars),
                                      array.null_count(),
                                      std::move(*get_mask_buffer(array, stream, mr)));
 

@@ -1,8 +1,9 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import itertools
 import warnings
-from typing import Dict, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -10,12 +11,14 @@ import pandas as pd
 import cudf
 from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
-from cudf._typing import Dtype
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.utils.dtypes import min_unsigned_type
+
+if TYPE_CHECKING:
+    from cudf._typing import Dtype
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -297,51 +300,31 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         obj = objs[0]
         if ignore_index:
             if axis == 1:
-                result = cudf.DataFrame._from_data(
-                    data=obj._data.copy(deep=True),
-                    index=obj.index.copy(deep=True),
-                )
-                # The DataFrame constructor for dict-like data (such as the
-                # ColumnAccessor given by obj._data here) will drop any columns
-                # in the data that are not in `columns`, so we have to rename
-                # after construction.
-                result.columns = pd.RangeIndex(len(obj._data.names))
-            else:
                 if isinstance(obj, cudf.Series):
-                    result = cudf.Series._from_data(
-                        data=obj._data.copy(deep=True),
-                        index=cudf.RangeIndex(len(obj)),
-                    )
-                elif isinstance(obj, pd.Series):
-                    result = cudf.Series(
-                        data=obj,
-                        index=cudf.RangeIndex(len(obj)),
-                    )
+                    result = obj.to_frame()
                 else:
-                    result = cudf.DataFrame._from_data(
-                        data=obj._data.copy(deep=True),
-                        index=cudf.RangeIndex(len(obj)),
-                    )
-        else:
-            if axis == 0:
-                result = obj.copy()
+                    result = obj.copy(deep=True)
+                result.columns = pd.RangeIndex(len(result._data))
             else:
-                data = obj._data.copy(deep=True)
-                if isinstance(obj, cudf.Series) and obj.name is None:
-                    # If the Series has no name, pandas renames it to 0.
-                    data[0] = data.pop(None)
-                result = cudf.DataFrame._from_data(
-                    data, index=obj.index.copy(deep=True)
+                result = type(obj)._from_data(
+                    data=obj._data.copy(deep=True),
+                    index=cudf.RangeIndex(len(obj)),
                 )
-                if keys is not None:
-                    if isinstance(result, cudf.DataFrame):
-                        k = keys[0]
-                        result.columns = cudf.MultiIndex.from_tuples(
-                            [
-                                (k, *c) if isinstance(c, tuple) else (k, c)
-                                for c in result._column_names
-                            ]
-                        )
+        elif axis == 0:
+            result = obj.copy(deep=True)
+        else:
+            if isinstance(obj, cudf.Series):
+                result = obj.to_frame()
+            else:
+                result = obj.copy(deep=True)
+            if keys is not None and isinstance(result, cudf.DataFrame):
+                k = keys[0]
+                result.columns = cudf.MultiIndex.from_tuples(
+                    [
+                        (k, *c) if isinstance(c, tuple) else (k, c)
+                        for c in result._column_names
+                    ]
+                )
 
         if isinstance(result, cudf.Series) and axis == 0:
             # sort has no effect for series concatted along axis 0
@@ -949,14 +932,10 @@ def _pivot(df, index, columns):
     index_labels, index_idx = index._encode()
     column_labels = columns_labels.to_pandas().to_flat_index()
 
-    # the result of pivot always has a multicolumn
-    result = cudf.core.column_accessor.ColumnAccessor(
-        multiindex=True, level_names=(None,) + columns._data.names
-    )
-
     def as_tuple(x):
         return x if isinstance(x, tuple) else (x,)
 
+    result = {}
     for v in df:
         names = [as_tuple(v) + as_tuple(name) for name in column_labels]
         nrows = len(index_labels)
@@ -981,8 +960,12 @@ def _pivot(df, index, columns):
                 }
             )
 
+    # the result of pivot always has a multicolumn
+    ca = cudf.core.column_accessor.ColumnAccessor(
+        result, multiindex=True, level_names=(None,) + columns._data.names
+    )
     return cudf.DataFrame._from_data(
-        result, index=cudf.Index(index_labels, name=index.name)
+        ca, index=cudf.Index(index_labels, name=index.name)
     )
 
 
@@ -1077,7 +1060,7 @@ def pivot(data, columns=None, index=no_default, values=no_default):
     return result
 
 
-def unstack(df, level, fill_value=None):
+def unstack(df, level, fill_value=None, sort: bool = True):
     """
     Pivot one or more levels of the (necessarily hierarchical) index labels.
 
@@ -1097,6 +1080,9 @@ def unstack(df, level, fill_value=None):
         levels of the index to pivot
     fill_value
         Non-functional argument provided for compatibility with Pandas.
+    sort : bool, default True
+        Sort the level(s) in the resulting MultiIndex columns.
+
 
     Returns
     -------
@@ -1173,10 +1159,11 @@ def unstack(df, level, fill_value=None):
 
     if fill_value is not None:
         raise NotImplementedError("fill_value is not supported.")
+    elif sort is False:
+        raise NotImplementedError(f"{sort=} is not supported.")
     if pd.api.types.is_list_like(level):
         if not level:
             return df
-    df = df.copy(deep=False)
     if not isinstance(df.index, cudf.MultiIndex):
         dtype = df._columns[0].dtype
         for col in df._columns:
@@ -1192,6 +1179,7 @@ def unstack(df, level, fill_value=None):
         )
         return res
     else:
+        df = df.copy(deep=False)
         columns = df.index._poplevels(level)
         index = df.index
     result = _pivot(df, index, columns)
@@ -1210,19 +1198,17 @@ def _get_unique(column, dummy_na):
     else:
         unique = column.unique().sort_values()
     if not dummy_na:
-        if np.issubdtype(unique.dtype, np.floating):
-            unique = unique.nans_to_nulls()
-        unique = unique.dropna()
+        unique = unique.nans_to_nulls().dropna()
     return unique
 
 
 def _one_hot_encode_column(
     column: ColumnBase,
     categories: ColumnBase,
-    prefix: Optional[str],
-    prefix_sep: Optional[str],
-    dtype: Optional[Dtype],
-) -> Dict[str, ColumnBase]:
+    prefix: str | None,
+    prefix_sep: str | None,
+    dtype: Dtype | None,
+) -> dict[str, ColumnBase]:
     """Encode a single column with one hot encoding. The return dictionary
     contains pairs of (category, encodings). The keys may be prefixed with
     `prefix`, separated with category name with `prefix_sep`. The encoding

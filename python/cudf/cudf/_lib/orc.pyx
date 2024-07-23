@@ -23,12 +23,12 @@ except ImportError:
 
 cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
 from cudf._lib.column cimport Column
-from cudf._lib.io.datasource cimport NativeFileDatasource
 from cudf._lib.io.utils cimport (
     make_sink_info,
     make_source_info,
     update_column_struct_field_names,
 )
+from cudf._lib.pylibcudf.io.datasource cimport NativeFileDatasource
 from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
 from cudf._lib.pylibcudf.libcudf.io.orc cimport (
     chunked_orc_writer_options,

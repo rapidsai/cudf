@@ -13,16 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include "strings/char_types/char_cases.h"
 #include "strings/char_types/char_flags.h"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/utilities.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -36,8 +37,7 @@
 #include <cstdlib>
 #include <string>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 
 /**
@@ -158,8 +158,13 @@ int64_t get_offset64_threshold()
 
 bool is_large_strings_enabled()
 {
+  // default depends on compile-time switch but can be overridden by the environment variable
   auto const env = std::getenv("LIBCUDF_LARGE_STRINGS_ENABLED");
+#ifdef CUDF_LARGE_STRINGS_DISABLED
   return env != nullptr && std::string(env) == "1";
+#else
+  return env == nullptr || std::string(env) == "1";
+#endif
 }
 
 int64_t get_offset_value(cudf::column_view const& offsets,
@@ -175,5 +180,17 @@ int64_t get_offset_value(cudf::column_view const& offsets,
 }
 
 }  // namespace detail
-}  // namespace strings
-}  // namespace cudf
+
+rmm::device_uvector<string_view> create_string_vector_from_column(
+  cudf::strings_column_view const strings,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::create_string_vector_from_column(strings, stream, mr);
+}
+
+int64_t get_offset64_threshold() { return detail::get_offset64_threshold(); }
+bool is_large_strings_enabled() { return detail::is_large_strings_enabled(); }
+
+}  // namespace cudf::strings

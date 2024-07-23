@@ -219,9 +219,9 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
-    [d_offsets] __device__(auto const idx) -> size_type {
+    cuda::proclaim_return_type<size_type>([d_offsets] __device__(auto const idx) -> size_type {
       return static_cast<size_type>(d_offsets[idx + 1] - d_offsets[idx]);
-    },
+    }),
     0,
     thrust::maximum<size_type>{});
 

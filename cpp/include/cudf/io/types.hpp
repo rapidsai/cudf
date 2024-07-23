@@ -30,6 +30,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace cudf {
@@ -247,14 +248,27 @@ struct column_name_info {
    * @param _is_nullable True if column is nullable
    * @param _is_binary True if column is binary data
    */
-  column_name_info(std::string const& _name,
+  column_name_info(std::string _name,
                    std::optional<bool> _is_nullable = std::nullopt,
                    std::optional<bool> _is_binary   = std::nullopt)
-    : name(_name), is_nullable(_is_nullable), is_binary(_is_binary)
+    : name(std::move(_name)), is_nullable(_is_nullable), is_binary(_is_binary)
   {
   }
 
   column_name_info() = default;
+
+  /**
+   * @brief Compares two column name info structs for equality
+   *
+   * @param rhs column name info struct to compare against
+   * @return boolean indicating if this and rhs are equal
+   */
+  bool operator==(column_name_info const& rhs) const
+  {
+    return ((name == rhs.name) && (is_nullable == rhs.is_nullable) &&
+            (is_binary == rhs.is_binary) && (type_length == rhs.type_length) &&
+            (children == rhs.children));
+  };
 };
 
 /**
@@ -263,6 +277,9 @@ struct column_name_info {
 struct table_metadata {
   std::vector<column_name_info>
     schema_info;  //!< Detailed name information for the entire output hierarchy
+  std::vector<size_t> num_rows_per_source;  //!< Number of rows read from each data source.
+                                            //!< Currently only computed for Parquet readers if no
+                                            //!< AST filters being used. Empty vector otherwise.
   std::map<std::string, std::string> user_data;  //!< Format-dependent metadata of the first input
                                                  //!< file as key-values pairs (deprecated)
   std::vector<std::unordered_map<std::string, std::string>>

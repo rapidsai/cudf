@@ -452,9 +452,9 @@ std::string encoding_to_string(Encoding encoding)
 [[nodiscard]] std::string list_unsupported_encodings(device_span<PageInfo const> pages,
                                                      rmm::cuda_stream_view stream)
 {
-  auto const to_mask = [] __device__(auto const& page) {
+  auto const to_mask = cuda::proclaim_return_type<uint32_t>([] __device__(auto const& page) {
     return is_supported_encoding(page.encoding) ? 0U : encoding_to_mask(page.encoding);
-  };
+  });
   uint32_t const unsupported = thrust::transform_reduce(
     rmm::exec_policy(stream), pages.begin(), pages.end(), to_mask, 0U, thrust::bit_or<uint32_t>());
   return encoding_bitmask_to_str(unsupported);
@@ -647,7 +647,7 @@ constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
 
 struct set_str_dict_index_count {
   device_span<size_t> str_dict_index_count;
-  device_span<const ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
   __device__ void operator()(PageInfo const& page)
   {
@@ -662,7 +662,7 @@ struct set_str_dict_index_count {
 
 struct set_str_dict_index_ptr {
   string_index_pair* const base;
-  device_span<const size_t> str_dict_index_offsets;
+  device_span<size_t const> str_dict_index_offsets;
   device_span<ColumnChunkDesc> chunks;
 
   __device__ void operator()(size_t i)
@@ -679,7 +679,7 @@ struct set_str_dict_index_ptr {
  *
  */
 struct set_list_row_count_estimate {
-  device_span<const ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
   __device__ void operator()(PageInfo& page)
   {
@@ -708,7 +708,7 @@ struct set_list_row_count_estimate {
  */
 struct set_final_row_count {
   device_span<PageInfo> pages;
-  device_span<const ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
   __device__ void operator()(size_t i)
   {
@@ -1235,8 +1235,10 @@ void reader::impl::preprocess_file(read_mode mode)
                    [](auto const& col) { return col.type; });
   }
 
-  std::tie(
-    _file_itm_data.global_skip_rows, _file_itm_data.global_num_rows, _file_itm_data.row_groups) =
+  std::tie(_file_itm_data.global_skip_rows,
+           _file_itm_data.global_num_rows,
+           _file_itm_data.row_groups,
+           _file_itm_data.num_rows_per_source) =
     _metadata->select_row_groups(_options.row_group_indices,
                                  _options.skip_rows,
                                  _options.num_rows,
@@ -1245,9 +1247,18 @@ void reader::impl::preprocess_file(read_mode mode)
                                  _expr_conv.get_converted_expr(),
                                  _stream);
 
+  // Inclusive scan the number of rows per source
+  if (not _expr_conv.get_converted_expr().has_value() and mode == read_mode::CHUNKED_READ) {
+    _file_itm_data.exclusive_sum_num_rows_per_source.resize(
+      _file_itm_data.num_rows_per_source.size());
+    thrust::inclusive_scan(_file_itm_data.num_rows_per_source.cbegin(),
+                           _file_itm_data.num_rows_per_source.cend(),
+                           _file_itm_data.exclusive_sum_num_rows_per_source.begin());
+  }
+
   // check for page indexes
-  _has_page_index = std::all_of(_file_itm_data.row_groups.begin(),
-                                _file_itm_data.row_groups.end(),
+  _has_page_index = std::all_of(_file_itm_data.row_groups.cbegin(),
+                                _file_itm_data.row_groups.cend(),
                                 [](auto const& row_group) { return row_group.has_page_index(); });
 
   if (_file_itm_data.global_num_rows > 0 && not _file_itm_data.row_groups.empty() &&
@@ -1436,7 +1447,8 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
     // subpass since we know that will safely completed.
     bool const is_list = chunk.max_level[level_type::REPETITION] > 0;
     if (is_list && max_col_row < last_pass_row) {
-      size_t const min_col_row = static_cast<size_t>(chunk.start_row + last_page.chunk_row);
+      auto const& first_page   = subpass.pages[page_index];
+      size_t const min_col_row = static_cast<size_t>(chunk.start_row + first_page.chunk_row);
       CUDF_EXPECTS((max_col_row - min_col_row) > 1, "Unexpected short subpass");
       max_col_row--;
     }

@@ -18,7 +18,8 @@ from pyarrow import fs as pa_fs
 import cudf
 from cudf import read_csv
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -1084,8 +1085,9 @@ def test_csv_reader_arrow_nativefile(path_or_buf):
     # Arrow FileSystem interface
     expect = cudf.read_csv(path_or_buf("filepath"))
     fs, path = pa_fs.FileSystem.from_uri(path_or_buf("filepath"))
-    with fs.open_input_file(path) as fil:
-        got = cudf.read_csv(fil)
+    with pytest.warns(FutureWarning):
+        with fs.open_input_file(path) as fil:
+            got = cudf.read_csv(fil)
 
     assert_eq(expect, got)
 
@@ -1190,7 +1192,7 @@ def test_csv_reader_byte_range_type_corner_case(tmpdir):
     ).to_csv(fname, chunksize=100000)
 
     byte_range = (2_147_483_648, 0)
-    with pytest.raises(RuntimeError, match="Offset is past end of file"):
+    with pytest.raises(OverflowError, match="Offset is past end of file"):
         cudf.read_csv(fname, byte_range=byte_range, header=None)
 
 
@@ -1616,7 +1618,7 @@ def test_csv_reader_partial_dtype(dtype):
         StringIO('"A","B","C"\n0,1,2'), dtype=dtype, usecols=["A", "C"]
     )
 
-    assert names_df == header_df
+    assert_eq(names_df, header_df)
     assert all(names_df.dtypes == ["int16", "int64"])
 
 

@@ -7,11 +7,13 @@ repos:
       - id: trailing-whitespace
         exclude: |
           (?x)^(
+            ^cpp/cmake/thirdparty/patches/.*|
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
           )
       - id: end-of-file-fixer
         exclude: |
           (?x)^(
+            ^cpp/cmake/thirdparty/patches/.*|
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
           )
   - repo: https://github.com/PyCQA/isort
@@ -54,12 +56,20 @@ repos:
       - id: clang-format
         types_or: [c, c++, cuda]
         args: ["-fallback-style=none", "-style=file", "-i"]
+        exclude: |
+          (?x)^(
+            ^cpp/src/io/parquet/ipc/Schema_generated.h|
+            ^cpp/src/io/parquet/ipc/Message_generated.h|
+            ^cpp/include/cudf_test/cxxopts.hpp
+          )
   - repo: https://github.com/sirosen/texthooks
     rev: 0.6.6
     hooks:
       - id: fix-smartquotes
         exclude: |
           (?x)^(
+            ^cpp/src/io/parquet/ipc/Schema_generated.h|
+            ^cpp/src/io/parquet/ipc/Message_generated.h|
             ^cpp/include/cudf_test/cxxopts.hpp|
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*|
             ^python/cudf/cudf/tests/text/test_text_methods.py
@@ -126,20 +136,15 @@ repos:
             .*test.*|
             ^CHANGELOG.md$
           )
-  - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.13.4
-    hooks:
-      - id: rapids-dependency-file-generator
-        args: ["--clean"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.3
+    rev: v0.4.8
     hooks:
       - id: ruff
         files: python/.*$
       - id: ruff-format
         files: python/.*$
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v0.0.3
+    rev: v0.2.0
     hooks:
       - id: verify-copyright
         exclude: |
@@ -148,6 +153,12 @@ repos:
             cpp/src/io/parquet/ipc/Message_generated[.]h$|
             cpp/src/io/parquet/ipc/Schema_generated[.]h$
           )
+      - id: verify-alpha-spec
+  - repo: https://github.com/rapidsai/dependency-file-generator
+    rev: v1.13.11
+    hooks:
+      - id: rapids-dependency-file-generator
+        args: ["--clean"]
 
 default_language_version:
       python: python3

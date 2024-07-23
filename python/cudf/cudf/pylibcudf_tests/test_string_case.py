@@ -18,18 +18,18 @@ def test_to_upper(string_col):
     plc_col = plc.interop.from_arrow(string_col)
     got = plc.strings.case.to_upper(plc_col)
     expected = pa.compute.utf8_upper(string_col)
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)
 
 
 def test_to_lower(string_col):
     plc_col = plc.interop.from_arrow(string_col)
     got = plc.strings.case.to_lower(plc_col)
     expected = pa.compute.utf8_lower(string_col)
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)
 
 
 def test_swapcase(string_col):
     plc_col = plc.interop.from_arrow(string_col)
     got = plc.strings.case.swapcase(plc_col)
     expected = pa.compute.utf8_swapcase(string_col)
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)

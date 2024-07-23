@@ -2,19 +2,15 @@
 
 from cython.operator import dereference
 
-from libcpp.memory cimport make_unique
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 
 from rmm._lib.device_buffer cimport device_buffer
 
 from cudf._lib.pylibcudf.libcudf cimport join as cpp_join
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.types cimport (
-    data_type,
-    null_equality,
-    size_type,
-    type_id,
-)
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.types cimport null_equality
 
 from .column cimport Column
 from .table cimport Table
@@ -22,15 +18,11 @@ from .table cimport Table
 
 cdef Column _column_from_gather_map(cpp_join.gather_map_type gather_map):
     # helper to convert a gather map to a Column
-    cdef device_buffer c_empty
-    cdef size_type size = dereference(gather_map.get()).size()
     return Column.from_libcudf(
         move(
             make_unique[column](
-                data_type(type_id.INT32),
-                size,
-                dereference(gather_map.get()).release(),
-                move(c_empty),
+                move(dereference(gather_map.get())),
+                device_buffer(),
                 0
             )
         )
@@ -88,7 +80,6 @@ cpdef tuple left_join(
     nulls_equal : NullEquality
         Should nulls compare equal?
 
-
     Returns
     -------
     Tuple[Column, Column]
@@ -121,7 +112,6 @@ cpdef tuple full_join(
         The right table to join.
     nulls_equal : NullEquality
         Should nulls compare equal?
-
 
     Returns
     -------
@@ -156,7 +146,6 @@ cpdef Column left_semi_join(
     nulls_equal : NullEquality
         Should nulls compare equal?
 
-
     Returns
     -------
     Column
@@ -190,7 +179,6 @@ cpdef Column left_anti_join(
     nulls_equal : NullEquality
         Should nulls compare equal?
 
-
     Returns
     -------
     Column
@@ -204,3 +192,26 @@ cpdef Column left_anti_join(
             nulls_equal
         )
     return _column_from_gather_map(move(c_result))
+
+
+cpdef Table cross_join(Table left, Table right):
+    """Perform a cross join on two tables.
+
+    For details see :cpp:func:`cross_join`.
+
+    Parameters
+    ----------
+    left : Table
+        The left table to join.
+    right: Table
+        The right table to join.
+
+    Returns
+    -------
+    Table
+        The result of cross joining the two inputs.
+    """
+    cdef unique_ptr[table] result
+    with nogil:
+        result = move(cpp_join.cross_join(left.view(), right.view()))
+    return Table.from_libcudf(move(result))

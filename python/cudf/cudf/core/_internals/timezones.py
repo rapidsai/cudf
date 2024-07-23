@@ -1,20 +1,52 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
+import datetime
 import os
 import zoneinfo
 from functools import lru_cache
-from typing import Literal, Tuple
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
+import pandas as pd
 
+import cudf
 from cudf._lib.timezone import make_timezone_transition_table
-from cudf.core.column.column import as_column
-from cudf.core.column.datetime import DatetimeColumn
-from cudf.core.column.timedelta import TimeDeltaColumn
+
+if TYPE_CHECKING:
+    from cudf.core.column.datetime import DatetimeColumn
+    from cudf.core.column.timedelta import TimeDeltaColumn
+
+
+def get_compatible_timezone(dtype: pd.DatetimeTZDtype) -> pd.DatetimeTZDtype:
+    """Convert dtype.tz object to zoneinfo object if possible."""
+    tz = dtype.tz
+    if isinstance(tz, zoneinfo.ZoneInfo):
+        return dtype
+    if cudf.get_option("mode.pandas_compatible"):
+        raise NotImplementedError(
+            f"{tz} must be a zoneinfo.ZoneInfo object in pandas_compatible mode."
+        )
+    elif (tzname := getattr(tz, "zone", None)) is not None:
+        # pytz-like
+        key = tzname
+    elif (tz_file := getattr(tz, "_filename", None)) is not None:
+        # dateutil-like
+        key = tz_file.split("zoneinfo/")[-1]
+    elif isinstance(tz, datetime.tzinfo):
+        # Try to get UTC-like tzinfos
+        reference = datetime.datetime.now()
+        key = tz.tzname(reference)
+        if not (isinstance(key, str) and key.lower() == "utc"):
+            raise NotImplementedError(f"cudf does not support {tz}")
+    else:
+        raise NotImplementedError(f"cudf does not support {tz}")
+    new_tz = zoneinfo.ZoneInfo(key)
+    return pd.DatetimeTZDtype(dtype.unit, new_tz)
 
 
 @lru_cache(maxsize=20)
-def get_tz_data(zone_name: str) -> Tuple[DatetimeColumn, TimeDeltaColumn]:
+def get_tz_data(zone_name: str) -> tuple[DatetimeColumn, TimeDeltaColumn]:
     """
     Return timezone data (transition times and UTC offsets) for the
     given IANA time zone.
@@ -40,7 +72,7 @@ def get_tz_data(zone_name: str) -> Tuple[DatetimeColumn, TimeDeltaColumn]:
 
 def _find_and_read_tzfile_tzpath(
     zone_name: str,
-) -> Tuple[DatetimeColumn, TimeDeltaColumn]:
+) -> tuple[DatetimeColumn, TimeDeltaColumn]:
     for search_path in zoneinfo.TZPATH:
         if os.path.isfile(os.path.join(search_path, zone_name)):
             return _read_tzfile_as_columns(search_path, zone_name)
@@ -49,7 +81,7 @@ def _find_and_read_tzfile_tzpath(
 
 def _find_and_read_tzfile_tzdata(
     zone_name: str,
-) -> Tuple[DatetimeColumn, TimeDeltaColumn]:
+) -> tuple[DatetimeColumn, TimeDeltaColumn]:
     import importlib.resources
 
     package_base = "tzdata.zoneinfo"
@@ -78,12 +110,14 @@ def _find_and_read_tzfile_tzdata(
 
 def _read_tzfile_as_columns(
     tzdir, zone_name: str
-) -> Tuple[DatetimeColumn, TimeDeltaColumn]:
+) -> tuple[DatetimeColumn, TimeDeltaColumn]:
     transition_times_and_offsets = make_timezone_transition_table(
         tzdir, zone_name
     )
 
     if not transition_times_and_offsets:
+        from cudf.core.column.column import as_column
+
         # this happens for UTC-like zones
         min_date = np.int64(np.iinfo("int64").min + 1).astype("M8[s]")
         return (as_column([min_date]), as_column([np.timedelta64(0, "s")]))
@@ -92,7 +126,7 @@ def _read_tzfile_as_columns(
 
 def check_ambiguous_and_nonexistent(
     ambiguous: Literal["NaT"], nonexistent: Literal["NaT"]
-) -> Tuple[Literal["NaT"], Literal["NaT"]]:
+) -> tuple[Literal["NaT"], Literal["NaT"]]:
     if ambiguous != "NaT":
         raise NotImplementedError(
             "Only ambiguous='NaT' is currently supported"

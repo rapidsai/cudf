@@ -176,7 +176,8 @@ std::unique_ptr<cudf::column> count_tokens(
  * t is now ["h","e","l","l","o"," ","w","o","r","l","d","g","o","o","d","b","y","e"]
  * @endcode
  *
- * All null row entries are ignored and the output contains all valid rows.
+ * @throw std::invalid_argument if `input` contains nulls
+ * @throw std::overflow_error if the output would produce more than max size_type rows
  *
  * @param input Strings column to tokenize
  * @param stream CUDA stream used for device memory operations and kernel launches

@@ -31,6 +31,8 @@
 
 namespace cudf::io::parquet::detail {
 
+namespace cg = cooperative_groups;
+
 namespace {
 
 constexpr int preprocess_block_size    = 512;
@@ -379,7 +381,7 @@ __device__ size_t totalDictEntriesSize(uint8_t const* data,
       if (mytid < batch_len) {
         dict_idx         = dict_val;
         int32_t ofs      = (mytid - ((batch_len + 7) & ~7)) * dict_bits;
-        const uint8_t* p = ptr + (ofs >> 3);
+        uint8_t const* p = ptr + (ofs >> 3);
         ofs &= 7;
         if (p < end) {
           uint32_t c = 8 - ofs;
@@ -399,7 +401,7 @@ __device__ size_t totalDictEntriesSize(uint8_t const* data,
         if (pos + mytid < end_value) {
           uint32_t const dict_pos = (dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
           if (pos + mytid >= start_value && dict_pos < (uint32_t)dict_size) {
-            const auto* src = reinterpret_cast<const string_index_pair*>(dict_base + dict_pos);
+            auto const* src = reinterpret_cast<string_index_pair const*>(dict_base + dict_pos);
             l_str_len += src->second;
           }
         }
@@ -413,7 +415,7 @@ __device__ size_t totalDictEntriesSize(uint8_t const* data,
       if (mytid == 0) {
         uint32_t const dict_pos = (dict_bits > 0) ? dict_val * sizeof(string_index_pair) : 0;
         if (pos + batch_len > start_value && dict_pos < (uint32_t)dict_size) {
-          const auto* src = reinterpret_cast<const string_index_pair*>(dict_base + dict_pos);
+          auto const* src = reinterpret_cast<string_index_pair const*>(dict_base + dict_pos);
           l_str_len += (batch_len - start_off) * src->second;
         }
       }
@@ -452,7 +454,7 @@ __device__ size_t totalPlainEntriesSize(uint8_t const* data,
 
   // This step is purely serial
   if (!t) {
-    const uint8_t* cur = data;
+    uint8_t const* cur = data;
     int k              = 0;
 
     while (pos < end_value && k < data_size) {
@@ -899,7 +901,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSi
         // RLE-packed dictionary indices, first byte indicates index length in bits
         if (col.str_dict_index) {
           // String dictionary: use index
-          dict_base = reinterpret_cast<const uint8_t*>(col.str_dict_index);
+          dict_base = reinterpret_cast<uint8_t const*>(col.str_dict_index);
           dict_size = col.dict_page->num_input_values * sizeof(string_index_pair);
         } else {
           dict_base = col.dict_page->page_data;
@@ -1006,6 +1008,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     }
     // this needs to be here to prevent warp 1/2 modifying src_pos before all threads have read it
     __syncthreads();
+
+    // Create a warp sized thread block tile
+    auto const tile_warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+
     if (t < 32) {
       // decode repetition and definition levels.
       // - update validity vectors
@@ -1020,9 +1026,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       if (s->dict_base) {
         src_target_pos = gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, lane_id).first;
       } else {
-        gpuInitStringDescriptors<false>(s, sb, src_target_pos, lane_id);
+        gpuInitStringDescriptors<false>(s, sb, src_target_pos, tile_warp);
       }
-      if (t == 32) { s->dict_pos = src_target_pos; }
+      if (tile_warp.thread_rank() == 0) { s->dict_pos = src_target_pos; }
     } else {
       int const me = t - out_thread0;
 
@@ -1197,14 +1203,17 @@ void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
   cudf::detail::join_streams(streams, stream);
 
   // check for needed temp space for DELTA_BYTE_ARRAY
-  auto const need_sizes = thrust::any_of(
-    rmm::exec_policy(stream), pages.device_begin(), pages.device_end(), [] __device__(auto& page) {
-      return page.temp_string_size != 0;
-    });
+  auto const need_sizes =
+    thrust::any_of(rmm::exec_policy(stream),
+                   pages.device_begin(),
+                   pages.device_end(),
+                   cuda::proclaim_return_type<bool>(
+                     [] __device__(auto& page) { return page.temp_string_size != 0; }));
 
   if (need_sizes) {
     // sum up all of the temp_string_sizes
-    auto const page_sizes = [] __device__(PageInfo const& page) { return page.temp_string_size; };
+    auto const page_sizes = cuda::proclaim_return_type<int64_t>(
+      [] __device__(PageInfo const& page) { return page.temp_string_size; });
     auto const total_size = thrust::transform_reduce(rmm::exec_policy(stream),
                                                      pages.device_begin(),
                                                      pages.device_end(),

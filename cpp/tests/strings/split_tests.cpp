@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -307,6 +307,26 @@ TEST_F(StringsSplitTest, SplitRecordWhitespaceWithMaxSplit)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
+TEST_F(StringsSplitTest, SplitRecordAllEmpty)
+{
+  auto input     = cudf::test::strings_column_wrapper({"", "", "", ""});
+  auto sv        = cudf::strings_column_view(input);
+  auto delimiter = cudf::string_scalar("s");
+  auto empty     = cudf::string_scalar("");
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected({LCW{}, LCW{}, LCW{}, LCW{}});
+  auto result = cudf::strings::split_record(sv, delimiter);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+  result = cudf::strings::split_record(sv, empty);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+
+  result = cudf::strings::rsplit_record(sv, delimiter);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+  result = cudf::strings::rsplit_record(sv, empty);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
 TEST_F(StringsSplitTest, MultiByteDelimiters)
 {
   // Overlapping delimiters
@@ -337,7 +357,8 @@ TEST_F(StringsSplitTest, MultiByteDelimiters)
 
     auto c0 = cudf::test::strings_column_wrapper({"u", "w", "y", "", "", ""});
     auto c1 = cudf::test::strings_column_wrapper({"", ":x", "", "a", ":b", ":c"});
-    auto c2 = cudf::test::strings_column_wrapper({"", "", "z", "", "", ":"}, {0, 0, 1, 0, 0, 1});
+    auto c2 = cudf::test::strings_column_wrapper({"", "", "z", "", "", ":"},
+                                                 {false, false, true, false, false, true});
     std::vector<std::unique_ptr<cudf::column>> expected_columns;
     expected_columns.push_back(c0.release());
     expected_columns.push_back(c1.release());
@@ -349,7 +370,8 @@ TEST_F(StringsSplitTest, MultiByteDelimiters)
 
     c0 = cudf::test::strings_column_wrapper({"u", "w:", "y", "", ":", ":"});
     c1 = cudf::test::strings_column_wrapper({"", "x", "", "a", "b", "c:"});
-    c2 = cudf::test::strings_column_wrapper({"", "", "z", "", "", ""}, {0, 0, 1, 0, 0, 1});
+    c2 = cudf::test::strings_column_wrapper({"", "", "z", "", "", ""},
+                                            {false, false, true, false, false, true});
     expected_columns.push_back(c0.release());
     expected_columns.push_back(c1.release());
     expected_columns.push_back(c2.release());
@@ -371,7 +393,7 @@ TEST_F(StringsSplitTest, MultiByteDelimiters)
     auto result = cudf::strings::split(view, cudf::string_scalar("}:{"));
 
     auto c0 = cudf::test::strings_column_wrapper({"{a=1", "{c=3}", ":{"});
-    auto c1 = cudf::test::strings_column_wrapper({"b=2}:", "", "}"}, {1, 0, 1});
+    auto c1 = cudf::test::strings_column_wrapper({"b=2}:", "", "}"}, {true, false, true});
     std::vector<std::unique_ptr<cudf::column>> expected_columns;
     expected_columns.push_back(c0.release());
     expected_columns.push_back(c1.release());
@@ -395,8 +417,10 @@ TEST_F(StringsSplitTest, SplitRegex)
     auto pattern = std::string("\\s+");
 
     cudf::test::strings_column_wrapper col0({"", "", "are", "tést", ""}, validity);
-    cudf::test::strings_column_wrapper col1({"Héllo", "", "some", "String", ""}, {1, 0, 1, 1, 0});
-    cudf::test::strings_column_wrapper col2({"thesé", "", "", "", ""}, {1, 0, 1, 0, 0});
+    cudf::test::strings_column_wrapper col1({"Héllo", "", "some", "String", ""},
+                                            {true, false, true, true, false});
+    cudf::test::strings_column_wrapper col2({"thesé", "", "", "", ""},
+                                            {true, false, true, false, false});
     auto expected = cudf::table_view({col0, col1, col2});
     auto prog     = cudf::strings::regex_program::create(pattern);
     auto result   = cudf::strings::split_re(sv, *prog);
@@ -412,9 +436,11 @@ TEST_F(StringsSplitTest, SplitRegex)
 
     cudf::test::strings_column_wrapper col0({" H", "", "ar", "t", ""}, validity);
     cudf::test::strings_column_wrapper col1({"llo th", "", " som", "st String", ""},
-                                            {1, 0, 1, 1, 0});
-    cudf::test::strings_column_wrapper col2({"s", "", "  ", "", ""}, {1, 0, 1, 0, 0});
-    cudf::test::strings_column_wrapper col3({"", "", "", "", ""}, {1, 0, 0, 0, 0});
+                                            {true, false, true, true, false});
+    cudf::test::strings_column_wrapper col2({"s", "", "  ", "", ""},
+                                            {true, false, true, false, false});
+    cudf::test::strings_column_wrapper col3({"", "", "", "", ""},
+                                            {true, false, false, false, false});
     auto expected = cudf::table_view({col0, col1, col2, col3});
     auto prog     = cudf::strings::regex_program::create(pattern);
     auto result   = cudf::strings::split_re(sv, *prog);
@@ -479,9 +505,10 @@ TEST_F(StringsSplitTest, SplitRegexWithMaxSplit)
   {
     auto pattern = std::string("\\s+");
 
-    cudf::test::strings_column_wrapper col0({"", "", "are", "tést", ""}, {1, 0, 1, 1, 1});
+    cudf::test::strings_column_wrapper col0({"", "", "are", "tést", ""},
+                                            {true, false, true, true, true});
     cudf::test::strings_column_wrapper col1({"Héllo\tthesé", "", "some  ", "String", ""},
-                                            {1, 0, 1, 1, 0});
+                                            {true, false, true, true, false});
     auto expected = cudf::table_view({col0, col1});
     auto prog     = cudf::strings::regex_program::create(pattern);
     auto result   = cudf::strings::split_re(sv, *prog, 1);
@@ -528,10 +555,10 @@ TEST_F(StringsSplitTest, SplitRegexWordBoundary)
     auto pattern = std::string("\\b");
 
     cudf::test::strings_column_wrapper col0({"", "", "-+", ""});
-    cudf::test::strings_column_wrapper col1({"a", "ab", "", "e"}, {1, 1, 0, 1});
-    cudf::test::strings_column_wrapper col2({"", "", "", "\n"}, {1, 1, 0, 1});
-    cudf::test::strings_column_wrapper col3({"", "", "", "é"}, {0, 0, 0, 1});
-    cudf::test::strings_column_wrapper col4({"", "", "", ""}, {0, 0, 0, 1});
+    cudf::test::strings_column_wrapper col1({"a", "ab", "", "e"}, {true, true, false, true});
+    cudf::test::strings_column_wrapper col2({"", "", "", "\n"}, {true, true, false, true});
+    cudf::test::strings_column_wrapper col3({"", "", "", "é"}, {false, false, false, true});
+    cudf::test::strings_column_wrapper col4({"", "", "", ""}, {false, false, false, true});
     auto expected = cudf::table_view({col0, col1, col2, col3, col4});
     auto prog     = cudf::strings::regex_program::create(pattern);
     auto result   = cudf::strings::split_re(sv, *prog);
@@ -652,7 +679,8 @@ TEST_F(StringsSplitTest, RSplitRegexWithMaxSplit)
 
   {
     cudf::test::strings_column_wrapper col0({" Héllo", "", "are some", "tést", ""}, validity);
-    cudf::test::strings_column_wrapper col1({"thesé", "", "", "String", ""}, {1, 0, 1, 1, 0});
+    cudf::test::strings_column_wrapper col1({"thesé", "", "", "String", ""},
+                                            {true, false, true, true, false});
     auto expected = cudf::table_view({col0, col1});
     auto result   = cudf::strings::rsplit_re(sv, *prog, 1);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
@@ -710,7 +738,7 @@ TEST_F(StringsSplitTest, SplitZeroSizeStringsColumns)
 // This test specifically for https://github.com/rapidsai/custrings/issues/119
 TEST_F(StringsSplitTest, AllNullsCase)
 {
-  cudf::test::strings_column_wrapper input({"", "", ""}, {0, 0, 0});
+  cudf::test::strings_column_wrapper input({"", "", ""}, {false, false, false});
   auto sv   = cudf::strings_column_view(input);
   auto prog = cudf::strings::regex_program::create("-");
 
