@@ -28,7 +28,7 @@
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io::json::detail {
 
 // Some magic numbers
@@ -54,4 +54,4 @@ size_type find_first_delimiter(device_span<char const> d_data,
                                rmm::cuda_stream_view stream);
 
 }  // namespace io::json::detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
