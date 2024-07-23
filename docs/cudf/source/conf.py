@@ -560,6 +560,10 @@ nitpick_ignore = [
     ("py:class", "ScalarLike"),
     ("py:class", "ParentType"),
     ("py:class", "ColumnLike"),
+    ("py:class", "ColumnLike"),
+    ("py:obj", "cudf.Index.transpose"),
+    ("py:obj", "cudf.Index.to_flat_index"),
+    ("py:obj", "cudf.MultiIndex.to_flat_index"),
     # TODO: Remove this when we figure out why typing_extensions doesn't seem
     # to map types correctly for intersphinx
     ("py:class", "typing_extensions.Self"),
