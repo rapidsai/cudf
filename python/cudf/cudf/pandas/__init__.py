@@ -25,11 +25,8 @@ def install():
     global LOADED
     LOADED = loader is not None
 
-    if (
-        rmm_mode := os.getenv("CUDF_PANDAS_RMM_MODE", "managed_pool")
-    ) is not None:
-        if rmm_mode == "disable":
-            return
+    rmm_mode = os.getenv("CUDF_PANDAS_RMM_MODE", "managed_pool")
+    if rmm_mode != "disable":
         # Check if a non-default memory resource is set
         current_mr = rmm.mr.get_current_device_resource()
         if not isinstance(current_mr, rmm.mr.CudaMemoryResource):
@@ -37,6 +34,7 @@ def install():
                 f"cudf.pandas detected an already configured memory resource, ignoring 'CUDF_PANDAS_RMM_MODE'={str(rmm_mode)}",
                 UserWarning,
             )
+        enable_prefetching = False
         free_memory, _ = rmm.mr.available_device_memory()
         free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
 
@@ -56,6 +54,7 @@ def install():
         elif rmm_mode == "managed":
             mr = rmm.mr.PrefetchResourceAdaptor(rmm.mr.ManagedMemoryResource())
             rmm.mr.set_current_device_resource(mr)
+            enable_prefetching = True
         elif rmm_mode == "managed_pool":
             mr = rmm.mr.PrefetchResourceAdaptor(
                 rmm.mr.PoolMemoryResource(
@@ -64,17 +63,19 @@ def install():
                 )
             )
             rmm.mr.set_current_device_resource(mr)
+            enable_prefetching = True
         else:
             raise ValueError(f"Unsupported rmm mode: {rmm_mode}")
         from cudf._lib import pylibcudf
 
-        for item in {
-            "column_view::get_data",
-            "mutable_column_view::get_data",
-            "gather",
-            "hash_join",
-        }:
-            pylibcudf.experimental.enable_prefetching(item)
+        if enable_prefetching:
+            for item in {
+                "column_view::get_data",
+                "mutable_column_view::get_data",
+                "gather",
+                "hash_join",
+            }:
+                pylibcudf.experimental.enable_prefetching(item)
 
 
 def pytest_load_initial_conftests(early_config, parser, args):
