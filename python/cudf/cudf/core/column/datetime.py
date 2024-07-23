@@ -297,22 +297,17 @@ class DatetimeColumn(column.ColumnBase):
 
     @property
     def is_quarter_end(self) -> ColumnBase:
-        day = self.get_dt_field("day")
-        last_day = libcudf.datetime.last_day_of_month(self)
-        last_day = last_day.get_dt_field("day")
-        last_month = self.get_dt_field("month").isin([3, 6, 9, 12])
-        return ((day == last_day) & last_month).fillna(False)
+        last_month = self.month.isin([3, 6, 9, 12])
+        return (self.is_month_end & last_month).fillna(False)
 
     @property
     def is_quarter_start(self) -> ColumnBase:
-        day = self.get_dt_field("day")
-        first_month = self.get_dt_field("month").isin([1, 4, 7, 10])
-
-        return ((day == cudf.Scalar(1)) & first_month).fillna(False)
+        first_month = self.month.isin([1, 4, 7, 10])
+        return (self.is_month_start & first_month).fillna(False)
 
     @property
     def is_year_end(self) -> ColumnBase:
-        day_of_year = self.get_dt_field("day_of_year")
+        day_of_year = self.day_of_year
         leap_dates = libcudf.datetime.is_leap_year(self)
 
         leap = day_of_year == cudf.Scalar(366)
@@ -323,9 +318,7 @@ class DatetimeColumn(column.ColumnBase):
 
     @property
     def is_year_start(self) -> ColumnBase:
-        return (self.get_dt_field("day_of_year") == cudf.Scalar(1)).fillna(
-            False
-        )
+        return (self.day_of_year == 1).fillna(False)
 
     @property
     def days_in_month(self) -> ColumnBase:
