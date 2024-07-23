@@ -287,6 +287,51 @@ class DatetimeColumn(column.ColumnBase):
         return self.get_dt_field("day_of_year")
 
     @property
+    def is_month_start(self) -> ColumnBase:
+        return (self.day == 1).fillna(False)
+
+    @property
+    def is_month_end(self) -> ColumnBase:
+        last_day_col = libcudf.datetime.last_day_of_month(self)
+        return (self.day == last_day_col).fillna(False)
+
+    @property
+    def is_quarter_end(self) -> ColumnBase:
+        day = self.get_dt_field("day")
+        last_day = libcudf.datetime.last_day_of_month(self)
+        last_day = last_day.get_dt_field("day")
+        last_month = self.get_dt_field("month").isin([3, 6, 9, 12])
+        return ((day == last_day) & last_month).fillna(False)
+
+    @property
+    def is_quarter_start(self) -> ColumnBase:
+        day = self.get_dt_field("day")
+        first_month = self.get_dt_field("month").isin([1, 4, 7, 10])
+
+        return ((day == cudf.Scalar(1)) & first_month).fillna(False)
+
+    @property
+    def is_year_end(self) -> ColumnBase:
+        day_of_year = self.get_dt_field("day_of_year")
+        leap_dates = libcudf.datetime.is_leap_year(self)
+
+        leap = day_of_year == cudf.Scalar(366)
+        non_leap = day_of_year == cudf.Scalar(365)
+        return libcudf.copying.copy_if_else(leap, non_leap, leap_dates).fillna(
+            False
+        )
+
+    @property
+    def is_year_start(self) -> ColumnBase:
+        return (self.get_dt_field("day_of_year") == cudf.Scalar(1)).fillna(
+            False
+        )
+
+    @property
+    def days_in_month(self) -> ColumnBase:
+        return libcudf.datetime.days_in_month(self)
+
+    @property
     def values(self):
         """
         Return a CuPy representation of the DateTimeColumn.
