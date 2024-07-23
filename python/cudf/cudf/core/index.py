@@ -2513,6 +2513,35 @@ class TimedeltaIndex(Index):
             return pd.Timedelta(value)
         return value
 
+    def as_unit(self, unit: str, round_ok: bool = True) -> Self:
+        """
+        Convert to a dtype with the given unit resolution.
+
+        Currently not implemented.
+
+        Parameters
+        ----------
+        unit : {'s', 'ms', 'us', 'ns'}
+        round_ok : bool, default True
+            If False and the conversion requires rounding, raise ValueError.
+        """
+        raise NotImplementedError("as_unit is currently not implemented")
+
+    @property
+    def freq(self) -> cudf.DateOffset | None:
+        raise NotImplementedError("freq is currently not implemented")
+
+    @property
+    def freqstr(self) -> str:
+        raise NotImplementedError("freqstr is currently not implemented")
+
+    @property
+    def resolution(self) -> str:
+        """
+        Returns day, hour, minute, second, millisecond or microsecond
+        """
+        raise NotImplementedError("resolution is currently not implemented")
+
     @property
     def unit(self) -> str:
         return self._column.time_unit
@@ -2543,6 +2572,38 @@ class TimedeltaIndex(Index):
 
     def std(self, *, skipna: bool = True, axis: int | None = 0, ddof: int = 1):
         return self._column.std(skipna=skipna, ddof=ddof)
+
+    def total_seconds(self) -> cupy.ndarray:
+        """
+        Return total duration of each element expressed in seconds.
+
+        This method is currently not implemented.
+        """
+        raise NotImplementedError("total_seconds is currently not implemented")
+
+    def ceil(self, freq) -> Self:
+        """
+        Ceil to the specified resolution.
+
+        This method is currently not implemented.
+        """
+        raise NotImplementedError("ceil is currently not implemented")
+
+    def floor(self, freq) -> Self:
+        """
+        Floor to the specified resolution.
+
+        This method is currently not implemented.
+        """
+        raise NotImplementedError("floor is currently not implemented")
+
+    def round(self, freq) -> Self:
+        """
+        Round to the specified resolution.
+
+        This method is currently not implemented.
+        """
+        raise NotImplementedError("round is currently not implemented")
 
     @property  # type: ignore
     @_performance_tracking
