@@ -2579,31 +2579,31 @@ class TimedeltaIndex(Index):
 
         This method is currently not implemented.
         """
-        raise NotImplementedError("total_seconds is currently not implemented")
+        return self._column.total_seconds().values
 
-    def ceil(self, freq) -> Self:
+    def ceil(self, freq: str) -> Self:
         """
         Ceil to the specified resolution.
 
         This method is currently not implemented.
         """
-        raise NotImplementedError("ceil is currently not implemented")
+        return type(self)._from_data({self.name: self._column.ceil(freq)})
 
-    def floor(self, freq) -> Self:
+    def floor(self, freq: str) -> Self:
         """
         Floor to the specified resolution.
 
         This method is currently not implemented.
         """
-        raise NotImplementedError("floor is currently not implemented")
+        return type(self)._from_data({self.name: self._column.floor(freq)})
 
-    def round(self, freq) -> Self:
+    def round(self, freq: str) -> Self:
         """
         Round to the specified resolution.
 
         This method is currently not implemented.
         """
-        raise NotImplementedError("round is currently not implemented")
+        return type(self)._from_data({self.name: self._column.round(freq)})
 
     @property  # type: ignore
     @_performance_tracking
