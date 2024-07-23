@@ -7,6 +7,8 @@ import warnings
 
 import rmm.mr
 
+from cudf._lib import pylibcudf
+
 from .fast_slow_proxy import is_proxy_object
 from .magics import load_ipython_extension
 from .profiler import Profiler
@@ -26,55 +28,53 @@ def install():
     LOADED = loader is not None
 
     rmm_mode = os.getenv("CUDF_PANDAS_RMM_MODE", "managed_pool")
-    if rmm_mode != "disable":
-        # Check if a non-default memory resource is set
-        current_mr = rmm.mr.get_current_device_resource()
-        if not isinstance(current_mr, rmm.mr.CudaMemoryResource):
-            warnings.warn(
-                f"cudf.pandas detected an already configured memory resource, ignoring 'CUDF_PANDAS_RMM_MODE'={str(rmm_mode)}",
-                UserWarning,
-            )
-        enable_prefetching = "managed" in rmm_mode
-        free_memory, _ = rmm.mr.available_device_memory()
-        free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
+    # Check if a non-default memory resource is set
+    current_mr = rmm.mr.get_current_device_resource()
+    if not isinstance(current_mr, rmm.mr.CudaMemoryResource):
+        warnings.warn(
+            f"cudf.pandas detected an already configured memory resource, ignoring 'CUDF_PANDAS_RMM_MODE'={str(rmm_mode)}",
+            UserWarning,
+        )
+        return
+    enable_prefetching = "managed" in rmm_mode
+    free_memory, _ = rmm.mr.available_device_memory()
+    free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
 
-        if rmm_mode == "cuda":
-            mr = rmm.mr.CudaMemoryResource()
-            rmm.mr.set_current_device_resource(mr)
-        elif rmm_mode == "pool":
-            rmm.mr.set_current_device_resource(
-                rmm.mr.PoolMemoryResource(
-                    rmm.mr.get_current_device_resource(),
-                    initial_pool_size=free_memory,
-                )
+    if rmm_mode == "cuda":
+        current_mr = rmm.mr.CudaMemoryResource()
+    elif rmm_mode == "pool":
+        current_mr = rmm.mr.set_current_device_resource(
+            rmm.mr.PoolMemoryResource(
+                rmm.mr.get_current_device_resource(),
+                initial_pool_size=free_memory,
             )
-        elif rmm_mode == "async":
-            mr = rmm.mr.CudaAsyncMemoryResource(initial_pool_size=free_memory)
-            rmm.mr.set_current_device_resource(mr)
-        elif rmm_mode == "managed":
-            mr = rmm.mr.PrefetchResourceAdaptor(rmm.mr.ManagedMemoryResource())
-            rmm.mr.set_current_device_resource(mr)
-        elif rmm_mode == "managed_pool":
-            mr = rmm.mr.PrefetchResourceAdaptor(
-                rmm.mr.PoolMemoryResource(
-                    rmm.mr.ManagedMemoryResource(),
-                    initial_pool_size=free_memory,
-                )
+        )
+    elif rmm_mode == "async":
+        current_mr = rmm.mr.CudaAsyncMemoryResource(
+            initial_pool_size=free_memory
+        )
+    elif rmm_mode == "managed":
+        current_mr = rmm.mr.PrefetchResourceAdaptor(
+            rmm.mr.ManagedMemoryResource()
+        )
+    elif rmm_mode == "managed_pool":
+        current_mr = rmm.mr.PrefetchResourceAdaptor(
+            rmm.mr.PoolMemoryResource(
+                rmm.mr.ManagedMemoryResource(),
+                initial_pool_size=free_memory,
             )
-            rmm.mr.set_current_device_resource(mr)
-        else:
-            raise ValueError(f"Unsupported rmm mode: {rmm_mode}")
-
-        if enable_prefetching:
-            from cudf._lib import pylibcudf
-
-            for key in {
-                "column_view::get_data",
-                "mutable_column_view::get_data",
-                "gather",
-                "hash_join",
-            }:
-                pylibcudf.experimental.enable_prefetching(key)
+        )
+    else:
+        raise ValueError(f"Unsupported rmm mode: {rmm_mode}")
+    rmm.mr.set_current_device_resource(current_mr)
+    if enable_prefetching:
+        for key in {
+            "column_view::get_data",
+            "mutable_column_view::get_data",
+            "gather",
+            "hash_join",
+        }:
+            pylibcudf.experimental.enable_prefetching(key)
 
 
 def pytest_load_initial_conftests(early_config, parser, args):
