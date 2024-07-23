@@ -53,9 +53,11 @@ def install():
             mr = rmm.mr.PrefetchResourceAdaptor(rmm.mr.ManagedMemoryResource())
             rmm.mr.set_current_device_resource(mr)
         elif rmm_mode == "managed_pool":
-            mr = rmm.mr.PoolMemoryResource(
-                rmm.mr.ManagedMemoryResource(),
-                initial_pool_size=free_memory,
+            mr = rmm.mr.PrefetchResourceAdaptor(
+                rmm.mr.PoolMemoryResource(
+                    rmm.mr.ManagedMemoryResource(),
+                    initial_pool_size=free_memory,
+                )
             )
             rmm.mr.set_current_device_resource(mr)
         else:
