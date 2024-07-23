@@ -38,9 +38,7 @@ def install():
     free_memory, _ = rmm.mr.available_device_memory()
     free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
 
-    if rmm_mode == "cuda":
-        current_mr = rmm.mr.CudaMemoryResource()
-    elif rmm_mode == "pool":
+    if rmm_mode == "pool":
         current_mr = rmm.mr.set_current_device_resource(
             rmm.mr.PoolMemoryResource(
                 current_mr,
@@ -62,8 +60,8 @@ def install():
                 initial_pool_size=free_memory,
             )
         )
-    else:
-        raise ValueError(f"Unsupported rmm mode: {rmm_mode}")
+    elif rmm_mode != "cuda":
+        raise ValueError(f"Unsupported {rmm_mode=}")
     rmm.mr.set_current_device_resource(current_mr)
     if enable_prefetching:
         for key in {
