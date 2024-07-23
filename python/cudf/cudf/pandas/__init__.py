@@ -45,7 +45,7 @@ def install():
     elif rmm_mode == "pool":
         current_mr = rmm.mr.set_current_device_resource(
             rmm.mr.PoolMemoryResource(
-                rmm.mr.get_current_device_resource(),
+                current_mr,
                 initial_pool_size=free_memory,
             )
         )
