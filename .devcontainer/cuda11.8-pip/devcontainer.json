@@ -8,9 +8,6 @@
       "BASE": "rapidsai/devcontainers:24.08-cpp-cuda11.8-ubuntu22.04"
     }
   },
-  "containerEnv": {
-      "RAPIDS_MATRIX_ENTRY": "cuda=11.8;cuda_suffixed=true"
-  },
   "runArgs": [
     "--rm",
     "--name",
