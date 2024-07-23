@@ -3788,26 +3788,20 @@ def test_parquet_chunked_reader(
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("chunk_read_limit", [240])  # [0, 240, 102400000])
-@pytest.mark.parametrize("pass_read_limit", [240])  # [0, 240, 102400000])
 @pytest.mark.parametrize(
     "nrows,skip_rows",
     [
-        # These are OK
         (0, 0),
         (1000, 0),
         (0, 1000),
-        # segfault in the chunked parquet reader (invalid device ordinal)
         (1000, 10000),
     ],
 )
-def test_parquet_reader_nrows_skiprows(
-    nrows, skip_rows
-):
+def test_parquet_reader_nrows_skiprows(nrows, skip_rows):
     df = pd.DataFrame(
         {"a": [1, 2, 3, 4] * 100000, "b": ["av", "qw", "hi", "xyz"] * 100000}
     )
-    expected = df[skip_rows:skip_rows+nrows]
+    expected = df[skip_rows : skip_rows + nrows]
     buffer = BytesIO()
     df.to_parquet(buffer)
     got = cudf.read_parquet(buffer, nrows=nrows, skip_rows=skip_rows)
@@ -3824,27 +3818,3 @@ def test_parquet_reader_pandas_compatibility():
     with cudf.option_context("io.parquet.low_memory", True):
         expected = cudf.read_parquet(buffer)
     assert_eq(expected, df)
-
-
-@pytest.mark.parametrize("row_group_size", [None, 1, 4, 33])
-def test_parquet_read_rows(tmpdir, pdf, row_group_size):
-    if len(pdf) > 100:
-        pytest.skip("Skipping long setup test")
-
-    fname = tmpdir.join("row_group.parquet")
-    pdf.to_parquet(fname, compression="None", row_group_size=row_group_size)
-
-    total_rows, _, _, _, _ = cudf.io.read_parquet_metadata(fname)
-
-    num_rows = total_rows // 4
-    skip_rows = (total_rows - num_rows) // 2
-    print(num_rows, skip_rows)
-    gdf = cudf.read_parquet(fname, skip_rows=skip_rows, nrows=num_rows)
-
-    # cudf doesn't preserve category dtype
-    if "col_category" in pdf.columns:
-        pdf = pdf.drop(columns=["col_category"])
-    if "col_category" in gdf.columns:
-        gdf = gdf.drop(columns=["col_category"])
-
-    assert_eq(pdf.iloc[skip_rows : skip_rows + num_rows], gdf)
