@@ -136,6 +136,8 @@ struct column_metadata {
  * Converts the `cudf::table_view` to `arrow::Table` with the provided
  * metadata `column_names`.
  *
+ * @deprecated Since 24.08. Use cudf::to_arrow_host instead.
+ *
  * @throws cudf::logic_error if `column_names` size doesn't match with number of columns.
  *
  * @param input table_view that needs to be converted to arrow Table
@@ -160,6 +162,8 @@ struct column_metadata {
  * @brief Create `arrow::Scalar` from cudf scalar `input`
  *
  * Converts the `cudf::scalar` to `arrow::Scalar`.
+ *
+ * @deprecated Since 24.08.
  *
  * @param input scalar that needs to be converted to arrow Scalar
  * @param metadata Contains hierarchy of names of columns and children
@@ -384,6 +388,8 @@ unique_device_array_t to_arrow_host(
 /**
  * @brief Create `cudf::table` from given arrow Table input
  *
+ * @deprecated Since 24.08. Use cudf::from_arrow_host instead.
+ *
  * @param input arrow:Table that needs to be converted to `cudf::table`
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr    Device memory resource used to allocate `cudf::table`
@@ -396,6 +402,8 @@ unique_device_array_t to_arrow_host(
 
 /**
  * @brief Create `cudf::scalar` from given arrow Scalar input
+ *
+ * @deprecated Since 24.08.
  *
  * @param input `arrow::Scalar` that needs to be converted to `cudf::scalar`
  * @param stream CUDA stream used for device memory operations and kernel launches
