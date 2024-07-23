@@ -37,6 +37,13 @@
 #include NVCOMP_ZSTD_HEADER
 #endif
 
+// When building with nvcomp 4.0 or newer, map the new version macros to the old ones
+#ifndef NVCOMP_MAJOR_VERSION
+#define NVCOMP_MAJOR_VERSION NVCOMP_VER_MAJOR
+#define NVCOMP_MINOR_VERSION NVCOMP_VER_MINOR
+#define NVCOMP_PATCH_VERSION NVCOMP_VER_PATCH
+#endif
+
 #define NVCOMP_HAS_ZSTD_DECOMP(MAJOR, MINOR, PATCH) (MAJOR > 2 or (MAJOR == 2 and MINOR >= 3))
 
 #define NVCOMP_HAS_ZSTD_COMP(MAJOR, MINOR, PATCH) (MAJOR > 2 or (MAJOR == 2 and MINOR >= 4))
