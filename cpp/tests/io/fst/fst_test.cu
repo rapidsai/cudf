@@ -169,7 +169,9 @@ TEST_F(FstTest, GroundTruth)
   auto parser = cudf::io::fst::detail::make_fst(
     cudf::io::fst::detail::make_symbol_group_lut(pda_sgs),
     cudf::io::fst::detail::make_transition_table(pda_state_tt),
-    cudf::io::fst::detail::make_translation_table<TT_NUM_STATES * NUM_SYMBOL_GROUPS>(pda_out_tt),
+    cudf::io::fst::detail::make_translation_table<TT_NUM_STATES * NUM_SYMBOL_GROUPS,
+                                                  min_translated_out,
+                                                  max_translated_out>(pda_out_tt),
     stream);
 
   // Allocate device-side temporary storage & run algorithm
