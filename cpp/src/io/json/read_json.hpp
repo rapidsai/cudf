@@ -31,6 +31,19 @@
 namespace cudf {
 namespace io::json::detail {
 
+// Some magic numbers
+constexpr int num_subchunks               = 10;  // per chunk_size
+constexpr size_t min_subchunk_size        = 10000;
+constexpr int estimated_compression_ratio = 4;
+constexpr int max_subchunks_prealloced    = 3;
+
+device_span<char> ingest_raw_input(device_span<char> buffer,
+                                   host_span<std::unique_ptr<datasource>> sources,
+                                   compression_type compression,
+                                   size_t range_offset,
+                                   size_t range_size,
+                                   rmm::cuda_stream_view stream);
+
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& reader_opts,
                               rmm::cuda_stream_view stream,
@@ -39,12 +52,6 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
 size_type find_first_delimiter(device_span<char const> d_data,
                                char const delimiter,
                                rmm::cuda_stream_view stream);
-
-CUDF_EXPORT
-size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::datasource>> sources,
-                                        json_reader_options const& reader_opts,
-                                        char const delimiter,
-                                        rmm::cuda_stream_view stream);
 
 }  // namespace io::json::detail
 }  // namespace cudf
