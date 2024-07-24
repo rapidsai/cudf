@@ -41,7 +41,7 @@
 #include <thrust/transform_scan.h>
 #include <thrust/unique.h>
 
-#include <io/utilities/multibuffer_memset.hpp>
+#include <io/utilities/batched_memset.hpp>
 
 #include <bitset>
 #include <numeric>
@@ -1612,9 +1612,9 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
       }
     }
   }
-  multibuffer_memset(memset_bufs, 0UL, _stream, _mr);
+  batched_memset(memset_bufs, 0UL, _stream, _mr);
   // Need to set null mask bufs to all high bits
-  multibuffer_memset(nullmask_bufs, ULLONG_MAX, _stream, _mr);
+  batched_memset(nullmask_bufs, ULLONG_MAX, _stream, _mr);
 }
 
 std::vector<size_t> reader::impl::calculate_page_string_offsets()

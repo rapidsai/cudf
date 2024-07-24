@@ -356,7 +356,7 @@ ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
 # ##################################################################################################
 # * multi buffer memset benchmark
 # ----------------------------------------------------------------------
-ConfigureNVBench(MULTIBUFFER_MEMSET_BENCH io/utilities/multibuffer_memset_bench.cpp)
+ConfigureNVBench(BATCHED_MEMSET_BENCH io/utilities/batched_memset_bench.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------

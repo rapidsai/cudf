@@ -392,7 +392,7 @@ ConfigureTest(
   utilities_tests/pinned_memory_tests.cpp
   utilities_tests/type_check_tests.cpp
   utilities_tests/type_list_tests.cpp
-  utilities_tests/multibuffer_memset_tests.cpp
+  utilities_tests/batched_memset_tests.cpp
 )
 
 # ##################################################################################################

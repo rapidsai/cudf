@@ -23,7 +23,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
-#include <src/io/utilities/multibuffer_memset.hpp>
+#include <src/io/utilities/batched_memset.hpp>
 
 // Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
@@ -59,7 +59,7 @@ void parquet_read_common(cudf::size_type num_rows_to_read,
 }
 
 template <data_type DataType>
-void bench_multibuffer_memset(nvbench::state& state,
+void bench_batched_memset(nvbench::state& state,
                               nvbench::type_list<nvbench::enum_type<DataType>>)
 {
   auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
@@ -93,7 +93,7 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::LIST,
                                             data_type::STRUCT>;
 
-NVBENCH_BENCH_TYPES(bench_multibuffer_memset, NVBENCH_TYPE_AXES(d_type_list))
+NVBENCH_BENCH_TYPES(bench_batched_memset, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("multibufffer_memset")
   .set_type_axes_names({"data_type"})
   .add_int64_axis("num_cols", {1000})
