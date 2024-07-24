@@ -196,7 +196,7 @@ std::unique_ptr<cudf::column> gen_repeat_str_col(std::string value, int64_t num_
   auto const indices = rmm::device_uvector<cudf::string_view>(num_rows, cudf::get_default_stream());
   auto const empty_str_col =
     cudf::make_strings_column(indices, cudf::string_view(nullptr, 0), cudf::get_default_stream());
-  auto const scalar        = cudf::string_scalar(value);
+  auto const scalar  = cudf::string_scalar(value);
   auto scalar_repeat = cudf::fill(empty_str_col->view(), 0, num_rows, scalar);
   return scalar_repeat;
 }
@@ -205,8 +205,9 @@ std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string>
                                                         int64_t num_rows)
 {
   // Build a vocab table of random strings to choose from
-  auto const keys   = gen_primary_key_col(0, string_set.size());
-  auto const values = cudf::test::strings_column_wrapper(string_set.begin(), string_set.end()).release();
+  auto const keys = gen_primary_key_col(0, string_set.size());
+  auto const values =
+    cudf::test::strings_column_wrapper(string_set.begin(), string_set.end()).release();
   auto const vocab_table = cudf::table_view({keys->view(), values->view()});
 
   // Build a single column table containing `num_rows` random numbers
@@ -264,11 +265,12 @@ void generate_orders(int64_t scale_factor)
   auto const o_orderpriority = gen_rand_str_col_from_set(vocab_priorities, num_rows);
 
   // Generate the `o_shippriority` column
-  auto const empty          = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT64},
-                                         num_rows,
-                                         cudf::mask_state::UNALLOCATED,
-                                         cudf::get_default_stream());
-  auto const o_shippriority = cudf::fill(empty->view(), 0, num_rows, cudf::numeric_scalar<int64_t>(0));
+  auto const empty = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT64},
+                                               num_rows,
+                                               cudf::mask_state::UNALLOCATED,
+                                               cudf::get_default_stream());
+  auto const o_shippriority =
+    cudf::fill(empty->view(), 0, num_rows, cudf::numeric_scalar<int64_t>(0));
 
   // Generate the `o_comment` column
   auto const o_comment = gen_rand_str_col(19, 78, num_rows);
@@ -697,9 +699,9 @@ void generate_supplier(int64_t const& scale_factor,
   auto const s_phone_part_4 =
     cudf::strings::from_integers(gen_rand_num_col<int64_t>(1000, 9999, num_rows)->view());
   auto const s_phone_parts = cudf::table_view({s_phone_part_1->view(),
-                                         s_phone_part_2->view(),
-                                         s_phone_part_3->view(),
-                                         s_phone_part_4->view()});
+                                               s_phone_part_2->view(),
+                                               s_phone_part_3->view(),
+                                               s_phone_part_4->view()});
   auto const s_phone       = cudf::strings::concatenate(s_phone_parts, cudf::string_scalar("-"));
 
   // Generate the `s_acctbal` column
