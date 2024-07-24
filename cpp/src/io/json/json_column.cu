@@ -77,16 +77,16 @@ void print_tree(host_span<SymbolT const> input,
                 tree_meta_t const& d_gpu_tree,
                 rmm::cuda_stream_view stream)
 {
-  print_vec(cudf::detail::make_std_vector_sync(d_gpu_tree.node_categories, stream),
+  print_vec(cudf::detail::make_host_vector_sync(d_gpu_tree.node_categories, stream),
             "node_categories",
             to_cat);
-  print_vec(cudf::detail::make_std_vector_sync(d_gpu_tree.parent_node_ids, stream),
+  print_vec(cudf::detail::make_host_vector_sync(d_gpu_tree.parent_node_ids, stream),
             "parent_node_ids",
             to_int);
   print_vec(
-    cudf::detail::make_std_vector_sync(d_gpu_tree.node_levels, stream), "node_levels", to_int);
-  auto node_range_begin = cudf::detail::make_std_vector_sync(d_gpu_tree.node_range_begin, stream);
-  auto node_range_end   = cudf::detail::make_std_vector_sync(d_gpu_tree.node_range_end, stream);
+    cudf::detail::make_host_vector_sync(d_gpu_tree.node_levels, stream), "node_levels", to_int);
+  auto node_range_begin = cudf::detail::make_host_vector_sync(d_gpu_tree.node_range_begin, stream);
+  auto node_range_end   = cudf::detail::make_host_vector_sync(d_gpu_tree.node_range_end, stream);
   print_vec(node_range_begin, "node_range_begin", to_int);
   print_vec(node_range_end, "node_range_end", to_int);
   for (int i = 0; i < int(node_range_begin.size()); i++) {
@@ -373,9 +373,9 @@ std::vector<std::string> copy_strings_to_host_sync(
   auto to_host        = [stream](auto const& col) {
     if (col.is_empty()) return std::vector<std::string>{};
     auto const scv     = cudf::strings_column_view(col);
-    auto const h_chars = cudf::detail::make_std_vector_async<char>(
+    auto const h_chars = cudf::detail::make_host_vector_sync<char>(
       cudf::device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
-    auto const h_offsets = cudf::detail::make_std_vector_async(
+    auto const h_offsets = cudf::detail::make_host_vector_sync(
       cudf::device_span<cudf::size_type const>(scv.offsets().data<cudf::size_type>() + scv.offset(),
                                                scv.size() + 1),
       stream);
@@ -523,14 +523,14 @@ void make_device_json_column(device_span<SymbolT const> input,
                           row_array_parent_col_id,
                           stream);
   auto num_columns    = d_unique_col_ids.size();
-  auto unique_col_ids = cudf::detail::make_std_vector_async(d_unique_col_ids, stream);
+  auto unique_col_ids = cudf::detail::make_host_vector_sync(d_unique_col_ids, stream);
   auto column_categories =
-    cudf::detail::make_std_vector_async(d_column_tree.node_categories, stream);
-  auto column_parent_ids =
-    cudf::detail::make_std_vector_async(d_column_tree.parent_node_ids, stream);
+    cudf::detail::make_host_vector_sync(d_column_tree.node_categories, stream);
+  auto const column_parent_ids =
+    cudf::detail::make_host_vector_sync(d_column_tree.parent_node_ids, stream);
   auto column_range_beg =
-    cudf::detail::make_std_vector_async(d_column_tree.node_range_begin, stream);
-  auto max_row_offsets = cudf::detail::make_std_vector_async(d_max_row_offsets, stream);
+    cudf::detail::make_host_vector_sync(d_column_tree.node_range_begin, stream);
+  auto const max_row_offsets = cudf::detail::make_host_vector_sync(d_max_row_offsets, stream);
   std::vector<std::string> column_names = copy_strings_to_host_sync(
     input, d_column_tree.node_range_begin, d_column_tree.node_range_end, stream);
   stream.synchronize();
@@ -540,7 +540,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     auto values_column_indices =
       get_values_column_indices(row_array_children_level, tree, col_ids, num_columns, stream);
     auto h_values_column_indices =
-      cudf::detail::make_std_vector_async(values_column_indices, stream);
+      cudf::detail::make_host_vector_sync(values_column_indices, stream);
     stream.synchronize();
     std::transform(unique_col_ids.begin(),
                    unique_col_ids.end(),
@@ -611,11 +611,13 @@ void make_device_json_column(device_span<SymbolT const> input,
     return thrust::get<0>(a) < thrust::get<0>(b);
   });
 
-  std::vector<uint8_t> is_str_column_all_nulls{};
-  if (is_enabled_mixed_types_as_string) {
-    is_str_column_all_nulls = cudf::detail::make_std_vector_sync(
-      is_all_nulls_each_column(input, d_column_tree, tree, col_ids, options, stream), stream);
-  }
+  auto const is_str_column_all_nulls = [&, &column_tree = d_column_tree]() {
+    if (is_enabled_mixed_types_as_string) {
+      return cudf::detail::make_host_vector_sync(
+        is_all_nulls_each_column(input, column_tree, tree, col_ids, options, stream), stream);
+    }
+    return cudf::detail::make_empty_host_vector<uint8_t>(0, stream);
+  }();
 
   // use hash map because we may skip field name's col_ids
   std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>> columns;
