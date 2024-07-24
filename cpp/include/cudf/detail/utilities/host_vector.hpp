@@ -63,6 +63,10 @@ class rmm_host_allocator<void> {
   };
 };
 
+template <class DesiredProperty, class... Properties>
+inline constexpr bool contains_property =
+  (cuda::std::is_same_v<DesiredProperty, Properties> || ... || false);
+
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
  *  that employs \c `rmm::host_async_resource_ref` for allocation.
  *
@@ -102,8 +106,12 @@ class rmm_host_allocator {
   /**
    * @brief Construct from a `cudf::host_async_resource_ref`
    */
-  rmm_host_allocator(rmm::host_async_resource_ref _mr, rmm::cuda_stream_view _stream)
-    : mr(_mr), stream(_stream)
+  template <class... Properties>
+  rmm_host_allocator(cuda::mr::async_resource_ref<cuda::mr::host_accessible, Properties...> _mr,
+                     rmm::cuda_stream_view _stream)
+    : mr(_mr),
+      stream(_stream),
+      _is_device_accessible{contains_property<cuda::mr::device_accessible, Properties...>}
   {
   }
 
@@ -175,16 +183,26 @@ class rmm_host_allocator {
    */
   inline bool operator!=(rmm_host_allocator const& x) const { return !operator==(x); }
 
+  bool is_device_accessible() const { return _is_device_accessible; }
+
  private:
   rmm::host_async_resource_ref mr;
   rmm::cuda_stream_view stream;
+  bool _is_device_accessible;
 };
 
 /**
  * @brief A vector class with rmm host memory allocator
  */
 template <typename T>
-using host_vector = thrust::host_vector<T, rmm_host_allocator<T>>;
+class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
+ public:
+  using base = thrust::host_vector<T, rmm_host_allocator<T>>;
+
+  host_vector(rmm_host_allocator<T> const& alloc) : base(alloc) {}
+
+  host_vector(size_t size, rmm_host_allocator<T> const& alloc) : base(size, alloc) {}
+};
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf
