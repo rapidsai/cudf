@@ -1496,6 +1496,8 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
   // buffers if they are not part of a list hierarchy. mark down
   // if we have any list columns that need further processing.
   bool has_lists = false;
+  // Using uin64_t as we are relying on the allocation padding for the buffers to be large enough
+  // that we can always write a multiple of 8 byte words
   std::vector<cudf::device_span<uint64_t>> memset_bufs;
   std::vector<cudf::device_span<uint64_t>> nullmask_bufs;
 
@@ -1522,11 +1524,15 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
           cudf::mask_state::UNINITIALIZED,
           _stream,
           _mr);
-        memset_bufs.push_back(cudf::device_span<uint64_t>(static_cast<uint64_t*>(out_buf.data()),
-                                                          out_buf.data_size() / sizeof(uint64_t)));
-        nullmask_bufs.push_back(
-          cudf::device_span<uint64_t>(reinterpret_cast<uint64_t*>(out_buf.null_mask()),
-                                      out_buf.null_mask_size() / sizeof(uint64_t)));
+        // Using uin64_t is safe as we are relying on the allocation padding for the buffers to be
+        // large enough that we can always write a multiple of 8 byte words
+        memset_bufs.push_back(cudf::device_span<uint64_t>(
+          static_cast<uint64_t*>(out_buf.data()),
+          cudf::util::round_up_safe(out_buf.data_size(), sizeof(uint64_t)) / sizeof(uint64_t)));
+        nullmask_bufs.push_back(cudf::device_span<uint64_t>(
+          reinterpret_cast<uint64_t*>(out_buf.null_mask()),
+          cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(uint64_t)) /
+            sizeof(uint64_t)));
       }
     }
   }
@@ -1603,11 +1609,15 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
           // allocate
           // we're going to start null mask as all valid and then turn bits off if necessary
           out_buf.create_with_mask(size, cudf::mask_state::UNINITIALIZED, _stream, _mr);
+          // Using uin64_t is safe as we are relying on the allocation padding for the buffers to be
+          // large enough that we can always write a multiple of 8 byte words
           memset_bufs.push_back(cudf::device_span<uint64_t>(
-            static_cast<uint64_t*>(out_buf.data()), out_buf.data_size() / sizeof(uint64_t)));
-          nullmask_bufs.push_back(
-            cudf::device_span<uint64_t>(reinterpret_cast<uint64_t*>(out_buf.null_mask()),
-                                        out_buf.null_mask_size() / sizeof(uint64_t)));
+            static_cast<uint64_t*>(out_buf.data()),
+            cudf::util::round_up_safe(out_buf.data_size(), sizeof(uint64_t)) / sizeof(uint64_t)));
+          nullmask_bufs.push_back(cudf::device_span<uint64_t>(
+            reinterpret_cast<uint64_t*>(out_buf.null_mask()),
+            cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(uint64_t)) /
+              sizeof(uint64_t)));
         }
       }
     }
