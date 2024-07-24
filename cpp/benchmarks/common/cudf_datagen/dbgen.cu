@@ -219,6 +219,7 @@ std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string>
   return std::make_unique<cudf::column>(joined_table->get_column(2));
 }
 
+// NOTE: Incomplete table
 void generate_lineitem(int64_t scale_factor)
 {
   cudf::size_type const num_rows = 1'500'000 * scale_factor;
@@ -257,6 +258,7 @@ void generate_lineitem(int64_t scale_factor)
                 {"l_quantity", "l_discount", "l_tax", "l_comment", "l_shipinstruct", "l_shipmode"});
 }
 
+// NOTE: Incomplete table
 void generate_orders(int64_t scale_factor)
 {
   cudf::size_type const num_rows = 1'500'000 * scale_factor;
