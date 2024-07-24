@@ -623,9 +623,11 @@ TEST_F(StringsContainsTests, SpecialNewLines)
   auto view  = cudf::strings_column_view(input);
 
   auto pattern = std::string("^zzé$");
-  auto prog    = cudf::strings::regex_program::create(pattern);
-  auto prog_ml =
-    cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::MULTILINE);
+  auto prog =
+    cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::EXT_NEWLINE);
+  auto both_flags = static_cast<cudf::strings::regex_flags>(
+    cudf::strings::regex_flags::EXT_NEWLINE | cudf::strings::regex_flags::MULTILINE);
+  auto prog_ml = cudf::strings::regex_program::create(pattern, both_flags);
 
   auto expected_contains = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0, 1, 1});
   auto results           = cudf::strings::contains_re(view, *prog_ml);

@@ -321,25 +321,33 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
             expanded    = true;
             break;
           case BOL: {
-            auto titr = itr;
-            if ((pos == 0) || ((inst.u1.c == '^') && (is_newline(*(--titr))))) {
+            auto titr          = itr;
+            auto const prev_ch = *(--titr);
+            if ((pos == 0) || ((inst.u1.c == '^') && (is_newline(prev_ch)))) {
               id_activate = inst.u2.next_id;
               expanded    = true;
             }
+            // if ((pos == 0) || ((inst.u1.c == '^') && (prev_ch == '\n')) ||
+            //     ((inst.u1.c == 'S') && (is_newline(prev_ch)))) {
+            //   id_activate = inst.u2.next_id;
+            //   expanded    = true;
+            // }
             break;
           }
-          case EOL:
+          case EOL: {
             // after the last character OR:
             // - for MULTILINE, if current character is new-line
             // - for non-MULTILINE, the very last character of the string can also be a new-line
+            // bool bnl = (inst.u1.c == 'S' || inst.u1.c == 'N') ? is_newline(c) : (c == '\n');
             if (last_character ||
                 (is_newline(c) && (inst.u1.c != 'Z') &&
-                 ((inst.u1.c == '$') ||
+                 ((inst.u1.c == '$') ||  // || inst.u1.c == 'S'
                   (itr.byte_offset() + bytes_in_char_utf8(c) == dstr.size_bytes())))) {
               id_activate = inst.u2.next_id;
               expanded    = true;
             }
             break;
+          }
           case BOW:
           case NBOW: {
             auto titr               = itr;
