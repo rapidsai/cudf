@@ -1196,9 +1196,6 @@ class Cast(Expr):
             raise NotImplementedError(
                 f"Can't cast {self.dtype.id().name} to {value.dtype.id().name}"
             )
-            raise NotImplementedError(
-                f"Can't cast {self.dtype.id().name} to {value.dtype.id().name}"
-            )
 
     def do_evaluate(
         self,
