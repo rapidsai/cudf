@@ -109,7 +109,7 @@ int main(int argc, char const** argv)
   auto const o_orderdate_upper_limit = cudf::ast::literal(o_orderdate_upper);
   auto const o_orderdate_pred_upper =
     cudf::ast::operation(cudf::ast::ast_operator::LESS, o_orderdate_ref, o_orderdate_upper_limit);
-  auto orders_pred = std::make_unique<cudf::ast::operation>(
+  auto const orders_pred = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LOGICAL_AND, o_orderdate_pred_lower, o_orderdate_pred_upper);
 
   // Define the column projection and filter predicate for the `region` table
@@ -118,7 +118,7 @@ int main(int argc, char const** argv)
     region_cols.begin(), std::find(region_cols.begin(), region_cols.end(), "r_name")));
   auto r_name_value                          = cudf::string_scalar("ASIA");
   auto const r_name_literal                  = cudf::ast::literal(r_name_value);
-  auto region_pred                           = std::make_unique<cudf::ast::operation>(
+  auto const region_pred                     = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::EQUAL, r_name_ref, r_name_literal);
 
   // Read out the tables from parquet files

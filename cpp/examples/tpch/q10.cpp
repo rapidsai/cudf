@@ -113,7 +113,7 @@ int main(int argc, char const** argv)
   auto const o_orderdate_upper_limit = cudf::ast::literal(o_orderdate_upper);
   auto const o_orderdate_pred_upper =
     cudf::ast::operation(cudf::ast::ast_operator::LESS, o_orderdate_ref, o_orderdate_upper_limit);
-  auto orders_pred = std::make_unique<cudf::ast::operation>(
+  auto const orders_pred = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LOGICAL_AND, o_orderdate_pred_lower, o_orderdate_pred_upper);
 
   // Read out the tables from parquet files
