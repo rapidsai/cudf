@@ -73,8 +73,8 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
   });
 
   // Assemble contiguous array of device views
-  auto device_views = thrust::host_vector<column_device_view>();
-  device_views.reserve(views.size());
+  auto device_views =
+    cudf::detail::make_empty_host_vector<column_device_view>(views.size(), stream);
   std::transform(device_view_owners.cbegin(),
                  device_view_owners.cend(),
                  std::back_inserter(device_views),
@@ -84,7 +84,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     make_device_uvector_async(device_views, stream, rmm::mr::get_current_device_resource());
 
   // Compute the partition offsets
-  auto offsets = thrust::host_vector<size_t>(views.size() + 1);
+  auto offsets = cudf::detail::make_host_vector<size_t>(views.size() + 1, stream);
   thrust::transform_inclusive_scan(
     thrust::host,
     device_views.cbegin(),

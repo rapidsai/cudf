@@ -150,7 +150,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         dtype=None,
         copy=False,
         name=None,
-        **kwargs,
+        verify_integrity=True,
     ):
         if sortorder is not None:
             raise NotImplementedError("sortorder is not yet supported")
@@ -841,10 +841,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         | tuple[Any, ...]
         | list[tuple[Any, ...]],
     ) -> DataFrameOrSeries:
-        if pd.api.types.is_bool_dtype(
-            list(row_tuple) if isinstance(row_tuple, tuple) else row_tuple
-        ):
-            return df[row_tuple]
         if isinstance(row_tuple, slice):
             if row_tuple.start is None:
                 row_tuple = slice(self[0], row_tuple.stop, row_tuple.step)
@@ -1926,17 +1922,18 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         # Handle partial key search. If length of `key` is less than `nlevels`,
         # Only search levels up to `len(key)` level.
-        key_as_table = cudf.core.frame.Frame(
-            {i: column.as_column(k, length=1) for i, k in enumerate(key)}
-        )
         partial_index = self.__class__._from_data(
-            data=self._data.select_by_index(slice(key_as_table._num_columns))
+            data=self._data.select_by_index(slice(len(key)))
         )
         (
             lower_bound,
             upper_bound,
             sort_inds,
-        ) = _lexsorted_equal_range(partial_index, key_as_table, is_sorted)
+        ) = _lexsorted_equal_range(
+            partial_index,
+            [column.as_column(k, length=1) for k in key],
+            is_sorted,
+        )
 
         if lower_bound == upper_bound:
             raise KeyError(key)
@@ -1961,7 +1958,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             return true_inds
 
         # Not sorted and not unique. Return a boolean mask
-        mask = cp.full(self._data.nrows, False)
+        mask = cp.full(len(self), False)
         mask[true_inds] = True
         return mask
 

@@ -188,9 +188,6 @@ def cut(
         # adjust bin edges decimal precision
         int_label_bins = np.around(bins, precision)
 
-    # the inputs is a column of the values in the array x
-    input_arr = as_column(x)
-
     # checking for the correct inclusivity values
     if right:
         closed = "right"
@@ -241,6 +238,9 @@ def cut(
             interval_labels = (
                 labels if len(set(labels)) == len(labels) else None
             )
+
+    # the inputs is a column of the values in the array x
+    input_arr = as_column(x)
 
     if isinstance(bins, pd.IntervalIndex):
         # get the left and right edges of the bins as columns

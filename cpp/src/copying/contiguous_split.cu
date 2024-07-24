@@ -1539,7 +1539,8 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
 
     std::vector<std::size_t> num_batches_per_iteration;
     std::vector<std::size_t> size_of_batches_per_iteration;
-    std::vector<std::size_t> accum_size_per_iteration;
+    auto accum_size_per_iteration =
+      cudf::detail::make_empty_host_vector<std::size_t>(h_offsets.size(), stream);
     std::size_t accum_size = 0;
     {
       auto current_offset_it = h_offsets.begin();

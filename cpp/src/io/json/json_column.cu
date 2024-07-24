@@ -623,7 +623,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   // map{parent_col_id, child_col_name}> = child_col_id, used for null value column tracking
   std::map<std::pair<NodeIndexT, std::string>, NodeIndexT> mapped_columns;
   // find column_ids which are values, but should be ignored in validity
-  std::vector<uint8_t> ignore_vals(num_columns, 0);
+  auto ignore_vals = cudf::detail::make_host_vector<uint8_t>(num_columns, stream);
   std::vector<uint8_t> is_mixed_type_column(num_columns, 0);
   std::vector<uint8_t> is_pruned(num_columns, 0);
   columns.try_emplace(parent_node_sentinel, std::ref(root));
@@ -813,7 +813,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     return thrust::get<1>(a) < thrust::get<1>(b);
   });
   // move columns data to device.
-  std::vector<json_column_data> columns_data(num_columns);
+  auto columns_data = cudf::detail::make_host_vector<json_column_data>(num_columns, stream);
   for (auto& [col_id, col_ref] : columns) {
     if (col_id == parent_node_sentinel) continue;
     auto& col            = col_ref.get();
