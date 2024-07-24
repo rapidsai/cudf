@@ -620,9 +620,12 @@ dependencies:
               cuda_suffixed: "false"
             packages:
               - *rmm_conda
-              # for as long as 'pynvjitlink' is not built from source in
-              # RAPIDS devcontainers / DLFW, it needs to be the fully-suffixed name
-              # here so it'll be found from package indices
+              # pynvjitlink still has a '-cu12' suffix here because:
+              #
+              #   * it's suffixed when built from source in DLFW builds
+              #   * it needs to be 'pip install'-ed from package repositories
+              #     in RAPIDS devcontainer builds
+              #
               - *pynvjitlink_cu12
           - matrix:
               cuda: "11.*"
