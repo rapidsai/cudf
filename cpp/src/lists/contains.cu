@@ -34,7 +34,6 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/optional>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>

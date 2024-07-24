@@ -35,7 +35,6 @@
 
 #include <cuda/std/climits>
 #include <cuda/std/limits>
-#include <cuda/std/optional>
 #include <cuda/std/type_traits>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
