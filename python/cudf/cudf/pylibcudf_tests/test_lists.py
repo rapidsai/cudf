@@ -198,6 +198,22 @@ def test_count_elements(test_data):
     assert_column_eq(expect, res)
 
 
+def test_sequences():
+    starts = plc.interop.from_arrow(pa.array([0, 1, 2, 3, 4]))
+    steps = plc.interop.from_arrow(pa.array([2, 1, 1, 1, -3]))
+    sizes = plc.interop.from_arrow(pa.array([0, 2, 2, 1, 3]))
+
+    res1 = plc.lists.sequences(starts, sizes, steps)
+    res2 = plc.lists.sequences(starts, sizes)
+
+    expect1 = pa.array([[], [1, 2], [2, 3], [3], [4, 1, -2]])
+    expect2 = pa.array([[], [1, 2], [2, 3], [3], [4, 5, 6]])
+
+    assert_column_eq(expect1, res1)
+
+    assert_column_eq(expect2, res2)
+
+
 @pytest.mark.parametrize(
     "ascending,na_position,expected",
     [
