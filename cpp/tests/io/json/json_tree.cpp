@@ -235,10 +235,8 @@ tree_meta_t2 get_tree_representation_cpu(
 {
   constexpr bool include_quote_char = true;
   // Copy the JSON tokens to the host
-  thrust::host_vector<cuio_json::PdaTokenT> tokens =
-    cudf::detail::make_host_vector_async(tokens_gpu, stream);
-  thrust::host_vector<cuio_json::SymbolOffsetT> token_indices =
-    cudf::detail::make_host_vector_async(token_indices_gpu1, stream);
+  auto tokens        = cudf::detail::make_host_vector_async(tokens_gpu, stream);
+  auto token_indices = cudf::detail::make_host_vector_async(token_indices_gpu1, stream);
 
   // Make sure tokens have been copied to the host
   stream.synchronize();
