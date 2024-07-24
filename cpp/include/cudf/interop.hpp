@@ -152,7 +152,7 @@ struct column_metadata {
  * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
  * converted to Arrow decimal128 of the precision 38.
  */
-[[deprecated]] std::shared_ptr<arrow::Table> to_arrow(
+[[deprecated("Use cudf::to_arrow_host")]] std::shared_ptr<arrow::Table> to_arrow(
   table_view input,
   std::vector<column_metadata> const& metadata = {},
   rmm::cuda_stream_view stream                 = cudf::get_default_stream(),
@@ -177,7 +177,7 @@ struct column_metadata {
  * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
  * converted to Arrow decimal128 of the precision 38.
  */
-[[deprecated]] std::shared_ptr<arrow::Scalar> to_arrow(
+[[deprecated("Use cudf::to_arrow_host")]] std::shared_ptr<arrow::Scalar> to_arrow(
   cudf::scalar const& input,
   column_metadata const& metadata = {},
   rmm::cuda_stream_view stream    = cudf::get_default_stream(),
@@ -395,7 +395,7 @@ unique_device_array_t to_arrow_host(
  * @param mr    Device memory resource used to allocate `cudf::table`
  * @return cudf table generated from given arrow Table
  */
-[[deprecated]] std::unique_ptr<table> from_arrow(
+[[deprecated("Use cudf::from_arrow_host")]] std::unique_ptr<table> from_arrow(
   arrow::Table const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
