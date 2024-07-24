@@ -1703,10 +1703,8 @@ void make_json_column(json_column& root_column,
   auto const [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
 
   // Copy the JSON tokens to the host
-  thrust::host_vector<PdaTokenT> tokens =
-    cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
-  thrust::host_vector<SymbolOffsetT> token_indices_gpu =
-    cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
+  auto tokens            = cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
+  auto token_indices_gpu = cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
 
   // Make sure tokens have been copied to the host
   stream.synchronize();
