@@ -25,9 +25,9 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
-#include <io/utilities/multibuffer_memset.hpp>
+#include <io/utilities/batched_memset.hpp>
 
-void multibuffer_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
+void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
                         uint64_t const value,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr)

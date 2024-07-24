@@ -442,7 +442,7 @@ add_library(
   src/io/utilities/base64_utilities.cpp
   src/io/utilities/column_buffer.cpp
   src/io/utilities/column_buffer_strings.cu
-  src/io/utilities/multibuffer_memset.cu
+  src/io/utilities/batched_memset.cu
   src/io/utilities/config_utils.cpp
   src/io/utilities/data_casting.cu
   src/io/utilities/data_sink.cpp
