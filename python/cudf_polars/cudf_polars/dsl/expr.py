@@ -1424,13 +1424,14 @@ class BinOp(Expr):
         super().__init__(dtype)
         self.op = op
         self.children = (left, right)
-        if (
-            op in (plc.binaryop.BinaryOperator.ADD, plc.binaryop.BinaryOperator.SUB)
-            and plc.traits.is_chrono(left.dtype)
-            and plc.traits.is_chrono(right.dtype)
-            and not dtypes.have_compatible_resolution(left.dtype.id(), right.dtype.id())
+        if not plc.binaryop.is_supported_operation(
+            self.dtype, left.dtype, right.dtype, op
         ):
-            raise NotImplementedError("Casting rules for timelike types")
+            raise NotImplementedError(
+                f"Operation {op.name} not supported "
+                f"for types {left.dtype.id().name} and {right.dtype.id().name} "
+                f"with output type {self.dtype.id().name}"
+            )
 
     _MAPPING: ClassVar[dict[pl_expr.Operator, plc.binaryop.BinaryOperator]] = {
         pl_expr.Operator.Eq: plc.binaryop.BinaryOperator.EQUAL,
