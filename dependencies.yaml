@@ -329,7 +329,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &rmm_conda rmm==24.8.*,>=0.0.0a0
+          - &rmm_unsuffixed rmm==24.8.*,>=0.0.0a0
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
@@ -349,21 +349,11 @@ dependencies:
             packages:
               - rmm-cu12==24.8.*,>=0.0.0a0
           - matrix:
-              cuda: "12.*"
-              cuda_suffixed: "false"
-            packages: &build_python_cudf_cu12_unsuffixed
-              - *rmm_conda
-          - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
               - rmm-cu11==24.8.*,>=0.0.0a0
-          - matrix:
-              cuda: "11.*"
-              cuda_suffixed: "false"
-            packages:
-              - *rmm_conda
-          - {matrix: null, packages: *build_python_cudf_cu12_unsuffixed}
+          - {matrix: null, packages: [*rmm_unsuffixed]}
   libarrow_build:
     common:
       - output_types: conda
@@ -581,7 +571,7 @@ dependencies:
           - typing_extensions>=4.0.0
       - output_types: conda
         packages:
-          - *rmm_conda
+          - *rmm_unsuffixed
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -605,8 +595,8 @@ dependencies:
               - pynvjitlink>=0.0.0a0
           - matrix: {cuda: "11.*"}
             packages:
-              - &cubinlinker_conda cubinlinker
-              - &ptxcompiler_conda ptxcompiler
+              - &cubinlinker_unsuffixed cubinlinker
+              - &ptxcompiler_unsuffixed ptxcompiler
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
@@ -619,7 +609,7 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "false"
             packages:
-              - *rmm_conda
+              - *rmm_unsuffixed
               - pynvjitlink>=0.0.0a0
           - matrix:
               cuda: "11.*"
@@ -632,9 +622,9 @@ dependencies:
               cuda: "11.*"
               cuda_suffixed: "false"
             packages: &run_cudf_cu11_unsuffixed
-              - *cubinlinker_conda
-              - *ptxcompiler_conda
-              - *rmm_conda
+              - *cubinlinker_unsuffixed
+              - *ptxcompiler_unsuffixed
+              - *rmm_unsuffixed
           - {matrix: null, packages: *run_cudf_cu11_unsuffixed}
   run_cudf_polars:
     common:
@@ -737,7 +727,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &cudf_conda cudf==24.8.*,>=0.0.0a0
+          - &cudf_unsuffixed cudf==24.8.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -753,26 +743,16 @@ dependencies:
             packages:
               - cudf-cu12==24.8.*,>=0.0.0a0
           - matrix:
-              cuda: "12.*"
-              cuda_suffixed: "false"
-            packages:
-              - *cudf_conda
-          - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
               - cudf-cu11==24.8.*,>=0.0.0a0
-          - matrix:
-              cuda: "11.*"
-              cuda_suffixed: "false"
-            packages: &depends_on_cudf_cu11_unsuffixed
-              - *cudf_conda
-          - {matrix: null, packages: *depends_on_cudf_cu11_unsuffixed}
+          - {matrix: null, packages: [*cudf_unsuffixed]}
   depends_on_cudf_kafka:
     common:
       - output_types: conda
         packages:
-          - &cudf_kafka_conda cudf_kafka==24.8.*,>=0.0.0a0
+          - &cudf_kafka_unsuffixed cudf_kafka==24.8.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -788,21 +768,11 @@ dependencies:
             packages:
               - cudf_kafka-cu12==24.8.*,>=0.0.0a0
           - matrix:
-              cuda: "12.*"
-              cuda_suffixed: "false"
-            packages:
-              - *cudf_conda
-          - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
               - cudf_kafka-cu11==24.8.*,>=0.0.0a0
-          - matrix:
-              cuda: "11.*"
-              cuda_suffixed: "false"
-            packages:
-              - *cudf_kafka_conda
-          - {matrix: null, packages: [*cudf_kafka_conda]}
+          - {matrix: null, packages: [*cudf_kafka_unsuffixed]}
   depends_on_cupy:
     common:
       - output_types: conda
