@@ -866,13 +866,6 @@ class StringFunction(Expr):
             )
         elif self.name == pl_expr.StringFunction.ReplaceMany:
             column, target, repl = columns
-            # if plc.binaryop.binary_operation(target.obj):
-            #     # libcudf ignores empty strings for replace_many
-            #     # polars inserts the replacement after every character
-            #     raise NotImplementedError(
-            #         "libcudf replace_many is implemented differently from polars "
-            #         "for empty strings"
-            #     )
             return Column(
                 plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj)
             )
