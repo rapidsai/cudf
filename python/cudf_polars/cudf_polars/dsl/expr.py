@@ -21,6 +21,7 @@ from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 import pyarrow as pa
+import pyarrow.compute as pc
 
 from polars.polars import _expr_nodes as pl_expr
 
@@ -752,10 +753,12 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "ascii_case_insensitive not implemented for replace_many"
                 )
+            if not all(
+                isinstance(expr, (LiteralColumn, Literal)) for expr in self.children[1:]
+            ):
+                raise NotImplementedError("replace_many only supports literal inputs")
             target = self.children[1]
-            if target.value == pa.scalar("", type=pa.string()):
-                # libcudf ignores empty strings for replace_many
-                # polars inserts the replacement after every character
+            if pc.any(pc.equal(target.value, "")).as_py():
                 raise NotImplementedError(
                     "libcudf replace_many is implemented differently from polars "
                     "for empty strings"
@@ -863,6 +866,13 @@ class StringFunction(Expr):
             )
         elif self.name == pl_expr.StringFunction.ReplaceMany:
             column, target, repl = columns
+            # if plc.binaryop.binary_operation(target.obj):
+            #     # libcudf ignores empty strings for replace_many
+            #     # polars inserts the replacement after every character
+            #     raise NotImplementedError(
+            #         "libcudf replace_many is implemented differently from polars "
+            #         "for empty strings"
+            #     )
             return Column(
                 plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj)
             )

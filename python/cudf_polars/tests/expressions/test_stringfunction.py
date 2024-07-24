@@ -192,6 +192,15 @@ def test_replace_many(ldf, target, repl):
     assert_gpu_result_equal(query)
 
 
+@pytest.mark.parametrize(
+    "target,repl",
+    [(["A", ""], ["a", "b"]), (pl.col("a").drop_nulls(), pl.col("a").drop_nulls())],
+)
+def test_replace_many_notimplemented(ldf, target, repl):
+    query = ldf.select(pl.col("a").str.replace_many(target, repl))
+    assert_ir_translation_raises(query, NotImplementedError)
+
+
 def test_replace_many_ascii_case(ldf):
     query = ldf.select(
         pl.col("a").str.replace_many(["a", "b", "c"], "a", ascii_case_insensitive=True)
