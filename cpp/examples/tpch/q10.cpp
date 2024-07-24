@@ -116,6 +116,12 @@ int main(int argc, char const** argv)
   auto const orders_pred = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LOGICAL_AND, o_orderdate_pred_lower, o_orderdate_pred_upper);
 
+  auto const l_returnflag_ref = cudf::ast::column_reference(3);
+  auto r_scalar               = cudf::string_scalar("R");
+  auto const r_literal        = cudf::ast::literal(r_scalar);
+  auto const lineitem_pred    = std::make_unique<cudf::ast::operation>(
+    cudf::ast::ast_operator::EQUAL, l_returnflag_ref, r_literal);
+
   // Read out the tables from parquet files
   // while pushing down the column projections and filter predicates
   auto const customer = read_parquet(
@@ -125,20 +131,13 @@ int main(int argc, char const** argv)
     read_parquet(args.dataset_dir + "/orders.parquet", orders_cols, std::move(orders_pred));
   auto const lineitem =
     read_parquet(args.dataset_dir + "/lineitem.parquet",
-                 {"l_extendedprice", "l_discount", "l_orderkey", "l_returnflag"});
+                 {"l_extendedprice", "l_discount", "l_orderkey", "l_returnflag"},
+                 std::move(lineitem_pred));
   auto const nation = read_parquet(args.dataset_dir + "/nation.parquet", {"n_name", "n_nationkey"});
 
-  // Filter the `lineitem` table using `l_returnflag = `R`'
-  auto const l_returnflag_ref = cudf::ast::column_reference(3);
-  auto r_scalar               = cudf::string_scalar("R");
-  auto const r_literal        = cudf::ast::literal(r_scalar);
-  auto const lineitem_pred =
-    cudf::ast::operation(cudf::ast::ast_operator::EQUAL, l_returnflag_ref, r_literal);
-  auto const lineitem_filtered = apply_filter(lineitem, lineitem_pred);
-
   // Perform the joins
-  auto const join_a = apply_inner_join(customer, nation, {"c_nationkey"}, {"n_nationkey"});
-  auto const join_b = apply_inner_join(lineitem_filtered, orders, {"l_orderkey"}, {"o_orderkey"});
+  auto const join_a       = apply_inner_join(customer, nation, {"c_nationkey"}, {"n_nationkey"});
+  auto const join_b       = apply_inner_join(lineitem, orders, {"l_orderkey"}, {"o_orderkey"});
   auto const joined_table = apply_inner_join(join_a, join_b, {"c_custkey"}, {"o_custkey"});
 
   // Calculate and append the `revenue` column
