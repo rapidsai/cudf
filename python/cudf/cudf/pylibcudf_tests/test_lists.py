@@ -1,11 +1,11 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+import numpy as np
 import pyarrow as pa
 import pytest
 from utils import assert_column_eq
 
 from cudf._lib import pylibcudf as plc
-import numpy as np
 
 
 @pytest.fixture
@@ -290,13 +290,23 @@ def test_sort_lists(lists_column, ascending, na_position, expected):
             plc.lists.union_distinct,
             False,
             True,
-            [[np.nan, 2, 1, 3], [1, 2, 3, 4, 5], None, [4, None, 5, None, None]],
+            [
+                [np.nan, 2, 1, 3],
+                [1, 2, 3, 4, 5],
+                None,
+                [4, None, 5, None, None],
+            ],
         ),
         (
             plc.lists.union_distinct,
             False,
             False,
-            [[np.nan, np.nan, 2, 1, np.nan, 3], [1, 2, 3, 4, 5], None, [4, None, 5, None, None]],
+            [
+                [np.nan, np.nan, 2, 1, np.nan, 3],
+                [1, 2, 3, 4, 5],
+                None,
+                [4, None, 5, None, None],
+            ],
         ),
     ],
 )
@@ -312,7 +322,7 @@ def test_set_operations(
         nulls_equal,
     )
 
-    if (set_operation != plc.lists.have_overlap):
+    if set_operation != plc.lists.have_overlap:
         expect = pa.array(expected, type=pa.list_(pa.float64()))
     else:
         expect = pa.array(expected)
