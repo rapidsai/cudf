@@ -59,8 +59,7 @@ void parquet_read_common(cudf::size_type num_rows_to_read,
 }
 
 template <data_type DataType>
-void bench_batched_memset(nvbench::state& state,
-                              nvbench::type_list<nvbench::enum_type<DataType>>)
+void bench_batched_memset(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
 {
   auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
   auto const num_cols    = static_cast<cudf::size_type>(state.get_int64("num_cols"));
