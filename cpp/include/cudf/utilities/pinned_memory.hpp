@@ -71,4 +71,20 @@ void set_kernel_pinned_copy_threshold(size_t threshold);
  */
 size_t get_kernel_pinned_copy_threshold();
 
+/**
+ * @brief Set the threshold size for allocating host memory as pinned memory.
+ *
+ * @param threshold The threshold size in bytes. If the size of the allocation is less or equal to
+ * this threshold, the memory will be allocated as pinned memory. If the size is greater than this
+ * threshold, the memory will be allocated as pageable memory.
+ */
+void set_allocate_host_as_pinned_threshold(size_t threshold);
+
+/**
+ * @brief Get the threshold size for allocating host memory as pinned memory.
+ *
+ * @return The threshold size in bytes.
+ */
+size_t get_allocate_host_as_pinned_threshold();
+
 }  // namespace cudf
