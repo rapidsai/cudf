@@ -13,7 +13,7 @@
 # =============================================================================
 
 set(cython_sources aggregation.pyx binaryop.pyx copying.pyx expressions.pyx reduce.pyx replace.pyx
-                   round.pyx stream_compaction.pyx types.pyx unary.pyx
+                   rolling.pyx round.pyx stream_compaction.pyx types.pyx unary.pyx
 )
 
 set(linked_libraries cudf::cudf)

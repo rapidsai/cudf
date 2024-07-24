@@ -19,12 +19,12 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <memory>
+#include <utility>
 
 namespace cudf {
 namespace detail {
@@ -47,6 +47,15 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rolling_aggregation const& agg,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr);
+
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> windows_from_offset(
+  column_view const& input,
+  scalar const& length,
+  scalar const& offset,
+  window_type const window_type,
+  bool only_preceding,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace cudf

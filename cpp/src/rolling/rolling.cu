@@ -18,9 +18,13 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/utilities/default_stream.hpp>
+#include <cudf/detail/rolling.hpp>
+#include <cudf/rolling.hpp>
 
 #include <rmm/resource_ref.hpp>
+
+#include <memory>
+#include <utility>
 
 namespace cudf {
 
