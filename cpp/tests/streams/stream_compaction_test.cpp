@@ -304,13 +304,14 @@ TEST_F(StreamCompactionTest, Distinct)
     auto const expected_sort =
       cudf::table_view{{exp_col1_sort, exp_col2_sort, exp_keys1_sort, exp_keys2_sort}};
 
-    auto const result      = cudf::distinct(input,
+    auto const result = cudf::distinct(input,
                                        key_idx,
                                        cudf::duplicate_keep_option::KEEP_FIRST,
                                        cudf::null_equality::EQUAL,
                                        cudf::nan_equality::ALL_EQUAL,
                                        cudf::test::get_default_stream());
-    auto const result_sort = cudf::sort_by_key(*result, result->select(key_idx));
+    auto const result_sort =
+      cudf::sort_by_key(*result, result->select(key_idx), {}, {}, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
   }
 
@@ -323,13 +324,14 @@ TEST_F(StreamCompactionTest, Distinct)
     auto const expected_sort =
       cudf::table_view{{exp_col1_sort, exp_col2_sort, exp_keys1_sort, exp_keys2_sort}};
 
-    auto const result      = cudf::distinct(input,
+    auto const result = cudf::distinct(input,
                                        key_idx,
                                        cudf::duplicate_keep_option::KEEP_LAST,
                                        cudf::null_equality::EQUAL,
                                        cudf::nan_equality::ALL_EQUAL,
                                        cudf::test::get_default_stream());
-    auto const result_sort = cudf::sort_by_key(*result, result->select(key_idx));
+    auto const result_sort =
+      cudf::sort_by_key(*result, result->select(key_idx), {}, {}, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
   }
 
@@ -342,13 +344,14 @@ TEST_F(StreamCompactionTest, Distinct)
     auto const expected_sort =
       cudf::table_view{{exp_col1_sort, exp_col2_sort, exp_keys1_sort, exp_keys2_sort}};
 
-    auto const result      = cudf::distinct(input,
+    auto const result = cudf::distinct(input,
                                        key_idx,
                                        cudf::duplicate_keep_option::KEEP_NONE,
                                        cudf::null_equality::EQUAL,
                                        cudf::nan_equality::ALL_EQUAL,
                                        cudf::test::get_default_stream());
-    auto const result_sort = cudf::sort_by_key(*result, result->select(key_idx));
+    auto const result_sort =
+      cudf::sort_by_key(*result, result->select(key_idx), {}, {}, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
   }
 }
