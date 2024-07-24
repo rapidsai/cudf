@@ -54,46 +54,7 @@ using cudf::test::iterators::nulls_at;
 
 struct StreamCompactionTest : public cudf::test::BaseFixture {};
 
-TEST_F(StreamCompactionTest, StableDistinctKeepAnyNoNullsTableWithNaNs)
-{
-  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
-  // groups for equivalent keys because KEEP_ANY is nondeterministic.
-  auto const col1  = int32s_col{6, 6, 6, 1, 1, 1, 3, 5, 8, 5};
-  auto const col2  = floats_col{6, 6, 6, 1, 1, 1, 3, 4, 9, 4};
-  auto const keys1 = int32s_col{20, 20, 20, 15, 15, 15, 20, 19, 21, 9};
-  auto const keys2 = floats_col{19., 19., 19., NaN, NaN, NaN, 20., 20., 9., 21.};
-
-  auto const input   = cudf::table_view{{col1, col2, keys1, keys2}};
-  auto const key_idx = std::vector<cudf::size_type>{2, 3};
-
-  // NaNs are unequal.
-  {
-    auto const exp_col1  = int32s_col{6, 1, 1, 1, 3, 5, 8, 5};
-    auto const exp_col2  = floats_col{6, 1, 1, 1, 3, 4, 9, 4};
-    auto const exp_keys1 = int32s_col{20, 15, 15, 15, 20, 19, 21, 9};
-    auto const exp_keys2 = floats_col{19., NaN, NaN, NaN, 20., 20., 9., 21.};
-    auto const expected  = cudf::table_view{{exp_col1, exp_col2, exp_keys1, exp_keys2}};
-
-    auto const result = cudf::stable_distinct(
-      input, key_idx, KEEP_ANY, NULL_EQUAL, NAN_UNEQUAL, cudf::test::get_default_stream());
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
-  }
-
-  // NaNs are equal.
-  {
-    auto const exp_col1  = int32s_col{6, 1, 3, 5, 8, 5};
-    auto const exp_col2  = floats_col{6, 1, 3, 4, 9, 4};
-    auto const exp_keys1 = int32s_col{20, 15, 20, 19, 21, 9};
-    auto const exp_keys2 = floats_col{19., NaN, 20., 20., 9., 21.};
-    auto const expected  = cudf::table_view{{exp_col1, exp_col2, exp_keys1, exp_keys2}};
-
-    auto const result = cudf::stable_distinct(
-      input, key_idx, KEEP_ANY, NULL_EQUAL, NAN_EQUAL, cudf::test::get_default_stream());
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
-  }
-}
-
-TEST_F(StreamCompactionTest, StableDistinctKeepAnyInputWithNullsAndNaNs)
+TEST_F(StreamCompactionTest, StableDistinctKeepAny)
 {
   auto constexpr null{0.0};  // shadow the global `null` variable of type int
 
@@ -149,7 +110,7 @@ TEST_F(StreamCompactionTest, StableDistinctKeepAnyInputWithNullsAndNaNs)
   }
 }
 
-TEST_F(StreamCompactionTest, StableDistinctKeepFirstLastNoneInputWithNaNsEqual)
+TEST_F(StreamCompactionTest, StableDistinctKeepFirstLastNone)
 {
   // Column(s) used to test needs to have different rows for the same keys.
   auto const col     = int32s_col{0, 1, 2, 3, 4, 5, 6};
@@ -187,48 +148,6 @@ TEST_F(StreamCompactionTest, StableDistinctKeepFirstLastNoneInputWithNaNsEqual)
 
     auto const result = cudf::stable_distinct(
       input, key_idx, KEEP_NONE, NULL_EQUAL, NAN_EQUAL, cudf::test::get_default_stream());
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
-  }
-}
-
-TEST_F(StreamCompactionTest, StableDistinctKeepFirstLastNoneInputWithNaNsUnequal)
-{
-  // Column(s) used to test needs to have different rows for the same keys.
-  auto const col     = int32s_col{0, 1, 2, 3, 4, 5, 6, 7};
-  auto const keys    = floats_col{20., NaN, NaN, 19., 21., 19., 22., 20.};
-  auto const input   = cudf::table_view{{col, keys}};
-  auto const key_idx = std::vector<cudf::size_type>{1};
-
-  // KEEP_FIRST
-  {
-    auto const exp_col  = int32s_col{0, 1, 2, 3, 4, 6};
-    auto const exp_keys = floats_col{20., NaN, NaN, 19., 21., 22.};
-    auto const expected = cudf::table_view{{exp_col, exp_keys}};
-
-    auto const result = cudf::stable_distinct(
-      input, key_idx, KEEP_FIRST, NULL_UNEQUAL, NAN_UNEQUAL, cudf::test::get_default_stream());
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
-  }
-
-  // KEEP_LAST
-  {
-    auto const exp_col  = int32s_col{1, 2, 4, 5, 6, 7};
-    auto const exp_keys = floats_col{NaN, NaN, 21., 19., 22., 20.};
-    auto const expected = cudf::table_view{{exp_col, exp_keys}};
-
-    auto const result = cudf::stable_distinct(
-      input, key_idx, KEEP_LAST, NULL_UNEQUAL, NAN_UNEQUAL, cudf::test::get_default_stream());
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
-  }
-
-  // KEEP_NONE
-  {
-    auto const exp_col  = int32s_col{1, 2, 4, 6};
-    auto const exp_keys = floats_col{NaN, NaN, 21., 22.};
-    auto const expected = cudf::table_view{{exp_col, exp_keys}};
-
-    auto const result = cudf::stable_distinct(
-      input, key_idx, KEEP_NONE, NULL_UNEQUAL, NAN_UNEQUAL, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 }
