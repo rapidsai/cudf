@@ -105,7 +105,9 @@ def test_scan(tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask, r
     assert_gpu_result_equal(
         q,
         polars_collect_kwargs=polars_collect_kwargs,
-        check_column_order=not versions.POLARS_VERSION_LT_12,
+        # This doesn't work in polars < 1.2 since the row-index
+        # is not passed through via the schema
+        check_column_order=versions.POLARS_VERSION_LT_12,
     )
 
 
@@ -257,18 +259,16 @@ def test_scan_csv_skip_initial_empty_rows(tmp_path):
     [
         # List of colnames (basicaly like names param in CSV)
         {"b": pl.String, "a": pl.Float32},
+        {"a": pl.UInt64},
     ],
 )
 def test_scan_ndjson_schema(df, tmp_path, schema):
     make_source(df, tmp_path / "file", "ndjson")
     q = pl.scan_ndjson(tmp_path / "file", schema=schema)
-    # TODO: can remove check_column_order once libcudf read_json supports
-    # usecols
-    assert_gpu_result_equal(q, check_column_order=True)
+    assert_gpu_result_equal(q)
 
 
-@pytest.mark.parametrize("kwargs", [{"ignore_errors": True}])
-def test_scan_ndjson_unsupported(df, tmp_path, kwargs):
+def test_scan_ndjson_unsupported(df, tmp_path):
     make_source(df, tmp_path / "file", "ndjson")
-    q = pl.scan_ndjson(tmp_path / "file", **kwargs)
+    q = pl.scan_ndjson(tmp_path / "file", ignore_errors=True)
     assert_ir_translation_raises(q, NotImplementedError)

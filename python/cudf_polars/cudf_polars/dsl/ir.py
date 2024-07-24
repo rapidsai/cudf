@@ -208,7 +208,7 @@ class Scan(IR):
             # This line is unhittable ATM since IPC/Anonymous scan raise
             # on the polars side
             raise NotImplementedError(f"Unhandled scan type: {self.typ}")
-        if self.typ == "json" and self.file_options.n_rows is not None:
+        if self.typ == "ndjson" and self.file_options.n_rows is not None:
             raise NotImplementedError("row limit in scan")
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None for k in ("aws", "azure", "gcp")
@@ -344,6 +344,8 @@ class Scan(IR):
                 plc_tbl_w_meta.tbl, plc_tbl_w_meta.column_names(include_children=False)
             )
             col_order = list(self.schema.keys())
+            # TODO: remove condition when dropping support for polars 1.0
+            # https://github.com/pola-rs/polars/pull/17363
             if row_index is not None and row_index[0] in self.schema:
                 col_order.remove(row_index[0])
             if col_order is not None:
