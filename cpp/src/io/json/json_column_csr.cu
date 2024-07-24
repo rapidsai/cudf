@@ -42,6 +42,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
+#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
@@ -50,6 +51,25 @@
 #include <thrust/unique.h>
 
 namespace cudf::io::json::experimental::detail {
+
+using row_offset_t = size_type;
+
+struct unvalidated_column_tree {
+  rmm::device_uvector<NodeIndexT> rowidx;
+  rmm::device_uvector<NodeIndexT> colidx;
+  rmm::device_uvector<row_offset_t> max_row_offsets;
+  rmm::device_uvector<NodeT> column_categories;
+};
+
+struct level_ordering {
+  device_span<TreeDepthT> node_levels;
+  device_span<NodeIndexT> col_ids;
+  __device__ bool operator()(NodeIndexT lhs_node_id, NodeIndexT rhs_node_id) const
+  {
+    return (node_levels[lhs_node_id] < node_levels[rhs_node_id]) ||
+      (node_levels[lhs_node_id] == node_levels[rhs_node_id] && col_ids[lhs_node_id] < col_ids[rhs_node_id]);
+  }
+};
 
 /**
  * @brief Reduces node tree representation to column tree CSR representation.
@@ -65,129 +85,93 @@ namespace cudf::io::json::experimental::detail {
  * @return A tuple of column tree representation of JSON string, column ids of columns, and
  * max row offsets of columns
  */
-std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tree_csr(
+unvalidated_column_tree reduce_to_column_tree_csr(
   tree_meta_t& tree,
-  device_span<NodeIndexT> original_col_ids,
-  device_span<NodeIndexT> sorted_col_ids,
-  device_span<NodeIndexT> ordered_node_ids,
+  device_span<NodeIndexT> col_ids,
   device_span<size_type> row_offsets,
   bool is_array_of_arrays,
   NodeIndexT const row_array_parent_col_id,
   rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  // 1. column count for allocation
+
+  rmm::device_uvector<NodeIndexT> level_ordered_col_ids(col_ids.size(), stream);
+  rmm::device_uvector<NodeIndexT> level_ordered_node_ids(col_ids.size(), stream);
+  thrust::copy(rmm::exec_policy_nosync(stream), col_ids.begin(), col_ids.end(), level_ordered_col_ids.begin());
+  thrust::sequence(rmm::exec_policy_nosync(stream), level_ordered_node_ids.begin(), level_ordered_node_ids.end());
+
+  // Reorder nodes and column ids in level-wise fashion
+  thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream), level_ordered_node_ids.begin(), level_ordered_node_ids.end(), 
+      level_ordered_col_ids.begin(), level_ordering{tree.node_levels, col_ids});
+
+  // 1. get the number of columns in tree, mapping between node tree col ids and csr col ids, and the node id of first row in each column 
   auto const num_columns =
-    thrust::unique_count(rmm::exec_policy(stream), sorted_col_ids.begin(), sorted_col_ids.end());
+    thrust::unique_count(rmm::exec_policy_nosync(stream), level_ordered_col_ids.begin(), level_ordered_col_ids.end());
+  rmm::device_uvector<NodeIndexT> level_ordered_unique_node_ids(num_columns, stream);
+  rmm::device_uvector<NodeIndexT> mapped_col_ids(num_columns, stream);
+  thrust::unique_by_key_copy(rmm::exec_policy_nosync(stream), level_ordered_col_ids.begin(), level_ordered_node_ids.end(), level_ordered_node_ids.begin(), mapped_col_ids.begin(), level_ordered_unique_node_ids.begin());
+  auto rev_mapped_col_ids_it = thrust::make_permutation_iterator(thrust::make_counting_iterator(0), mapped_col_ids.begin());
 
-  rmm::device_uvector<size_type> unique_node_ids(num_columns, stream);
-  rmm::device_uvector<size_type> csr_unique_node_ids(num_columns, stream);
-  rmm::device_uvector<TreeDepthT> column_levels(num_columns, stream);
-  thrust::unique_by_key_copy(rmm::exec_policy(stream),
-                             sorted_col_ids.begin(),
-                             sorted_col_ids.end(),
-                             ordered_node_ids.begin(),
-                             thrust::make_discard_iterator(),
-                             unique_node_ids.begin());
-  thrust::copy_n(
-    rmm::exec_policy(stream),
-    thrust::make_permutation_iterator(tree.node_levels.begin(), unique_node_ids.begin()),
-    unique_node_ids.size(),
-    column_levels.begin());
-  auto [sorted_column_levels, sorted_column_levels_order] =
-    cudf::io::json::detail::stable_sorted_key_order<size_t, TreeDepthT>(column_levels, stream);
-
-  // 2. reduce_by_key {col_id}, {row_offset}, max.
-  rmm::device_uvector<NodeIndexT> unique_col_ids(num_columns, stream);
+  // 2. maximum number of rows per column: computed with reduce_by_key {col_id}, {row_offset}, max.
+  // 3. category for each column node by aggregating all nodes in node tree corresponding to same column:
+  //    reduce_by_key {col_id}, {node_categories} - custom opp (*+v=*, v+v=v, *+#=E)
   rmm::device_uvector<size_type> max_row_offsets(num_columns, stream);
-  rmm::device_uvector<NodeIndexT> csr_unique_col_ids(num_columns, stream);
-  rmm::device_uvector<size_type> csr_max_row_offsets(num_columns, stream);
-  auto ordered_row_offsets =
-    thrust::make_permutation_iterator(row_offsets.begin(), ordered_node_ids.begin());
-  thrust::reduce_by_key(rmm::exec_policy(stream),
-                        sorted_col_ids.begin(),
-                        sorted_col_ids.end(),
-                        ordered_row_offsets,
-                        unique_col_ids.begin(),
-                        max_row_offsets.begin(),
-                        thrust::equal_to<size_type>(),
-                        thrust::maximum<size_type>());
-
-  // 3. reduce_by_key {col_id}, {node_categories} - custom opp (*+v=*, v+v=v, *+#=E)
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
-  rmm::device_uvector<NodeT> csr_column_categories(num_columns, stream);
-  thrust::reduce_by_key(
-    rmm::exec_policy(stream),
-    sorted_col_ids.begin(),
-    sorted_col_ids.end(),
-    thrust::make_permutation_iterator(tree.node_categories.begin(), ordered_node_ids.begin()),
-    unique_col_ids.begin(),
-    column_categories.begin(),
-    thrust::equal_to<size_type>(),
-    [] __device__(NodeT type_a, NodeT type_b) -> NodeT {
-      auto is_a_leaf = (type_a == NC_VAL || type_a == NC_STR);
-      auto is_b_leaf = (type_b == NC_VAL || type_b == NC_STR);
-      // (v+v=v, *+*=*,  *+v=*, *+#=E, NESTED+VAL=NESTED)
-      // *+*=*, v+v=v
-      if (type_a == type_b) {
-        return type_a;
-      } else if (is_a_leaf) {
-        // *+v=*, N+V=N
-        // STRUCT/LIST + STR/VAL = STRUCT/LIST, STR/VAL + FN = ERR, STR/VAL + STR = STR
-        return type_b == NC_FN ? NC_ERR : (is_b_leaf ? NC_STR : type_b);
-      } else if (is_b_leaf) {
-        return type_a == NC_FN ? NC_ERR : (is_a_leaf ? NC_STR : type_a);
-      }
-      // *+#=E
-      return NC_ERR;
-    });
+  auto ordered_row_offsets =
+    thrust::make_permutation_iterator(row_offsets.begin(), level_ordered_node_ids.begin());
+  auto ordered_node_categories = thrust::make_permutation_iterator(tree.node_categories.begin(), level_ordered_node_ids.begin());
+  thrust::reduce_by_key(rmm::exec_policy(stream),
+                        level_ordered_col_ids.begin(),
+                        level_ordered_col_ids.end(),
+                        thrust::make_zip_iterator(thrust::make_tuple(ordered_row_offsets, ordered_node_categories)),
+                        thrust::make_discard_iterator(),
+                        thrust::make_zip_iterator(thrust::make_tuple(max_row_offsets.begin(), column_categories.begin())),
+                        thrust::equal_to<NodeIndexT>(),
+                        [] __device__(auto a, auto b) {
+                          auto row_offset_a = thrust::get<0>(a);
+                          auto row_offset_b = thrust::get<0>(b);
+                          auto type_a = thrust::get<1>(a);
+                          auto type_b = thrust::get<1>(b);
+                        
+                          NodeT max_offset;
+                          auto is_a_leaf = (type_a == NC_VAL || type_a == NC_STR);
+                          auto is_b_leaf = (type_b == NC_VAL || type_b == NC_STR);
+                          // (v+v=v, *+*=*,  *+v=*, *+#=E, NESTED+VAL=NESTED)
+                          // *+*=*, v+v=v
+                          if (type_a == type_b) {
+                            max_offset = type_a;
+                          } else if (is_a_leaf) {
+                            // *+v=*, N+V=N
+                            // STRUCT/LIST + STR/VAL = STRUCT/LIST, STR/VAL + FN = ERR, STR/VAL + STR = STR
+                            max_offset = type_b == NC_FN ? NC_ERR : (is_b_leaf ? NC_STR : type_b);
+                          } else if (is_b_leaf) {
+                            max_offset = type_a == NC_FN ? NC_ERR : (is_a_leaf ? NC_STR : type_a);
+                          }
+                          // *+#=E
+                          max_offset = NC_ERR;
 
-  auto csr_permutation_it = thrust::make_zip_iterator(
-    thrust::make_permutation_iterator(unique_node_ids.begin(), sorted_column_levels_order.begin()),
-    thrust::make_permutation_iterator(unique_col_ids.begin(), sorted_column_levels_order.begin()),
-    thrust::make_permutation_iterator(max_row_offsets.begin(), sorted_column_levels_order.begin()),
-    thrust::make_permutation_iterator(column_categories.begin(),
-                                      sorted_column_levels_order.begin()));
-  thrust::copy(rmm::exec_policy(stream),
-               csr_permutation_it,
-               csr_permutation_it + num_columns,
-               thrust::make_zip_iterator(csr_unique_node_ids.begin(),
-                                         csr_unique_col_ids.begin(),
-                                         csr_max_row_offsets.begin(),
-                                         csr_column_categories.begin()));
+                          thrust::maximum<size_type> row_offset_op;
+                          return thrust::make_tuple(row_offset_op(row_offset_a, row_offset_b), max_offset);
+                        });
 
-  // 4. unique_copy parent_node_ids, ranges
-  rmm::device_uvector<NodeIndexT> csr_parent_col_ids(num_columns, stream);
-  rmm::device_uvector<SymbolOffsetT> csr_col_range_begin(num_columns, stream);  // Field names
-  rmm::device_uvector<SymbolOffsetT> csr_col_range_end(num_columns, stream);
+  // 4. construct parent_col_ids using permutation iterator
+  rmm::device_uvector<NodeIndexT> parent_col_ids(num_columns, stream);
   thrust::copy_n(
     rmm::exec_policy(stream),
-    thrust::make_zip_iterator(
-      thrust::make_permutation_iterator(tree.parent_node_ids.begin(), csr_unique_node_ids.begin()),
-      thrust::make_permutation_iterator(tree.node_range_begin.begin(), csr_unique_node_ids.begin()),
-      thrust::make_permutation_iterator(tree.node_range_end.begin(), csr_unique_node_ids.begin())),
-    csr_unique_node_ids.size(),
-    thrust::make_zip_iterator(
-      csr_parent_col_ids.begin(), csr_col_range_begin.begin(), csr_col_range_end.begin()));
-
-  // convert parent_node_ids to parent_col_ids
-  thrust::transform(
-    rmm::exec_policy(stream),
-    csr_parent_col_ids.begin(),
-    csr_parent_col_ids.end(),
-    csr_parent_col_ids.begin(),
-    [col_ids = original_col_ids.begin()] __device__(auto parent_node_id) -> size_type {
-      return parent_node_id == parent_node_sentinel ? parent_node_sentinel
-                                                    : col_ids[parent_node_id];
-    });
+    thrust::make_permutation_iterator(tree.parent_node_ids.begin(), level_ordered_unique_node_ids.begin()),
+    num_columns,
+    thrust::make_transform_output_iterator(parent_col_ids.begin(), 
+      [col_ids = col_ids.begin(), rev_mapped_col_ids_it] __device__(auto parent_node_id) -> NodeIndexT {
+        return parent_node_id == parent_node_sentinel ? parent_node_sentinel : rev_mapped_col_ids_it[col_ids[parent_node_id]];
+  }));
 
   /*
-    CSR construction:
-    1. Sort column levels and get their ordering
-    2. For each column node coln iterated according to sorted_column_levels; do
-        a. Find nodes that have coln as the parent node -> set adj_coln
-        b. row idx[coln] = size of adj_coln + 1
-        c. col idx[coln] = adj_coln U {parent_col_id[coln]}
+    5. CSR construction:
+      a. Sort column levels and get their ordering
+      b. For each column node coln iterated according to sorted_column_levels; do
+          i. Find nodes that have coln as the parent node -> set adj_coln
+          ii. row idx[coln] = size of adj_coln + 1
+          iii. col idx[coln] = adj_coln U {parent_col_id[coln]}
   */
 
   rmm::device_uvector<NodeIndexT> rowidx(num_columns + 1, stream);
@@ -196,28 +180,16 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
   // Note that the first element of csr_parent_col_ids is -1 (parent_node_sentinel)
   // children adjacency
   auto num_non_leaf_columns = thrust::unique_count(
-    rmm::exec_policy(stream), csr_parent_col_ids.begin() + 1, csr_parent_col_ids.end());
+    rmm::exec_policy(stream), parent_col_ids.begin() + 1, parent_col_ids.end());
   thrust::reduce_by_key(rmm::exec_policy(stream),
-                        csr_parent_col_ids.begin() + 1,
-                        csr_parent_col_ids.end(),
+                        parent_col_ids.begin() + 1,
+                        parent_col_ids.end(),
                         thrust::make_constant_iterator(1),
                         thrust::make_discard_iterator(),
                         rowidx.begin() + 1,
                         thrust::equal_to<TreeDepthT>());
   thrust::inclusive_scan(
     rmm::exec_policy(stream), rowidx.begin() + 1, rowidx.end(), rowidx.begin() + 1);
-  // overwrite the csr_parent_col_ids with the col ids in the csr tree
-  thrust::fill(rmm::exec_policy(stream), csr_parent_col_ids.begin(), csr_parent_col_ids.end(), -1);
-  thrust::scatter(rmm::exec_policy(stream),
-                  thrust::make_counting_iterator(0),
-                  thrust::make_counting_iterator(0) + num_non_leaf_columns,
-                  rowidx.begin(),
-                  csr_parent_col_ids.begin() + 1);
-  thrust::inclusive_scan(rmm::exec_policy(stream),
-                         csr_parent_col_ids.begin(),
-                         csr_parent_col_ids.end(),
-                         csr_parent_col_ids.begin(),
-                         thrust::maximum<NodeIndexT>{});
   // We are discarding the parent of the root node. Add the parent adjacency. Since we have already
   // performed the scan, we use a counting iterator to add
   thrust::transform(rmm::exec_policy(stream),
@@ -228,32 +200,31 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
                     thrust::plus<NodeIndexT>());
 
   rmm::device_uvector<NodeIndexT> colidx((num_columns - 1) * 2, stream);
-  thrust::fill(rmm::exec_policy(stream), colidx.begin(), colidx.end(), 0);
+
   // Skip the parent of root node
   thrust::scatter(rmm::exec_policy(stream),
-                  csr_parent_col_ids.begin() + 1,
-                  csr_parent_col_ids.end(),
+                  parent_col_ids.begin() + 1,
+                  parent_col_ids.end(),
                   rowidx.begin() + 1,
                   colidx.begin());
-  // excluding root node
+  // excluding root node, construct scatter map
   rmm::device_uvector<NodeIndexT> map(num_columns - 1, stream);
-  thrust::fill(rmm::exec_policy(stream), map.begin(), map.end(), 1);
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                csr_parent_col_ids.begin() + 1,
-                                csr_parent_col_ids.end(),
-                                map.begin(),
+                                parent_col_ids.begin() + 1,
+                                parent_col_ids.end(), 
+                                thrust::make_constant_iterator(1),
                                 map.begin());
-  thrust::for_each(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy(stream),
                    thrust::make_counting_iterator(1),
-                   thrust::make_counting_iterator(1) + num_columns - 1,
+                   num_columns - 1,
                    [rowidx             = rowidx.begin(),
                     map                = map.begin(),
-                    csr_parent_col_ids = csr_parent_col_ids.begin()] __device__(auto i) {
-                     auto csr_parent_col_id = csr_parent_col_ids[i];
-                     if (csr_parent_col_id == 0)
+                    parent_col_ids = parent_col_ids.begin()] __device__(auto i) {
+                     auto parent_col_id = parent_col_ids[i];
+                     if (parent_col_id == 0)
                        map[i - 1]--;
                      else
-                       map[i - 1] += rowidx[csr_parent_col_id];
+                       map[i - 1] += rowidx[parent_col_id];
                    });
   thrust::scatter(rmm::exec_policy(stream),
                   thrust::make_counting_iterator(1),
@@ -281,6 +252,8 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
                  list_parents_children_max_row_offsets.begin(),
                  list_parents_children_max_row_offsets.end(),
                  0);
+    auto list_nodes = thrust::make_permutation_iterator
+
     thrust::for_each(rmm::exec_policy(stream),
                      csr_unique_col_ids.begin(),
                      csr_unique_col_ids.end(),

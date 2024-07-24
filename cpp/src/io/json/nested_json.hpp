@@ -187,15 +187,28 @@ struct device_json_column {
 };
 
 namespace experimental {
-struct column_tree_csr {
+/*
+ * @brief Unvalidated column tree stored in Compressed Sparse Row (CSR) format. The device json column 
+ * subtree - the subgraph that conforms to column tree properties - is extracted and further processed
+ * according to the JSON reader options passed. Only the final processed subgraph is annotated with information
+ * required to construct cuDF columns.
+ */
+struct column_tree {
   // position of nnzs
   rmm::device_uvector<NodeIndexT> rowidx;
   rmm::device_uvector<NodeIndexT> colidx;
-  // node properties
-  rmm::device_uvector<NodeIndexT> column_ids;
-  rmm::device_uvector<NodeT> categories;
-  rmm::device_uvector<SymbolOffsetT> range_begin;
-  rmm::device_uvector<SymbolOffsetT> range_end;
+  // device_json_column properties
+  using row_offset_t = size_type;
+  // Indicator array for the device column subtree
+  // Stores the number of rows in the column if the node is part of device column subtree
+  // Stores zero otherwise
+  rmm::device_uvector<row_offset_t> subtree_nrows;
+  rmm::device_uvector<row_offset_t> string_offsets;
+  rmm::device_uvector<row_offset_t> string_lengths;
+  // Row offsets
+  rmm::device_uvector<row_offset_t> child_offsets;
+  // Validity bitmap
+  rmm::device_buffer validity;
 };
 
 namespace detail {
