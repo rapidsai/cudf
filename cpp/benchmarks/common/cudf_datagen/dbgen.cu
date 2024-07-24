@@ -499,15 +499,15 @@ void generate_part(int64_t const& scale_factor,
   auto const p_comment = gen_rand_str_col(5, 22, num_rows);
 
   // Create the `part` table
-  auto const part = cudf::table_view({p_partkey->view(),
-                                      p_name->view(),
-                                      p_mfgr->view(),
-                                      p_brand->view(),
-                                      p_type->view(),
-                                      p_size->view(),
-                                      p_container->view(),
-                                      p_retailprice->view(),
-                                      p_comment->view()});
+  auto part = cudf::table_view({p_partkey->view(),
+                                p_name->view(),
+                                p_mfgr->view(),
+                                p_brand->view(),
+                                p_type->view(),
+                                p_size->view(),
+                                p_container->view(),
+                                p_retailprice->view(),
+                                p_comment->view()});
 
   write_parquet(part, "part.parquet", schema_part);
 }
@@ -557,7 +557,7 @@ void generate_nation(int64_t const& scale_factor,
   auto const n_comment = gen_rand_str_col(31, 114, num_rows);
 
   // Create the `nation` table
-  auto const nation =
+  auto nation =
     cudf::table_view({n_nationkey->view(), n_name->view(), n_regionkey->view(), n_comment->view()});
   write_parquet(nation, "nation.parquet", schema_nation);
 }
@@ -588,7 +588,7 @@ void generate_region(int64_t const& scale_factor,
   auto const r_comment = gen_rand_str_col(31, 115, num_rows);
 
   // Create the `region` table
-  auto const region = cudf::table_view({r_regionkey->view(), r_name->view(), r_comment->view()});
+  auto region = cudf::table_view({r_regionkey->view(), r_name->view(), r_comment->view()});
   write_parquet(region, "region.parquet", schema_region);
 }
 
@@ -647,14 +647,14 @@ void generate_customer(int64_t const& scale_factor,
   auto const c_comment = gen_rand_str_col(29, 116, num_rows);
 
   // Create the `customer` table
-  auto const customer = cudf::table_view({c_custkey->view(),
-                                          c_name->view(),
-                                          c_address->view(),
-                                          c_nationkey->view(),
-                                          c_phone->view(),
-                                          c_acctbal->view(),
-                                          c_mktsegment->view(),
-                                          c_comment->view()});
+  auto customer = cudf::table_view({c_custkey->view(),
+                                    c_name->view(),
+                                    c_address->view(),
+                                    c_nationkey->view(),
+                                    c_phone->view(),
+                                    c_acctbal->view(),
+                                    c_mktsegment->view(),
+                                    c_comment->view()});
   write_parquet(customer, "customer.parquet", schema_customer);
 }
 
