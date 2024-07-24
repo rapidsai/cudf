@@ -308,7 +308,10 @@ auto decompose_structs(table_view table,
 auto list_lex_preprocess(table_view const& table, rmm::cuda_stream_view stream)
 {
   std::vector<detail::dremel_data> dremel_data;
-  std::vector<detail::dremel_device_view> dremel_device_views;
+  auto const num_list_columns = std::count_if(
+    table.begin(), table.end(), [](auto const& col) { return col.type().id() == type_id::LIST; });
+  auto dremel_device_views =
+    cudf::detail::make_empty_host_vector<detail::dremel_device_view>(num_list_columns, stream);
   for (auto const& col : table) {
     if (col.type().id() == type_id::LIST) {
       dremel_data.push_back(detail::get_comparator_data(col, {}, false, stream));
