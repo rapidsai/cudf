@@ -136,6 +136,8 @@ struct column_metadata {
  * Converts the `cudf::table_view` to `arrow::Table` with the provided
  * metadata `column_names`.
  *
+ * @deprecated Since 24.08. Use cudf::to_arrow_host instead.
+ *
  * @throws cudf::logic_error if `column_names` size doesn't match with number of columns.
  *
  * @param input table_view that needs to be converted to arrow Table
@@ -150,15 +152,18 @@ struct column_metadata {
  * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
  * converted to Arrow decimal128 of the precision 38.
  */
-std::shared_ptr<arrow::Table> to_arrow(table_view input,
-                                       std::vector<column_metadata> const& metadata = {},
-                                       rmm::cuda_stream_view stream = cudf::get_default_stream(),
-                                       arrow::MemoryPool* ar_mr     = arrow::default_memory_pool());
+[[deprecated]] std::shared_ptr<arrow::Table> to_arrow(
+  table_view input,
+  std::vector<column_metadata> const& metadata = {},
+  rmm::cuda_stream_view stream                 = cudf::get_default_stream(),
+  arrow::MemoryPool* ar_mr                     = arrow::default_memory_pool());
 
 /**
  * @brief Create `arrow::Scalar` from cudf scalar `input`
  *
  * Converts the `cudf::scalar` to `arrow::Scalar`.
+ *
+ * @deprecated Since 24.08.
  *
  * @param input scalar that needs to be converted to arrow Scalar
  * @param metadata Contains hierarchy of names of columns and children
@@ -172,10 +177,11 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
  * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
  * converted to Arrow decimal128 of the precision 38.
  */
-std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
-                                        column_metadata const& metadata = {},
-                                        rmm::cuda_stream_view stream = cudf::get_default_stream(),
-                                        arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
+[[deprecated]] std::shared_ptr<arrow::Scalar> to_arrow(
+  cudf::scalar const& input,
+  column_metadata const& metadata = {},
+  rmm::cuda_stream_view stream    = cudf::get_default_stream(),
+  arrow::MemoryPool* ar_mr        = arrow::default_memory_pool());
 
 /**
  * @brief typedef for a unique_ptr to an ArrowSchema with custom deleter
@@ -330,14 +336,66 @@ unique_device_array_t to_arrow_device(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Copy table view data to host and create `ArrowDeviceArray` for it
+ *
+ * Populates the C struct ArrowDeviceArray, copying the cudf data to the host. The
+ * returned ArrowDeviceArray will have a device_type of CPU and will have no ties
+ * to the memory referenced by the table view passed in. The deleter for the
+ * returned unique_ptr will call the release callback on the ArrowDeviceArray
+ * automatically.
+ *
+ * @note For decimals, since the precision is not stored for them in libcudf, it will
+ * be converted to an Arrow decimal128 that has the widest-precision the cudf decimal type
+ * supports. For example, numeric::decimal32 will be converted to Arrow decimal128 of the precision
+ * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
+ * converted to Arrow decimal128 of precision 38.
+ *
+ * @param table Input table
+ * @param stream CUDA stream used for the device memory operations and kernel launches
+ * @param mr Device memory resource used for any allocations during conversion
+ * @return ArrowDeviceArray generated from input table
+ */
+unique_device_array_t to_arrow_host(
+  cudf::table_view const& table,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Copy column view data to host and create `ArrowDeviceArray` for it
+ *
+ * Populates the C struct ArrowDeviceArray, copying the cudf data to the host. The
+ * returned ArrowDeviceArray will have a device_type of CPU and will have no ties
+ * to the memory referenced by the column view passed in. The deleter for the
+ * returned unique_ptr will call the release callback on the ArrowDeviceArray
+ * automatically.
+ *
+ * @note For decimals, since the precision is not stored for them in libcudf, it will
+ * be converted to an Arrow decimal128 that has the widest-precision the cudf decimal type
+ * supports. For example, numeric::decimal32 will be converted to Arrow decimal128 of the precision
+ * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
+ * converted to Arrow decimal128 of precision 38.
+ *
+ * @param col Input column
+ * @param stream CUDA stream used for the device memory operations and kernel launches
+ * @param mr Device memory resource used for any allocations during conversion
+ * @return ArrowDeviceArray generated from input column
+ */
+unique_device_array_t to_arrow_host(
+  cudf::column_view const& col,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Create `cudf::table` from given arrow Table input
+ *
+ * @deprecated Since 24.08. Use cudf::from_arrow_host instead.
  *
  * @param input arrow:Table that needs to be converted to `cudf::table`
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr    Device memory resource used to allocate `cudf::table`
  * @return cudf table generated from given arrow Table
  */
-std::unique_ptr<table> from_arrow(
+[[deprecated]] std::unique_ptr<table> from_arrow(
   arrow::Table const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
@@ -345,12 +403,14 @@ std::unique_ptr<table> from_arrow(
 /**
  * @brief Create `cudf::scalar` from given arrow Scalar input
  *
+ * @deprecated Since 24.08.
+ *
  * @param input `arrow::Scalar` that needs to be converted to `cudf::scalar`
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr    Device memory resource used to allocate `cudf::scalar`
  * @return cudf scalar generated from given arrow Scalar
  */
-std::unique_ptr<cudf::scalar> from_arrow(
+[[deprecated]] std::unique_ptr<cudf::scalar> from_arrow(
   arrow::Scalar const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
