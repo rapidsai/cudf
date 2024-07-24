@@ -106,7 +106,7 @@ def test_scan(tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask, r
         q,
         polars_collect_kwargs=polars_collect_kwargs,
         # This doesn't work in polars < 1.2 since the row-index
-        # is not passed through via the schema
+        # is in the wrong order in previous polars releases
         check_column_order=versions.POLARS_VERSION_LT_12,
     )
 
