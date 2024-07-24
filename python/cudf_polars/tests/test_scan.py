@@ -119,6 +119,14 @@ def test_scan_unsupported_raises(tmp_path):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_scan_ndjson_nrows_notimplemented(tmp_path, df):
+    df = pl.DataFrame({"a": [1, 2, 3]})
+
+    df.write_ndjson(tmp_path / "df.jsonl")
+    q = pl.scan_ndjson(tmp_path / "df.jsonl", n_rows=1)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
 @pytest.mark.xfail(
     versions.POLARS_VERSION_LT_11,
     reason="https://github.com/pola-rs/polars/issues/15730",
