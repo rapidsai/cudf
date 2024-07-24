@@ -19,8 +19,8 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
-
 #include <cudf/io/parquet.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
 
@@ -29,8 +29,6 @@
 #include <thrust/tuple.h>
 
 #include <src/io/utilities/batched_memset.hpp>
-#include <cudf/utilities/span.hpp>
-
 
 #include <type_traits>
 
@@ -43,22 +41,20 @@ TEST(MultiBufferTestIntegral, BasicTest1)
 
   // Device init
   auto stream = cudf::get_default_stream();
-  auto mr    = rmm::mr::get_current_device_resource();
+  auto mr     = rmm::mr::get_current_device_resource();
 
   // Creating base vector for data and setting it to all 0xFF
   std::vector<std::vector<uint64_t>> expected;
-  std::transform(BUF_SIZES.begin(),
-                 BUF_SIZES.end(),
-                 std::back_inserter(expected),
-                 [](auto size) {
-                   return std::vector<uint64_t>(size + 2000, ULLONG_MAX);
-                 });
+  std::transform(BUF_SIZES.begin(), BUF_SIZES.end(), std::back_inserter(expected), [](auto size) {
+    return std::vector<uint64_t>(size + 2000, ULLONG_MAX);
+  });
 
   // set buffer region to other value
   std::for_each(thrust::make_zip_iterator(thrust::make_tuple(expected.begin(), BUF_SIZES.begin())),
                 thrust::make_zip_iterator(thrust::make_tuple(expected.end(), BUF_SIZES.end())),
                 [](auto elem) {
-                  std::fill_n(thrust::get<0>(elem).begin() + 1000, thrust::get<1>(elem), 0xEEEEEEEEEEEEEEEE);
+                  std::fill_n(
+                    thrust::get<0>(elem).begin() + 1000, thrust::get<1>(elem), 0xEEEEEEEEEEEEEEEE);
                 });
 
   // Copy host vector data to device
@@ -66,36 +62,38 @@ TEST(MultiBufferTestIntegral, BasicTest1)
   std::transform(expected.begin(),
                  expected.end(),
                  std::back_inserter(device_bufs),
-                 [stream, mr](auto const & vec) {
+                 [stream, mr](auto const& vec) {
                    return cudf::detail::make_device_uvector_async(vec, stream, mr);
                  });
 
   // Init Device buffers for memset
   std::vector<cudf::device_span<uint64_t>> memset_bufs;
-  std::transform(thrust::make_zip_iterator(thrust::make_tuple(device_bufs.begin(), BUF_SIZES.begin())),
-                 thrust::make_zip_iterator(thrust::make_tuple(device_bufs.end(), BUF_SIZES.end())),
-                 std::back_inserter(memset_bufs),
-                 [](auto const & elem) {
-                   return cudf::device_span<uint64_t>(thrust::get<0>(elem).data() + 1000, thrust::get<1>(elem));
-                 });
+  std::transform(
+    thrust::make_zip_iterator(thrust::make_tuple(device_bufs.begin(), BUF_SIZES.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(device_bufs.end(), BUF_SIZES.end())),
+    std::back_inserter(memset_bufs),
+    [](auto const& elem) {
+      return cudf::device_span<uint64_t>(thrust::get<0>(elem).data() + 1000, thrust::get<1>(elem));
+    });
 
   // Function Call
   batched_memset(memset_bufs, 0UL, stream, mr);
 
   // Set all buffer regions to 0 for expected comparison
-  std::for_each(thrust::make_zip_iterator(thrust::make_tuple(expected.begin(), BUF_SIZES.begin())),
-                thrust::make_zip_iterator(thrust::make_tuple(expected.end(), BUF_SIZES.end())),
-                [](auto elem) {
-                  std::fill_n(thrust::get<0>(elem).begin() + 1000, thrust::get<1>(elem), 0UL);
-                });
+  std::for_each(
+    thrust::make_zip_iterator(thrust::make_tuple(expected.begin(), BUF_SIZES.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(expected.end(), BUF_SIZES.end())),
+    [](auto elem) { std::fill_n(thrust::get<0>(elem).begin() + 1000, thrust::get<1>(elem), 0UL); });
 
   // Compare to see that only given buffers are zeroed out
-  std::for_each(thrust::make_zip_iterator(thrust::make_tuple(device_bufs.begin(), expected.begin())),
-                thrust::make_zip_iterator(thrust::make_tuple(device_bufs.end(), expected.end())),
-                [stream](auto const & elem) {
-                  auto after_memset = cudf::detail::make_std_vector_async(thrust::get<0>(elem), stream);
-                  EXPECT_EQ(std::equal(thrust::get<1>(elem).begin(), thrust::get<1>(elem).end(), after_memset.begin()), true);
-                });
+  std::for_each(
+    thrust::make_zip_iterator(thrust::make_tuple(device_bufs.begin(), expected.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(device_bufs.end(), expected.end())),
+    [stream](auto const& elem) {
+      auto after_memset = cudf::detail::make_std_vector_async(thrust::get<0>(elem), stream);
+      EXPECT_TRUE(
+        std::equal(thrust::get<1>(elem).begin(), thrust::get<1>(elem).end(), after_memset.begin()));
+    });
 }
 
 TEST(MultiBufferTestIntegral, BasicTest2)
@@ -104,22 +102,20 @@ TEST(MultiBufferTestIntegral, BasicTest2)
 
   // Device init
   auto stream = cudf::get_default_stream();
-  auto mr    = rmm::mr::get_current_device_resource();
+  auto mr     = rmm::mr::get_current_device_resource();
 
   // Creating base vector for data and setting it to all 0xFF
   std::vector<std::vector<uint64_t>> expected;
-  std::transform(BUF_SIZES.begin(),
-                 BUF_SIZES.end(),
-                 std::back_inserter(expected),
-                 [](auto size) {
-                   return std::vector<uint64_t>(size + 2000, ULLONG_MAX);
-                 });
+  std::transform(BUF_SIZES.begin(), BUF_SIZES.end(), std::back_inserter(expected), [](auto size) {
+    return std::vector<uint64_t>(size + 2000, ULLONG_MAX);
+  });
 
   // set buffer region to other value
   std::for_each(thrust::make_zip_iterator(thrust::make_tuple(expected.begin(), BUF_SIZES.begin())),
                 thrust::make_zip_iterator(thrust::make_tuple(expected.end(), BUF_SIZES.end())),
                 [](auto elem) {
-                  std::fill_n(thrust::get<0>(elem).begin() + 1000, thrust::get<1>(elem), 0xEEEEEEEEEEEEEEEE);
+                  std::fill_n(
+                    thrust::get<0>(elem).begin() + 1000, thrust::get<1>(elem), 0xEEEEEEEEEEEEEEEE);
                 });
 
   // Copy host vector data to device
@@ -127,36 +123,38 @@ TEST(MultiBufferTestIntegral, BasicTest2)
   std::transform(expected.begin(),
                  expected.end(),
                  std::back_inserter(device_bufs),
-                 [stream, mr](auto const & vec) {
+                 [stream, mr](auto const& vec) {
                    return cudf::detail::make_device_uvector_async(vec, stream, mr);
                  });
 
   // Init Device buffers for memset
   std::vector<cudf::device_span<uint64_t>> memset_bufs;
-  std::transform(thrust::make_zip_iterator(thrust::make_tuple(device_bufs.begin(), BUF_SIZES.begin())),
-                 thrust::make_zip_iterator(thrust::make_tuple(device_bufs.end(), BUF_SIZES.end())),
-                 std::back_inserter(memset_bufs),
-                 [](auto const & elem) {
-                   return cudf::device_span<uint64_t>(thrust::get<0>(elem).data() + 1000, thrust::get<1>(elem));
-                 });
+  std::transform(
+    thrust::make_zip_iterator(thrust::make_tuple(device_bufs.begin(), BUF_SIZES.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(device_bufs.end(), BUF_SIZES.end())),
+    std::back_inserter(memset_bufs),
+    [](auto const& elem) {
+      return cudf::device_span<uint64_t>(thrust::get<0>(elem).data() + 1000, thrust::get<1>(elem));
+    });
 
   // Function Call
   batched_memset(memset_bufs, 0UL, stream, mr);
 
   // Set all buffer regions to 0 for expected comparison
-  std::for_each(thrust::make_zip_iterator(thrust::make_tuple(expected.begin(), BUF_SIZES.begin())),
-                thrust::make_zip_iterator(thrust::make_tuple(expected.end(), BUF_SIZES.end())),
-                [](auto elem) {
-                  std::fill_n(thrust::get<0>(elem).begin() + 1000, thrust::get<1>(elem), 0UL);
-                });
+  std::for_each(
+    thrust::make_zip_iterator(thrust::make_tuple(expected.begin(), BUF_SIZES.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(expected.end(), BUF_SIZES.end())),
+    [](auto elem) { std::fill_n(thrust::get<0>(elem).begin() + 1000, thrust::get<1>(elem), 0UL); });
 
   // Compare to see that only given buffers are zeroed out
-  std::for_each(thrust::make_zip_iterator(thrust::make_tuple(device_bufs.begin(), expected.begin())),
-                thrust::make_zip_iterator(thrust::make_tuple(device_bufs.end(), expected.end())),
-                [stream](auto const & elem) {
-                  auto after_memset = cudf::detail::make_std_vector_async(thrust::get<0>(elem), stream);
-                  EXPECT_EQ(std::equal(thrust::get<1>(elem).begin(), thrust::get<1>(elem).end(), after_memset.begin()), true);
-                });
+  std::for_each(
+    thrust::make_zip_iterator(thrust::make_tuple(device_bufs.begin(), expected.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(device_bufs.end(), expected.end())),
+    [stream](auto const& elem) {
+      auto after_memset = cudf::detail::make_std_vector_async(thrust::get<0>(elem), stream);
+      EXPECT_TRUE(
+        std::equal(thrust::get<1>(elem).begin(), thrust::get<1>(elem).end(), after_memset.begin()));
+    });
 }
 
 TEST(MultiBufferTestIntegral, BasicTest3)
@@ -165,22 +163,20 @@ TEST(MultiBufferTestIntegral, BasicTest3)
 
   // Device init
   auto stream = cudf::get_default_stream();
-  auto mr    = rmm::mr::get_current_device_resource();
+  auto mr     = rmm::mr::get_current_device_resource();
 
   // Creating base vector for data and setting it to all 0xFF
   std::vector<std::vector<uint64_t>> expected;
-  std::transform(BUF_SIZES.begin(),
-                 BUF_SIZES.end(),
-                 std::back_inserter(expected),
-                 [](auto size) {
-                   return std::vector<uint64_t>(size + 2000, ULLONG_MAX);
-                 });
+  std::transform(BUF_SIZES.begin(), BUF_SIZES.end(), std::back_inserter(expected), [](auto size) {
+    return std::vector<uint64_t>(size + 2000, ULLONG_MAX);
+  });
 
   // set buffer region to other value
   std::for_each(thrust::make_zip_iterator(thrust::make_tuple(expected.begin(), BUF_SIZES.begin())),
                 thrust::make_zip_iterator(thrust::make_tuple(expected.end(), BUF_SIZES.end())),
                 [](auto elem) {
-                  std::fill_n(thrust::get<0>(elem).begin() + 1000, thrust::get<1>(elem), 0xEEEEEEEEEEEEEEEE);
+                  std::fill_n(
+                    thrust::get<0>(elem).begin() + 1000, thrust::get<1>(elem), 0xEEEEEEEEEEEEEEEE);
                 });
 
   // Copy host vector data to device
@@ -188,34 +184,36 @@ TEST(MultiBufferTestIntegral, BasicTest3)
   std::transform(expected.begin(),
                  expected.end(),
                  std::back_inserter(device_bufs),
-                 [stream, mr](auto const & vec) {
+                 [stream, mr](auto const& vec) {
                    return cudf::detail::make_device_uvector_async(vec, stream, mr);
                  });
 
   // Init Device buffers for memset
   std::vector<cudf::device_span<uint64_t>> memset_bufs;
-  std::transform(thrust::make_zip_iterator(thrust::make_tuple(device_bufs.begin(), BUF_SIZES.begin())),
-                 thrust::make_zip_iterator(thrust::make_tuple(device_bufs.end(), BUF_SIZES.end())),
-                 std::back_inserter(memset_bufs),
-                 [](auto const & elem) {
-                   return cudf::device_span<uint64_t>(thrust::get<0>(elem).data() + 1000, thrust::get<1>(elem));
-                 });
+  std::transform(
+    thrust::make_zip_iterator(thrust::make_tuple(device_bufs.begin(), BUF_SIZES.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(device_bufs.end(), BUF_SIZES.end())),
+    std::back_inserter(memset_bufs),
+    [](auto const& elem) {
+      return cudf::device_span<uint64_t>(thrust::get<0>(elem).data() + 1000, thrust::get<1>(elem));
+    });
 
   // Function Call
   batched_memset(memset_bufs, 0UL, stream, mr);
 
   // Set all buffer regions to 0 for expected comparison
-  std::for_each(thrust::make_zip_iterator(thrust::make_tuple(expected.begin(), BUF_SIZES.begin())),
-                thrust::make_zip_iterator(thrust::make_tuple(expected.end(), BUF_SIZES.end())),
-                [](auto elem) {
-                  std::fill_n(thrust::get<0>(elem).begin() + 1000, thrust::get<1>(elem), 0UL);
-                });
+  std::for_each(
+    thrust::make_zip_iterator(thrust::make_tuple(expected.begin(), BUF_SIZES.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(expected.end(), BUF_SIZES.end())),
+    [](auto elem) { std::fill_n(thrust::get<0>(elem).begin() + 1000, thrust::get<1>(elem), 0UL); });
 
   // Compare to see that only given buffers are zeroed out
-  std::for_each(thrust::make_zip_iterator(thrust::make_tuple(device_bufs.begin(), expected.begin())),
-                thrust::make_zip_iterator(thrust::make_tuple(device_bufs.end(), expected.end())),
-                [stream](auto const & elem) {
-                  auto after_memset = cudf::detail::make_std_vector_async(thrust::get<0>(elem), stream);
-                  EXPECT_EQ(std::equal(thrust::get<1>(elem).begin(), thrust::get<1>(elem).end(), after_memset.begin()), true);
-                });
+  std::for_each(
+    thrust::make_zip_iterator(thrust::make_tuple(device_bufs.begin(), expected.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(device_bufs.end(), expected.end())),
+    [stream](auto const& elem) {
+      auto after_memset = cudf::detail::make_std_vector_async(thrust::get<0>(elem), stream);
+      EXPECT_TRUE(
+        std::equal(thrust::get<1>(elem).begin(), thrust::get<1>(elem).end(), after_memset.begin()));
+    });
 }
