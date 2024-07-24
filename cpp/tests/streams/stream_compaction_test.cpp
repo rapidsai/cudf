@@ -300,7 +300,7 @@ TEST_F(StreamCompactionTest, DropNulls)
   }
 }
 
-TEST_F(StreamCompactionTest, UniqueKeepFirstLastNone)
+TEST_F(StreamCompactionTest, Unique)
 {
   auto const col1     = int32s_col{5, 4, 3, 5, 8, 5};
   auto const col2     = floats_col{4., 5., 3., 4., 9., 4.};
@@ -365,7 +365,7 @@ TEST_F(StreamCompactionTest, UniqueKeepFirstLastNone)
   }
 }
 
-TEST_F(StreamCompactionTest, DistinctKeepFirstLastNone)
+TEST_F(StreamCompactionTest, Distinct)
 {
   // Column(s) used to test needs to have different rows for the same keys.
   auto const col1  = int32s_col{0, 1, 2, 3, 4, 5, 6};
@@ -460,34 +460,83 @@ TEST_F(StreamCompactionTest, ApplyBooleanMask)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
 }
 
-TEST_F(StreamCompactionTest, DistinctCountColumn)
+TEST_F(StreamCompactionTest, UniqueCountColumn)
 {
-  auto const col = int32s_col{1, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4};
+  std::vector<int32_t> const input = {1, 3,  3,  4,  31, 1, 8,  2, 0, 4, 1,
+                                      4, 10, 40, 31, 42, 0, 42, 8, 5, 4};
+
+  cudf::test::fixed_width_column_wrapper<int32_t> input_col(input.begin(), input.end());
+  std::vector<double> input_data(input.begin(), input.end());
+
+  auto const new_end  = std::unique(input_data.begin(), input_data.end());
+  auto const expected = std::distance(input_data.begin(), new_end);
   EXPECT_EQ(
-    11, cudf::distinct_count(col, cudf::null_policy::INCLUDE, cudf::nan_policy::NAN_IS_VALID));  //
-                                                                                                 //
+    expected,
+    cudf::unique_count(
+      input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID, cudf::test::get_default_stream()));
 }
 
-// TEST_F(StreamCompactionTest, DistinctCountTable)
-// {
-//   using T = TypeParam;
+TEST_F(StreamCompactionTest, UniqueCountTable)
+{
+  std::vector<int32_t> const input1 = {1, 3, 3,  3,  4,  31, 1, 8,  2, 0, 4,
+                                       1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4};
+  std::vector<int32_t> const input2 = {3, 3,  3,  4,  31, 1, 8,  5, 0, 4, 1,
+                                       4, 10, 40, 31, 42, 0, 42, 8, 5, 4, 1};
 
-//   auto const input1 = cudf::test::make_type_param_vector<T>(
-//     {1, 3, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4});
-//   auto const input2 = cudf::test::make_type_param_vector<T>(
-//     {3, 3, 3, 4, 31, 1, 8, 5, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4, 1});
+  std::vector<std::pair<int32_t, int32_t>> pair_input;
+  std::transform(input1.begin(),
+                 input1.end(),
+                 input2.begin(),
+                 std::back_inserter(pair_input),
+                 [](int32_t a, int32_t b) { return std::pair(a, b); });
 
-//   std::vector<std::pair<T, T>> pair_input;
-//   std::transform(
-//     input1.begin(), input1.end(), input2.begin(), std::back_inserter(pair_input), [](T a, T b) {
-//       return std::pair(a, b);
-//     });
+  cudf::test::fixed_width_column_wrapper<int32_t> input_col1(input1.begin(), input1.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> input_col2(input2.begin(), input2.end());
+  cudf::table_view input_table({input_col1, input_col2});
 
-//   cudf::test::fixed_width_column_wrapper<T> input_col1(input1.begin(), input1.end());
-//   cudf::test::fixed_width_column_wrapper<T> input_col2(input2.begin(), input2.end());
-//   cudf::table_view input_table({input_col1, input_col2});
+  auto const new_end = std::unique(pair_input.begin(), pair_input.end());
+  auto const result  = std::distance(pair_input.begin(), new_end);
+  EXPECT_EQ(
+    result,
+    cudf::unique_count(input_table, null_equality::EQUAL, cudf::test::get_default_stream()));
+}
 
-//   auto const expected = static_cast<cudf::size_type>(
-//     std::set<std::pair<T, T>>(pair_input.begin(), pair_input.end()).size());
-//   EXPECT_EQ(expected, cudf::distinct_count(input_table, null_equality::EQUAL));
-// }
+TEST_F(StreamCompactionTest, DistinctCountColumn)
+{
+  std::vector<int32_t> const input = {1, 3,  3,  4,  31, 1, 8,  2, 0, 4, 1,
+                                      4, 10, 40, 31, 42, 0, 42, 8, 5, 4};
+
+  cudf::test::fixed_width_column_wrapper<int32_t> input_col(input.begin(), input.end());
+
+  auto const expected =
+    static_cast<cudf::size_type>(std::set<double>(input.begin(), input.end()).size());
+  EXPECT_EQ(
+    expected,
+    cudf::distinct_count(
+      input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID, cudf::test::get_default_stream()));
+}
+
+TEST_F(StreamCompactionTest, DistinctCountTable)
+{
+  std::vector<int32_t> const input1 = {1, 3, 3,  3,  4,  31, 1, 8,  2, 0, 4,
+                                       1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4};
+  std::vector<int32_t> const input2 = {3, 3,  3,  4,  31, 1, 8,  5, 0, 4, 1,
+                                       4, 10, 40, 31, 42, 0, 42, 8, 5, 4, 1};
+
+  std::vector<std::pair<int32_t, int32_t>> pair_input;
+  std::transform(input1.begin(),
+                 input1.end(),
+                 input2.begin(),
+                 std::back_inserter(pair_input),
+                 [](int32_t a, int32_t b) { return std::pair(a, b); });
+
+  cudf::test::fixed_width_column_wrapper<int32_t> input_col1(input1.begin(), input1.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> input_col2(input2.begin(), input2.end());
+  cudf::table_view input_table({input_col1, input_col2});
+
+  auto const expected = static_cast<cudf::size_type>(
+    std::set<std::pair<int32_t, int32_t>>(pair_input.begin(), pair_input.end()).size());
+  EXPECT_EQ(
+    expected,
+    cudf::distinct_count(input_table, null_equality::EQUAL, cudf::test::get_default_stream()));
+}
