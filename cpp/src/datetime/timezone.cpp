@@ -485,14 +485,12 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
   CUDF_EXPECTS(transition_times.size() == offsets.size(),
                "Error reading TZif file for timezone " + std::string{timezone_name});
 
-  std::vector<timestamp_s> ttimes_typed;
-  ttimes_typed.reserve(transition_times.size());
+  auto ttimes_typed = make_empty_host_vector<timestamp_s>(transition_times.size(), stream);
   std::transform(transition_times.cbegin(),
                  transition_times.cend(),
                  std::back_inserter(ttimes_typed),
                  [](auto ts) { return timestamp_s{duration_s{ts}}; });
-  std::vector<duration_s> offsets_typed;
-  offsets_typed.reserve(offsets.size());
+  auto offsets_typed = make_empty_host_vector<duration_s>(offsets.size(), stream);
   std::transform(offsets.cbegin(), offsets.cend(), std::back_inserter(offsets_typed), [](auto ts) {
     return duration_s{ts};
   });

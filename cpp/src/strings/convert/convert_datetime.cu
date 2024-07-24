@@ -123,7 +123,7 @@ struct format_compiler {
     : format(fmt), d_items(0, stream)
   {
     specifiers.insert(extra_specifiers.begin(), extra_specifiers.end());
-    std::vector<format_item> items;
+    auto items  = cudf::detail::make_empty_host_vector<format_item>(format.length(), stream);
     auto str    = format.data();
     auto length = format.length();
     while (length > 0) {
