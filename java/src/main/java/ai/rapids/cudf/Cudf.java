@@ -17,7 +17,7 @@
 package ai.rapids.cudf;
 
 public class Cudf {
-    
+
   static {
     NativeDepsLoader.loadNativeDeps();
   }
