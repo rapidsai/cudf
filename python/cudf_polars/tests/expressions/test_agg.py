@@ -6,11 +6,13 @@ import pytest
 
 import polars as pl
 
+from cudf_polars.callback import execute_with_cudf
 from cudf_polars.dsl import expr
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-@pytest.fixture(params=sorted(expr.Agg._SUPPORTED))
+# Note: quantile is tested separately (since it takes another argument)
+@pytest.fixture(params=sorted(expr.Agg._SUPPORTED - {"quantile"}))
 def agg(request):
     return request.param
 
@@ -50,6 +52,30 @@ def test_agg(df, agg):
         with pytest.raises(AssertionError):
             assert_gpu_result_equal(q)
     assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
+
+
+@pytest.mark.parametrize("q", [0.5, pl.lit(0.5)])
+@pytest.mark.parametrize("interp", ["nearest", "higher", "lower", "midpoint", "linear"])
+def test_quantile(df, q, interp):
+    expr = pl.col("a").quantile(q, interp)
+    q = df.select(expr)
+
+    # https://github.com/rapidsai/cudf/issues/15852
+    check_dtypes = q.collect_schema()["a"] == pl.Float64
+    if not check_dtypes:
+        with pytest.raises(AssertionError):
+            assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
+
+
+def test_quantile_invalid_q(df):
+    expr = pl.col("a").quantile(pl.col("a"))
+    q = df.select(expr)
+    with pytest.raises(
+        pl.exceptions.ComputeError,
+        match="cudf-polars only supports expressions that evaluate to a scalar as the quantile argument",
+    ):
+        q.collect(post_opt_callback=execute_with_cudf)
 
 
 @pytest.mark.parametrize(
