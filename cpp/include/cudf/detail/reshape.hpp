@@ -24,7 +24,7 @@
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @copydoc cudf::tile
@@ -46,4 +46,4 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
                                            rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
