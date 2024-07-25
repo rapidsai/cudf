@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+import numpy as np
 import pyarrow as pa
 import pytest
 from utils import assert_column_eq
@@ -20,6 +21,13 @@ def scalar():
 @pytest.fixture
 def column():
     return pa.array([3, 2, 5, 6]), pa.array([-1, 0, 0, 0], type=pa.int32())
+
+
+@pytest.fixture
+def set_lists_column():
+    lhs = [[np.nan, np.nan, 2, 1, 2], [1, 2, 3], None, [4, None, 5]]
+    rhs = [[np.nan, 1, 2, 3], [4, 5], [None, 7, 8], [None, None]]
+    return lhs, rhs
 
 
 @pytest.fixture
@@ -198,6 +206,22 @@ def test_count_elements(test_data):
     assert_column_eq(expect, res)
 
 
+def test_sequences():
+    starts = plc.interop.from_arrow(pa.array([0, 1, 2, 3, 4]))
+    steps = plc.interop.from_arrow(pa.array([2, 1, 1, 1, -3]))
+    sizes = plc.interop.from_arrow(pa.array([0, 2, 2, 1, 3]))
+
+    res1 = plc.lists.sequences(starts, sizes, steps)
+    res2 = plc.lists.sequences(starts, sizes)
+
+    expect1 = pa.array([[], [1, 2], [2, 3], [3], [4, 1, -2]])
+    expect2 = pa.array([[], [1, 2], [2, 3], [3], [4, 5, 6]])
+
+    assert_column_eq(expect1, res1)
+
+    assert_column_eq(expect2, res2)
+
+
 @pytest.mark.parametrize(
     "ascending,na_position,expected",
     [
@@ -237,3 +261,85 @@ def test_sort_lists(lists_column, ascending, na_position, expected):
 
     assert_column_eq(expect, res)
     assert_column_eq(expect, res_stable)
+
+
+@pytest.mark.parametrize(
+    "set_operation,nans_equal,nulls_equal,expected",
+    [
+        (
+            plc.lists.difference_distinct,
+            True,
+            True,
+            [[], [1, 2, 3], None, [4, 5]],
+        ),
+        (
+            plc.lists.difference_distinct,
+            False,
+            True,
+            [[], [1, 2, 3], None, [4, None, 5]],
+        ),
+        (
+            plc.lists.have_overlap,
+            True,
+            True,
+            [True, False, None, True],
+        ),
+        (
+            plc.lists.have_overlap,
+            False,
+            False,
+            [True, False, None, False],
+        ),
+        (
+            plc.lists.intersect_distinct,
+            True,
+            True,
+            [[np.nan, 1, 2], [], None, [None]],
+        ),
+        (
+            plc.lists.intersect_distinct,
+            True,
+            False,
+            [[1, 2], [], None, [None]],
+        ),
+        (
+            plc.lists.union_distinct,
+            False,
+            True,
+            [
+                [np.nan, 2, 1, 3],
+                [1, 2, 3, 4, 5],
+                None,
+                [4, None, 5, None, None],
+            ],
+        ),
+        (
+            plc.lists.union_distinct,
+            False,
+            False,
+            [
+                [np.nan, np.nan, 2, 1, np.nan, 3],
+                [1, 2, 3, 4, 5],
+                None,
+                [4, None, 5, None, None],
+            ],
+        ),
+    ],
+)
+def test_set_operations(
+    set_lists_column, set_operation, nans_equal, nulls_equal, expected
+):
+    lhs, rhs = set_lists_column
+
+    res = set_operation(
+        plc.interop.from_arrow(pa.array(lhs)),
+        plc.interop.from_arrow(pa.array(rhs)),
+        nans_equal,
+        nulls_equal,
+    )
+
+    if set_operation != plc.lists.have_overlap:
+        expect = pa.array(expected, type=pa.list_(pa.float64()))
+    else:
+        expect = pa.array(expected)
+    assert_column_eq(expect, res)
