@@ -16,6 +16,21 @@
 #include <string>
 #include <vector>
 
+auto const schema_orders = std::vector<std::string>{
+  "o_custkey", "o_orderdate", "o_orderpriority", "o_clerk", "o_shippriority", "o_comment"};
+
+auto const schema_lineitem = std::vector<std::string>{"l_partkey",
+                                                      "l_suppkey",
+                                                      "l_quantity",
+                                                      "l_discount",
+                                                      "l_tax",
+                                                      "l_shipdate",
+                                                      "l_commitdate",
+                                                      "l_receiptdate",
+                                                      "l_shipinstruct",
+                                                      "l_shipmode",
+                                                      "l_comment"};
+
 auto const schema_customer = std::vector<std::string>{"c_custkey",
                                                       "c_name",
                                                       "c_address",

@@ -23,15 +23,19 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
+#include <cudf/datetime.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/combine.hpp>
+#include <cudf/strings/convert/convert_datetime.hpp>
+#include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/padding.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/transform.hpp>
+#include <cudf/unary.hpp>
 
 #include <rmm/cuda_device.hpp>
 #include <rmm/exec_policy.hpp>
@@ -61,6 +65,7 @@
 
 #include <memory>
 #include <string>
+#include <typeinfo>
 #include <utility>
 #include <vector>
 
@@ -158,7 +163,11 @@ std::unique_ptr<cudf::column> gen_rand_num_col(T lower, T upper, cudf::size_type
 {
   cudf::data_type type;
   if (cudf::is_integral<T>()) {
-    type = cudf::data_type{cudf::type_id::INT64};
+    if (typeid(lower) == typeid(int64_t)) {
+      type = cudf::data_type{cudf::type_id::INT64};
+    } else {
+      type = cudf::data_type{cudf::type_id::INT32};
+    }
   } else {
     type = cudf::data_type{cudf::type_id::FLOAT64};
   }
@@ -219,52 +228,107 @@ std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string>
   return std::make_unique<cudf::column>(joined_table->get_column(2));
 }
 
-// NOTE: Incomplete table
-void generate_lineitem(int64_t scale_factor)
+std::unique_ptr<cudf::column> calc_l_suppkey(cudf::column_view const& l_partkey,
+                                             int64_t const& scale_factor,
+                                             int64_t const& num_rows)
 {
-  cudf::size_type const num_rows = 1'500'000 * scale_factor;
+  // Generating the `s` col
+  auto s_empty = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT64},
+                                           num_rows,
+                                           cudf::mask_state::UNALLOCATED,
+                                           cudf::get_default_stream());
 
-  // Generate the `l_partkey` column
-  auto const l_partkey = gen_rand_num_col<int64_t>(1, 200'000 * scale_factor, num_rows);
+  auto s =
+    cudf::fill(s_empty->view(), 0, num_rows, cudf::numeric_scalar<int64_t>(10000 * scale_factor));
 
-  // Generate the `l_quantity` column
-  auto const l_quantity = gen_rand_num_col<int64_t>(1, 50, num_rows);
+  // Generating the `i` col
+  auto seq = gen_primary_key_col(0, num_rows);
+  auto i   = cudf::binary_operation(seq->view(),
+                                  cudf::numeric_scalar<int64_t>(4),
+                                  cudf::binary_operator::MOD,
+                                  cudf::data_type{cudf::type_id::INT64});
 
-  // Generate the `l_discount` column
-  auto const l_discount = gen_rand_num_col<double>(0.0, 0.10, num_rows);
+  // Create a table view out of `l_partkey`, `s`, and `i`
+  auto table = cudf::table_view({l_partkey, s->view(), i->view()});
 
-  // Generate the `l_tax` column
-  auto const l_tax = gen_rand_num_col<double>(0.0, 0.08, num_rows);
+  // Create the AST expression
+  auto scalar_1  = cudf::numeric_scalar<int64_t>(1);
+  auto scalar_4  = cudf::numeric_scalar<int64_t>(4);
+  auto literal_1 = cudf::ast::literal(scalar_1);
+  auto literal_4 = cudf::ast::literal(scalar_4);
 
-  // Generate the `l_comment` column
-  auto const l_comment = gen_rand_str_col(10, 43, num_rows);
+  auto l_partkey_col_ref = cudf::ast::column_reference(0);
+  auto s_col_ref         = cudf::ast::column_reference(1);
+  auto i_col_ref         = cudf::ast::column_reference(2);
 
-  // Generate the `l_shipinstruct` column
-  auto const l_shipinstruct = gen_rand_str_col_from_set(vocab_instructions, num_rows);
+  // (int)(l_partkey - 1)/s
+  auto expr_a = cudf::ast::operation(cudf::ast::ast_operator::SUB, l_partkey_col_ref, literal_1);
+  auto expr_b = cudf::ast::operation(cudf::ast::ast_operator::DIV, expr_a, s_col_ref);
+  auto expr_b_casted = cudf::ast::operation(cudf::ast::ast_operator::CAST_TO_INT64, expr_b);
 
-  // Generate the `l_shipmode` column
-  auto const l_shipmode = gen_rand_str_col_from_set(vocab_modes, num_rows);
+  // s/4
+  auto expr_c = cudf::ast::operation(cudf::ast::ast_operator::DIV, s_col_ref, literal_4);
 
-  auto lineitem = cudf::table_view({l_partkey->view(),
-                                    l_quantity->view(),
-                                    l_discount->view(),
-                                    l_tax->view(),
-                                    l_comment->view(),
-                                    l_shipinstruct->view(),
-                                    l_shipmode->view()});
+  // (s/4 + (int)(l_partkey - 1)/s)
+  auto expr_d = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_c, expr_b_casted);
 
-  write_parquet(lineitem,
-                "lineitem.parquet",
-                {"l_quantity", "l_discount", "l_tax", "l_comment", "l_shipinstruct", "l_shipmode"});
+  // (i * (s/4 + (int)(l_partkey - 1)/s))
+  auto expr_e = cudf::ast::operation(cudf::ast::ast_operator::MUL, i_col_ref, expr_d);
+
+  // (l_partkey + (i * (s/4 + (int)(l_partkey - 1)/s)))
+  auto expr_f = cudf::ast::operation(cudf::ast::ast_operator::ADD, l_partkey_col_ref, expr_e);
+
+  // (l_partkey + (i * (s/4 + (int)(l_partkey - 1)/s))) % s
+  auto expr_g = cudf::ast::operation(cudf::ast::ast_operator::MOD, expr_f, s_col_ref);
+
+  // (l_partkey + (i * (s/4 + (int)(l_partkey - 1)/s))) % s + 1
+  auto final_expr = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_g, literal_1);
+
+  // Execute the AST expression
+  auto l_suppkey = cudf::compute_column(table, final_expr);
+  return l_suppkey;
 }
 
 // NOTE: Incomplete table
-void generate_orders(int64_t scale_factor)
+void generate_lineitem_and_orders(int64_t scale_factor)
 {
   cudf::size_type const num_rows = 1'500'000 * scale_factor;
 
+  // Generate the non-dependent columns of the `orders` table
+  // Columns: `o_custkey`, `o_orderdate`, `o_orderpriority`, `o_clerk`, `o_shippriority`,
+  // `o_comment`
+
+  // Generate the `o_custkey` column
+  // NOTE: Currently, this column does not comply with the specs which
+  // specifies that every value % 3 != 0
+  auto const o_custkey = gen_rand_num_col<int64_t>(1, num_rows, num_rows);
+
+  // Generate the `o_orderdate` column
+  // Uniformly distributed random dates between `1992-01-01` and `1998-08-02`
+  auto const o_orderdate_year  = gen_rand_str_col_from_set(years, num_rows);
+  auto const o_orderdate_month = gen_rand_str_col_from_set(months, num_rows);
+  auto const o_orderdate_day   = gen_rand_str_col_from_set(days, num_rows);
+  auto const o_orderdate_str   = cudf::strings::concatenate(
+    cudf::table_view(
+      {o_orderdate_year->view(), o_orderdate_month->view(), o_orderdate_day->view()}),
+    cudf::string_scalar("-"));
+
+  auto const o_orderdate_ts =
+    cudf::strings::to_timestamps(o_orderdate_str->view(),
+                                 cudf::data_type{cudf::type_id::TIMESTAMP_DAYS},
+                                 std::string("%Y-%m-%d"));
+
   // Generate the `o_orderpriority` column
   auto const o_orderpriority = gen_rand_str_col_from_set(vocab_priorities, num_rows);
+
+  // Generate the `o_clerk` column
+  auto const clerk_repeat = gen_repeat_str_col("Clerk#", num_rows);
+  auto const random_c     = gen_rand_num_col<int64_t>(1, 1'000 * scale_factor, num_rows);
+  auto const random_c_str = cudf::strings::from_integers(random_c->view());
+  auto const random_c_str_padded =
+    cudf::strings::pad(random_c_str->view(), 9, cudf::strings::side_type::LEFT, "0");
+  auto const o_clerk = cudf::strings::concatenate(
+    cudf::table_view({clerk_repeat->view(), random_c_str_padded->view()}));
 
   // Generate the `o_shippriority` column
   auto const empty = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT64},
@@ -275,12 +339,74 @@ void generate_orders(int64_t scale_factor)
     cudf::fill(empty->view(), 0, num_rows, cudf::numeric_scalar<int64_t>(0));
 
   // Generate the `o_comment` column
+  // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
   auto const o_comment = gen_rand_str_col(19, 78, num_rows);
 
-  auto const orders =
-    cudf::table_view({o_orderpriority->view(), o_shippriority->view(), o_comment->view()});
+  // Generate the non-dependent columns of the `lineitem` table
 
-  write_parquet(orders, "orders.parquet", {"o_orderpriority", "o_shippriority", "o_comment"});
+  // Generate the `l_partkey` column
+  auto const l_partkey = gen_rand_num_col<int64_t>(1, 200'000 * scale_factor, num_rows);
+
+  // Generate the `l_suppkey` column
+  auto const l_suppkey = calc_l_suppkey(l_partkey->view(), scale_factor, num_rows);
+
+  // Generate the `l_quantity` column
+  auto const l_quantity = gen_rand_num_col<int64_t>(1, 50, num_rows);
+
+  // Generate the `l_discount` column
+  auto const l_discount = gen_rand_num_col<double>(0.0, 0.10, num_rows);
+
+  // Generate the `l_tax` column
+  auto const l_tax = gen_rand_num_col<double>(0.0, 0.08, num_rows);
+
+  // NOTE: For now, adding months, would add a new `add_calendrical_days` function to add days
+  // Generate the `l_shipdate` column
+  auto const l_shipdate_rand_add_days = gen_rand_num_col<int32_t>(1, 6, num_rows);
+  auto const l_shipdate_ts            = cudf::datetime::add_calendrical_months(
+    o_orderdate_ts->view(), l_shipdate_rand_add_days->view());
+
+  // Generate the `l_commitdate` column
+  auto const l_commitdate_rand_add_days = gen_rand_num_col<int32_t>(1, 6, num_rows);
+  auto const l_commitdate_ts            = cudf::datetime::add_calendrical_months(
+    o_orderdate_ts->view(), l_commitdate_rand_add_days->view());
+
+  // Generate the `l_receiptdate` column
+  auto const l_receiptdate_rand_add_days = gen_rand_num_col<int32_t>(1, 6, num_rows);
+  auto const l_receiptdate_ts            = cudf::datetime::add_calendrical_months(
+    l_shipdate_ts->view(), l_receiptdate_rand_add_days->view());
+
+  // Generate the `l_shipinstruct` column
+  auto const l_shipinstruct = gen_rand_str_col_from_set(vocab_instructions, num_rows);
+
+  // Generate the `l_shipmode` column
+  auto const l_shipmode = gen_rand_str_col_from_set(vocab_modes, num_rows);
+
+  // Generate the `l_comment` column
+  // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
+  auto const l_comment = gen_rand_str_col(10, 43, num_rows);
+
+  auto orders = cudf::table_view({o_custkey->view(),
+                                  o_orderdate_ts->view(),
+                                  o_orderpriority->view(),
+                                  o_clerk->view(),
+                                  o_shippriority->view(),
+                                  o_comment->view()});
+
+  write_parquet(orders, "orders.parquet", schema_orders);
+
+  auto lineitem = cudf::table_view({l_partkey->view(),
+                                    l_suppkey->view(),
+                                    l_quantity->view(),
+                                    l_discount->view(),
+                                    l_tax->view(),
+                                    l_shipdate_ts->view(),
+                                    l_commitdate_ts->view(),
+                                    l_receiptdate_ts->view(),
+                                    l_shipinstruct->view(),
+                                    l_shipmode->view(),
+                                    l_comment->view()});
+
+  write_parquet(lineitem, "lineitem.parquet", schema_lineitem);
 }
 
 std::unique_ptr<cudf::column> calc_ps_suppkey(cudf::column_view const& ps_partkey,
@@ -737,8 +863,7 @@ int main(int argc, char** argv)
   int32_t scale_factor = std::atoi(argv[1]);
   std::cout << "Requested scale factor: " << scale_factor << std::endl;
 
-  // generate_lineitem(scale_factor);
-  // generate_orders(scale_factor);
+  generate_lineitem_and_orders(scale_factor);
   generate_partsupp(scale_factor);
   generate_part(scale_factor);
   generate_supplier(scale_factor);
