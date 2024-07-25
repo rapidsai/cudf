@@ -17,11 +17,12 @@
 #pragma once
 
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <cstdint>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 namespace text {
 /**
@@ -113,4 +114,4 @@ byte_range_info create_byte_range_info_max();
 
 }  // namespace text
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

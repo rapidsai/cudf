@@ -16,6 +16,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/strings/detail/convert/int_to_string.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/types.hpp>

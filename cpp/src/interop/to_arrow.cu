@@ -459,7 +459,7 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
 {
   auto const column = cudf::make_column_from_scalar(input, 1, stream);
   cudf::table_view const tv{{column->view()}};
-  auto const arrow_table  = cudf::to_arrow(tv, {metadata}, stream);
+  auto const arrow_table  = detail::to_arrow(tv, {metadata}, stream, ar_mr);
   auto const ac           = arrow_table->column(0);
   auto const maybe_scalar = ac->GetScalar(0);
   if (!maybe_scalar.ok()) { CUDF_FAIL("Failed to produce a scalar"); }
