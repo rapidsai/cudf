@@ -1188,7 +1188,11 @@ class Cast(Expr):
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
         super().__init__(dtype)
         self.children = (value,)
-        if not plc.unary.is_supported_cast(self.dtype, value.dtype):
+        if not (
+            plc.traits.is_fixed_width(self.dtype)
+            and plc.traits.is_fixed_width(value.dtype)
+            and plc.unary.is_supported_cast(value.dtype, self.dtype)
+        ):
             raise NotImplementedError(
                 f"Can't cast {self.dtype.id().name} to {value.dtype.id().name}"
             )

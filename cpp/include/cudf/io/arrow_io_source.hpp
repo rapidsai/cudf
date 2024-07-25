@@ -18,6 +18,8 @@
 
 #include "datasource.hpp"
 
+#include <cudf/utilities/export.hpp>
+
 #include <arrow/filesystem/filesystem.h>
 #include <arrow/io/interfaces.h>
 
@@ -25,7 +27,8 @@
 #include <string>
 #include <utility>
 
-namespace cudf::io {
+namespace CUDF_EXPORT cudf {
+namespace io {
 /**
  * @addtogroup io_datasources
  * @{
@@ -86,4 +89,5 @@ class arrow_io_source : public datasource {
 };
 
 /** @} */  // end of group
-}  // namespace cudf::io
+}  // namespace io
+}  // namespace CUDF_EXPORT cudf

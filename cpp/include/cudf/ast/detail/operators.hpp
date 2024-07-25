@@ -29,7 +29,7 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 namespace ast {
 
@@ -1233,4 +1233,4 @@ CUDF_HOST_DEVICE inline cudf::size_type ast_operator_arity(ast_operator op)
 
 }  // namespace ast
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
