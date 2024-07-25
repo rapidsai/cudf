@@ -57,7 +57,7 @@ zip-safe = false
 [tool.setuptools.dynamic]
 version = {file = "custreamz/VERSION"}
 
-[tools.setuptools.packages.find]
+[tool.setuptools.packages.find]
 include = [
     "custreamz",
     "custreamz.*",
