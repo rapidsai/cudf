@@ -383,7 +383,8 @@ aggregate_reader_metadata::collect_keyval_metadata() const
 std::optional<std::vector<std::unordered_map<int32_t, int32_t>>>
 aggregate_reader_metadata::init_schema_idx_maps(bool const has_cols_from_mismatched_srcs) const
 {
-  if (has_cols_from_mismatched_srcs) {
+  // Only initialize if more than 1 data sources and has select columns from mismatched data sources
+  if (has_cols_from_mismatched_srcs and per_file_metadata.size() > 1) {
     return std::vector<std::unordered_map<int32_t, int32_t>>{per_file_metadata.size() - 1};
   } else {
     return std::nullopt;
