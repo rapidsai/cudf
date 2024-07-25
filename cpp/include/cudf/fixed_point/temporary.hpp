@@ -24,7 +24,7 @@
 #include <algorithm>
 #include <string>
 
-namespace numeric {
+namespace CUDF_EXPORT numeric {
 namespace detail {
 
 template <typename T>
@@ -81,4 +81,4 @@ constexpr auto exp10(int32_t exponent)
 }
 
 }  // namespace detail
-}  // namespace numeric
+}  // namespace CUDF_EXPORT numeric

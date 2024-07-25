@@ -21,6 +21,7 @@
 #include <cudf/detail/reshape.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/interleave_columns.hpp>
+#include <cudf/reshape.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>

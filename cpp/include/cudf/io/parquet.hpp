@@ -21,6 +21,7 @@
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
@@ -32,7 +33,8 @@
 #include <utility>
 #include <vector>
 
-namespace cudf::io {
+namespace CUDF_EXPORT cudf {
+namespace io {
 /**
  * @addtogroup io_readers
  * @{
@@ -517,8 +519,9 @@ class chunked_parquet_reader {
    * @brief Default constructor, this should never be used.
    *
    * This is added just to satisfy cython.
+   * This is added to not leak detail API
    */
-  chunked_parquet_reader() = default;
+  chunked_parquet_reader();
 
   /**
    * @brief Constructor for chunked reader.
@@ -1417,8 +1420,9 @@ class parquet_chunked_writer {
   /**
    * @brief Default constructor, this should never be used.
    *        This is added just to satisfy cython.
+   *        This is added to not leak detail API
    */
-  parquet_chunked_writer() = default;
+  parquet_chunked_writer();
 
   /**
    * @brief Constructor with chunked writer options
@@ -1428,6 +1432,11 @@ class parquet_chunked_writer {
    */
   parquet_chunked_writer(chunked_parquet_writer_options const& options,
                          rmm::cuda_stream_view stream = cudf::get_default_stream());
+  /**
+   * @brief Default destructor.
+   *        This is added to not leak detail API
+   */
+  ~parquet_chunked_writer();
 
   /**
    * @brief Writes table to output.
@@ -1460,4 +1469,5 @@ class parquet_chunked_writer {
 
 /** @} */  // end of group
 
-}  // namespace cudf::io
+}  // namespace io
+}  // namespace CUDF_EXPORT cudf
