@@ -36,4 +36,14 @@ cpdef Column extract_list_element(Column, ColumnOrSizeType)
 
 cpdef Column count_elements(Column)
 
+cpdef Column sequences(Column, Column, Column steps = *)
+
 cpdef Column sort_lists(Column, bool, null_order, bool stable = *)
+
+cpdef Column difference_distinct(Column, Column, bool nulls_equal=*, bool nans_equal=*)
+
+cpdef Column have_overlap(Column, Column, bool nulls_equal=*, bool nans_equal=*)
+
+cpdef Column intersect_distinct(Column, Column, bool nulls_equal=*, bool nans_equal=*)
+
+cpdef Column union_distinct(Column, Column, bool nulls_equal=*, bool nans_equal=*)
