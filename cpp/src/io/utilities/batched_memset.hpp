@@ -30,5 +30,4 @@
  */
 void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
                     uint64_t const value,
-                    rmm::cuda_stream_view stream,
-                    rmm::device_async_resource_ref mr);
+                    rmm::cuda_stream_view stream);

@@ -29,15 +29,14 @@
 
 void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
                     uint64_t const value,
-                    rmm::cuda_stream_view stream,
-                    rmm::device_async_resource_ref mr)
+                    rmm::cuda_stream_view stream)
 {
   // define task and bytes parameters
   auto const num_bufs = bufs.size();
 
   // copy bufs into gpu and then get sizes from there (cudf detail function make device vector
   // async)
-  auto gpu_bufs = cudf::detail::make_device_uvector_async(bufs, stream, mr);
+  auto gpu_bufs = cudf::detail::make_device_uvector_async(bufs, stream, rmm::mr::get_current_device_resource());
 
   // get a vector with the sizes of all buffers
   auto sizes = cudf::detail::make_counting_transform_iterator(
@@ -61,7 +60,7 @@ void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
 
   cub::DeviceCopy::Batched(nullptr, temp_storage_bytes, iter_in, iter_out, sizes, num_bufs, stream);
 
-  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream, mr);
+  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream, rmm::mr::get_current_device_resource());
 
   cub::DeviceCopy::Batched(
     d_temp_storage.data(), temp_storage_bytes, iter_in, iter_out, sizes, num_bufs, stream);

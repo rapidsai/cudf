@@ -78,7 +78,7 @@ TEST(MultiBufferTestIntegral, BasicTest1)
     });
 
   // Function Call
-  batched_memset(memset_bufs, 0UL, stream, mr);
+  batched_memset(memset_bufs, 0UL, stream);
 
   // Set all buffer regions to 0 for expected comparison
   std::for_each(

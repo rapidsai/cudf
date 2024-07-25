@@ -1622,9 +1622,9 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
       }
     }
   }
-  batched_memset(memset_bufs, 0UL, _stream, _mr);
+  batched_memset(memset_bufs, 0UL, _stream);
   // Need to set null mask bufs to all high bits
-  batched_memset(nullmask_bufs, ULLONG_MAX, _stream, _mr);
+  batched_memset(nullmask_bufs, ULLONG_MAX, _stream);
 }
 
 std::vector<size_t> reader::impl::calculate_page_string_offsets()
