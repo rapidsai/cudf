@@ -2,11 +2,9 @@
 
 import io
 
-import pyarrow as pa
 import pytest
 
 import cudf._lib.pylibcudf as plc
-from cudf._lib.pylibcudf.io.datasource import NativeFileDatasource
 
 
 @pytest.fixture(params=[plc.io.SourceInfo, plc.io.SinkInfo])
@@ -18,10 +16,8 @@ def _skip_invalid_sinks(io_class, sink):
     """
     Skip invalid sinks for SinkInfo
     """
-    if io_class is plc.io.SinkInfo and isinstance(
-        sink, (bytes, NativeFileDatasource)
-    ):
-        pytest.skip(f"{sink} is not a valid input for SinkInfo")
+    if io_class is plc.io.SinkInfo and isinstance(sink, bytes):
+        pytest.skip("bytes is not a valid input for SinkInfo")
 
 
 @pytest.mark.parametrize(
@@ -30,7 +26,6 @@ def _skip_invalid_sinks(io_class, sink):
         "a.txt",
         b"hello world",
         io.BytesIO(b"hello world"),
-        NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
     ],
 )
 def test_source_info_ctor(io_class, source, tmp_path):
@@ -47,13 +42,12 @@ def test_source_info_ctor(io_class, source, tmp_path):
 @pytest.mark.parametrize(
     "sources",
     [
+        ["a.txt"],
+        [b"hello world"],
+        [io.BytesIO(b"hello world")],
         ["a.txt", "a.txt"],
         [b"hello world", b"hello there"],
         [io.BytesIO(b"hello world"), io.BytesIO(b"hello there")],
-        [
-            NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
-            NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
-        ],
     ],
 )
 def test_source_info_ctor_multiple(io_class, sources, tmp_path):
@@ -77,11 +71,6 @@ def test_source_info_ctor_multiple(io_class, sources, tmp_path):
         [
             io.BytesIO(b"hello world"),
             io.BytesIO(b"hello there"),
-            b"hello world",
-        ],
-        [
-            NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
-            "awef.txt",
             b"hello world",
         ],
     ],
