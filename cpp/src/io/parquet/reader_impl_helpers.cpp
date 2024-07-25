@@ -17,6 +17,7 @@
 #include "reader_impl_helpers.hpp"
 
 #include "compact_protocol_reader.hpp"
+#include "cudf/utilities/error.hpp"
 #include "io/parquet/parquet.hpp"
 #include "io/utilities/base64_utilities.hpp"
 #include "io/utilities/row_selection.hpp"
@@ -1244,6 +1245,11 @@ aggregate_reader_metadata::select_columns(
 
       // We're at a leaf and this is an input column (one with actual data stored) so map it.
       if (src_schema_elem.num_children == 0) {
+        // Ensure that we are at the leaf with dst_schema_elem as well
+        CUDF_EXPECTS(dst_schema_elem.num_children == 0,
+                     "Encountered a mismatch in schema tree depths across data sources");
+
+        // Get the schema_idx_map for this data source (pfm)
         auto& schema_idx_map = schema_idx_maps.value()[pfm_idx - 1];
 
         // Ensure that the schema index of the current schema_element isn't already mapped.
