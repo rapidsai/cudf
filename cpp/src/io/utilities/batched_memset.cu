@@ -36,7 +36,8 @@ void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
 
   // copy bufs into gpu and then get sizes from there (cudf detail function make device vector
   // async)
-  auto gpu_bufs = cudf::detail::make_device_uvector_async(bufs, stream, rmm::mr::get_current_device_resource());
+  auto gpu_bufs =
+    cudf::detail::make_device_uvector_async(bufs, stream, rmm::mr::get_current_device_resource());
 
   // get a vector with the sizes of all buffers
   auto sizes = cudf::detail::make_counting_transform_iterator(
@@ -45,10 +46,7 @@ void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
       [gpu_bufs = gpu_bufs.data()] __device__(cudf::size_type i) { return gpu_bufs[i].size(); }));
 
   // get a iterator with a constant value to memset
-  auto iter_in = thrust::make_transform_iterator(
-    thrust::counting_iterator<uint64_t>(0),
-    cuda::proclaim_return_type<thrust::constant_iterator<uint64_t>>(
-      [value] __device__(cudf::size_type i) { return thrust::make_constant_iterator(value); }));
+  auto iter_in = thrust::make_constant_iterator(thrust::make_constant_iterator(value));
 
   // get a iterator pointing to each device span
   auto iter_out = thrust::make_transform_iterator(
@@ -60,7 +58,8 @@ void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
 
   cub::DeviceCopy::Batched(nullptr, temp_storage_bytes, iter_in, iter_out, sizes, num_bufs, stream);
 
-  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream, rmm::mr::get_current_device_resource());
+  rmm::device_buffer d_temp_storage(
+    temp_storage_bytes, stream, rmm::mr::get_current_device_resource());
 
   cub::DeviceCopy::Batched(
     d_temp_storage.data(), temp_storage_bytes, iter_in, iter_out, sizes, num_bufs, stream);
