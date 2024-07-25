@@ -66,7 +66,7 @@ requirements:
     - dlpack >=0.8,<1.0
     # TODO: Change to `2.0` for NumPy 2
     - numpy 1.23
-    - pyarrow ==16.1.0.*
+    - pyarrow ==17.0.0.*
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
