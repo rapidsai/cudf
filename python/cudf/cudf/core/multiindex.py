@@ -524,8 +524,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             col.values for col in self._codes
         )
 
-    def get_slice_bound(self, label, side, kind=None):
-        raise NotImplementedError()
+    def get_slice_bound(self, label, side):
+        raise NotImplementedError(
+            "get_slice_bound is not currently implemented."
+        )
 
     @property  # type: ignore
     @_performance_tracking
