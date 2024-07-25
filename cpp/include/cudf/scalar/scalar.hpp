@@ -32,7 +32,7 @@
  * @brief Class definitions for cudf::scalar
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup scalar_classes
  * @{
@@ -894,4 +894,4 @@ class struct_scalar : public scalar {
 };
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

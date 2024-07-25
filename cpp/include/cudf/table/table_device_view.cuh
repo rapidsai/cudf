@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@
  * @brief Table device view class definitions
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -271,4 +271,4 @@ auto contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_st
   return std::make_tuple(std::move(descendant_storage), d_columns);
 }
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

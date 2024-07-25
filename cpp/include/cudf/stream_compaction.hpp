@@ -18,6 +18,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
@@ -25,7 +26,7 @@
 #include <memory>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup reorder_compact
  * @{
@@ -401,4 +402,4 @@ cudf::size_type distinct_count(table_view const& input,
                                null_equality nulls_equal = null_equality::EQUAL);
 
 /** @} */
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

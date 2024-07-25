@@ -17,10 +17,12 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/device_uvector.hpp>
 
-namespace cudf::detail {
+namespace CUDF_EXPORT cudf {
+namespace detail {
 
 /**
  * @brief Device view for `dremel_data`.
@@ -213,4 +215,5 @@ dremel_data get_comparator_data(column_view input,
                                 std::vector<uint8_t> nullability,
                                 bool output_as_byte_array,
                                 rmm::cuda_stream_view stream);
-}  // namespace cudf::detail
+}  // namespace detail
+}  // namespace CUDF_EXPORT cudf
