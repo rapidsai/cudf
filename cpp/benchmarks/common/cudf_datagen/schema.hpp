@@ -27,6 +27,7 @@ auto const schema_lineitem = std::vector<std::string>{"l_partkey",
                                                       "l_shipdate",
                                                       "l_commitdate",
                                                       "l_receiptdate",
+                                                      "l_linestatus",
                                                       "l_shipinstruct",
                                                       "l_shipmode",
                                                       "l_comment"};
