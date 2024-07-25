@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -23,7 +24,8 @@
 #include <cstddef>
 #include <vector>
 
-namespace cudf::detail {
+namespace CUDF_EXPORT cudf {
+namespace detail {
 
 class cuda_stream_pool {
  public:
@@ -122,4 +124,5 @@ cuda_stream_pool& global_cuda_stream_pool();
  */
 void join_streams(host_span<rmm::cuda_stream_view const> streams, rmm::cuda_stream_view stream);
 
-}  // namespace cudf::detail
+}  // namespace detail
+}  // namespace CUDF_EXPORT cudf
