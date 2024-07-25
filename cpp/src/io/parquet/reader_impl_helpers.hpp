@@ -128,7 +128,7 @@ struct arrow_schema_data_types {
 class aggregate_reader_metadata {
   std::vector<metadata> per_file_metadata;
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
-  std::vector<std::unordered_map<int32_t, int32_t>> schema_idx_maps;
+  std::optional<std::vector<std::unordered_map<int32_t, int32_t>>> schema_idx_maps;
 
   int64_t num_rows;
   size_type num_row_groups;
@@ -144,6 +144,12 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::vector<std::unordered_map<std::string, std::string>> collect_keyval_metadata()
     const;
+
+  /**
+   * @brief Initialize the schema index maps
+   */
+  [[nodiscard]] std::optional<std::vector<std::unordered_map<int32_t, int32_t>>>
+  init_schema_idx_maps(bool) const;
 
   /**
    * @brief Decodes and constructs the arrow schema from the ARROW_SCHEMA_KEY IPC message

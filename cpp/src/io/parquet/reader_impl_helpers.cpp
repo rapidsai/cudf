@@ -380,6 +380,16 @@ aggregate_reader_metadata::collect_keyval_metadata() const
   return kv_maps;
 }
 
+std::optional<std::vector<std::unordered_map<int32_t, int32_t>>>
+aggregate_reader_metadata::init_schema_idx_maps(bool const has_cols_from_mismatched_srcs) const
+{
+  if (has_cols_from_mismatched_srcs) {
+    return std::vector<std::unordered_map<int32_t, int32_t>>{per_file_metadata.size() - 1};
+  } else {
+    return std::nullopt;
+  }
+}
+
 int64_t aggregate_reader_metadata::calc_num_rows() const
 {
   return std::accumulate(
@@ -541,10 +551,10 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
 aggregate_reader_metadata::aggregate_reader_metadata(
   host_span<std::unique_ptr<datasource> const> sources,
   bool use_arrow_schema,
-  bool has_projection_from_mismatched_sources)
+  bool has_cols_from_mismatched_srcs)
   : per_file_metadata(metadatas_from_sources(sources)),
     keyval_maps(collect_keyval_metadata()),
-    schema_idx_maps((has_projection_from_mismatched_sources) ? per_file_metadata.size() - 1 : 0),
+    schema_idx_maps(init_schema_idx_maps(has_cols_from_mismatched_srcs)),
     num_rows(calc_num_rows()),
     num_row_groups(calc_num_row_groups())
 {
@@ -553,7 +563,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(
 
   // Validate that all sources have the same schema unless we are reading a column projection
   // in which case, only the projected columns will be checked later when selecting them.
-  if (per_file_metadata.size() > 1 and not has_projection_from_mismatched_sources) {
+  if (per_file_metadata.size() > 1 and not has_cols_from_mismatched_srcs) {
     auto const& first_meta = per_file_metadata.front();
     auto const num_cols =
       first_meta.row_groups.size() > 0 ? first_meta.row_groups.front().columns.size() : 0;
@@ -876,10 +886,10 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
                                                                           size_type src_idx,
                                                                           int schema_idx) const
 {
-  // schema_idx_maps.size() will only be > 0 when we reading matching column projection from
+  // schema_idx_maps will only exist when we are reading matching column projection from
   // mismatched Parquet sources.
-  if (src_idx and schema_idx_maps.size()) {
-    auto const& schema_idx_map = schema_idx_maps[src_idx - 1];
+  if (src_idx and schema_idx_maps.has_value()) {
+    auto const& schema_idx_map = schema_idx_maps.value()[src_idx - 1];
     CUDF_EXPECTS(schema_idx_map.find(schema_idx) != schema_idx_map.end(),
                  "Found no metadata for schema index");
     schema_idx = schema_idx_map.at(schema_idx);
@@ -1223,7 +1233,7 @@ aggregate_reader_metadata::select_columns(
       } else {
         for (const auto& idx : col_name_info->children) {
           map_column(&idx,
-                     find_schema_child(src_schema_elem, idx.name, 0),
+                     find_schema_child(src_schema_elem, idx.name),
                      find_schema_child(dst_schema_elem, idx.name, pfm_idx),
                      pfm_idx);
         }
@@ -1231,7 +1241,7 @@ aggregate_reader_metadata::select_columns(
 
       // We're at a leaf and this is an input column (one with actual data stored) so map it.
       if (src_schema_elem.num_children == 0) {
-        auto& schema_idx_map = schema_idx_maps[pfm_idx - 1];
+        auto& schema_idx_map = schema_idx_maps.value()[pfm_idx - 1];
 
         // Ensure that the schema index of the current schema_element isn't already mapped.
         CUDF_EXPECTS(schema_idx_map.find(src_schema_idx) == schema_idx_map.end(),
@@ -1380,7 +1390,7 @@ aggregate_reader_metadata::select_columns(
         output_column_schemas.push_back(top_level_col_schema_idx);
 
         // Map the column and/or it's children's schema_idx to the rest of the data sources.
-        if (per_file_metadata.size() > 1) {
+        if (per_file_metadata.size() > 1 and schema_idx_maps.has_value()) {
           std::for_each(thrust::make_counting_iterator(1ul),
                         thrust::make_counting_iterator(per_file_metadata.size()),
                         [&](auto const pfm_idx) {
