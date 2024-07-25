@@ -375,6 +375,24 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   auto const l_receiptdate_ts            = cudf::datetime::add_calendrical_months(
     l_shipdate_ts->view(), l_receiptdate_rand_add_days->view());
 
+  auto current_date =
+    cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 6, 17), true);
+  auto current_date_literal = cudf::ast::literal(current_date);
+
+  // Generate the `l_returnflag` column
+  auto l_receiptdate_col_ref = cudf::ast::column_reference(0);
+  auto l_returnflag_pred     = cudf::ast::operation(
+    cudf::ast::ast_operator::LESS_EQUAL, l_receiptdate_col_ref, current_date_literal);
+  auto l_returngflag_mask =
+    cudf::compute_column(cudf::table_view({l_receiptdate_ts->view()}), l_returnflag_pred);
+
+  // Generate the `l_linestatus` column
+  auto l_shipdate_ts_col_ref = cudf::ast::column_reference(0);
+  auto l_linestatus_pred     = cudf::ast::operation(
+    cudf::ast::ast_operator::GREATER, l_shipdate_ts_col_ref, current_date_literal);
+  auto l_linestatus_mask =
+    cudf::compute_column(cudf::table_view({l_shipdate_ts->view()}), l_linestatus_pred);
+
   // Generate the `l_shipinstruct` column
   auto const l_shipinstruct = gen_rand_str_col_from_set(vocab_instructions, num_rows);
 
