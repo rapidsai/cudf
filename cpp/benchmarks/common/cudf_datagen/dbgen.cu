@@ -385,8 +385,36 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   auto l_receiptdate_col_ref = cudf::ast::column_reference(0);
   auto l_returnflag_pred     = cudf::ast::operation(
     cudf::ast::ast_operator::LESS_EQUAL, l_receiptdate_col_ref, current_date_literal);
-  auto l_returngflag_mask =
+  auto l_returnflag_mask =
     cudf::compute_column(cudf::table_view({l_receiptdate_ts->view()}), l_returnflag_pred);
+  auto l_returnflag_mask_int =
+    cudf::cast(l_returnflag_mask->view(), cudf::data_type{cudf::type_id::INT32});
+
+  auto seq                        = gen_primary_key_col(0, num_rows);
+  auto multiplier                 = cudf::binary_operation(seq->view(),
+                                           cudf::numeric_scalar<int64_t>(2),
+                                           cudf::binary_operator::MOD,
+                                           cudf::data_type{cudf::type_id::INT32});
+  auto multiplier_non_zero        = cudf::binary_operation(multiplier->view(),
+                                                    cudf::numeric_scalar<int64_t>(1),
+                                                    cudf::binary_operator::ADD,
+                                                    cudf::data_type{cudf::type_id::INT32});
+  auto l_returnflag_mask_3_unique = cudf::binary_operation(l_returnflag_mask_int->view(),
+                                                           multiplier_non_zero->view(),
+                                                           cudf::binary_operator::MUL,
+                                                           cudf::data_type{cudf::type_id::INT32});
+
+  auto l_returnflag_mask_3_unique_str =
+    cudf::strings::from_integers(l_returnflag_mask_3_unique->view());
+
+  auto const l_returnflag_replace_target =
+    cudf::test::strings_column_wrapper({"0", "1", "2"}).release();
+  auto const l_returnflag_replace_with =
+    cudf::test::strings_column_wrapper({"N", "A", "R"}).release();
+
+  auto const l_returnflag = cudf::strings::replace(l_returnflag_mask_3_unique_str->view(),
+                                                   l_returnflag_replace_target->view(),
+                                                   l_returnflag_replace_with->view());
 
   // Generate the `l_linestatus` column
   auto const l_shipdate_ts_col_ref = cudf::ast::column_reference(0);
@@ -399,11 +427,12 @@ void generate_lineitem_and_orders(int64_t scale_factor)
     cudf::cast(l_linestatus_mask->view(), cudf::data_type{cudf::type_id::INT32});
   auto const l_linestatus_mask_str = cudf::strings::from_integers(l_linestatus_mask_int->view());
 
-  auto const replace_target = cudf::test::strings_column_wrapper({"0", "1"}).release();
-  auto const replace_with   = cudf::test::strings_column_wrapper({"F", "O"}).release();
+  auto const l_linestatus_replace_target = cudf::test::strings_column_wrapper({"0", "1"}).release();
+  auto const l_linestatus_replace_with   = cudf::test::strings_column_wrapper({"F", "O"}).release();
 
-  auto const l_linestatus = cudf::strings::replace(
-    l_linestatus_mask_str->view(), replace_target->view(), replace_with->view());
+  auto const l_linestatus = cudf::strings::replace(l_linestatus_mask_str->view(),
+                                                   l_linestatus_replace_target->view(),
+                                                   l_linestatus_replace_with->view());
 
   // Generate the `l_shipinstruct` column
   auto const l_shipinstruct = gen_rand_str_col_from_set(vocab_instructions, num_rows);
@@ -432,6 +461,7 @@ void generate_lineitem_and_orders(int64_t scale_factor)
                                     l_shipdate_ts->view(),
                                     l_commitdate_ts->view(),
                                     l_receiptdate_ts->view(),
+                                    l_returnflag->view(),
                                     l_linestatus->view(),
                                     l_shipinstruct->view(),
                                     l_shipmode->view(),
