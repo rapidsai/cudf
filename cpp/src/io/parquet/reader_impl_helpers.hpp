@@ -191,7 +191,7 @@ class aggregate_reader_metadata {
  public:
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
                             bool use_arrow_schema,
-                            bool has_projection_from_mismatched_sources);
+                            bool has_cols_from_mismatched_srcs);
 
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
 
@@ -210,7 +210,7 @@ class aggregate_reader_metadata {
 
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
 
-  [[nodiscard]] SchemaElement const& get_schema(int schema_idx, int pfm_idx = 0) const
+  [[nodiscard]] auto const& get_schema(int schema_idx, int pfm_idx = 0) const
   {
     CUDF_EXPECTS(
       schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
