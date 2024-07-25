@@ -885,9 +885,9 @@ class UnaryFunction(Expr):
         if self.name not in (
             "mask_nans",
             "round",
-            "setsorted",
+            "set_sorted",
             "unique",
-            "dropnull",
+            "drop_nulls",
             "fill_null",
         ):
             raise NotImplementedError(f"Unary function {name=}")
@@ -948,7 +948,7 @@ class UnaryFunction(Expr):
             if maintain_order:
                 return Column(column).sorted_like(values)
             return Column(column)
-        elif self.name == "setsorted":
+        elif self.name == "set_sorted":
             (column,) = (
                 child.evaluate(df, context=context, mapping=mapping)
                 for child in self.children
@@ -975,7 +975,7 @@ class UnaryFunction(Expr):
                 order=order,
                 null_order=null_order,
             )
-        elif self.name == "dropnull":
+        elif self.name == "drop_nulls":
             (column,) = (
                 child.evaluate(df, context=context, mapping=mapping)
                 for child in self.children
