@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,8 @@
 
 #include <cudf/ast/expressions.hpp>
 
-namespace cudf::ast::detail {
+namespace CUDF_EXPORT cudf {
+namespace ast::detail {
 /**
  * @brief Base "visitor" pattern class with the `expression` class for expression transformer.
  *
@@ -61,4 +62,7 @@ class expression_transformer {
 
   virtual ~expression_transformer() {}
 };
-}  // namespace cudf::ast::detail
+
+}  // namespace ast::detail
+
+}  // namespace CUDF_EXPORT cudf

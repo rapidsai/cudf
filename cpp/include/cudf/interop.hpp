@@ -36,6 +36,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -53,7 +54,7 @@ struct ArrowArray;
 
 struct ArrowArrayStream;
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup interop_dlpack
  * @{
@@ -152,7 +153,7 @@ struct column_metadata {
  * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
  * converted to Arrow decimal128 of the precision 38.
  */
-[[deprecated]] std::shared_ptr<arrow::Table> to_arrow(
+[[deprecated("Use cudf::to_arrow_host")]] std::shared_ptr<arrow::Table> to_arrow(
   table_view input,
   std::vector<column_metadata> const& metadata = {},
   rmm::cuda_stream_view stream                 = cudf::get_default_stream(),
@@ -177,7 +178,7 @@ struct column_metadata {
  * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
  * converted to Arrow decimal128 of the precision 38.
  */
-[[deprecated]] std::shared_ptr<arrow::Scalar> to_arrow(
+[[deprecated("Use cudf::to_arrow_host")]] std::shared_ptr<arrow::Scalar> to_arrow(
   cudf::scalar const& input,
   column_metadata const& metadata = {},
   rmm::cuda_stream_view stream    = cudf::get_default_stream(),
@@ -395,7 +396,7 @@ unique_device_array_t to_arrow_host(
  * @param mr    Device memory resource used to allocate `cudf::table`
  * @return cudf table generated from given arrow Table
  */
-[[deprecated]] std::unique_ptr<table> from_arrow(
+[[deprecated("Use cudf::from_arrow_host")]] std::unique_ptr<table> from_arrow(
   arrow::Table const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
@@ -403,14 +404,17 @@ unique_device_array_t to_arrow_host(
 /**
  * @brief Create `cudf::scalar` from given arrow Scalar input
  *
- * @deprecated Since 24.08.
+ * @deprecated Since 24.08. Use arrow's `MakeArrayFromScalar` on the
+ * input, followed by `ExportArray` to obtain something that can be
+ * consumed by `from_arrow_host`. Then use `cudf::get_element` to
+ * extract a device scalar from the column.
  *
  * @param input `arrow::Scalar` that needs to be converted to `cudf::scalar`
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr    Device memory resource used to allocate `cudf::scalar`
  * @return cudf scalar generated from given arrow Scalar
  */
-[[deprecated]] std::unique_ptr<cudf::scalar> from_arrow(
+[[deprecated("See docstring for migration strategies")]] std::unique_ptr<cudf::scalar> from_arrow(
   arrow::Scalar const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
@@ -645,4 +649,4 @@ unique_column_view_t from_arrow_device_column(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
