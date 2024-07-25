@@ -27,6 +27,7 @@
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/merge.hpp>
 #include <cudf/strings/detail/merge.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>

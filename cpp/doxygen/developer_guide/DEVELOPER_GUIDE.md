@@ -52,15 +52,36 @@ header file in `cudf/cpp/include/cudf/`. For example, `cudf/cpp/include/cudf/cop
 contains the APIs for functions related to copying from one column to another. Note the `.hpp`
 file extension used to indicate a C++ header file.
 
-Header files should use the `#pragma once` include guard.
+External/public libcudf C++ API header files need to mark all symbols inside of them with `CUDF_EXPORT`.
+This is done by placing the macro on the `namespace cudf` as seen below. Markup on namespace
+require them not to be nested, so the `cudf` namespace must be kept by itself.
+
+```c++
+
+#pragma once
+
+namespace CUDF_EXPORT cudf {
+namespace lists {
+
+...
+
+
+} // namespace lists
+} // namespace CUDF_EXPORT cudf
+
+```
+
 
 The naming of external API headers should be consistent with the name of the folder that contains
 the source files that implement the API. For example, the implementation of the APIs found in
 `cudf/cpp/include/cudf/copying.hpp` are located in `cudf/src/copying`. Likewise, the unit tests for
 the APIs reside in `cudf/tests/copying/`.
 
-Internal API headers containing `detail` namespace definitions that are used across translation
-units inside libcudf should be placed in `include/cudf/detail`.
+Internal API headers containing `detail` namespace definitions that are either used across translation
+units inside libcudf should be placed in `include/cudf/detail`. Just like the public C++ API headers, any
+internal C++ API header requires `CUDF_EXPORT` markup on the `cudf` namespace so that the functions can be tested.
+
+All headers in cudf should use `#pragma once` for include guards.
 
 ## File extensions
 

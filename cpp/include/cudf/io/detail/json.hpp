@@ -18,11 +18,13 @@
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf::io::json::detail {
+namespace CUDF_EXPORT cudf {
+namespace io::json::detail {
 
 /**
  * @brief Reads and returns the entire data set.
@@ -73,4 +75,5 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<char>
 void normalize_whitespace(datasource::owning_buffer<rmm::device_uvector<char>>& indata,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr);
-}  // namespace cudf::io::json::detail
+}  // namespace io::json::detail
+}  // namespace CUDF_EXPORT cudf
