@@ -1206,15 +1206,16 @@ aggregate_reader_metadata::select_columns(
       // Check the schema elements to be equal except their number of children as we only care about
       // the specific column paths in the schema trees.
       CUDF_EXPECTS(compare_schema_elems_except_num_children(src_schema_elem, dst_schema_elem),
-                   "All sources must have the same schema for the selected columns");
+                   "Mismatching schema properties encountered for a column in the selected path");
 
       // It src_schema_elem is a stub, it does not exist in the column_name_info and column_buffer
       // hierarchy. So continue on with mapping.
       if (src_schema_elem.is_stub()) {
         // Check if dst_schema_elem is also a stub and has equal number of children.
-        CUDF_EXPECTS(dst_schema_elem.is_stub() and
-                       src_schema_elem.num_children == dst_schema_elem.num_children,
-                     "All sources must have the same schema for the selected columns");
+        CUDF_EXPECTS(
+          dst_schema_elem.is_stub() and
+            src_schema_elem.num_children == dst_schema_elem.num_children,
+          "Mismatching schema encountered for a one-level-list column in the selected path.");
         auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
         return map_column(child_col_name_info,
                           src_schema_elem.children_idx[0],
@@ -1226,8 +1227,9 @@ aggregate_reader_metadata::select_columns(
         // Map all src_schema_elem's children.
         for (int idx = 0; idx < src_schema_elem.num_children; idx++) {
           // Check the number of children to be equal here.
-          CUDF_EXPECTS(src_schema_elem.num_children == dst_schema_elem.num_children,
-                       "All sources must have the same schema for the selected columns");
+          CUDF_EXPECTS(
+            src_schema_elem.num_children == dst_schema_elem.num_children,
+            "Mismatching number of children encountered for a column in the selected path");
           map_column(
             nullptr, src_schema_elem.children_idx[idx], dst_schema_elem.children_idx[idx], pfm_idx);
         }
@@ -1246,8 +1248,8 @@ aggregate_reader_metadata::select_columns(
 
         // Ensure that the schema index of the current schema_element isn't already mapped.
         CUDF_EXPECTS(schema_idx_map.find(src_schema_idx) == schema_idx_map.end(),
-                     "Encountered an invalid mapping between the schema indices of the "
-                     "selected columns across data sources.");
+                     "Encountered a one-to-many mapping between the schema indices of a column "
+                     "across data sources.");
 
         // Map the schema index.
         schema_idx_map[src_schema_idx] = dst_schema_idx;
@@ -1390,7 +1392,7 @@ aggregate_reader_metadata::select_columns(
       if (valid_column) {
         output_column_schemas.push_back(top_level_col_schema_idx);
 
-        // Map the column and/or it's children's schema_idx to the rest of the data sources.
+        // Map the column's schema_idx across the rest of the data sources if required.
         if (per_file_metadata.size() > 1 and schema_idx_maps.has_value()) {
           std::for_each(thrust::make_counting_iterator(1ul),
                         thrust::make_counting_iterator(per_file_metadata.size()),
