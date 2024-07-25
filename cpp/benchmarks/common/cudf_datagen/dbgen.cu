@@ -24,6 +24,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/datetime.hpp>
+#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/filling.hpp>
@@ -33,6 +34,7 @@
 #include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/padding.hpp>
+#include <cudf/strings/replace.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
@@ -387,11 +389,21 @@ void generate_lineitem_and_orders(int64_t scale_factor)
     cudf::compute_column(cudf::table_view({l_receiptdate_ts->view()}), l_returnflag_pred);
 
   // Generate the `l_linestatus` column
-  auto l_shipdate_ts_col_ref = cudf::ast::column_reference(0);
-  auto l_linestatus_pred     = cudf::ast::operation(
+  auto const l_shipdate_ts_col_ref = cudf::ast::column_reference(0);
+  auto const l_linestatus_pred     = cudf::ast::operation(
     cudf::ast::ast_operator::GREATER, l_shipdate_ts_col_ref, current_date_literal);
-  auto l_linestatus_mask =
+  auto const l_linestatus_mask =
     cudf::compute_column(cudf::table_view({l_shipdate_ts->view()}), l_linestatus_pred);
+
+  auto const l_linestatus_mask_int =
+    cudf::cast(l_linestatus_mask->view(), cudf::data_type{cudf::type_id::INT32});
+  auto const l_linestatus_mask_str = cudf::strings::from_integers(l_linestatus_mask_int->view());
+
+  auto const replace_target = cudf::test::strings_column_wrapper({"0", "1"}).release();
+  auto const replace_with   = cudf::test::strings_column_wrapper({"F", "O"}).release();
+
+  auto const l_linestatus = cudf::strings::replace(
+    l_linestatus_mask_str->view(), replace_target->view(), replace_with->view());
 
   // Generate the `l_shipinstruct` column
   auto const l_shipinstruct = gen_rand_str_col_from_set(vocab_instructions, num_rows);
@@ -420,6 +432,7 @@ void generate_lineitem_and_orders(int64_t scale_factor)
                                     l_shipdate_ts->view(),
                                     l_commitdate_ts->view(),
                                     l_receiptdate_ts->view(),
+                                    l_linestatus->view(),
                                     l_shipinstruct->view(),
                                     l_shipmode->view(),
                                     l_comment->view()});
