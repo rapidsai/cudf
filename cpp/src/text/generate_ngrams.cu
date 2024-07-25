@@ -360,14 +360,13 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
   auto output_type = cudf::data_type{cudf::type_to_id<cudf::hash_value_type>()};
   if (input.is_empty()) { return cudf::make_empty_column(output_type); }
 
-  auto const d_strings  = cudf::column_device_view::create(input.parent(), stream);
-  auto const num_blocks = cudf::util::div_rounding_up_safe(
-    static_cast<cudf::thread_index_type>(input.size()) * cudf::detail::warp_size, block_size);
+  auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
+  auto const grid      = cudf::detail::grid_1d(input.size() * cudf::detail::warp_size, block_size);
 
   // build offsets column by computing the number of ngrams per string
   auto [offsets, total_ngrams] = [&] {
     auto counts = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-    count_char_ngrams_kernel<<<num_blocks, block_size, 0, stream.value()>>>(
+    count_char_ngrams_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *d_strings, ngrams, counts.data());
     return cudf::detail::make_offsets_child_column(counts.begin(), counts.end(), stream, mr);
   }();
@@ -381,7 +380,7 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
     cudf::make_numeric_column(output_type, total_ngrams, cudf::mask_state::UNALLOCATED, stream, mr);
   auto d_hashes = hashes->mutable_view().data<cudf::hash_value_type>();
 
-  character_ngram_hash_kernel<<<num_blocks, block_size, 0, stream.value()>>>(
+  character_ngram_hash_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     *d_strings, ngrams, d_offsets, d_hashes);
 
   return make_lists_column(
