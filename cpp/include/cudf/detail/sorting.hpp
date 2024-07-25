@@ -26,7 +26,7 @@
 #include <memory>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -163,4 +163,4 @@ std::unique_ptr<table> stable_sort(table_view const& values,
                                    rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -17,14 +17,13 @@
 #pragma once
 
 #include <cudf/io/csv.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace csv {
+namespace CUDF_EXPORT cudf {
+namespace io::detail::csv {
 
 /**
  * @brief Reads the entire dataset.
@@ -56,7 +55,5 @@ void write_csv(data_sink* sink,
                csv_writer_options const& options,
                rmm::cuda_stream_view stream);
 
-}  // namespace csv
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace io::detail::csv
+}  // namespace CUDF_EXPORT cudf

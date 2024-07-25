@@ -36,6 +36,8 @@
 #define CUDF_KERNEL static
 #endif
 
+#include <cudf/utilities/export.hpp>
+
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -54,7 +56,7 @@ class device_buffer;
 
 }  // namespace rmm
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 // Forward declaration
 class column;
 class column_view;
@@ -344,4 +346,4 @@ inline bool operator!=(data_type const& lhs, data_type const& rhs) { return !(lh
 std::size_t size_of(data_type t);
 
 /** @} */
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
