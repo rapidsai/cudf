@@ -3780,7 +3780,8 @@ def test_parquet_reader_pandas_compatibility():
 
 
 @pytest.mark.parametrize("store_schema", [True, False])
-def test_parquet_reader_read_mismatched_pq_schemas(store_schema):
+def test_parquet_reader_with_mismatched_tables(store_schema):
+    # cuDF tables with mixed types
     df1 = cudf.DataFrame(
         {
             "i32": cudf.Series([None, None, None], dtype="int32"),
@@ -3814,10 +3815,11 @@ def test_parquet_reader_read_mismatched_pq_schemas(store_schema):
         }
     )
 
+    # IO buffers
     buf1 = BytesIO()
     buf2 = BytesIO()
 
-    # Write Parquet with arrow schema
+    # Write Parquet with and without arrow schema
     df1.to_parquet(buf1, store_schema=store_schema)
     df2.to_parquet(buf2, store_schema=store_schema)
 
@@ -3837,10 +3839,7 @@ def test_parquet_reader_read_mismatched_pq_schemas(store_schema):
         ]
     ).reset_index(drop=True)
 
-    # Check results
-    assert_eq(expected, got)
-
-    # Read with chunked reader
+    # Read with chunked reader (filter columns not supported)
     got_chunked = read_parquet_chunked(
         [buf1, buf2],
         columns=["list", "d_list", "str"],
@@ -3849,10 +3848,109 @@ def test_parquet_reader_read_mismatched_pq_schemas(store_schema):
         read_mismatched_pq_schemas=True,
     )
 
-    # Construct the expected table
-    expected = cudf.concat(
+    # Construct the expected table without filter columns
+    expected_chunked = cudf.concat(
         [df1[["list", "d_list", "str"]], df2[["list", "d_list", "str"]]]
     ).reset_index(drop=True)
 
     # Check results
+    assert_eq(expected, got)
+    assert_eq(expected_chunked, got_chunked)
+
+
+def test_parquet_reader_with_mismatched_structs():
+    data1 = [
+        {
+            "a": 1,
+            "b": {
+                "inner_a": 10,
+                "inner_b": {"inner_inner_b": 1, "inner_inner_a": 2},
+            },
+            "c": 2,
+        },
+        {
+            "a": 3,
+            "b": {"inner_a": 30, "inner_b": {"inner_inner_a": 210}},
+            "c": 4,
+        },
+        {"a": 5, "b": {"inner_a": 50, "inner_b": None}, "c": 6},
+        {"a": 7, "b": None, "c": 8},
+        {"a": None, "b": {"inner_a": None, "inner_b": None}, "c": None},
+        None,
+        {
+            "a": None,
+            "b": {
+                "inner_a": None,
+                "inner_b": {"inner_inner_b": None, "inner_inner_a": 10},
+            },
+            "c": 10,
+        },
+    ]
+
+    data2 = [
+        {"a": 1, "b": {"inner_b": {"inner_inner_a": None}}},
+        {"a": 3, "b": {"inner_b": {"inner_inner_a": 1}}},
+        {"a": 5, "b": {"inner_b": None}},
+        {"a": 7, "b": {"inner_b": {"inner_inner_b": 1, "inner_inner_a": 0}}},
+        {"a": None, "b": {"inner_b": None}},
+        None,
+        {"a": None, "b": {"inner_b": {"inner_inner_a": 1}}},
+    ]
+
+    # cuDF tables from struct data
+    df1 = cudf.DataFrame.from_arrow(pa.Table.from_pydict({"struct": data1}))
+    df2 = cudf.DataFrame.from_arrow(pa.Table.from_pydict({"struct": data2}))
+
+    # Buffers
+    buf1 = BytesIO()
+    buf2 = BytesIO()
+
+    # Write to parquet
+    df1.to_parquet(buf1)
+    df2.to_parquet(buf2)
+
+    # Read the struct.b.inner_b.inner_inner_a column from parquet
+    got = cudf.read_parquet(
+        [buf1, buf2],
+        columns=["struct.b.inner_b.inner_inner_a"],
+        read_mismatched_pq_schemas=True,
+    )
+    got = (
+        cudf.Series(got["struct"])
+        .struct.field("b")
+        .struct.field("inner_b")
+        .struct.field("inner_inner_a")
+    )
+
+    # Read with chunked reader
+    got_chunked = read_parquet_chunked(
+        [buf1, buf2],
+        columns=["struct.b.inner_b.inner_inner_a"],
+        chunk_read_limit=240,
+        pass_read_limit=240,
+        read_mismatched_pq_schemas=True,
+    )
+    got_chunked = (
+        cudf.Series(got_chunked["struct"])
+        .struct.field("b")
+        .struct.field("inner_b")
+        .struct.field("inner_inner_a")
+    )
+
+    # Construct the expected series
+    expected = cudf.concat(
+        [
+            cudf.Series(df1["struct"])
+            .struct.field("b")
+            .struct.field("inner_b")
+            .struct.field("inner_inner_a"),
+            cudf.Series(df2["struct"])
+            .struct.field("b")
+            .struct.field("inner_b")
+            .struct.field("inner_inner_a"),
+        ]
+    ).reset_index(drop=True)
+
+    # Check results
+    assert_eq(expected, got)
     assert_eq(expected, got_chunked)
