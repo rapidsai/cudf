@@ -297,8 +297,6 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   cudf::size_type const num_rows = 1'500'000 * scale_factor;
 
   // Generate the non-dependent columns of the `orders` table
-  // Columns: `o_custkey`, `o_orderdate`, `o_orderpriority`, `o_clerk`, `o_shippriority`,
-  // `o_comment`
 
   // Generate the `o_custkey` column
   // NOTE: Currently, this column does not comply with the specs which
@@ -352,6 +350,17 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   // Generate the `l_suppkey` column
   auto const l_suppkey = calc_l_suppkey(l_partkey->view(), scale_factor, num_rows);
 
+  // Generate the `l_linenumber` column
+  auto seq              = gen_primary_key_col(0, num_rows);
+  auto repeat_counter_0 = cudf::binary_operation(seq->view(),
+                                                 cudf::numeric_scalar<int64_t>(7),
+                                                 cudf::binary_operator::MOD,
+                                                 cudf::data_type{cudf::type_id::INT32});
+  auto l_linenumber     = cudf::binary_operation(repeat_counter_0->view(),
+                                             cudf::numeric_scalar<int64_t>(1),
+                                             cudf::binary_operator::ADD,
+                                             cudf::data_type{cudf::type_id::INT32});
+
   // Generate the `l_quantity` column
   auto const l_quantity = gen_rand_num_col<int64_t>(1, 50, num_rows);
 
@@ -390,8 +399,8 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   auto l_returnflag_mask_int =
     cudf::cast(l_returnflag_mask->view(), cudf::data_type{cudf::type_id::INT32});
 
-  auto seq                        = gen_primary_key_col(0, num_rows);
-  auto multiplier                 = cudf::binary_operation(seq->view(),
+  auto seq_2                      = gen_primary_key_col(0, num_rows);
+  auto multiplier                 = cudf::binary_operation(seq_2->view(),
                                            cudf::numeric_scalar<int64_t>(2),
                                            cudf::binary_operator::MOD,
                                            cudf::data_type{cudf::type_id::INT32});
@@ -455,6 +464,7 @@ void generate_lineitem_and_orders(int64_t scale_factor)
 
   auto lineitem = cudf::table_view({l_partkey->view(),
                                     l_suppkey->view(),
+                                    l_linenumber->view(),
                                     l_quantity->view(),
                                     l_discount->view(),
                                     l_tax->view(),
