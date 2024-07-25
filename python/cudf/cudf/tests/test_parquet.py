@@ -3777,3 +3777,82 @@ def test_parquet_reader_pandas_compatibility():
     with cudf.option_context("io.parquet.low_memory", True):
         expected = cudf.read_parquet(buffer)
     assert_eq(expected, df)
+
+
+@pytest.mark.parametrize("store_schema", [True, False])
+def test_parquet_reader_read_mismatched_pq_schemas(store_schema):
+    df1 = cudf.DataFrame(
+        {
+            "i32": cudf.Series([None, None, None], dtype="int32"),
+            "i64": cudf.Series([1234, None, 123], dtype="int64"),
+            "list": list([[1, 2], [None, 4], [5, 6]]),
+            "time": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
+            "str": ["vfd", None, "ghu"],
+            "d_list": list(
+                [
+                    [pd.Timedelta(minutes=1), pd.Timedelta(minutes=2)],
+                    [None, pd.Timedelta(minutes=3)],
+                    [pd.Timedelta(minutes=8), None],
+                ]
+            ),
+        }
+    )
+
+    df2 = cudf.DataFrame(
+        {
+            "str": ["abc", "def", None],
+            "i64": cudf.Series([None, 65, 98], dtype="int64"),
+            "times": cudf.Series([1234, None, 4123], dtype="datetime64[us]"),
+            "list": list([[7, 8], [9, 10], [None, 12]]),
+            "d_list": list(
+                [
+                    [pd.Timedelta(minutes=4), None],
+                    [None, None],
+                    [pd.Timedelta(minutes=6), None],
+                ]
+            ),
+        }
+    )
+
+    buf1 = BytesIO()
+    buf2 = BytesIO()
+
+    # Write Parquet with arrow schema
+    df1.to_parquet(buf1, store_schema=store_schema)
+    df2.to_parquet(buf2, store_schema=store_schema)
+
+    # Read mismatched Parquet files
+    got = cudf.read_parquet(
+        [buf1, buf2],
+        columns=["list", "d_list", "str"],
+        filters=[("i64", ">", 20)],
+        read_mismatched_pq_schemas=True,
+    )
+
+    # Construct the expected table
+    expected = cudf.concat(
+        [
+            df1[df1["i64"] > 20][["list", "d_list", "str"]],
+            df2[df2["i64"] > 20][["list", "d_list", "str"]],
+        ]
+    ).reset_index(drop=True)
+
+    # Check results
+    assert_eq(expected, got)
+
+    # Read with chunked reader
+    got_chunked = read_parquet_chunked(
+        [buf1, buf2],
+        columns=["list", "d_list", "str"],
+        chunk_read_limit=240,
+        pass_read_limit=240,
+        read_mismatched_pq_schemas=True,
+    )
+
+    # Construct the expected table
+    expected = cudf.concat(
+        [df1[["list", "d_list", "str"]], df2[["list", "d_list", "str"]]]
+    ).reset_index(drop=True)
+
+    # Check results
+    assert_eq(expected, got_chunked)

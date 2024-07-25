@@ -128,6 +128,7 @@ struct arrow_schema_data_types {
 class aggregate_reader_metadata {
   std::vector<metadata> per_file_metadata;
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
+  std::vector<std::unordered_map<int32_t, int32_t>> schema_idx_maps;
 
   int64_t num_rows;
   size_type num_row_groups;
@@ -183,7 +184,8 @@ class aggregate_reader_metadata {
 
  public:
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
-                            bool use_arrow_schema);
+                            bool use_arrow_schema,
+                            bool has_projection_from_mismatched_sources);
 
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
 
@@ -202,9 +204,12 @@ class aggregate_reader_metadata {
 
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
 
-  [[nodiscard]] auto const& get_schema(int schema_idx) const
+  [[nodiscard]] SchemaElement const& get_schema(int schema_idx, int pfm_idx = 0) const
   {
-    return per_file_metadata[0].schema[schema_idx];
+    CUDF_EXPECTS(
+      schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
+      "Parquet reader encountered an invalid schema_idx or pfm_idx");
+    return per_file_metadata[pfm_idx].schema[schema_idx];
   }
 
   [[nodiscard]] auto const& get_key_value_metadata() const& { return keyval_maps; }
@@ -314,7 +319,7 @@ class aggregate_reader_metadata {
                  std::optional<std::vector<std::string>> const& filter_columns_names,
                  bool include_index,
                  bool strings_to_categorical,
-                 type_id timestamp_type_id) const;
+                 type_id timestamp_type_id);
 };
 
 /**

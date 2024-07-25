@@ -534,6 +534,7 @@ def read_parquet(
     filters=None,
     row_groups=None,
     use_pandas_metadata=True,
+    read_mismatched_pq_schemas=False,
     use_python_file_object=None,
     categorical_partitions=True,
     open_file_options=None,
@@ -682,6 +683,7 @@ def read_parquet(
             columns=columns,
             row_groups=row_groups,
             use_pandas_metadata=use_pandas_metadata,
+            read_mismatched_pq_schemas=read_mismatched_pq_schemas,
             partition_keys=partition_keys,
             partition_categories=partition_categories,
             dataset_kwargs=dataset_kwargs,
@@ -912,6 +914,7 @@ def _read_parquet(
     columns=None,
     row_groups=None,
     use_pandas_metadata=None,
+    read_mismatched_pq_schemas=False,
     *args,
     **kwargs,
 ):
@@ -934,6 +937,7 @@ def _read_parquet(
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
+                read_mismatched_pq_schemas=read_mismatched_pq_schemas,
             )
         else:
             return libparquet.read_parquet(
@@ -941,6 +945,7 @@ def _read_parquet(
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
+                read_mismatched_pq_schemas=read_mismatched_pq_schemas,
             )
     else:
         if (
