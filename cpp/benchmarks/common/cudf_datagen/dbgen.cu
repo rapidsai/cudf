@@ -397,7 +397,6 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   auto const o_custkey = gen_rand_num_col<int64_t>(1, num_rows, num_rows);
 
   // Generate the `o_orderstatus` column
-  // Generate the `o_totalprice` column
 
   // Generate the `o_orderdate` column
   // Uniformly distributed random dates between `1992-01-01` and `1998-08-02`
