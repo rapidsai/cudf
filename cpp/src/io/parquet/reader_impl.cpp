@@ -473,7 +473,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
   _metadata = std::make_unique<aggregate_reader_metadata>(
     _sources,
     options.is_enabled_use_arrow_schema(),
-    options.get_columns().has_value() and options.is_enabled_read_mismatched_pq_schemas());
+    options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
 
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();

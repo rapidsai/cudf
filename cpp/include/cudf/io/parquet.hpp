@@ -76,8 +76,8 @@ class parquet_reader_options {
   bool _use_pandas_metadata = true;
   // Whether to read and use ARROW schema
   bool _use_arrow_schema = true;
-  // Whether to read matching projected and filter columns from mismatched Parquet sources.
-  bool _read_mismatched_pq_schemas = false;
+  // Whether to allow reading matching select columns from mismatched Parquet files.
+  bool _allow_mismatched_pq_schemas = false;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
@@ -147,9 +147,9 @@ class parquet_reader_options {
    * @return `true` if mismatched projected and filter columns will be read from mismatched Parquet
    * sources.
    */
-  [[nodiscard]] bool is_enabled_read_mismatched_pq_schemas() const
+  [[nodiscard]] bool is_enabled_allow_mismatched_pq_schemas() const
   {
-    return _read_mismatched_pq_schemas;
+    return _allow_mismatched_pq_schemas;
   }
 
   /**
@@ -279,7 +279,7 @@ class parquet_reader_options {
    * @param val Boolean value whether to read matching projected and filter columns from mismatched
    * Parquet sources.
    */
-  void enable_read_mismatched_pq_schemas(bool val) { _read_mismatched_pq_schemas = val; }
+  void enable_allow_mismatched_pq_schemas(bool val) { _allow_mismatched_pq_schemas = val; }
 
   /**
    * @brief Sets reader column schema.
@@ -413,9 +413,9 @@ class parquet_reader_options_builder {
    * Parquet sources.
    * @return this for chaining.
    */
-  parquet_reader_options_builder& read_mismatched_pq_schemas(bool val)
+  parquet_reader_options_builder& allow_mismatched_pq_schemas(bool val)
   {
-    options._read_mismatched_pq_schemas = val;
+    options._allow_mismatched_pq_schemas = val;
     return *this;
   }
 

@@ -3828,7 +3828,7 @@ def test_parquet_reader_with_mismatched_tables(store_schema):
         [buf1, buf2],
         columns=["list", "d_list", "str"],
         filters=[("i64", ">", 20)],
-        read_mismatched_pq_schemas=True,
+        allow_mismatched_pq_schemas=True,
     )
 
     # Construct the expected table
@@ -3845,7 +3845,7 @@ def test_parquet_reader_with_mismatched_tables(store_schema):
         columns=["list", "d_list", "str"],
         chunk_read_limit=240,
         pass_read_limit=240,
-        read_mismatched_pq_schemas=True,
+        allow_mismatched_pq_schemas=True,
     )
 
     # Construct the expected table without filter columns
@@ -3913,7 +3913,7 @@ def test_parquet_reader_with_mismatched_structs():
     got = cudf.read_parquet(
         [buf1, buf2],
         columns=["struct.b.inner_b.inner_inner_a"],
-        read_mismatched_pq_schemas=True,
+        allow_mismatched_pq_schemas=True,
     )
     got = (
         cudf.Series(got["struct"])
@@ -3928,7 +3928,7 @@ def test_parquet_reader_with_mismatched_structs():
         columns=["struct.b.inner_b.inner_inner_a"],
         chunk_read_limit=240,
         pass_read_limit=240,
-        read_mismatched_pq_schemas=True,
+        allow_mismatched_pq_schemas=True,
     )
     got_chunked = (
         cudf.Series(got_chunked["struct"])

@@ -381,14 +381,14 @@ aggregate_reader_metadata::collect_keyval_metadata() const
   return kv_maps;
 }
 
-std::optional<std::vector<std::unordered_map<int32_t, int32_t>>>
-aggregate_reader_metadata::init_schema_idx_maps(bool const has_cols_from_mismatched_srcs) const
+std::vector<std::unordered_map<int32_t, int32_t>> aggregate_reader_metadata::init_schema_idx_maps(
+  bool const has_cols_from_mismatched_srcs) const
 {
   // Only initialize if more than 1 data sources and has select columns from mismatched data sources
   if (has_cols_from_mismatched_srcs and per_file_metadata.size() > 1) {
     return std::vector<std::unordered_map<int32_t, int32_t>>{per_file_metadata.size() - 1};
   } else {
-    return std::nullopt;
+    return {};
   }
 }
 
@@ -560,11 +560,8 @@ aggregate_reader_metadata::aggregate_reader_metadata(
     num_rows(calc_num_rows()),
     num_row_groups(calc_num_row_groups())
 {
-  // Ensure we have at least one datasource to work with.
-  CUDF_EXPECTS(per_file_metadata.size() > 0, "No valid Parquet datasource to be read");
-
-  // Validate that all sources have the same schema unless we are reading a column projection
-  // in which case, only the projected columns will be checked later when selecting them.
+  // Validate that all sources have the same schema unless we are reading select columns
+  // from mismatched sources, in which case, we will only check the projected columns later.
   if (per_file_metadata.size() > 1 and not has_cols_from_mismatched_srcs) {
     auto const& first_meta = per_file_metadata.front();
     auto const num_cols =
@@ -888,10 +885,10 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
                                                                           size_type src_idx,
                                                                           int schema_idx) const
 {
-  // schema_idx_maps will only exist when we are reading matching column projection from
+  // schema_idx_maps will only have > 0 size when we are reading matching column projection from
   // mismatched Parquet sources.
-  if (src_idx and schema_idx_maps.has_value()) {
-    auto const& schema_idx_map = schema_idx_maps.value()[src_idx - 1];
+  if (src_idx and schema_idx_maps.size()) {
+    auto const& schema_idx_map = schema_idx_maps[src_idx - 1];
     CUDF_EXPECTS(schema_idx_map.find(schema_idx) != schema_idx_map.end(),
                  "Found no metadata for schema index");
     schema_idx = schema_idx_map.at(schema_idx);
@@ -1104,7 +1101,7 @@ aggregate_reader_metadata::select_columns(
       if (schema_elem.is_stub()) {
         // is this legit?
         CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
-        auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
+        auto const child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
         return build_column(
           child_col_name_info, schema_elem.children_idx[0], out_col_array, has_list_parent);
       }
@@ -1185,8 +1182,7 @@ aggregate_reader_metadata::select_columns(
     };
 
   // Compares two schema elements to be equal except their number of children
-  auto const compare_schema_elems_except_num_children = [](SchemaElement const& lhs,
-                                                           SchemaElement const& rhs) {
+  auto const equal_to_except_num_children = [](SchemaElement const& lhs, SchemaElement const& rhs) {
     return lhs.type == rhs.type and lhs.converted_type == rhs.converted_type and
            lhs.type_length == rhs.type_length and lhs.repetition_type == rhs.repetition_type and
            lhs.name == rhs.name and lhs.decimal_scale == rhs.decimal_scale and
@@ -1206,39 +1202,43 @@ aggregate_reader_metadata::select_columns(
 
       // Check the schema elements to be equal except their number of children as we only care about
       // the specific column paths in the schema trees.
-      CUDF_EXPECTS(compare_schema_elems_except_num_children(src_schema_elem, dst_schema_elem),
+      CUDF_EXPECTS(equal_to_except_num_children(src_schema_elem, dst_schema_elem),
                    "Mismatching schema properties encountered for a column in the selected path");
 
       // It src_schema_elem is a stub, it does not exist in the column_name_info and column_buffer
       // hierarchy. So continue on with mapping.
       if (src_schema_elem.is_stub()) {
         // Check if dst_schema_elem is also a stub and has equal number of children.
-        CUDF_EXPECTS(
-          dst_schema_elem.is_stub() and
-            src_schema_elem.num_children == dst_schema_elem.num_children,
-          "Mismatching schema encountered for a one-level-list column in the selected path.");
-        auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
+        CUDF_EXPECTS(dst_schema_elem.is_stub(), "Mismatching schemas encountered for stub.");
+        CUDF_EXPECTS(src_schema_elem.num_children == 1 and dst_schema_elem.num_children == 1,
+                     "Unexpected number of children for stub.");
+        auto const child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
         return map_column(child_col_name_info,
                           src_schema_elem.children_idx[0],
                           dst_schema_elem.children_idx[0],
                           pfm_idx);
       }
 
+      // The path ends at a list/struct col. Map all it's children which must also be identical.
       if (col_name_info == nullptr or col_name_info->children.empty()) {
-        // Map all src_schema_elem's children.
-        for (int idx = 0; idx < src_schema_elem.num_children; idx++) {
+        for (int child_idx = 0; child_idx < src_schema_elem.num_children; child_idx++) {
           // Check the number of children to be equal here.
           CUDF_EXPECTS(
             src_schema_elem.num_children == dst_schema_elem.num_children,
             "Mismatching number of children encountered for a column in the selected path");
-          map_column(
-            nullptr, src_schema_elem.children_idx[idx], dst_schema_elem.children_idx[idx], pfm_idx);
+          map_column(nullptr,
+                     src_schema_elem.children_idx[child_idx],
+                     dst_schema_elem.children_idx[child_idx],
+                     pfm_idx);
         }
-      } else {
-        for (const auto& idx : col_name_info->children) {
-          map_column(&idx,
-                     find_schema_child(src_schema_elem, idx.name),
-                     find_schema_child(dst_schema_elem, idx.name, pfm_idx),
+      }
+      // The path goes further down to specific child(ren) of this column so map only those
+      // children.
+      else {
+        for (auto const& child_col_name_info : col_name_info->children) {
+          map_column(&child_col_name_info,
+                     find_schema_child(src_schema_elem, child_col_name_info.name),
+                     find_schema_child(dst_schema_elem, child_col_name_info.name, pfm_idx),
                      pfm_idx);
         }
       }
@@ -1250,14 +1250,14 @@ aggregate_reader_metadata::select_columns(
                      "Encountered a mismatch in schema tree depths across data sources");
 
         // Get the schema_idx_map for this data source (pfm)
-        auto& schema_idx_map = schema_idx_maps.value()[pfm_idx - 1];
+        auto& schema_idx_map = schema_idx_maps[pfm_idx - 1];
 
         // Ensure that the schema index of the current schema_element isn't already mapped.
         CUDF_EXPECTS(schema_idx_map.find(src_schema_idx) == schema_idx_map.end(),
                      "Encountered a one-to-many mapping between the schema indices of a column "
                      "across data sources.");
 
-        // Map the schema index.
+        // Map the schema index from 0th tree (src) to the one in the current (dst) tree.
         schema_idx_map[src_schema_idx] = dst_schema_idx;
       }
     };
@@ -1399,7 +1399,7 @@ aggregate_reader_metadata::select_columns(
         output_column_schemas.push_back(top_level_col_schema_idx);
 
         // Map the column's schema_idx across the rest of the data sources if required.
-        if (per_file_metadata.size() > 1 and schema_idx_maps.has_value()) {
+        if (per_file_metadata.size() > 1 and schema_idx_maps.size()) {
           std::for_each(thrust::make_counting_iterator(1ul),
                         thrust::make_counting_iterator(per_file_metadata.size()),
                         [&](auto const pfm_idx) {

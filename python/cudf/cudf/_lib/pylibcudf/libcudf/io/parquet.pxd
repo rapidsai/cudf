@@ -24,7 +24,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         data_type get_timestamp_type() except +
         bool is_enabled_use_pandas_metadata() except +
         bool is_enabled_arrow_schema() except +
-        bool is_enabled_read_mismatched_pq_schemas() except +
+        bool is_enabled_allow_mismatched_pq_schemas() except +
         # setter
 
         void set_filter(expression &filter) except +
@@ -33,7 +33,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_row_groups(vector[vector[size_type]] row_grp) except +
         void set_skip_rows(int64_t val) except +
         void enable_use_arrow_schema(bool val) except +
-        void enable_read_mismatched_pq_schemas(bool val) except +
+        void enable_allow_mismatched_pq_schemas(bool val) except +
         void enable_use_pandas_metadata(bool val) except +
         void set_timestamp_type(data_type type) except +
 
@@ -62,7 +62,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_reader_options_builder& use_arrow_schema(
             bool val
         ) except +
-        parquet_reader_options_builder& read_mismatched_pq_schemas(
+        parquet_reader_options_builder& allow_mismatched_pq_schemas(
             bool val
         ) except +
         parquet_reader_options_builder& timestamp_type(

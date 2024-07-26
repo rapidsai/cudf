@@ -27,7 +27,7 @@ cpdef read_parquet(
     Expression filters = *,
     bool convert_strings_to_categories = *,
     bool use_pandas_metadata = *,
-    bool read_mismatched_pq_schemas = *,
+    bool allow_mismatched_pq_schemas = *,
     int64_t skip_rows = *,
     size_type num_rows = *,
     # disabled see comment in parquet.pyx for more

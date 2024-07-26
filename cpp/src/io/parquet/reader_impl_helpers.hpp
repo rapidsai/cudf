@@ -128,7 +128,7 @@ struct arrow_schema_data_types {
 class aggregate_reader_metadata {
   std::vector<metadata> per_file_metadata;
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
-  std::optional<std::vector<std::unordered_map<int32_t, int32_t>>> schema_idx_maps;
+  std::vector<std::unordered_map<int32_t, int32_t>> schema_idx_maps;
 
   int64_t num_rows;
   size_type num_row_groups;
@@ -146,10 +146,17 @@ class aggregate_reader_metadata {
     const;
 
   /**
-   * @brief Initialize the schema index maps
+   * @brief Initialize the vector of schema_idx maps.
+   *
+   * Initializes a vector of hash maps that will store the one-to-one mappings between the
+   * schema_idx'es of the selected columns in the zeroth per_file_metadata (source) and each
+   * kth per_file_metadata (destination) for k in range: [1, per_file_metadata.size()-1].
+   *
+   * @param has_cols_from_mismatched_srcs True if we are reading select cols from mismatched
+   * parquet schemas.
    */
-  [[nodiscard]] std::optional<std::vector<std::unordered_map<int32_t, int32_t>>>
-  init_schema_idx_maps(bool) const;
+  [[nodiscard]] std::vector<std::unordered_map<int32_t, int32_t>> init_schema_idx_maps(
+    bool has_cols_from_mismatched_srcs) const;
 
   /**
    * @brief Decodes and constructs the arrow schema from the ARROW_SCHEMA_KEY IPC message
