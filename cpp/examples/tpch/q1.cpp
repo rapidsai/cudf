@@ -124,7 +124,7 @@ int main(int argc, char const** argv)
   auto shipdate_upper =
     cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1998, 9, 2), true);
   auto const shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
-  auto lineitem_pred                = std::make_unique<cudf::ast::operation>(
+  auto const lineitem_pred          = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LESS_EQUAL, shipdate_ref, shipdate_upper_literal);
 
   // Read out the `lineitem` table from parquet file
