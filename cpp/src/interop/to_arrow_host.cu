@@ -123,6 +123,8 @@ struct dispatch_to_arrow_host {
 
     NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
     auto buf = detail::convert_decimals_to_decimal128<DeviceType>(column, stream, mr);
+    // No need to synchronize stream here as populate_data_buffer uses the same stream to copy data
+    // to host.
     NANOARROW_RETURN_NOT_OK(
       populate_data_buffer(device_span<__int128_t const>(
                              reinterpret_cast<const __int128_t*>(buf->data()), column.size()),

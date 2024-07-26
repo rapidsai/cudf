@@ -1674,6 +1674,8 @@ std::vector<column_view> convert_decimal_columns_and_metadata(
                 column.offset(),
                 converted_children};
     }
+    // Synchronize stream here to ensure all decimal128 buffers are ready.
+    stream.synchronize();
   };
 
   // Vector of converted column views

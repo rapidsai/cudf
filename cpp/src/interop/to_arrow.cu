@@ -162,6 +162,9 @@ std::shared_ptr<arrow::Array> unsupported_decimals_to_arrow(column_view input,
   auto buf = detail::convert_decimals_to_decimal128<DeviceType>(
     input, stream, rmm::mr::get_current_device_resource());
 
+  // Synchronize stream here to ensure the decimal128 buffer is ready.
+  stream.synchronize();
+
   auto const buf_size_in_bytes = buf->size();
   auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);
 
