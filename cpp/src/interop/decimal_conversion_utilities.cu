@@ -39,7 +39,7 @@ std::unique_ptr<rmm::device_buffer> convert_decimals_to_decimal128(
   constexpr size_type BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DecimalType);
   auto buf = std::make_unique<rmm::device_buffer>(column.size() * sizeof(__int128_t), stream, mr);
 
-  thrust::for_each(rmm::exec_policy_nosync(stream, mr),
+  thrust::for_each(rmm::exec_policy(stream, mr),
                    thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(column.size()),
                    [in  = column.begin<DecimalType>(),
