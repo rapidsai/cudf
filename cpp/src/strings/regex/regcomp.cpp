@@ -539,19 +539,19 @@ class regex_parser {
                                                          : static_cast<int32_t>(LBRA);
       case ')': return RBRA;
       case '^': {
-        // if (is_ext_newline(_flags)) {
-        //   _chr = is_multiline(_flags) ? 'S' : 'N';
-        // } else {
-        _chr = is_multiline(_flags) ? chr : '\n';
-        //}
+        if (is_ext_newline(_flags)) {
+          _chr = is_multiline(_flags) ? 'S' : 'N';
+        } else {
+          _chr = is_multiline(_flags) ? chr : '\n';
+        }
         return BOL;
       }
       case '$': {
-        // if (is_ext_newline(_flags)) {
-        //   _chr = is_multiline(_flags) ? 'S' : 'N';
-        // } else {
-        _chr = is_multiline(_flags) ? chr : '\n';
-        //}
+        if (is_ext_newline(_flags)) {
+          _chr = is_multiline(_flags) ? 'S' : 'N';
+        } else {
+          _chr = is_multiline(_flags) ? chr : '\n';
+        }
         return EOL;
       }
       case '[': return build_cclass();
