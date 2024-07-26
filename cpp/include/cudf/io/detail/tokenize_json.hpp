@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/io/json.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -117,7 +118,7 @@ enum token_t : PdaTokenT {
   NUM_TOKENS
 };
 
-namespace detail {
+namespace CUDF_EXPORT detail {
 
 /**
  * @brief Parses the given JSON string and emits a sequence of tokens that demarcate relevant
@@ -136,6 +137,6 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
-}  // namespace detail
+}  // namespace CUDF_EXPORT detail
 
 }  // namespace cudf::io::json
