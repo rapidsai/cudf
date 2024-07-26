@@ -19,6 +19,7 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -27,7 +28,8 @@
 
 #include <memory>
 
-namespace cudf::io::json::detail {
+namespace CUDF_EXPORT cudf {
+namespace io::json::detail {
 
 // Some magic numbers
 constexpr int num_subchunks               = 10;  // per chunk_size
@@ -51,4 +53,5 @@ size_type find_first_delimiter(device_span<char const> d_data,
                                char const delimiter,
                                rmm::cuda_stream_view stream);
 
-}  // namespace cudf::io::json::detail
+}  // namespace io::json::detail
+}  // namespace CUDF_EXPORT cudf
