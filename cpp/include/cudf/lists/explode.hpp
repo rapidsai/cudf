@@ -25,7 +25,7 @@
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup column_reshape
  * @{
@@ -215,4 +215,4 @@ std::unique_ptr<table> explode_outer_position(
 
 /** @} */  // end of group
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

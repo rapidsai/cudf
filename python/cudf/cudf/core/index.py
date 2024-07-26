@@ -78,6 +78,11 @@ class IndexMeta(type):
     """Custom metaclass for Index that overrides instance/subclass tests."""
 
     def __call__(cls, data, *args, **kwargs):
+        if kwargs.get("tupleize_cols", True) is not True:
+            raise NotImplementedError(
+                "tupleize_cols is currently not supported."
+            )
+
         if cls is Index:
             return as_index(
                 arbitrary=data,
@@ -1005,21 +1010,23 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
 class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     """
-    An array of orderable values that represent the indices of another Column
+    Immutable sequence used for indexing and alignment.
 
-    Attributes
-    ----------
-    _values: A Column object
-    name: A string
+    The basic object storing axis labels for all pandas objects.
 
     Parameters
     ----------
-    data : Column
-        The Column of data for this index
-    name : str optional
-        The name of the Index. If not provided, the Index adopts the value
-        Column's name. Otherwise if this name is different from the value
-        Column's, the data Column will be cloned to adopt this name.
+    data : array-like (1-dimensional)
+    dtype : str, numpy.dtype, or ExtensionDtype, optional
+        Data type for the output Index. If not specified, this will be
+        inferred from `data`.
+    copy : bool, default False
+        Copy input data.
+    name : object
+        Name to be stored in the index.
+    tupleize_cols : bool (default: True)
+        When True, attempt to create a MultiIndex if possible.
+        Currently not supported.
     """
 
     @_performance_tracking
@@ -1751,8 +1758,18 @@ class DatetimeIndex(Index):
         if tz is not None:
             raise NotImplementedError("tz is not yet supported")
         if normalize is not False:
+            warnings.warn(
+                "The 'normalize' keyword is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
             raise NotImplementedError("normalize == True is not yet supported")
         if closed is not None:
+            warnings.warn(
+                "The 'closed' keyword is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
             raise NotImplementedError("closed is not yet supported")
         if ambiguous != "raise":
             raise NotImplementedError("ambiguous is not yet supported")
@@ -2496,6 +2513,14 @@ class TimedeltaIndex(Index):
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
 
+        if closed is not None:
+            warnings.warn(
+                "The 'closed' keyword is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
+            raise NotImplementedError("closed is not yet supported")
+
         if unit is not None:
             warnings.warn(
                 "The 'unit' keyword is "
@@ -2879,6 +2904,7 @@ class IntervalIndex(Index):
         dtype=None,
         copy: bool = False,
         name=None,
+        verify_integrity: bool = True,
     ):
         name = _getdefault_name(data, name=name)
 

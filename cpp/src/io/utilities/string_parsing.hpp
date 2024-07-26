@@ -18,6 +18,7 @@
 #include "io/utilities/parsing_utils.cuh"
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -43,7 +44,7 @@ namespace detail {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The inferred data type
  */
-cudf::data_type infer_data_type(
+CUDF_EXPORT cudf::data_type infer_data_type(
   cudf::io::json_inference_options_view const& options,
   device_span<char const> data,
   thrust::zip_iterator<thrust::tuple<size_type const*, size_type const*>> offset_length_begin,
@@ -66,7 +67,7 @@ namespace json::detail {
  * @param mr The resource to be used for device memory allocation
  * @return The column that contains the parsed data
  */
-std::unique_ptr<column> parse_data(
+CUDF_EXPORT std::unique_ptr<column> parse_data(
   char const* data,
   thrust::zip_iterator<thrust::tuple<size_type const*, size_type const*>> offset_length_begin,
   size_type col_size,
