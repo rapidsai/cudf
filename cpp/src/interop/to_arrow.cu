@@ -159,8 +159,8 @@ std::shared_ptr<arrow::Array> unsupported_decimals_to_arrow(column_view input,
                                                             arrow::MemoryPool* ar_mr,
                                                             rmm::cuda_stream_view stream)
 {
-  auto buf =
-    detail::decimals_to_arrow<DeviceType>(input, stream, rmm::mr::get_current_device_resource());
+  auto buf = detail::convert_decimals_to_decimal128<DeviceType>(
+    input, stream, rmm::mr::get_current_device_resource());
 
   auto const buf_size_in_bytes = buf->size();
   auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);

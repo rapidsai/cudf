@@ -15,6 +15,7 @@
  */
 
 #include "arrow_utilities.hpp"
+#include "decimal_conversion_utilities.cuh"
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/interop.hpp>
@@ -49,41 +50,6 @@
 
 namespace cudf {
 namespace detail {
-
-template <typename DeviceType>
-std::unique_ptr<rmm::device_buffer> decimals_to_arrow(cudf::column_view input,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::device_async_resource_ref mr)
-{
-  constexpr size_type BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DeviceType);
-  auto buf = std::make_unique<rmm::device_buffer>(input.size() * sizeof(__int128_t), stream, mr);
-
-  auto count = thrust::counting_iterator<size_type>(0);
-  thrust::for_each(rmm::exec_policy(stream, mr),
-                   count,
-                   count + input.size(),
-                   [in  = input.begin<DeviceType>(),
-                    out = reinterpret_cast<DeviceType*>(buf->data()),
-                    BIT_WIDTH_RATIO] __device__(auto in_idx) {
-                     auto const out_idx = in_idx * BIT_WIDTH_RATIO;
-                     // the lowest order bits are the value, the remainder
-                     // simply matches the sign bit to satisfy the two's
-                     // complement integer representation of negative numbers.
-                     out[out_idx] = in[in_idx];
-#pragma unroll BIT_WIDTH_RATIO - 1
-                     for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
-                       out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
-                     }
-                   });
-
-  return buf;
-}
-
-template std::unique_ptr<rmm::device_buffer> decimals_to_arrow<int32_t>(
-  cudf::column_view input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
-
-template std::unique_ptr<rmm::device_buffer> decimals_to_arrow<int64_t>(
-  cudf::column_view input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
 namespace {
 
@@ -156,7 +122,7 @@ struct dispatch_to_arrow_host {
     NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, column));
 
     NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
-    auto buf = detail::decimals_to_arrow<DeviceType>(column, stream, mr);
+    auto buf = detail::convert_decimals_to_decimal128<DeviceType>(column, stream, mr);
     NANOARROW_RETURN_NOT_OK(
       populate_data_buffer(device_span<__int128_t const>(
                              reinterpret_cast<const __int128_t*>(buf->data()), column.size()),

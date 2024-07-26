@@ -714,10 +714,11 @@ TEST_F(ToArrowDeviceTest, FixedPoint32Table)
 {
   using namespace numeric;
 
-  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const expect_data = std::vector<int32_t>{-1, -1, -1, -1, 2, 0, 0, 0, -3, -1, -1, -1,
-                                                  4,  0,  0,  0,  5, 0, 0, 0, 6,  0,  0,  0};
-    auto col               = fp_wrapper<int32_t>({-1, 2, -3, 4, 5, 6}, scale_type{scale});
+  for (auto const scale : {6, 4, 2, 0, -1, -3, -5}) {
+    auto const expect_data =
+      std::vector<int32_t>{-1000, -1, -1, -1, 2400, 0, 0, 0, -3456, -1, -1, -1,
+                           4650,  0,  0,  0,  5154, 0, 0, 0, 6800,  0,  0,  0};
+    auto col = fp_wrapper<int32_t>({-1000, 2400, -3456, 4650, 5154, 6800}, scale_type{scale});
     std::vector<std::unique_ptr<cudf::column>> table_cols;
     table_cols.emplace_back(col.release());
     auto input = cudf::table(std::move(table_cols));

@@ -1607,7 +1607,7 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
  *        update the input table metadata, and return a new vector of column views.
  *
  * @param[in,out] table_meta The table metadata
- * @param[in,out] d128_vectors Vector containing the computed decimal128 data buffers.
+ * @param[in,out] d128_buffers Buffers containing the converted decimal128 data.
  * @param input The input table
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
@@ -1615,7 +1615,7 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
  */
 std::vector<column_view> convert_decimal_columns_and_metadata(
   table_input_metadata& table_meta,
-  std::vector<rmm::device_uvector<__int128_t>>& d128_vectors,
+  std::vector<std::unique_ptr<rmm::device_buffer>>& d128_buffers,
   table_view const& table,
   rmm::cuda_stream_view stream)
 {
@@ -1636,30 +1636,30 @@ std::vector<column_view> convert_decimal_columns_and_metadata(
     switch (column.type().id()) {
       case type_id::DECIMAL32:
         // Convert data to decimal128 type
-        d128_vectors.emplace_back(
-          cudf::detail::convert_decimal_data_to_decimal128<int32_t>(column, stream));
+        d128_buffers.emplace_back(cudf::detail::convert_decimals_to_decimal128<int32_t>(
+          column, stream, rmm::mr::get_current_device_resource()));
         // Update metadata
         metadata.set_decimal_precision(MAX_DECIMAL32_PRECISION);
         metadata.set_type_length(size_of(data_type{type_id::DECIMAL128, column.type().scale()}));
         // Create a new column view from the d128 data vector
         return {data_type{type_id::DECIMAL128, column.type().scale()},
                 column.size(),
-                d128_vectors.back().data(),
+                d128_buffers.back()->data(),
                 column.null_mask(),
                 column.null_count(),
                 column.offset(),
                 converted_children};
       case type_id::DECIMAL64:
         // Convert data to decimal128 type
-        d128_vectors.emplace_back(
-          cudf::detail::convert_decimal_data_to_decimal128<int64_t>(column, stream));
+        d128_buffers.emplace_back(cudf::detail::convert_decimals_to_decimal128<int64_t>(
+          column, stream, rmm::mr::get_current_device_resource()));
         // Update metadata
         metadata.set_decimal_precision(MAX_DECIMAL64_PRECISION);
         metadata.set_type_length(size_of(data_type{type_id::DECIMAL128, column.type().scale()}));
         // Create a new column view from the d128 data vector
         return {data_type{type_id::DECIMAL128, column.type().scale()},
                 column.size(),
-                d128_vectors.back().data(),
+                d128_buffers.back()->data(),
                 column.null_mask(),
                 column.null_count(),
                 column.offset(),
@@ -1745,13 +1745,13 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    rmm::cuda_stream_view stream)
 {
   // Container to store decimal128 converted data if needed
-  std::vector<rmm::device_uvector<__int128_t>> d128_vectors;
+  std::vector<std::unique_ptr<rmm::device_buffer>> d128_buffers;
 
   // Convert decimal32/decimal64 data to decimal128 if writing arrow schema
   // and initialize LinkedColVector
   auto vec = table_to_linked_columns(
     (write_arrow_schema)
-      ? table_view({convert_decimal_columns_and_metadata(table_meta, d128_vectors, input, stream)})
+      ? table_view({convert_decimal_columns_and_metadata(table_meta, d128_buffers, input, stream)})
       : input);
 
   auto schema_tree = construct_parquet_schema_tree(
