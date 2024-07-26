@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
  * @brief Class definition for cudf::dictionary_column_view
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup dictionary_classes
  * @{
@@ -124,4 +124,4 @@ class dictionary_column_view : private column_view {
 namespace dictionary {  // defined here for doxygen output
 }
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

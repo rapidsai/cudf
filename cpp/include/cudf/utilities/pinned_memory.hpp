@@ -16,11 +16,13 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <rmm/resource_ref.hpp>
 
 #include <optional>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief Set the rmm resource to be used for pinned memory allocations.
@@ -87,4 +89,4 @@ void set_allocate_host_as_pinned_threshold(size_t threshold);
  */
 size_t get_allocate_host_as_pinned_threshold();
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
