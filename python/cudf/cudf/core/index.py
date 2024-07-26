@@ -1665,7 +1665,7 @@ class DatetimeIndex(Index):
     copy : bool
         Make a copy of input.
     freq : str, optional
-        This is not yet supported
+        Frequency of the DatetimeIndex
     tz : pytz.timezone or dateutil.tz.tzfile
         This is not yet supported
     ambiguous : 'infer', bool-ndarray, 'NaT', default 'raise'
@@ -1865,7 +1865,7 @@ class DatetimeIndex(Index):
             Date format string (e.g. "%Y-%m-%d").
         """
         return Index._from_data(
-            {self.name, self._column.strftime(date_format)}
+            {self.name: self._column.strftime(date_format)}
         )
 
     @property
@@ -1950,7 +1950,7 @@ class DatetimeIndex(Index):
 
         The time part of the Timestamps.
         """
-        return self.to_pandas().time()
+        return self.to_pandas().time
 
     @property
     def timetz(self) -> np.ndarray:
@@ -1959,7 +1959,7 @@ class DatetimeIndex(Index):
 
         The time part of the Timestamps.
         """
-        return self.to_pandas().timetz()
+        return self.to_pandas().timetz
 
     @property
     def date(self) -> np.ndarray:
@@ -1969,7 +1969,7 @@ class DatetimeIndex(Index):
         Namely, the date part of Timestamps without time and
         timezone information.
         """
-        return self.to_pandas().date()
+        return self.to_pandas().date
 
     @property
     def is_month_start(self) -> cupy.ndarray:
