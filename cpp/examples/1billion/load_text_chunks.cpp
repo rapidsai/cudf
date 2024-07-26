@@ -20,8 +20,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/filling.hpp>
-#include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
@@ -56,19 +54,13 @@ int main(int argc, char const** argv)
   std::filesystem::path p = input_file;
   auto const file_size    = std::filesystem::file_size(p);
 
-  std::vector<std::unique_ptr<cudf::table>> agg_data;
-
-  // 25 = 46.559s
-  // 10 = 20.455s
-  //  7 = 16.087s
-  //  5 = 11.749s
   int constexpr divider = 10;
   auto byte_ranges      = cudf::io::text::create_byte_range_infos_consecutive(file_size, divider);
   auto const source     = cudf::io::text::make_source_from_file(input_file);
 
+  std::vector<std::unique_ptr<cudf::table>> agg_data;
   for (auto& br : byte_ranges) {
     auto splits = [&] {
-      // auto raw_data_column = load_chunk(source, br);
       cudf::io::text::parse_options options{br, false};
       auto raw_data_column = cudf::io::text::multibyte_split(*source, "\n", options);
       auto const sv        = cudf::strings_column_view(raw_data_column->view());

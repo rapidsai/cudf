@@ -28,6 +28,9 @@
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <vector>
 
@@ -36,7 +39,8 @@
 std::unique_ptr<cudf::table> compute_results(
   cudf::column_view const& cities,
   cudf::column_view const& temperatures,
-  std::vector<std::unique_ptr<cudf::groupby_aggregation>>&& aggregations)
+  std::vector<std::unique_ptr<cudf::groupby_aggregation>>&& aggregations,
+  rmm::cuda_stream_view stream = cudf::get_default_stream())
 {
   auto groupby_obj      = cudf::groupby::groupby(cudf::table_view({cities}));
   auto aggregation_reqs = std::vector<cudf::groupby::aggregation_request>{};
@@ -57,7 +61,8 @@ std::unique_ptr<cudf::table> compute_results(
 /**
  */
 std::unique_ptr<cudf::table> compute_final_aggregates(
-  std::vector<std::unique_ptr<cudf::table>>& agg_data)
+  std::vector<std::unique_ptr<cudf::table>>& agg_data,
+  rmm::cuda_stream_view stream = cudf::get_default_stream())
 {
   // first combine all the results into tables (vectors of columns)
   std::vector<cudf::column_view> min_cols, max_cols, sum_cols, count_cols;
@@ -79,29 +84,31 @@ std::unique_ptr<cudf::table> compute_final_aggregates(
 
   // build the offsets for segmented reduce
   auto const num_keys = agg_data.front()->num_rows();
-  auto seg_offsets    = cudf::sequence(static_cast<cudf::size_type>(num_keys) + 1,
-                                    cudf::numeric_scalar<cudf::size_type>(0),
-                                    cudf::numeric_scalar<cudf::size_type>(agg_data.size()));
-  auto offsets_span   = cudf::device_span<cudf::size_type const>(seg_offsets->view());
+  auto seg_offsets =
+    cudf::sequence(static_cast<cudf::size_type>(num_keys) + 1,
+                   cudf::numeric_scalar<cudf::size_type>(0, true, stream),
+                   cudf::numeric_scalar<cudf::size_type>(agg_data.size(), true, stream),
+                   stream);
+  auto offsets_span = cudf::device_span<cudf::size_type const>(seg_offsets->view());
 
   // compute the min/max for each key by doing a segmented reduce
   auto min_agg = cudf::make_min_aggregation<cudf::segmented_reduce_aggregation>();
   mins         = cudf::segmented_reduce(
-    mins->view(), offsets_span, *min_agg, mins->type(), cudf::null_policy::EXCLUDE);
+    mins->view(), offsets_span, *min_agg, mins->type(), cudf::null_policy::EXCLUDE, stream);
   auto max_agg = cudf::make_max_aggregation<cudf::segmented_reduce_aggregation>();
   maxes        = cudf::segmented_reduce(
-    maxes->view(), offsets_span, *max_agg, maxes->type(), cudf::null_policy::EXCLUDE);
+    maxes->view(), offsets_span, *max_agg, maxes->type(), cudf::null_policy::EXCLUDE, stream);
 
   // compute the sum and total counts in the same way
   auto sum_agg = cudf::make_sum_aggregation<cudf::segmented_reduce_aggregation>();
   sums         = cudf::segmented_reduce(
-    sums->view(), offsets_span, *sum_agg, sums->type(), cudf::null_policy::EXCLUDE);
+    sums->view(), offsets_span, *sum_agg, sums->type(), cudf::null_policy::EXCLUDE, stream);
   counts = cudf::segmented_reduce(
-    counts->view(), offsets_span, *sum_agg, counts->type(), cudf::null_policy::EXCLUDE);
+    counts->view(), offsets_span, *sum_agg, counts->type(), cudf::null_policy::EXCLUDE, stream);
 
   // compute the means using binary-operation to divide the individual rows sum/count
-  auto means =
-    cudf::binary_operation(sums->view(), counts->view(), cudf::binary_operator::DIV, sums->type());
+  auto means = cudf::binary_operation(
+    sums->view(), counts->view(), cudf::binary_operator::DIV, sums->type(), stream);
 
   std::vector<std::unique_ptr<cudf::column>> results;
   results.emplace_back(std::move(mins));
