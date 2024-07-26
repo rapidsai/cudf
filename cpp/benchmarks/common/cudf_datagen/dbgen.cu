@@ -338,12 +338,46 @@ int64_t l_calc_cardinality(cudf::column_view const& o_orderkey_repeat_freqs)
   return reinterpret_cast<cudf::numeric_scalar<int64_t>*>(l_num_rows_scalar.get())->value();
 }
 
+/**
+ * @brief Calculate the charge column
+ *
+ * @param tax The tax column
+ * @param disc_price The discount price column
+ * @param stream The CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ */
+[[nodiscard]] std::unique_ptr<cudf::column> l_calc_charge(
+  cudf::column_view const& extendedprice,
+  cudf::column_view const& tax,
+  cudf::column_view const& discount,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+{
+  auto const one = cudf::numeric_scalar<double>(1);
+  auto const one_minus_discount =
+    cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type(), stream, mr);
+  auto const disc_price_type = cudf::data_type{cudf::type_id::FLOAT64};
+  auto disc_price            = cudf::binary_operation(extendedprice,
+                                           one_minus_discount->view(),
+                                           cudf::binary_operator::MUL,
+                                           disc_price_type,
+                                           stream,
+                                           mr);
+  auto const one_plus_tax =
+    cudf::binary_operation(one, tax, cudf::binary_operator::ADD, tax.type(), stream, mr);
+  auto const charge_type = cudf::data_type{cudf::type_id::FLOAT64};
+  auto charge            = cudf::binary_operation(
+    disc_price->view(), one_plus_tax->view(), cudf::binary_operator::MUL, charge_type, stream, mr);
+  return charge;
+}
+
 // NOTE: Incomplete table
 void generate_lineitem_and_orders(int64_t scale_factor)
 {
   cudf::size_type const num_rows = 1'500'000 * scale_factor;
 
-  // Generate the non-dependent columns of the `orders` table
+  // Generate a primary key column for the orders table
+  // which will not be written into the parquet file
   auto const o_pkey = gen_primary_key_col(0, num_rows);
 
   // Generate the `o_orderkey` column
@@ -543,6 +577,17 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   // Generate the `l_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
   auto const l_comment = gen_rand_str_col(10, 43, l_num_rows);
+
+  // Generate the `o_totalprice` column
+  auto l_charge   = l_calc_charge(l_tax->view(), l_tax->view(), l_discount->view());
+  auto const keys = cudf::table_view({l_orderkey.view()});
+  cudf::groupby::groupby gb(keys);
+  std::vector<cudf::groupby::aggregation_request> requests;
+  requests.push_back(cudf::groupby::aggregation_request());
+  requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+  requests[0].values = l_charge->view();
+  auto agg_result    = gb.aggregate(requests);
+  auto o_totalprice  = std::move(agg_result.second[0].results[0]);
 
   auto lineitem = cudf::table_view({l_orderkey.view(),
                                     l_partkey->view(),
