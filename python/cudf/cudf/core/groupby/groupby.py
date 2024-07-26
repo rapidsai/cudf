@@ -314,6 +314,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         _, offsets, _, _ = self._grouped()
         return len(offsets) - 1
 
+    @property
     def ndim(self) -> int:
         return self.obj.ndim
 
