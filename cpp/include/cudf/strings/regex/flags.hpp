@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,11 @@
  */
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <cstdint>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 
 /**
@@ -86,4 +88,4 @@ enum class capture_groups : uint32_t {
 
 /** @} */  // end of doxygen group
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
