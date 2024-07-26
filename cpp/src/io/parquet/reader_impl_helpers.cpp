@@ -1224,7 +1224,7 @@ aggregate_reader_metadata::select_columns(
         std::for_each(
           thrust::make_counting_iterator(0),
           thrust::make_counting_iterator(src_schema_elem.num_children),
-          [&](auto child_idx) {
+          [&](auto const child_idx) {
             // Check the number of children to be equal here.
             CUDF_EXPECTS(
               src_schema_elem.num_children == dst_schema_elem.num_children,
