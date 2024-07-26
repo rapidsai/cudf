@@ -2170,3 +2170,12 @@ def test_bool_raises():
         lfunc_args_and_kwargs=[[cudf.MultiIndex.from_arrays([range(1)])]],
         rfunc_args_and_kwargs=[[pd.MultiIndex.from_arrays([range(1)])]],
     )
+
+
+def test_unique_level():
+    pd_mi = pd.MultiIndex.from_arrays([[1, 1, 2], [3, 3, 2]])
+    cudf_mi = cudf.MultiIndex.from_pandas(pd_mi)
+
+    result = pd_mi.unique(level=1)
+    expected = cudf_mi.unique(level=1)
+    assert_eq(result, expected)
