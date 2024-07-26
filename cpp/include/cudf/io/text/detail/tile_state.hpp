@@ -16,12 +16,14 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <rmm/resource_ref.hpp>
 
 #include <cub/block/block_scan.cuh>
 #include <cuda/atomic>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 namespace text {
 namespace detail {
@@ -147,4 +149,4 @@ struct scan_tile_state_callback {
 }  // namespace detail
 }  // namespace text
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

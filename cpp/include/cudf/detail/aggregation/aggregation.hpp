@@ -26,7 +26,7 @@
 #include <numeric>
 #include <utility>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 // Visitor pattern
@@ -1674,4 +1674,4 @@ constexpr inline bool is_valid_aggregation()
 bool is_valid_aggregation(data_type source, aggregation::Kind k);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -157,7 +157,18 @@ def test_groupby_nan_minmax_raises(op):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-@pytest.mark.parametrize("key", [1, pl.col("key1")])
+@pytest.mark.parametrize(
+    "key",
+    [
+        pytest.param(
+            1,
+            marks=pytest.mark.xfail(
+                versions.POLARS_VERSION_GE_121, reason="polars 1.2.1 disallows this"
+            ),
+        ),
+        pl.col("key1"),
+    ],
+)
 @pytest.mark.parametrize(
     "expr",
     [
