@@ -98,7 +98,7 @@ class IntervalColumn(StructColumn):
         not_closed_both = as_column(
             self.dtype.closed != "both", length=len(self)
         )
-        raise left_equals_right & not_closed_both
+        return left_equals_right & not_closed_both
 
     @property
     def is_non_overlapping_monotonic(self) -> bool:
