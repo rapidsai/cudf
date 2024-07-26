@@ -19,12 +19,14 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/resource_ref.hpp>
 
 #include <optional>
 
-namespace cudf::reduction::detail {
+namespace CUDF_EXPORT cudf {
+namespace reduction::detail {
 
 /**
  * @copydoc cudf::reduce(column_view const&, reduce_aggregation const&, data_type,
@@ -39,4 +41,5 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr);
 
-}  // namespace cudf::reduction::detail
+}  // namespace reduction::detail
+}  // namespace CUDF_EXPORT cudf
