@@ -71,6 +71,12 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
   return std::make_unique<cudf::table>(std::move(joined_cols));
 }
 
+struct groupby_context_t {
+  std::vector<int64_t> keys;
+  std::unordered_map<std::string, std::vector<std::pair<cudf::aggregation::Kind, std::string>>>
+    values;
+};
+
 /**
  * @brief Generate the `std::tm` structure from year, month, and day
  *

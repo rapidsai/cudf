@@ -18,6 +18,7 @@
 
 auto const schema_orders = std::vector<std::string>{"o_orderkey",
                                                     "o_custkey",
+                                                    "o_totalprice",
                                                     "o_orderdate",
                                                     "o_orderpriority",
                                                     "o_clerk",
