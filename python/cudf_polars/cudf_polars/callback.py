@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import nvtx
 
-from polars.exceptions import PerformanceWarning
+from polars.exceptions import ComputeError, PerformanceWarning
 
 import rmm
 from rmm._cuda import gpu
@@ -49,7 +49,21 @@ def default_memory_resource(device: int) -> rmm.mr.DeviceMemoryResource:
         The default memory resource that cudf-polars uses. Currently
         an async pool resource.
     """
-    return rmm.mr.CudaAsyncMemoryResource()
+    try:
+        return rmm.mr.CudaAsyncMemoryResource()
+    except RuntimeError as e:
+        msg, *_ = e.args
+        if (
+            msg.startswith("RMM failure")
+            and msg.find("not supported with this CUDA driver/runtime version") > -1
+        ):
+            raise ComputeError(
+                "GPU engine requested, but incorrect cudf-polars package installed. "
+                "If your system has a CUDA 11 driver, please uninstall `cudf-polars-cu12` "
+                "and install `cudf-polars-cu11`"
+            ) from None
+        else:
+            raise
 
 
 @contextlib.contextmanager
