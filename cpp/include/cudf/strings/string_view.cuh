@@ -18,6 +18,7 @@
 
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.hpp>
+#include <cudf/utilities/export.hpp>
 
 #ifndef __CUDA_ARCH__
 #include <cudf/utilities/error.hpp>
@@ -35,7 +36,7 @@
 // This file should only include device code logic.
 // Host-only or host/device code should be defined in the string_view.hpp header file.
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 namespace detail {
 
@@ -453,4 +454,4 @@ __device__ inline size_type string_view::character_offset(size_type bytepos) con
   return strings::detail::characters_in_string(data(), bytepos);
 }
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

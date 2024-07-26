@@ -15,9 +15,11 @@
  */
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <cstdint>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 
 /**
@@ -98,4 +100,4 @@ enum class capture_groups : uint32_t {
 
 /** @} */  // end of doxygen group
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
