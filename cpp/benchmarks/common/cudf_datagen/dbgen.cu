@@ -23,12 +23,14 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>
@@ -212,6 +214,12 @@ std::unique_ptr<cudf::column> gen_repeat_str_col(std::string value, int64_t num_
   return scalar_repeat;
 }
 
+/**
+ * @brief Generate a column by randomly choosing from set of strings
+ *
+ * @param string_set The set of strings to choose from
+ * @param num_rows The length of the column
+ */
 std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string> string_set,
                                                         int64_t num_rows)
 {
@@ -228,6 +236,22 @@ std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string>
   auto const joined_table =
     perform_left_join(rand_keys_table, vocab_table, {0}, {0}, cudf::null_equality::EQUAL);
   return std::make_unique<cudf::column>(joined_table->get_column(2));
+}
+
+std::unique_ptr<cudf::column> gen_phone_col(int64_t num_rows)
+{
+  auto const part_a =
+    cudf::strings::from_integers(gen_rand_num_col<int64_t>(10, 34, num_rows)->view());
+  auto const part_b =
+    cudf::strings::from_integers(gen_rand_num_col<int64_t>(100, 999, num_rows)->view());
+  auto const part_c =
+    cudf::strings::from_integers(gen_rand_num_col<int64_t>(100, 999, num_rows)->view());
+  auto const part_d =
+    cudf::strings::from_integers(gen_rand_num_col<int64_t>(1000, 9999, num_rows)->view());
+  auto const phone_parts_table =
+    cudf::table_view({part_a->view(), part_b->view(), part_c->view(), part_d->view()});
+  auto phone = cudf::strings::concatenate(phone_parts_table, cudf::string_scalar("-"));
+  return phone;
 }
 
 std::unique_ptr<cudf::column> calc_l_suppkey(cudf::column_view const& l_partkey,
@@ -297,6 +321,16 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   cudf::size_type const num_rows = 1'500'000 * scale_factor;
 
   // Generate the non-dependent columns of the `orders` table
+
+  // Generate the `o_orderkey` column
+  // NOTE: This column is not compliant with the specifications
+  auto const o_orderkey_set      = gen_primary_key_col(1, 4 * num_rows);
+  auto const o_orderkey_unsorted = cudf::sample(
+    cudf::table_view({o_orderkey_set->view()}), num_rows, cudf::sample_with_replacement::FALSE);
+  auto const o_orderkey =
+    cudf::sort_by_key(o_orderkey_unsorted->view(),
+                      cudf::table_view({o_orderkey_unsorted->view().column(0)}))
+      ->get_column(0);
 
   // Generate the `o_custkey` column
   // NOTE: Currently, this column does not comply with the specs which
@@ -453,7 +487,8 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
   auto const l_comment = gen_rand_str_col(10, 43, num_rows);
 
-  auto orders = cudf::table_view({o_custkey->view(),
+  auto orders = cudf::table_view({o_orderkey.view(),
+                                  o_custkey->view(),
                                   o_orderdate_ts->view(),
                                   o_orderpriority->view(),
                                   o_clerk->view(),
@@ -823,17 +858,7 @@ void generate_customer(int64_t const& scale_factor,
   auto const c_nationkey = gen_rand_num_col<int64_t>(0, 24, num_rows);
 
   // Generate the `c_phone` column
-  auto const c_phone_a =
-    cudf::strings::from_integers(gen_rand_num_col<int64_t>(10, 34, num_rows)->view());
-  auto const c_phone_b =
-    cudf::strings::from_integers(gen_rand_num_col<int64_t>(100, 999, num_rows)->view());
-  auto const c_phone_c =
-    cudf::strings::from_integers(gen_rand_num_col<int64_t>(100, 999, num_rows)->view());
-  auto const c_phone_d =
-    cudf::strings::from_integers(gen_rand_num_col<int64_t>(1000, 9999, num_rows)->view());
-  auto const c_phone_parts =
-    cudf::table_view({c_phone_a->view(), c_phone_b->view(), c_phone_c->view(), c_phone_d->view()});
-  auto const c_phone = cudf::strings::concatenate(c_phone_parts, cudf::string_scalar("-"));
+  auto const c_phone = gen_phone_col(num_rows);
 
   // Generate the `c_acctbal` column
   auto const c_acctbal = gen_rand_num_col<double>(-999.99, 9999.99, num_rows);
@@ -889,19 +914,7 @@ void generate_supplier(int64_t const& scale_factor,
   auto const s_nationkey = gen_rand_num_col<int64_t>(0, 24, num_rows);
 
   // Generate the `s_phone` column
-  auto const s_phone_part_1 =
-    cudf::strings::from_integers(gen_rand_num_col<int64_t>(10, 34, num_rows)->view());
-  auto const s_phone_part_2 =
-    cudf::strings::from_integers(gen_rand_num_col<int64_t>(100, 999, num_rows)->view());
-  auto const s_phone_part_3 =
-    cudf::strings::from_integers(gen_rand_num_col<int64_t>(100, 999, num_rows)->view());
-  auto const s_phone_part_4 =
-    cudf::strings::from_integers(gen_rand_num_col<int64_t>(1000, 9999, num_rows)->view());
-  auto const s_phone_parts = cudf::table_view({s_phone_part_1->view(),
-                                               s_phone_part_2->view(),
-                                               s_phone_part_3->view(),
-                                               s_phone_part_4->view()});
-  auto const s_phone       = cudf::strings::concatenate(s_phone_parts, cudf::string_scalar("-"));
+  auto const s_phone = gen_phone_col(num_rows);
 
   // Generate the `s_acctbal` column
   auto const s_acctbal = gen_rand_num_col<double>(-999.99, 9999.99, num_rows);
