@@ -36,3 +36,16 @@ transfers.
 When using `cudf.pandas`, cuDF's [pandas compatibility
 mode](api.options) is automatically enabled, ensuring consistency with
 pandas-specific semantics like default sort ordering.
+
+
+`cudf.pandas` uses a managed pool memory by default, that will also enable
+prefetching <<LINK to prefetch tutorial/demo>>.
+
+There are various memory allocators that can be used by changing the environment
+variable `CUDF_PANDAS_RMM_MODE`. It supports:
+
+1. "pool"
+2. "async"
+3. "managed" (default)
+4. "managed_pool"
+5. "cuda"
