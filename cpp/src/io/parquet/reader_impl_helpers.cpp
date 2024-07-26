@@ -1221,26 +1221,31 @@ aggregate_reader_metadata::select_columns(
 
       // The path ends at a list/struct col. Map all it's children which must also be identical.
       if (col_name_info == nullptr or col_name_info->children.empty()) {
-        for (int child_idx = 0; child_idx < src_schema_elem.num_children; child_idx++) {
-          // Check the number of children to be equal here.
-          CUDF_EXPECTS(
-            src_schema_elem.num_children == dst_schema_elem.num_children,
-            "Mismatching number of children encountered for a column in the selected path");
-          map_column(nullptr,
-                     src_schema_elem.children_idx[child_idx],
-                     dst_schema_elem.children_idx[child_idx],
-                     pfm_idx);
-        }
+        std::for_each(
+          thrust::make_counting_iterator(0),
+          thrust::make_counting_iterator(src_schema_elem.num_children),
+          [&](auto child_idx) {  // Check the number of children to be equal here.
+            CUDF_EXPECTS(
+              src_schema_elem.num_children == dst_schema_elem.num_children,
+              "Mismatching number of children encountered for a column in the selected path");
+            map_column(nullptr,
+                       src_schema_elem.children_idx[child_idx],
+                       dst_schema_elem.children_idx[child_idx],
+                       pfm_idx);
+          });
       }
       // The path goes further down to specific child(ren) of this column so map only those
       // children.
       else {
-        for (auto const& child_col_name_info : col_name_info->children) {
-          map_column(&child_col_name_info,
-                     find_schema_child(src_schema_elem, child_col_name_info.name),
-                     find_schema_child(dst_schema_elem, child_col_name_info.name, pfm_idx),
-                     pfm_idx);
-        }
+        std::for_each(col_name_info->children.cbegin(),
+                      col_name_info->children.cend(),
+                      [&](auto const& child_col_name_info) {
+                        map_column(
+                          &child_col_name_info,
+                          find_schema_child(src_schema_elem, child_col_name_info.name),
+                          find_schema_child(dst_schema_elem, child_col_name_info.name, pfm_idx),
+                          pfm_idx);
+                      });
       }
 
       // We're at a leaf and this is an input column (one with actual data stored) so map it.
