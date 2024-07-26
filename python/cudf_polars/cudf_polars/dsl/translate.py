@@ -294,6 +294,14 @@ def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
     ctx: AbstractContextManager[None] = (
         set_node(visitor, n) if n is not None else noop_context
     )
+    # IR is versioned with major.minor, minor is bumped for backwards
+    # compatible changes (e.g. adding new nodes), major is bumped for
+    # incompatible changes (e.g. renaming nodes).
+    if (version := visitor.version()) >= (1, 0):
+        raise NotImplementedError(
+            f"No support for polars IR {version=}"
+        )  # pragma: no cover; no such version for now.
+
     with ctx:
         node = visitor.view_current_node()
         schema = {k: dtypes.from_polars(v) for k, v in visitor.get_schema().items()}
