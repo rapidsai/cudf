@@ -56,7 +56,7 @@ class ExponentialMovingWindow(_RollingBase):
     the equivalent pandas method.
 
     .. pandas-compat::
-        **cudf.core.window.ExponentialMovingWindow**
+        :meth:`pandas.DataFrame.ewm`
 
         The parameters ``min_periods``, ``ignore_na``, ``axis``, and ``times``
         are not yet supported. Behavior is defined only for data that begins
