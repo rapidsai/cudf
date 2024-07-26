@@ -266,11 +266,11 @@ std::unique_ptr<cudf::column> gen_repeat_seq_col(int64_t limit, int64_t num_rows
   auto repeat_seq_zero_indexed = cudf::binary_operation(pkey->view(),
                                                         cudf::numeric_scalar<int64_t>(limit),
                                                         cudf::binary_operator::MOD,
-                                                        cudf::data_type{cudf::type_id::INT32});
+                                                        cudf::data_type{cudf::type_id::INT64});
   return cudf::binary_operation(repeat_seq_zero_indexed->view(),
                                 cudf::numeric_scalar<int64_t>(1),
                                 cudf::binary_operator::ADD,
-                                cudf::data_type{cudf::type_id::INT32});
+                                cudf::data_type{cudf::type_id::INT64});
 }
 
 std::unique_ptr<cudf::column> l_calc_suppkey(cudf::column_view const& l_partkey,
@@ -376,6 +376,7 @@ void generate_lineitem_and_orders(int64_t scale_factor)
 {
   cudf::size_type const num_rows = 1'500'000 * scale_factor;
 
+  // Generate the `orders` table
   // Generate a primary key column for the orders table
   // which will not be written into the parquet file
   auto const o_pkey = gen_primary_key_col(0, num_rows);
@@ -437,17 +438,6 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
   auto const o_comment = gen_rand_str_col(19, 78, num_rows);
 
-  // Write the `orders` table to a parquet file
-  auto orders = cudf::table_view({o_orderkey.view(),
-                                  o_custkey->view(),
-                                  o_orderdate_ts->view(),
-                                  o_orderpriority->view(),
-                                  o_clerk->view(),
-                                  o_shippriority->view(),
-                                  o_comment->view()});
-
-  write_parquet(orders, "orders.parquet", schema_orders);
-
   // Generate the `lineitem` table. For each row in the `orders` table,
   // we have a random number (between 1 and 7) of rows in the `lineitem` table
 
@@ -487,7 +477,7 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   auto const l_suppkey = l_calc_suppkey(l_partkey->view(), scale_factor, l_num_rows);
 
   // Generate the `l_linenumber` column
-  auto l_linenumber = gen_repeat_seq_col(7, num_rows);
+  auto l_linenumber = gen_repeat_seq_col(7, l_num_rows);
 
   // Generate the `l_quantity` column
   auto const l_quantity = gen_rand_num_col<int64_t>(1, 50, l_num_rows);
@@ -529,13 +519,13 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   auto l_returnflag_binary_mask =
     cudf::compute_column(cudf::table_view({l_receiptdate_ts->view()}), l_returnflag_pred);
   auto l_returnflag_binary_mask_int =
-    cudf::cast(l_returnflag_binary_mask->view(), cudf::data_type{cudf::type_id::INT32});
+    cudf::cast(l_returnflag_binary_mask->view(), cudf::data_type{cudf::type_id::INT64});
 
-  auto multiplier                = gen_repeat_seq_col(2, num_rows);
+  auto multiplier                = gen_repeat_seq_col(2, l_num_rows);
   auto l_returnflag_ternary_mask = cudf::binary_operation(l_returnflag_binary_mask_int->view(),
                                                           multiplier->view(),
                                                           cudf::binary_operator::MUL,
-                                                          cudf::data_type{cudf::type_id::INT32});
+                                                          cudf::data_type{cudf::type_id::INT64});
 
   auto l_returnflag_ternary_mask_str =
     cudf::strings::from_integers(l_returnflag_ternary_mask->view());
@@ -557,7 +547,7 @@ void generate_lineitem_and_orders(int64_t scale_factor)
     cudf::compute_column(cudf::table_view({l_shipdate_ts->view()}), l_linestatus_pred);
 
   auto const l_linestatus_mask_int =
-    cudf::cast(l_linestatus_mask->view(), cudf::data_type{cudf::type_id::INT32});
+    cudf::cast(l_linestatus_mask->view(), cudf::data_type{cudf::type_id::INT64});
   auto const l_linestatus_mask_str = cudf::strings::from_integers(l_linestatus_mask_int->view());
 
   auto const l_linestatus_replace_target = cudf::test::strings_column_wrapper({"0", "1"}).release();
@@ -588,6 +578,21 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   auto agg_result    = gb.aggregate(requests);
   auto o_totalprice  = std::move(agg_result.second[0].results[0]);
 
+  // Calculate the `o_orderstatus` column
+
+  // Write the `orders` table to a parquet file
+  auto orders = cudf::table_view({o_orderkey.view(),
+                                  o_custkey->view(),
+                                  o_totalprice->view(),
+                                  o_orderdate_ts->view(),
+                                  o_orderpriority->view(),
+                                  o_clerk->view(),
+                                  o_shippriority->view(),
+                                  o_comment->view()});
+
+  write_parquet(orders, "orders.parquet", schema_orders);
+
+  // Write the `lineitem` table to a parquet file
   auto lineitem = cudf::table_view({l_orderkey.view(),
                                     l_partkey->view(),
                                     l_suppkey->view(),
@@ -771,9 +776,10 @@ std::unique_ptr<cudf::column> calc_p_retailprice(cudf::column_view const& p_part
  * @param stream The CUDA stream to use
  * @param mr The memory resource to use
  */
-void generate_part(int64_t const& scale_factor,
-                   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::table> generate_part(
+  int64_t const& scale_factor,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   cudf::size_type const num_rows = 200'000 * scale_factor;
 
@@ -821,17 +827,17 @@ void generate_part(int64_t const& scale_factor,
   auto const p_comment = gen_rand_str_col(5, 22, num_rows);
 
   // Create the `part` table
-  auto part = cudf::table_view({p_partkey->view(),
-                                p_name->view(),
-                                p_mfgr->view(),
-                                p_brand->view(),
-                                p_type->view(),
-                                p_size->view(),
-                                p_container->view(),
-                                p_retailprice->view(),
-                                p_comment->view()});
+  auto part_view = cudf::table_view({p_partkey->view(),
+                                     p_name->view(),
+                                     p_mfgr->view(),
+                                     p_brand->view(),
+                                     p_type->view(),
+                                     p_size->view(),
+                                     p_container->view(),
+                                     p_retailprice->view(),
+                                     p_comment->view()});
 
-  write_parquet(part, "part.parquet", schema_part);
+  return std::make_unique<cudf::table>(part_view);
 }
 
 /**
@@ -1037,7 +1043,6 @@ int main(int argc, char** argv)
 
   generate_lineitem_and_orders(scale_factor);
   generate_partsupp(scale_factor);
-  generate_part(scale_factor);
   generate_supplier(scale_factor);
   generate_customer(scale_factor);
   generate_nation(scale_factor);
