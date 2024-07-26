@@ -29,6 +29,7 @@
 #include <cudf/filling.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/filling.hpp>
+#include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/strings/combine.hpp>
@@ -238,6 +239,11 @@ std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string>
   return std::make_unique<cudf::column>(joined_table->get_column(2));
 }
 
+/**
+ * @brief Generate a phone number column
+ *
+ * @param num_rows The length of the column
+ */
 std::unique_ptr<cudf::column> gen_phone_col(int64_t num_rows)
 {
   auto const part_a =
@@ -337,6 +343,9 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   // specifies that every value % 3 != 0
   auto const o_custkey = gen_rand_num_col<int64_t>(1, num_rows, num_rows);
 
+  // Generate the `o_orderstatus` column
+  // Generate the `o_totalprice` column
+
   // Generate the `o_orderdate` column
   // Uniformly distributed random dates between `1992-01-01` and `1998-08-02`
   auto const o_orderdate_year  = gen_rand_str_col_from_set(years, num_rows);
@@ -376,117 +385,7 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
   auto const o_comment = gen_rand_str_col(19, 78, num_rows);
 
-  // Generate the non-dependent columns of the `lineitem` table
-
-  // Generate the `l_partkey` column
-  auto const l_partkey = gen_rand_num_col<int64_t>(1, 200'000 * scale_factor, num_rows);
-
-  // Generate the `l_suppkey` column
-  auto const l_suppkey = calc_l_suppkey(l_partkey->view(), scale_factor, num_rows);
-
-  // Generate the `l_linenumber` column
-  auto seq              = gen_primary_key_col(0, num_rows);
-  auto repeat_counter_0 = cudf::binary_operation(seq->view(),
-                                                 cudf::numeric_scalar<int64_t>(7),
-                                                 cudf::binary_operator::MOD,
-                                                 cudf::data_type{cudf::type_id::INT32});
-  auto l_linenumber     = cudf::binary_operation(repeat_counter_0->view(),
-                                             cudf::numeric_scalar<int64_t>(1),
-                                             cudf::binary_operator::ADD,
-                                             cudf::data_type{cudf::type_id::INT32});
-
-  // Generate the `l_quantity` column
-  auto const l_quantity = gen_rand_num_col<int64_t>(1, 50, num_rows);
-
-  // Generate the `l_discount` column
-  auto const l_discount = gen_rand_num_col<double>(0.0, 0.10, num_rows);
-
-  // Generate the `l_tax` column
-  auto const l_tax = gen_rand_num_col<double>(0.0, 0.08, num_rows);
-
-  // NOTE: For now, adding months, would add a new `add_calendrical_days` function to add days
-  // Generate the `l_shipdate` column
-  auto const l_shipdate_rand_add_days = gen_rand_num_col<int32_t>(1, 6, num_rows);
-  auto const l_shipdate_ts            = cudf::datetime::add_calendrical_months(
-    o_orderdate_ts->view(), l_shipdate_rand_add_days->view());
-
-  // Generate the `l_commitdate` column
-  auto const l_commitdate_rand_add_days = gen_rand_num_col<int32_t>(1, 6, num_rows);
-  auto const l_commitdate_ts            = cudf::datetime::add_calendrical_months(
-    o_orderdate_ts->view(), l_commitdate_rand_add_days->view());
-
-  // Generate the `l_receiptdate` column
-  auto const l_receiptdate_rand_add_days = gen_rand_num_col<int32_t>(1, 6, num_rows);
-  auto const l_receiptdate_ts            = cudf::datetime::add_calendrical_months(
-    l_shipdate_ts->view(), l_receiptdate_rand_add_days->view());
-
-  auto current_date =
-    cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 6, 17), true);
-  auto current_date_literal = cudf::ast::literal(current_date);
-
-  // Generate the `l_returnflag` column
-  auto l_receiptdate_col_ref = cudf::ast::column_reference(0);
-  auto l_returnflag_pred     = cudf::ast::operation(
-    cudf::ast::ast_operator::LESS_EQUAL, l_receiptdate_col_ref, current_date_literal);
-  auto l_returnflag_mask =
-    cudf::compute_column(cudf::table_view({l_receiptdate_ts->view()}), l_returnflag_pred);
-  auto l_returnflag_mask_int =
-    cudf::cast(l_returnflag_mask->view(), cudf::data_type{cudf::type_id::INT32});
-
-  auto seq_2                      = gen_primary_key_col(0, num_rows);
-  auto multiplier                 = cudf::binary_operation(seq_2->view(),
-                                           cudf::numeric_scalar<int64_t>(2),
-                                           cudf::binary_operator::MOD,
-                                           cudf::data_type{cudf::type_id::INT32});
-  auto multiplier_non_zero        = cudf::binary_operation(multiplier->view(),
-                                                    cudf::numeric_scalar<int64_t>(1),
-                                                    cudf::binary_operator::ADD,
-                                                    cudf::data_type{cudf::type_id::INT32});
-  auto l_returnflag_mask_3_unique = cudf::binary_operation(l_returnflag_mask_int->view(),
-                                                           multiplier_non_zero->view(),
-                                                           cudf::binary_operator::MUL,
-                                                           cudf::data_type{cudf::type_id::INT32});
-
-  auto l_returnflag_mask_3_unique_str =
-    cudf::strings::from_integers(l_returnflag_mask_3_unique->view());
-
-  auto const l_returnflag_replace_target =
-    cudf::test::strings_column_wrapper({"0", "1", "2"}).release();
-  auto const l_returnflag_replace_with =
-    cudf::test::strings_column_wrapper({"N", "A", "R"}).release();
-
-  auto const l_returnflag = cudf::strings::replace(l_returnflag_mask_3_unique_str->view(),
-                                                   l_returnflag_replace_target->view(),
-                                                   l_returnflag_replace_with->view());
-
-  // Generate the `l_linestatus` column
-  auto const l_shipdate_ts_col_ref = cudf::ast::column_reference(0);
-  auto const l_linestatus_pred     = cudf::ast::operation(
-    cudf::ast::ast_operator::GREATER, l_shipdate_ts_col_ref, current_date_literal);
-  auto const l_linestatus_mask =
-    cudf::compute_column(cudf::table_view({l_shipdate_ts->view()}), l_linestatus_pred);
-
-  auto const l_linestatus_mask_int =
-    cudf::cast(l_linestatus_mask->view(), cudf::data_type{cudf::type_id::INT32});
-  auto const l_linestatus_mask_str = cudf::strings::from_integers(l_linestatus_mask_int->view());
-
-  auto const l_linestatus_replace_target = cudf::test::strings_column_wrapper({"0", "1"}).release();
-  auto const l_linestatus_replace_with   = cudf::test::strings_column_wrapper({"F", "O"}).release();
-
-  auto const l_linestatus = cudf::strings::replace(l_linestatus_mask_str->view(),
-                                                   l_linestatus_replace_target->view(),
-                                                   l_linestatus_replace_with->view());
-
-  // Generate the `l_shipinstruct` column
-  auto const l_shipinstruct = gen_rand_str_col_from_set(vocab_instructions, num_rows);
-
-  // Generate the `l_shipmode` column
-  auto const l_shipmode = gen_rand_str_col_from_set(vocab_modes, num_rows);
-
-  // Generate the `l_comment` column
-  // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto const l_comment = gen_rand_str_col(10, 43, num_rows);
-
+  // Write the `orders` table to a parquet file
   auto orders = cudf::table_view({o_orderkey.view(),
                                   o_custkey->view(),
                                   o_orderdate_ts->view(),
@@ -497,22 +396,142 @@ void generate_lineitem_and_orders(int64_t scale_factor)
 
   write_parquet(orders, "orders.parquet", schema_orders);
 
-  auto lineitem = cudf::table_view({l_partkey->view(),
-                                    l_suppkey->view(),
-                                    l_linenumber->view(),
-                                    l_quantity->view(),
-                                    l_discount->view(),
-                                    l_tax->view(),
-                                    l_shipdate_ts->view(),
-                                    l_commitdate_ts->view(),
-                                    l_receiptdate_ts->view(),
-                                    l_returnflag->view(),
-                                    l_linestatus->view(),
-                                    l_shipinstruct->view(),
-                                    l_shipmode->view(),
-                                    l_comment->view()});
+  // Generate the non-dependent columns of the `lineitem` table
+  auto const sum_agg           = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
+  auto o_orderkey_repeat_freqs = gen_rand_num_col<int64_t>(1, 7, num_rows);
 
-  write_parquet(lineitem, "lineitem.parquet", schema_lineitem);
+  auto l_num_rows_scalar =
+    cudf::reduce(o_orderkey_repeat_freqs->view(), *sum_agg, cudf::data_type{cudf::type_id::INT64});
+  auto l_num_rows =
+    reinterpret_cast<cudf::numeric_scalar<int64_t>*>(l_num_rows_scalar.get())->value();
+  // // Generate the `l_orderkey` column
+
+  // // Generate the `l_partkey` column
+  // auto const l_partkey = gen_rand_num_col<int64_t>(1, 200'000 * scale_factor, l_num_rows);
+
+  // // Generate the `l_suppkey` column
+  // auto const l_suppkey = calc_l_suppkey(l_partkey->view(), scale_factor, l_num_rows);
+
+  // // Generate the `l_linenumber` column
+  // auto seq              = gen_primary_key_col(0, l_num_rows);
+  // auto repeat_counter_0 = cudf::binary_operation(seq->view(),
+  //                                                cudf::numeric_scalar<int64_t>(7),
+  //                                                cudf::binary_operator::MOD,
+  //                                                cudf::data_type{cudf::type_id::INT32});
+  // auto l_linenumber     = cudf::binary_operation(repeat_counter_0->view(),
+  //                                            cudf::numeric_scalar<int64_t>(1),
+  //                                            cudf::binary_operator::ADD,
+  //                                            cudf::data_type{cudf::type_id::INT32});
+
+  // // Generate the `l_quantity` column
+  // auto const l_quantity = gen_rand_num_col<int64_t>(1, 50, l_num_rows);
+
+  // // Generate the `l_discount` column
+  // auto const l_discount = gen_rand_num_col<double>(0.0, 0.10, l_num_rows);
+
+  // // Generate the `l_tax` column
+  // auto const l_tax = gen_rand_num_col<double>(0.0, 0.08, l_num_rows);
+
+  // NOTE: For now, adding months, would add a new `add_calendrical_days` function to add days
+  // Generate the `l_shipdate` column
+  // auto const l_shipdate_rand_add_days = gen_rand_num_col<int32_t>(1, 6, l_num_rows);
+  // auto const l_shipdate_ts            = cudf::datetime::add_calendrical_months(
+  //   o_orderdate_ts->view(), l_shipdate_rand_add_days->view());
+
+  // // Generate the `l_commitdate` column
+  // auto const l_commitdate_rand_add_days = gen_rand_num_col<int32_t>(1, 6, l_num_rows);
+  // auto const l_commitdate_ts            = cudf::datetime::add_calendrical_months(
+  //   o_orderdate_ts->view(), l_commitdate_rand_add_days->view());
+
+  // // Generate the `l_receiptdate` column
+  // auto const l_receiptdate_rand_add_days = gen_rand_num_col<int32_t>(1, 6, l_num_rows);
+  // auto const l_receiptdate_ts            = cudf::datetime::add_calendrical_months(
+  //   l_shipdate_ts->view(), l_receiptdate_rand_add_days->view());
+
+  // auto current_date =
+  //   cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 6, 17), true);
+  // auto current_date_literal = cudf::ast::literal(current_date);
+
+  // // Generate the `l_returnflag` column
+  // auto l_receiptdate_col_ref = cudf::ast::column_reference(0);
+  // auto l_returnflag_pred     = cudf::ast::operation(
+  //   cudf::ast::ast_operator::LESS_EQUAL, l_receiptdate_col_ref, current_date_literal);
+  // auto l_returnflag_mask =
+  //   cudf::compute_column(cudf::table_view({l_receiptdate_ts->view()}), l_returnflag_pred);
+  // auto l_returnflag_mask_int =
+  //   cudf::cast(l_returnflag_mask->view(), cudf::data_type{cudf::type_id::INT32});
+
+  // auto seq_2                      = gen_primary_key_col(0, l_num_rows);
+  // auto multiplier                 = cudf::binary_operation(seq_2->view(),
+  //                                          cudf::numeric_scalar<int64_t>(2),
+  //                                          cudf::binary_operator::MOD,
+  //                                          cudf::data_type{cudf::type_id::INT32});
+  // auto multiplier_non_zero        = cudf::binary_operation(multiplier->view(),
+  //                                                   cudf::numeric_scalar<int64_t>(1),
+  //                                                   cudf::binary_operator::ADD,
+  //                                                   cudf::data_type{cudf::type_id::INT32});
+  // auto l_returnflag_mask_3_unique = cudf::binary_operation(l_returnflag_mask_int->view(),
+  //                                                          multiplier_non_zero->view(),
+  //                                                          cudf::binary_operator::MUL,
+  //                                                          cudf::data_type{cudf::type_id::INT32});
+
+  // auto l_returnflag_mask_3_unique_str =
+  //   cudf::strings::from_integers(l_returnflag_mask_3_unique->view());
+
+  // auto const l_returnflag_replace_target =
+  //   cudf::test::strings_column_wrapper({"0", "1", "2"}).release();
+  // auto const l_returnflag_replace_with =
+  //   cudf::test::strings_column_wrapper({"N", "A", "R"}).release();
+
+  // auto const l_returnflag = cudf::strings::replace(l_returnflag_mask_3_unique_str->view(),
+  //                                                  l_returnflag_replace_target->view(),
+  //                                                  l_returnflag_replace_with->view());
+
+  // // Generate the `l_linestatus` column
+  // auto const l_shipdate_ts_col_ref = cudf::ast::column_reference(0);
+  // auto const l_linestatus_pred     = cudf::ast::operation(
+  //   cudf::ast::ast_operator::GREATER, l_shipdate_ts_col_ref, current_date_literal);
+  // auto const l_linestatus_mask =
+  //   cudf::compute_column(cudf::table_view({l_shipdate_ts->view()}), l_linestatus_pred);
+
+  // auto const l_linestatus_mask_int =
+  //   cudf::cast(l_linestatus_mask->view(), cudf::data_type{cudf::type_id::INT32});
+  // auto const l_linestatus_mask_str = cudf::strings::from_integers(l_linestatus_mask_int->view());
+
+  // auto const l_linestatus_replace_target = cudf::test::strings_column_wrapper({"0",
+  // "1"}).release(); auto const l_linestatus_replace_with   =
+  // cudf::test::strings_column_wrapper({"F", "O"}).release();
+
+  // auto const l_linestatus = cudf::strings::replace(l_linestatus_mask_str->view(),
+  //                                                  l_linestatus_replace_target->view(),
+  //                                                  l_linestatus_replace_with->view());
+
+  // // Generate the `l_shipinstruct` column
+  // auto const l_shipinstruct = gen_rand_str_col_from_set(vocab_instructions, l_num_rows);
+
+  // // Generate the `l_shipmode` column
+  // auto const l_shipmode = gen_rand_str_col_from_set(vocab_modes, l_num_rows);
+
+  // // Generate the `l_comment` column
+  // // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
+  // auto const l_comment = gen_rand_str_col(10, 43, l_num_rows);
+
+  // auto lineitem = cudf::table_view({l_partkey->view(),
+  //                                   l_suppkey->view(),
+  //                                   l_linenumber->view(),
+  //                                   l_quantity->view(),
+  //                                   l_discount->view(),
+  //                                   l_tax->view(),
+  //                                   l_shipdate_ts->view(),
+  //                                   l_commitdate_ts->view(),
+  //                                   l_receiptdate_ts->view(),
+  //                                   l_returnflag->view(),
+  //                                   l_linestatus->view(),
+  //                                   l_shipinstruct->view(),
+  //                                   l_shipmode->view(),
+  //                                   l_comment->view()});
+
+  // write_parquet(lineitem, "lineitem.parquet", schema_lineitem);
 }
 
 std::unique_ptr<cudf::column> calc_ps_suppkey(cudf::column_view const& ps_partkey,
