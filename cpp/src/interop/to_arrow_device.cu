@@ -143,7 +143,7 @@ int construct_decimals(cudf::column_view input,
   NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, input));
 
   auto buf = detail::convert_decimals_to_decimal128<DeviceType>(input, stream, mr);
-  // Synchronize stream here as convert_decimals_to_decimal128 does not sync.
+  // Synchronize stream here to ensure the decimal128 buffer is ready.
   stream.synchronize();
   NANOARROW_RETURN_NOT_OK(set_buffer(std::move(buf), fixed_width_data_buffer_idx, tmp.get()));
 

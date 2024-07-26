@@ -1674,8 +1674,6 @@ std::vector<column_view> convert_decimal_columns_and_metadata(
                 column.offset(),
                 converted_children};
     }
-    // Synchronize stream here to ensure all decimal128 buffers are ready.
-    stream.synchronize();
   };
 
   // Vector of converted column views
@@ -1688,6 +1686,9 @@ std::vector<column_view> convert_decimal_columns_and_metadata(
     thrust::make_zip_iterator(thrust::make_tuple(table.end(), table_meta.column_metadata.end())),
     std::back_inserter(converted_column_views),
     [&](auto elem) { return convert_column(thrust::get<0>(elem), thrust::get<1>(elem)); });
+
+  // Synchronize stream here to ensure all decimal128 buffers are ready.
+  stream.synchronize();
 
   return converted_column_views;
 }
