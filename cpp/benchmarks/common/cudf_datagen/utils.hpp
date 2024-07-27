@@ -95,6 +95,15 @@ void write_parquet(cudf::table_view tbl,
   cudf::io::write_parquet(options);
 }
 
+void debug_parquet(cudf::table_view tbl, std::string const& path)
+{
+  std::cout << "Writing to " << path << "\n";
+  auto const sink_info = cudf::io::sink_info(path);
+  auto builder         = cudf::io::parquet_writer_options::builder(sink_info, tbl);
+  auto const options   = builder.build();
+  cudf::io::write_parquet(options);
+}
+
 std::unique_ptr<cudf::table> perform_left_join(
   cudf::table_view const& left_input,
   cudf::table_view const& right_input,

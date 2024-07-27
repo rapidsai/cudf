@@ -697,17 +697,18 @@ void generate_orders_lineitem_part(
 
   // Join the `part` and partial `lineitem` tables, then calculate the `l_extendedprice` column,
   // add the column to the `lineitem` table, and write the `lineitem` table to a parquet file
-  auto lineitem_joined_part = perform_left_join(lineitem_partial->view(), part->view(), {1}, {0});
+  auto lineitem_joined_part = perform_left_join(lineitem_partial->view(), part->view(), {2}, {0});
   auto const l_quantity     = lineitem_joined_part->get_column(5);
   auto const l_quantity_fp = cudf::cast(l_quantity.view(), cudf::data_type{cudf::type_id::FLOAT64});
   auto const p_retailprice = lineitem_joined_part->get_column(23);
-  auto l_extendedprice     = cudf::binary_operation(l_quantity_fp->view(),
+
+  auto l_extendedprice  = cudf::binary_operation(l_quantity_fp->view(),
                                                 p_retailprice.view(),
                                                 cudf::binary_operator::MUL,
                                                 cudf::data_type{cudf::type_id::FLOAT64},
                                                 stream,
                                                 mr);
-  auto lineitem_columns    = lineitem_partial->release();
+  auto lineitem_columns = lineitem_partial->release();
   lineitem_columns.push_back(std::move(l_extendedprice));
   auto lineitem_with_linestatus_mask = std::make_unique<cudf::table>(std::move(lineitem_columns));
   auto lineitem =
