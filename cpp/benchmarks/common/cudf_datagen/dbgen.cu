@@ -116,7 +116,10 @@ int64_t l_calc_cardinality(cudf::column_view const& o_orderkey_repeat_freqs)
 }
 
 // NOTE: Incomplete table
-void generate_lineitem_and_orders(int64_t scale_factor)
+void generate_lineitem_and_orders(
+  int64_t scale_factor,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   cudf::size_type const num_rows = 1'500'000 * scale_factor;
 
@@ -151,7 +154,11 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   auto const o_orderdate_str   = cudf::strings::concatenate(
     cudf::table_view(
       {o_orderdate_year->view(), o_orderdate_month->view(), o_orderdate_day->view()}),
-    cudf::string_scalar("-"));
+    cudf::string_scalar("-"),
+    cudf::string_scalar("", false),
+    cudf::strings::separator_on_nulls::YES,
+    stream,
+    mr);
 
   auto const o_orderdate_ts =
     cudf::strings::to_timestamps(o_orderdate_str->view(),
@@ -492,28 +499,27 @@ void generate_partsupp(int64_t const& scale_factor,
   cudf::size_type const num_rows      = 800'000 * scale_factor;
 
   // Generate the `ps_partkey` column
-  auto const p_partkey      = gen_primary_key_col(1, num_rows_part);
-  auto const rep_freq_empty = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT64},
-                                                        num_rows_part,
-                                                        cudf::mask_state::UNALLOCATED,
-                                                        cudf::get_default_stream());
-  auto const rep_freq =
-    cudf::fill(rep_freq_empty->view(), 0, num_rows_part, cudf::numeric_scalar<int64_t>(4));
-  auto const rep_table  = cudf::repeat(cudf::table_view({p_partkey->view()}), rep_freq->view());
+  auto const p_partkey      = gen_primary_key_col(1, num_rows_part, stream, mr);
+  auto const rep_freq_empty = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_id::INT64}, num_rows_part, cudf::mask_state::UNALLOCATED, stream);
+  auto const rep_freq = cudf::fill(
+    rep_freq_empty->view(), 0, num_rows_part, cudf::numeric_scalar<int64_t>(4), stream, mr);
+  auto const rep_table =
+    cudf::repeat(cudf::table_view({p_partkey->view()}), rep_freq->view(), stream, mr);
   auto const ps_partkey = rep_table->get_column(0);
 
   // Generate the `ps_suppkey` column
   auto const ps_suppkey = ps_calc_suppkey(ps_partkey.view(), scale_factor, num_rows);
 
   // Generate the `p_availqty` column
-  auto const ps_availqty = gen_rand_num_col<int64_t>(1, 9999, num_rows);
+  auto const ps_availqty = gen_rand_num_col<int64_t>(1, 9999, num_rows, stream, mr);
 
   // Generate the `p_supplycost` column
-  auto const ps_supplycost = gen_rand_num_col<double>(1.0, 1000.0, num_rows);
+  auto const ps_supplycost = gen_rand_num_col<double>(1.0, 1000.0, num_rows, stream, mr);
 
   // Generate the `p_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto const ps_comment = gen_rand_str_col(49, 198, num_rows);
+  auto const ps_comment = gen_rand_str_col(49, 198, num_rows, stream, mr);
 
   auto partsupp = cudf::table_view({ps_partkey.view(),
                                     ps_suppkey->view(),
@@ -592,47 +598,65 @@ std::unique_ptr<cudf::table> generate_part(
   cudf::size_type const num_rows = 200'000 * scale_factor;
 
   // Generate the `p_partkey` column
-  auto const p_partkey = gen_primary_key_col(1, num_rows);
+  auto const p_partkey = gen_primary_key_col(1, num_rows, stream, mr);
 
   // Generate the `p_name` column
-  auto const p_name_a     = gen_rand_str_col_from_set(vocab_p_name, num_rows);
-  auto const p_name_b     = gen_rand_str_col_from_set(vocab_p_name, num_rows);
-  auto const p_name_c     = gen_rand_str_col_from_set(vocab_p_name, num_rows);
-  auto const p_name_d     = gen_rand_str_col_from_set(vocab_p_name, num_rows);
-  auto const p_name_e     = gen_rand_str_col_from_set(vocab_p_name, num_rows);
-  auto const p_name_parts = cudf::table_view(
-    {p_name_a->view(), p_name_b->view(), p_name_c->view(), p_name_d->view(), p_name_e->view()});
-  auto const p_name = cudf::strings::concatenate(p_name_parts, cudf::string_scalar(" "));
+  auto const p_name_a = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
+  auto const p_name_b = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
+  auto const p_name_c = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
+  auto const p_name_d = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
+  auto const p_name_e = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
+  auto const p_name   = cudf::strings::concatenate(
+    cudf::table_view(
+      {p_name_a->view(), p_name_b->view(), p_name_c->view(), p_name_d->view(), p_name_e->view()}),
+    cudf::string_scalar(" "),
+    cudf::string_scalar("", false),
+    cudf::strings::separator_on_nulls::YES,
+    stream,
+    mr);
 
   // Generate the `p_mfgr` column
-  auto const mfgr_repeat         = gen_rep_str_col("Manufacturer#", num_rows);
-  auto const random_values_m     = gen_rand_num_col<int64_t>(1, 5, num_rows);
-  auto const random_values_m_str = cudf::strings::from_integers(random_values_m->view());
-  auto const p_mfgr              = cudf::strings::concatenate(
-    cudf::table_view({mfgr_repeat->view(), random_values_m_str->view()}));
+  auto const mfgr_repeat     = gen_rep_str_col("Manufacturer#", num_rows, stream, mr);
+  auto const random_values_m = gen_rand_num_col<int64_t>(1, 5, num_rows, stream, mr);
+  auto const random_values_m_str =
+    cudf::strings::from_integers(random_values_m->view(), stream, mr);
+  auto const p_mfgr =
+    cudf::strings::concatenate(cudf::table_view({mfgr_repeat->view(), random_values_m_str->view()}),
+                               cudf::string_scalar("", false),
+                               cudf::string_scalar("", false),
+                               cudf::strings::separator_on_nulls::YES,
+                               stream,
+                               mr);
 
   // Generate the `p_brand` column
-  auto const brand_repeat        = gen_rep_str_col("Brand#", num_rows);
-  auto const random_values_n     = gen_rand_num_col<int64_t>(1, 5, num_rows);
-  auto const random_values_n_str = cudf::strings::from_integers(random_values_n->view());
-  auto const p_brand             = cudf::strings::concatenate(cudf::table_view(
-    {brand_repeat->view(), random_values_m_str->view(), random_values_n_str->view()}));
+  auto const brand_repeat    = gen_rep_str_col("Brand#", num_rows, stream, mr);
+  auto const random_values_n = gen_rand_num_col<int64_t>(1, 5, num_rows, stream, mr);
+  auto const random_values_n_str =
+    cudf::strings::from_integers(random_values_n->view(), stream, mr);
+  auto const p_brand = cudf::strings::concatenate(
+    cudf::table_view(
+      {brand_repeat->view(), random_values_m_str->view(), random_values_n_str->view()}),
+    cudf::string_scalar("", false),
+    cudf::string_scalar("", false),
+    cudf::strings::separator_on_nulls::YES,
+    stream,
+    mr);
 
   // Generate the `p_type` column
-  auto const p_type = gen_rand_str_col_from_set(gen_vocab_types(), num_rows);
+  auto const p_type = gen_rand_str_col_from_set(gen_vocab_types(), num_rows, stream, mr);
 
   // Generate the `p_size` column
-  auto const p_size = gen_rand_num_col<int64_t>(1, 50, num_rows);
+  auto const p_size = gen_rand_num_col<int64_t>(1, 50, num_rows, stream, mr);
 
   // Generate the `p_container` column
-  auto const p_container = gen_rand_str_col_from_set(gen_vocab_containers(), num_rows);
+  auto const p_container = gen_rand_str_col_from_set(gen_vocab_containers(), num_rows, stream, mr);
 
   // Generate the `p_retailprice` column
-  auto const p_retailprice = calc_p_retailprice(p_partkey->view());
+  auto const p_retailprice = calc_p_retailprice(p_partkey->view(), stream, mr);
 
   // Generate the `p_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto const p_comment = gen_rand_str_col(5, 22, num_rows);
+  auto const p_comment = gen_rand_str_col(5, 22, num_rows, stream, mr);
 
   // Create the `part` table
   auto part_view = cudf::table_view({p_partkey->view(),
@@ -741,7 +765,12 @@ void generate_customer(int64_t const& scale_factor,
   auto const c_custkey_str_padded =
     cudf::strings::pad(c_custkey_str->view(), 9, cudf::strings::side_type::LEFT, "0", stream, mr);
   auto const c_name = cudf::strings::concatenate(
-    cudf::table_view({customer_repeat->view(), c_custkey_str_padded->view()}), stream, mr);
+    cudf::table_view({customer_repeat->view(), c_custkey_str_padded->view()}),
+    cudf::string_scalar("", false),
+    cudf::string_scalar("", false),
+    cudf::strings::separator_on_nulls::YES,
+    stream,
+    mr);
 
   // Generate the `c_address` column
   // NOTE: This column is not compliant with clause 4.2.2.7 of the TPC-H specification
@@ -797,7 +826,12 @@ void generate_supplier(int64_t const& scale_factor,
   auto const s_suppkey_str_padded =
     cudf::strings::pad(s_suppkey_str->view(), 9, cudf::strings::side_type::LEFT, "0", stream, mr);
   auto const s_name = cudf::strings::concatenate(
-    cudf::table_view({supplier_repeat->view(), s_suppkey_str_padded->view()}), stream, mr);
+    cudf::table_view({supplier_repeat->view(), s_suppkey_str_padded->view()}),
+    cudf::string_scalar("", false),
+    cudf::string_scalar("", false),
+    cudf::strings::separator_on_nulls::YES,
+    stream,
+    mr);
 
   // Generate the `s_address` column
   // NOTE: This column is not compliant with clause 4.2.2.7 of the TPC-H specification
