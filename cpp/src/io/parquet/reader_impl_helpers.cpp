@@ -1218,7 +1218,8 @@ aggregate_reader_metadata::select_columns(
                           pfm_idx);
       }
 
-      // The path ends at a list/struct col. Map all it's children which must also be identical.
+      // The path ends here. If this is a list/struct col (has children), then map all its children
+      // which must be identical.
       if (col_name_info == nullptr or col_name_info->children.empty()) {
         std::for_each(thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(src_schema_elem.num_children),
