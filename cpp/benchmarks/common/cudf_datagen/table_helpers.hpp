@@ -180,7 +180,7 @@
  * @param stream The CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] std::unique_ptr<cudf::column> l_calc_charge(
+[[nodiscard]] std::unique_ptr<cudf::column> calc_l_charge(
   cudf::column_view const& extendedprice,
   cudf::column_view const& tax,
   cudf::column_view const& discount,
