@@ -1221,13 +1221,14 @@ aggregate_reader_metadata::select_columns(
       // The path ends here. If this is a list/struct col (has children), then map all its children
       // which must be identical.
       if (col_name_info == nullptr or col_name_info->children.empty()) {
+        // Check the number of children to be equal here.
+        CUDF_EXPECTS(src_schema_elem.num_children == dst_schema_elem.num_children,
+                     "Encountered mismatching number of children encountered for a "
+                     "column in the selected path");
+
         std::for_each(thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(src_schema_elem.num_children),
                       [&](auto const child_idx) {
-                        // Check the number of children to be equal here.
-                        CUDF_EXPECTS(src_schema_elem.num_children == dst_schema_elem.num_children,
-                                     "Encountered mismatching number of children encountered for a "
-                                     "column in the selected path");
                         map_column(nullptr,
                                    src_schema_elem.children_idx[child_idx],
                                    dst_schema_elem.children_idx[child_idx],
@@ -1241,6 +1242,7 @@ aggregate_reader_metadata::select_columns(
           col_name_info->children.cbegin(),
           col_name_info->children.cend(),
           [&](auto const& child_col_name_info) {
+            // Ensure that each named child column exists in the destination schema tree
             CUDF_EXPECTS(
               find_schema_child(dst_schema_elem, child_col_name_info.name, pfm_idx) != -1,
               "Encountered mismatching schema tree depths across data sources");
