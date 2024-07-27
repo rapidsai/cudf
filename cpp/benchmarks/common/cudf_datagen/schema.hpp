@@ -25,7 +25,8 @@ auto const schema_orders = std::vector<std::string>{"o_orderkey",
                                                     "o_shippriority",
                                                     "o_comment"};
 
-auto const schema_lineitem = std::vector<std::string>{"l_orderkey",
+auto const schema_lineitem = std::vector<std::string>{"l_pkey",
+                                                      "l_orderkey",
                                                       "l_partkey",
                                                       "l_suppkey",
                                                       "l_linenumber",
@@ -39,7 +40,8 @@ auto const schema_lineitem = std::vector<std::string>{"l_orderkey",
                                                       "l_linestatus",
                                                       "l_shipinstruct",
                                                       "l_shipmode",
-                                                      "l_comment"};
+                                                      "l_comment",
+                                                      "l_extendedprice"};
 
 auto const schema_customer = std::vector<std::string>{"c_custkey",
                                                       "c_name",
