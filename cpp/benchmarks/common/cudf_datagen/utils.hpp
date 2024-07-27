@@ -218,17 +218,19 @@ struct gen_rand_num {
  */
 std::unique_ptr<cudf::column> gen_rand_str_col(int64_t lower,
                                                int64_t upper,
-                                               cudf::size_type num_rows)
+                                               cudf::size_type num_rows,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
 {
-  rmm::device_uvector<cudf::size_type> offsets(num_rows + 1, cudf::get_default_stream());
+  rmm::device_uvector<cudf::size_type> offsets(num_rows + 1, stream);
 
   // The first element will always be 0 since it the offset of the first string.
   int64_t initial_offset{0};
-  offsets.set_element(0, initial_offset, cudf::get_default_stream());
+  offsets.set_element(0, initial_offset, stream);
 
   // We generate the lengths of the strings randomly for each row and
   // store them from the second element of the offsets vector.
-  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator(0),
                     thrust::make_counting_iterator(num_rows),
                     offsets.begin() + 1,
@@ -236,18 +238,17 @@ std::unique_ptr<cudf::column> gen_rand_str_col(int64_t lower,
 
   // We then calculate the offsets by performing an inclusive scan on this
   // vector.
-  thrust::inclusive_scan(
-    rmm::exec_policy(cudf::get_default_stream()), offsets.begin(), offsets.end(), offsets.begin());
+  thrust::inclusive_scan(rmm::exec_policy(stream), offsets.begin(), offsets.end(), offsets.begin());
 
   // The last element is the total length of all the strings combined using
   // which we allocate the memory for the `chars` vector, that holds the
   // randomly generated characters for the strings.
   auto const total_length = *thrust::device_pointer_cast(offsets.end() - 1);
-  rmm::device_uvector<char> chars(total_length, cudf::get_default_stream());
+  rmm::device_uvector<char> chars(total_length, stream);
 
   // We generate the strings in parallel into the `chars` vector using the
   // offsets vector generated above.
-  thrust::for_each_n(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_zip_iterator(offsets.begin(), offsets.begin() + 1),
                      num_rows,
                      gen_rand_str(chars.data()));
