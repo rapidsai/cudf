@@ -1202,16 +1202,16 @@ aggregate_reader_metadata::select_columns(
 
       // Check the schema elements to be equal except their number of children as we only care about
       // the specific column paths in the schema trees.
-      CUDF_EXPECTS(
-        equal_to_except_num_children(src_schema_elem, dst_schema_elem),
-        "Mismatching SchemaElement properties encountered for a column in the selected path");
+      CUDF_EXPECTS(equal_to_except_num_children(src_schema_elem, dst_schema_elem),
+                   "Encountered mismatching SchemaElement properties encountered for a column in "
+                   "the selected path");
 
       // It src_schema_elem is a stub, it does not exist in the column_name_info and column_buffer
       // hierarchy. So continue on with mapping.
       if (src_schema_elem.is_stub()) {
         // Check if dst_schema_elem is also a stub i.e. has num_children == 1 that we didn't
         // previously checked
-        CUDF_EXPECTS(dst_schema_elem.is_stub(), "Mismatching schemas encountered for stub.");
+        CUDF_EXPECTS(dst_schema_elem.is_stub(), "Encountered mismatching schemas for stub.");
         auto const child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
         return map_column(child_col_name_info,
                           src_schema_elem.children_idx[0],
@@ -1221,41 +1221,38 @@ aggregate_reader_metadata::select_columns(
 
       // The path ends at a list/struct col. Map all it's children which must also be identical.
       if (col_name_info == nullptr or col_name_info->children.empty()) {
-        std::for_each(
-          thrust::make_counting_iterator(0),
-          thrust::make_counting_iterator(src_schema_elem.num_children),
-          [&](auto const child_idx) {
-            // Check the number of children to be equal here.
-            CUDF_EXPECTS(
-              src_schema_elem.num_children == dst_schema_elem.num_children,
-              "Mismatching number of children encountered for a column in the selected path");
-            map_column(nullptr,
-                       src_schema_elem.children_idx[child_idx],
-                       dst_schema_elem.children_idx[child_idx],
-                       pfm_idx);
-          });
+        std::for_each(thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(src_schema_elem.num_children),
+                      [&](auto const child_idx) {
+                        // Check the number of children to be equal here.
+                        CUDF_EXPECTS(src_schema_elem.num_children == dst_schema_elem.num_children,
+                                     "Encountered mismatching number of children encountered for a "
+                                     "column in the selected path");
+                        map_column(nullptr,
+                                   src_schema_elem.children_idx[child_idx],
+                                   dst_schema_elem.children_idx[child_idx],
+                                   pfm_idx);
+                      });
       }
       // The path goes further down to specific child(ren) of this column so map only those
       // children.
       else {
-        std::cout << "going further: " << col_name_info->name << std::endl;
-        std::for_each(col_name_info->children.cbegin(),
-                      col_name_info->children.cend(),
-                      [&](auto const& child_col_name_info) {
-                        map_column(
-                          &child_col_name_info,
-                          find_schema_child(src_schema_elem, child_col_name_info.name),
-                          find_schema_child(dst_schema_elem, child_col_name_info.name, pfm_idx),
-                          pfm_idx);
-                      });
+        std::for_each(
+          col_name_info->children.cbegin(),
+          col_name_info->children.cend(),
+          [&](auto const& child_col_name_info) {
+            CUDF_EXPECTS(
+              find_schema_child(dst_schema_elem, child_col_name_info.name, pfm_idx) != -1,
+              "Encountered mismatching schema tree depths across data sources");
+            map_column(&child_col_name_info,
+                       find_schema_child(src_schema_elem, child_col_name_info.name),
+                       find_schema_child(dst_schema_elem, child_col_name_info.name, pfm_idx),
+                       pfm_idx);
+          });
       }
 
       // We're at a leaf and this is an input column (one with actual data stored) so map it.
       if (src_schema_elem.num_children == 0) {
-        // Ensure that we are at the leaf with dst_schema_elem as well
-        CUDF_EXPECTS(dst_schema_elem.num_children == 0,
-                     "Encountered a mismatch in schema tree depths across data sources");
-
         // Get the schema_idx_map for this data source (pfm)
         auto& schema_idx_map = schema_idx_maps[pfm_idx - 1];
 
