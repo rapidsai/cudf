@@ -123,12 +123,6 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
   return std::make_unique<cudf::table>(std::move(joined_cols));
 }
 
-struct groupby_context_t {
-  std::vector<int64_t> keys;
-  std::unordered_map<std::string, std::vector<std::pair<cudf::aggregation::Kind, std::string>>>
-    values;
-};
-
 /**
  * @brief Generate the `std::tm` structure from year, month, and day
  *
@@ -215,6 +209,8 @@ struct gen_rand_num {
  * @param lower The lower bound of the length of the strings
  * @param upper The upper bound of the length of the strings
  * @param num_rows The number of rows in the column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<cudf::column> gen_rand_str_col(int64_t lower,
                                                int64_t upper,
@@ -266,6 +262,8 @@ std::unique_ptr<cudf::column> gen_rand_str_col(int64_t lower,
  * @param lower The lower bound of the random numbers
  * @param upper The upper bound of the random numbers
  * @param count The number of rows in the column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename T>
 std::unique_ptr<cudf::column> gen_rand_num_col(T lower,
@@ -298,6 +296,8 @@ std::unique_ptr<cudf::column> gen_rand_num_col(T lower,
  *
  * @param start The starting value of the primary key
  * @param num_rows The number of rows in the column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<cudf::column> gen_primary_key_col(int64_t start,
                                                   int64_t num_rows,
@@ -314,6 +314,8 @@ std::unique_ptr<cudf::column> gen_primary_key_col(int64_t start,
  *
  * @param value The string value to fill the column with
  * @param num_rows The number of rows in the column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<cudf::column> gen_rep_str_col(std::string value,
                                               int64_t num_rows,
@@ -333,6 +335,8 @@ std::unique_ptr<cudf::column> gen_rep_str_col(std::string value,
  *
  * @param string_set The set of strings to choose from
  * @param num_rows The number of rows in the column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string> string_set,
                                                         int64_t num_rows,
@@ -358,6 +362,8 @@ std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string>
  * @brief Generate a phone number column according to TPC-H specification clause 4.2.2.9
  *
  * @param num_rows The number of rows in the column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<cudf::column> gen_phone_col(int64_t num_rows,
                                             rmm::cuda_stream_view stream,
@@ -373,19 +379,39 @@ std::unique_ptr<cudf::column> gen_phone_col(int64_t num_rows,
     gen_rand_num_col<int64_t>(1000, 9999, num_rows, stream, mr)->view());
   auto const phone_parts_table =
     cudf::table_view({part_a->view(), part_b->view(), part_c->view(), part_d->view()});
-  auto phone = cudf::strings::concatenate(phone_parts_table, cudf::string_scalar("-"), stream, mr);
+  auto phone = cudf::strings::concatenate(phone_parts_table,
+                                          cudf::string_scalar("-"),
+                                          cudf::string_scalar("", false),
+                                          cudf::strings::separator_on_nulls::YES,
+                                          stream,
+                                          mr);
   return phone;
 }
 
-std::unique_ptr<cudf::column> gen_rep_seq_col(int64_t limit, int64_t num_rows)
+/**
+ * @brief Generate a column consisting of a repeating sequence of integers
+ *
+ * @param limit The upper limit of the repeating sequence
+ * @param num_rows The number of rows in the column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<cudf::column> gen_rep_seq_col(int64_t limit,
+                                              int64_t num_rows,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
 {
-  auto pkey                    = gen_primary_key_col(0, num_rows);
+  auto pkey                    = gen_primary_key_col(0, num_rows, stream, mr);
   auto repeat_seq_zero_indexed = cudf::binary_operation(pkey->view(),
                                                         cudf::numeric_scalar<int64_t>(limit),
                                                         cudf::binary_operator::MOD,
-                                                        cudf::data_type{cudf::type_id::INT64});
+                                                        cudf::data_type{cudf::type_id::INT64},
+                                                        stream,
+                                                        mr);
   return cudf::binary_operation(repeat_seq_zero_indexed->view(),
                                 cudf::numeric_scalar<int64_t>(1),
                                 cudf::binary_operator::ADD,
-                                cudf::data_type{cudf::type_id::INT64});
+                                cudf::data_type{cudf::type_id::INT64},
+                                stream,
+                                mr);
 }
