@@ -709,12 +709,15 @@ void generate_orders_lineitem_part(
                                                 mr);
   auto lineitem_columns    = lineitem_partial->release();
   lineitem_columns.push_back(std::move(l_extendedprice));
-  auto lineitem = std::make_unique<cudf::table>(std::move(lineitem_columns));
-  write_parquet(lineitem->view(), "lineitem.parquet", schema_lineitem);
+  auto lineitem_with_linestatus_mask = std::make_unique<cudf::table>(std::move(lineitem_columns));
+  auto lineitem =
+    lineitem_with_linestatus_mask->select({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
+  write_parquet(lineitem, "lineitem.parquet", schema_lineitem);
 
   // Generate the dependent columns of the `orders` table and merge them with the independent
   // columns
-  auto orders_dependent           = generate_orders_dependent(lineitem->view(), stream, mr);
+  auto orders_dependent =
+    generate_orders_dependent(lineitem_with_linestatus_mask->view(), stream, mr);
   auto orders_independent_columns = orders_independent->release();
   orders_independent_columns.erase(orders_independent_columns.begin());
   auto orders_dependent_columns = orders_dependent->release();
