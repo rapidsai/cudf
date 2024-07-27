@@ -135,7 +135,7 @@ std::unique_ptr<cudf::table> perform_inner_join(
   constexpr auto oob_policy                          = cudf::out_of_bounds_policy::DONT_CHECK;
   auto const left_selected                           = left_input.select(left_on);
   auto const right_selected                          = right_input.select(right_on);
-  auto const [left_join_indices, right_join_indices] = cudf::left_join(
+  auto const [left_join_indices, right_join_indices] = cudf::inner_join(
     left_selected, right_selected, compare_nulls, rmm::mr::get_current_device_resource());
 
   auto const left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};

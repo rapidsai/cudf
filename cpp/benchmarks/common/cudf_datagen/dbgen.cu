@@ -276,15 +276,15 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
 }
 
 std::unique_ptr<cudf::table> generate_orders_dependent(
-  cudf::table_view const& lineitem_partial,
+  cudf::table_view const& lineitem,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
-  auto const l_linestatus_mask = lineitem_partial.column(0);
-  auto const l_orderkey        = lineitem_partial.column(1);
-  auto const l_discount        = lineitem_partial.column(6);
-  auto const l_tax             = lineitem_partial.column(7);
-  auto const l_extendedprice   = lineitem_partial.column(16);
+  auto const l_linestatus_mask = lineitem.column(0);
+  auto const l_orderkey        = lineitem.column(1);
+  auto const l_discount        = lineitem.column(6);
+  auto const l_tax             = lineitem.column(7);
+  auto const l_extendedprice   = lineitem.column(16);
 
   // Generate the `o_totalprice` column
   auto const l_charge = calc_charge(l_extendedprice, l_tax, l_discount, stream, mr);
@@ -695,34 +695,30 @@ void generate_orders_lineitem_part(
   auto part = generate_part(scale_factor, stream, mr);
   write_parquet(part->view(), "part.parquet", schema_part);
 
-  // Join the `part` and partial `lineitem` tables
-  auto const lineitem_joined_part =
-    perform_inner_join(part->view(), lineitem_partial->view(), {0}, {1});
-  auto const l_quantity    = lineitem_joined_part->get_column(13).view();
-  auto const p_retailprice = lineitem_joined_part->get_column(7).view();
-  auto l_extendedprice     = cudf::binary_operation(l_quantity,
-                                                p_retailprice,
+  // Join the `part` and partial `lineitem` tables, then calculate the `l_extendedprice` column,
+  // add the column to the `lineitem` table, and write the `lineitem` table to a parquet file
+  auto lineitem_joined_part = perform_left_join(lineitem_partial->view(), part->view(), {1}, {0});
+  auto const l_quantity     = lineitem_joined_part->get_column(5);
+  auto const l_quantity_fp = cudf::cast(l_quantity.view(), cudf::data_type{cudf::type_id::FLOAT64});
+  auto const p_retailprice = lineitem_joined_part->get_column(23);
+  auto l_extendedprice     = cudf::binary_operation(l_quantity_fp->view(),
+                                                p_retailprice.view(),
                                                 cudf::binary_operator::MUL,
                                                 cudf::data_type{cudf::type_id::FLOAT64},
                                                 stream,
                                                 mr);
+  auto lineitem_columns    = lineitem_partial->release();
+  lineitem_columns.push_back(std::move(l_extendedprice));
+  auto lineitem = std::make_unique<cudf::table>(std::move(lineitem_columns));
+  write_parquet(lineitem->view(), "lineitem.parquet", schema_lineitem);
 
-  // // Push the `l_extendedprice` column
-  // auto lineitem_partial_columns = lineitem_partial->release();
-  // lineitem_partial_columns.push_back(std::move(l_extendedprice));
-  // auto lineitem = std::make_unique<cudf::table>(std::move(lineitem_partial_columns));
+  // Generate the dependent columns of the `orders` table
+  auto orders_dependent = generate_orders_dependent(lineitem->view(), stream, mr);
 
-  // // Generate the dependent columns of the `orders` table
-  // auto orders_dependent = generate_orders_dependent(lineitem, stream, mr);
-
-  // // Generate the `lineitem` table
-  // lineitem_partial_columns.erase(lineitem_partial_columns.begin());
-  // auto lineitem_view = lineitem->select({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16});
-  // write_parquet(lineitem_view, "lineitem.parquet", schema_lineitem);
-
-  // Generate the `orders` table
+  // // Generate the `orders` table
   // auto orders_independent_columns = orders_independent->release();
-  // auto orders_dependent_columns   = orders_dependent->release();
+  // orders_independent_columns.erase(orders_independent_columns.begin());
+  // auto orders_dependent_columns = orders_dependent->release();
   // std::vector<std::unique_ptr<cudf::column>> orders_columns(orders_independent_columns.size() +
   //                                                           orders_dependent_columns.size());
   // orders_columns.insert(
@@ -746,7 +742,7 @@ int main(int argc, char** argv)
   int32_t scale_factor = std::atoi(argv[1]);
   std::cout << "Requested scale factor: " << scale_factor << std::endl;
 
-  // generate_orders_lineitem_part(scale_factor);
+  generate_orders_lineitem_part(scale_factor);
   auto partsupp = generate_partsupp(scale_factor);
   write_parquet(partsupp->view(), "partsupp.parquet", schema_partsupp);
 
