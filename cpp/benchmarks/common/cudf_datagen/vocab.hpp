@@ -16,6 +16,14 @@
 #include <string>
 #include <vector>
 
+std::vector<std::string> const nations = {"ALGERIA",      "ARGENTINA", "BRAZIL", "CANADA",
+                                          "EGYPT",        "ETHIOPIA",  "FRANCE", "GERMANY",
+                                          "INDIA",        "INDONESIA", "IRAN",   "IRAQ",
+                                          "JAPAN",        "JORDAN",    "KENYA",  "MOROCCO",
+                                          "MOZAMBIQUE",   "PERU",      "CHINA",  "ROMANIA",
+                                          "SAUDI ARABIA", "VIETNAM",   "RUSSIA", "UNITED KINGDOM",
+                                          "UNITED STATES"}
+
 std::vector<std::string> const years  = {"1992", "1993", "1994", "1995", "1996", "1997", "1998"};
 std::vector<std::string> const months = {
   "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"};

@@ -662,35 +662,26 @@ void generate_nation(int64_t const& scale_factor,
   cudf::size_type const num_rows = 25;
 
   // Generate the `n_nationkey` column
-  auto const n_nationkey = gen_primary_key_col(0, num_rows);
+  auto const n_nationkey = gen_primary_key_col(0, num_rows, stream, mr);
 
   // Generate the `n_name` column
-  auto const n_name =
-    cudf::test::strings_column_wrapper(
-      {"ALGERIA",      "ARGENTINA",  "BRAZIL",  "CANADA",         "EGYPT",
-       "ETHIOPIA",     "FRANCE",     "GERMANY", "INDIA",          "INDONESIA",
-       "IRAN",         "IRAQ",       "JAPAN",   "JORDAN",         "KENYA",
-       "MOROCCO",      "MOZAMBIQUE", "PERU",    "CHINA",          "ROMANIA",
-       "SAUDI ARABIA", "VIETNAM",    "RUSSIA",  "UNITED KINGDOM", "UNITED STATES"})
-      .release();
+  auto const n_name = cudf::test::strings_column_wrapper(nations.begin(), nations.end()).release();
 
   // Generate the `n_regionkey` column
   thrust::host_vector<int64_t> const region_keys     = {0, 1, 1, 1, 4, 0, 3, 3, 2, 2, 4, 4, 2,
                                                         4, 0, 0, 0, 1, 2, 3, 4, 2, 3, 3, 1};
   thrust::device_vector<int64_t> const d_region_keys = region_keys;
 
-  auto n_regionkey = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT64},
-                                               num_rows,
-                                               cudf::mask_state::UNALLOCATED,
-                                               cudf::get_default_stream());
-  thrust::copy(rmm::exec_policy(cudf::get_default_stream()),
+  auto n_regionkey = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_id::INT64}, num_rows, cudf::mask_state::UNALLOCATED, stream);
+  thrust::copy(rmm::exec_policy(stream),
                d_region_keys.begin(),
                d_region_keys.end(),
                n_regionkey->mutable_view().begin<int64_t>());
 
   // Generate the `n_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto const n_comment = gen_rand_str_col(31, 114, num_rows);
+  auto const n_comment = gen_rand_str_col(31, 114, num_rows, stream, mr);
 
   // Create the `nation` table
   auto nation =
@@ -712,7 +703,7 @@ void generate_region(int64_t const& scale_factor,
   cudf::size_type const num_rows = 5;
 
   // Generate the `r_regionkey` column
-  auto const r_regionkey = gen_primary_key_col(0, num_rows);
+  auto const r_regionkey = gen_primary_key_col(0, num_rows, stream, mr);
 
   // Generate the `r_name` column
   auto const r_name =
@@ -721,7 +712,7 @@ void generate_region(int64_t const& scale_factor,
 
   // Generate the `r_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto const r_comment = gen_rand_str_col(31, 115, num_rows);
+  auto const r_comment = gen_rand_str_col(31, 115, num_rows, stream, mr);
 
   // Create the `region` table
   auto region = cudf::table_view({r_regionkey->view(), r_name->view(), r_comment->view()});
@@ -742,35 +733,35 @@ void generate_customer(int64_t const& scale_factor,
   cudf::size_type const num_rows = 150'000 * scale_factor;
 
   // Generate the `c_custkey` column
-  auto const c_custkey = gen_primary_key_col(1, num_rows);
+  auto const c_custkey = gen_primary_key_col(1, num_rows, stream, mr);
 
   // Generate the `c_name` column
-  auto const customer_repeat = gen_rep_str_col("Customer#", num_rows);
-  auto const c_custkey_str   = cudf::strings::from_integers(c_custkey->view());
+  auto const customer_repeat = gen_rep_str_col("Customer#", num_rows, stream, mr);
+  auto const c_custkey_str   = cudf::strings::from_integers(c_custkey->view(), stream, mr);
   auto const c_custkey_str_padded =
-    cudf::strings::pad(c_custkey_str->view(), 9, cudf::strings::side_type::LEFT, "0");
+    cudf::strings::pad(c_custkey_str->view(), 9, cudf::strings::side_type::LEFT, "0", stream, mr);
   auto const c_name = cudf::strings::concatenate(
-    cudf::table_view({customer_repeat->view(), c_custkey_str_padded->view()}));
+    cudf::table_view({customer_repeat->view(), c_custkey_str_padded->view()}), stream, mr);
 
   // Generate the `c_address` column
   // NOTE: This column is not compliant with clause 4.2.2.7 of the TPC-H specification
-  auto const c_address = gen_rand_str_col(10, 40, num_rows);
+  auto const c_address = gen_rand_str_col(10, 40, num_rows, stream, mr);
 
   // Generate the `c_nationkey` column
-  auto const c_nationkey = gen_rand_num_col<int64_t>(0, 24, num_rows);
+  auto const c_nationkey = gen_rand_num_col<int64_t>(0, 24, num_rows, stream, mr);
 
   // Generate the `c_phone` column
   auto const c_phone = gen_phone_col(num_rows, stream, mr);
 
   // Generate the `c_acctbal` column
-  auto const c_acctbal = gen_rand_num_col<double>(-999.99, 9999.99, num_rows);
+  auto const c_acctbal = gen_rand_num_col<double>(-999.99, 9999.99, num_rows, stream, mr);
 
   // Generate the `c_mktsegment` column
-  auto const c_mktsegment = gen_rand_str_col_from_set(vocab_segments, num_rows);
+  auto const c_mktsegment = gen_rand_str_col_from_set(vocab_segments, num_rows, stream, mr);
 
   // Generate the `c_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto const c_comment = gen_rand_str_col(29, 116, num_rows);
+  auto const c_comment = gen_rand_str_col(29, 116, num_rows, stream, mr);
 
   // Create the `customer` table
   auto customer = cudf::table_view({c_custkey->view(),
