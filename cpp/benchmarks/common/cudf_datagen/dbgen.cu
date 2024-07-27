@@ -712,21 +712,17 @@ void generate_orders_lineitem_part(
   auto lineitem = std::make_unique<cudf::table>(std::move(lineitem_columns));
   write_parquet(lineitem->view(), "lineitem.parquet", schema_lineitem);
 
-  // Generate the dependent columns of the `orders` table
-  auto orders_dependent = generate_orders_dependent(lineitem->view(), stream, mr);
-
-  // // Generate the `orders` table
-  // auto orders_independent_columns = orders_independent->release();
-  // orders_independent_columns.erase(orders_independent_columns.begin());
-  // auto orders_dependent_columns = orders_dependent->release();
-  // std::vector<std::unique_ptr<cudf::column>> orders_columns(orders_independent_columns.size() +
-  //                                                           orders_dependent_columns.size());
-  // orders_columns.insert(
-  //   orders_columns.end(), orders_independent_columns.begin(), orders_independent_columns.end());
-  // orders_columns.insert(
-  //   orders_columns.end(), orders_dependent_columns.begin(), orders_dependent_columns.end());
-  // auto orders = std::make_unique<cudf::table>(std::move(orders_columns));
-  // write_parquet(orders->view(), "orders.parquet", schema_orders);
+  // Generate the dependent columns of the `orders` table and merge them with the independent
+  // columns
+  auto orders_dependent           = generate_orders_dependent(lineitem->view(), stream, mr);
+  auto orders_independent_columns = orders_independent->release();
+  orders_independent_columns.erase(orders_independent_columns.begin());
+  auto orders_dependent_columns = orders_dependent->release();
+  orders_independent_columns.insert(orders_independent_columns.end(),
+                                    std::make_move_iterator(orders_dependent_columns.begin()),
+                                    std::make_move_iterator(orders_dependent_columns.end()));
+  auto orders = std::make_unique<cudf::table>(std::move(orders_independent_columns));
+  write_parquet(orders->view(), "orders.parquet", schema_orders);
 }
 
 int main(int argc, char** argv)
