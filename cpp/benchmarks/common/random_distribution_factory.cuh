@@ -139,7 +139,6 @@ struct value_generator {
     } else {
       return std::clamp(dist(engine), lower_bound, upper_bound);
     }
-    // Note: uniform does not need clamp, because already range is guaranteed to be within bounds.
   }
 
   T lower_bound;
