@@ -379,13 +379,13 @@ std::unique_ptr<cudf::table> generate_partsupp(
   // Generate the `ps_suppkey` column
   auto const ps_suppkey = calc_ps_suppkey(ps_partkey.view(), scale_factor, num_rows, stream, mr);
 
-  // Generate the `p_availqty` column
+  // Generate the `ps_availqty` column
   auto const ps_availqty = gen_rand_num_col<int64_t>(1, 9999, num_rows, stream, mr);
 
-  // Generate the `p_supplycost` column
+  // Generate the `ps_supplycost` column
   auto const ps_supplycost = gen_rand_num_col<double>(1.0, 1000.0, num_rows, stream, mr);
 
-  // Generate the `p_comment` column
+  // Generate the `ps_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
   auto const ps_comment = gen_rand_str_col(49, 198, num_rows, stream, mr);
 
@@ -590,7 +590,6 @@ std::unique_ptr<cudf::table> generate_customer(
     mr);
 
   // Generate the `c_address` column
-  // NOTE: This column is not compliant with clause 4.2.2.7 of the TPC-H specification
   auto const c_address = gen_rand_str_col(10, 40, num_rows, stream, mr);
 
   // Generate the `c_nationkey` column
@@ -652,7 +651,6 @@ std::unique_ptr<cudf::table> generate_supplier(
     mr);
 
   // Generate the `s_address` column
-  // NOTE: This column is not compliant with clause 4.2.2.7 of the TPC-H specification
   auto const s_address = gen_rand_str_col(10, 40, num_rows, stream, mr);
 
   // Generate the `s_nationkey` column
