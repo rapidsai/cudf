@@ -3954,3 +3954,46 @@ def test_parquet_reader_with_mismatched_structs():
     # Check results
     assert_eq(expected, got)
     assert_eq(expected, got_chunked)
+
+
+def test_parquet_reader_with_mismatched_schemas_error():
+    df1 = cudf.DataFrame({"millis": cudf.Series([123,3454,123], dtype="timedelta64[ms]"),
+                         "i64": cudf.Series([123,3454,123], dtype="int64")})
+    df2 = cudf.DataFrame({"i64": cudf.Series([123,3454,123], dtype="int64"), 
+                          "millis": cudf.Series([123,3454,123], dtype="timedelta64[ms]")})
+    
+    buf1 = BytesIO()
+    buf2 = BytesIO()
+
+    df1.to_parquet(buf1, store_schema=True)
+    df2.to_parquet(buf2, store_schema=False)
+
+    with pytest.raises(RuntimeError, match="Mismatching SchemaElement properties encountered for a column in the selected path"):
+        cudf.read_parquet([buf1,buf2], columns=["millis"], allow_mismatched_pq_schemas=True)
+
+    data1 = [
+        {"a": 1, "b": {"inner_a": 1, "inner_b": 6}},
+        {"a": 3, "b": {"inner_a": None, "inner_b": 2}},
+    ]
+    data2 = [
+        {"b": {"inner_a": 1}, "a": 1},
+        {"b": {"inner_a": None}, "a": 3},
+    ]
+
+    # cuDF tables from struct data
+    df1 = cudf.DataFrame.from_arrow(pa.Table.from_pydict({"struct": data1}))
+    df2 = cudf.DataFrame.from_arrow(pa.Table.from_pydict({"struct": data2}))
+
+    # Buffers
+    buf1 = BytesIO()
+    buf2 = BytesIO()
+
+    # Write to parquet
+    df1.to_parquet(buf1)
+    df2.to_parquet(buf2)
+
+    with pytest.raises(RuntimeError, match="Mismatching number of children encountered for a column in the selected path"):
+        cudf.read_parquet([buf1,buf2], columns=["struct.b"], allow_mismatched_pq_schemas=True)
+
+    with pytest.raises(RuntimeError, match="Parquet reader encountered an invalid schema_idx or pfm_idx"):
+        cudf.read_parquet([buf1,buf2], columns=["struct.b.inner_b"], allow_mismatched_pq_schemas=True)

@@ -890,7 +890,7 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
   if (src_idx and schema_idx_maps.size()) {
     auto const& schema_idx_map = schema_idx_maps[src_idx - 1];
     CUDF_EXPECTS(schema_idx_map.find(schema_idx) != schema_idx_map.end(),
-                 "Found no metadata for schema index");
+                 "Found no metadata for the mapped schema index");
     schema_idx = schema_idx_map.at(schema_idx);
   }
 
@@ -1202,16 +1202,16 @@ aggregate_reader_metadata::select_columns(
 
       // Check the schema elements to be equal except their number of children as we only care about
       // the specific column paths in the schema trees.
-      CUDF_EXPECTS(equal_to_except_num_children(src_schema_elem, dst_schema_elem),
-                   "Mismatching schema properties encountered for a column in the selected path");
+      CUDF_EXPECTS(
+        equal_to_except_num_children(src_schema_elem, dst_schema_elem),
+        "Mismatching SchemaElement properties encountered for a column in the selected path");
 
       // It src_schema_elem is a stub, it does not exist in the column_name_info and column_buffer
       // hierarchy. So continue on with mapping.
       if (src_schema_elem.is_stub()) {
-        // Check if dst_schema_elem is also a stub and has equal number of children.
+        // Check if dst_schema_elem is also a stub i.e. has num_children == 1 that we didn't
+        // previously checked
         CUDF_EXPECTS(dst_schema_elem.is_stub(), "Mismatching schemas encountered for stub.");
-        CUDF_EXPECTS(src_schema_elem.num_children == 1 and dst_schema_elem.num_children == 1,
-                     "Unexpected number of children for stub.");
         auto const child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
         return map_column(child_col_name_info,
                           src_schema_elem.children_idx[0],
@@ -1238,6 +1238,7 @@ aggregate_reader_metadata::select_columns(
       // The path goes further down to specific child(ren) of this column so map only those
       // children.
       else {
+        std::cout << "going further: " << col_name_info->name << std::endl;
         std::for_each(col_name_info->children.cbegin(),
                       col_name_info->children.cend(),
                       [&](auto const& child_col_name_info) {
@@ -1257,11 +1258,6 @@ aggregate_reader_metadata::select_columns(
 
         // Get the schema_idx_map for this data source (pfm)
         auto& schema_idx_map = schema_idx_maps[pfm_idx - 1];
-
-        // Ensure that the schema index of the current schema_element isn't already mapped.
-        CUDF_EXPECTS(schema_idx_map.find(src_schema_idx) == schema_idx_map.end(),
-                     "Encountered a one-to-many mapping between the schema indices of a column "
-                     "across data sources.");
 
         // Map the schema index from 0th tree (src) to the one in the current (dst) tree.
         schema_idx_map[src_schema_idx] = dst_schema_idx;
