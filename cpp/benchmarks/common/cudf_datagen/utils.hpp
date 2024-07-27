@@ -372,6 +372,26 @@ std::unique_ptr<cudf::column> gen_rep_str_col(std::string value,
 }
 
 /**
+ * @brief Generate a column where all the rows have the same integer value
+ *
+ * @param value The integer value to fill the column with
+ * @param num_rows The number of rows in the column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<cudf::column> gen_rep_int_col(int64_t value,
+                                              int64_t num_rows,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
+{
+  auto const empty_col = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_id::INT64}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
+  auto const scalar  = cudf::numeric_scalar<int64_t>(value);
+  auto scalar_repeat = cudf::fill(empty_col->view(), 0, num_rows, scalar, stream, mr);
+  return scalar_repeat;
+}
+
+/**
  * @brief Generate a column by randomly choosing from set of strings
  *
  * @param string_set The set of strings to choose from
@@ -455,4 +475,15 @@ std::unique_ptr<cudf::column> gen_rep_seq_col(int64_t limit,
                                 cudf::data_type{cudf::type_id::INT64},
                                 stream,
                                 mr);
+}
+
+std::unique_ptr<cudf::column> add_calendrical_days(cudf::column_view const& timestamp_days,
+                                                   cudf::column_view const& days,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr)
+{
+  auto const days_duration_type = cudf::cast(days, cudf::data_type{cudf::type_id::DURATION_DAYS});
+  auto const data_type          = cudf::data_type{cudf::type_id::TIMESTAMP_DAYS};
+  return cudf::binary_operation(
+    timestamp_days, days_duration_type->view(), cudf::binary_operator::ADD, data_type, stream, mr);
 }

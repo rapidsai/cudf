@@ -176,25 +176,23 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
   // Generate the `l_tax` column
   auto const l_tax = gen_rand_num_col<double>(0.0, 0.08, l_num_rows, stream, mr);
 
-  // NOTE: For now, adding months. Need to add a new `add_calendrical_days` function
-  // to add days to the `o_orderdate` column. For implementing this column, we use
-  // the column at index 3 in the `l_base` table.
+  // Get the `l_orderdate` column from the `l_base` table
   auto const ol_orderdate_ts = l_base->get_column(3);
 
   // Generate the `l_shipdate` column
-  auto const l_shipdate_rand_add_days = gen_rand_num_col<int32_t>(1, 6, l_num_rows, stream, mr);
-  auto const l_shipdate_ts            = cudf::datetime::add_calendrical_months(
-    ol_orderdate_ts.view(), l_shipdate_rand_add_days->view(), mr);
+  auto const l_shipdate_rand_add_days = gen_rand_num_col<int32_t>(1, 121, l_num_rows, stream, mr);
+  auto const l_shipdate_ts =
+    add_calendrical_days(ol_orderdate_ts.view(), l_shipdate_rand_add_days->view(), stream, mr);
 
   // Generate the `l_commitdate` column
-  auto const l_commitdate_rand_add_days = gen_rand_num_col<int32_t>(1, 6, l_num_rows, stream, mr);
-  auto const l_commitdate_ts            = cudf::datetime::add_calendrical_months(
-    ol_orderdate_ts.view(), l_commitdate_rand_add_days->view(), mr);
+  auto const l_commitdate_rand_add_days = gen_rand_num_col<int32_t>(30, 90, l_num_rows, stream, mr);
+  auto const l_commitdate_ts =
+    add_calendrical_days(ol_orderdate_ts.view(), l_commitdate_rand_add_days->view(), stream, mr);
 
   // Generate the `l_receiptdate` column
-  auto const l_receiptdate_rand_add_days = gen_rand_num_col<int32_t>(1, 6, l_num_rows, stream, mr);
-  auto const l_receiptdate_ts            = cudf::datetime::add_calendrical_months(
-    l_shipdate_ts->view(), l_receiptdate_rand_add_days->view(), mr);
+  auto const l_receiptdate_rand_add_days = gen_rand_num_col<int32_t>(1, 30, l_num_rows, stream, mr);
+  auto const l_receiptdate_ts =
+    add_calendrical_days(l_shipdate_ts->view(), l_receiptdate_rand_add_days->view(), stream, mr);
 
   // Define the current date as per clause 4.2.2.12 of the TPC-H specification
   auto current_date =
