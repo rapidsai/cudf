@@ -33,6 +33,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/strings/combine.hpp>
+#include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
