@@ -103,7 +103,7 @@ void generate_lineitem_and_orders(
   // Sum up the `o_orderkey_repeat_freqs` to get the number of rows in the
   // `lineitem` table. This is required to generate the independent columns
   // in the `lineitem` table
-  auto const l_num_rows = calc_l_cardinality(o_orderkey_repeat_freqs->view());
+  auto const l_num_rows = calc_l_cardinality(o_orderkey_repeat_freqs->view(), stream, mr);
 
   // We create a column, `l_pkey` which will contain the repeated primary keys,
   // `_o_pkey` of the `orders` table as per the frequencies in `o_orderkey_repeat_freqs`
@@ -128,7 +128,7 @@ void generate_lineitem_and_orders(
   auto const l_partkey = gen_rand_num_col<int64_t>(1, 200'000 * scale_factor, l_num_rows);
 
   // Generate the `l_suppkey` column
-  auto const l_suppkey = calc_l_suppkey(l_partkey->view(), scale_factor, l_num_rows);
+  auto const l_suppkey = calc_l_suppkey(l_partkey->view(), scale_factor, l_num_rows, stream, mr);
 
   // Generate the `l_linenumber` column
   auto l_linenumber = gen_rep_seq_col(7, l_num_rows);
@@ -231,7 +231,7 @@ void generate_lineitem_and_orders(
   auto const l_comment = gen_rand_str_col(10, 43, l_num_rows);
 
   // Generate the `o_totalprice` column
-  auto l_charge   = l_calc_charge(l_tax->view(), l_tax->view(), l_discount->view());
+  auto l_charge   = calc_l_charge(l_tax->view(), l_tax->view(), l_discount->view(), stream, mr);
   auto const keys = cudf::table_view({l_orderkey.view()});
   cudf::groupby::groupby gb(keys);
   std::vector<cudf::groupby::aggregation_request> requests;
@@ -375,7 +375,9 @@ void generate_partsupp(int64_t const& scale_factor,
   write_parquet(partsupp, "partsupp.parquet", schema_partsupp);
 }
 
-std::unique_ptr<cudf::column> calc_p_retailprice(cudf::column_view const& p_partkey)
+std::unique_ptr<cudf::column> calc_p_retailprice(cudf::column_view const& p_partkey,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::device_async_resource_ref mr)
 {
   // (
   //            90000
