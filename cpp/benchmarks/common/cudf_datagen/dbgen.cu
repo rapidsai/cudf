@@ -498,6 +498,15 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   auto const l_shipdate_ts            = cudf::datetime::add_calendrical_months(
     ol_orderdate_ts.view(), l_shipdate_rand_add_days->view());
 
+  auto const d1 = gen_repeat_seq_col(1, l_num_rows);
+  auto const d1_duration_days =
+    cudf::cast(d1->view(), cudf::data_type{cudf::type_id::DURATION_DAYS});
+  auto const l_shipdate_ts_plus_x =
+    cudf::binary_operation(l_shipdate_ts->view(),
+                           d1_duration_days->view(),
+                           cudf::binary_operator::ADD,
+                           cudf::data_type{cudf::type_id::TIMESTAMP_DAYS});
+
   // Generate the `l_commitdate` column
   auto const l_commitdate_rand_add_days = gen_rand_num_col<int32_t>(1, 6, l_num_rows);
   auto const l_commitdate_ts            = cudf::datetime::add_calendrical_months(
@@ -521,7 +530,7 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   auto l_returnflag_binary_mask_int =
     cudf::cast(l_returnflag_binary_mask->view(), cudf::data_type{cudf::type_id::INT64});
 
-  auto multiplier                = gen_repeat_seq_col(2, l_num_rows);
+  auto multiplier                = gen_repeat_seq_col(2, l_num_rows);  // 1, 2, 1, 2,...
   auto l_returnflag_ternary_mask = cudf::binary_operation(l_returnflag_binary_mask_int->view(),
                                                           multiplier->view(),
                                                           cudf::binary_operator::MUL,
@@ -578,7 +587,61 @@ void generate_lineitem_and_orders(int64_t scale_factor)
   auto agg_result    = gb.aggregate(requests);
   auto o_totalprice  = std::move(agg_result.second[0].results[0]);
 
-  // Calculate the `o_orderstatus` column
+  // Generate the `o_orderstatus` column
+  auto const keys2 = cudf::table_view({l_orderkey.view()});
+  cudf::groupby::groupby gb2(keys2);
+  std::vector<cudf::groupby::aggregation_request> requests2;
+  requests2.push_back(cudf::groupby::aggregation_request());
+
+  requests2[0].aggregations.push_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
+  requests2[0].values = l_orderkey.view();
+
+  requests2.push_back(cudf::groupby::aggregation_request());
+  requests2[1].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+  requests2[1].values = l_linestatus_mask_int->view();
+
+  auto agg_result2 = gb2.aggregate(requests2);
+  auto const count64 =
+    cudf::cast(agg_result2.second[0].results[0]->view(), cudf::data_type{cudf::type_id::INT64});
+  auto const ttt = cudf::table_view({agg_result2.first->get_column(0).view(),
+                                     count64->view(),
+                                     agg_result2.second[1].results[0]->view()});
+
+  write_parquet(ttt, "ttt.parquet", {"l_orderkey", "count", "sum"});
+
+  // if sum == count, then o_orderstatus = 'O'
+  // if sum == 0, then o_orderstatus = 'F'
+  // else o_orderstatus = 'P'
+
+  auto const count_ref = cudf::ast::column_reference(1);
+  auto const sum_ref   = cudf::ast::column_reference(2);
+  auto expr            = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, sum_ref, count_ref);
+  auto const mask      = cudf::compute_column(ttt, expr);
+
+  auto const col_aa =
+    cudf::copy_if_else(cudf::string_scalar("O"), cudf::string_scalar("F"), mask->view());
+
+  auto const ttta = cudf::table_view({agg_result2.first->get_column(0).view(),
+                                      count64->view(),
+                                      agg_result2.second[1].results[0]->view(),
+                                      col_aa->view()});
+  write_parquet(ttta, "ttta.parquet", {"l_orderkey", "count", "sum", "o_orderstatus"});
+
+  auto zero_scalar  = cudf::numeric_scalar<int64_t>(0);
+  auto zero_literal = cudf::ast::literal(zero_scalar);
+  auto expr2_a      = cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, sum_ref, count_ref);
+  auto expr2_b = cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, sum_ref, zero_literal);
+  auto expr2   = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr2_a, expr2_b);
+
+  auto const mask2  = cudf::compute_column(ttt, expr2);
+  auto const col_bb = cudf::copy_if_else(cudf::string_scalar("P"), col_aa->view(), mask2->view());
+  auto const tttaa  = cudf::table_view({agg_result2.first->get_column(0).view(),
+                                        count64->view(),
+                                        agg_result2.second[1].results[0]->view(),
+                                        col_aa->view(),
+                                        col_bb->view()});
+  write_parquet(
+    tttaa, "tttaa.parquet", {"l_orderkey", "count", "sum", "o_orderstatus", "o_orderstatus2"});
 
   // Write the `orders` table to a parquet file
   auto orders = cudf::table_view({o_orderkey.view(),
@@ -601,6 +664,7 @@ void generate_lineitem_and_orders(int64_t scale_factor)
                                     l_discount->view(),
                                     l_tax->view(),
                                     l_shipdate_ts->view(),
+                                    l_shipdate_ts_plus_x->view(),
                                     l_commitdate_ts->view(),
                                     l_receiptdate_ts->view(),
                                     l_returnflag->view(),
