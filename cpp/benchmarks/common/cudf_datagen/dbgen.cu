@@ -374,62 +374,6 @@ void generate_partsupp(int64_t const& scale_factor,
   write_parquet(partsupp, "partsupp.parquet", schema_partsupp);
 }
 
-std::unique_ptr<cudf::column> calc_p_retailprice(cudf::column_view const& p_partkey,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::device_async_resource_ref mr)
-{
-  // (
-  //            90000
-  //            +
-  //            (
-  //                  (P_PARTKEY/10)
-  //                      modulo
-  //                       20001
-  //            )
-  //            +
-  //            100
-  //            *
-  //            (P_PARTKEY modulo 1000)
-  // )
-  // /100
-  auto val_a = cudf::binary_operation(p_partkey,
-                                      cudf::numeric_scalar<int64_t>(10),
-                                      cudf::binary_operator::DIV,
-                                      cudf::data_type{cudf::type_id::FLOAT64});
-
-  auto val_b = cudf::binary_operation(val_a->view(),
-                                      cudf::numeric_scalar<int64_t>(20001),
-                                      cudf::binary_operator::MOD,
-                                      cudf::data_type{cudf::type_id::INT64});
-
-  auto val_c = cudf::binary_operation(p_partkey,
-                                      cudf::numeric_scalar<int64_t>(1000),
-                                      cudf::binary_operator::MOD,
-                                      cudf::data_type{cudf::type_id::INT64});
-
-  auto val_d = cudf::binary_operation(val_c->view(),
-                                      cudf::numeric_scalar<int64_t>(100),
-                                      cudf::binary_operator::MUL,
-                                      cudf::data_type{cudf::type_id::INT64});
-  // 90000 + val_b + val_d
-  auto val_e = cudf::binary_operation(val_b->view(),
-                                      cudf::numeric_scalar<int64_t>(90000),
-                                      cudf::binary_operator::ADD,
-                                      cudf::data_type{cudf::type_id::INT64});
-
-  auto val_f = cudf::binary_operation(val_e->view(),
-                                      val_d->view(),
-                                      cudf::binary_operator::ADD,
-                                      cudf::data_type{cudf::type_id::INT64});
-
-  auto p_retailprice = cudf::binary_operation(val_f->view(),
-                                              cudf::numeric_scalar<int64_t>(100),
-                                              cudf::binary_operator::DIV,
-                                              cudf::data_type{cudf::type_id::FLOAT64});
-
-  return p_retailprice;
-}
-
 /**
  * @brief Generate the `part` table
  *

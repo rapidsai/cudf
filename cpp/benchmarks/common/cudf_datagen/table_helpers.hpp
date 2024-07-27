@@ -19,6 +19,69 @@
 #include <memory>
 
 /**
+ * @brief Generate the `p_retailprice` column of the `part` table
+ *
+ * @param p_partkey The `p_partkey` column of the `part` table
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+[[nodiscard]] std::unique_ptr<cudf::column> calc_p_retailprice(cudf::column_view const& p_partkey,
+                                                               rmm::cuda_stream_view stream,
+                                                               rmm::device_async_resource_ref mr)
+{
+  // (
+  //            90000
+  //            +
+  //            (
+  //                  (P_PARTKEY/10)
+  //                      modulo
+  //                       20001
+  //            )
+  //            +
+  //            100
+  //            *
+  //            (P_PARTKEY modulo 1000)
+  // )
+  // /100
+  auto val_a = cudf::binary_operation(p_partkey,
+                                      cudf::numeric_scalar<int64_t>(10),
+                                      cudf::binary_operator::DIV,
+                                      cudf::data_type{cudf::type_id::FLOAT64});
+
+  auto val_b = cudf::binary_operation(val_a->view(),
+                                      cudf::numeric_scalar<int64_t>(20001),
+                                      cudf::binary_operator::MOD,
+                                      cudf::data_type{cudf::type_id::INT64});
+
+  auto val_c = cudf::binary_operation(p_partkey,
+                                      cudf::numeric_scalar<int64_t>(1000),
+                                      cudf::binary_operator::MOD,
+                                      cudf::data_type{cudf::type_id::INT64});
+
+  auto val_d = cudf::binary_operation(val_c->view(),
+                                      cudf::numeric_scalar<int64_t>(100),
+                                      cudf::binary_operator::MUL,
+                                      cudf::data_type{cudf::type_id::INT64});
+  // 90000 + val_b + val_d
+  auto val_e = cudf::binary_operation(val_b->view(),
+                                      cudf::numeric_scalar<int64_t>(90000),
+                                      cudf::binary_operator::ADD,
+                                      cudf::data_type{cudf::type_id::INT64});
+
+  auto val_f = cudf::binary_operation(val_e->view(),
+                                      val_d->view(),
+                                      cudf::binary_operator::ADD,
+                                      cudf::data_type{cudf::type_id::INT64});
+
+  auto p_retailprice = cudf::binary_operation(val_f->view(),
+                                              cudf::numeric_scalar<int64_t>(100),
+                                              cudf::binary_operator::DIV,
+                                              cudf::data_type{cudf::type_id::FLOAT64});
+
+  return p_retailprice;
+}
+
+/**
  * @brief Generate the `l_suppkey` column of the `lineitem` table
  *
  * @param l_partkey The `l_partkey` column of the `lineitem` table
