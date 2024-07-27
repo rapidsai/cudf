@@ -3985,20 +3985,13 @@ def test_parquet_reader_with_mismatched_schemas_error():
             [buf1, buf2], columns=["millis"], allow_mismatched_pq_schemas=True
         )
 
-    with pytest.raises(
-        RuntimeError, match="Parquet reader encountered an invalid schema_idx"
-    ):
-        cudf.read_parquet(
-            [buf1, buf2], columns=["i32"], allow_mismatched_pq_schemas=True
-        )
-
     data1 = [
         {"a": 1, "b": {"inner_a": 1, "inner_b": 6}},
         {"a": 3, "b": {"inner_a": None, "inner_b": 2}},
     ]
     data2 = [
-        {"b": {"inner_a": 1}},
-        {"b": {"inner_a": None}},
+        {"b": {"inner_a": 1}, "c": "str"},
+        {"b": {"inner_a": None}, "c": None},
     ]
 
     # cuDF tables from struct data

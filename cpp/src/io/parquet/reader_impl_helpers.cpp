@@ -1405,6 +1405,11 @@ aggregate_reader_metadata::select_columns(
                         thrust::make_counting_iterator(per_file_metadata.size()),
                         [&](auto const pfm_idx) {
                           auto const& dst_root = get_schema(0, pfm_idx);
+                          // Ensure that each top level column exists in the destination schema
+                          // tree
+                          CUDF_EXPECTS(
+                            find_schema_child(dst_root, col.name, pfm_idx) != -1,
+                            "Encountered mismatching schema tree depths across data sources");
                           map_column(&col,
                                      top_level_col_schema_idx,
                                      find_schema_child(dst_root, col.name, pfm_idx),
