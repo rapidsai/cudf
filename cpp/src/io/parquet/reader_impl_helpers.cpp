@@ -17,7 +17,6 @@
 #include "reader_impl_helpers.hpp"
 
 #include "compact_protocol_reader.hpp"
-#include "cudf/utilities/error.hpp"
 #include "io/parquet/parquet.hpp"
 #include "io/utilities/base64_utilities.hpp"
 #include "io/utilities/row_selection.hpp"
