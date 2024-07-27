@@ -203,7 +203,7 @@ struct gen_rand_str {
   thrust::default_random_engine engine;
   thrust::uniform_int_distribution<unsigned char> char_dist;
 
-  __host__ __device__ gen_rand_str(char* c) : chars(c), char_dist(32, 137) {}
+  __host__ __device__ gen_rand_str(char* c) : chars(c), char_dist(44, 122) {}
 
   __host__ __device__ void operator()(thrust::tuple<cudf::size_type, cudf::size_type> str_begin_end)
   {
