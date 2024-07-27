@@ -50,7 +50,7 @@ void generate_lineitem_and_orders(
       ->get_column(0);
 
   // Generate the `o_custkey` column
-  // NOTE: Currently, this column does not comply with the specs which
+  // NOTE: This column does not comply with the specs which
   // specifies that every value % 3 != 0
   auto const o_custkey = gen_rand_num_col<int64_t>(1, o_num_rows, o_num_rows, stream, mr);
 
