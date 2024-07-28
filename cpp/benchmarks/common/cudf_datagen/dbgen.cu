@@ -368,6 +368,7 @@ std::unique_ptr<cudf::table> generate_partsupp(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
+  std::cout << "Generating partsupp..." << std::endl;
   cudf::size_type const num_rows_part = 200'000 * scale_factor;
   cudf::size_type const num_rows      = 800'000 * scale_factor;
 
@@ -415,6 +416,7 @@ std::unique_ptr<cudf::table> generate_part(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
+  std::cout << "Generating part..." << std::endl;
   cudf::size_type const num_rows = 200'000 * scale_factor;
 
   // Generate the `p_partkey` column
@@ -503,6 +505,7 @@ std::unique_ptr<cudf::table> generate_nation(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
+  std::cout << "Generating nation..." << std::endl;
   cudf::size_type const num_rows = 25;
 
   // Generate the `n_nationkey` column
@@ -545,6 +548,7 @@ std::unique_ptr<cudf::table> generate_region(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
+  std::cout << "Generating region..." << std::endl;
   cudf::size_type const num_rows = 5;
 
   // Generate the `r_regionkey` column
@@ -576,6 +580,7 @@ std::unique_ptr<cudf::table> generate_customer(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
+  std::cout << "Generating customer..." << std::endl;
   cudf::size_type const num_rows = 150'000 * scale_factor;
 
   // Generate the `c_custkey` column
@@ -637,6 +642,7 @@ std::unique_ptr<cudf::table> generate_supplier(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
+  std::cout << "Generating supplier..." << std::endl;
   cudf::size_type const num_rows = 10'000 * scale_factor;
 
   // Generate the `s_suppkey` column
@@ -687,6 +693,9 @@ void generate_orders_lineitem_part(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
+  std::cout << "Generating lineitem..." << std::endl;
+  std::cout << "Generating orders..." << std::endl;
+
   // Generate a table with the independent columns of the `orders` table
   auto orders_independent = generate_orders_independent(scale_factor, stream, mr);
 
