@@ -284,68 +284,78 @@ std::unique_ptr<cudf::table> generate_orders_dependent(
   auto const l_tax             = lineitem.column(7);
   auto const l_extendedprice   = lineitem.column(16);
 
-  // Generate the `o_totalprice` column
-  auto const l_charge = calc_charge(l_extendedprice, l_tax, l_discount, stream, mr);
-  auto const keys     = cudf::table_view({l_orderkey});
-  cudf::groupby::groupby gb(keys);
-  std::vector<cudf::groupby::aggregation_request> requests;
-  requests.push_back(cudf::groupby::aggregation_request());
-  requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-  requests[0].values = l_charge->view();
-  auto agg_result    = gb.aggregate(requests);
-  auto o_totalprice  = std::move(agg_result.second[0].results[0]);
+  std::vector<cudf::column_view> orders_dependent_columns;
 
-  // Generate the `o_orderstatus` column
-  auto const keys2 = cudf::table_view({l_orderkey});
-  cudf::groupby::groupby gb2(keys2);
-  std::vector<cudf::groupby::aggregation_request> requests2;
-  requests2.push_back(cudf::groupby::aggregation_request());
+  {
+    // Generate the `o_totalprice` column
+    // We calculate the `charge` column, which is a function of `l_extendedprice`,
+    // `l_tax`, and `l_discount` and then group by `l_orderkey` and sum the `charge`
+    auto const l_charge = calc_charge(l_extendedprice, l_tax, l_discount, stream, mr);
+    auto const keys     = cudf::table_view({l_orderkey});
+    cudf::groupby::groupby gb(keys);
+    std::vector<cudf::groupby::aggregation_request> requests;
+    requests.push_back(cudf::groupby::aggregation_request());
+    requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+    requests[0].values    = l_charge->view();
+    auto const agg_result = gb.aggregate(requests);
+    orders_dependent_columns.push_back(agg_result.second[0].results[0]->view());
+  }
+  {
+    // Generate the `o_orderstatus` column
+    auto const keys = cudf::table_view({l_orderkey});
+    cudf::groupby::groupby gb(keys);
+    std::vector<cudf::groupby::aggregation_request> requests;
 
-  requests2[0].aggregations.push_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
-  requests2[0].values = l_orderkey;
+    // Perform a `count` aggregation on `l_orderkey`
+    requests.push_back(cudf::groupby::aggregation_request());
+    requests[0].aggregations.push_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
+    requests[0].values = l_orderkey;
 
-  requests2.push_back(cudf::groupby::aggregation_request());
-  requests2[1].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-  auto const l_linestatus_mask_int =
-    cudf::cast(l_linestatus_mask, cudf::data_type{cudf::type_id::INT64});
-  requests2[1].values = l_linestatus_mask_int->view();
+    // Perform a `sum` aggregation on `l_linestatus_mask`
+    requests.push_back(cudf::groupby::aggregation_request());
+    requests[1].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+    auto const l_linestatus_mask_int =
+      cudf::cast(l_linestatus_mask, cudf::data_type{cudf::type_id::INT64});
+    requests[1].values = l_linestatus_mask_int->view();
 
-  auto agg_result2 = gb2.aggregate(requests2);
-  auto const count64 =
-    cudf::cast(agg_result2.second[0].results[0]->view(), cudf::data_type{cudf::type_id::INT64});
-  auto const ttt = cudf::table_view({agg_result2.first->get_column(0).view(),
-                                     count64->view(),
-                                     agg_result2.second[1].results[0]->view()});
+    auto const agg_result = gb.aggregate(requests);
 
-  auto const count_ref = cudf::ast::column_reference(1);
-  auto const sum_ref   = cudf::ast::column_reference(2);
-  auto expr            = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, sum_ref, count_ref);
-  auto const mask      = cudf::compute_column(ttt, expr);
+    // Create a `table_view` out of the `l_orderkey`, `count`, and `sum` columns
+    auto const count_int64 =
+      cudf::cast(agg_result.second[0].results[0]->view(), cudf::data_type{cudf::type_id::INT64});
+    auto const sum_int64 = agg_result.second[1].results[0]->view();
+    auto const table =
+      cudf::table_view({agg_result.first->get_column(0).view(), count_int64->view(), sum_int64});
 
-  auto const col_aa =
-    cudf::copy_if_else(cudf::string_scalar("O"), cudf::string_scalar("F"), mask->view());
+    // Now on this table,
+    // if `sum` == `count` then "O",
+    // if `sum` == 0, then "F",
+    // else "P"
 
-  auto const ttta = cudf::table_view({agg_result2.first->get_column(0).view(),
-                                      count64->view(),
-                                      agg_result2.second[1].results[0]->view(),
-                                      col_aa->view()});
+    // So, we first evaluate an expression `sum == count` and generate a boolean mask
+    auto const count_ref = cudf::ast::column_reference(1);
+    auto const sum_ref   = cudf::ast::column_reference(2);
+    auto const expr_a    = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, sum_ref, count_ref);
+    auto const mask_a    = cudf::compute_column(table, expr_a);
+    auto const o_orderstatus_intermediate =
+      cudf::copy_if_else(cudf::string_scalar("O"), cudf::string_scalar("F"), mask_a->view());
 
-  auto zero_scalar  = cudf::numeric_scalar<int64_t>(0);
-  auto zero_literal = cudf::ast::literal(zero_scalar);
-  auto expr2_a      = cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, sum_ref, count_ref);
-  auto expr2_b = cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, sum_ref, zero_literal);
-  auto expr2   = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr2_a, expr2_b);
+    // Then, we evaluate an expression `sum == 0` and generate a boolean mask
+    auto zero_scalar        = cudf::numeric_scalar<int64_t>(0);
+    auto const zero_literal = cudf::ast::literal(zero_scalar);
+    auto const expr_b_left =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, sum_ref, count_ref);
+    auto const expr_b_right =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, sum_ref, zero_literal);
+    auto const expr_b =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_b_left, expr_b_right);
+    auto const mask_b        = cudf::compute_column(table, expr_b);
+    auto const o_orderstatus = cudf::copy_if_else(
+      cudf::string_scalar("P"), o_orderstatus_intermediate->view(), mask_b->view());
+    orders_dependent_columns.push_back(o_orderstatus->view());
+  }
 
-  auto const mask2  = cudf::compute_column(ttt, expr2);
-  auto const col_bb = cudf::copy_if_else(cudf::string_scalar("P"), col_aa->view(), mask2->view());
-  auto const tttaa  = cudf::table_view({agg_result2.first->get_column(0).view(),
-                                        count64->view(),
-                                        agg_result2.second[1].results[0]->view(),
-                                        col_aa->view(),
-                                        col_bb->view()});
-  auto const o_orderstatus = tttaa.column(4);
-
-  auto view = cudf::table_view({o_totalprice->view(), o_orderstatus});
+  auto view = cudf::table_view(orders_dependent_columns);
   return std::make_unique<cudf::table>(view);
 }
 
@@ -727,16 +737,18 @@ void generate_orders_lineitem_part(
 
 int main(int argc, char** argv)
 {
-  rmm::mr::cuda_memory_resource cuda_mr{};
-  rmm::mr::set_current_device_resource(&cuda_mr);
-
-  if (argc < 2) {
-    std::cerr << "Usage: " << argv[0] << " <scale_factor>" << std::endl;
+  if (argc < 3) {
+    std::cerr << "Usage: " << argv[0] << " [scale_factor]"
+              << " [memory_resource_type]" << std::endl;
     return 1;
   }
 
   int32_t scale_factor = std::atoi(argv[1]);
-  std::cout << "Requested scale factor: " << scale_factor << std::endl;
+  std::cout << "Generating scale factor: " << scale_factor << std::endl;
+
+  std::string memory_resource_type = argv[2];
+  auto resource                    = create_memory_resource(memory_resource_type);
+  rmm::mr::set_current_device_resource(resource.get());
 
   generate_orders_lineitem_part(scale_factor);
   auto partsupp = generate_partsupp(scale_factor);

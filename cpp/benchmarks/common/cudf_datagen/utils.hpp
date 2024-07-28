@@ -48,6 +48,7 @@
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
+#include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <cuda/functional>
@@ -162,6 +163,30 @@ std::unique_ptr<cudf::table> perform_inner_join(
                      std::make_move_iterator(right_cols.begin()),
                      std::make_move_iterator(right_cols.end()));
   return std::make_unique<cudf::table>(std::move(joined_cols));
+}
+
+// RMM memory resource creation utilities
+inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
+inline auto make_pool()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+    make_cuda(), rmm::percent_of_free_device_memory(50));
+}
+inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
+inline auto make_managed_pool()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+    make_managed(), rmm::percent_of_free_device_memory(50));
+}
+inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
+  std::string const& mode)
+{
+  if (mode == "cuda") return make_cuda();
+  if (mode == "pool") return make_pool();
+  if (mode == "managed") return make_managed();
+  if (mode == "managed_pool") return make_managed_pool();
+  CUDF_FAIL("Unknown rmm_mode parameter: " + mode +
+            "\nExpecting: cuda, pool, managed, or managed_pool");
 }
 
 /**
