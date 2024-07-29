@@ -26,6 +26,7 @@ from pandas.tseries.holiday import (
 )
 
 import cudf
+import cudf.core._compat
 
 from ..annotation import nvtx
 from ..fast_slow_proxy import (
@@ -556,13 +557,14 @@ StringArray = make_final_proxy_type(
     },
 )
 
-ArrowStringArrayNumpySemantics = make_final_proxy_type(
-    "ArrowStringArrayNumpySemantics",
-    _Unusable,
-    pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-)
+if cudf.core._compat.PANDAS_GE_210:
+    ArrowStringArrayNumpySemantics = make_final_proxy_type(
+        "ArrowStringArrayNumpySemantics",
+        _Unusable,
+        pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+    )
 
 ArrowStringArray = make_final_proxy_type(
     "ArrowStringArray",

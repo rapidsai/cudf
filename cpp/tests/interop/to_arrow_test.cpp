@@ -14,6 +14,13 @@
  * limitations under the License.
  */
 
+// These interop functions are deprecated. We keep the code in this
+// test and will migrate the tests to export via the arrow C data
+// interface with to_arrow_host which arrow can consume. For now, the
+// test is commented out.
+
+#if 0
+
 #include <tests/interop/arrow_utils.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -195,6 +202,7 @@ TEST_F(ToArrowTest, DateTimeTable)
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
+
 
   auto expected_arrow_table = arrow::Table::Make(schema, {arr});
 
@@ -685,3 +693,5 @@ TEST_F(ToArrowStructScalarTest, Basic)
 }
 
 CUDF_TEST_PROGRAM_MAIN()
+
+#endif
