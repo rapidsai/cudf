@@ -24,7 +24,7 @@
 
 #include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace groupby {
 namespace detail {
 
@@ -45,4 +45,4 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
 
 }  // namespace detail
 }  // namespace groupby
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

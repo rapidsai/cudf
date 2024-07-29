@@ -41,6 +41,11 @@ chunked_reader::chunked_reader(std::size_t chunk_read_limit,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
 {
+  // TODO: skip_rows not currently supported in chunked parquet reader until
+  // https://github.com/rapidsai/cudf/issues/16186 is closed
+  CUDF_EXPECTS(options.get_skip_rows() == 0,
+               "skip_rows > 0 is not currently supported in the Chunked Parquet reader.");
+
   _impl = std::make_unique<impl>(
     chunk_read_limit, pass_read_limit, std::move(sources), options, stream, mr);
 }

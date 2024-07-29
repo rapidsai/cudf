@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,12 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 namespace detail {
 
@@ -33,4 +35,4 @@ extern rmm::cuda_stream_view const default_stream_value;
 
 }  // namespace detail
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -24,24 +24,25 @@
 #include <string>
 #include <string_view>
 
-namespace cudf::experimental::prefetch {
+namespace CUDF_EXPORT cudf {
+namespace experimental::prefetch {
 
 namespace detail {
 
 /**
  * @brief A singleton class that manages the prefetching configuration.
  */
-class PrefetchConfig {
+class prefetch_config {
  public:
-  PrefetchConfig& operator=(const PrefetchConfig&) = delete;
-  PrefetchConfig(const PrefetchConfig&)            = delete;
+  prefetch_config& operator=(const prefetch_config&) = delete;
+  prefetch_config(const prefetch_config&)            = delete;
 
   /**
    * @brief Get the singleton instance of the prefetching configuration.
    *
    * @return The singleton instance of the prefetching configuration.
    */
-  static PrefetchConfig& instance();
+  static prefetch_config& instance();
 
   /**
    * @brief Get the value of a configuration key.
@@ -65,7 +66,7 @@ class PrefetchConfig {
   bool debug{false};
 
  private:
-  PrefetchConfig() = default;                 //< Private constructor to enforce singleton pattern
+  prefetch_config() = default;                //< Private constructor to enforce singleton pattern
   std::map<std::string, bool> config_values;  //< Map of configuration keys to values
 };
 
@@ -152,4 +153,5 @@ void disable_prefetching(std::string_view key);
  */
 void prefetch_debugging(bool enable);
 
-}  // namespace cudf::experimental::prefetch
+}  // namespace experimental::prefetch
+}  // namespace CUDF_EXPORT cudf
