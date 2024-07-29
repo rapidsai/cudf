@@ -127,23 +127,57 @@ class ExponentialMovingWindow(_RollingBase):
         self.adjust = adjust
         self.com = get_center_of_mass(com, span, halflife, alpha)
 
-    def mean(self):
+    def online(self, engine: str = "numba", engine_kwargs=None):
+        """
+        Return an ``OnlineExponentialMovingWindow`` object to calculate
+        exponentially moving window aggregations in an online method.
+
+        Currently not supported.
+        """
+        raise NotImplementedError("online is currently not supported.")
+
+    def mean(
+        self, numeric_only: bool = False, engine=None, engine_kwargs=None
+    ):
         """
         Calculate the ewm (exponential weighted moment) mean.
         """
+        if numeric_only is not False:
+            raise NotImplementedError(
+                "numeric_only is currently not supported."
+            )
+        if engine is not None:
+            raise NotImplementedError(
+                "engine is non-functional and added for compatibility with pandas."
+            )
+        if engine_kwargs is not None:
+            raise NotImplementedError(
+                "engine_kwargs is non-functional and added for compatibility with pandas."
+            )
         return self._apply_agg("ewma")
 
-    def var(self, bias):
-        raise NotImplementedError("ewmvar not yet supported.")
+    def sum(self, numeric_only: bool = False, engine=None, engine_kwargs=None):
+        raise NotImplementedError("sum not yet supported.")
 
-    def std(self, bias):
-        raise NotImplementedError("ewmstd not yet supported.")
+    def var(self, bias: bool = False, numeric_only: bool = False):
+        raise NotImplementedError("var not yet supported.")
 
-    def corr(self, other):
-        raise NotImplementedError("ewmcorr not yet supported.")
+    def std(self, bias: bool = False, numeric_only: bool = False):
+        raise NotImplementedError("std not yet supported.")
 
-    def cov(self, other):
-        raise NotImplementedError("ewmcov not yet supported.")
+    def corr(
+        self, other, pairwise: bool | None = None, numeric_only: bool = False
+    ):
+        raise NotImplementedError("corr not yet supported.")
+
+    def cov(
+        self,
+        other,
+        pairwise: bool | None = None,
+        bias: bool = False,
+        numeric_only: bool = False,
+    ):
+        raise NotImplementedError("cov not yet supported.")
 
     def _apply_agg_series(self, sr, agg_name):
         if not is_numeric_dtype(sr.dtype):
