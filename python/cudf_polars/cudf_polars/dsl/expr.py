@@ -370,6 +370,10 @@ class Literal(Expr):
         # datatype of pyarrow scalar is correct by construction.
         return Column(plc.Column.from_scalar(plc.interop.from_arrow(self.value), 1))
 
+    def collect_agg(self, *, depth: int) -> AggInfo:
+        """Collect information about aggregations in groupbys."""
+        return AggInfo([])
+
 
 class LiteralColumn(Expr):
     __slots__ = ("value",)
@@ -382,6 +386,13 @@ class LiteralColumn(Expr):
         data = value.to_arrow()
         self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
 
+    def get_hash(self) -> int:
+        """Compute a hash of the column."""
+        # This is stricter than necessary, but we only need this hash
+        # for identity in groupby replacements so it's OK. And this
+        # way we avoid doing potentially expensive compute.
+        return hash((type(self), self.dtype, id(self.value)))
+
     def do_evaluate(
         self,
         df: DataFrame,
@@ -392,6 +403,10 @@ class LiteralColumn(Expr):
         """Evaluate this expression given a dataframe for context."""
         # datatype of pyarrow array is correct by construction.
         return Column(plc.interop.from_arrow(self.value))
+
+    def collect_agg(self, *, depth: int) -> AggInfo:
+        """Collect information about aggregations in groupbys."""
+        return AggInfo([])
 
 
 class Col(Expr):
@@ -867,7 +882,14 @@ class UnaryFunction(Expr):
         self.name = name
         self.options = options
         self.children = children
-        if self.name not in ("mask_nans", "round", "setsorted", "unique"):
+        if self.name not in (
+            "mask_nans",
+            "round",
+            "setsorted",
+            "unique",
+            "dropnull",
+            "fill_null",
+        ):
             raise NotImplementedError(f"Unary function {name=}")
 
     def do_evaluate(
@@ -953,6 +975,27 @@ class UnaryFunction(Expr):
                 order=order,
                 null_order=null_order,
             )
+        elif self.name == "dropnull":
+            (column,) = (
+                child.evaluate(df, context=context, mapping=mapping)
+                for child in self.children
+            )
+            return Column(
+                plc.stream_compaction.drop_nulls(
+                    plc.Table([column.obj]), [0], 1
+                ).columns()[0]
+            )
+        elif self.name == "fill_null":
+            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            if isinstance(self.children[1], Literal):
+                arg = plc.interop.from_arrow(self.children[1].value)
+            else:
+                evaluated = self.children[1].evaluate(
+                    df, context=context, mapping=mapping
+                )
+                arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
+            return Column(plc.replace.replace_nulls(column.obj, arg))
+
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
         )  # pragma: no cover; init trips first
@@ -1145,6 +1188,14 @@ class Cast(Expr):
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
         super().__init__(dtype)
         self.children = (value,)
+        if not (
+            plc.traits.is_fixed_width(self.dtype)
+            and plc.traits.is_fixed_width(value.dtype)
+            and plc.unary.is_supported_cast(value.dtype, self.dtype)
+        ):
+            raise NotImplementedError(
+                f"Can't cast {self.dtype.id().name} to {value.dtype.id().name}"
+            )
 
     def do_evaluate(
         self,
@@ -1377,13 +1428,14 @@ class BinOp(Expr):
         super().__init__(dtype)
         self.op = op
         self.children = (left, right)
-        if (
-            op in (plc.binaryop.BinaryOperator.ADD, plc.binaryop.BinaryOperator.SUB)
-            and plc.traits.is_chrono(left.dtype)
-            and plc.traits.is_chrono(right.dtype)
-            and not dtypes.have_compatible_resolution(left.dtype.id(), right.dtype.id())
+        if not plc.binaryop.is_supported_operation(
+            self.dtype, left.dtype, right.dtype, op
         ):
-            raise NotImplementedError("Casting rules for timelike types")
+            raise NotImplementedError(
+                f"Operation {op.name} not supported "
+                f"for types {left.dtype.id().name} and {right.dtype.id().name} "
+                f"with output type {self.dtype.id().name}"
+            )
 
     _MAPPING: ClassVar[dict[pl_expr.Operator, plc.binaryop.BinaryOperator]] = {
         pl_expr.Operator.Eq: plc.binaryop.BinaryOperator.EQUAL,
