@@ -132,7 +132,7 @@ jobs:
   wheel-build-python:
     needs: [checks, wheel-build-cpp]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.08
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.10
     with:
       build_type: pull-request
       script: "ci/build_wheel_python.sh"

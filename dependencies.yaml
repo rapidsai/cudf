@@ -413,16 +413,16 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - &libcudf_conda libcudf==24.8.*,>=0.0.0a0
+          - &libcudf_conda libcudf==24.10.*,>=0.0.0a0
     specific:
       - output_types: [pyproject]
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - libcudf-cu12==24.8.*,>=0.0.0a0
+              - libcudf-cu12==24.10.*,>=0.0.0a0
           - matrix: {cuda: "11.*"}
             packages:
-              - libcudf-cu11==24.8.*,>=0.0.0a0
+              - libcudf-cu11==24.10.*,>=0.0.0a0
           - {matrix: null, packages: [*libcudf_conda] }
   cuda_version:
     specific:

@@ -51,6 +51,7 @@ DEPENDENCIES=(
   dask-cuda
   dask-cudf
   kvikio
+  libcudf
   libkvikio
   librmm
   rapids-dask-dependency
