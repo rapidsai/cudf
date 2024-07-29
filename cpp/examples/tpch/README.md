@@ -5,6 +5,7 @@ Implements TPC-H queries using `libcudf`. We leverage the data generator (wrappe
 ## Requirements
 
 - Rust
+- Libcudf
 
 ## Generating the Dataset
 
@@ -16,6 +17,7 @@ git clone git@github.com:JayjeetAtGithub/datafusion.git $HOME/datafusion
 2. Run the data generator with a specific scale factor. The data will be placed in a `data/` subdirectory.
 ```bash
 cd $HOME/datafusion/benchmarks/
+# for scale factor 1,
 ./bench.sh data tpch
 
 # for scale factor 10,
@@ -26,7 +28,7 @@ cd $HOME/datafusion/benchmarks/
 
 ## Running Queries
 
-1. Build the libcudf examples.
+1. Build the `libcudf` examples.
 ```bash
 cd $HOME/cudf/cpp/examples
 ./build.sh
