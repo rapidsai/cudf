@@ -22,7 +22,7 @@ cd tpch/datagen
 ./datagen.sh [scale factor (1/10)]
 ```
 
-The parquet files will be generated in `tpch/datagen/datafusion/benchmarks/data/tpch_sfX`.
+The parquet files will be generated in `tpch/datagen/datafusion/benchmarks/data/tpch_sf[scale factor]`.
 
 3. Set these environment variables for optimized runtimes.
 ```bash
@@ -33,7 +33,7 @@ export CUDA_MODULE_LOADING="EAGER"
 
 4. Execute the queries.
 ```bash
-./tpch/build/tpch_q[X] [path to dataset] [memory resource type (cuda/pool/managed/managed_pool)]
+./tpch/build/tpch_q[query no] [path to dataset] [memory resource type (cuda/pool/managed/managed_pool)]
 ```
 
-A parquet file named `qX.parquet` would be generated containing the results of the query.
+A parquet file named `q[query no].parquet` would be generated containing the results of the query.
