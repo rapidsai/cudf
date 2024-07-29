@@ -24,7 +24,7 @@
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -51,4 +51,4 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -24,7 +24,6 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -33,6 +32,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -51,7 +51,7 @@
 #include <memory>
 #include <numeric>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace test {
 namespace detail {
 /**
@@ -225,6 +225,9 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   using namespace numeric;
   using RepType = typename ElementTo::rep;
+
+  CUDF_EXPECTS(std::all_of(begin, end, [](ElementFrom v) { return v.scale() == 0; }),
+               "Only zero-scale fixed-point values are supported");
 
   auto to_rep            = [](ElementTo fp) { return fp.value(); };
   auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
@@ -1752,7 +1755,7 @@ class lists_column_wrapper : public detail::column_wrapper {
       normalize_column(lists_column_view(col).child(),
                        lists_column_view(expected_hierarchy).child()),
       col.null_count(),
-      cudf::detail::copy_bitmask(
+      cudf::copy_bitmask(
         col, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
       cudf::test::get_default_stream());
   }
@@ -1967,4 +1970,4 @@ class structs_column_wrapper : public detail::column_wrapper {
 };
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

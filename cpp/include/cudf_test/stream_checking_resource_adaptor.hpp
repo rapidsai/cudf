@@ -24,13 +24,11 @@
 
 #include <iostream>
 
+namespace cudf::test {
+
 /**
  * @brief Resource that verifies that the default stream is not used in any allocation.
- *
- * @tparam Upstream Type of the upstream resource used for
- * allocation/deallocation.
  */
-template <typename Upstream>
 class stream_checking_resource_adaptor final : public rmm::mr::device_memory_resource {
  public:
   /**
@@ -40,14 +38,13 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
    *
    * @param upstream The resource used for allocating/deallocating device memory
    */
-  stream_checking_resource_adaptor(Upstream* upstream,
+  stream_checking_resource_adaptor(rmm::device_async_resource_ref upstream,
                                    bool error_on_invalid_stream,
                                    bool check_default_stream)
     : upstream_{upstream},
       error_on_invalid_stream_{error_on_invalid_stream},
       check_default_stream_{check_default_stream}
   {
-    CUDF_EXPECTS(nullptr != upstream, "Unexpected null upstream resource pointer.");
   }
 
   stream_checking_resource_adaptor()                                                   = delete;
@@ -86,7 +83,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
   void* do_allocate(std::size_t bytes, rmm::cuda_stream_view stream) override
   {
     verify_stream(stream);
-    return upstream_->allocate(bytes, stream);
+    return upstream_.allocate_async(bytes, rmm::CUDA_ALLOCATION_ALIGNMENT, stream);
   }
 
   /**
@@ -101,7 +98,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
   void do_deallocate(void* ptr, std::size_t bytes, rmm::cuda_stream_view stream) override
   {
     verify_stream(stream);
-    upstream_->deallocate(ptr, bytes, stream);
+    upstream_.deallocate_async(ptr, bytes, rmm::CUDA_ALLOCATION_ALIGNMENT, stream);
   }
 
   /**
@@ -113,8 +110,8 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
   [[nodiscard]] bool do_is_equal(device_memory_resource const& other) const noexcept override
   {
     if (this == &other) { return true; }
-    auto cast = dynamic_cast<stream_checking_resource_adaptor<Upstream> const*>(&other);
-    if (cast == nullptr) { return upstream_->is_equal(other); }
+    auto cast = dynamic_cast<stream_checking_resource_adaptor const*>(&other);
+    if (cast == nullptr) { return false; }
     return get_upstream_resource() == cast->get_upstream_resource();
   }
 
@@ -150,7 +147,8 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     }
   }
 
-  Upstream* upstream_;            // the upstream resource used for satisfying allocation requests
+  rmm::device_async_resource_ref
+    upstream_;                    // the upstream resource used for satisfying allocation requests
   bool error_on_invalid_stream_;  // If true, throw an exception when the wrong stream is detected.
                                   // If false, simply print to stdout.
   bool check_default_stream_;  // If true, throw an exception when the default stream is observed.
@@ -162,13 +160,12 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
  * @brief Convenience factory to return a `stream_checking_resource_adaptor` around the
  * upstream resource `upstream`.
  *
- * @tparam Upstream Type of the upstream `device_memory_resource`.
- * @param upstream Pointer to the upstream resource
+ * @param upstream Reference to the upstream resource
  */
-template <typename Upstream>
-stream_checking_resource_adaptor<Upstream> make_stream_checking_resource_adaptor(
-  Upstream* upstream, bool error_on_invalid_stream, bool check_default_stream)
+inline stream_checking_resource_adaptor make_stream_checking_resource_adaptor(
+  rmm::device_async_resource_ref upstream, bool error_on_invalid_stream, bool check_default_stream)
 {
-  return stream_checking_resource_adaptor<Upstream>{
-    upstream, error_on_invalid_stream, check_default_stream};
+  return stream_checking_resource_adaptor{upstream, error_on_invalid_stream, check_default_stream};
 }
+
+}  // namespace cudf::test

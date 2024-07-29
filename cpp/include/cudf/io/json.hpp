@@ -30,7 +30,7 @@
 #include <variant>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 /**
  * @addtogroup io_readers
@@ -333,14 +333,14 @@ class json_reader_options {
    *
    * @param offset Number of bytes of offset
    */
-  void set_byte_range_offset(size_type offset) { _byte_range_offset = offset; }
+  void set_byte_range_offset(size_t offset) { _byte_range_offset = offset; }
 
   /**
    * @brief Set number of bytes to read.
    *
    * @param size Number of bytes to read
    */
-  void set_byte_range_size(size_type size) { _byte_range_size = size; }
+  void set_byte_range_size(size_t size) { _byte_range_size = size; }
 
   /**
    * @brief Set delimiter separating records in JSON lines
@@ -1018,12 +1018,10 @@ class json_writer_options_builder {
  *
  * @param options Settings for controlling writing behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource to use for device memory allocation
  */
 void write_json(json_writer_options const& options,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+                rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

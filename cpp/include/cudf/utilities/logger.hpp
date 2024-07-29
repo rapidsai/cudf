@@ -16,9 +16,11 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <spdlog/spdlog.h>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief Returns the global logger.
@@ -48,4 +50,4 @@ namespace cudf {
 __attribute__((visibility("default"))) spdlog::logger& logger();
 /// \endcond
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

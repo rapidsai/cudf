@@ -19,13 +19,14 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/file_utilities.hpp>
 
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace test {
 
 /**
@@ -99,4 +100,4 @@ class TempDirTestEnvironment : public ::testing::Environment {
 };
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

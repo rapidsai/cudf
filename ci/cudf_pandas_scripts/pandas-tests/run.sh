@@ -21,7 +21,7 @@ RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
 bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
-  -n 10 \
+  -n 5 \
   --tb=no \
   -m "not slow" \
   --max-worker-restart=3 \

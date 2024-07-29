@@ -21,8 +21,6 @@ from cudf._lib.types cimport (
 import cudf
 from cudf._lib import pylibcudf
 
-size_type_dtype = np.dtype("int32")
-
 
 class TypeId(IntEnum):
     EMPTY = <underlying_type_t_type_id> libcudf_types.type_id.EMPTY
@@ -150,6 +148,8 @@ datetime_unit_map = {
     TypeId.TIMESTAMP_NANOSECONDS: "ns",
 }
 
+size_type_dtype = LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[pylibcudf.types.SIZE_TYPE_ID]
+
 
 class Interpolation(IntEnum):
     LINEAR = (
@@ -239,6 +239,9 @@ cdef dtype_from_column_view(column_view cv):
         ]
 
 cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
+    # Note: This function is to be phased out in favor of
+    # dtype_to_pylibcudf_type which will return a pylibcudf
+    # DataType object
     cdef libcudf_types.type_id tid
     if isinstance(dtype, cudf.ListDtype):
         tid = libcudf_types.type_id.LIST
