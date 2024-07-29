@@ -540,8 +540,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
             )
         return 0
 
-    def unique(self) -> Self:
+    def unique(self, level: int | None = None) -> Self:
         # RangeIndex always has unique values
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
         return self.copy()
 
     @_performance_tracking
@@ -964,7 +968,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
             i = []
         return as_column(i, dtype=size_type_dtype)
 
-    def isin(self, values):
+    def isin(self, values, level=None):
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
@@ -1616,12 +1624,20 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
         return self._concat(to_concat)
 
-    def unique(self):
+    def unique(self, level: int | None = None) -> Self:
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
         return cudf.core.index._index_from_data(
             {self.name: self._values.unique()}, name=self.name
         )
 
-    def isin(self, values):
+    def isin(self, values, level=None):
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
