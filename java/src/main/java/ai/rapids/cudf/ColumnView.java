@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -5034,8 +5034,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   // DATA MOVEMENT
   /////////////////////////////////////////////////////////////////////////////
 
-  private static HostColumnVectorCore copyToHostNestedHelper(
-      ColumnView deviceCvPointer, HostMemoryAllocator hostMemoryAllocator) {
+  private static HostColumnVectorCore copyToHostAsyncNestedHelper(
+      Cuda.Stream stream, ColumnView deviceCvPointer, HostMemoryAllocator hostMemoryAllocator) {
     if (deviceCvPointer == null) {
       return null;
     }
@@ -5056,20 +5056,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       currValidity = deviceCvPointer.getValid();
       if (currData != null) {
         hostData = hostMemoryAllocator.allocate(currData.length);
-        hostData.copyFromDeviceBuffer(currData);
+        hostData.copyFromDeviceBufferAsync(currData, stream);
       }
       if (currValidity != null) {
         hostValid = hostMemoryAllocator.allocate(currValidity.length);
-        hostValid.copyFromDeviceBuffer(currValidity);
+        hostValid.copyFromDeviceBufferAsync(currValidity, stream);
       }
       if (currOffsets != null) {
         hostOffsets = hostMemoryAllocator.allocate(currOffsets.length);
-        hostOffsets.copyFromDeviceBuffer(currOffsets);
+        hostOffsets.copyFromDeviceBufferAsync(currOffsets, stream);
       }
       int numChildren = deviceCvPointer.getNumChildren();
       for (int i = 0; i < numChildren; i++) {
         try(ColumnView childDevPtr = deviceCvPointer.getChildColumnView(i)) {
-          children.add(copyToHostNestedHelper(childDevPtr, hostMemoryAllocator));
+          children.add(copyToHostAsyncNestedHelper(stream, childDevPtr, hostMemoryAllocator));
         }
       }
       currNullCount = deviceCvPointer.getNullCount();
@@ -5103,11 +5103,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
   }
 
-  /**
-   * Copy the data to the host.
-   */
+  /** Copy the data to the host synchronously. */
   public HostColumnVector copyToHost(HostMemoryAllocator hostMemoryAllocator) {
-    try (NvtxRange toHost = new NvtxRange("ensureOnHost", NvtxColor.BLUE)) {
+    HostColumnVector result = copyToHostAsync(Cuda.DEFAULT_STREAM, hostMemoryAllocator);
+    Cuda.DEFAULT_STREAM.sync();
+    return result;
+  }
+
+  /**
+   * Copy the data to the host asynchronously. The caller MUST synchronize on the stream
+   * before examining the result.
+   */
+  public HostColumnVector copyToHostAsync(Cuda.Stream stream,
+                                          HostMemoryAllocator hostMemoryAllocator) {
+    try (NvtxRange toHost = new NvtxRange("toHostAsync", NvtxColor.BLUE)) {
       HostMemoryBuffer hostDataBuffer = null;
       HostMemoryBuffer hostValidityBuffer = null;
       HostMemoryBuffer hostOffsetsBuffer = null;
@@ -5127,16 +5136,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         if (!type.isNestedType()) {
           if (valid != null) {
             hostValidityBuffer = hostMemoryAllocator.allocate(valid.getLength());
-            hostValidityBuffer.copyFromDeviceBuffer(valid);
+            hostValidityBuffer.copyFromDeviceBufferAsync(valid, stream);
           }
           if (offsets != null) {
             hostOffsetsBuffer = hostMemoryAllocator.allocate(offsets.length);
-            hostOffsetsBuffer.copyFromDeviceBuffer(offsets);
+            hostOffsetsBuffer.copyFromDeviceBufferAsync(offsets, stream);
           }
           // If a strings column is all null values there is no data buffer allocated
           if (data != null) {
             hostDataBuffer = hostMemoryAllocator.allocate(data.length);
-            hostDataBuffer.copyFromDeviceBuffer(data);
+            hostDataBuffer.copyFromDeviceBufferAsync(data, stream);
           }
           HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
               hostDataBuffer, hostValidityBuffer, hostOffsetsBuffer);
@@ -5145,21 +5154,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         } else {
           if (data != null) {
             hostDataBuffer = hostMemoryAllocator.allocate(data.length);
-            hostDataBuffer.copyFromDeviceBuffer(data);
+            hostDataBuffer.copyFromDeviceBufferAsync(data, stream);
           }
 
           if (valid != null) {
             hostValidityBuffer = hostMemoryAllocator.allocate(valid.getLength());
-            hostValidityBuffer.copyFromDeviceBuffer(valid);
+            hostValidityBuffer.copyFromDeviceBufferAsync(valid, stream);
           }
           if (offsets != null) {
             hostOffsetsBuffer = hostMemoryAllocator.allocate(offsets.getLength());
-            hostOffsetsBuffer.copyFromDeviceBuffer(offsets);
+            hostOffsetsBuffer.copyFromDeviceBufferAsync(offsets, stream);
           }
           List<HostColumnVectorCore> children = new ArrayList<>();
           for (int i = 0; i < getNumChildren(); i++) {
             try (ColumnView childDevPtr = getChildColumnView(i)) {
-              children.add(copyToHostNestedHelper(childDevPtr, hostMemoryAllocator));
+              children.add(copyToHostAsyncNestedHelper(stream, childDevPtr, hostMemoryAllocator));
             }
           }
           HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
@@ -5192,8 +5201,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
   }
 
+  /** Copy the data to host memory synchronously */
   public HostColumnVector copyToHost() {
     return copyToHost(DefaultHostMemoryAllocator.get());
+  }
+
+  /**
+   * Copy the data to the host asynchronously. The caller MUST synchronize on the stream
+   * before examining the result.
+   */
+  public HostColumnVector copyToHostAsync(Cuda.Stream stream) {
+    return copyToHostAsync(stream, DefaultHostMemoryAllocator.get());
   }
 
   /**
