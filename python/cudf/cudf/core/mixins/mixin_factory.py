@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import inspect
 
@@ -246,7 +246,7 @@ def _create_delegating_mixin(
     OperationMixin.__doc__ = docstring
 
     def _operation(self, op: str, *args, **kwargs):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     _operation.__name__ = base_operation_name
     _operation.__qualname__ = ".".join([mixin_name, base_operation_name])

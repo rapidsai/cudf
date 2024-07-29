@@ -261,7 +261,7 @@ class Frame(BinaryOperand, Scannable):
         -------
         The total bytes used.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @_performance_tracking
     def __len__(self) -> int:
@@ -608,7 +608,7 @@ class Frame(BinaryOperand, Scannable):
             2    <NA>
             dtype: int64
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @_performance_tracking
     def fillna(

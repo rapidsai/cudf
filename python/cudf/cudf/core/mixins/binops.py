@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 from .mixin_factory import _create_delegating_mixin
 
@@ -59,7 +59,7 @@ def _binaryop(self, other, op: str):
     Must be overridden by subclasses, the default implementation raises a
     NotImplementedError.
     """
-    raise NotImplementedError
+    raise NotImplementedError()
 
 
 def _check_reflected_op(op):

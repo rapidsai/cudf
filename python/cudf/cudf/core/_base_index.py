@@ -43,17 +43,17 @@ class BaseIndex(Serializable):
 
     @property
     def _columns(self) -> tuple[Any, ...]:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @cached_property
     def _values(self) -> ColumnBase:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def copy(self, deep: bool = True) -> Self:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def __len__(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def __bool__(self):
         raise ValueError(
@@ -96,18 +96,18 @@ class BaseIndex(Serializable):
         >>> index.astype('float64')
         Index([1.0, 2.0, 3.0], dtype='float64')
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def argsort(self, *args, **kwargs) -> cupy.ndarray:
         """Return the integer indices that would sort the index.
 
         Parameters vary by subclass.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @property
     def dtype(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @property
     def empty(self):
@@ -116,7 +116,7 @@ class BaseIndex(Serializable):
     @property
     def is_unique(self):
         """Return if the index has unique values."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def memory_usage(self, deep=False):
         """Return the memory usage of an object.
@@ -131,7 +131,7 @@ class BaseIndex(Serializable):
         -------
         The total bytes used.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def tolist(self):  # noqa: D102
         raise TypeError(
@@ -145,7 +145,7 @@ class BaseIndex(Serializable):
     @property
     def name(self):
         """Returns the name of the Index."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @property  # type: ignore
     def ndim(self) -> int:  # noqa: D401
@@ -162,11 +162,11 @@ class BaseIndex(Serializable):
             True if "other" is an Index and it has the same elements
             as calling index; False otherwise.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def shift(self, periods=1, freq=None):
         """Not yet implemented"""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @property
     def shape(self):
@@ -176,11 +176,11 @@ class BaseIndex(Serializable):
     @property
     def str(self):
         """Not yet implemented."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @property
     def values(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def get_indexer(self, target, method=None, limit=None, tolerance=None):
         """
@@ -220,7 +220,7 @@ class BaseIndex(Serializable):
         >>> index.get_indexer(['a', 'b', 'x'])
         array([ 1,  2, -1], dtype=int32)
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def get_loc(self, key):
         """
@@ -269,11 +269,11 @@ class BaseIndex(Serializable):
 
     def max(self):
         """The maximum value of the index."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def min(self):
         """The minimum value of the index."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def __getitem__(self, key):
         raise NotImplementedError()
@@ -283,7 +283,7 @@ class BaseIndex(Serializable):
         return item in self._values
 
     def _copy_type_metadata(self: Self, other: Self) -> Self:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def get_level_values(self, level):
         """
@@ -367,7 +367,7 @@ class BaseIndex(Serializable):
         methods using this method to replace or handle representation
         of the actual types correctly.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @property
     def is_monotonic_increasing(self):
@@ -377,7 +377,7 @@ class BaseIndex(Serializable):
         -------
         bool
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @property
     def is_monotonic_decreasing(self):
@@ -387,7 +387,7 @@ class BaseIndex(Serializable):
         -------
         bool
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @property
     def hasnans(self):
@@ -418,7 +418,7 @@ class BaseIndex(Serializable):
         >>> index.hasnans
         True
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @property
     def nlevels(self):
@@ -518,10 +518,10 @@ class BaseIndex(Serializable):
             A copy of self with values replaced from other
             where the condition is False.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def factorize(self, sort: bool = False, use_na_sentinel: bool = True):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def union(self, other, sort=None):
         """
@@ -858,21 +858,21 @@ class BaseIndex(Serializable):
 
     def to_arrow(self):
         """Convert to a suitable Arrow object."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def to_cupy(self):
         """Convert to a cupy array."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def to_numpy(self):
         """Convert to a numpy array."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def any(self):
         """
         Return whether any elements is True in Index.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def isna(self):
         """
@@ -889,7 +889,7 @@ class BaseIndex(Serializable):
             A boolean array to indicate which entries are NA.
 
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def notna(self):
         """
@@ -905,7 +905,7 @@ class BaseIndex(Serializable):
         numpy.ndarray[bool]
             A boolean array to indicate which entries are not NA.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def to_pandas(self, *, nullable: bool = False, arrow_type: bool = False):
         """
@@ -943,7 +943,7 @@ class BaseIndex(Serializable):
         >>> idx.to_pandas(arrow_type=True)
         Index([-3, 10, 15, 20], dtype='int64[pyarrow]')
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def isin(self, values):
         """Return a boolean array where the index values are in values.
@@ -977,7 +977,7 @@ class BaseIndex(Serializable):
         # supposed to be passed, only scalars throw errors. Other types (like
         # dicts) just transparently return False (see the implementation of
         # ColumnBase.isin).
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def unique(self):
         """
@@ -987,7 +987,7 @@ class BaseIndex(Serializable):
         -------
         Index without duplicates
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def to_series(self, index=None, name=None):
         """
@@ -1048,7 +1048,7 @@ class BaseIndex(Serializable):
         >>> idx.append([other, other])
         Index([1, 2, 10, 100, 200, 400, 50, 200, 400, 50], dtype='int64')
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def difference(self, other, sort=None):
         """
@@ -1192,7 +1192,7 @@ class BaseIndex(Serializable):
         return self._is_numeric()
 
     def _is_numeric(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def is_boolean(self):
         """
@@ -1237,7 +1237,7 @@ class BaseIndex(Serializable):
         return self._is_boolean()
 
     def _is_boolean(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def is_integer(self):
         """
@@ -1282,7 +1282,7 @@ class BaseIndex(Serializable):
         return self._is_integer()
 
     def _is_integer(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def is_floating(self):
         """
@@ -1334,7 +1334,7 @@ class BaseIndex(Serializable):
         return self._is_floating()
 
     def _is_floating(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def is_object(self):
         """
@@ -1380,7 +1380,7 @@ class BaseIndex(Serializable):
         return self._is_object()
 
     def _is_object(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def is_categorical(self):
         """
@@ -1433,7 +1433,7 @@ class BaseIndex(Serializable):
         return self._is_categorical()
 
     def _is_categorical(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def is_interval(self):
         """
@@ -1480,7 +1480,7 @@ class BaseIndex(Serializable):
         return self._is_interval()
 
     def _is_interval(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def _union(self, other, sort=None):
         # TODO: As a future optimization we should explore
@@ -1759,7 +1759,7 @@ class BaseIndex(Serializable):
         -------
         Column of indices
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def find_label_range(self, loc: slice) -> slice:
         """
@@ -1833,7 +1833,7 @@ class BaseIndex(Serializable):
         As a precondition the index must be sorted in the same order
         as requested by the `ascending` flag.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def get_slice_bound(
         self,
@@ -2183,7 +2183,7 @@ class BaseIndex(Serializable):
                     33, 33, 33, 33, 55, 55, 55, 55, 55],
                 dtype='int64')
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def _new_index_for_reset_index(
         self, levels: tuple | None, name
@@ -2202,7 +2202,7 @@ class BaseIndex(Serializable):
         )
 
     def _split(self, splits):
-        raise NotImplementedError
+        raise NotImplementedError()
 
 
 def _get_result_name(left_name, right_name):

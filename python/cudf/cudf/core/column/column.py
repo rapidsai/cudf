@@ -236,7 +236,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         replacement: ColumnLike,
         all_nan: bool = False,
     ) -> Self:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> ColumnBase:
         return libcudf.replace.clip(self, lo, hi)
@@ -1069,30 +1069,30 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def as_numerical_column(
         self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def as_datetime_column(
         self, dtype: Dtype
     ) -> cudf.core.column.DatetimeColumn:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def as_interval_column(
         self, dtype: Dtype
     ) -> "cudf.core.column.IntervalColumn":
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def as_timedelta_column(
         self, dtype: Dtype
     ) -> cudf.core.column.TimeDeltaColumn:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def as_decimal_column(
         self, dtype: Dtype
     ) -> "cudf.core.column.decimal.DecimalBaseColumn":
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
         mask = as_column(mask)
@@ -1283,7 +1283,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def normalize_binop_value(
         self, other: ScalarLike
     ) -> ColumnBase | ScalarLike:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def _reduce(
         self,

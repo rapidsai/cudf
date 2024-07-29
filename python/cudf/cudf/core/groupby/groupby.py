@@ -1870,7 +1870,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         """
         if exclude is not None and include is not None:
-            raise NotImplementedError
+            raise NotImplementedError()
 
         res = self.agg(
             [

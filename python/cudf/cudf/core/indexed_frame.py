@@ -2839,7 +2839,7 @@ class IndexedFrame(Frame):
         >>> s.memory_usage(index=False)
         24
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def hash_values(self, method="murmur3", seed=None):
         """Compute the hash of values in this column.
@@ -3461,7 +3461,7 @@ class IndexedFrame(Frame):
         2       3       5
         3       4       6
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @acquire_spill_lock()
     @_performance_tracking
