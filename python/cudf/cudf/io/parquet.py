@@ -534,12 +534,12 @@ def read_parquet(
     filters=None,
     row_groups=None,
     use_pandas_metadata=True,
-    allow_mismatched_pq_schemas=False,
     use_python_file_object=None,
     categorical_partitions=True,
     open_file_options=None,
     bytes_per_thread=None,
     dataset_kwargs=None,
+    allow_mismatched_pq_schemas=False,
     *args,
     **kwargs,
 ):
