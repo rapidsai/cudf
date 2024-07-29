@@ -39,3 +39,17 @@ def test_unsupported_config_raises():
 
     with pytest.raises(pl.exceptions.ComputeError):
         q.collect(engine=pl.GPUEngine(unknown_key=True))
+
+
+@pytest.mark.parametrize("device", [-1, "foo"])
+def test_invalid_device_raises(device):
+    q = pl.LazyFrame({})
+    with pytest.raises(pl.exceptions.ComputeError):
+        q.collect(engine=pl.GPUEngine(device=device))
+
+
+@pytest.mark.parametrize("mr", [1, object()])
+def test_invalid_memory_resource_raises(mr):
+    q = pl.LazyFrame({})
+    with pytest.raises(pl.exceptions.ComputeError):
+        q.collect(engine=pl.GPUEngine(memory_resource=mr))
