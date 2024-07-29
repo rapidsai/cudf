@@ -131,7 +131,7 @@ __device__ __forceinline__ void reprog_device::reljunk::swaplist()
  *
  * '\n, \r, \u0085, \u2028, or \u2029'
  */
-__device__ __forceinline__ bool is_newline(char32_t const ch)
+constexpr bool is_newline(char32_t const ch)
 {
   return (ch == '\n' || ch == '\r' || ch == 0x00c285 || ch == 0x00e280a8 || ch == 0x00e280a9);
 }
@@ -382,11 +382,12 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
         case CHAR:
           if (inst.u1.c == c) id_activate = inst.u2.next_id;
           break;
-        case ANY:
-          if (!is_newline(c)) { id_activate = inst.u2.next_id; }
-          break;
+        case ANY: {
+          if ((c == '\n') || ((inst.u1.c == 'N') && is_newline(c))) { break; }
+          [[fallthrough]];
+        }
         case ANYNL: id_activate = inst.u2.next_id; break;
-        case NCCLASS:
+        case NCCLASS: [[fallthrough]];
         case CCLASS: {
           auto const cls = get_class(inst.u1.cls_id);
           if (cls.is_match(static_cast<char32_t>(c), _codepoint_flags) == (inst.type == CCLASS)) {
