@@ -30,9 +30,13 @@ with warnings.catch_warnings():
 
     del cudf
 
+# Check we have a supported polars version
+import cudf_polars.utils.versions as v  # noqa: E402
 from cudf_polars._version import __git_commit__, __version__  # noqa: E402
 from cudf_polars.callback import execute_with_cudf  # noqa: E402
 from cudf_polars.dsl.translate import translate_ir  # noqa: E402
+
+del v
 
 __all__: list[str] = [
     "execute_with_cudf",

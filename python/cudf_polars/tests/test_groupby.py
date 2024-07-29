@@ -12,7 +12,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils import versions
 
 
 @pytest.fixture
@@ -101,12 +100,7 @@ def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs):
         with pytest.raises(AssertionError):
             # https://github.com/pola-rs/polars/issues/17556
             assert_gpu_result_equal(q, check_exact=False)
-        if versions.POLARS_VERSION_LT_12 and schema[sort_keys[1]] == pl.Boolean():
-            # https://github.com/pola-rs/polars/issues/17557
-            with pytest.raises(AssertionError):
-                assert_gpu_result_equal(qsorted, check_exact=False)
-        else:
-            assert_gpu_result_equal(qsorted, check_exact=False)
+        assert_gpu_result_equal(qsorted, check_exact=False)
     elif schema[sort_keys[0]] == pl.Boolean():
         # Boolean keys don't do sorting, so we get random order
         assert_gpu_result_equal(qsorted, check_exact=False)
@@ -159,15 +153,7 @@ def test_groupby_nan_minmax_raises(op):
 
 @pytest.mark.parametrize(
     "key",
-    [
-        pytest.param(
-            1,
-            marks=pytest.mark.xfail(
-                versions.POLARS_VERSION_GE_121, reason="polars 1.2.1 disallows this"
-            ),
-        ),
-        pl.col("key1"),
-    ],
+    [1, pl.col("key1")],
 )
 @pytest.mark.parametrize(
     "expr",

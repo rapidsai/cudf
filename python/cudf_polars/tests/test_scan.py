@@ -12,7 +12,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils import versions
 
 
 @pytest.fixture(
@@ -98,17 +97,7 @@ def test_scan(tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask, r
         q = q.filter(mask)
     if columns is not None:
         q = q.select(*columns)
-    polars_collect_kwargs = {}
-    if versions.POLARS_VERSION_LT_12:
-        # https://github.com/pola-rs/polars/issues/17553
-        polars_collect_kwargs = {"projection_pushdown": False}
-    assert_gpu_result_equal(
-        q,
-        polars_collect_kwargs=polars_collect_kwargs,
-        # This doesn't work in polars < 1.2 since the row-index
-        # is in the wrong order in previous polars releases
-        check_column_order=versions.POLARS_VERSION_LT_12,
-    )
+    assert_gpu_result_equal(q)
 
 
 def test_scan_unsupported_raises(tmp_path):
@@ -127,10 +116,6 @@ def test_scan_ndjson_nrows_notimplemented(tmp_path, df):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-@pytest.mark.xfail(
-    versions.POLARS_VERSION_LT_11,
-    reason="https://github.com/pola-rs/polars/issues/15730",
-)
 def test_scan_row_index_projected_out(tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
 
