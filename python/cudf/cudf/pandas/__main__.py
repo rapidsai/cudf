@@ -10,6 +10,7 @@ python -m cudf.pandas -m module <args>
 """
 
 import argparse
+import code
 import runpy
 import sys
 import tempfile
@@ -21,6 +22,8 @@ from .profiler import Profiler, lines_with_profiling
 
 @contextmanager
 def profile(function_profile, line_profile, fn):
+    if fn is None and (line_profile or function_profile):
+        raise RuntimeError("Enabling the profiler requires a script name.")
     if line_profile:
         with open(fn) as f:
             lines = f.readlines()
@@ -55,6 +58,11 @@ def main():
         nargs=1,
     )
     parser.add_argument(
+        "-c",
+        dest="cmd",
+        nargs=1,
+    )
+    parser.add_argument(
         "--profile",
         action="store_true",
         help="Perform per-function profiling of this script.",
@@ -72,9 +80,18 @@ def main():
 
     args = parser.parse_args()
 
+    if args.cmd:
+        f = tempfile.NamedTemporaryFile(mode="w+b", suffix=".py")
+        f.write(args.cmd[0].encode())
+        f.seek(0)
+        args.args.insert(0, f.name)
+
     rmm_mode = install()
-    with profile(args.profile, args.line_profile, args.args[0]) as fn:
-        args.args[0] = fn
+
+    script_name = args.args[0] if len(args.args) > 0 else None
+    with profile(args.profile, args.line_profile, script_name) as fn:
+        if script_name is not None:
+            args.args[0] = fn
         if args.module:
             (module,) = args.module
             # run the module passing the remaining arguments
@@ -85,6 +102,14 @@ def main():
             # Remove ourself from argv and continue
             sys.argv[:] = args.args
             runpy.run_path(args.args[0], run_name="__main__")
+        else:
+            # Launch an interactive interpreter
+            site_import = not sys.flags.no_site
+            banner = "Python %s on %s" % (sys.version, sys.platform)
+            if site_import:
+                cprt = 'Type "help", "copyright", "credits" or "license" for more information.'
+                banner += "\n" + cprt
+            code.interact(banner=banner, exitmsg="")
 
     if "managed" in rmm_mode:
         for key in {
