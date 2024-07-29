@@ -21,6 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/detail/batched_memset.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -40,8 +41,6 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 #include <thrust/unique.h>
-
-#include <io/utilities/batched_memset.hpp>
 
 #include <bitset>
 #include <numeric>
@@ -1623,9 +1622,9 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
       }
     }
   }
-  batched_memset(memset_bufs, 0UL, _stream);
+  cudf::io::detail::batched_memset(memset_bufs, 0UL, _stream);
   // Need to set null mask bufs to all high bits
-  batched_memset(nullmask_bufs, ULLONG_MAX, _stream);
+  cudf::io::detail::batched_memset(nullmask_bufs, ULLONG_MAX, _stream);
 }
 
 std::vector<size_t> reader::impl::calculate_page_string_offsets()

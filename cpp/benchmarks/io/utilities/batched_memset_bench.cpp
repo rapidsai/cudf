@@ -23,7 +23,6 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
-#include <src/io/utilities/batched_memset.hpp>
 
 // Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput

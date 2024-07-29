@@ -28,6 +28,14 @@
  *
  * @return The data in device spans all set to value
  */
+
+namespace CUDF_EXPORT cudf {
+namespace io::detail {
+
 void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
                     uint64_t const value,
                     rmm::cuda_stream_view stream);
+
+}  // namespace io::detail
+}  // namespace CUDF_EXPORT cudf
+

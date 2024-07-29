@@ -19,6 +19,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/detail/batched_memset.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -27,8 +28,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/tuple.h>
-
-#include <src/io/utilities/batched_memset.hpp>
 
 #include <type_traits>
 
@@ -78,7 +77,7 @@ TEST(MultiBufferTestIntegral, BasicTest1)
     });
 
   // Function Call
-  batched_memset(memset_bufs, 0UL, stream);
+  cudf::io::detail::batched_memset(memset_bufs, 0UL, stream);
 
   // Set all buffer regions to 0 for expected comparison
   std::for_each(

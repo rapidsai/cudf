@@ -16,6 +16,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/detail/batched_memset.hpp>
 
 #include <rmm/device_buffer.hpp>
 
@@ -25,7 +26,8 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
-#include <io/utilities/batched_memset.hpp>
+namespace CUDF_EXPORT cudf {
+namespace io::detail {
 
 void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
                     uint64_t const value,
@@ -64,3 +66,6 @@ void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
   cub::DeviceCopy::Batched(
     d_temp_storage.data(), temp_storage_bytes, iter_in, iter_out, sizes, num_bufs, stream);
 }
+
+}  // namespace io::detail
+}  // namespace CUDF_EXPORT cudf
