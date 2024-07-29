@@ -44,9 +44,9 @@ prefetching <<LINK to prefetch tutorial/demo>>.
 Other memory allocators can be used by changing the environment
 variable `CUDF_PANDAS_RMM_MODE` to one of the following.
 
-Pool allocators improve allocation performance. Without using one, memory 
+Pool allocators improve allocation performance. Without using one, memory
 allocation may be a bottleneck depending on the workload. Managed memory
-enables oversubscribing GPU memory. This allows cudf.pandas to process 
+enables oversubscribing GPU memory. This allows cudf.pandas to process
 data larger than GPU memory in many cases, without CPU (Pandas) fallback.
 
 1. "managed_pool" (default): CUDA Unified Memory (managed memory) with RMM's asynchronous pool allocator.
