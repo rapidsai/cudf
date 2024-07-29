@@ -93,7 +93,7 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::STRUCT>;
 
 NVBENCH_BENCH_TYPES(bench_batched_memset, NVBENCH_TYPE_AXES(d_type_list))
-  .set_name("multibufffer_memset")
+  .set_name("batched_memset")
   .set_type_axes_names({"data_type"})
   .add_int64_axis("num_cols", {1000})
   .add_string_axis("io_type", {"DEVICE_BUFFER"})

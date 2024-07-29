@@ -52,12 +52,13 @@ namespace detail {
 inline rmm::device_buffer create_data(data_type type,
                                       size_type size,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      rmm::device_async_resource_ref mr,
+                                      bool memset_data = true)
 {
   std::size_t data_size = size_of(type) * size;
 
   rmm::device_buffer data(data_size, stream, mr);
-
+  if (memset_data) { CUDF_CUDA_TRY(cudaMemsetAsync(data.data(), 0, data_size, stream.value())); }
   return data;
 }
 
@@ -112,14 +113,18 @@ class column_buffer_base {
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for
   // preprocessing steps such as in the Parquet reader
-  void create(size_type _size, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+  void create(size_type _size,
+              rmm::cuda_stream_view stream,
+              rmm::device_async_resource_ref mr,
+              bool memset_data = true);
 
   // like create(), but also takes a `cudf::mask_state` to allow initializing the null mask as
   // something other than `ALL_NULL`
   void create_with_mask(size_type _size,
                         cudf::mask_state null_mask_state,
                         rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr);
+                        rmm::device_async_resource_ref mr,
+                        bool memset_data = true);
 
   // Create a new column_buffer that has empty data but with the same basic information as the
   // input column, including same type, nullability, name, and user_data.
@@ -191,7 +196,7 @@ class gather_column_buffer : public column_buffer_base<gather_column_buffer> {
     create(_size, stream, mr);
   }
 
-  void allocate_strings_data(rmm::cuda_stream_view stream);
+  void allocate_strings_data(rmm::cuda_stream_view stream, bool memset_data = true);
 
   [[nodiscard]] void* data_impl() { return _strings ? _strings->data() : _data.data(); }
   [[nodiscard]] void const* data_impl() const { return _strings ? _strings->data() : _data.data(); }
@@ -225,7 +230,7 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
     create(_size, stream, mr);
   }
 
-  void allocate_strings_data(rmm::cuda_stream_view stream);
+  void allocate_strings_data(rmm::cuda_stream_view stream, bool memset_data = true);
 
   void* data_impl() { return _data.data(); }
   [[nodiscard]] void const* data_impl() const { return _data.data(); }
