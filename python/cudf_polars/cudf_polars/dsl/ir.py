@@ -625,7 +625,7 @@ class Join(IR):
     right_on: list[expr.NamedExpr]
     """List of expressions used as keys in the right frame."""
     options: tuple[
-        Literal["inner", "left", "full", "leftsemi", "leftanti", "cross"],
+        Literal["inner", "left", "right", "full", "leftsemi", "leftanti", "cross"],
         bool,
         tuple[int, int] | None,
         str | None,
@@ -651,7 +651,7 @@ class Join(IR):
     @staticmethod
     @cache
     def _joiners(
-        how: Literal["inner", "left", "full", "leftsemi", "leftanti"],
+        how: Literal["inner", "left", "right", "full", "leftsemi", "leftanti"],
     ) -> tuple[
         Callable, plc.copying.OutOfBoundsPolicy, plc.copying.OutOfBoundsPolicy | None
     ]:
@@ -661,7 +661,7 @@ class Join(IR):
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
             )
-        elif how == "left":
+        elif how == "left" or how == "right":
             return (
                 plc.join.left_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
@@ -685,8 +685,7 @@ class Join(IR):
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 None,
             )
-        else:
-            assert_never(how)
+        assert_never(how)
 
     def _reorder_maps(
         self,
@@ -780,8 +779,12 @@ class Join(IR):
             table = plc.copying.gather(left.table, lg, left_policy)
             result = DataFrame.from_table(table, left.column_names)
         else:
+            if how == "right":
+                # Right join is a left join with the tables swapped
+                left, right = right, left
+                left_on, right_on = right_on, left_on
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
-            if how == "left":
+            if how == "left" or how == "right":
                 # Order of left table is preserved
                 lg, rg = self._reorder_maps(
                     left.num_rows, lg, left_policy, right.num_rows, rg, right_policy
@@ -808,6 +811,9 @@ class Join(IR):
                     )
                 )
                 right = right.discard_columns(right_on.column_names_set)
+            if how == "right":
+                # Undo the swap for right join before gluing together.
+                left, right = right, left
             right = right.rename_columns(
                 {
                     name: f"{name}{suffix}"
