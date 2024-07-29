@@ -69,6 +69,8 @@ from cudf.utils.dtypes import (
 from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
+    import pyarrow as pa
+
     from cudf._typing import (
         ColumnLike,
         DataFrameOrSeries,
@@ -678,6 +680,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_performance_tracking
     def __contains__(self, item):
         return item in self.index
+
+    @classmethod
+    @_performance_tracking
+    def from_arrow(cls, array: pa.Array) -> Self:
+        return cls._from_data({None: ColumnBase.from_arrow(array)})
 
     @classmethod
     @_performance_tracking
