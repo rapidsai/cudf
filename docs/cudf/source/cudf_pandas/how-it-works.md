@@ -51,6 +51,6 @@ data larger than GPU memory in many cases, without CPU (Pandas) fallback.
 
 1. "managed_pool" (default): CUDA Unified Memory (managed memory) with RMM's asynchronous pool allocator.
 2. "managed": CUDA Unified Memory, (managed memory) with no pool allocator.
-3. "async": CUDA's built-in pool asynchronous pool allocator with normal CUDA device memory. 
+3. "async": CUDA's built-in pool asynchronous pool allocator with normal CUDA device memory.
 4. "pool": RMM's asynchronous pool allocator with normal CUDA device memory.
 5. "cuda": normal CUDA device memory with no pool allocator.
