@@ -32,17 +32,18 @@ prefetch_config& prefetch_config::instance()
   return instance;
 }
 
-bool prefetch_config::get(std::string_view key) const
+bool prefetch_config::get(std::string_view key)
 {
-  std::scoped_lock lock(config_mtx);
-  // Default to not prefetching
-  if (config_values.find(key.data()) == config_values.end()) { return false; }
+  std::shared_lock<std::shared_mutex> lock(config_mtx);
+  if (config_values.find(key.data()) == config_values.end()) {
+    return false;  // default to not prefetching
+  }
   return config_values.at(key.data());
 }
 
 void prefetch_config::set(std::string_view key, bool value)
 {
-  std::scoped_lock lock(config_mtx);
+  std::lock_guard<std::shared_mutex> lock(config_mtx);
   config_values[key.data()] = value;
 }
 
