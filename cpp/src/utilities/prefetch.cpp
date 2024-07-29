@@ -35,10 +35,8 @@ prefetch_config& prefetch_config::instance()
 bool prefetch_config::get(std::string_view key)
 {
   std::shared_lock<std::shared_mutex> lock(config_mtx);
-  if (config_values.find(key.data()) == config_values.end()) {
-    return false;  // default to not prefetching
-  }
-  return config_values.at(key.data());
+  auto const it = config_values.find(key.data());
+  return it == config_values.end() ? false : it->second;  // default to not prefetching
 }
 
 void prefetch_config::set(std::string_view key, bool value)
