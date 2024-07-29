@@ -75,6 +75,16 @@ def main():
     rmm_mode = install()
     with profile(args.profile, args.line_profile, args.args[0]) as fn:
         args.args[0] = fn
+        if "managed" in rmm_mode:
+            for key in {
+                "column_view::get_data",
+                "mutable_column_view::get_data",
+                "gather",
+                "hash_join",
+            }:
+                from cudf._lib import pylibcudf
+
+                pylibcudf.experimental.enable_prefetching(key)
         if args.module:
             (module,) = args.module
             # run the module passing the remaining arguments
@@ -85,17 +95,6 @@ def main():
             # Remove ourself from argv and continue
             sys.argv[:] = args.args
             runpy.run_path(args.args[0], run_name="__main__")
-
-    if "managed" in rmm_mode:
-        for key in {
-            "column_view::get_data",
-            "mutable_column_view::get_data",
-            "gather",
-            "hash_join",
-        }:
-            from cudf._lib import pylibcudf
-
-            pylibcudf.experimental.enable_prefetching(key)
 
 
 if __name__ == "__main__":
