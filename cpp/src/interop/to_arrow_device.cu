@@ -15,6 +15,7 @@
  */
 
 #include "arrow_utilities.hpp"
+#include "decimal_conversion_utilities.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
@@ -141,7 +142,9 @@ int construct_decimals(cudf::column_view input,
   nanoarrow::UniqueArray tmp;
   NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, input));
 
-  auto buf = detail::decimals_to_arrow<DeviceType>(input, stream, mr);
+  auto buf = detail::convert_decimals_to_decimal128<DeviceType>(input, stream, mr);
+  // Synchronize stream here to ensure the decimal128 buffer is ready.
+  stream.synchronize();
   NANOARROW_RETURN_NOT_OK(set_buffer(std::move(buf), fixed_width_data_buffer_idx, tmp.get()));
 
   ArrowArrayMove(tmp.get(), out);

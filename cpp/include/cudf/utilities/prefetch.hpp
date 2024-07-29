@@ -24,7 +24,8 @@
 #include <string>
 #include <string_view>
 
-namespace cudf::experimental::prefetch {
+namespace CUDF_EXPORT cudf {
+namespace experimental::prefetch {
 
 namespace detail {
 
@@ -152,4 +153,5 @@ void disable_prefetching(std::string_view key);
  */
 void prefetch_debugging(bool enable);
 
-}  // namespace cudf::experimental::prefetch
+}  // namespace experimental::prefetch
+}  // namespace CUDF_EXPORT cudf
