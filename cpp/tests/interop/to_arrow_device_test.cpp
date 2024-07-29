@@ -710,6 +710,83 @@ TEST_F(ToArrowDeviceTest, StructColumn)
 template <typename T>
 using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;
 
+TEST_F(ToArrowDeviceTest, FixedPoint32Table)
+{
+  using namespace numeric;
+
+  for (auto const scale : {6, 4, 2, 0, -1, -3, -5}) {
+    auto const expect_data =
+      std::vector<int32_t>{-1000, -1, -1, -1, 2400, 0, 0, 0, -3456, -1, -1, -1,
+                           4650,  0,  0,  0,  5154, 0, 0, 0, 6800,  0,  0,  0};
+    auto col = fp_wrapper<int32_t>({-1000, 2400, -3456, 4650, 5154, 6800}, scale_type{scale});
+    std::vector<std::unique_ptr<cudf::column>> table_cols;
+    table_cols.emplace_back(col.release());
+    auto input = cudf::table(std::move(table_cols));
+
+    nanoarrow::UniqueSchema expected_schema;
+    ArrowSchemaInit(expected_schema.get());
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(expected_schema.get(), 1));
+    ArrowSchemaInit(expected_schema->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
+                                                     NANOARROW_TYPE_DECIMAL128,
+                                                     cudf::detail::max_precision<int32_t>(),
+                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
+    expected_schema->children[0]->flags = 0;
+
+    auto got_arrow_schema =
+      cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
+    compare_schemas(expected_schema.get(), got_arrow_schema.get());
+
+    auto result_dev_data = std::make_unique<rmm::device_uvector<int32_t>>(
+      expect_data.size(), cudf::get_default_stream());
+    cudaMemcpy(result_dev_data->data(),
+               expect_data.data(),
+               sizeof(int32_t) * expect_data.size(),
+               cudaMemcpyHostToDevice);
+
+    cudf::get_default_stream().synchronize();
+    nanoarrow::UniqueArray expected_array;
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(expected_array.get(), expected_schema.get(), nullptr));
+    expected_array->length = input.num_rows();
+
+    expected_array->children[0]->length = input.num_rows();
+    NANOARROW_THROW_NOT_OK(
+      ArrowBufferSetAllocator(ArrowArrayBuffer(expected_array->children[0], 0), noop_alloc));
+    ArrowArrayValidityBitmap(expected_array->children[0])->buffer.data =
+      const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(input.view().column(0).null_mask()));
+
+    auto data_ptr = reinterpret_cast<uint8_t*>(result_dev_data->data());
+    NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(
+      ArrowArrayBuffer(expected_array->children[0], 1),
+      ArrowBufferDeallocator(
+        [](ArrowBufferAllocator* alloc, uint8_t*, int64_t) {
+          auto buf =
+            reinterpret_cast<std::unique_ptr<rmm::device_uvector<int32_t>>*>(alloc->private_data);
+          delete buf;
+        },
+        new std::unique_ptr<rmm::device_uvector<int32_t>>(std::move(result_dev_data)))));
+    ArrowArrayBuffer(expected_array->children[0], 1)->data = data_ptr;
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayFinishBuilding(expected_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
+
+    auto got_arrow_array = cudf::to_arrow_device(input.view());
+    ASSERT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
+    ASSERT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+    ASSERT_CUDA_SUCCEEDED(
+      cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_array->sync_event)));
+    compare_arrays(expected_schema.get(), expected_array.get(), &got_arrow_array->array);
+
+    got_arrow_array = cudf::to_arrow_device(std::move(input));
+    ASSERT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
+    ASSERT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+    ASSERT_CUDA_SUCCEEDED(
+      cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_array->sync_event)));
+    compare_arrays(expected_schema.get(), expected_array.get(), &got_arrow_array->array);
+  }
+}
+
 TEST_F(ToArrowDeviceTest, FixedPoint64Table)
 {
   using namespace numeric;

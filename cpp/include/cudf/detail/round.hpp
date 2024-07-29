@@ -22,7 +22,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 //! Inner interfaces and implementations
 namespace detail {
 
@@ -39,4 +39,4 @@ std::unique_ptr<column> round(column_view const& input,
                               rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

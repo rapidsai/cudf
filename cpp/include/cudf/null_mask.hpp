@@ -17,6 +17,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -25,7 +26,7 @@
 
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_nullmask
@@ -208,4 +209,4 @@ cudf::size_type null_count(bitmask_type const* bitmask,
                            size_type stop,
                            rmm::cuda_stream_view stream = cudf::get_default_stream());
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
