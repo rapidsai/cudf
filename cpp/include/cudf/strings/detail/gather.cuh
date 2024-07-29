@@ -18,13 +18,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/prefetch.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -232,8 +230,7 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
   if (output_count == 0) return rmm::device_uvector<char>(0, stream, mr);
 
   auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
-  cudf::experimental::prefetch::detail::prefetch("gather", chars_data, stream);
-  auto d_chars = chars_data.data();
+  auto d_chars    = chars_data.data();
 
   constexpr int warps_per_threadblock = 4;
   // String parallel strategy will be used if average string length is above this threshold.
@@ -315,8 +312,6 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
   // build chars column
   auto const offsets_view =
     cudf::detail::offsetalator_factory::make_input_iterator(out_offsets_column->view());
-  cudf::experimental::prefetch::detail::prefetch(
-    "gather", strings.chars_begin(stream), strings.chars_size(stream), stream);
   auto out_chars_data = gather_chars(
     d_strings->begin<string_view>(), begin, end, offsets_view, total_bytes, stream, mr);
 
