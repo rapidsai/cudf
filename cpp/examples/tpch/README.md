@@ -1,4 +1,4 @@
-# TPC-H Inspired Examples
+# TPC-H Derived Examples
 
 Implements TPC-H queries using `libcudf`. We leverage the data generator (wrapper around official TPC-H datagen) from [Apache Datafusion](https://github.com/apache/datafusion) for generating data in Parquet format.
 
