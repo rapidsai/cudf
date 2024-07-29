@@ -32,15 +32,18 @@ prefetch_config& prefetch_config::instance()
   return instance;
 }
 
-bool prefetch_config::get(std::string_view key)
+bool prefetch_config::get(std::string_view key) const
 {
   // Default to not prefetching
-  if (config_values.find(key.data()) == config_values.end()) {
-    return (config_values[key.data()] = false);
-  }
+  if (config_values.find(key.data()) == config_values.end()) { return false; }
   return config_values[key.data()];
 }
-void prefetch_config::set(std::string_view key, bool value) { config_values[key.data()] = value; }
+
+void prefetch_config::set(std::string_view key, bool value)
+{
+  std::scoped_lock lock(config_mtx);
+  config_values[key.data()] = value;
+}
 
 cudaError_t prefetch_noexcept(std::string_view key,
                               void const* ptr,

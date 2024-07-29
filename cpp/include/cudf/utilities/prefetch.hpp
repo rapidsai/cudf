@@ -21,6 +21,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <map>
+#include <mutex>
 #include <string>
 #include <string_view>
 
@@ -47,12 +48,16 @@ class prefetch_config {
   /**
    * @brief Get the value of a configuration key.
    *
+   * If the key does not exist, a `false` value will be returned.
+   *
    * @param key The configuration key.
    * @return The value of the configuration key.
    */
-  bool get(std::string_view key);
+  bool get(std::string_view key) const;
   /**
    * @brief Set the value of a configuration key.
+   *
+   * This is a thread-safe operation.
    *
    * @param key The configuration key.
    * @param value The value to set.
@@ -68,6 +73,7 @@ class prefetch_config {
  private:
   prefetch_config() = default;                //< Private constructor to enforce singleton pattern
   std::map<std::string, bool> config_values;  //< Map of configuration keys to values
+  std::mutex config_mtx;                      //< Mutex for thread-safe config access
 };
 
 /**
