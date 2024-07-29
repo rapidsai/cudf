@@ -24,14 +24,14 @@ cd tpch/datagen
 
 The parquet files will be generated in `tpch/datagen/datafusion/benchmarks/data/tpch_sfX`.
 
-2. Set these environment variables for optimized runtimes.
+3. Set these environment variables for optimized runtimes.
 ```bash
 export KVIKIO_COMPAT_MODE="on"
 export LIBCUDF_CUFILE_POLICY="KVIKIO"
 export CUDA_MODULE_LOADING="EAGER"
 ```
 
-3. Execute the queries.
+4. Execute the queries.
 ```bash
 ./tpch/build/tpch_q[X] [path to dataset] [memory resource type (cuda/pool/managed/managed_pool)]
 ```
