@@ -34,9 +34,10 @@ prefetch_config& prefetch_config::instance()
 
 bool prefetch_config::get(std::string_view key) const
 {
+  std::scoped_lock lock(config_mtx);
   // Default to not prefetching
   if (config_values.find(key.data()) == config_values.end()) { return false; }
-  return config_values.get(key.data());
+  return config_values.at(key.data());
 }
 
 void prefetch_config::set(std::string_view key, bool value)
