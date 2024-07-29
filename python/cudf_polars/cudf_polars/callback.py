@@ -51,7 +51,7 @@ def default_memory_resource(device: int) -> rmm.mr.DeviceMemoryResource:
     """
     try:
         return rmm.mr.CudaAsyncMemoryResource()
-    except RuntimeError as e:
+    except RuntimeError as e:  # pragma: no cover
         msg, *_ = e.args
         if (
             msg.startswith("RMM failure")
