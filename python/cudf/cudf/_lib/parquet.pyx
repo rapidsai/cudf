@@ -133,7 +133,7 @@ cdef object _process_metadata(object df,
                               list pa_buffers,
                               bool allow_range_index,
                               bool use_pandas_metadata,
-                              size_type num_rows=-1,
+                              size_type nrows=-1,
                               int64_t skip_rows=0,
                               ):
 
@@ -298,7 +298,7 @@ def read_parquet_chunked(
         chunk_read_limit=chunk_read_limit,
         pass_read_limit=pass_read_limit,
         skip_rows=skip_rows,
-        num_rows=nrows,
+        nrows=nrows,
     )
 
     tbl_w_meta = reader.read_chunk()
@@ -332,7 +332,7 @@ def read_parquet_chunked(
                            per_file_user_data, row_groups,
                            filepaths_or_buffers, pa_buffers,
                            allow_range_index, use_pandas_metadata,
-                           num_rows=nrows, skip_rows=skip_rows)
+                           nrows=nrows, skip_rows=skip_rows)
     return df
 
 
@@ -377,7 +377,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         convert_strings_to_categories = False,
         use_pandas_metadata = use_pandas_metadata,
         skip_rows = skip_rows,
-        num_rows = nrows,
+        nrows = nrows,
     )
 
     df = cudf.DataFrame._from_data(
@@ -388,7 +388,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                            tbl_w_meta.child_names, tbl_w_meta.per_file_user_data,
                            row_groups, filepaths_or_buffers, pa_buffers,
                            allow_range_index, use_pandas_metadata,
-                           num_rows=nrows, skip_rows=skip_rows)
+                           nrows=nrows, skip_rows=skip_rows)
     return df
 
 cpdef read_parquet_metadata(filepaths_or_buffers):
