@@ -76,13 +76,26 @@ def _translate_ir(
 def _(
     node: pl_ir.PythonScan, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    return ir.PythonScan(
-        schema,
-        node.options,
-        translate_named_expr(visitor, n=node.predicate)
-        if node.predicate is not None
-        else None,
-    )
+    if visitor.version()[0] == 1:  # pragma: no cover
+        # https://github.com/pola-rs/polars/pull/17939
+        # Versioning can be dropped once polars 1.4 is lowest
+        # supported version.
+        scan_fn, with_columns, source_type, predicate, nrows = node.options
+        options = (scan_fn, with_columns, source_type, nrows)
+        predicate = (
+            translate_named_expr(visitor, n=predicate)
+            if predicate is not None
+            else None
+        )
+    else:
+        # version == 0
+        options = node.options
+        predicate = (
+            translate_named_expr(visitor, n=node.predicate)
+            if node.predicate is not None
+            else None
+        )
+    return ir.PythonScan(schema, options, predicate)
 
 
 @_translate_ir.register
@@ -297,7 +310,8 @@ def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
     # IR is versioned with major.minor, minor is bumped for backwards
     # compatible changes (e.g. adding new nodes), major is bumped for
     # incompatible changes (e.g. renaming nodes).
-    if (version := visitor.version()) >= (1, 0):
+    # Polars 1.4 changes definition of PythonScan.
+    if (version := visitor.version()) >= (2, 0):
         raise NotImplementedError(
             f"No support for polars IR {version=}"
         )  # pragma: no cover; no such version for now.
