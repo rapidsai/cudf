@@ -139,16 +139,17 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
                              level_ordered_node_ids.begin(),
                              mapped_col_ids.begin(),
                              level_ordered_unique_node_ids.begin());
-  auto* dev_num_levels_ptr =
-    thrust::max_element(rmm::exec_policy(stream), tree.node_levels.begin(), tree.node_levels.end());
+  auto* dev_num_levels_ptr = thrust::max_element(
+    rmm::exec_policy_nosync(stream), tree.node_levels.begin(), tree.node_levels.end());
 
   rmm::device_uvector<NodeIndexT> mapped_col_ids_copy(num_columns, stream);
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream),
                mapped_col_ids.begin(),
                mapped_col_ids.end(),
                mapped_col_ids_copy.begin());
-  thrust::sequence(rmm::exec_policy(stream), rev_mapped_col_ids.begin(), rev_mapped_col_ids.end());
-  thrust::sort_by_key(rmm::exec_policy(stream),
+  thrust::sequence(
+    rmm::exec_policy_nosync(stream), rev_mapped_col_ids.begin(), rev_mapped_col_ids.end());
+  thrust::sort_by_key(rmm::exec_policy_nosync(stream),
                       mapped_col_ids_copy.begin(),
                       mapped_col_ids_copy.end(),
                       rev_mapped_col_ids.begin());
@@ -164,7 +165,7 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   auto ordered_node_categories =
     thrust::make_permutation_iterator(tree.node_categories.begin(), level_ordered_node_ids.begin());
   thrust::reduce_by_key(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     level_ordered_col_ids.begin(),
     level_ordered_col_ids.end(),
     thrust::make_zip_iterator(thrust::make_tuple(ordered_row_offsets, ordered_node_categories)),
@@ -202,7 +203,7 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   rmm::device_uvector<NodeIndexT> parent_col_ids(num_columns, stream);
   thrust::transform_output_iterator parent_col_ids_it(
     parent_col_ids.begin(), parent_nodeids_to_colids{col_ids, rev_mapped_col_ids});
-  thrust::copy_n(rmm::exec_policy(stream),
+  thrust::copy_n(rmm::exec_policy_nosync(stream),
                  thrust::make_permutation_iterator(tree.parent_node_ids.begin(),
                                                    level_ordered_unique_node_ids.begin()),
                  num_columns,
@@ -218,12 +219,12 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   */
 
   rmm::device_uvector<NodeIndexT> rowidx(num_columns + 1, stream);
-  thrust::fill(rmm::exec_policy(stream), rowidx.begin(), rowidx.end(), 0);
+  thrust::fill(rmm::exec_policy_nosync(stream), rowidx.begin(), rowidx.end(), 0);
   // Note that the first element of csr_parent_col_ids is -1 (parent_node_sentinel)
   // children adjacency
   auto num_non_leaf_columns = thrust::unique_count(
-    rmm::exec_policy(stream), parent_col_ids.begin() + 1, parent_col_ids.end());
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream), parent_col_ids.begin() + 1, parent_col_ids.end());
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         parent_col_ids.begin() + 1,
                         parent_col_ids.end(),
                         thrust::make_constant_iterator(1),
@@ -231,7 +232,7 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
                         rowidx.begin() + 1,
                         thrust::equal_to<TreeDepthT>());
   thrust::transform_inclusive_scan(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_zip_iterator(thrust::make_counting_iterator(1), rowidx.begin() + 1),
     thrust::make_zip_iterator(thrust::make_counting_iterator(1) + num_columns, rowidx.end()),
     rowidx.begin() + 1,
@@ -244,19 +245,19 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
 
   rmm::device_uvector<NodeIndexT> colidx((num_columns - 1) * 2, stream);
   // Skip the parent of root node
-  thrust::scatter(rmm::exec_policy(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream),
                   parent_col_ids.begin() + 1,
                   parent_col_ids.end(),
                   rowidx.begin() + 1,
                   colidx.begin());
   // excluding root node, construct scatter map
   rmm::device_uvector<NodeIndexT> map(num_columns - 1, stream);
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                 parent_col_ids.begin() + 1,
                                 parent_col_ids.end(),
                                 thrust::make_constant_iterator(1),
                                 map.begin());
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator(1),
                      num_columns - 1,
                      [rowidx         = rowidx.begin(),
@@ -268,7 +269,7 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
                        else
                          map[i - 1] += rowidx[parent_col_id];
                      });
-  thrust::scatter(rmm::exec_policy(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream),
                   thrust::make_counting_iterator(1),
                   thrust::make_counting_iterator(1) + num_columns - 1,
                   map.begin(),
@@ -304,7 +305,7 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
 
     rmm::device_uvector<NodeIndexT> list_ancestors(num_columns, stream);
     thrust::for_each_n(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator(0),
       num_columns,
       [rowidx            = rowidx.begin(),
@@ -323,7 +324,7 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
             break;
         }
       });
-    thrust::gather_if(rmm::exec_policy(stream),
+    thrust::gather_if(rmm::exec_policy_nosync(stream),
                       list_ancestors.begin(),
                       list_ancestors.end(),
                       list_ancestors.begin(),
