@@ -586,10 +586,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
             if isinstance(data, (pd.Series, Series)):
                 index_from_data = ensure_index(data.index)
-        elif isinstance(data, ColumnAccessor):
+        elif isinstance(data, (ColumnAccessor, ColumnBase)):
             raise TypeError(
                 "Use cudf.Series._from_data for constructing a Series from "
-                "ColumnAccessor"
+                "ColumnAccessor or a ColumnBase"
             )
         elif isinstance(data, dict):
             if not data:
@@ -1597,7 +1597,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if len(objs):
             col = col._with_type_metadata(objs[0].dtype)
 
-        return cls(data=col, index=index, name=name)
+        return cls._from_data(
+            ColumnAccessor({name: col}, verify=False), index=index
+        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -3036,7 +3038,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         res = self._column.unique()
         if cudf.get_option("mode.pandas_compatible"):
             return res.values
-        return Series(res, name=self.name)
+        return Series._from_data(
+            self._data._from_columns_like_self([res], verify=False)
+        )
 
     @_performance_tracking
     def value_counts(

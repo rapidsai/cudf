@@ -358,7 +358,7 @@ class StringMethods(ColumnMethods):
             )
 
         if len(data) == 1 and data.null_count == 1:
-            data = [""]
+            data = cudf.core.column.as_column("", length=len(data))
         # We only want to keep the index if we are adding something to each
         # row, not if we are joining all the rows into a single string.
         out = self._return_or_inplace(data, retain_index=others is not None)
@@ -3623,7 +3623,7 @@ class StringMethods(ColumnMethods):
         data = libstrings.findall(self._column, pat, flags)
         return self._return_or_inplace(data)
 
-    def find_multiple(self, patterns: SeriesOrIndex) -> "cudf.Series":
+    def find_multiple(self, patterns: SeriesOrIndex) -> cudf.Series:
         """
         Find all first occurrences of patterns in the Series/Index.
 
@@ -3679,13 +3679,13 @@ class StringMethods(ColumnMethods):
                 f"got: {patterns_column.dtype}"
             )
 
-        return cudf.Series(
+        result = self._return_or_inplace(
             libstrings.find_multiple(self._column, patterns_column),
-            index=self._parent.index
-            if isinstance(self._parent, cudf.Series)
-            else self._parent,
-            name=self._parent.name,
+            retain_index=True,
         )
+        if isinstance(result, cudf.Index):
+            result = cudf.Series(result, index=self._parent)
+        return cast(cudf.Series, result)
 
     def isempty(self) -> SeriesOrIndex:
         """
@@ -4376,14 +4376,9 @@ class StringMethods(ColumnMethods):
         2    99
         dtype: int32
         """
-
-        new_col = libstrings.code_points(self._column)
-        if isinstance(self._parent, cudf.Series):
-            return cudf.Series(new_col, name=self._parent.name)
-        elif isinstance(self._parent, cudf.BaseIndex):
-            return cudf.Index(new_col, name=self._parent.name)
-        else:
-            return new_col
+        return self._return_or_inplace(
+            libstrings.code_points(self._column), retain_index=False
+        )
 
     def translate(self, table: dict) -> SeriesOrIndex:
         """
