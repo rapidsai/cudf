@@ -17,11 +17,12 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -73,6 +74,7 @@ std::unique_ptr<column> scan_exclusive(column_view const& input,
  * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @returns Column with scan results.
  */
+CUDF_EXPORT
 std::unique_ptr<column> scan_inclusive(column_view const& input,
                                        scan_aggregation const& agg,
                                        null_policy null_handling,
@@ -99,6 +101,7 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return rank values.
  */
+CUDF_EXPORT
 std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr);
@@ -117,4 +120,4 @@ std::unique_ptr<column> inclusive_one_normalized_percent_rank_scan(
   column_view const& order_by, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

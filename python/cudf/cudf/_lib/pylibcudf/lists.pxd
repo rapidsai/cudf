@@ -47,3 +47,7 @@ cpdef Column have_overlap(Column, Column, bool nulls_equal=*, bool nans_equal=*)
 cpdef Column intersect_distinct(Column, Column, bool nulls_equal=*, bool nans_equal=*)
 
 cpdef Column union_distinct(Column, Column, bool nulls_equal=*, bool nans_equal=*)
+
+cpdef Column apply_boolean_mask(Column, Column)
+
+cpdef Column distinct(Column, bool, bool)

@@ -20,7 +20,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
@@ -91,7 +90,6 @@ int main(int argc, char const** argv)
   std::cout << "Process time: " << elapsed.count() << " seconds\n";
 
   std::cout << "Output: " << result->num_rows() << " rows" << std::endl;
-  // cudf::test::print(result->view().column(1));
 
   return 0;
 }

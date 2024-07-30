@@ -20,9 +20,8 @@
 
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace lists {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace lists::detail {
 
 /**
  * @copydoc cudf::lists::extract_list_element(lists_column_view, size_type,
@@ -44,6 +43,5 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace lists
-}  // namespace cudf
+}  // namespace lists::detail
+}  // namespace CUDF_EXPORT cudf
