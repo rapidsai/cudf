@@ -18,7 +18,7 @@ function(find_and_configure_thread_pool)
   include(${rapids-cmake-dir}/cpm/bs_thread_pool.cmake)
 
   # Find or install thread-pool
-  rapids_cpm_bs_thread_pool(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
+  rapids_cpm_bs_thread_pool()
 
 endfunction()
 
