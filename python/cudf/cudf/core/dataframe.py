@@ -782,7 +782,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
-
+            data = cupy.asfortranarray(data)
             # descr is an optional field of the _cuda_ary_iface_
             if "descr" in arr_interface:
                 if len(arr_interface["descr"]) == 1:
@@ -801,6 +801,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self._check_data_index_length_match()
         elif hasattr(data, "__array_interface__"):
             arr_interface = data.__array_interface__
+            data = np.asfortranarray(data)
             if len(arr_interface["descr"]) == 1:
                 # not record arrays
                 new_df = self._from_arrays(data, index=index, columns=columns)
