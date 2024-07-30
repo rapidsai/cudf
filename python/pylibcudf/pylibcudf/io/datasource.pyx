@@ -6,6 +6,8 @@ from pyarrow.lib cimport NativeFile
 from pylibcudf.libcudf.io.arrow_io_source cimport arrow_io_source
 from pylibcudf.libcudf.io.datasource cimport datasource
 
+import warnings
+
 
 cdef class Datasource:
     cdef datasource* get_datasource(self) except * nogil:
@@ -15,9 +17,15 @@ cdef class Datasource:
 
 cdef class NativeFileDatasource(Datasource):
 
-    def __cinit__(self, NativeFile native_file,):
+    def __cinit__(self, NativeFile native_file):
 
         cdef shared_ptr[CRandomAccessFile] ra_src
+
+        warnings.warn(
+            "Support for reading pyarrow's NativeFile is deprecated "
+            "and will be removed in a future release of cudf.",
+            FutureWarning,
+        )
 
         ra_src = native_file.get_random_access_file()
         self.c_datasource.reset(new arrow_io_source(ra_src))

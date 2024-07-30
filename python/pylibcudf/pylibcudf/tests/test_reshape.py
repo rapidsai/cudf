@@ -1,10 +1,9 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
+import pylibcudf as plc
 import pytest
 from utils import assert_column_eq, assert_table_eq
-
-from cudf._lib import pylibcudf as plc
 
 
 @pytest.fixture(scope="module")

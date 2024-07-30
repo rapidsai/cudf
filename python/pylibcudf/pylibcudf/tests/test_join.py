@@ -2,9 +2,8 @@
 
 import numpy as np
 import pyarrow as pa
+import pylibcudf as plc
 from utils import assert_table_eq
-
-from cudf._lib import pylibcudf as plc
 
 
 def test_cross_join():

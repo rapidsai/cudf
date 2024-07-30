@@ -2,6 +2,7 @@
 
 from cython.operator import dereference
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf cimport binaryop as cpp_binaryop
@@ -83,3 +84,37 @@ cpdef Column binary_operation(
         raise ValueError(f"Invalid arguments {lhs} and {rhs}")
 
     return Column.from_libcudf(move(result))
+
+
+cpdef bool is_supported_operation(
+    DataType out,
+    DataType lhs,
+    DataType rhs,
+    binary_operator op
+):
+    """Check if an operation is supported for the given data types.
+
+    For details, see :cpp:func::is_supported_operation`.
+
+    Parameters
+    ----------
+    out : DataType
+        The output data type.
+    lhs : DataType
+        The left hand side data type.
+    rhs : DataType
+        The right hand side data type.
+    op : BinaryOperator
+        The operation to check.
+    Returns
+    -------
+    bool
+        True if the operation is supported, False otherwise
+    """
+
+    return cpp_binaryop.is_supported_operation(
+        out.c_obj,
+        lhs.c_obj,
+        rhs.c_obj,
+        op
+    )

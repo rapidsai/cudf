@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include "strings/char_types/char_cases.h"
 #include "strings/char_types/char_flags.h"
 

@@ -4,10 +4,9 @@ from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.exception_handler cimport cudf_exception_handler
 from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 from pylibcudf.libcudf.scalar.scalar cimport scalar
-
-from cudf._lib.exception_handler cimport cudf_exception_handler
 
 
 cdef extern from "cudf/lists/contains.hpp" namespace "cudf::lists" nogil:

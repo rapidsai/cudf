@@ -1,7 +1,8 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t
-from pylibcudf.libcudf.types cimport data_type, type_id
+from pylibcudf.libcudf.types cimport data_type, size_type, type_id
+from pylibcudf.libcudf.utilities.type_dispatcher cimport type_to_id
 
 from pylibcudf.libcudf.types import type_id as TypeId  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import nan_policy as NanPolicy  # no-cython-lint, isort:skip
@@ -66,3 +67,7 @@ cdef class DataType:
         cdef DataType ret = DataType.__new__(DataType, type_id.EMPTY)
         ret.c_obj = dt
         return ret
+
+
+SIZE_TYPE = DataType(type_to_id[size_type]())
+SIZE_TYPE_ID = SIZE_TYPE.id()

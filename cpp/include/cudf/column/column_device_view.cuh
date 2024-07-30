@@ -44,7 +44,7 @@
  * @brief Column device view class definitions
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief Indicates the presence of nulls at compile-time or runtime.
@@ -1527,4 +1527,4 @@ ColumnDeviceView* child_columns_to_device_array(ColumnViewIterator child_begin,
 }
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

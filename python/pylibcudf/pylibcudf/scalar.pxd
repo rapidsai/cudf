@@ -6,6 +6,7 @@ from pylibcudf.libcudf.scalar.scalar cimport scalar
 
 from rmm._lib.memory_resource cimport DeviceMemoryResource
 
+from .column cimport Column
 from .types cimport DataType
 
 
@@ -22,6 +23,9 @@ cdef class Scalar:
 
     cpdef DataType type(self)
     cpdef bool is_valid(self)
+
+    @staticmethod
+    cdef Scalar empty_like(Column column)
 
     @staticmethod
     cdef Scalar from_libcudf(unique_ptr[scalar] libcudf_scalar, dtype=*)

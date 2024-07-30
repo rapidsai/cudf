@@ -8,8 +8,13 @@ from pylibcudf.libcudf.types cimport nan_equality, null_equality
 
 cdef extern from "cudf/lists/stream_compaction.hpp" \
         namespace "cudf::lists" nogil:
+    cdef unique_ptr[column] apply_boolean_mask(
+        const lists_column_view& lists_column,
+        const lists_column_view& boolean_mask,
+    ) except +
+
     cdef unique_ptr[column] distinct(
-        const lists_column_view lists_column,
+        const lists_column_view& lists_column,
         null_equality nulls_equal,
         nan_equality nans_equal
     ) except +

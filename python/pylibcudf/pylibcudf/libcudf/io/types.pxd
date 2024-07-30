@@ -80,6 +80,7 @@ cdef extern from "cudf/io/types.hpp" \
         map[string, string] user_data
         vector[unordered_map[string, string]] per_file_user_data
         vector[column_name_info] schema_info
+        vector[size_t] num_rows_per_source
 
     cdef cppclass table_with_metadata:
         unique_ptr[table] tbl

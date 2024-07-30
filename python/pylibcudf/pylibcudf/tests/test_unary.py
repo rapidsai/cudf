@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from cudf._lib import pylibcudf as plc
+import pylibcudf as plc
 
 
 def test_is_supported_cast():

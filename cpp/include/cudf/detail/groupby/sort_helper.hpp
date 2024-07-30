@@ -25,10 +25,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
-namespace sort {
+namespace CUDF_EXPORT cudf {
+namespace groupby::detail::sort {
 /**
  * @brief Helper class for computing sort-based groupby
  *
@@ -229,7 +227,5 @@ struct sort_groupby_helper {
   std::vector<null_order> _null_precedence;  ///< How to sort NULLs
 };
 
-}  // namespace sort
-}  // namespace detail
-}  // namespace groupby
-}  // namespace cudf
+}  // namespace groupby::detail::sort
+}  // namespace CUDF_EXPORT cudf

@@ -7,12 +7,7 @@ from libcpp.utility cimport move
 from pylibcudf.libcudf cimport join as cpp_join
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.table.table cimport table
-from pylibcudf.libcudf.types cimport (
-    data_type,
-    null_equality,
-    size_type,
-    type_id,
-)
+from pylibcudf.libcudf.types cimport null_equality
 
 from rmm._lib.device_buffer cimport device_buffer
 
@@ -22,15 +17,11 @@ from .table cimport Table
 
 cdef Column _column_from_gather_map(cpp_join.gather_map_type gather_map):
     # helper to convert a gather map to a Column
-    cdef device_buffer c_empty
-    cdef size_type size = dereference(gather_map.get()).size()
     return Column.from_libcudf(
         move(
             make_unique[column](
-                data_type(type_id.INT32),
-                size,
-                dereference(gather_map.get()).release(),
-                move(c_empty),
+                move(dereference(gather_map.get())),
+                device_buffer(),
                 0
             )
         )
