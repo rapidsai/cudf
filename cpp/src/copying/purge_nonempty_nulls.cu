@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/utilities/default_stream.hpp>

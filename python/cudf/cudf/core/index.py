@@ -78,6 +78,11 @@ class IndexMeta(type):
     """Custom metaclass for Index that overrides instance/subclass tests."""
 
     def __call__(cls, data, *args, **kwargs):
+        if kwargs.get("tupleize_cols", True) is not True:
+            raise NotImplementedError(
+                "tupleize_cols is currently not supported."
+            )
+
         if cls is Index:
             return as_index(
                 arbitrary=data,
@@ -535,8 +540,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
             )
         return 0
 
-    def unique(self) -> Self:
+    def unique(self, level: int | None = None) -> Self:
         # RangeIndex always has unique values
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
         return self.copy()
 
     @_performance_tracking
@@ -959,7 +968,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
             i = []
         return as_column(i, dtype=size_type_dtype)
 
-    def isin(self, values):
+    def isin(self, values, level=None):
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
@@ -997,21 +1010,23 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
 class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     """
-    An array of orderable values that represent the indices of another Column
+    Immutable sequence used for indexing and alignment.
 
-    Attributes
-    ----------
-    _values: A Column object
-    name: A string
+    The basic object storing axis labels for all pandas objects.
 
     Parameters
     ----------
-    data : Column
-        The Column of data for this index
-    name : str optional
-        The name of the Index. If not provided, the Index adopts the value
-        Column's name. Otherwise if this name is different from the value
-        Column's, the data Column will be cloned to adopt this name.
+    data : array-like (1-dimensional)
+    dtype : str, numpy.dtype, or ExtensionDtype, optional
+        Data type for the output Index. If not specified, this will be
+        inferred from `data`.
+    copy : bool, default False
+        Copy input data.
+    name : object
+        Name to be stored in the index.
+    tupleize_cols : bool (default: True)
+        When True, attempt to create a MultiIndex if possible.
+        Currently not supported.
     """
 
     @_performance_tracking
@@ -1609,12 +1624,20 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
         return self._concat(to_concat)
 
-    def unique(self):
+    def unique(self, level: int | None = None) -> Self:
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
         return cudf.core.index._index_from_data(
             {self.name: self._values.unique()}, name=self.name
         )
 
-    def isin(self, values):
+    def isin(self, values, level=None):
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
@@ -1735,8 +1758,18 @@ class DatetimeIndex(Index):
         if tz is not None:
             raise NotImplementedError("tz is not yet supported")
         if normalize is not False:
+            warnings.warn(
+                "The 'normalize' keyword is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
             raise NotImplementedError("normalize == True is not yet supported")
         if closed is not None:
+            warnings.warn(
+                "The 'closed' keyword is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
             raise NotImplementedError("closed is not yet supported")
         if ambiguous != "raise":
             raise NotImplementedError("ambiguous is not yet supported")
@@ -2480,6 +2513,14 @@ class TimedeltaIndex(Index):
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
 
+        if closed is not None:
+            warnings.warn(
+                "The 'closed' keyword is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
+            raise NotImplementedError("closed is not yet supported")
+
         if unit is not None:
             warnings.warn(
                 "The 'unit' keyword is "
@@ -2680,6 +2721,10 @@ class CategoricalIndex(Index):
             data = data.as_ordered(ordered=False)
         super().__init__(data, name=name)
 
+    @property
+    def ordered(self) -> bool:
+        return self._column.ordered
+
     @property  # type: ignore
     @_performance_tracking
     def codes(self):
@@ -2701,6 +2746,118 @@ class CategoricalIndex(Index):
 
     def _is_categorical(self):
         return True
+
+    def add_categories(self, new_categories) -> Self:
+        """
+        Add new categories.
+
+        `new_categories` will be included at the last/highest place in the
+        categories and will be unused directly after this call.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.add_categories(new_categories)}
+        )
+
+    def as_ordered(self) -> Self:
+        """
+        Set the Categorical to be ordered.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.as_ordered(ordered=True)}
+        )
+
+    def as_unordered(self) -> Self:
+        """
+        Set the Categorical to be unordered.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.as_ordered(ordered=False)}
+        )
+
+    def remove_categories(self, removals) -> Self:
+        """
+        Remove the specified categories.
+
+        `removals` must be included in the old categories.
+
+        Parameters
+        ----------
+        removals : category or list of categories
+           The categories which should be removed.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.remove_categories(removals)}
+        )
+
+    def remove_unused_categories(self) -> Self:
+        """
+        Remove categories which are not used.
+
+        This method is currently not supported.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.remove_unused_categories()}
+        )
+
+    def rename_categories(self, new_categories) -> Self:
+        """
+        Rename categories.
+
+        This method is currently not supported.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.rename_categories(new_categories)}
+        )
+
+    def reorder_categories(self, new_categories, ordered=None) -> Self:
+        """
+        Reorder categories as specified in new_categories.
+
+        ``new_categories`` need to include all old categories and no new category
+        items.
+
+        Parameters
+        ----------
+        new_categories : Index-like
+           The categories in new order.
+        ordered : bool, optional
+           Whether or not the categorical is treated as a ordered categorical.
+           If not given, do not change the ordered information.
+        """
+        return type(self)._from_data(
+            {
+                self.name: self._column.reorder_categories(
+                    new_categories, ordered=ordered
+                )
+            }
+        )
+
+    def set_categories(
+        self, new_categories, ordered=None, rename: bool = False
+    ) -> Self:
+        """
+        Set the categories to the specified new_categories.
+
+        Parameters
+        ----------
+        new_categories : list-like
+            The categories in new order.
+        ordered : bool, default None
+            Whether or not the categorical is treated as
+            a ordered categorical. If not given, do
+            not change the ordered information.
+        rename : bool, default False
+            Whether or not the `new_categories` should be
+            considered as a rename of the old categories
+            or as reordered categories.
+        """
+        return type(self)._from_data(
+            {
+                self.name: self._column.set_categories(
+                    new_categories, ordered=ordered, rename=rename
+                )
+            }
+        )
 
 
 @_performance_tracking
@@ -2863,6 +3020,7 @@ class IntervalIndex(Index):
         dtype=None,
         copy: bool = False,
         name=None,
+        verify_integrity: bool = True,
     ):
         name = _getdefault_name(data, name=name)
 
