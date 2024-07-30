@@ -75,39 +75,29 @@ bool check_equality(cuio_json::tree_meta_t& d_a,
                   cudf::detail::make_std_vector_async(d_a.node_range_end, stream)};
 
   h_column_tree b{cudf::detail::make_std_vector_async(d_b_csr.rowidx, stream),
-                      cudf::detail::make_std_vector_async(d_b_csr.colidx, stream),
-                      cudf::detail::make_std_vector_async(d_b_ctp.categories, stream),
-                      cudf::detail::make_std_vector_async(d_b_ctp.mapped_ids, stream)};
+                  cudf::detail::make_std_vector_async(d_b_csr.colidx, stream),
+                  cudf::detail::make_std_vector_async(d_b_ctp.categories, stream),
+                  cudf::detail::make_std_vector_async(d_b_ctp.mapped_ids, stream)};
 
   stream.synchronize();
 
   auto num_nodes = a.parent_node_ids.size();
-  if (b.rowidx.size() != num_nodes + 1) {
-    return false;
-  }
+  if (b.rowidx.size() != num_nodes + 1) { return false; }
 
   for (auto pos = b.rowidx[0]; pos < b.rowidx[1]; pos++) {
     auto v = b.colidx[pos];
-    if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) {
-      return false;
-    }
+    if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) { return false; }
   }
   for (size_t u = 1; u < num_nodes; u++) {
     auto v = b.colidx[b.rowidx[u]];
-    if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) {
-      return false;
-    }
+    if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) { return false; }
     for (auto pos = b.rowidx[u] + 1; pos < b.rowidx[u + 1]; pos++) {
       v = b.colidx[pos];
-      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) {
-        return false;
-      }
+      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) { return false; }
     }
   }
   for (size_t u = 0; u < num_nodes; u++) {
-    if (a.node_categories[b.column_ids[u]] != b.categories[u]) {
-      return false;
-    }
+    if (a.node_categories[b.column_ids[u]] != b.categories[u]) { return false; }
   }
   return true;
 }
@@ -180,12 +170,8 @@ TEST_F(JsonColumnTreeTests, SimpleLines)
                                                   stream);
 
   auto [d_column_tree_csr, d_column_tree_properties] =
-    cudf::io::json::experimental::detail::reduce_to_column_tree(gpu_tree,
-                                                                    gpu_col_id,
-                                                                    gpu_row_offsets,
-                                                                    false,
-                                                                    row_array_parent_col_id,
-                                                                    stream);
+    cudf::io::json::experimental::detail::reduce_to_column_tree(
+      gpu_tree, gpu_col_id, gpu_row_offsets, false, row_array_parent_col_id, stream);
 
   auto iseq = check_equality(d_column_tree, d_column_tree_csr, d_column_tree_properties, stream);
   // assert equality between csr and meta formats

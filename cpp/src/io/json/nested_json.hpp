@@ -188,7 +188,7 @@ struct device_json_column {
 
 namespace experimental {
 /*
- * @brief Sparse graph adjacency matrix stored in Compressed Sparse Row (CSR) format. 
+ * @brief Sparse graph adjacency matrix stored in Compressed Sparse Row (CSR) format.
  */
 struct csr {
   rmm::device_uvector<NodeIndexT> rowidx;
@@ -202,10 +202,10 @@ struct column_tree_properties {
 };
 
 /*
- * @brief Unvalidated column tree stored in Compressed Sparse Row (CSR) format. The device json column 
- * subtree - the subgraph that conforms to column tree properties - is extracted and further processed
- * according to the JSON reader options passed. Only the final processed subgraph is annotated with information
- * required to construct cuDF columns.
+ * @brief Unvalidated column tree stored in Compressed Sparse Row (CSR) format. The device json
+ * column subtree - the subgraph that conforms to column tree properties - is extracted and further
+ * processed according to the JSON reader options passed. Only the final processed subgraph is
+ * annotated with information required to construct cuDF columns.
  */
 struct column_tree {
   // position of nnzs
