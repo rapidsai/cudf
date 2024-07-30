@@ -188,6 +188,20 @@ struct device_json_column {
 
 namespace experimental {
 /*
+ * @brief Sparse graph adjacency matrix stored in Compressed Sparse Row (CSR) format. 
+ */
+struct csr {
+  rmm::device_uvector<NodeIndexT> rowidx;
+  rmm::device_uvector<NodeIndexT> colidx;
+};
+
+struct column_tree_properties {
+  rmm::device_uvector<NodeT> categories;
+  rmm::device_uvector<size_type> max_row_offsets;
+  rmm::device_uvector<NodeIndexT> mapped_ids;
+};
+
+/*
  * @brief Unvalidated column tree stored in Compressed Sparse Row (CSR) format. The device json column 
  * subtree - the subgraph that conforms to column tree properties - is extracted and further processed
  * according to the JSON reader options passed. Only the final processed subgraph is annotated with information
@@ -195,6 +209,7 @@ namespace experimental {
  */
 struct column_tree {
   // position of nnzs
+  csr adjacency;
   rmm::device_uvector<NodeIndexT> rowidx;
   rmm::device_uvector<NodeIndexT> colidx;
   // device_json_column properties
@@ -223,11 +238,9 @@ namespace detail {
  * in each column
  */
 
-std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tree_csr(
+std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   tree_meta_t& tree,
   device_span<NodeIndexT> original_col_ids,
-  device_span<NodeIndexT> sorted_col_ids,
-  device_span<NodeIndexT> ordered_node_ids,
   device_span<size_type> row_offsets,
   bool is_array_of_arrays,
   NodeIndexT const row_array_parent_col_id,
