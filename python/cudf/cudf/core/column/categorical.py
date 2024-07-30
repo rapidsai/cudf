@@ -262,36 +262,9 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (2, int64): [1, 2]
         """
-        old_categories = self._column.categories
-        new_categories = column.as_column(
-            new_categories,
-            dtype=old_categories.dtype if len(new_categories) == 0 else None,
+        return self._return_or_inplace(
+            self._column.add_categories(new_categories=new_categories)
         )
-
-        if is_mixed_with_object_dtype(old_categories, new_categories):
-            raise TypeError(
-                f"cudf does not support adding categories with existing "
-                f"categories of dtype `{old_categories.dtype}` and new "
-                f"categories of dtype `{new_categories.dtype}`, please "
-                f"type-cast new_categories to the same type as "
-                f"existing categories."
-            )
-        common_dtype = find_common_type(
-            [old_categories.dtype, new_categories.dtype]
-        )
-
-        new_categories = new_categories.astype(common_dtype)
-        old_categories = old_categories.astype(common_dtype)
-
-        if old_categories.isin(new_categories).any():
-            raise ValueError("new categories must not include old categories")
-
-        new_categories = old_categories.append(new_categories)
-        out_col = self._column
-        if not out_col._categories_equal(new_categories):
-            out_col = out_col._set_categories(new_categories)
-
-        return self._return_or_inplace(out_col)
 
     def remove_categories(
         self,
@@ -349,23 +322,9 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (3, int64): [1, 2, 10]
         """
-
-        cats = self.categories.to_series()
-        removals = cudf.Series(removals, dtype=cats.dtype)
-        removals_mask = removals.isin(cats)
-
-        # ensure all the removals are in the current categories
-        # list. If not, raise an error to match Pandas behavior
-        if not removals_mask.all():
-            vals = removals[~removals_mask].to_numpy()
-            raise ValueError(f"removals must all be in old categories: {vals}")
-
-        new_categories = cats[~cats.isin(removals)]._column
-        out_col = self._column
-        if not out_col._categories_equal(new_categories):
-            out_col = out_col._set_categories(new_categories)
-
-        return self._return_or_inplace(out_col)
+        return self._return_or_inplace(
+            self._column.remove_categories(removals=removals)
+        )
 
     def set_categories(
         self,
@@ -1319,7 +1278,7 @@ class CategoricalColumn(column.ColumnBase):
         new_categories: Any,
         is_unique: bool = False,
         ordered: bool = False,
-    ) -> CategoricalColumn:
+    ) -> Self:
         """Returns a new CategoricalColumn with the categories set to the
         specified *new_categories*.
 
@@ -1376,16 +1335,67 @@ class CategoricalColumn(column.ColumnBase):
         new_codes = df._data["new_codes"]
 
         # codes can't have masks, so take mask out before moving in
-        return column.build_categorical_column(
-            categories=new_cats,
-            codes=column.build_column(
-                new_codes.base_data, dtype=new_codes.dtype
+        return cast(
+            Self,
+            column.build_categorical_column(
+                categories=new_cats,
+                codes=column.build_column(
+                    new_codes.base_data, dtype=new_codes.dtype
+                ),
+                mask=new_codes.base_mask,
+                size=new_codes.size,
+                offset=new_codes.offset,
+                ordered=ordered,
             ),
-            mask=new_codes.base_mask,
-            size=new_codes.size,
-            offset=new_codes.offset,
-            ordered=ordered,
         )
+
+    def add_categories(self, new_categories: Any) -> Self:
+        old_categories = self.categories
+        new_categories = column.as_column(
+            new_categories,
+            dtype=old_categories.dtype if len(new_categories) == 0 else None,
+        )
+        if is_mixed_with_object_dtype(old_categories, new_categories):
+            raise TypeError(
+                f"cudf does not support adding categories with existing "
+                f"categories of dtype `{old_categories.dtype}` and new "
+                f"categories of dtype `{new_categories.dtype}`, please "
+                f"type-cast new_categories to the same type as "
+                f"existing categories."
+            )
+        common_dtype = find_common_type(
+            [old_categories.dtype, new_categories.dtype]
+        )
+
+        new_categories = new_categories.astype(common_dtype)
+        old_categories = old_categories.astype(common_dtype)
+
+        if old_categories.isin(new_categories).any():
+            raise ValueError("new categories must not include old categories")
+
+        new_categories = old_categories.append(new_categories)
+        if not self._categories_equal(new_categories):
+            return self._set_categories(new_categories)
+        return self
+
+    def remove_categories(
+        self,
+        removals: Any,
+    ) -> Self:
+        removals = column.as_column(removals).astype(self.categories.dtype)
+        removals_mask = removals.isin(self.categories)
+
+        # ensure all the removals are in the current categories
+        # list. If not, raise an error to match Pandas behavior
+        if not removals_mask.all():
+            raise ValueError("removals must all be in old categories")
+
+        new_categories = self.categories.apply_boolean_mask(
+            self.categories.isin(removals).unary_operator("not")
+        )
+        if not self._categories_equal(new_categories):
+            return self._set_categories(new_categories)
+        return self
 
     def reorder_categories(
         self,
@@ -1403,6 +1413,16 @@ class CategoricalColumn(column.ColumnBase):
                 "old categories"
             )
         return self._set_categories(new_categories, ordered=ordered)
+
+    def rename_categories(self, new_categories) -> CategoricalColumn:
+        raise NotImplementedError(
+            "rename_categories is currently not supported."
+        )
+
+    def remove_unused_categories(self) -> Self:
+        raise NotImplementedError(
+            "remove_unused_categories is currently not supported."
+        )
 
     def as_ordered(self, ordered: bool):
         if self.dtype.ordered == ordered:
