@@ -786,7 +786,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             out_index.insert(
                 out_index._num_columns,
                 k,
-                cudf.Series._from_data({None: index._data.columns[k]}),
+                cudf.Series._from_data(
+                    ColumnAccessor(
+                        {None: index._data.columns[k]}, verify=False
+                    )
+                ),
             )
 
         # determine if we should downcast from a DataFrame to a Series
@@ -1925,8 +1929,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             *join_keys,
             how="inner",
         )
-        (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
-        result_series = cudf.Series(result)
+        result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
+        result_series = cudf.Series._from_data(
+            ColumnAccessor({None: result}, verify=False)
+        )
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
             result_series = _get_indexer_basic(

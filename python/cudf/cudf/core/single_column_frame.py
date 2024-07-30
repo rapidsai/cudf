@@ -113,34 +113,7 @@ class SingleColumnFrame(Frame, NotIterable):
     @classmethod
     @_performance_tracking
     def from_arrow(cls, array) -> Self:
-        """Create from PyArrow Array/ChunkedArray.
-
-        Parameters
-        ----------
-        array : PyArrow Array/ChunkedArray
-            PyArrow Object which has to be converted.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Returns
-        -------
-        SingleColumnFrame
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
-        Index(['a', 'b', None], dtype='object')
-        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
-        0       a
-        1       b
-        2    <NA>
-        dtype: object
-        """
-        return cls(ColumnBase.from_arrow(array))
+        raise NotImplementedError
 
     @_performance_tracking
     def to_arrow(self) -> pa.Array:

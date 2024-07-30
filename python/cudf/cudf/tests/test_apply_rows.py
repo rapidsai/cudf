@@ -27,8 +27,12 @@ def test_dataframe_apply_rows(dtype, has_nulls, pessimistic):
         gdf_series_expected = gdf_series_a * gdf_series_b
     else:
         # optimistically ignore the null masks
-        a = cudf.Series(column.build_column(gdf_series_a.data, dtype))
-        b = cudf.Series(column.build_column(gdf_series_b.data, dtype))
+        a = cudf.Series._from_data(
+            {None: column.build_column(gdf_series_a.data, dtype)}
+        )
+        b = cudf.Series_from_data(
+            {None: column.build_column(gdf_series_b.data, dtype)}
+        )
         gdf_series_expected = a * b
 
     df_expected = cudf.DataFrame(

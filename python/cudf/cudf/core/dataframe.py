@@ -508,8 +508,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 new_name = result.index[0]
                 result = Series._concat(
                     [result[name] for name in column_names],
-                    index=result.keys(),
                 )
+                result.index = cudf.Index(result.keys())
                 result.name = new_name
                 return result
             except TypeError:
@@ -1753,7 +1753,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if 1 == first_data_column_position:
                 table_index = cudf.Index(cols[0])
             elif first_data_column_position > 1:
-                table_index = DataFrame._from_data(
+                table_index = cudf.MultiIndex._from_data(
                     data=dict(
                         zip(
                             indices[:first_data_column_position],
@@ -3804,7 +3804,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     col_empty = column_empty(
                         len(idxs), dtype=col.dtype, masked=True
                     )
-                    ans = cudf.Series(data=col_empty, index=idxs)
+                    ca = ColumnAccessor({None: col_empty}, verify=False)
+                    ans = cudf.Series._from_data(ca, index=cudf.Index(idxs))
                     if isinstance(aggs.get(key), abc.Iterable):
                         # TODO : Allow simultaneous pass for multi-aggregation
                         # as a future optimization
@@ -6073,9 +6074,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             if q_is_number:
                 result = result.transpose()
-                return Series(
-                    data=result._columns[0], index=result.index, name=q
-                )
+                ca = ColumnAccessor({q: result._columns[0]}, verify=False)
+                return Series._from_data(ca, index=result.index)
         else:
             # Ensure that qs is non-scalar so that we always get a column back.
             interpolation = interpolation or "linear"
@@ -6700,11 +6700,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 result = result.set_mask(
                     cudf._lib.transform.bools_to_mask(mask._column)
                 )
-            return Series(
-                result,
-                index=self.index,
-                dtype=result_dtype,
-            )
+            ca = ColumnAccessor({None: result}, verify=False)
+            return Series._from_data(ca, index=self.index)
         else:
             result_df = DataFrame(result).set_index(self.index)
             result_df._set_columns_like(prepared._data)
@@ -8474,7 +8471,9 @@ def _get_non_null_cols_and_dtypes(col_idxs, list_of_columns):
     return non_null_columns, dtypes
 
 
-def _find_common_dtypes_and_categories(non_null_columns, dtypes):
+def _find_common_dtypes_and_categories(
+    non_null_columns, dtypes
+) -> dict[Any, ColumnBase]:
     # A mapping of {idx: categories}, where `categories` is a
     # column of all the unique categorical values from each
     # categorical column across all input frames
@@ -8490,9 +8489,9 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             isinstance(col, cudf.core.column.CategoricalColumn) for col in cols
         ):
             # Combine and de-dupe the categories
-            categories[idx] = cudf.Series(
-                concat_columns([col.categories for col in cols])
-            )._column.unique()
+            categories[idx] = concat_columns(
+                [col.categories for col in cols]
+            ).unique()
             # Set the column dtype to the codes' dtype. The categories
             # will be re-assigned at the end
             dtypes[idx] = min_signed_type(len(categories[idx]))

@@ -1091,6 +1091,28 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     @classmethod
     @_performance_tracking
     def from_arrow(cls, obj):
+        """Create from PyArrow Array/ChunkedArray.
+
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+            PyArrow Object which has to be converted.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        SingleColumnFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
+        Index(['a', 'b', None], dtype='object')
+        """
         try:
             return cls(ColumnBase.from_arrow(obj))
         except TypeError:
@@ -1296,22 +1318,22 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             return _return_get_indexer_result(result.values)
 
         scatter_map, indices = libcudf.join.join([lcol], [rcol], how="inner")
-        (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
-        result_series = cudf.Series(result)
+        result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
+        result_series = cudf.Series._from_data({None: result})
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
             result_series = _get_indexer_basic(
                 index=self,
                 positions=result_series,
                 method=method,
-                target_col=cudf.Series(needle),
+                target_col=cudf.Series._from_data({None: needle}),
                 tolerance=tolerance,
             )
         elif method == "nearest":
             result_series = _get_nearest_indexer(
                 index=self,
                 positions=result_series,
-                target_col=cudf.Series(needle),
+                target_col=cudf.Series._from_data({None: needle}),
                 tolerance=tolerance,
             )
         elif method is not None:
