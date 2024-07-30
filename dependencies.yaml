@@ -112,6 +112,13 @@ files:
     includes:
       - test_python_common
       - test_python_cudf
+  py_rapids_build_cudf:
+    output: pyproject
+    pyproject_dir: python/pylibcudf
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_skbuild
   py_build_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -130,6 +137,7 @@ files:
     includes:
       - run_pylibcudf
       - pyarrow_run
+  # TODO: finishme
   # py_test_pylibcudf:
   #   output: pyproject
   #   pyproject_dir: python/pylibcudf
