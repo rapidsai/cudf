@@ -22,6 +22,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
@@ -77,14 +78,12 @@
 #include <utility>
 #include <vector>
 
-#include <cudf/detail/nvtx/ranges.hpp>
-
 void write_parquet(cudf::table_view tbl,
                    std::string const& path,
                    std::vector<std::string> const& col_names)
 {
   CUDF_FUNC_RANGE();
-  std::cout << __func__<< path << std::endl;
+  std::cout << __func__ << path << std::endl;
   auto const sink_info = cudf::io::sink_info(path);
   cudf::io::table_metadata metadata;
   std::vector<cudf::io::column_name_info> col_name_infos;
