@@ -16,10 +16,10 @@ cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
 include(../../rapids_config.cmake)
 include(rapids-cuda)
-rapids_cuda_init_architectures(cudf-python)
+rapids_cuda_init_architectures(pylibcudf)
 
 project(
-  cudf-python
+  pylibcudf
   VERSION "${RAPIDS_VERSION}"
   LANGUAGES CXX CUDA
 )
