@@ -5858,9 +5858,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         DataFrame
         """
         if hasattr(data, "__cuda_array_interface__"):
-            data = cupy.asfortranarray(data)
+            data = cupy.asarray(data, order="F")
         elif hasattr(data, "__array_interface__"):
-            data = np.asfortranarray(data)
+            data = np.asarray(data, order="F")
 
         if data.ndim not in {1, 2}:
             raise ValueError(
