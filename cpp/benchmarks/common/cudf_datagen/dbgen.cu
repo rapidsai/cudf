@@ -18,6 +18,8 @@
 #include "table_helpers.hpp"
 #include "vocab.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
+
 std::unique_ptr<cudf::table> generate_orders_independent(
   int64_t const& scale_factor,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -133,7 +135,7 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
   auto const l_num_rows = calc_l_cardinality(o_orderkey_repeat_freqs->view(), stream, mr);
 
   // We create a column, `l_pkey` which will contain the repeated primary keys,
-  // `_o_pkey` of the `orders` table as per the frequencies in `o_orderkey_repeat_freqs`
+  // `o_pkey` of the `orders` table as per the frequencies in `o_orderkey_repeat_freqs`
   auto const o_pkey = orders_independent.column(0);
   auto const l_pkey =
     cudf::repeat(cudf::table_view({o_pkey}), o_orderkey_repeat_freqs->view(), stream, mr);
@@ -147,10 +149,11 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
   auto const left_table      = cudf::table_view({l_pkey->view()});
   auto const right_table     = cudf::table_view({o_pkey, o_orderkey, o_orderdate_ts});
   auto const l_base_unsorted = perform_left_join(left_table, right_table, {0}, {0});
-  auto const l_base          = cudf::sort_by_key(l_base_unsorted->view(),
+  // get rid of the first 2 cols
+  auto const l_base = cudf::sort_by_key(l_base_unsorted->view(),
                                         cudf::table_view({l_base_unsorted->get_column(2).view()}),
-                                                 {},
-                                                 {},
+                                        {},
+                                        {},
                                         stream,
                                         mr);
 
@@ -209,6 +212,7 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
   auto const l_returnflag_binary_mask_int =
     cudf::cast(l_returnflag_binary_mask->view(), cudf::data_type{cudf::type_id::INT64}, stream, mr);
 
+  // use copy if else here
   auto const binarty_to_ternary_multiplier =
     gen_rep_seq_col(2, l_num_rows, stream, mr);  // 1, 2, 1, 2,...
   auto const l_returnflag_ternary_mask =
@@ -222,6 +226,7 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
   auto const l_returnflag_ternary_mask_str =
     cudf::strings::from_integers(l_returnflag_ternary_mask->view(), stream, mr);
 
+  // use gather here
   auto const l_returnflag_replace_target =
     cudf::test::strings_column_wrapper({"0", "1", "2"}).release();
   auto const l_returnflag_replace_with =
@@ -235,12 +240,14 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
 
   // Generate the `l_linestatus` column
   // if `l_shipdate` > current_date then "F" else "O"
+  // use int8 for bool masks
   auto const l_shipdate_ts_col_ref = cudf::ast::column_reference(0);
   auto const l_linestatus_pred     = cudf::ast::operation(
     cudf::ast::ast_operator::GREATER, l_shipdate_ts_col_ref, current_date_literal);
   auto const l_linestatus_mask =
     cudf::compute_column(cudf::table_view({l_shipdate_ts->view()}), l_linestatus_pred, mr);
 
+  // use gather here instead
   auto const l_linestatus = cudf::strings::from_booleans(
     l_linestatus_mask->view(), cudf::string_scalar("F"), cudf::string_scalar("O"), stream, mr);
 
@@ -359,18 +366,20 @@ std::unique_ptr<cudf::table> generate_orders_dependent(
 /**
  * @brief Generate the `partsupp` table
  *
- * @param scale_factor The scale factor to use
- * @param stream The CUDA stream to use
- * @param mr The memory resource to use
+ * @param scale_factor The scale factor to generate
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<cudf::table> generate_partsupp(
   int64_t const& scale_factor,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
-  std::cout << "Generating partsupp..." << std::endl;
-  cudf::size_type const num_rows_part = 200'000 * scale_factor;
-  cudf::size_type const num_rows      = 800'000 * scale_factor;
+  CUDF_FUNC_RANGE();
+  std::cout << __func__ << std::endl;
+  cudf::size_type const num_rows_part = scale_factor * 200'000;
+  // num rows partsupp
+  cudf::size_type const num_rows = scale_factor * 800'000;
 
   // Generate the `ps_partkey` column
   auto const p_partkey      = gen_primary_key_col(1, num_rows_part, stream, mr);
@@ -378,75 +387,81 @@ std::unique_ptr<cudf::table> generate_partsupp(
     cudf::data_type{cudf::type_id::INT64}, num_rows_part, cudf::mask_state::UNALLOCATED, stream);
   auto const rep_freq = cudf::fill(
     rep_freq_empty->view(), 0, num_rows_part, cudf::numeric_scalar<int64_t>(4), stream, mr);
+  // use the repeat api with count field
   auto const rep_table =
     cudf::repeat(cudf::table_view({p_partkey->view()}), rep_freq->view(), stream, mr);
-  auto const ps_partkey = rep_table->get_column(0);
+  auto ps_partkey = std::make_unique<cudf::column>(rep_table->get_column(0));
 
   // Generate the `ps_suppkey` column
-  auto const ps_suppkey = calc_ps_suppkey(ps_partkey.view(), scale_factor, num_rows, stream, mr);
+  auto ps_suppkey = calc_ps_suppkey(ps_partkey->view(), scale_factor, num_rows, stream, mr);
 
   // Generate the `ps_availqty` column
-  auto const ps_availqty = gen_rand_num_col<int64_t>(1, 9999, num_rows, stream, mr);
+  auto ps_availqty = gen_rand_num_col<int64_t>(1, 9999, num_rows, stream, mr);
 
   // Generate the `ps_supplycost` column
-  auto const ps_supplycost = gen_rand_num_col<double>(1.0, 1000.0, num_rows, stream, mr);
+  auto ps_supplycost = gen_rand_num_col<double>(1.0, 1000.0, num_rows, stream, mr);
 
   // Generate the `ps_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto const ps_comment = gen_rand_str_col(49, 198, num_rows, stream, mr);
+  auto ps_comment = gen_rand_str_col(49, 198, num_rows, stream, mr);
 
   // Create the `partsupp` table
-  auto partsupp_view = cudf::table_view({ps_partkey.view(),
-                                         ps_suppkey->view(),
-                                         ps_availqty->view(),
-                                         ps_supplycost->view(),
-                                         ps_comment->view()});
-  return std::make_unique<cudf::table>(partsupp_view);
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(std::move(ps_partkey));
+  columns.push_back(std::move(ps_suppkey));
+  columns.push_back(std::move(ps_availqty));
+  columns.push_back(std::move(ps_supplycost));
+  columns.push_back(std::move(ps_comment));
+  return std::make_unique<cudf::table>(std::move(columns));
 }
 
 /**
  * @brief Generate the `part` table
  *
- * @param scale_factor The scale factor to use
- * @param stream The CUDA stream to use
- * @param mr The memory resource to use
+ * @param scale_factor The scale factor to generate
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<cudf::table> generate_part(
   int64_t const& scale_factor,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
-  std::cout << "Generating part..." << std::endl;
-  cudf::size_type const num_rows = 200'000 * scale_factor;
+  CUDF_FUNC_RANGE();
+  std::cout << __func__ << std::endl;
+
+  cudf::size_type const num_rows = scale_factor * 200'000;
 
   // Generate the `p_partkey` column
-  auto const p_partkey = gen_primary_key_col(1, num_rows, stream, mr);
+  auto p_partkey = gen_primary_key_col(1, num_rows, stream, mr);
 
   // Generate the `p_name` column
-  auto const p_name_a = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
-  auto const p_name_b = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
-  auto const p_name_c = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
-  auto const p_name_d = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
-  auto const p_name_e = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
-  auto const p_name   = cudf::strings::concatenate(
-    cudf::table_view(
-      {p_name_a->view(), p_name_b->view(), p_name_c->view(), p_name_d->view(), p_name_e->view()}),
-    cudf::string_scalar(" "),
-    cudf::string_scalar("", false),
-    cudf::strings::separator_on_nulls::YES,
-    stream,
-    mr);
+  auto p_name = [&]() {
+    auto const p_name_a = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
+    auto const p_name_b = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
+    auto const p_name_c = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
+    auto const p_name_d = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
+    auto const p_name_e = gen_rand_str_col_from_set(vocab_p_name, num_rows, stream, mr);
+    return cudf::strings::concatenate(
+      cudf::table_view(
+        {p_name_a->view(), p_name_b->view(), p_name_c->view(), p_name_d->view(), p_name_e->view()}),
+      cudf::string_scalar(" "),
+      cudf::string_scalar("", false),
+      cudf::strings::separator_on_nulls::NO,
+      stream,
+      mr);
+  }();
 
   // Generate the `p_mfgr` column
   auto const mfgr_repeat     = gen_rep_str_col("Manufacturer#", num_rows, stream, mr);
   auto const random_values_m = gen_rand_num_col<int64_t>(1, 5, num_rows, stream, mr);
   auto const random_values_m_str =
     cudf::strings::from_integers(random_values_m->view(), stream, mr);
-  auto const p_mfgr =
+  auto p_mfgr =
     cudf::strings::concatenate(cudf::table_view({mfgr_repeat->view(), random_values_m_str->view()}),
                                cudf::string_scalar(""),
                                cudf::string_scalar("", false),
-                               cudf::strings::separator_on_nulls::YES,
+                               cudf::strings::separator_on_nulls::NO,
                                stream,
                                mr);
 
@@ -455,237 +470,43 @@ std::unique_ptr<cudf::table> generate_part(
   auto const random_values_n = gen_rand_num_col<int64_t>(1, 5, num_rows, stream, mr);
   auto const random_values_n_str =
     cudf::strings::from_integers(random_values_n->view(), stream, mr);
-  auto const p_brand = cudf::strings::concatenate(
+  auto p_brand = cudf::strings::concatenate(
     cudf::table_view(
       {brand_repeat->view(), random_values_m_str->view(), random_values_n_str->view()}),
     cudf::string_scalar(""),
     cudf::string_scalar("", false),
-    cudf::strings::separator_on_nulls::YES,
+    cudf::strings::separator_on_nulls::NO,
     stream,
     mr);
 
   // Generate the `p_type` column
-  auto const p_type = gen_rand_str_col_from_set(gen_vocab_types(), num_rows, stream, mr);
+  auto p_type = gen_rand_str_col_from_set(gen_vocab_types(), num_rows, stream, mr);
 
   // Generate the `p_size` column
-  auto const p_size = gen_rand_num_col<int64_t>(1, 50, num_rows, stream, mr);
+  auto p_size = gen_rand_num_col<int64_t>(1, 50, num_rows, stream, mr);
 
   // Generate the `p_container` column
-  auto const p_container = gen_rand_str_col_from_set(gen_vocab_containers(), num_rows, stream, mr);
+  auto p_container = gen_rand_str_col_from_set(gen_vocab_containers(), num_rows, stream, mr);
 
   // Generate the `p_retailprice` column
-  auto const p_retailprice = calc_p_retailprice(p_partkey->view(), stream, mr);
+  auto p_retailprice = calc_p_retailprice(p_partkey->view(), stream, mr);
 
   // Generate the `p_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto const p_comment = gen_rand_str_col(5, 22, num_rows, stream, mr);
+  auto p_comment = gen_rand_str_col(5, 22, num_rows, stream, mr);
 
   // Create the `part` table
-  auto part_view = cudf::table_view({p_partkey->view(),
-                                     p_name->view(),
-                                     p_mfgr->view(),
-                                     p_brand->view(),
-                                     p_type->view(),
-                                     p_size->view(),
-                                     p_container->view(),
-                                     p_retailprice->view(),
-                                     p_comment->view()});
-  return std::make_unique<cudf::table>(part_view);
-}
-
-/**
- * @brief Generate the `nation` table
- *
- * @param scale_factor The scale factor to use
- * @param stream The CUDA stream to use
- * @param mr The memory resource to use
- */
-std::unique_ptr<cudf::table> generate_nation(
-  int64_t const& scale_factor,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
-{
-  std::cout << "Generating nation..." << std::endl;
-  cudf::size_type const num_rows = 25;
-
-  // Generate the `n_nationkey` column
-  auto const n_nationkey = gen_primary_key_col(0, num_rows, stream, mr);
-
-  // Generate the `n_name` column
-  auto const n_name = cudf::test::strings_column_wrapper(nations.begin(), nations.end()).release();
-
-  // Generate the `n_regionkey` column
-  thrust::host_vector<int64_t> const region_keys     = {0, 1, 1, 1, 4, 0, 3, 3, 2, 2, 4, 4, 2,
-                                                        4, 0, 0, 0, 1, 2, 3, 4, 2, 3, 3, 1};
-  thrust::device_vector<int64_t> const d_region_keys = region_keys;
-
-  auto n_regionkey = cudf::make_numeric_column(
-    cudf::data_type{cudf::type_id::INT64}, num_rows, cudf::mask_state::UNALLOCATED, stream);
-  thrust::copy(rmm::exec_policy(stream),
-               d_region_keys.begin(),
-               d_region_keys.end(),
-               n_regionkey->mutable_view().begin<int64_t>());
-
-  // Generate the `n_comment` column
-  // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto const n_comment = gen_rand_str_col(31, 114, num_rows, stream, mr);
-
-  // Create the `nation` table
-  auto nation_view =
-    cudf::table_view({n_nationkey->view(), n_name->view(), n_regionkey->view(), n_comment->view()});
-  return std::make_unique<cudf::table>(nation_view);
-}
-
-/**
- * @brief Generate the `region` table
- *
- * @param scale_factor The scale factor to use
- * @param stream The CUDA stream to use
- * @param mr The memory resource to use
- */
-std::unique_ptr<cudf::table> generate_region(
-  int64_t const& scale_factor,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
-{
-  std::cout << "Generating region..." << std::endl;
-  cudf::size_type const num_rows = 5;
-
-  // Generate the `r_regionkey` column
-  auto const r_regionkey = gen_primary_key_col(0, num_rows, stream, mr);
-
-  // Generate the `r_name` column
-  auto const r_name =
-    cudf::test::strings_column_wrapper({"AFRICA", "AMERICA", "ASIA", "EUROPE", "MIDDLE EAST"})
-      .release();
-
-  // Generate the `r_comment` column
-  // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto const r_comment = gen_rand_str_col(31, 115, num_rows, stream, mr);
-
-  // Create the `region` table
-  auto region_view = cudf::table_view({r_regionkey->view(), r_name->view(), r_comment->view()});
-  return std::make_unique<cudf::table>(region_view);
-}
-
-/**
- * @brief Generate the `customer` table
- *
- * @param scale_factor The scale factor to use
- * @param stream The CUDA stream to use
- * @param mr The memory resource to use
- */
-std::unique_ptr<cudf::table> generate_customer(
-  int64_t const& scale_factor,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
-{
-  std::cout << "Generating customer..." << std::endl;
-  cudf::size_type const num_rows = 150'000 * scale_factor;
-
-  // Generate the `c_custkey` column
-  auto const c_custkey = gen_primary_key_col(1, num_rows, stream, mr);
-
-  // Generate the `c_name` column
-  auto const customer_repeat = gen_rep_str_col("Customer#", num_rows, stream, mr);
-  auto const c_custkey_str   = cudf::strings::from_integers(c_custkey->view(), stream, mr);
-  auto const c_custkey_str_padded =
-    cudf::strings::pad(c_custkey_str->view(), 9, cudf::strings::side_type::LEFT, "0", stream, mr);
-  auto const c_name = cudf::strings::concatenate(
-    cudf::table_view({customer_repeat->view(), c_custkey_str_padded->view()}),
-    cudf::string_scalar(""),
-    cudf::string_scalar("", false),
-    cudf::strings::separator_on_nulls::YES,
-    stream,
-    mr);
-
-  // Generate the `c_address` column
-  auto const c_address = gen_rand_str_col(10, 40, num_rows, stream, mr);
-
-  // Generate the `c_nationkey` column
-  auto const c_nationkey = gen_rand_num_col<int64_t>(0, 24, num_rows, stream, mr);
-
-  // Generate the `c_phone` column
-  auto const c_phone = gen_phone_col(num_rows, stream, mr);
-
-  // Generate the `c_acctbal` column
-  auto const c_acctbal = gen_rand_num_col<double>(-999.99, 9999.99, num_rows, stream, mr);
-
-  // Generate the `c_mktsegment` column
-  auto const c_mktsegment = gen_rand_str_col_from_set(vocab_segments, num_rows, stream, mr);
-
-  // Generate the `c_comment` column
-  // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto const c_comment = gen_rand_str_col(29, 116, num_rows, stream, mr);
-
-  // Create the `customer` table
-  auto customer_view = cudf::table_view({c_custkey->view(),
-                                         c_name->view(),
-                                         c_address->view(),
-                                         c_nationkey->view(),
-                                         c_phone->view(),
-                                         c_acctbal->view(),
-                                         c_mktsegment->view(),
-                                         c_comment->view()});
-  return std::make_unique<cudf::table>(customer_view);
-}
-
-/**
- * @brief Generate the `supplier` table
- *
- * @param scale_factor The scale factor to use
- * @param stream The CUDA stream to use
- * @param mr The memory resource to use
- */
-std::unique_ptr<cudf::table> generate_supplier(
-  int64_t const& scale_factor,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
-{
-  std::cout << "Generating supplier..." << std::endl;
-  cudf::size_type const num_rows = 10'000 * scale_factor;
-
-  // Generate the `s_suppkey` column
-  auto const s_suppkey = gen_primary_key_col(1, num_rows, stream, mr);
-
-  // Generate the `s_name` column
-  auto const supplier_repeat = gen_rep_str_col("Supplier#", num_rows, stream, mr);
-  auto const s_suppkey_str   = cudf::strings::from_integers(s_suppkey->view(), stream, mr);
-  auto const s_suppkey_str_padded =
-    cudf::strings::pad(s_suppkey_str->view(), 9, cudf::strings::side_type::LEFT, "0", stream, mr);
-  auto const s_name = cudf::strings::concatenate(
-    cudf::table_view({supplier_repeat->view(), s_suppkey_str_padded->view()}),
-    cudf::string_scalar(""),
-    cudf::string_scalar("", false),
-    cudf::strings::separator_on_nulls::YES,
-    stream,
-    mr);
-
-  // Generate the `s_address` column
-  auto const s_address = gen_rand_str_col(10, 40, num_rows, stream, mr);
-
-  // Generate the `s_nationkey` column
-  auto const s_nationkey = gen_rand_num_col<int64_t>(0, 24, num_rows, stream, mr);
-
-  // Generate the `s_phone` column
-  auto const s_phone = gen_phone_col(num_rows, stream, mr);
-
-  // Generate the `s_acctbal` column
-  auto const s_acctbal = gen_rand_num_col<double>(-999.99, 9999.99, num_rows, stream, mr);
-
-  // Generate the `s_comment` column
-  // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto const s_comment = gen_rand_str_col(25, 100, num_rows, stream, mr);
-
-  // Create the `supplier` table
-  auto supplier_view = cudf::table_view({s_suppkey->view(),
-                                         s_name->view(),
-                                         s_address->view(),
-                                         s_nationkey->view(),
-                                         s_phone->view(),
-                                         s_acctbal->view(),
-                                         s_comment->view()});
-  return std::make_unique<cudf::table>(supplier_view);
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(std::move(p_partkey));
+  columns.push_back(std::move(p_name));
+  columns.push_back(std::move(p_mfgr));
+  columns.push_back(std::move(p_brand));
+  columns.push_back(std::move(p_type));
+  columns.push_back(std::move(p_size));
+  columns.push_back(std::move(p_container));
+  columns.push_back(std::move(p_retailprice));
+  columns.push_back(std::move(p_comment));
+  return std::make_unique<cudf::table>(std::move(columns));
 }
 
 void generate_orders_lineitem_part(
@@ -693,8 +514,8 @@ void generate_orders_lineitem_part(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
-  std::cout << "Generating lineitem..." << std::endl;
-  std::cout << "Generating orders..." << std::endl;
+  CUDF_FUNC_RANGE();
+  std::cout << __func__ << std::endl;
 
   // Generate a table with the independent columns of the `orders` table
   auto orders_independent = generate_orders_independent(scale_factor, stream, mr);
@@ -741,6 +562,213 @@ void generate_orders_lineitem_part(
   write_parquet(orders->view(), "orders.parquet", schema_orders);
 }
 
+/**
+ * @brief Generate the `supplier` table
+ *
+ * @param scale_factor The scale factor to generate
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<cudf::table> generate_supplier(
+  int64_t const& scale_factor,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+{
+  CUDF_FUNC_RANGE();
+  std::cout << __func__ << std::endl;
+
+  cudf::size_type const num_rows = scale_factor * 10'000;
+
+  // Generate the `s_suppkey` column
+  auto s_suppkey = gen_primary_key_col(1, num_rows, stream, mr);
+
+  // Generate the `s_name` column
+  auto s_name = [&]() {
+    auto const supplier_repeat = gen_rep_str_col("Supplier#", num_rows, stream, mr);
+    auto const s_suppkey_str   = cudf::strings::from_integers(s_suppkey->view(), stream, mr);
+    // TODO: use cudf::zfill instead
+    auto const s_suppkey_str_padded =
+      cudf::strings::pad(s_suppkey_str->view(), 9, cudf::strings::side_type::LEFT, "0", stream, mr);
+    return cudf::strings::concatenate(
+      cudf::table_view({supplier_repeat->view(), s_suppkey_str_padded->view()}),
+      cudf::string_scalar(""),
+      cudf::string_scalar("", false),
+      cudf::strings::separator_on_nulls::YES,
+      stream,
+      mr);
+  }();
+
+  // Generate the `s_address` column
+  auto s_address = gen_addr_col(num_rows, stream, mr);
+
+  // Generate the `s_nationkey` column
+  auto s_nationkey = gen_rand_num_col<int64_t>(0, 24, num_rows, stream, mr);
+
+  // Generate the `s_phone` column
+  auto s_phone = gen_phone_col(num_rows, stream, mr);
+
+  // Generate the `s_acctbal` column
+  auto s_acctbal = gen_rand_num_col<double>(-999.99, 9999.99, num_rows, stream, mr);
+
+  // Generate the `s_comment` column
+  // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
+  auto s_comment = gen_rand_str_col(25, 100, num_rows, stream, mr);
+
+  // Create the `supplier` table
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(std::move(s_suppkey));
+  columns.push_back(std::move(s_name));
+  columns.push_back(std::move(s_address));
+  columns.push_back(std::move(s_nationkey));
+  columns.push_back(std::move(s_phone));
+  columns.push_back(std::move(s_acctbal));
+  columns.push_back(std::move(s_comment));
+  return std::make_unique<cudf::table>(std::move(columns));
+}
+
+/**
+ * @brief Generate the `customer` table
+ *
+ * @param scale_factor The scale factor to generate
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<cudf::table> generate_customer(
+  int64_t const& scale_factor,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+{
+  CUDF_FUNC_RANGE();
+  std::cout << __func__ << std::endl;
+
+  cudf::size_type const num_rows = scale_factor * 150'000;
+
+  // Generate the `c_custkey` column
+  auto c_custkey = gen_primary_key_col(1, num_rows, stream, mr);
+
+  // Generate the `c_name` column
+  auto c_name = [&]() {
+    auto const customer_repeat = gen_rep_str_col("Customer#", num_rows, stream, mr);
+    auto const c_custkey_str   = cudf::strings::from_integers(c_custkey->view(), stream, mr);
+    // TODO: use cudf::zfill
+    auto const c_custkey_str_padded =
+      cudf::strings::pad(c_custkey_str->view(), 9, cudf::strings::side_type::LEFT, "0", stream, mr);
+    return cudf::strings::concatenate(
+      cudf::table_view({customer_repeat->view(), c_custkey_str_padded->view()}),
+      cudf::string_scalar(""),
+      cudf::string_scalar("", false),
+      cudf::strings::separator_on_nulls::NO,
+      stream,
+      mr);
+  }();
+
+  // Generate the `c_address` column
+  auto c_address = gen_addr_col(num_rows, stream, mr);
+
+  // Generate the `c_nationkey` column
+  auto c_nationkey = gen_rand_num_col<int64_t>(0, 24, num_rows, stream, mr);
+
+  // Generate the `c_phone` column
+  auto c_phone = gen_phone_col(num_rows, stream, mr);
+
+  // Generate the `c_acctbal` column
+  auto c_acctbal = gen_rand_num_col<double>(-999.99, 9999.99, num_rows, stream, mr);
+
+  // Generate the `c_mktsegment` column
+  auto c_mktsegment = gen_rand_str_col_from_set(vocab_segments, num_rows, stream, mr);
+
+  // Generate the `c_comment` column
+  // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
+  auto c_comment = gen_rand_str_col(29, 116, num_rows, stream, mr);
+
+  // Create the `customer` table
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(std::move(c_custkey));
+  columns.push_back(std::move(c_name));
+  columns.push_back(std::move(c_address));
+  columns.push_back(std::move(c_nationkey));
+  columns.push_back(std::move(c_phone));
+  columns.push_back(std::move(c_acctbal));
+  columns.push_back(std::move(c_mktsegment));
+  columns.push_back(std::move(c_comment));
+  return std::make_unique<cudf::table>(std::move(columns));
+}
+
+/**
+ * @brief Generate the `nation` table
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<cudf::table> generate_nation(
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+{
+  CUDF_FUNC_RANGE();
+  std::cout << __func__ << std::endl;
+
+  constexpr cudf::size_type num_rows = 25;
+
+  // Generate the `n_nationkey` column
+  auto n_nationkey = gen_primary_key_col(0, num_rows, stream, mr);
+
+  // Generate the `n_name` column
+  auto n_name = cudf::test::strings_column_wrapper(nations.begin(), nations.end()).release();
+
+  // Generate the `n_regionkey` column
+  std::vector<int64_t> region_keys{0, 1, 1, 1, 4, 0, 3, 3, 2, 2, 4, 4, 2,
+                                   4, 0, 0, 0, 1, 2, 3, 4, 2, 3, 3, 1};
+  auto n_regionkey =
+    cudf::test::fixed_width_column_wrapper<int64_t>(region_keys.begin(), region_keys.end())
+      .release();
+
+  // Generate the `n_comment` column
+  // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
+  auto n_comment = gen_rand_str_col(31, 114, num_rows, stream, mr);
+
+  // Create the `nation` table
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(std::move(n_nationkey));
+  columns.push_back(std::move(n_name));
+  columns.push_back(std::move(n_comment));
+  return std::make_unique<cudf::table>(std::move(columns));
+}
+
+/**
+ * @brief Generate the `region` table
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<cudf::table> generate_region(
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+{
+  CUDF_FUNC_RANGE();
+  std::cout << __func__ << std::endl;
+
+  constexpr cudf::size_type num_rows = 5;
+
+  // Generate the `r_regionkey` column
+  auto r_regionkey = gen_primary_key_col(0, num_rows, stream, mr);
+
+  // Generate the `r_name` column
+  auto r_name =
+    cudf::test::strings_column_wrapper({"AFRICA", "AMERICA", "ASIA", "EUROPE", "MIDDLE EAST"})
+      .release();
+
+  // Generate the `r_comment` column
+  // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
+  auto r_comment = gen_rand_str_col(31, 115, num_rows, stream, mr);
+
+  // Create the `region` table
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(std::move(r_regionkey));
+  columns.push_back(std::move(r_name));
+  columns.push_back(std::move(r_comment));
+  return std::make_unique<cudf::table>(std::move(columns));
+}
+
 int main(int argc, char** argv)
 {
   if (argc < 3) {
@@ -766,10 +794,10 @@ int main(int argc, char** argv)
   auto customer = generate_customer(scale_factor);
   write_parquet(customer->view(), "customer.parquet", schema_customer);
 
-  auto nation = generate_nation(scale_factor);
+  auto nation = generate_nation();
   write_parquet(nation->view(), "nation.parquet", schema_nation);
 
-  auto region = generate_region(scale_factor);
+  auto region = generate_region();
   write_parquet(region->view(), "region.parquet", schema_region);
 
   return 0;

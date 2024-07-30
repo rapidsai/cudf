@@ -77,11 +77,14 @@
 #include <utility>
 #include <vector>
 
+#include <cudf/detail/nvtx/ranges.hpp>
+
 void write_parquet(cudf::table_view tbl,
                    std::string const& path,
                    std::vector<std::string> const& col_names)
 {
-  std::cout << "Writing to " << path << "\n";
+  CUDF_FUNC_RANGE();
+  std::cout << __func__<< path << std::endl;
   auto const sink_info = cudf::io::sink_info(path);
   cudf::io::table_metadata metadata;
   std::vector<cudf::io::column_name_info> col_name_infos;
@@ -98,41 +101,12 @@ void write_parquet(cudf::table_view tbl,
 
 void debug_parquet(cudf::table_view tbl, std::string const& path)
 {
-  std::cout << "Writing to " << path << "\n";
+  CUDF_FUNC_RANGE();
+  std::cout << __func__ << path << std::endl;
   auto const sink_info = cudf::io::sink_info(path);
   auto builder         = cudf::io::parquet_writer_options::builder(sink_info, tbl);
   auto const options   = builder.build();
   cudf::io::write_parquet(options);
-}
-
-std::unique_ptr<cudf::table> perform_left_join(
-  cudf::table_view const& left_input,
-  cudf::table_view const& right_input,
-  std::vector<cudf::size_type> const& left_on,
-  std::vector<cudf::size_type> const& right_on,
-  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
-{
-  constexpr auto oob_policy                          = cudf::out_of_bounds_policy::NULLIFY;
-  auto const left_selected                           = left_input.select(left_on);
-  auto const right_selected                          = right_input.select(right_on);
-  auto const [left_join_indices, right_join_indices] = cudf::left_join(
-    left_selected, right_selected, compare_nulls, rmm::mr::get_current_device_resource());
-
-  auto const left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
-  auto const right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
-
-  auto const left_indices_col  = cudf::column_view{left_indices_span};
-  auto const right_indices_col = cudf::column_view{right_indices_span};
-
-  auto const left_result  = cudf::gather(left_input, left_indices_col, oob_policy);
-  auto const right_result = cudf::gather(right_input, right_indices_col, oob_policy);
-
-  auto joined_cols = left_result->release();
-  auto right_cols  = right_result->release();
-  joined_cols.insert(joined_cols.end(),
-                     std::make_move_iterator(right_cols.begin()),
-                     std::make_move_iterator(right_cols.end()));
-  return std::make_unique<cudf::table>(std::move(joined_cols));
 }
 
 std::unique_ptr<cudf::table> perform_inner_join(
@@ -142,6 +116,7 @@ std::unique_ptr<cudf::table> perform_inner_join(
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
 {
+  CUDF_FUNC_RANGE();
   constexpr auto oob_policy                          = cudf::out_of_bounds_policy::DONT_CHECK;
   auto const left_selected                           = left_input.select(left_on);
   auto const right_selected                          = right_input.select(right_on);
@@ -284,6 +259,7 @@ std::unique_ptr<cudf::column> gen_rand_str_col(int64_t lower,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   rmm::device_uvector<cudf::size_type> offsets(num_rows + 1, stream);
 
   // The first element will always be 0 since it the offset of the first string.
@@ -338,6 +314,7 @@ std::unique_ptr<cudf::column> gen_rand_num_col(T lower,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   cudf::data_type type;
   if (cudf::is_integral<T>()) {
     if (typeid(lower) == typeid(int64_t)) {
@@ -370,6 +347,7 @@ std::unique_ptr<cudf::column> gen_primary_key_col(int64_t start,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   auto const init = cudf::numeric_scalar<int64_t>(start);
   auto const step = cudf::numeric_scalar<int64_t>(1);
   return cudf::sequence(num_rows, init, step, stream, mr);
@@ -388,12 +366,12 @@ std::unique_ptr<cudf::column> gen_rep_str_col(std::string value,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   auto const indices = rmm::device_uvector<cudf::string_view>(num_rows, stream);
   auto const empty_str_col =
     cudf::make_strings_column(indices, cudf::string_view(nullptr, 0), stream, mr);
-  auto const scalar  = cudf::string_scalar(value);
-  auto scalar_repeat = cudf::fill(empty_str_col->view(), 0, num_rows, scalar, stream, mr);
-  return scalar_repeat;
+  auto const scalar = cudf::string_scalar(value);
+  return cudf::fill(empty_str_col->view(), 0, num_rows, scalar, stream, mr);
 }
 
 /**
@@ -409,11 +387,11 @@ std::unique_ptr<cudf::column> gen_rep_int_col(int64_t value,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   auto const empty_col = cudf::make_numeric_column(
     cudf::data_type{cudf::type_id::INT64}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
-  auto const scalar  = cudf::numeric_scalar<int64_t>(value);
-  auto scalar_repeat = cudf::fill(empty_col->view(), 0, num_rows, scalar, stream, mr);
-  return scalar_repeat;
+  auto const scalar = cudf::numeric_scalar<int64_t>(value);
+  return cudf::fill(empty_col->view(), 0, num_rows, scalar, stream, mr);
 }
 
 /**
@@ -429,19 +407,18 @@ std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string>
                                                         rmm::cuda_stream_view stream,
                                                         rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   // Build a vocab table of random strings to choose from
   auto const keys = gen_primary_key_col(0, string_set.size(), stream, mr);
   auto const values =
     cudf::test::strings_column_wrapper(string_set.begin(), string_set.end()).release();
   auto const vocab_table = cudf::table_view({keys->view(), values->view()});
 
-  // Build a single column table containing `num_rows` random numbers
+  // Build a single column containing `num_rows` random numbers
   auto const rand_keys = gen_rand_num_col<int64_t>(0, string_set.size() - 1, num_rows, stream, mr);
-  auto const rand_keys_table = cudf::table_view({rand_keys->view()});
 
-  auto const joined_table =
-    perform_left_join(rand_keys_table, vocab_table, {0}, {0}, cudf::null_equality::EQUAL);
-  return std::make_unique<cudf::column>(joined_table->get_column(2));
+  auto const gathered_table = cudf::gather(vocab_table, rand_keys);
+  return std::make_unique<cudf::column>(joined_table->get_column(1));
 }
 
 /**
@@ -455,6 +432,7 @@ std::unique_ptr<cudf::column> gen_phone_col(int64_t num_rows,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   auto const part_a =
     cudf::strings::from_integers(gen_rand_num_col<int64_t>(10, 34, num_rows, stream, mr)->view());
   auto const part_b =
@@ -465,13 +443,12 @@ std::unique_ptr<cudf::column> gen_phone_col(int64_t num_rows,
     gen_rand_num_col<int64_t>(1000, 9999, num_rows, stream, mr)->view());
   auto const phone_parts_table =
     cudf::table_view({part_a->view(), part_b->view(), part_c->view(), part_d->view()});
-  auto phone = cudf::strings::concatenate(phone_parts_table,
-                                          cudf::string_scalar("-"),
-                                          cudf::string_scalar("", false),
-                                          cudf::strings::separator_on_nulls::YES,
-                                          stream,
-                                          mr);
-  return phone;
+  return cudf::strings::concatenate(phone_parts_table,
+                                    cudf::string_scalar("-"),
+                                    cudf::string_scalar("", false),
+                                    cudf::strings::separator_on_nulls::YES,
+                                    stream,
+                                    mr);
 }
 
 /**
@@ -487,6 +464,7 @@ std::unique_ptr<cudf::column> gen_rep_seq_col(int64_t limit,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   auto pkey                    = gen_primary_key_col(0, num_rows, stream, mr);
   auto repeat_seq_zero_indexed = cudf::binary_operation(pkey->view(),
                                                         cudf::numeric_scalar<int64_t>(limit),
@@ -502,11 +480,20 @@ std::unique_ptr<cudf::column> gen_rep_seq_col(int64_t limit,
                                 mr);
 }
 
+std::unique_ptr<cudf::column> gen_addr_col(int64_t const& num_rows,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return gen_rand_str_col(10, 40, num_rows, stream, mr);
+}
+
 std::unique_ptr<cudf::column> add_calendrical_days(cudf::column_view const& timestamp_days,
                                                    cudf::column_view const& days,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   auto const days_duration_type = cudf::cast(days, cudf::data_type{cudf::type_id::DURATION_DAYS});
   auto const data_type          = cudf::data_type{cudf::type_id::TIMESTAMP_DAYS};
   return cudf::binary_operation(
