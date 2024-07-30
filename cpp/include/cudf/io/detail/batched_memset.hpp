@@ -38,4 +38,3 @@ void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
 
 }  // namespace io::detail
 }  // namespace CUDF_EXPORT cudf
-
