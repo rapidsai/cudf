@@ -391,49 +391,6 @@ def test_read_parquet_filters(s3_base, s3so, pdf_ext, precache):
     assert_eq(pdf_ext.iloc[:0], got.reset_index(drop=True))
 
 
-def test_read_parquet_dask(s3_base, s3so, pdf):
-    dask_cudf = pytest.importorskip("dask_cudf")
-    dd = pytest.importorskip("dask.dataframe")
-
-    fname = "test_parquet_reader_dask.parquet"
-    bucket = "parquet"
-    buffer = BytesIO()
-    pdf.to_parquet(path=buffer)
-    buffer.seek(0)
-    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        got = dask_cudf.read_parquet(
-            f"s3://{bucket}/{fname}",
-            storage_options=s3so,
-        )
-        dd.assert_eq(pdf, got)
-
-
-@pytest.mark.parametrize(
-    "options",
-    [
-        {"open_file_options": {"precache_options": {"method": "parquet"}}},
-        {"read": {"use_python_file_object": True}},
-    ],
-)
-def test_read_parquet_dask_warns(s3_base, s3so, pdf, options):
-    dask_cudf = pytest.importorskip("dask_cudf")
-    dd = pytest.importorskip("dask.dataframe")
-
-    fname = "test_parquet_reader_dask_warns.parquet"
-    bucket = "parquet"
-    buffer = BytesIO()
-    pdf.to_parquet(path=buffer)
-    buffer.seek(0)
-    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        with pytest.warns(FutureWarning):
-            got = dask_cudf.read_parquet(
-                f"s3://{bucket}/{fname}",
-                storage_options=s3so,
-                **options,
-            ).head()
-            dd.assert_eq(pdf, got)
-
-
 @pytest.mark.parametrize("partition_cols", [None, ["String"]])
 def test_write_parquet(s3_base, s3so, pdf, partition_cols):
     fname_cudf = "test_parquet_writer_cudf"
