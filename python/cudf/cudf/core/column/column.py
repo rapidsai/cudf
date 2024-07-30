@@ -1843,7 +1843,6 @@ def as_column(
         else:
             mask = None
 
-        arbitrary = cupy.asarray(arbitrary)
         arbitrary = cupy.ascontiguousarray(arbitrary)
 
         data = as_buffer(arbitrary, exposed=cudf.get_option("copy_on_write"))
@@ -2036,7 +2035,7 @@ def as_column(
         check_invalid_array(desc["shape"], np.dtype(desc["typestr"]))
 
         # CUDF assumes values are always contiguous
-        arbitrary = np.asarray(arbitrary, order="C")
+        arbitrary = np.ascontiguousarray(arbitrary)
 
         if arbitrary.ndim == 0:
             # TODO: Or treat as scalar?
