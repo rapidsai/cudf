@@ -20,7 +20,6 @@
 #include <cudf/detail/interop.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
-#include <cudf/interop/detail/arrow.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
@@ -120,7 +119,11 @@ int dispatch_to_arrow_type::operator()<cudf::string_view>(column_view input,
                                                           column_metadata const&,
                                                           ArrowSchema* out)
 {
-  return ArrowSchemaSetType(out, NANOARROW_TYPE_STRING);
+  return ((input.num_children() == 0 ||
+           input.child(cudf::strings_column_view::offsets_column_index).type().id() ==
+             type_id::INT32))
+           ? ArrowSchemaSetType(out, NANOARROW_TYPE_STRING)
+           : ArrowSchemaSetType(out, NANOARROW_TYPE_LARGE_STRING);
 }
 
 // these forward declarations are needed due to the recursive calls to them

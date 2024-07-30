@@ -18,13 +18,14 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <optional>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup aggregation_reduction
  * @{
@@ -232,4 +233,4 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
 
 /** @} */  // end of group
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

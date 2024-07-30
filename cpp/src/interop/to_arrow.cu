@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "arrow_utilities.hpp"
 #include "detail/arrow_allocator.hpp"
 
 #include <cudf/column/column.hpp>
@@ -157,33 +158,17 @@ std::shared_ptr<arrow::Array> unsupported_decimals_to_arrow(column_view input,
                                                             arrow::MemoryPool* ar_mr,
                                                             rmm::cuda_stream_view stream)
 {
-  constexpr size_type BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DeviceType);
+  auto buf =
+    detail::decimals_to_arrow<DeviceType>(input, stream, rmm::mr::get_current_device_resource());
 
-  rmm::device_uvector<DeviceType> buf(input.size() * BIT_WIDTH_RATIO, stream);
-
-  auto count = thrust::make_counting_iterator(0);
-
-  thrust::for_each(
-    rmm::exec_policy(cudf::get_default_stream()),
-    count,
-    count + input.size(),
-    [in = input.begin<DeviceType>(), out = buf.data(), BIT_WIDTH_RATIO] __device__(auto in_idx) {
-      auto const out_idx = in_idx * BIT_WIDTH_RATIO;
-      // The lowest order bits are the value, the remainder
-      // simply matches the sign bit to satisfy the two's
-      // complement integer representation of negative numbers.
-      out[out_idx] = in[in_idx];
-#pragma unroll BIT_WIDTH_RATIO - 1
-      for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
-        out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
-      }
-    });
-
-  auto const buf_size_in_bytes = buf.size() * sizeof(DeviceType);
+  auto const buf_size_in_bytes = buf->size();
   auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);
 
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    data_buffer->mutable_data(), buf.data(), buf_size_in_bytes, cudaMemcpyDefault, stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
+                                buf->data(),
+                                buf_size_in_bytes,
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   auto type    = arrow::decimal(precision, -input.type().scale());
   auto mask    = fetch_mask_buffer(input, ar_mr, stream);
@@ -473,7 +458,7 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
 {
   auto const column = cudf::make_column_from_scalar(input, 1, stream);
   cudf::table_view const tv{{column->view()}};
-  auto const arrow_table  = cudf::to_arrow(tv, {metadata}, stream);
+  auto const arrow_table  = detail::to_arrow(tv, {metadata}, stream, ar_mr);
   auto const ac           = arrow_table->column(0);
   auto const maybe_scalar = ac->GetScalar(0);
   if (!maybe_scalar.ok()) { CUDF_FAIL("Failed to produce a scalar"); }

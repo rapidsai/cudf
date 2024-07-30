@@ -20,10 +20,11 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/resource_ref.hpp>
 
-namespace nvtext {
+namespace CUDF_EXPORT nvtext {
 
 /**
  * @addtogroup nvtext_tokenize
@@ -132,4 +133,4 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
   rmm::device_async_resource_ref mr    = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
-}  // namespace nvtext
+}  // namespace CUDF_EXPORT nvtext

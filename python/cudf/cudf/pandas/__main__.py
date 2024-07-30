@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -72,7 +72,17 @@ def main():
 
     args = parser.parse_args()
 
-    install()
+    rmm_mode = install()
+    if "managed" in rmm_mode:
+        for key in {
+            "column_view::get_data",
+            "mutable_column_view::get_data",
+            "gather",
+            "hash_join",
+        }:
+            from cudf._lib import pylibcudf
+
+            pylibcudf.experimental.enable_prefetching(key)
     with profile(args.profile, args.line_profile, args.args[0]) as fn:
         args.args[0] = fn
         if args.module:

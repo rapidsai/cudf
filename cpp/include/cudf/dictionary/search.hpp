@@ -21,7 +21,7 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace dictionary {
 /**
  * @addtogroup dictionary_search
@@ -50,4 +50,4 @@ std::unique_ptr<scalar> get_index(
 
 /** @} */  // end of group
 }  // namespace dictionary
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

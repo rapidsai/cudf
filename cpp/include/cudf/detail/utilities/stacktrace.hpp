@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,12 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <string>
 
-namespace cudf::detail {
+namespace CUDF_EXPORT cudf {
+namespace detail {
 /**
  * @addtogroup utility_stacktrace
  * @{
@@ -44,4 +47,5 @@ std::string get_stacktrace(capture_last_stackframe capture_last_frame);
 
 /** @} */  // end of group
 
-}  // namespace cudf::detail
+}  // namespace detail
+}  // namespace CUDF_EXPORT cudf

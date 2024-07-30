@@ -229,8 +229,8 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   if (null_or_empty_count == 0) {
     // performance penalty to run the below loop if there are no nulls or empty lists.
     // run simple explode instead
-    return include_position ? explode_position(input_table, explode_column_idx, stream, mr)
-                            : explode(input_table, explode_column_idx, stream, mr);
+    return include_position ? detail::explode_position(input_table, explode_column_idx, stream, mr)
+                            : detail::explode(input_table, explode_column_idx, stream, mr);
   }
 
   auto gather_map_size = sliced_child.size() + null_or_empty_count;
@@ -300,58 +300,63 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 }  // namespace detail
 
 /**
- * @copydoc cudf::explode(table_view const&, size_type, rmm::device_async_resource_ref)
+ * @copydoc cudf::explode(table_view const&, size_type, rmm::cuda_stream_view,
+ * rmm::device_async_resource_ref)
  */
 std::unique_ptr<table> explode(table_view const& input_table,
                                size_type explode_column_idx,
+                               rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input_table.column(explode_column_idx).type().id() == type_id::LIST,
                "Unsupported non-list column");
-  return detail::explode(input_table, explode_column_idx, cudf::get_default_stream(), mr);
+  return detail::explode(input_table, explode_column_idx, stream, mr);
 }
 
 /**
- * @copydoc cudf::explode_position(table_view const&, size_type, rmm::device_async_resource_ref)
+ * @copydoc cudf::explode_position(table_view const&, size_type, rmm::cuda_stream_view,
+ * rmm::device_async_resource_ref)
  */
 std::unique_ptr<table> explode_position(table_view const& input_table,
                                         size_type explode_column_idx,
+                                        rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input_table.column(explode_column_idx).type().id() == type_id::LIST,
                "Unsupported non-list column");
-  return detail::explode_position(input_table, explode_column_idx, cudf::get_default_stream(), mr);
+  return detail::explode_position(input_table, explode_column_idx, stream, mr);
 }
 
 /**
- * @copydoc cudf::explode_outer(table_view const&, size_type, rmm::device_async_resource_ref)
+ * @copydoc cudf::explode_outer(table_view const&, size_type, rmm::cuda_stream_view,
+ * rmm::device_async_resource_ref)
  */
 std::unique_ptr<table> explode_outer(table_view const& input_table,
                                      size_type explode_column_idx,
+                                     rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input_table.column(explode_column_idx).type().id() == type_id::LIST,
                "Unsupported non-list column");
-  return detail::explode_outer(
-    input_table, explode_column_idx, false, cudf::get_default_stream(), mr);
+  return detail::explode_outer(input_table, explode_column_idx, false, stream, mr);
 }
 
 /**
  * @copydoc cudf::explode_outer_position(table_view const&, size_type,
- * rmm::device_async_resource_ref)
+ * rmm::cuda_stream_view, rmm::device_async_resource_ref)
  */
 std::unique_ptr<table> explode_outer_position(table_view const& input_table,
                                               size_type explode_column_idx,
+                                              rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input_table.column(explode_column_idx).type().id() == type_id::LIST,
                "Unsupported non-list column");
-  return detail::explode_outer(
-    input_table, explode_column_idx, true, cudf::get_default_stream(), mr);
+  return detail::explode_outer(input_table, explode_column_idx, true, stream, mr);
 }
 
 }  // namespace cudf

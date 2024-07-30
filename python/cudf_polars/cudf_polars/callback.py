@@ -5,10 +5,14 @@
 
 from __future__ import annotations
 
+import os
+import warnings
 from functools import partial
 from typing import TYPE_CHECKING
 
 import nvtx
+
+from polars.exceptions import PerformanceWarning
 
 from cudf_polars.dsl.translate import translate_ir
 
@@ -61,6 +65,12 @@ def execute_with_cudf(
     try:
         with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
             nt.set_udf(partial(_callback, translate_ir(nt)))
-    except exception:
+    except exception as e:
+        if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
+            warnings.warn(
+                f"Query execution with GPU not supported, reason: {type(e)}: {e}",
+                PerformanceWarning,
+                stacklevel=2,
+            )
         if raise_on_fail:
             raise

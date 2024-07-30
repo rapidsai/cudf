@@ -24,48 +24,23 @@ def row_index(request):
 
 
 @pytest.fixture(
-    params=[
-        None,
-        pytest.param(
-            2, marks=pytest.mark.xfail(reason="No handling of row limit in scan")
-        ),
-        pytest.param(
-            3, marks=pytest.mark.xfail(reason="No handling of row limit in scan")
-        ),
-    ],
+    params=[None, 2, 3],
     ids=["all-rows", "n_rows-with-skip", "n_rows-no-skip"],
 )
 def n_rows(request):
     return request.param
 
 
-@pytest.fixture(params=["csv", "parquet"])
-def df(request, tmp_path, row_index, n_rows):
-    df = pl.DataFrame(
+@pytest.fixture(scope="module")
+def df():
+    # TODO: more dtypes
+    return pl.DataFrame(
         {
-            "a": [1, 2, 3, None],
-            "b": ["ẅ", "x", "y", "z"],
-            "c": [None, None, 4, 5],
+            "a": [1, 2, 3, None, 4, 5],
+            "b": ["ẅ", "x", "y", "z", "123", "abcd"],
+            "c": [None, None, 4, 5, -1, 0],
         }
     )
-    name, offset = row_index
-    if request.param == "csv":
-        df.write_csv(tmp_path / "file.csv")
-        return pl.scan_csv(
-            tmp_path / "file.csv",
-            row_index_name=name,
-            row_index_offset=offset,
-            n_rows=n_rows,
-        )
-    else:
-        df.write_parquet(tmp_path / "file.pq")
-        # parquet doesn't have skip_rows argument
-        return pl.scan_parquet(
-            tmp_path / "file.pq",
-            row_index_name=name,
-            row_index_offset=offset,
-            n_rows=n_rows,
-        )
 
 
 @pytest.fixture(params=[None, ["a"], ["b", "a"]], ids=["all", "subset", "reordered"])
@@ -83,20 +58,72 @@ def mask(request):
     return request.param
 
 
-def test_scan(df, columns, mask):
-    q = df
+def make_source(df, path, format):
+    """
+    Writes the passed polars df to a file of
+    the desired format
+    """
+    if format == "csv":
+        df.write_csv(path)
+    elif format == "ndjson":
+        df.write_ndjson(path)
+    else:
+        df.write_parquet(path)
+
+
+@pytest.mark.parametrize(
+    "format, scan_fn",
+    [
+        ("csv", pl.scan_csv),
+        ("ndjson", pl.scan_ndjson),
+        ("parquet", pl.scan_parquet),
+    ],
+)
+def test_scan(tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask, request):
+    name, offset = row_index
+    make_source(df, tmp_path / "file", format)
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(n_rows is not None and scan_fn is pl.scan_ndjson),
+            reason="libcudf does not support n_rows",
+        )
+    )
+    q = scan_fn(
+        tmp_path / "file",
+        row_index_name=name,
+        row_index_offset=offset,
+        n_rows=n_rows,
+    )
     if mask is not None:
         q = q.filter(mask)
     if columns is not None:
-        q = df.select(*columns)
-    assert_gpu_result_equal(q)
+        q = q.select(*columns)
+    polars_collect_kwargs = {}
+    if versions.POLARS_VERSION_LT_12:
+        # https://github.com/pola-rs/polars/issues/17553
+        polars_collect_kwargs = {"projection_pushdown": False}
+    assert_gpu_result_equal(
+        q,
+        polars_collect_kwargs=polars_collect_kwargs,
+        # This doesn't work in polars < 1.2 since the row-index
+        # is in the wrong order in previous polars releases
+        check_column_order=versions.POLARS_VERSION_LT_12,
+    )
 
 
 def test_scan_unsupported_raises(tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
 
-    df.write_ndjson(tmp_path / "df.json")
-    q = pl.scan_ndjson(tmp_path / "df.json")
+    df.write_ipc(tmp_path / "df.ipc")
+    q = pl.scan_ipc(tmp_path / "df.ipc")
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_ndjson_nrows_notimplemented(tmp_path, df):
+    df = pl.DataFrame({"a": [1, 2, 3]})
+
+    df.write_ndjson(tmp_path / "df.jsonl")
+    q = pl.scan_ndjson(tmp_path / "df.jsonl", n_rows=1)
     assert_ir_translation_raises(q, NotImplementedError)
 
 
@@ -233,3 +260,23 @@ def test_scan_csv_skip_initial_empty_rows(tmp_path):
     q = pl.scan_csv(tmp_path / "test.csv", separator="|", skip_rows=1)
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        # List of colnames (basicaly like names param in CSV)
+        {"b": pl.String, "a": pl.Float32},
+        {"a": pl.UInt64},
+    ],
+)
+def test_scan_ndjson_schema(df, tmp_path, schema):
+    make_source(df, tmp_path / "file", "ndjson")
+    q = pl.scan_ndjson(tmp_path / "file", schema=schema)
+    assert_gpu_result_equal(q)
+
+
+def test_scan_ndjson_unsupported(df, tmp_path):
+    make_source(df, tmp_path / "file", "ndjson")
+    q = pl.scan_ndjson(tmp_path / "file", ignore_errors=True)
+    assert_ir_translation_raises(q, NotImplementedError)

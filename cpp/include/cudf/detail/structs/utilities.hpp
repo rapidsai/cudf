@@ -25,9 +25,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/resource_ref.hpp>
 
-#include <utility>
-
-namespace cudf::structs::detail {
+namespace CUDF_EXPORT cudf {
+namespace structs::detail {
 
 enum class column_nullability {
   MATCH_INCOMING,  ///< generate a null column if the incoming column has nulls
@@ -268,4 +267,5 @@ class flattened_table {
  */
 bool contains_null_structs(column_view const& col);
 
-}  // namespace cudf::structs::detail
+}  // namespace structs::detail
+}  // namespace CUDF_EXPORT cudf

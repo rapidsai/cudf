@@ -105,7 +105,7 @@ struct compute_children_offsets_fn {
    */
   rmm::device_uvector<offsets_pair> create_children_offsets(rmm::cuda_stream_view stream)
   {
-    std::vector<offsets_pair> offsets(columns_ptrs.size());
+    auto offsets = cudf::detail::make_host_vector<offsets_pair>(columns_ptrs.size(), stream);
     thrust::transform_exclusive_scan(
       thrust::host,
       columns_ptrs.begin(),

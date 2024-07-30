@@ -22,9 +22,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace dictionary {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace dictionary::detail {
 
 /**
  * @brief Merges two dictionary columns.
@@ -47,6 +46,5 @@ std::unique_ptr<column> merge(dictionary_column_view const& lcol,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace dictionary
-}  // namespace cudf
+}  // namespace dictionary::detail
+}  // namespace CUDF_EXPORT cudf

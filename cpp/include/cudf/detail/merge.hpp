@@ -16,12 +16,14 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <rmm/device_uvector.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <thrust/pair.h>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -59,4 +61,4 @@ std::unique_ptr<cudf::table> merge(std::vector<table_view> const& tables_to_merg
                                    rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

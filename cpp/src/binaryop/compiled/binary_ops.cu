@@ -18,6 +18,7 @@
 #include "operation.cuh"
 #include "struct_binary_ops.cuh"
 
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>

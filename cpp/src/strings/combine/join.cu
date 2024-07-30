@@ -169,8 +169,10 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
 
   // build the offsets: single string output has offsets [0,chars-size]
   auto offsets_column = [&] {
-    auto offsets = cudf::detail::make_device_uvector_async(
-      std::vector<size_type>({0, static_cast<size_type>(chars.size())}), stream, mr);
+    auto h_offsets = cudf::detail::make_host_vector<size_type>(2, stream);
+    h_offsets[0]   = 0;
+    h_offsets[1]   = chars.size();
+    auto offsets   = cudf::detail::make_device_uvector_async(h_offsets, stream, mr);
     return std::make_unique<column>(std::move(offsets), rmm::device_buffer{}, 0);
   }();
 

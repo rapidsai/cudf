@@ -23,7 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @copydoc cudf::sequence(size_type size, scalar const& init, scalar const& step,
@@ -65,4 +65,4 @@ std::unique_ptr<cudf::column> calendrical_month_sequence(size_type size,
                                                          rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

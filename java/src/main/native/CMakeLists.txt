@@ -210,6 +210,7 @@ target_compile_definitions(
   cudfjni PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
                  "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>"
 )
+target_link_options(cudfjni PRIVATE "-Wl,--no-undefined")
 
 if(USE_GDS)
   add_library(cufilejni src/CuFileJni.cpp)

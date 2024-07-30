@@ -23,7 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -125,4 +125,4 @@ std::vector<uint8_t> pack_metadata(table_view const& table,
                                    metadata_builder& builder);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

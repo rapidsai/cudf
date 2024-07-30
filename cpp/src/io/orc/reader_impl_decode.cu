@@ -492,11 +492,17 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
   if (num_stripes == 0) return;
 
   auto const num_columns = chunks.size().second;
-  std::vector<thrust::pair<size_type, uint32_t*>> prefix_sums_to_update;
+  auto const num_struct_cols =
+    std::count_if(chunks[0].begin(), chunks[0].end(), [](auto const& chunk) {
+      return chunk.type_kind == STRUCT;
+    });
+  auto prefix_sums_to_update =
+    cudf::detail::make_empty_host_vector<thrust::pair<size_type, uint32_t*>>(num_struct_cols,
+                                                                             stream);
   for (auto col_idx = 0ul; col_idx < num_columns; ++col_idx) {
     // Null counts sums are only needed for children of struct columns
     if (chunks[0][col_idx].type_kind == STRUCT) {
-      prefix_sums_to_update.emplace_back(col_idx, d_prefix_sums + num_stripes * col_idx);
+      prefix_sums_to_update.push_back({col_idx, d_prefix_sums + num_stripes * col_idx});
     }
   }
   auto const d_prefix_sums_to_update = cudf::detail::make_device_uvector_async(

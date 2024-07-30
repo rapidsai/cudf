@@ -23,7 +23,7 @@
 
 #include <cstdint>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace ast {
 /**
  * @addtogroup expressions
@@ -555,4 +555,4 @@ class column_name_reference : public expression {
 /** @} */  // end of group
 }  // namespace ast
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

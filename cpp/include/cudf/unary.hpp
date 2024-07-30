@@ -20,6 +20,7 @@
 #include <cudf/fixed_point/floating_conversion.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -27,7 +28,7 @@
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup transformation_unaryops
  * @{
@@ -259,4 +260,4 @@ std::unique_ptr<column> is_not_nan(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

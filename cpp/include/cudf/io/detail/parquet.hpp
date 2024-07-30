@@ -24,6 +24,7 @@
 #include <cudf/io/parquet_metadata.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -32,12 +33,13 @@
 #include <string>
 #include <vector>
 
-namespace cudf::io {
+namespace CUDF_EXPORT cudf {
+namespace io {
 
 // Forward declaration
-class parquet_reader_options;
-class parquet_writer_options;
-class chunked_parquet_writer_options;
+class CUDF_EXPORT parquet_reader_options;
+class CUDF_EXPORT parquet_writer_options;
+class CUDF_EXPORT chunked_parquet_writer_options;
 
 namespace parquet::detail {
 
@@ -257,4 +259,5 @@ class writer {
  */
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources);
 }  // namespace parquet::detail
-}  // namespace cudf::io
+}  // namespace io
+}  // namespace CUDF_EXPORT cudf

@@ -18,14 +18,13 @@
 
 #include <cudf/io/avro.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace avro {
+namespace CUDF_EXPORT cudf {
+namespace io::detail::avro {
 
 /**
  * @brief Reads the entire dataset.
@@ -42,7 +41,5 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);
 
-}  // namespace avro
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace io::detail::avro
+}  // namespace CUDF_EXPORT cudf

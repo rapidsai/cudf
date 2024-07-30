@@ -150,7 +150,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         dtype=None,
         copy=False,
         name=None,
-        **kwargs,
+        verify_integrity=True,
     ):
         if sortorder is not None:
             raise NotImplementedError("sortorder is not yet supported")

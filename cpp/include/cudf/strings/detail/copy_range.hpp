@@ -21,9 +21,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace strings {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace strings::detail {
 
 /**
  * @brief Internal API to copy a range of string elements out-of-place from
@@ -56,6 +55,5 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace strings
-}  // namespace cudf
+}  // namespace strings::detail
+}  // namespace CUDF_EXPORT cudf

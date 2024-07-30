@@ -430,7 +430,9 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
   if (num_segments == 0) { return std::vector<size_type>{}; }
 
   // Construct a contiguous host buffer of indices and copy to device.
-  auto const h_indices = std::vector<size_type>(indices_begin, indices_end);
+  auto h_indices = make_empty_host_vector<typename std::iterator_traits<IndexIterator>::value_type>(
+    std::distance(indices_begin, indices_end), stream);
+  std::copy(indices_begin, indices_end, std::back_inserter(h_indices));
   auto const d_indices =
     make_device_uvector_async(h_indices, stream, rmm::mr::get_current_device_resource());
 

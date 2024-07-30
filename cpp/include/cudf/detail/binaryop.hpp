@@ -17,11 +17,12 @@
 
 #include <cudf/binaryop.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 //! Inner interfaces and implementations
 namespace detail {
 
@@ -77,4 +78,4 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr);
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

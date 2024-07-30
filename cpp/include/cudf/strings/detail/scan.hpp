@@ -21,9 +21,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace strings {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace strings::detail {
 /**
  * @brief Scan function for strings
  *
@@ -43,6 +42,5 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace strings
-}  // namespace cudf
+}  // namespace strings::detail
+}  // namespace CUDF_EXPORT cudf

@@ -34,7 +34,9 @@ def ldf(with_nulls):
     if with_nulls:
         a[4] = None
         a[-3] = None
-    return pl.LazyFrame({"a": a, "b": range(len(a))})
+    return pl.LazyFrame(
+        {"a": a, "b": range(len(a)), "c": [str(i) for i in range(len(a))]}
+    )
 
 
 slice_cases = [
@@ -84,7 +86,7 @@ def test_contains_re_non_strict_raises(ldf):
 
 
 def test_contains_re_non_literal_raises(ldf):
-    q = ldf.select(pl.col("a").str.contains(pl.col("b"), literal=False))
+    q = ldf.select(pl.col("a").str.contains(pl.col("c"), literal=False))
 
     assert_ir_translation_raises(q, NotImplementedError)
 

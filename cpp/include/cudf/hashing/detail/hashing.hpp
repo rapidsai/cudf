@@ -24,9 +24,8 @@
 #include <cstddef>
 #include <functional>
 
-namespace cudf {
-namespace hashing {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace hashing::detail {
 
 std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
                                            uint32_t seed,
@@ -109,9 +108,8 @@ constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
   return lhs ^ (rhs + 0x9e37'79b9'7f4a'7c15 + (lhs << 6) + (lhs >> 2));
 }
 
-}  // namespace detail
-}  // namespace hashing
-}  // namespace cudf
+}  // namespace hashing::detail
+}  // namespace CUDF_EXPORT cudf
 
 // specialization of std::hash for cudf::data_type
 namespace std {

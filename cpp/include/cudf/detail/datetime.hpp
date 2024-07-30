@@ -23,7 +23,7 @@
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace datetime {
 namespace detail {
 /**
@@ -174,4 +174,4 @@ std::unique_ptr<cudf::column> extract_quarter(cudf::column_view const& column,
 
 }  // namespace detail
 }  // namespace datetime
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -14,6 +14,13 @@
  * limitations under the License.
  */
 
+// These interop functions are deprecated. We keep the code in this
+// test and will migrate the tests to export the arrow C data
+// interface which we consume with from_arrow_host. For now, the tests
+// are commented out.
+
+#if 0
+
 #include <tests/interop/arrow_utils.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -595,3 +602,5 @@ TEST_F(FromArrowStructScalarTest, Basic)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(lhs, cudf_struct_scalar->view());
 }
+
+#endif

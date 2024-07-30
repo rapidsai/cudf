@@ -54,7 +54,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 namespace experimental {
 
@@ -2026,4 +2026,4 @@ class row_hasher {
 }  // namespace row
 
 }  // namespace experimental
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

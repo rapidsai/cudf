@@ -18,13 +18,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace strings {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace strings::detail {
 
 /**
  * @copydoc to_integers(strings_column_view const&,data_type,rmm::device_async_resource_ref)
@@ -153,6 +153,5 @@ std::unique_ptr<column> from_fixed_point(column_view const& integers,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace strings
-}  // namespace cudf
+}  // namespace strings::detail
+}  // namespace CUDF_EXPORT cudf

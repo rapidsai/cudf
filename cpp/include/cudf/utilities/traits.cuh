@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 
 #include <cuda/std/atomic>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup utility_types
@@ -64,4 +64,4 @@ constexpr inline bool has_atomic_support(data_type type)
 
 /** @} */
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

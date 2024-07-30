@@ -25,7 +25,6 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/interop.hpp>
-#include <cudf/interop/detail/arrow.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -39,6 +38,7 @@
 
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
+#include <nanoarrow/nanoarrow_device.h>
 
 namespace cudf {
 
@@ -144,9 +144,6 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(schema->type != NANOARROW_TYPE_LARGE_STRING,
-               "Large strings are not yet supported in from_arrow_device",
-               cudf::data_type_error);
   if (input->length == 0) {
     return std::make_tuple<column_view, owned_columns_t>(
       {type,
@@ -158,12 +155,15 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
       {});
   }
 
-  auto offsets_view = column_view{data_type(type_id::INT32),
+  data_type offsets_type(type_id::INT32);
+  if (schema->type == NANOARROW_TYPE_LARGE_STRING) { offsets_type = data_type(type_id::INT64); }
+  auto offsets_view = column_view{offsets_type,
                                   static_cast<size_type>(input->offset + input->length) + 1,
                                   input->buffers[fixed_width_data_buffer_idx],
                                   nullptr,
                                   0,
                                   0};
+
   return std::make_tuple<column_view, owned_columns_t>(
     {type,
      static_cast<size_type>(input->length),

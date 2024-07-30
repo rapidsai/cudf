@@ -12,20 +12,14 @@
 # the License.
 # =============================================================================
 
-# This function finds rmm and sets any additional necessary environment variables.
+# Need to call rapids_cpm_bs_thread_pool to get support for an installed version of thread-pool and
+# to support installing it ourselves
 function(find_and_configure_thread_pool)
-  rapids_cpm_find(
-    BS_thread_pool 4.1.0
-    CPM_ARGS
-    GIT_REPOSITORY https://github.com/bshoshany/thread-pool.git
-    GIT_TAG 097aa718f25d44315cadb80b407144ad455ee4f9
-    GIT_SHALLOW TRUE
-  )
-  if(NOT TARGET BS_thread_pool)
-    add_library(BS_thread_pool INTERFACE)
-    target_include_directories(BS_thread_pool INTERFACE ${BS_thread_pool_SOURCE_DIR}/include)
-    target_compile_definitions(BS_thread_pool INTERFACE "BS_THREAD_POOL_ENABLE_PAUSE=1")
-  endif()
+  include(${rapids-cmake-dir}/cpm/bs_thread_pool.cmake)
+
+  # Find or install thread-pool
+  rapids_cpm_bs_thread_pool()
+
 endfunction()
 
 find_and_configure_thread_pool()

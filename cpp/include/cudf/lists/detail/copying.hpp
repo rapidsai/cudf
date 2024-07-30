@@ -20,9 +20,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace lists {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace lists::detail {
 
 /**
  * @brief Returns a new lists column created from a subset of the
@@ -49,6 +48,5 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace lists
-}  // namespace cudf
+}  // namespace lists::detail
+}  // namespace CUDF_EXPORT cudf

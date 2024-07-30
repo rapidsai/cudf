@@ -19,13 +19,13 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace strings {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace strings::detail {
 /**
  * @brief Returns a strings column replacing a range of rows
  * with the specified string.
@@ -50,6 +50,5 @@ std::unique_ptr<column> fill(strings_column_view const& strings,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace strings
-}  // namespace cudf
+}  // namespace strings::detail
+}  // namespace CUDF_EXPORT cudf

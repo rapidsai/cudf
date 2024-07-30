@@ -23,9 +23,8 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace lists {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace lists::detail {
 
 /**
  * @brief Internal API to construct a lists column from a `list_scalar`, for public
@@ -67,6 +66,5 @@ std::unique_ptr<column> make_all_nulls_lists_column(size_type size,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace lists
-}  // namespace cudf
+}  // namespace lists::detail
+}  // namespace CUDF_EXPORT cudf

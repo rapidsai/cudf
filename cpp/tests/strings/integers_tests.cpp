@@ -294,7 +294,7 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   std::iota(h_integers.begin(), h_integers.end(), -(TypeParam)(h_integers.size() / 2));
   h_integers.push_back(std::numeric_limits<TypeParam>::min());
   h_integers.push_back(std::numeric_limits<TypeParam>::max());
-  auto d_integers = cudf::detail::make_device_uvector_sync(
+  auto const d_integers = cudf::detail::make_device_uvector_sync(
     h_integers, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto integers      = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                             (cudf::size_type)d_integers.size());
@@ -308,8 +308,6 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   // convert to strings
   auto results_strings = cudf::strings::from_integers(integers->view());
 
-  // copy back to host
-  h_integers = cudf::detail::make_host_vector_sync(d_integers, cudf::get_default_stream());
   std::vector<std::string> h_strings;
   for (auto itr = h_integers.begin(); itr != h_integers.end(); ++itr)
     h_strings.push_back(std::to_string(*itr));

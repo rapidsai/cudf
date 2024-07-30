@@ -20,15 +20,15 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <optional>
 
-namespace cudf {
-namespace reduction {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace reduction::detail {
 
 /**
  * @brief Compute sum of each segment in the input column
@@ -354,6 +354,5 @@ std::unique_ptr<column> segmented_nunique(column_view const& col,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace reduction
-}  // namespace cudf
+}  // namespace reduction::detail
+}  // namespace CUDF_EXPORT cudf

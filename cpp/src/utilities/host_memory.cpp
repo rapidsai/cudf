@@ -83,7 +83,7 @@ class fixed_pinned_pool_memory_resource {
   void deallocate_async(void* ptr,
                         std::size_t bytes,
                         std::size_t alignment,
-                        cuda::stream_ref stream) noexcept
+                        cuda::stream_ref stream)
   {
     if (bytes <= pool_size_ && ptr >= pool_begin_ && ptr < pool_end_) {
       pool_->deallocate_async(ptr, bytes, alignment, stream);
@@ -92,14 +92,14 @@ class fixed_pinned_pool_memory_resource {
     }
   }
 
-  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream) noexcept
+  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream)
   {
     return deallocate_async(ptr, bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
   }
 
   void deallocate(void* ptr,
                   std::size_t bytes,
-                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT) noexcept
+                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
   {
     deallocate_async(ptr, bytes, alignment, stream_);
     stream_.wait();
@@ -186,6 +186,61 @@ CUDF_EXPORT rmm::host_device_async_resource_ref& host_mr()
   return mr_ref;
 }
 
+class new_delete_memory_resource {
+ public:
+  void* allocate(std::size_t bytes, std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
+  {
+    try {
+      return rmm::detail::aligned_host_allocate(
+        bytes, alignment, [](std::size_t size) { return ::operator new(size); });
+    } catch (std::bad_alloc const& e) {
+      CUDF_FAIL("Failed to allocate memory: " + std::string{e.what()}, rmm::out_of_memory);
+    }
+  }
+
+  void* allocate_async(std::size_t bytes, [[maybe_unused]] cuda::stream_ref stream)
+  {
+    return allocate(bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT);
+  }
+
+  void* allocate_async(std::size_t bytes,
+                       std::size_t alignment,
+                       [[maybe_unused]] cuda::stream_ref stream)
+  {
+    return allocate(bytes, alignment);
+  }
+
+  void deallocate(void* ptr,
+                  std::size_t bytes,
+                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
+  {
+    rmm::detail::aligned_host_deallocate(
+      ptr, bytes, alignment, [](void* ptr) { ::operator delete(ptr); });
+  }
+
+  void deallocate_async(void* ptr,
+                        std::size_t bytes,
+                        std::size_t alignment,
+                        [[maybe_unused]] cuda::stream_ref stream)
+  {
+    deallocate(ptr, bytes, alignment);
+  }
+
+  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream)
+  {
+    deallocate(ptr, bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT);
+  }
+
+  bool operator==(new_delete_memory_resource const& other) const { return true; }
+
+  bool operator!=(new_delete_memory_resource const& other) const { return !operator==(other); }
+
+  friend void get_property(new_delete_memory_resource const&, cuda::mr::host_accessible) noexcept {}
+};
+
+static_assert(cuda::mr::resource_with<new_delete_memory_resource, cuda::mr::host_accessible>,
+              "Pageable pool mr must be accessible from the host");
+
 }  // namespace
 
 rmm::host_device_async_resource_ref set_pinned_memory_resource(
@@ -224,5 +279,30 @@ void set_kernel_pinned_copy_threshold(size_t threshold)
 }
 
 size_t get_kernel_pinned_copy_threshold() { return kernel_pinned_copy_threshold(); }
+
+CUDF_EXPORT auto& allocate_host_as_pinned_threshold()
+{
+  // use pageable memory for all host allocations
+  static std::atomic<size_t> threshold = 0;
+  return threshold;
+}
+
+void set_allocate_host_as_pinned_threshold(size_t threshold)
+{
+  allocate_host_as_pinned_threshold() = threshold;
+}
+
+size_t get_allocate_host_as_pinned_threshold() { return allocate_host_as_pinned_threshold(); }
+
+namespace detail {
+
+CUDF_EXPORT rmm::host_async_resource_ref get_pageable_memory_resource()
+{
+  static new_delete_memory_resource mr{};
+  static rmm::host_async_resource_ref mr_ref{mr};
+  return mr_ref;
+}
+
+}  // namespace detail
 
 }  // namespace cudf

@@ -4525,7 +4525,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             If False, the funcs will be passed the whole Series at once.
 
             Currently not supported.
-
         engine : {'python', 'numba'}, default 'python'
             Unused. Added for compatibility with pandas.
         engine_kwargs : dict

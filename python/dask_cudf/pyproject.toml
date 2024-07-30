@@ -58,6 +58,7 @@ Homepage = "https://github.com/rapidsai/cudf"
 [tool.rapids-build-backend]
 build-backend = "setuptools.build_meta"
 dependencies-file = "../../dependencies.yaml"
+matrix-entry = "cuda_suffixed=true"
 
 [tool.setuptools]
 license-files = ["LICENSE"]

@@ -1824,7 +1824,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   size_type max_page_fragment_size =
     max_page_fragment_size_opt.value_or(default_max_page_fragment_size);
 
-  std::vector<size_type> column_frag_size(num_columns, max_page_fragment_size);
+  auto column_frag_size = cudf::detail::make_host_vector<size_type>(num_columns, stream);
+  std::fill(column_frag_size.begin(), column_frag_size.end(), max_page_fragment_size);
 
   if (input.num_rows() > 0 && not max_page_fragment_size_opt.has_value()) {
     std::vector<size_t> column_sizes;
@@ -1880,7 +1881,9 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
   size_type num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
 
-  std::vector<int> part_frag_offset;  // Store the idx of the first fragment in each partition
+  auto part_frag_offset =
+    cudf::detail::make_empty_host_vector<int>(num_frag_in_part.size() + 1, stream);
+  // Store the idx of the first fragment in each partition
   std::exclusive_scan(
     num_frag_in_part.begin(), num_frag_in_part.end(), std::back_inserter(part_frag_offset), 0);
   part_frag_offset.push_back(part_frag_offset.back() + num_frag_in_part.back());

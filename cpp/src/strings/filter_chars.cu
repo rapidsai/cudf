@@ -129,7 +129,7 @@ std::unique_ptr<column> filter_characters(
 
   // convert input table for copy to device memory
   size_type table_size = static_cast<size_type>(characters_to_filter.size());
-  thrust::host_vector<char_range> htable(table_size);
+  auto htable          = cudf::detail::make_host_vector<char_range>(table_size, stream);
   std::transform(
     characters_to_filter.begin(), characters_to_filter.end(), htable.begin(), [](auto entry) {
       return char_range{entry.first, entry.second};

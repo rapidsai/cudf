@@ -804,16 +804,16 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   rmm::device_buffer decomp_pages(
     cudf::util::round_up_safe(total_decomp_size, BUFFER_PADDING_MULTIPLE), stream);
 
-  std::vector<device_span<uint8_t const>> comp_in;
-  comp_in.reserve(num_comp_pages);
-  std::vector<device_span<uint8_t>> comp_out;
-  comp_out.reserve(num_comp_pages);
+  auto comp_in =
+    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+  auto comp_out =
+    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
 
   // vectors to save v2 def and rep level data, if any
-  std::vector<device_span<uint8_t const>> copy_in;
-  copy_in.reserve(num_comp_pages);
-  std::vector<device_span<uint8_t>> copy_out;
-  copy_out.reserve(num_comp_pages);
+  auto copy_in =
+    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+  auto copy_out =
+    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
 
   rmm::device_uvector<compression_result> comp_res(num_comp_pages, stream);
   thrust::fill(rmm::exec_policy_nosync(stream),
@@ -822,7 +822,6 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
                compression_result{0, compression_status::FAILURE});
 
   size_t decomp_offset = 0;
-  int32_t start_pos    = 0;
   for (auto const& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
 
@@ -836,56 +835,64 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
       // input and output buffers. otherwise we'd have to keep both the compressed
       // and decompressed data.
       if (offset != 0) {
-        copy_in.emplace_back(page.page_data, offset);
-        copy_out.emplace_back(dst_base, offset);
+        copy_in.push_back({page.page_data, static_cast<size_t>(offset)});
+        copy_out.push_back({dst_base, static_cast<size_t>(offset)});
       }
-      comp_in.emplace_back(page.page_data + offset,
-                           static_cast<size_t>(page.compressed_page_size - offset));
-      comp_out.emplace_back(dst_base + offset,
-                            static_cast<size_t>(page.uncompressed_page_size - offset));
+      comp_in.push_back(
+        {page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)});
+      comp_out.push_back(
+        {dst_base + offset, static_cast<size_t>(page.uncompressed_page_size - offset)});
       page.page_data = dst_base;
       decomp_offset += page.uncompressed_page_size;
     });
+  }
+  auto d_comp_in = cudf::detail::make_device_uvector_async(
+    comp_in, stream, rmm::mr::get_current_device_resource());
+  auto d_comp_out = cudf::detail::make_device_uvector_async(
+    comp_out, stream, rmm::mr::get_current_device_resource());
 
-    host_span<device_span<uint8_t const> const> comp_in_view{comp_in.data() + start_pos,
-                                                             codec.num_pages};
-    auto const d_comp_in = cudf::detail::make_device_uvector_async(
-      comp_in_view, stream, rmm::mr::get_current_device_resource());
-    host_span<device_span<uint8_t> const> comp_out_view(comp_out.data() + start_pos,
-                                                        codec.num_pages);
-    auto const d_comp_out = cudf::detail::make_device_uvector_async(
-      comp_out_view, stream, rmm::mr::get_current_device_resource());
+  int32_t start_pos = 0;
+  for (auto const& codec : codecs) {
+    if (codec.num_pages == 0) { continue; }
+
+    device_span<device_span<uint8_t const> const> d_comp_in_view{d_comp_in.data() + start_pos,
+                                                                 codec.num_pages};
+
+    device_span<device_span<uint8_t> const> d_comp_out_view(d_comp_out.data() + start_pos,
+                                                            codec.num_pages);
+
     device_span<compression_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
 
     switch (codec.compression_type) {
       case GZIP:
-        gpuinflate(d_comp_in, d_comp_out, d_comp_res_view, gzip_header_included::YES, stream);
+        gpuinflate(
+          d_comp_in_view, d_comp_out_view, d_comp_res_view, gzip_header_included::YES, stream);
         break;
       case SNAPPY:
         if (cudf::io::nvcomp_integration::is_stable_enabled()) {
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
-                                     d_comp_in,
-                                     d_comp_out,
+                                     d_comp_in_view,
+                                     d_comp_out_view,
                                      d_comp_res_view,
                                      codec.max_decompressed_size,
                                      codec.total_decomp_size,
                                      stream);
         } else {
-          gpu_unsnap(d_comp_in, d_comp_out, d_comp_res_view, stream);
+          gpu_unsnap(d_comp_in_view, d_comp_out, d_comp_res_view, stream);
         }
         break;
       case ZSTD:
         nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
-                                   d_comp_in,
-                                   d_comp_out,
+                                   d_comp_in_view,
+                                   d_comp_out_view,
                                    d_comp_res_view,
                                    codec.max_decompressed_size,
                                    codec.total_decomp_size,
                                    stream);
         break;
       case BROTLI:
-        gpu_debrotli(d_comp_in,
-                     d_comp_out,
+        gpu_debrotli(d_comp_in_view,
+                     d_comp_out_view,
                      d_comp_res_view,
                      debrotli_scratch.data(),
                      debrotli_scratch.size(),
@@ -893,8 +900,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
         break;
       case LZ4_RAW:
         nvcomp::batched_decompress(nvcomp::compression_type::LZ4,
-                                   d_comp_in,
-                                   d_comp_out,
+                                   d_comp_in_view,
+                                   d_comp_out_view,
                                    d_comp_res_view,
                                    codec.max_decompressed_size,
                                    codec.total_decomp_size,
@@ -1127,9 +1134,8 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
                                 decomp_sum{});
 
   // retrieve to host so we can call nvcomp to get compression scratch sizes
-  std::vector<decompression_info> h_decomp_info =
-    cudf::detail::make_std_vector_sync(decomp_info, stream);
-  std::vector<size_t> temp_cost(pages.size());
+  auto h_decomp_info = cudf::detail::make_host_vector_sync(decomp_info, stream);
+  auto temp_cost     = cudf::detail::make_host_vector<size_t>(pages.size(), stream);
   thrust::transform(thrust::host,
                     h_decomp_info.begin(),
                     h_decomp_info.end(),
