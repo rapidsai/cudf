@@ -226,8 +226,8 @@ cdef object _process_metadata(object df,
             else:
                 start = range_index_meta["start"] + skip_rows
                 stop = range_index_meta["stop"]
-                if num_rows != -1:
-                    stop = start + num_rows
+                if nrows != -1:
+                    stop = start + nrows
                 idx = cudf.RangeIndex(
                     start=start,
                     stop=stop,
