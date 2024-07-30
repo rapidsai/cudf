@@ -782,7 +782,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
-            data = cupy.asfortranarray(data)
             # descr is an optional field of the _cuda_ary_iface_
             if "descr" in arr_interface:
                 if len(arr_interface["descr"]) == 1:
@@ -801,7 +800,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self._check_data_index_length_match()
         elif hasattr(data, "__array_interface__"):
             arr_interface = data.__array_interface__
-            data = np.asfortranarray(data)
             if len(arr_interface["descr"]) == 1:
                 # not record arrays
                 new_df = self._from_arrays(data, index=index, columns=columns)
@@ -5836,17 +5834,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_performance_tracking
     def _from_arrays(
         cls,
-        data: np.ndarray | cupy.ndarray,
+        data,
         index=None,
         columns=None,
         nan_as_null=False,
     ):
-        """Convert a numpy/cupy array to DataFrame.
+        """
+        Convert an object implementing an array interface to DataFrame.
 
         Parameters
         ----------
-        data : numpy/cupy array of ndim 1 or 2,
-            dimensions greater than 2 are not supported yet.
+        data : object of ndim 1 or 2,
+            Object implementing __array_interface__ or __cuda_array_interface__
         index : Index or array-like
             Index to use for resulting frame. Will default to
             RangeIndex if no indexing information part of input data and
@@ -5858,7 +5857,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
         """
-        if data.ndim != 1 and data.ndim != 2:
+        if hasattr(data, "__cuda_array_interface__"):
+            data = cupy.asfortranarray(data)
+        elif hasattr(data, "__array_interface__"):
+            data = np.asfortranarray(data)
+
+        if data.ndim not in {1, 2}:
             raise ValueError(
                 f"records dimension expected 1 or 2 but found: {data.ndim}"
             )
