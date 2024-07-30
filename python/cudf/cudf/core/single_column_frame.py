@@ -389,3 +389,10 @@ class SingleColumnFrame(Frame, NotIterable):
         result = cudf._lib.copying.copy_if_else(input_col, other, cond)
 
         return _make_categorical_like(result, self_column)
+
+    @_performance_tracking
+    def transpose(self):
+        """Return the transpose, which is by definition self."""
+        return self
+
+    T = property(transpose, doc=transpose.__doc__)
