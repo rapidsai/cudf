@@ -3978,7 +3978,7 @@ def test_parquet_reader_with_mismatched_schemas_error():
     df2.to_parquet(buf2, store_schema=False)
 
     with pytest.raises(
-        RuntimeError,
+        ValueError,
         match="Encountered mismatching SchemaElement properties encountered for a column in the selected path",
     ):
         cudf.read_parquet(
@@ -4007,7 +4007,7 @@ def test_parquet_reader_with_mismatched_schemas_error():
     df2.to_parquet(buf2)
 
     with pytest.raises(
-        RuntimeError,
+        IndexError,
         match="Encountered mismatching number of children encountered for a column in the selected path",
     ):
         cudf.read_parquet(
@@ -4017,7 +4017,7 @@ def test_parquet_reader_with_mismatched_schemas_error():
         )
 
     with pytest.raises(
-        RuntimeError,
+        IndexError,
         match="Encountered mismatching schema tree depths across data sources",
     ):
         cudf.read_parquet(
