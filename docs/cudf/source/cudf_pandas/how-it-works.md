@@ -39,7 +39,6 @@ pandas-specific semantics like default sort ordering.
 
 
 `cudf.pandas` uses a managed memory pool by default. This allows `cudf.pandas` to process datasets larger than the memory of the GPU(s) it is running on. Managed memory prefetching is also enabled by default to improve memory access performance. For more information on CUDA Unified Memory (managed memory), performance and prefetching, see [this NVIDIA Developer blog post](https://developer.nvidia.com/blog/improving-gpu-memory-oversubscription-performance/).
-prefetching <<LINK to prefetch tutorial/demo>>.
 
 Pool allocators improve allocation performance. Without using one, memory
 allocation may be a bottleneck depending on the workload. Managed memory
