@@ -19,7 +19,7 @@ def bench_construction(benchmark, N):
 
 @pytest.mark.parametrize("N", [100, 100_000])
 def bench_construction_numba_device_array(benchmark, N):
-    benchmark(cudf.DataFrame, numba.cuda.to_device(numpy.ones(N)))
+    benchmark(cudf.DataFrame, numba.cuda.to_device(numpy.ones((100, N))))
 
 
 @benchmark_with_object(cls="dataframe", dtype="float", cols=6)
