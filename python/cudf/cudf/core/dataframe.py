@@ -5857,18 +5857,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
         """
+        array_data = np.ndarray | cupy.ndarray
         if hasattr(data, "__cuda_array_interface__"):
-            data = cupy.asarray(data, order="F")
+            array_data = cupy.asarray(data, order="F")
         elif hasattr(data, "__array_interface__"):
-            data = np.asarray(data, order="F")
-
-        if data.ndim not in {1, 2}:
+            array_data = np.asarray(data, order="F")
+        else:
             raise ValueError(
-                f"records dimension expected 1 or 2 but found: {data.ndim}"
+                "data must be an object implementing __cuda_array_interface__ or __array_interface__"
+            )
+
+        if array_data.ndim not in {1, 2}:
+            raise ValueError(
+                f"records dimension expected 1 or 2 but found: {array_data.ndim}"
             )
 
         if data.ndim == 2:
-            num_cols = data.shape[1]
+            num_cols = array_data.shape[1]
         else:
             # Since we validate ndim to be either 1 or 2 above,
             # this case can be assumed to be ndim == 1.
@@ -5886,14 +5891,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError("Duplicate column names are not allowed")
             names = columns
 
-        if data.ndim == 2:
+        if array_data.ndim == 2:
             ca_data = {
-                k: column.as_column(data[:, i], nan_as_null=nan_as_null)
+                k: column.as_column(array_data[:, i], nan_as_null=nan_as_null)
                 for i, k in enumerate(names)
             }
-        elif data.ndim == 1:
+        elif array_data.ndim == 1:
             ca_data = {
-                names[0]: column.as_column(data, nan_as_null=nan_as_null)
+                names[0]: column.as_column(array_data, nan_as_null=nan_as_null)
             }
 
         if index is not None:
