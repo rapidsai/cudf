@@ -15,6 +15,10 @@ from .scalar cimport Scalar
 from .types cimport DataType, type_id
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
+import functools
+
+import numpy as np
+
 
 cdef class Column:
     """A container of nullable device data as a column of elements.
@@ -270,6 +274,51 @@ cdef class Column:
             c_result = move(make_column_from_scalar(dereference(slr.get()), size))
         return Column.from_libcudf(move(c_result))
 
+    @staticmethod
+    def from_cuda_array_interface_obj(object obj):
+        """Create a Column from an object with a CUDA array interface.
+
+        Parameters
+        ----------
+        obj : object
+            The object with the CUDA array interface to create a column from.
+
+        Returns
+        -------
+        Column
+            A Column containing the data from the CUDA array interface.
+
+        Notes
+        -----
+        Data is not copied when creating the column. The caller is
+        responsible for ensuring the data is not mutated unexpectedly while the
+        column is in use.
+        """
+        data = gpumemoryview(obj)
+        iface = data.__cuda_array_interface__
+        if iface.get('mask') is not None:
+            raise ValueError("mask not yet supported.")
+
+        typestr = iface['typestr'][1:]
+        if not is_c_contiguous(
+            iface['shape'],
+            iface['strides'],
+            np.dtype(typestr).itemsize
+        ):
+            raise ValueError("Data must be C-contiguous")
+
+        data_type = _datatype_from_dtype_desc(typestr)
+        size = iface['shape'][0]
+        return Column(
+            data_type,
+            size,
+            data,
+            None,
+            0,
+            0,
+            []
+        )
+
     cpdef DataType type(self):
         """The type of data in the column."""
         return self._data_type
@@ -354,6 +403,34 @@ cdef class ListColumnView:
         return lists_column_view(self._column.view())
 
 
+@functools.cache
+def _datatype_from_dtype_desc(desc):
+    mapping = {
+        'u1': type_id.UINT8,
+        'u2': type_id.UINT16,
+        'u4': type_id.UINT32,
+        'u8': type_id.UINT64,
+        'i1': type_id.INT8,
+        'i2': type_id.INT16,
+        'i4': type_id.INT32,
+        'i8': type_id.INT64,
+        'f4': type_id.FLOAT32,
+        'f8': type_id.FLOAT64,
+        'b1': type_id.BOOL8,
+        'M8[s]': type_id.TIMESTAMP_SECONDS,
+        'M8[ms]': type_id.TIMESTAMP_MILLISECONDS,
+        'M8[us]': type_id.TIMESTAMP_MICROSECONDS,
+        'M8[ns]': type_id.TIMESTAMP_NANOSECONDS,
+        'm8[s]': type_id.DURATION_SECONDS,
+        'm8[ms]': type_id.DURATION_MILLISECONDS,
+        'm8[us]': type_id.DURATION_MICROSECONDS,
+        'm8[ns]': type_id.DURATION_NANOSECONDS,
+    }
+    if desc not in mapping:
+        raise ValueError(f"Unsupported dtype: {desc}")
+    return DataType(mapping[desc])
+
+
 def is_c_contiguous(
     shape: Sequence[int], strides: Sequence[int], itemsize: int
 ) -> bool:
@@ -375,9 +452,6 @@ def is_c_contiguous(
     """
 
     if any(dim == 0 for dim in shape):
-        return True
-    if strides is None:
-        # spec says strides = None -> c-contig
         return True
     cumulative_stride = itemsize
     for dim, stride in zip(reversed(shape), reversed(strides)):
