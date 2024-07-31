@@ -2496,20 +2496,28 @@ def test_dti_asi8():
     "method, kwargs",
     [
         ["mean", {}],
-        ["std", {}],
-        ["std", {"ddof": 0}],
+        pytest.param(
+            "std",
+            {},
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/16444"
+            ),
+        ),
+        pytest.param(
+            "std",
+            {"ddof": 0},
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/16444"
+            ),
+        ),
     ],
 )
-def test_dti_reduction(method, kwargs, request):
+def test_dti_reduction(method, kwargs):
     pd_dti = pd.DatetimeIndex(["2020-01-01", "2020-12-31"], name="foo")
     cudf_dti = cudf.from_pandas(pd_dti)
 
     result = getattr(cudf_dti, method)(**kwargs)
     expected = getattr(pd_dti, method)(**kwargs)
-    if method == "std":
-        request.applymarker(
-            pytest.mark.xfail(reason="cudf returns imprecise nanoseconds")
-        )
     assert result == expected
 
 
