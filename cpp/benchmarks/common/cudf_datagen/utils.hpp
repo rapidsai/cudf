@@ -164,13 +164,13 @@ inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>
 inline auto make_pool()
 {
   return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    make_cuda(), rmm::percent_of_free_device_memory(50));
+    make_cuda(), rmm::percent_of_free_device_memory(40));
 }
 inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
 inline auto make_managed_pool()
 {
   return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    make_managed(), rmm::percent_of_free_device_memory(50));
+    make_managed(), rmm::percent_of_free_device_memory(40));
 }
 inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
   std::string const& mode)
@@ -361,14 +361,15 @@ std::unique_ptr<cudf::column> gen_rand_num_col(T lower,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::column> gen_primary_key_col(int64_t start,
-                                                  int64_t num_rows,
+template <typename T>
+std::unique_ptr<cudf::column> gen_primary_key_col(T start,
+                                                  T num_rows,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto const init = cudf::numeric_scalar<int64_t>(start);
-  auto const step = cudf::numeric_scalar<int64_t>(1);
+  auto const init = cudf::numeric_scalar<T>(start);
+  auto const step = cudf::numeric_scalar<T>(1);
   return cudf::sequence(num_rows, init, step, stream, mr);
 }
 
@@ -428,13 +429,13 @@ std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string>
 {
   CUDF_FUNC_RANGE();
   // Build a vocab table of random strings to choose from
-  auto const keys = gen_primary_key_col(0, string_set.size(), stream, mr);
+  auto const keys = gen_primary_key_col<int32_t>(0, string_set.size(), stream, mr);
   auto const values =
     cudf::test::strings_column_wrapper(string_set.begin(), string_set.end()).release();
   auto const vocab_table = cudf::table_view({keys->view(), values->view()});
 
   // Build a single column containing `num_rows` random numbers
-  auto const rand_keys = gen_rand_num_col<int64_t>(0, string_set.size() - 1, num_rows, stream, mr);
+  auto const rand_keys = gen_rand_num_col<int32_t>(0, string_set.size() - 1, num_rows, stream, mr);
 
   auto const gathered_table = cudf::gather(
     vocab_table, rand_keys->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
@@ -485,7 +486,7 @@ std::unique_ptr<cudf::column> gen_rep_seq_col(int64_t limit,
                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto pkey                    = gen_primary_key_col(0, num_rows, stream, mr);
+  auto pkey                    = gen_primary_key_col<int64_t>(0, num_rows, stream, mr);
   auto repeat_seq_zero_indexed = cudf::binary_operation(pkey->view(),
                                                         cudf::numeric_scalar<int64_t>(limit),
                                                         cudf::binary_operator::MOD,
