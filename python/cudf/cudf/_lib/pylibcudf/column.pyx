@@ -20,8 +20,6 @@ from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 import functools
 
-import numpy as np
-
 
 cdef class Column:
     """A container of nullable device data as a column of elements.
@@ -306,7 +304,7 @@ cdef class Column:
         if not is_c_contiguous(
             iface['shape'],
             iface['strides'],
-            np.dtype(typestr).itemsize
+            int(iface['typestr'][2])
         ):
             raise ValueError("Data must be C-contiguous")
 
