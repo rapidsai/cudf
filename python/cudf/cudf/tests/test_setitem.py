@@ -179,8 +179,8 @@ def test_column_set_equal_length_object_by_mask():
 
     data[bool_col] = replace_data
     assert_eq(
-        cudf.Series._from_data({None: data}),
-        cudf.Series._from_data({None: replace_data}),
+        cudf.Series._from_column(data),
+        cudf.Series._from_column(replace_data),
     )
 
     data = cudf.Series([0, 0, 1, 1, 1])._column
@@ -188,7 +188,7 @@ def test_column_set_equal_length_object_by_mask():
     data[bool_col] = replace_data
 
     assert_eq(
-        cudf.Series._from_data({None: data}),
+        cudf.Series._from_column(data),
         cudf.Series([100, 0, 300, 1, 500]),
     )
 

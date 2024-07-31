@@ -1489,14 +1489,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self._drop_column(name)
 
     @_performance_tracking
-    def memory_usage(self, index=True, deep=False):
+    def memory_usage(self, index=True, deep=False) -> cudf.Series:
         mem_usage = [col.memory_usage for col in self._data.columns]
         names = [str(name) for name in self._data.names]
         if index:
             mem_usage.append(self.index.memory_usage())
             names.append("Index")
-        return Series._from_data(
-            data={None: as_column(mem_usage)},
+        return Series._from_column(
+            as_column(mem_usage),
             index=cudf.Index(names),
         )
 
@@ -3804,8 +3804,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     col_empty = column_empty(
                         len(idxs), dtype=col.dtype, masked=True
                     )
-                    ca = ColumnAccessor({None: col_empty}, verify=False)
-                    ans = cudf.Series._from_data(ca, index=cudf.Index(idxs))
+                    ans = cudf.Series._from_column(
+                        col_empty, index=cudf.Index(idxs)
+                    )
                     if isinstance(aggs.get(key), abc.Iterable):
                         # TODO : Allow simultaneous pass for multi-aggregation
                         # as a future optimization
@@ -4803,7 +4804,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # this could be written as a single kernel
         result = {}
         for name, col in self._data.items():
-            apply_sr = Series._from_data({None: col})
+            apply_sr = Series._from_column(col)
             result[name] = apply_sr.apply(_func)._column
 
         return DataFrame._from_data(result, index=self.index)
@@ -6074,8 +6075,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             if q_is_number:
                 result = result.transpose()
-                ca = ColumnAccessor({q: result._columns[0]}, verify=False)
-                return Series._from_data(ca, index=result.index)
+                return Series._from_column(
+                    result._columns[0], name=q, index=result.index
+                )
         else:
             # Ensure that qs is non-scalar so that we always get a column back.
             interpolation = interpolation or "linear"
@@ -6336,12 +6338,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if axis != 0:
             raise NotImplementedError("Only axis=0 is currently supported.")
         length = len(self)
-        return Series._from_data(
-            {
-                None: as_column(
-                    [length - col.null_count for col in self._columns]
-                )
-            },
+        return Series._from_column(
+            as_column([length - col.null_count for col in self._columns]),
             cudf.Index(self._data.names),
         )
 
@@ -6470,7 +6468,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
                 else:
                     idx = cudf.Index(source._data.names)
-                return Series._from_data({None: as_column(result)}, idx)
+                return Series._from_column(as_column(result), index=idx)
         elif axis == 1:
             return source._apply_cupy_method_axis_1(op, **kwargs)
         else:
@@ -6700,8 +6698,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 result = result.set_mask(
                     cudf._lib.transform.bools_to_mask(mask._column)
                 )
-            ca = ColumnAccessor({None: result}, verify=False)
-            return Series._from_data(ca, index=self.index)
+            return Series._from_column(result, index=self.index)
         else:
             result_df = DataFrame(result).set_index(self.index)
             result_df._set_columns_like(prepared._data)
@@ -7289,9 +7286,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Construct the resulting dataframe / series
         if not has_unnamed_levels:
-            result = Series._from_data(
-                data={None: stacked[0]}, index=new_index
-            )
+            result = Series._from_column(stacked[0], index=new_index)
         else:
             if unnamed_level_values.nlevels == 1:
                 unnamed_level_values = unnamed_level_values.get_level_values(0)
@@ -7432,10 +7427,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             size=len(self),
             offset=0,
         )
-        return cudf.Series._from_data(
-            cudf.core.column_accessor.ColumnAccessor(
-                {name: col}, verify=False
-            ),
+        return cudf.Series._from_column(
+            col,
             index=self.index,
             name=name,
         )
@@ -7922,12 +7915,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError(
                     "Cannot operate inplace if there is no assignment"
                 )
-            return Series._from_data(
-                {
-                    None: libcudf.transform.compute_column(
-                        [*self._columns], self._column_names, statements[0]
-                    )
-                }
+            return Series._from_column(
+                libcudf.transform.compute_column(
+                    [*self._columns], self._column_names, statements[0]
+                )
             )
 
         targets = []

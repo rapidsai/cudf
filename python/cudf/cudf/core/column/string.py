@@ -3679,12 +3679,9 @@ class StringMethods(ColumnMethods):
                 f"got: {patterns_column.dtype}"
             )
 
-        return cudf.Series._from_data(
-            {
-                self._parent.name: libstrings.find_multiple(
-                    self._column, patterns_column
-                )
-            },
+        return cudf.Series._from_column(
+            libstrings.find_multiple(self._column, patterns_column),
+            name=self._parent.name,
             index=self._parent.index
             if isinstance(self._parent, cudf.Series)
             else self._parent,
@@ -4692,8 +4689,9 @@ class StringMethods(ColumnMethods):
         if isinstance(self._parent, cudf.Series):
             lengths = self.len().fillna(0)
             index = self._parent.index.repeat(lengths)
-            data = {self._parent.name: result_col}
-            return cudf.Series._from_data(data, index=index)
+            return cudf.Series._from_column(
+                result_col, name=self._parent.name, index=index
+            )
         elif isinstance(self._parent, cudf.BaseIndex):
             return cudf.Index(result_col, name=self._parent.name)
         else:

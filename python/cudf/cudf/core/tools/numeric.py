@@ -12,7 +12,6 @@ from cudf import _lib as libcudf
 from cudf._lib import strings as libstrings
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_string_dtype
 from cudf.core.column import as_column
-from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.index import ensure_index
 from cudf.utils.dtypes import can_convert_to_column
@@ -171,8 +170,9 @@ def to_numeric(arg, errors="raise", downcast=None):
                     break
 
     if isinstance(arg, (cudf.Series, pd.Series)):
-        ca = ColumnAccessor({arg.name: col}, verify=False)
-        return cudf.Series._from_data(ca, index=ensure_index(arg.index))
+        return cudf.Series._from_column(
+            col, name=arg.name, index=ensure_index(arg.index)
+        )
     else:
         if col.has_nulls():
             # To match pandas, always return a floating type filled with nan.

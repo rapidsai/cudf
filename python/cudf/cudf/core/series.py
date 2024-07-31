@@ -396,10 +396,9 @@ class _SeriesLocIndexer(_FrameIndexer):
             return _indices_from_labels(self._frame, arg)
 
         else:
-            ca = ColumnAccessor(
-                {None: cudf.core.column.as_column(arg)}, verify=False
+            arg = cudf.core.series.Series._from_column(
+                cudf.core.column.as_column(arg)
             )
-            arg = cudf.core.series.Series._from_data(ca)
             if arg.dtype.kind == "b":
                 return arg
             else:
@@ -515,8 +514,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         col = cudf.core.column.categorical.pandas_categorical_as_column(
             categorical, codes=codes
         )
-        ca = ColumnAccessor({None: col}, verify=False)
-        return Series._from_data(ca)
+        return Series._from_column(col)
 
     @classmethod
     @_performance_tracking
@@ -693,6 +691,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             self._data = reindexed._data
             self._index = second_index
         self._check_data_index_length_match()
+
+    @classmethod
+    @_performance_tracking
+    def _from_column(
+        cls,
+        column: ColumnBase,
+        *,
+        name: abc.Hashable = None,
+        index: BaseIndex | None = None,
+    ) -> Self:
+        ca = ColumnAccessor({name: column}, verify=False)
+        return cls._from_data(ca, index=index)
 
     @classmethod
     @_performance_tracking
@@ -2753,8 +2763,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if len(val_counts) > 0:
             val_counts = val_counts[val_counts == val_counts.iloc[0]]
 
-        return Series._from_data(
-            {self.name: val_counts.index.sort_values()._column}, name=self.name
+        return Series._from_column(
+            val_counts.index.sort_values()._column, name=self.name
         )
 
     @_performance_tracking
@@ -3043,8 +3053,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 f"to isin(), you passed a [{type(values).__name__}]"
             )
 
-        return Series._from_data(
-            {self.name: self._column.isin(values)}, index=self.index
+        return Series._from_column(
+            self._column.isin(values), name=self.name, index=self.index
         )
 
     @_performance_tracking
@@ -3080,9 +3090,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         res = self._column.unique()
         if cudf.get_option("mode.pandas_compatible"):
             return res.values
-        return Series._from_data(
-            self._data._from_columns_like_self([res], verify=False)
-        )
+        return Series._from_column(res, name=self.name)
 
     @_performance_tracking
     def value_counts(
@@ -3314,8 +3322,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if return_scalar:
             return result
 
-        return Series._from_data(
-            data={self.name: result},
+        return Series._from_column(
+            result,
+            name=self.name,
             index=cudf.Index(np_array_q) if quant_index else None,
         )
 
@@ -3397,15 +3406,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    2
         dtype: int32
         """
-        ca = ColumnAccessor(
-            {
-                self.name: cudf.core.column.numerical.digitize(
-                    self._column, bins, right
-                )
-            },
-            verify=False,
+        return Series._from_column(
+            cudf.core.column.numerical.digitize(self._column, bins, right),
+            name=self.name,
         )
-        return Series._from_data(ca)
 
     @_performance_tracking
     def diff(self, periods=1):
@@ -5366,10 +5370,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     elif b_col.null_count:
         null_values = b_col.isnull()
     else:
-        return Series._from_data({None: result_col}, index=index)
+        return Series._from_column(result_col, index=index)
 
     result_col[null_values] = False
     if equal_nan is True and a_col.null_count and b_col.null_count:
         result_col[equal_nulls] = True
 
-    return Series._from_data({None: result_col}, index=index)
+    return Series._from_column(result_col, index=index)

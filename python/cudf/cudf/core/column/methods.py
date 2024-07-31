@@ -86,11 +86,10 @@ class ColumnMethods(NotIterable):
                         data=table, index=self._parent.index
                     )
             elif isinstance(self._parent, cudf.Series):
-                ca = cudf.core.column_accessor.ColumnAccessor(
-                    {self._parent.name: new_col}, verify=False
-                )
-                return cudf.Series._from_data(
-                    ca, self._parent.index if retain_index else None
+                return cudf.Series._from_column(
+                    new_col,
+                    name=self._parent.name,
+                    index=self._parent.index if retain_index else None,
                 )
             elif isinstance(self._parent, cudf.BaseIndex):
                 return cudf.Index(new_col, name=self._parent.name)

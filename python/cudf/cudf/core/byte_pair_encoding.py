@@ -56,4 +56,4 @@ class BytePairEncoder:
         sep = cudf.Scalar(separator, dtype="str")
         result = cpp_byte_pair_encoding(text._column, self.merge_pairs, sep)
 
-        return cudf.Series._from_data({None: result})
+        return cudf.Series._from_column(result)

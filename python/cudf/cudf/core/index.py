@@ -60,7 +60,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf, search_range
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator, Hashable, Iterable
 
 
 def ensure_index(index_like: Any) -> BaseIndex:
@@ -1072,6 +1072,16 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @classmethod
     @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None
+    ) -> Self:
+        ca = cudf.core.column_accessor.ColumnAccessor(
+            {name: column}, verify=False
+        )
+        return _index_from_data(ca)
+
+    @classmethod
+    @_performance_tracking
     def _from_data(cls, data: MutableMapping, name: Any = no_default) -> Self:
         out = super()._from_data(data=data)
         if name is not no_default:
@@ -1319,21 +1329,21 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
         scatter_map, indices = libcudf.join.join([lcol], [rcol], how="inner")
         result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
-        result_series = cudf.Series._from_data({None: result})
+        result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
             result_series = _get_indexer_basic(
                 index=self,
                 positions=result_series,
                 method=method,
-                target_col=cudf.Series._from_data({None: needle}),
+                target_col=cudf.Series._from_column(needle),
                 tolerance=tolerance,
             )
         elif method == "nearest":
             result_series = _get_nearest_indexer(
                 index=self,
                 positions=result_series,
-                target_col=cudf.Series._from_data({None: needle}),
+                target_col=cudf.Series._from_column(needle),
                 tolerance=tolerance,
             )
         elif method is not None:

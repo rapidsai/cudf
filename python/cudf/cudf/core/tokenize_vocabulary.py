@@ -47,4 +47,4 @@ class TokenizeVocabulary:
             text._column, self.vocabulary, delim, default_id
         )
 
-        return cudf.Series._from_data({None: result})
+        return cudf.Series._from_column(result)

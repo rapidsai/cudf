@@ -95,7 +95,7 @@ def test_column_offset_and_size(pandas_input, offset, size):
     else:
         assert col.size == (col.data.size / col.dtype.itemsize)
 
-    got = cudf.Series._from_data({None: col})
+    got = cudf.Series._from_column(col)
 
     if offset is None:
         offset = 0
@@ -112,8 +112,8 @@ def test_column_offset_and_size(pandas_input, offset, size):
 
 def column_slicing_test(col, offset, size, cast_to_float=False):
     col_slice = col.slice(offset, offset + size)
-    series = cudf.Series._from_data({None: col})
-    sliced_series = cudf.Series._from_data({None: col_slice})
+    series = cudf.Series._from_column(col)
+    sliced_series = cudf.Series._from_column(col_slice)
 
     if cast_to_float:
         pd_series = series.astype(float).to_pandas()

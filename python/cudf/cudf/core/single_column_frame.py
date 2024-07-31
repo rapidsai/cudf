@@ -15,11 +15,14 @@ from cudf.api.types import (
     is_numeric_dtype,
 )
 from cudf.core.column import ColumnBase, as_column
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import NotIterable
 
 if TYPE_CHECKING:
+    from collections.abc import Hashable
+
     import cupy
     import numpy
     import pyarrow as pa
@@ -109,6 +112,15 @@ class SingleColumnFrame(Frame, NotIterable):
     @_performance_tracking
     def values_host(self) -> numpy.ndarray:  # noqa: D102
         return self._column.values_host
+
+    @classmethod
+    @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None
+    ) -> Self:
+        """Constructor for a single Column."""
+        ca = ColumnAccessor({name: column}, verify=False)
+        return cls._from_data(ca)
 
     @classmethod
     @_performance_tracking

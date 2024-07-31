@@ -277,8 +277,7 @@ def to_datetime(
                 format=format,
                 utc=utc,
             )
-            ca = ColumnAccessor({None: col}, verify=False)
-            return cudf.Series._from_data(ca, index=arg.index)
+            return cudf.Series._from_column(col, index=arg.index)
         else:
             col = _process_col(
                 col=column.as_column(arg),
@@ -292,9 +291,8 @@ def to_datetime(
                 ca = ColumnAccessor({arg.name: col}, verify=False)
                 return cudf.DatetimeIndex._from_data(ca)
             elif isinstance(arg, (cudf.Series, pd.Series)):
-                ca = ColumnAccessor({arg.name: col}, verify=False)
-                return cudf.Series._from_data(
-                    ca, index=ensure_index(arg.index)
+                return cudf.Series._from_column(
+                    col, name=arg.name, index=ensure_index(arg.index)
                 )
             elif is_scalar(arg):
                 return col.element_indexing(0)

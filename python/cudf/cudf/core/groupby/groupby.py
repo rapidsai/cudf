@@ -458,13 +458,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         Return the size of each group.
         """
-        data = {
-            None: cudf.core.column.column_empty(
-                len(self.obj), "int8", masked=False
-            )
-        }
+        col = cudf.core.column.column_empty(
+            len(self.obj), "int8", masked=False
+        )
         return (
-            cudf.Series._from_data(data)
+            cudf.Series._from_column(col)
             .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
             .agg("size")
         )
@@ -1070,7 +1068,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # Count descending from num_groups - 1 to 0
             groups = range(num_groups - 1, -1, -1)
 
-        group_ids = cudf.Series._from_data({None: as_column(groups)})
+        group_ids = cudf.Series._from_column(as_column(groups))
 
         if has_null_group:
             group_ids.iloc[-1] = cudf.NA

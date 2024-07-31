@@ -96,7 +96,7 @@ def run_udf_test(data, func, dtype):
     else:
         result = output
 
-    got = cudf.Series._from_data({None: result.astype(dtype)})
+    got = cudf.Series._from_column(result.astype(dtype))
     assert_eq(expect, got, check_dtype=False)
     with _CUDFNumbaConfig():
         udf_str_kernel.forall(len(data))(str_views, output)
@@ -105,7 +105,7 @@ def run_udf_test(data, func, dtype):
     else:
         result = output
 
-    got = cudf.Series._from_data({None: result.astype(dtype)})
+    got = cudf.Series._from_column(result.astype(dtype))
     assert_eq(expect, got, check_dtype=False)
 
 
