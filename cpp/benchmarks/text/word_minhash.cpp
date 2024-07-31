@@ -49,12 +49,11 @@ static void bench_word_minhash(nvbench::state& state)
                                         0,
                                         rmm::device_buffer{});
 
-  data_profile const seeds_profile = data_profile_builder().null_probability(0).distribution(
-    cudf::type_to_id<cudf::hash_value_type>(), distribution_id::NORMAL, 0, 4);
+  data_profile const seeds_profile = data_profile_builder().no_validity().distribution(
+    cudf::type_to_id<cudf::hash_value_type>(), distribution_id::NORMAL, 0, 256);
   auto const seed_type   = base64 ? cudf::type_id::UINT64 : cudf::type_id::UINT32;
   auto const seeds_table = create_random_table({seed_type}, row_count{seed_count}, seeds_profile);
   auto seeds             = seeds_table->get_column(0);
-  seeds.set_null_mask(rmm::device_buffer{}, 0);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 

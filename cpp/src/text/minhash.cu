@@ -153,8 +153,9 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
                                           mr);
   auto d_hashes = hashes->mutable_view().data<hash_value_type>();
 
-  constexpr int block_size = 256;
-  cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+  constexpr cudf::thread_index_type block_size = 256;
+  cudf::detail::grid_1d grid{
+    static_cast<cudf::thread_index_type>(input.size()) * cudf::detail::warp_size, block_size};
   minhash_kernel<HashFunction><<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     *d_strings, seeds, width, d_hashes);
 
@@ -181,21 +182,17 @@ CUDF_KERNEL void minhash_word_kernel(cudf::detail::lists_column_device_view cons
                                      cudf::device_span<hash_value_type const> seeds,
                                      hash_value_type* d_hashes)
 {
-  auto const idx = cudf::detail::grid_1d::global_thread_id();
-  if (idx >= (static_cast<cudf::thread_index_type>(d_input.size()) *
-              static_cast<cudf::thread_index_type>(cudf::detail::warp_size))) {
-    return;
-  }
+  auto const idx     = cudf::detail::grid_1d::global_thread_id();
+  auto const row_idx = idx / cudf::detail::warp_size;
 
-  auto const row_idx  = static_cast<cudf::size_type>(idx / cudf::detail::warp_size);
-  auto const lane_idx = static_cast<cudf::size_type>(idx % cudf::detail::warp_size);
-
+  if (row_idx >= d_input.size()) { return; }
   if (d_input.is_null(row_idx)) { return; }
 
   auto const d_row    = cudf::list_device_view(d_input, row_idx);
   auto const d_output = d_hashes + (row_idx * seeds.size());
 
   // initialize hashes output for this row
+  auto const lane_idx = static_cast<cudf::size_type>(idx % cudf::detail::warp_size);
   if (lane_idx == 0) {
     auto const init = d_row.size() == 0 ? 0 : std::numeric_limits<hash_value_type>::max();
     thrust::fill(thrust::seq, d_output, d_output + seeds.size(), init);
@@ -228,10 +225,10 @@ template <
   typename HashFunction,
   typename hash_value_type = std::
     conditional_t<std::is_same_v<typename HashFunction::result_type, uint32_t>, uint32_t, uint64_t>>
-std::unique_ptr<cudf::column> minhash_fn(cudf::lists_column_view const& input,
-                                         cudf::device_span<hash_value_type const> seeds,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> word_minhash_fn(cudf::lists_column_view const& input,
+                                              cudf::device_span<hash_value_type const> seeds,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(!seeds.empty(), "Parameter seeds cannot be empty", std::invalid_argument);
   CUDF_EXPECTS((static_cast<std::size_t>(input.size()) * seeds.size()) <
@@ -252,8 +249,9 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::lists_column_view const& input,
   auto d_hashes = hashes->mutable_view().data<hash_value_type>();
   auto lcdv     = cudf::detail::lists_column_device_view(*d_input);
 
-  constexpr int block_size = 256;
-  cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+  constexpr cudf::thread_index_type block_size = 256;
+  cudf::detail::grid_1d grid{
+    static_cast<cudf::thread_index_type>(input.size()) * cudf::detail::warp_size, block_size};
   minhash_word_kernel<HashFunction>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(lcdv, seeds, d_hashes);
 
@@ -336,23 +334,23 @@ std::unique_ptr<cudf::column> minhash64(cudf::strings_column_view const& input,
   return build_list_result(input.parent(), std::move(hashes), seeds.size(), stream, mr);
 }
 
-std::unique_ptr<cudf::column> minhash(cudf::lists_column_view const& input,
-                                      cudf::device_span<uint32_t const> seeds,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> word_minhash(cudf::lists_column_view const& input,
+                                           cudf::device_span<uint32_t const> seeds,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   using HashFunction = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
-  auto hashes        = detail::minhash_fn<HashFunction>(input, seeds, stream, mr);
+  auto hashes        = detail::word_minhash_fn<HashFunction>(input, seeds, stream, mr);
   return build_list_result(input.parent(), std::move(hashes), seeds.size(), stream, mr);
 }
 
-std::unique_ptr<cudf::column> minhash64(cudf::lists_column_view const& input,
-                                        cudf::device_span<uint64_t const> seeds,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> word_minhash64(cudf::lists_column_view const& input,
+                                             cudf::device_span<uint64_t const> seeds,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
 {
   using HashFunction = cudf::hashing::detail::MurmurHash3_x64_128<cudf::string_view>;
-  auto hashes        = detail::minhash_fn<HashFunction>(input, seeds, stream, mr);
+  auto hashes        = detail::word_minhash_fn<HashFunction>(input, seeds, stream, mr);
   return build_list_result(input.parent(), std::move(hashes), seeds.size(), stream, mr);
 }
 }  // namespace detail
@@ -403,7 +401,7 @@ std::unique_ptr<cudf::column> word_minhash(cudf::lists_column_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::minhash(input, seeds, stream, mr);
+  return detail::word_minhash(input, seeds, stream, mr);
 }
 
 std::unique_ptr<cudf::column> word_minhash64(cudf::lists_column_view const& input,
@@ -412,6 +410,6 @@ std::unique_ptr<cudf::column> word_minhash64(cudf::lists_column_view const& inpu
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::minhash64(input, seeds, stream, mr);
+  return detail::word_minhash64(input, seeds, stream, mr);
 }
 }  // namespace nvtext
