@@ -78,7 +78,7 @@
 #include <utility>
 #include <vector>
 
-void write_parquet(cudf::table_view tbl,
+void write_parquet(std::unique_ptr<cudf::table> tbl,
                    std::string const& path,
                    std::vector<std::string> const& col_names)
 {
@@ -92,7 +92,7 @@ void write_parquet(cudf::table_view tbl,
   }
   metadata.schema_info            = col_name_infos;
   auto const table_input_metadata = cudf::io::table_input_metadata{metadata};
-  auto builder                    = cudf::io::parquet_writer_options::builder(sink_info, tbl);
+  auto builder = cudf::io::parquet_writer_options::builder(sink_info, tbl->view());
   builder.metadata(table_input_metadata);
   auto const options = builder.build();
   cudf::io::write_parquet(options);
