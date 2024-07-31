@@ -830,10 +830,14 @@ int main(int argc, char** argv)
   auto resource                    = create_memory_resource(memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
 
+  auto const mem_stats_logger = memory_stats_logger();
+
   auto [orders, lineitem, part] = generate_orders_lineitem_part(scale_factor);
   write_parquet(std::move(orders), "orders.parquet", schema_orders);
   write_parquet(std::move(lineitem), "lineitem.parquet", schema_lineitem);
   write_parquet(std::move(part), "part.parquet", schema_part);
+
+  std::cout << mem_stats_logger.peak_memory_usage() << std::endl;
 
   auto partsupp = generate_partsupp(scale_factor);
   write_parquet(std::move(partsupp), "partsupp.parquet", schema_partsupp);
