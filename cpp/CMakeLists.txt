@@ -365,6 +365,7 @@ add_library(
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/arrow_utilities.cpp
+  src/interop/decimal_conversion_utilities.cu
   src/interop/to_arrow.cu
   src/interop/to_arrow_device.cu
   src/interop/to_arrow_host.cu
