@@ -68,6 +68,7 @@ requirements:
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
     - fmt {{ fmt_version }}
+    - flatbuffers
     - spdlog {{ spdlog_version }}
     - zlib {{ zlib_version }}
 

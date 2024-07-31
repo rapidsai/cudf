@@ -31,6 +31,7 @@ dependencies:
 - dlpack>=0.8,<1.0
 - doxygen=1.9.1
 - fastavro>=0.22.9
+- flatbuffers
 - fmt>=10.1.1,<11
 - fsspec>=0.6.0
 - gcc_linux-64=11.*
