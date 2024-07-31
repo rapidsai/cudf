@@ -60,6 +60,7 @@ from cudf.core.reshape import (
 )
 from cudf.core.scalar import Scalar
 from cudf.core.series import Series, isclose
+from cudf.core.timestamp import Timestamp
 from cudf.core.tools.datetimes import DateOffset, date_range, to_datetime
 from cudf.core.tools.numeric import to_numeric
 from cudf.io import (
@@ -110,7 +111,7 @@ __all__ = [
     "Series",
     "StructDtype",
     "TimedeltaIndex",
-    "api",
+    "Timestamp" "api",
     "concat",
     "crosstab",
     "cut",
