@@ -164,13 +164,13 @@ inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>
 inline auto make_pool()
 {
   return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    make_cuda(), rmm::percent_of_free_device_memory(40));
+    make_cuda(), rmm::percent_of_free_device_memory(90));
 }
 inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
 inline auto make_managed_pool()
 {
   return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    make_managed(), rmm::percent_of_free_device_memory(40));
+    make_managed(), rmm::percent_of_free_device_memory(90));
 }
 inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
   std::string const& mode)
@@ -286,9 +286,9 @@ struct gen_rand_num {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::column> gen_rand_str_col(int64_t lower,
-                                               int64_t upper,
-                                               cudf::size_type num_rows,
+std::unique_ptr<cudf::column> gen_rand_str_col(int64_t const& lower,
+                                               int64_t const& upper,
+                                               cudf::size_type const& num_rows,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
@@ -341,9 +341,9 @@ std::unique_ptr<cudf::column> gen_rand_str_col(int64_t lower,
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename T>
-std::unique_ptr<cudf::column> gen_rand_num_col(T lower,
-                                               T upper,
-                                               int64_t num_rows,
+std::unique_ptr<cudf::column> gen_rand_num_col(T const& lower,
+                                               T const& upper,
+                                               cudf::size_type const& num_rows,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
@@ -369,8 +369,8 @@ std::unique_ptr<cudf::column> gen_rand_num_col(T lower,
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename T>
-std::unique_ptr<cudf::column> gen_primary_key_col(T start,
-                                                  int64_t num_rows,
+std::unique_ptr<cudf::column> gen_primary_key_col(T const& start,
+                                                  cudf::size_type const& num_rows,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr)
 {
@@ -388,8 +388,8 @@ std::unique_ptr<cudf::column> gen_primary_key_col(T start,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::column> gen_rep_str_col(std::string value,
-                                              int64_t num_rows,
+std::unique_ptr<cudf::column> gen_rep_str_col(std::string const& value,
+                                              cudf::size_type const& num_rows,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
@@ -410,7 +410,7 @@ std::unique_ptr<cudf::column> gen_rep_str_col(std::string value,
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string> set,
-                                                        int64_t num_rows,
+                                                        cudf::size_type const& num_rows,
                                                         rmm::cuda_stream_view stream,
                                                         rmm::device_async_resource_ref mr)
 {
@@ -437,7 +437,7 @@ std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string>
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::column> gen_phone_col(int64_t num_rows,
+std::unique_ptr<cudf::column> gen_phone_col(cudf::size_type const& num_rows,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
@@ -469,13 +469,13 @@ std::unique_ptr<cudf::column> gen_phone_col(int64_t num_rows,
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename T>
-std::unique_ptr<cudf::column> gen_rep_seq_col(T limit,
-                                              int64_t num_rows,
+std::unique_ptr<cudf::column> gen_rep_seq_col(T const& limit,
+                                              cudf::size_type const& num_rows,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto pkey                    = gen_primary_key_col<int64_t>(0, num_rows, stream, mr);
+  auto pkey                    = gen_primary_key_col<cudf::size_type>(0, num_rows, stream, mr);
   auto repeat_seq_zero_indexed = cudf::binary_operation(pkey->view(),
                                                         cudf::numeric_scalar<T>(limit),
                                                         cudf::binary_operator::MOD,
