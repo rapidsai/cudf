@@ -20,15 +20,20 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 
+/**
+ * @brief Generate a table out of the independent columns of the `orders` table
+ *
+ * @param scale_factor The scale factor to generate
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
 std::unique_ptr<cudf::table> generate_orders_independent(
   int64_t const& scale_factor,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();
-  cudf::size_type const o_num_rows = 1'500'000 * scale_factor;
-
-  // Generate the non-dependent columns of the `orders` table
+  cudf::size_type const o_num_rows = scale_factor * 1'500'000;
 
   // Generate a primary key column for the `orders` table
   // required for internal operations, but will not be
@@ -124,6 +129,14 @@ std::unique_ptr<cudf::table> generate_orders_independent(
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
+/**
+ * @brief Generate the `lineitem` table partially
+ *
+ * @param orders_independent Table with the independent columns of the `orders` table
+ * @param scale_factor The scale factor to generate
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
 std::unique_ptr<cudf::table> generate_lineitem_partial(
   cudf::table_view const& orders_independent,
   int64_t const& scale_factor,
@@ -193,19 +206,24 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
   auto const ol_orderdate_ts = l_base->get_column(3);
 
   // Generate the `l_shipdate` column
-  auto const l_shipdate_rand_add_days = gen_rand_num_col<int32_t>(1, 121, l_num_rows, stream, mr);
-  auto l_shipdate_ts =
+  auto l_shipdate_ts = [&]() {
+    auto const l_shipdate_rand_add_days = gen_rand_num_col<int32_t>(1, 121, l_num_rows, stream, mr);
     add_calendrical_days(ol_orderdate_ts.view(), l_shipdate_rand_add_days->view(), stream, mr);
+  }();
 
   // Generate the `l_commitdate` column
-  auto const l_commitdate_rand_add_days = gen_rand_num_col<int32_t>(30, 90, l_num_rows, stream, mr);
-  auto l_commitdate_ts =
+  auto l_commitdate_ts = [&]() {
+    auto const l_commitdate_rand_add_days =
+      gen_rand_num_col<int32_t>(30, 90, l_num_rows, stream, mr);
     add_calendrical_days(ol_orderdate_ts.view(), l_commitdate_rand_add_days->view(), stream, mr);
+  }();
 
   // Generate the `l_receiptdate` column
-  auto const l_receiptdate_rand_add_days = gen_rand_num_col<int32_t>(1, 30, l_num_rows, stream, mr);
-  auto l_receiptdate_ts =
+  auto l_receiptdate_ts = [&]() {
+    auto const l_receiptdate_rand_add_days =
+      gen_rand_num_col<int32_t>(1, 30, l_num_rows, stream, mr);
     add_calendrical_days(l_shipdate_ts->view(), l_receiptdate_rand_add_days->view(), stream, mr);
+  }();
 
   // Define the current date as per clause 4.2.2.12 of the TPC-H specification
   auto current_date =
@@ -214,26 +232,23 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
 
   // Generate the `l_returnflag` column
   // if `l_receiptdate` <= current_date then "R" or "A" else "N"
-  auto const l_receiptdate_col_ref = cudf::ast::column_reference(0);
-  auto const l_returnflag_pred     = cudf::ast::operation(
+  auto const col_ref = cudf::ast::column_reference(0);
+  auto const pred    = cudf::ast::operation(
     cudf::ast::ast_operator::LESS_EQUAL, l_receiptdate_col_ref, current_date_literal);
-  auto const l_returnflag_binary_mask =
+  auto const binary_mask =
     cudf::compute_column(cudf::table_view({l_receiptdate_ts->view()}), l_returnflag_pred, mr);
-  auto const l_returnflag_binary_mask_int =
-    cudf::cast(l_returnflag_binary_mask->view(), cudf::data_type{cudf::type_id::INT64}, stream, mr);
 
   auto const binarty_to_ternary_multiplier =
     gen_rep_seq_col(2, l_num_rows, stream, mr);  // 1, 2, 1, 2,...
-  auto const l_returnflag_ternary_mask =
-    cudf::binary_operation(l_returnflag_binary_mask_int->view(),
-                           binarty_to_ternary_multiplier->view(),
-                           cudf::binary_operator::MUL,
-                           cudf::data_type{cudf::type_id::INT64},
-                           stream,
-                           mr);
+  auto const ternary_mask = cudf::binary_operation(l_returnflag_binary_mask_int->view(),
+                                                   binarty_to_ternary_multiplier->view(),
+                                                   cudf::binary_operator::MUL,
+                                                   cudf::data_type{cudf::type_id::INT64},
+                                                   stream,
+                                                   mr);
 
   auto const gather_map     = cudf::table_view({
-    cudf::test::fixed_width_column_wrapper<int64_t>({0, 1, 2}).release()->view(),
+    cudf::test::fixed_width_column_wrapper<int8_t>({0, 1, 2}).release()->view(),
     cudf::test::strings_column_wrapper({"N", "A", "R"}).release()->view(),
   });
   auto const gathered_table = cudf::gather(gather_map,
@@ -593,6 +608,7 @@ std::unique_ptr<cudf::table> generate_supplier(
   CUDF_FUNC_RANGE();
   std::cout << __func__ << std::endl;
 
+  // Calculate the number of rows based on the scale factor
   cudf::size_type const num_rows = scale_factor * 10'000;
 
   // Generate the `s_suppkey` column
@@ -655,6 +671,7 @@ std::unique_ptr<cudf::table> generate_customer(
   CUDF_FUNC_RANGE();
   std::cout << __func__ << std::endl;
 
+  // Calculate the number of rows based on the scale factor
   cudf::size_type const num_rows = scale_factor * 150'000;
 
   // Generate the `c_custkey` column
@@ -719,6 +736,7 @@ std::unique_ptr<cudf::table> generate_nation(
   CUDF_FUNC_RANGE();
   std::cout << __func__ << std::endl;
 
+  // Define the number of rows
   constexpr cudf::size_type num_rows = 25;
 
   // Generate the `n_nationkey` column
@@ -760,6 +778,7 @@ std::unique_ptr<cudf::table> generate_region(
   CUDF_FUNC_RANGE();
   std::cout << __func__ << std::endl;
 
+  // Define the number of rows
   constexpr cudf::size_type num_rows = 5;
 
   // Generate the `r_regionkey` column
@@ -797,9 +816,10 @@ int main(int argc, char** argv)
   auto resource                    = create_memory_resource(memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
 
-  // generate_orders_lineitem(scale_factor);
-  // auto partsupp = generate_partsupp(scale_factor);
-  // write_parquet(partsupp->view(), "partsupp.parquet", schema_partsupp);
+  generate_orders_lineitem(scale_factor);
+
+  auto partsupp = generate_partsupp(scale_factor);
+  write_parquet(partsupp->view(), "partsupp.parquet", schema_partsupp);
 
   auto supplier = generate_supplier(scale_factor);
   write_parquet(supplier->view(), "supplier.parquet", schema_supplier);

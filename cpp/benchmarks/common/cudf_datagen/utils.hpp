@@ -480,7 +480,7 @@ std::unique_ptr<cudf::column> gen_phone_col(int64_t num_rows,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::column> gen_rep_seq_col(int64_t limit,
+std::unique_ptr<cudf::column> gen_rep_seq_col(int8_t limit,
                                               int64_t num_rows,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
@@ -488,15 +488,15 @@ std::unique_ptr<cudf::column> gen_rep_seq_col(int64_t limit,
   CUDF_FUNC_RANGE();
   auto pkey                    = gen_primary_key_col<int64_t>(0, num_rows, stream, mr);
   auto repeat_seq_zero_indexed = cudf::binary_operation(pkey->view(),
-                                                        cudf::numeric_scalar<int64_t>(limit),
+                                                        cudf::numeric_scalar<int8_t>(limit),
                                                         cudf::binary_operator::MOD,
-                                                        cudf::data_type{cudf::type_id::INT64},
+                                                        cudf::data_type{cudf::type_id::INT8},
                                                         stream,
                                                         mr);
   return cudf::binary_operation(repeat_seq_zero_indexed->view(),
-                                cudf::numeric_scalar<int64_t>(1),
+                                cudf::numeric_scalar<int8_t>(1),
                                 cudf::binary_operator::ADD,
-                                cudf::data_type{cudf::type_id::INT64},
+                                cudf::data_type{cudf::type_id::INT8},
                                 stream,
                                 mr);
 }
