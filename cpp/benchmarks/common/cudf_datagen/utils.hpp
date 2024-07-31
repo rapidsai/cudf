@@ -83,7 +83,6 @@ void write_parquet(cudf::table_view tbl,
                    std::vector<std::string> const& col_names)
 {
   CUDF_FUNC_RANGE();
-  std::cout << __func__ << path << std::endl;
   auto const sink_info = cudf::io::sink_info(path);
   cudf::io::table_metadata metadata;
   std::vector<cudf::io::column_name_info> col_name_infos;
@@ -95,16 +94,6 @@ void write_parquet(cudf::table_view tbl,
   auto builder                    = cudf::io::parquet_writer_options::builder(sink_info, tbl);
   builder.metadata(table_input_metadata);
   auto const options = builder.build();
-  cudf::io::write_parquet(options);
-}
-
-void debug_parquet(cudf::table_view tbl, std::string const& path)
-{
-  CUDF_FUNC_RANGE();
-  std::cout << __func__ << path << std::endl;
-  auto const sink_info = cudf::io::sink_info(path);
-  auto builder         = cudf::io::parquet_writer_options::builder(sink_info, tbl);
-  auto const options   = builder.build();
   cudf::io::write_parquet(options);
 }
 
@@ -120,6 +109,37 @@ std::unique_ptr<cudf::table> perform_inner_join(
   auto const left_selected                           = left_input.select(left_on);
   auto const right_selected                          = right_input.select(right_on);
   auto const [left_join_indices, right_join_indices] = cudf::inner_join(
+    left_selected, right_selected, compare_nulls, rmm::mr::get_current_device_resource());
+
+  auto const left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
+  auto const right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
+
+  auto const left_indices_col  = cudf::column_view{left_indices_span};
+  auto const right_indices_col = cudf::column_view{right_indices_span};
+
+  auto const left_result  = cudf::gather(left_input, left_indices_col, oob_policy);
+  auto const right_result = cudf::gather(right_input, right_indices_col, oob_policy);
+
+  auto joined_cols = left_result->release();
+  auto right_cols  = right_result->release();
+  joined_cols.insert(joined_cols.end(),
+                     std::make_move_iterator(right_cols.begin()),
+                     std::make_move_iterator(right_cols.end()));
+  return std::make_unique<cudf::table>(std::move(joined_cols));
+}
+
+std::unique_ptr<cudf::table> perform_left_join(
+  cudf::table_view const& left_input,
+  cudf::table_view const& right_input,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
+{
+  CUDF_FUNC_RANGE();
+  constexpr auto oob_policy                          = cudf::out_of_bounds_policy::NULLIFY;
+  auto const left_selected                           = left_input.select(left_on);
+  auto const right_selected                          = right_input.select(right_on);
+  auto const [left_join_indices, right_join_indices] = cudf::left_join(
     left_selected, right_selected, compare_nulls, rmm::mr::get_current_device_resource());
 
   auto const left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
@@ -416,8 +436,8 @@ std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string>
   // Build a single column containing `num_rows` random numbers
   auto const rand_keys = gen_rand_num_col<int64_t>(0, string_set.size() - 1, num_rows, stream, mr);
 
-  auto const gathered_table = cudf::gather(vocab_table, rand_keys);
-  return std::make_unique<cudf::column>(joined_table->get_column(1));
+  auto const gathered_table = cudf::gather(vocab_table, rand_keys->view());
+  return std::make_unique<cudf::column>(gathered_table->get_column(1));
 }
 
 /**
@@ -445,7 +465,7 @@ std::unique_ptr<cudf::column> gen_phone_col(int64_t num_rows,
   return cudf::strings::concatenate(phone_parts_table,
                                     cudf::string_scalar("-"),
                                     cudf::string_scalar("", false),
-                                    cudf::strings::separator_on_nulls::YES,
+                                    cudf::strings::separator_on_nulls::NO,
                                     stream,
                                     mr);
 }
