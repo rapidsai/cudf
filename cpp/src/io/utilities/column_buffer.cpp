@@ -133,6 +133,14 @@ void column_buffer_base<string_policy>::create(size_type _size,
 }
 
 template <class string_policy>
+void column_buffer_base<string_policy>::create(size_type _size,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
+{
+  create_with_mask(_size, mask_state::ALL_NULL, true, stream, mr);
+}
+
+template <class string_policy>
 string_policy column_buffer_base<string_policy>::empty_like(string_policy const& input)
 {
   auto new_buff = string_policy(input.type, input.is_nullable);

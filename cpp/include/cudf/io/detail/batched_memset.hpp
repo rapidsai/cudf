@@ -17,21 +17,21 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
+namespace CUDF_EXPORT cudf {
+namespace io::detail {
+
 /**
  * @brief A helper function that takes in a vector of device spans and memsets them to the
- * value provided using batches sent to the GPU.
+ * value provided using batches sent to the GPU. Using uint64_t is safe as we are relying on the
+ * allocation padding for the buffers to be large enough that we can always write a multiple of 8
+ * byte words
  *
  * @param bufs Vector with device spans of data
  * @param value Value to memset all device spans to
  * @param _stream Stream used for device memory operations and kernel launches
- * @param _mr Device memory resource used to allocate the returned column's device memory
  *
  * @return The data in device spans all set to value
  */
-
-namespace CUDF_EXPORT cudf {
-namespace io::detail {
-
 void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
                     uint64_t const value,
                     rmm::cuda_stream_view stream);

@@ -46,7 +46,7 @@ TEST(MultiBufferTestIntegral, BasicTest1)
   // Creating base vector for data and setting it to all 0xFF
   std::vector<std::vector<uint64_t>> expected;
   std::transform(BUF_SIZES.begin(), BUF_SIZES.end(), std::back_inserter(expected), [](auto size) {
-    return std::vector<uint64_t>(size + 2000, ULLONG_MAX);
+    return std::vector<uint64_t>(size + 2000, std::numeric_limits<uint64_t>::max());
   });
 
   // set buffer region to other value
@@ -66,7 +66,7 @@ TEST(MultiBufferTestIntegral, BasicTest1)
                    return cudf::detail::make_device_uvector_async(vec, stream, mr);
                  });
 
-  // Init Device buffers for memset
+  // Initialize device buffers for memset
   std::vector<cudf::device_span<uint64_t>> memset_bufs;
   std::transform(
     thrust::make_zip_iterator(thrust::make_tuple(device_bufs.begin(), BUF_SIZES.begin())),
