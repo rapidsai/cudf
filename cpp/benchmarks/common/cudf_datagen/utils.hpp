@@ -183,6 +183,20 @@ inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
             "\nExpecting: cuda, pool, managed, or managed_pool");
 }
 
+// Convert a C++ type to a cudf::data_type
+template <typename T>
+cudf::data_type get_cudf_type()
+{
+  if (std::is_same<T, bool>::value) return cudf::data_type{cudf::type_id::BOOL8};
+  if (std::is_same<T, int8_t>::value) return cudf::data_type{cudf::type_id::INT8};
+  if (std::is_same<T, int16_t>::value) return cudf::data_type{cudf::type_id::INT16};
+  if (std::is_same<T, int32_t>::value) return cudf::data_type{cudf::type_id::INT32};
+  if (std::is_same<T, int64_t>::value) return cudf::data_type{cudf::type_id::INT64};
+  if (std::is_same<T, float>::value) return cudf::data_type{cudf::type_id::FLOAT32};
+  if (std::is_same<T, double>::value) return cudf::data_type{cudf::type_id::FLOAT64};
+  CUDF_FAIL("Unsupported type for cudf::data_type");
+}
+
 /**
  * @brief Generate the `std::tm` structure from year, month, and day
  *
@@ -322,32 +336,25 @@ std::unique_ptr<cudf::column> gen_rand_str_col(int64_t lower,
  * @brief Generate a column of random numbers
  * @param lower The lower bound of the random numbers
  * @param upper The upper bound of the random numbers
- * @param count The number of rows in the column
+ * @param num_rows The number of rows in the column
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename T>
 std::unique_ptr<cudf::column> gen_rand_num_col(T lower,
                                                T upper,
-                                               cudf::size_type count,
+                                               int64_t num_rows,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  cudf::data_type type;
-  if (cudf::is_integral<T>()) {
-    if (typeid(lower) == typeid(int64_t)) {
-      type = cudf::data_type{cudf::type_id::INT64};
-    } else {
-      type = cudf::data_type{cudf::type_id::INT32};
-    }
-  } else {
-    type = cudf::data_type{cudf::type_id::FLOAT64};
-  }
-  auto col = cudf::make_numeric_column(type, count, cudf::mask_state::UNALLOCATED, stream, mr);
+  cudf::data_type type = get_cudf_type<T>();
+  auto col = cudf::make_numeric_column(type, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
+  int64_t begin = 0;
+  int64_t end   = num_rows;
   thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(count),
+                    thrust::make_counting_iterator(begin),
+                    thrust::make_counting_iterator(end),
                     col->mutable_view().begin<T>(),
                     gen_rand_num<T>(lower, upper));
   return col;
@@ -363,7 +370,7 @@ std::unique_ptr<cudf::column> gen_rand_num_col(T lower,
  */
 template <typename T>
 std::unique_ptr<cudf::column> gen_primary_key_col(T start,
-                                                  T num_rows,
+                                                  int64_t num_rows,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr)
 {
@@ -395,50 +402,31 @@ std::unique_ptr<cudf::column> gen_rep_str_col(std::string value,
 }
 
 /**
- * @brief Generate a column where all the rows have the same integer value
- *
- * @param value The integer value to fill the column with
- * @param num_rows The number of rows in the column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- */
-std::unique_ptr<cudf::column> gen_rep_int_col(int64_t value,
-                                              int64_t num_rows,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  auto const empty_col = cudf::make_numeric_column(
-    cudf::data_type{cudf::type_id::INT64}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
-  auto const scalar = cudf::numeric_scalar<int64_t>(value);
-  return cudf::fill(empty_col->view(), 0, num_rows, scalar, stream, mr);
-}
-
-/**
  * @brief Generate a column by randomly choosing from set of strings
  *
- * @param string_set The set of strings to choose from
+ * @param set The set of strings to choose from
  * @param num_rows The number of rows in the column
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string> string_set,
+std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string> set,
                                                         int64_t num_rows,
                                                         rmm::cuda_stream_view stream,
                                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  // Build a vocab table of random strings to choose from
-  auto const keys = gen_primary_key_col<int32_t>(0, string_set.size(), stream, mr);
-  auto const values =
-    cudf::test::strings_column_wrapper(string_set.begin(), string_set.end()).release();
-  auto const vocab_table = cudf::table_view({keys->view(), values->view()});
+  // Build a gather map of random strings to choose from
+  // The size of the string sets always fits within 16-bit integers
+  auto const keys       = gen_primary_key_col<int16_t>(0, set.size(), stream, mr);
+  auto const values     = cudf::test::strings_column_wrapper(set.begin(), set.end()).release();
+  auto const gather_map = cudf::table_view({keys->view(), values->view()});
 
-  // Build a single column containing `num_rows` random numbers
-  auto const rand_keys = gen_rand_num_col<int32_t>(0, string_set.size() - 1, num_rows, stream, mr);
+  // Build a column of random keys to gather from the set
+  auto const indices = gen_rand_num_col<int16_t>(0, set.size() - 1, num_rows, stream, mr);
 
-  auto const gathered_table = cudf::gather(
-    vocab_table, rand_keys->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
+  // Perform the gather operation
+  auto const gathered_table =
+    cudf::gather(gather_map, indices->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
   return std::make_unique<cudf::column>(gathered_table->get_column(1));
 }
 
@@ -455,13 +443,13 @@ std::unique_ptr<cudf::column> gen_phone_col(int64_t num_rows,
 {
   CUDF_FUNC_RANGE();
   auto const part_a =
-    cudf::strings::from_integers(gen_rand_num_col<int64_t>(10, 34, num_rows, stream, mr)->view());
+    cudf::strings::from_integers(gen_rand_num_col<int16_t>(10, 34, num_rows, stream, mr)->view());
   auto const part_b =
-    cudf::strings::from_integers(gen_rand_num_col<int64_t>(100, 999, num_rows, stream, mr)->view());
+    cudf::strings::from_integers(gen_rand_num_col<int16_t>(100, 999, num_rows, stream, mr)->view());
   auto const part_c =
-    cudf::strings::from_integers(gen_rand_num_col<int64_t>(100, 999, num_rows, stream, mr)->view());
+    cudf::strings::from_integers(gen_rand_num_col<int16_t>(100, 999, num_rows, stream, mr)->view());
   auto const part_d = cudf::strings::from_integers(
-    gen_rand_num_col<int64_t>(1000, 9999, num_rows, stream, mr)->view());
+    gen_rand_num_col<int16_t>(1000, 9999, num_rows, stream, mr)->view());
   auto const phone_parts_table =
     cudf::table_view({part_a->view(), part_b->view(), part_c->view(), part_d->view()});
   return cudf::strings::concatenate(phone_parts_table,
@@ -480,7 +468,8 @@ std::unique_ptr<cudf::column> gen_phone_col(int64_t num_rows,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::column> gen_rep_seq_col(int8_t limit,
+template <typename T>
+std::unique_ptr<cudf::column> gen_rep_seq_col(T limit,
                                               int64_t num_rows,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
@@ -488,15 +477,15 @@ std::unique_ptr<cudf::column> gen_rep_seq_col(int8_t limit,
   CUDF_FUNC_RANGE();
   auto pkey                    = gen_primary_key_col<int64_t>(0, num_rows, stream, mr);
   auto repeat_seq_zero_indexed = cudf::binary_operation(pkey->view(),
-                                                        cudf::numeric_scalar<int8_t>(limit),
+                                                        cudf::numeric_scalar<T>(limit),
                                                         cudf::binary_operator::MOD,
-                                                        cudf::data_type{cudf::type_id::INT8},
+                                                        get_cudf_type<T>(),
                                                         stream,
                                                         mr);
   return cudf::binary_operation(repeat_seq_zero_indexed->view(),
-                                cudf::numeric_scalar<int8_t>(1),
+                                cudf::numeric_scalar<T>(1),
                                 cudf::binary_operator::ADD,
-                                cudf::data_type{cudf::type_id::INT8},
+                                get_cudf_type<T>(),
                                 stream,
                                 mr);
 }
