@@ -848,7 +848,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         valid_indices = self._get_valid_indices_by_tuple(
             df.index, row_tuple, len(df.index)
         )
-        indices = cudf.Series(valid_indices)
+        if isinstance(valid_indices, column.ColumnBase):
+            indices = cudf.Series._from_column(valid_indices)
+        else:
+            indices = cudf.Series(valid_indices)
         result = df.take(indices)
         final = self._index_and_downcast(result, result.index, row_tuple)
         return final

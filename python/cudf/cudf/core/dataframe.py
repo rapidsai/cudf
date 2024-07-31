@@ -382,7 +382,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 length = len(idx) if idx is not None else 1
                 value = as_column(value, length=length)
 
-            new_col = cudf.Series(value, index=idx)
+            if isinstance(value, ColumnBase):
+                new_col = cudf.Series._from_column(value, index=idx)
+            else:
+                new_col = cudf.Series(value, index=idx)
             if len(self._frame.index) != 0:
                 new_col = new_col._align_to_index(
                     self._frame.index, how="right"
@@ -506,12 +509,12 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 # turn any heterogeneous set of columns into a series if
                 # you only ask for one row.
                 new_name = result.index[0]
-                result = Series._concat(
+                ser = Series._concat(
                     [result[name] for name in column_names],
                 )
-                result.index = cudf.Index(result.keys())
-                result.name = new_name
-                return result
+                ser.index = ensure_index(result.keys())
+                ser.name = new_name
+                return ser
             except TypeError:
                 # Couldn't find a common type, Hence:
                 # Raise in pandas compatibility mode,
