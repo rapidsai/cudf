@@ -23,6 +23,7 @@
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <cub/cub.cuh>
@@ -35,7 +36,7 @@ namespace cg = cooperative_groups;
 #pragma GCC diagnostic ignored "-Wattributes"
 
 template <cudf::size_type block_size, bool has_nulls, typename HashProbe>
-__attribute__((visibility("hidden"))) __launch_bounds__(block_size) __global__
+CUDF_HIDDEN __launch_bounds__(block_size) __global__
   void mixed_join_semi(table_device_view left_table,
                        table_device_view right_table,
                        table_device_view probe,
