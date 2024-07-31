@@ -96,5 +96,5 @@ include(cmake/Modules/LinkPyarrowHeaders.cmake)
 add_subdirectory(pylibcudf)
 
 if(DEFINED cython_lib_dir)
-  rapids_cython_add_rpath_entries(TARGET pylibcudf PATHS "${cython_lib_dir}")
+  rapids_cython_add_rpath_entries(TARGET cudf PATHS "${cython_lib_dir}")
 endif()
