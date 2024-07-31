@@ -837,8 +837,6 @@ int main(int argc, char** argv)
   write_parquet(std::move(lineitem), "lineitem.parquet", schema_lineitem);
   write_parquet(std::move(part), "part.parquet", schema_part);
 
-  std::cout << mem_stats_logger.peak_memory_usage() << std::endl;
-
   auto partsupp = generate_partsupp(scale_factor);
   write_parquet(std::move(partsupp), "partsupp.parquet", schema_partsupp);
 
@@ -853,6 +851,8 @@ int main(int argc, char** argv)
 
   auto region = generate_region();
   write_parquet(std::move(region), "region.parquet", schema_region);
+
+  std::cout << "Peak Memory Usage: " << mem_stats_logger.peak_memory_usage() << std::endl;
 
   return 0;
 }
