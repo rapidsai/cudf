@@ -3979,7 +3979,7 @@ def test_parquet_reader_with_mismatched_schemas_error():
 
     with pytest.raises(
         ValueError,
-        match="Encountered mismatching SchemaElement properties encountered for a column in the selected path",
+        match="Encountered mismatching SchemaElement properties for a column in the selected path",
     ):
         cudf.read_parquet(
             [buf1, buf2], columns=["millis"], allow_mismatched_pq_schemas=True
@@ -4008,7 +4008,7 @@ def test_parquet_reader_with_mismatched_schemas_error():
 
     with pytest.raises(
         IndexError,
-        match="Encountered mismatching number of children encountered for a column in the selected path",
+        match="Encountered mismatching number of children for a column in the selected path",
     ):
         cudf.read_parquet(
             [buf1, buf2],
