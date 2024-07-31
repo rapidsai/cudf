@@ -33,11 +33,11 @@ std::unique_ptr<cudf::table> generate_orders_independent(
   // Generate a primary key column for the `orders` table
   // required for internal operations, but will not be
   // written into the parquet file
-  auto o_pkey = gen_primary_key_col(0, o_num_rows, stream, mr);
+  auto o_pkey = gen_primary_key_col<int64_t>(0, o_num_rows, stream, mr);
 
   // Generate the `o_orderkey` column
   auto o_orderkey = [&]() {
-    auto const o_orderkey_candidates = gen_primary_key_col(1, 4 * o_num_rows, stream, mr);
+    auto const o_orderkey_candidates = gen_primary_key_col<int64_t>(1, 4 * o_num_rows, stream, mr);
     auto const o_orderkey_unsorted = cudf::sample(cudf::table_view({o_orderkey_candidates->view()}),
                                                   o_num_rows,
                                                   cudf::sample_with_replacement::FALSE,
@@ -388,7 +388,7 @@ std::unique_ptr<cudf::table> generate_partsupp(
   cudf::size_type const ps_num_rows = scale_factor * 800'000;
 
   // Generate the `ps_partkey` column
-  auto const p_partkey = gen_primary_key_col(1, p_num_rows, stream, mr);
+  auto const p_partkey = gen_primary_key_col<int64_t>(1, p_num_rows, stream, mr);
 
   // Generate the `ps_partkey` column
   auto ps_partkey = [&]() {
@@ -437,7 +437,7 @@ std::unique_ptr<cudf::table> generate_part(
   cudf::size_type const num_rows = scale_factor * 200'000;
 
   // Generate the `p_partkey` column
-  auto p_partkey = gen_primary_key_col(1, num_rows, stream, mr);
+  auto p_partkey = gen_primary_key_col<int32_t>(1, num_rows, stream, mr);
 
   // Generate the `p_name` column
   auto p_name = [&]() {
@@ -596,7 +596,7 @@ std::unique_ptr<cudf::table> generate_supplier(
   cudf::size_type const num_rows = scale_factor * 10'000;
 
   // Generate the `s_suppkey` column
-  auto s_suppkey = gen_primary_key_col(1, num_rows, stream, mr);
+  auto s_suppkey = gen_primary_key_col<int32_t>(1, num_rows, stream, mr);
 
   // Generate the `s_name` column
   auto s_name = [&]() {
@@ -616,7 +616,7 @@ std::unique_ptr<cudf::table> generate_supplier(
   auto s_address = gen_addr_col(num_rows, stream, mr);
 
   // Generate the `s_nationkey` column
-  auto s_nationkey = gen_rand_num_col<int64_t>(0, 24, num_rows, stream, mr);
+  auto s_nationkey = gen_rand_num_col<int32_t>(0, 24, num_rows, stream, mr);
 
   // Generate the `s_phone` column
   auto s_phone = gen_phone_col(num_rows, stream, mr);
@@ -658,7 +658,7 @@ std::unique_ptr<cudf::table> generate_customer(
   cudf::size_type const num_rows = scale_factor * 150'000;
 
   // Generate the `c_custkey` column
-  auto c_custkey = gen_primary_key_col(1, num_rows, stream, mr);
+  auto c_custkey = gen_primary_key_col<int32_t>(1, num_rows, stream, mr);
 
   // Generate the `c_name` column
   auto c_name = [&]() {
@@ -722,7 +722,7 @@ std::unique_ptr<cudf::table> generate_nation(
   constexpr cudf::size_type num_rows = 25;
 
   // Generate the `n_nationkey` column
-  auto n_nationkey = gen_primary_key_col(0, num_rows, stream, mr);
+  auto n_nationkey = gen_primary_key_col<int32_t>(0, num_rows, stream, mr);
 
   // Generate the `n_name` column
   auto n_name = cudf::test::strings_column_wrapper(nations.begin(), nations.end()).release();
@@ -763,7 +763,7 @@ std::unique_ptr<cudf::table> generate_region(
   constexpr cudf::size_type num_rows = 5;
 
   // Generate the `r_regionkey` column
-  auto r_regionkey = gen_primary_key_col(0, num_rows, stream, mr);
+  auto r_regionkey = gen_primary_key_col<int32_t>(0, num_rows, stream, mr);
 
   // Generate the `r_name` column
   auto r_name =
@@ -797,9 +797,9 @@ int main(int argc, char** argv)
   auto resource                    = create_memory_resource(memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
 
-  generate_orders_lineitem(scale_factor);
-  auto partsupp = generate_partsupp(scale_factor);
-  write_parquet(partsupp->view(), "partsupp.parquet", schema_partsupp);
+  // generate_orders_lineitem(scale_factor);
+  // auto partsupp = generate_partsupp(scale_factor);
+  // write_parquet(partsupp->view(), "partsupp.parquet", schema_partsupp);
 
   auto supplier = generate_supplier(scale_factor);
   write_parquet(supplier->view(), "supplier.parquet", schema_supplier);
