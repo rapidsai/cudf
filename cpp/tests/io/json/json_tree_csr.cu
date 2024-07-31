@@ -64,11 +64,14 @@ void print(std::string str, std::vector<T>& vec)
 }
 
 bool check_equality(cuio_json::tree_meta_t& d_a,
+                    rmm::device_uvector<cudf::size_type>& d_a_max_row_offsets,
                     cuio_json::experimental::csr& d_b_csr,
                     cuio_json::experimental::column_tree_properties& d_b_ctp,
                     rmm::cuda_stream_view stream)
 {
   // convert from tree_meta_t to column_tree_csr
+  stream.synchronize();
+
   h_tree_meta_t a{cudf::detail::make_std_vector_async(d_a.node_categories, stream),
                   cudf::detail::make_std_vector_async(d_a.parent_node_ids, stream),
                   cudf::detail::make_std_vector_async(d_a.node_range_begin, stream),
@@ -78,6 +81,9 @@ bool check_equality(cuio_json::tree_meta_t& d_a,
                   cudf::detail::make_std_vector_async(d_b_csr.colidx, stream),
                   cudf::detail::make_std_vector_async(d_b_ctp.categories, stream),
                   cudf::detail::make_std_vector_async(d_b_ctp.mapped_ids, stream)};
+
+  auto a_max_row_offsets = cudf::detail::make_std_vector_async(d_a_max_row_offsets, stream);
+  auto b_max_row_offsets = cudf::detail::make_std_vector_async(d_b_ctp.max_row_offsets, stream);
 
   stream.synchronize();
 
@@ -98,6 +104,9 @@ bool check_equality(cuio_json::tree_meta_t& d_a,
   }
   for (size_t u = 0; u < num_nodes; u++) {
     if (a.node_categories[b.column_ids[u]] != b.categories[u]) { return false; }
+  }
+  for (size_t u = 0; u < num_nodes; u++) {
+    if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) { return false; }
   }
   return true;
 }
@@ -173,7 +182,7 @@ TEST_F(JsonColumnTreeTests, SimpleLines)
     cudf::io::json::experimental::detail::reduce_to_column_tree(
       gpu_tree, gpu_col_id, gpu_row_offsets, false, row_array_parent_col_id, stream);
 
-  auto iseq = check_equality(d_column_tree, d_column_tree_csr, d_column_tree_properties, stream);
+  auto iseq = check_equality(d_column_tree, d_max_row_offsets, d_column_tree_csr, d_column_tree_properties, stream);
   // assert equality between csr and meta formats
   assert(iseq == true);
 }

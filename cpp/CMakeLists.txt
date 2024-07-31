@@ -393,7 +393,7 @@ add_library(
   src/io/functions.cpp
   src/io/json/byte_range_info.cu
   src/io/json/json_column.cu
-  src/io/json/json_column_csr.cu
+  src/io/json/column_tree_construction.cu
   src/io/json/json_normalization.cu
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu

@@ -344,22 +344,21 @@ get_array_children_indices(TreeDepthT row_array_children_level,
                            device_span<TreeDepthT const> node_levels,
                            device_span<NodeIndexT const> parent_node_ids,
                            rmm::cuda_stream_view stream);
+
 /**
  * @brief Reduce node tree into column tree by aggregating each property of column.
  *
- * @param tree json node tree to reduce (modified in-place, but restored to original state)
- * @param col_ids column ids of each node (modified in-place, but restored to original state)
- * @param row_offsets row offsets of each node (modified in-place, but restored to original state)
- * @param stream The CUDA stream to which kernels are dispatched
- * @return A tuple containing the column tree, identifier for each column and the maximum row index
- * in each column
+ * @param tree Node tree representation of JSON string
+ * @param original_col_ids Column ids of nodes
+ * @param sorted_col_ids Sorted column ids of nodes
+ * @param ordered_node_ids Node ids of nodes sorted by column ids
+ * @param row_offsets Row offsets of nodes
+ * @param is_array_of_arrays Whether the tree is an array of arrays
+ * @param row_array_parent_col_id Column id of row array, if is_array_of_arrays is true
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A tuple of column tree representation of JSON string, column ids of columns, and
+ * max row offsets of columns
  */
-std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
-reduce_to_column_tree(tree_meta_t& tree,
-                      device_span<NodeIndexT> col_ids,
-                      device_span<size_type> row_offsets,
-                      rmm::cuda_stream_view stream);
-
 std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 reduce_to_column_tree(tree_meta_t& tree,
                       device_span<NodeIndexT> original_col_ids,
