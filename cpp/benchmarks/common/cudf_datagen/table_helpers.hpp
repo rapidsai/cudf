@@ -44,41 +44,39 @@
   // )
   // /100
   auto val_a = cudf::binary_operation(p_partkey,
-                                      cudf::numeric_scalar<int64_t>(10),
+                                      cudf::numeric_scalar<cudf::size_type>(10),
                                       cudf::binary_operator::DIV,
                                       cudf::data_type{cudf::type_id::FLOAT64});
 
   auto val_b = cudf::binary_operation(val_a->view(),
-                                      cudf::numeric_scalar<int64_t>(20001),
+                                      cudf::numeric_scalar<cudf::size_type>(20001),
                                       cudf::binary_operator::MOD,
                                       cudf::data_type{cudf::type_id::INT64});
 
   auto val_c = cudf::binary_operation(p_partkey,
-                                      cudf::numeric_scalar<int64_t>(1000),
+                                      cudf::numeric_scalar<cudf::size_type>(1000),
                                       cudf::binary_operator::MOD,
                                       cudf::data_type{cudf::type_id::INT64});
 
   auto val_d = cudf::binary_operation(val_c->view(),
-                                      cudf::numeric_scalar<int64_t>(100),
+                                      cudf::numeric_scalar<cudf::size_type>(100),
                                       cudf::binary_operator::MUL,
                                       cudf::data_type{cudf::type_id::INT64});
   // 90000 + val_b + val_d
   auto val_e = cudf::binary_operation(val_b->view(),
-                                      cudf::numeric_scalar<int64_t>(90000),
+                                      cudf::numeric_scalar<cudf::size_type>(90000),
                                       cudf::binary_operator::ADD,
                                       cudf::data_type{cudf::type_id::INT64});
 
   auto val_f = cudf::binary_operation(val_e->view(),
                                       val_d->view(),
                                       cudf::binary_operator::ADD,
-                                      cudf::data_type{cudf::type_id::INT64});
+                                      cudf::data_type{cudf::type_id::INT32});
 
-  auto p_retailprice = cudf::binary_operation(val_f->view(),
-                                              cudf::numeric_scalar<int64_t>(100),
-                                              cudf::binary_operator::DIV,
-                                              cudf::data_type{cudf::type_id::FLOAT64});
-
-  return p_retailprice;
+  return cudf::binary_operation(val_f->view(),
+                                cudf::numeric_scalar<cudf::size_type>(100),
+                                cudf::binary_operator::DIV,
+                                cudf::data_type{cudf::type_id::FLOAT64});
 }
 
 /**
@@ -91,8 +89,8 @@
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 [[nodiscard]] std::unique_ptr<cudf::column> calc_l_suppkey(cudf::column_view const& l_partkey,
-                                                           int64_t const& scale_factor,
-                                                           int64_t const& num_rows,
+                                                           cudf::size_type const& scale_factor,
+                                                           cudf::size_type const& num_rows,
                                                            rmm::cuda_stream_view stream,
                                                            rmm::device_async_resource_ref mr)
 {
@@ -100,20 +98,24 @@
 
   // Generate the `s` col
   auto s_empty = cudf::make_numeric_column(
-    cudf::data_type{cudf::type_id::INT64}, num_rows, cudf::mask_state::UNALLOCATED, stream);
+    cudf::data_type{cudf::type_id::INT32}, num_rows, cudf::mask_state::UNALLOCATED, stream);
 
-  auto s = cudf::fill(
-    s_empty->view(), 0, num_rows, cudf::numeric_scalar<int64_t>(10'000 * scale_factor), stream, mr);
+  auto s = cudf::fill(s_empty->view(),
+                      0,
+                      num_rows,
+                      cudf::numeric_scalar<cudf::size_type>(scale_factor * 10'000),
+                      stream,
+                      mr);
 
   // Generate the `i` col
-  auto i = gen_rep_seq_col(4, num_rows, stream, mr);
+  auto i = gen_rep_seq_col<cudf::size_type>(4, true, num_rows, stream, mr);
 
   // Create a table view out of `l_partkey`, `s`, and `i`
   auto table = cudf::table_view({l_partkey, s->view(), i->view()});
 
   // Create the AST expression
-  auto scalar_1  = cudf::numeric_scalar<int64_t>(1);
-  auto scalar_4  = cudf::numeric_scalar<int64_t>(4);
+  auto scalar_1  = cudf::numeric_scalar<cudf::size_type>(1);
+  auto scalar_4  = cudf::numeric_scalar<cudf::size_type>(4);
   auto literal_1 = cudf::ast::literal(scalar_1);
   auto literal_4 = cudf::ast::literal(scalar_4);
 
@@ -124,13 +126,12 @@
   // (int)(l_partkey - 1)/s
   auto expr_a = cudf::ast::operation(cudf::ast::ast_operator::SUB, l_partkey_col_ref, literal_1);
   auto expr_b = cudf::ast::operation(cudf::ast::ast_operator::DIV, expr_a, s_col_ref);
-  auto expr_b_casted = cudf::ast::operation(cudf::ast::ast_operator::CAST_TO_INT64, expr_b);
 
   // s/4
   auto expr_c = cudf::ast::operation(cudf::ast::ast_operator::DIV, s_col_ref, literal_4);
 
   // (s/4 + (int)(l_partkey - 1)/s)
-  auto expr_d = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_c, expr_b_casted);
+  auto expr_d = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_c, expr_b);
 
   // (i * (s/4 + (int)(l_partkey - 1)/s))
   auto expr_e = cudf::ast::operation(cudf::ast::ast_operator::MUL, i_col_ref, expr_d);
@@ -145,8 +146,7 @@
   auto final_expr = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_g, literal_1);
 
   // Execute the AST expression
-  auto l_suppkey = cudf::compute_column(table, final_expr, mr);
-  return l_suppkey;
+  return cudf::compute_column(table, final_expr, mr);
 }
 
 /**
@@ -156,14 +156,14 @@
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] int64_t calc_l_cardinality(cudf::column_view const& o_orderkey_repeat_freqs,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+[[nodiscard]] cudf::size_type calc_l_cardinality(cudf::column_view const& o_orderkey_repeat_freqs,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::device_async_resource_ref mr)
 {
   auto const sum_agg           = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
   auto const l_num_rows_scalar = cudf::reduce(
-    o_orderkey_repeat_freqs, *sum_agg, cudf::data_type{cudf::type_id::INT64}, stream, mr);
-  return reinterpret_cast<cudf::numeric_scalar<int64_t>*>(l_num_rows_scalar.get())->value();
+    o_orderkey_repeat_freqs, *sum_agg, cudf::data_type{cudf::type_id::INT32}, stream, mr);
+  return reinterpret_cast<cudf::numeric_scalar<cudf::size_type>*>(l_num_rows_scalar.get())->value();
 }
 
 /**
@@ -185,20 +185,24 @@
 
   // Generate the `s` col
   auto s_empty = cudf::make_numeric_column(
-    cudf::data_type{cudf::type_id::INT64}, num_rows, cudf::mask_state::UNALLOCATED, stream);
+    cudf::data_type{cudf::type_id::INT32}, num_rows, cudf::mask_state::UNALLOCATED, stream);
 
-  auto s = cudf::fill(
-    s_empty->view(), 0, num_rows, cudf::numeric_scalar<int64_t>(10'000 * scale_factor), stream, mr);
+  auto s = cudf::fill(s_empty->view(),
+                      0,
+                      num_rows,
+                      cudf::numeric_scalar<cudf::size_type>(scale_factor * 10'000),
+                      stream,
+                      mr);
 
   // Generate the `i` col
-  auto i = gen_rep_seq_col<int64_t>(4, num_rows, stream, mr);
+  auto i = gen_rep_seq_col<cudf::size_type>(4, true, num_rows, stream, mr);
 
   // Create a table view out of `p_partkey`, `s`, and `i`
   auto table = cudf::table_view({ps_partkey, s->view(), i->view()});
 
   // Create the AST expression
-  auto scalar_1  = cudf::numeric_scalar<int64_t>(1);
-  auto scalar_4  = cudf::numeric_scalar<int64_t>(4);
+  auto scalar_1  = cudf::numeric_scalar<cudf::size_type>(1);
+  auto scalar_4  = cudf::numeric_scalar<cudf::size_type>(4);
   auto literal_1 = cudf::ast::literal(scalar_1);
   auto literal_4 = cudf::ast::literal(scalar_4);
 
@@ -209,13 +213,12 @@
   // (int)(ps_partkey - 1)/s
   auto expr_a = cudf::ast::operation(cudf::ast::ast_operator::SUB, ps_partkey_col_ref, literal_1);
   auto expr_b = cudf::ast::operation(cudf::ast::ast_operator::DIV, expr_a, s_col_ref);
-  auto expr_b_casted = cudf::ast::operation(cudf::ast::ast_operator::CAST_TO_INT64, expr_b);
 
   // s/4
   auto expr_c = cudf::ast::operation(cudf::ast::ast_operator::DIV, s_col_ref, literal_4);
 
   // (s/4 + (int)(ps_partkey - 1)/s)
-  auto expr_d = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_c, expr_b_casted);
+  auto expr_d = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_c, expr_b);
 
   // (i * (s/4 + (int)(ps_partkey - 1)/s))
   auto expr_e = cudf::ast::operation(cudf::ast::ast_operator::MUL, i_col_ref, expr_d);
@@ -230,8 +233,7 @@
   auto final_expr = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_g, literal_1);
 
   // Execute the AST expression
-  auto ps_suppkey = cudf::compute_column(table, final_expr, mr);
-  return ps_suppkey;
+  return cudf::compute_column(table, final_expr, mr);
 }
 
 /**
@@ -250,20 +252,21 @@
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
-  auto const one = cudf::numeric_scalar<double>(1);
-  auto const one_minus_discount =
-    cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type(), stream, mr);
-  auto const disc_price_type = cudf::data_type{cudf::type_id::FLOAT64};
-  auto disc_price            = cudf::binary_operation(extendedprice,
+  auto const one                = cudf::numeric_scalar<double>(1);
+  auto const one_minus_discount = cudf::binary_operation(
+    one, discount, cudf::binary_operator::SUB, cudf::data_type{cudf::type_id::FLOAT64}, stream, mr);
+  auto disc_price = cudf::binary_operation(extendedprice,
                                            one_minus_discount->view(),
                                            cudf::binary_operator::MUL,
-                                           disc_price_type,
+                                           cudf::data_type{cudf::type_id::FLOAT64},
                                            stream,
                                            mr);
   auto const one_plus_tax =
     cudf::binary_operation(one, tax, cudf::binary_operator::ADD, tax.type(), stream, mr);
-  auto const charge_type = cudf::data_type{cudf::type_id::FLOAT64};
-  auto charge            = cudf::binary_operation(
-    disc_price->view(), one_plus_tax->view(), cudf::binary_operator::MUL, charge_type, stream, mr);
-  return charge;
+  return cudf::binary_operation(disc_price->view(),
+                                one_plus_tax->view(),
+                                cudf::binary_operator::MUL,
+                                cudf::data_type{cudf::type_id::FLOAT64},
+                                stream,
+                                mr);
 }
