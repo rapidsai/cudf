@@ -320,25 +320,37 @@ def read_orc(
                 "A list of stripes must be provided for each input source"
             )
 
+    # Extract filesystem up front
+    fs, paths = ioutils._get_filesystem_and_paths(
+        path_or_data=filepath_or_buffer, storage_options=storage_options
+    )
+
+    # Prefetch remote data if possible
+    if fs and paths and not use_python_file_object:
+        # TODO: Add prefetcher for partial IO
+        filepath_or_buffer, _ = ioutils.prefetch_remote_buffers(
+            paths,
+            fs,
+            bytes_per_thread=bytes_per_thread,
+            expand_paths="*.orc",
+            prefetcher="contiguous",
+        )
+
     filepaths_or_buffers = []
     have_nativefile = any(
         isinstance(source, pa.NativeFile) for source in filepath_or_buffer
     )
     for source in filepath_or_buffer:
         if ioutils.is_directory(
-            path_or_data=source, storage_options=storage_options
+            path_or_data=source, storage_options=storage_options, fs=fs
         ):
-            fs = ioutils._ensure_filesystem(
-                passed_filesystem=None,
-                path=source,
-                storage_options=storage_options,
-            )
             source = stringify_path(source)
             source = fs.sep.join([source, "*.orc"])
 
         tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
             compression=None,
+            fs=fs,
             use_python_file_object=use_python_file_object,
             storage_options=storage_options,
             bytes_per_thread=bytes_per_thread,

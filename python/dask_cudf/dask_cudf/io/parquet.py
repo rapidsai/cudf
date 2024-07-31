@@ -32,6 +32,7 @@ from cudf.utils.ioutils import (
     _ROW_GROUP_SIZE_BYTES_DEFAULT,
     _is_local_filesystem,
     _open_remote_files,
+    prefetch_remote_buffers,
 )
 from cudf.utils.utils import maybe_filter_deprecation
 
@@ -102,14 +103,33 @@ class CudfEngine(ArrowDatasetEngine):
             # Non-local filesystem handling
             paths_or_fobs = paths
             if not _is_local_filesystem(fs):
-                paths_or_fobs = _open_remote_files(
-                    paths_or_fobs,
-                    fs,
-                    context_stack=stack,
-                    **_default_open_file_options(
-                        open_file_options, columns, row_groups
-                    ),
-                )
+                if open_file_options or kwargs.get(
+                    "use_python_file_object", False
+                ):
+                    # Use deprecated NativeFile code path in cudf
+                    paths_or_fobs = _open_remote_files(
+                        paths_or_fobs,
+                        fs,
+                        context_stack=stack,
+                        **_default_open_file_options(
+                            open_file_options, columns, row_groups
+                        ),
+                    )
+                else:
+                    # Use fsspec to collect byte ranges for all
+                    # files ahead of time
+                    paths_or_fobs, _ = prefetch_remote_buffers(
+                        paths,
+                        fs,
+                        prefetcher="parquet",
+                        prefetcher_options={
+                            "columns": columns,
+                            # All paths must have the same row-group selection
+                            "row_groups": row_groups[0]
+                            if row_groups
+                            else None,
+                        },
+                    )
 
             # Filter out deprecation warning unless the user
             # specifies open_file_options and/or use_python_file_object.

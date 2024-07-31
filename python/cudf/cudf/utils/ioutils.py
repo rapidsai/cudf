@@ -28,6 +28,7 @@ except ImportError:
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
 _ROW_GROUP_SIZE_BYTES_DEFAULT = 128 * 1024 * 1024
+_READ_AHEAD_DEFAULT = 1024 * 1024
 
 _docstring_remote_sources = """
 - cuDF supports local and remote data stores. See configuration details for
@@ -1570,15 +1571,18 @@ def ensure_single_filepath_or_buffer(path_or_data, storage_options=None):
     return True
 
 
-def is_directory(path_or_data, storage_options=None):
+def is_directory(path_or_data, storage_options=None, fs=None):
     """Returns True if the provided filepath is a directory"""
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
         path_or_data = os.path.expanduser(path_or_data)
         try:
-            fs = get_fs_token_paths(
-                path_or_data, mode="rb", storage_options=storage_options
-            )[0]
+            fs = (
+                fs
+                or get_fs_token_paths(
+                    path_or_data, mode="rb", storage_options=storage_options
+                )[0]
+            )
         except ValueError as e:
             if str(e).startswith("Protocol not known"):
                 return False
@@ -1630,6 +1634,144 @@ def _set_context(obj, stack):
     if stack is None:
         return obj
     return stack.enter_context(obj)
+
+
+def _get_remote_bytes_parquet(
+    remote_paths,
+    fs,
+    *,
+    columns=None,
+    row_groups=None,
+    bytes_per_thread=None,
+):
+    if fsspec_parquet is None or (columns is None and row_groups is None):
+        return _get_remote_bytes(
+            remote_paths, fs, bytes_per_thread=bytes_per_thread
+        ), {}
+
+    sizes = fs.sizes(remote_paths)
+    data = fsspec_parquet._get_parquet_byte_ranges(
+        remote_paths,
+        fs,
+        columns=columns,
+        row_groups=row_groups,
+        max_block=bytes_per_thread or _BYTES_PER_THREAD_DEFAULT,
+    )
+    buffers = []
+    for size, path in zip(sizes, remote_paths):
+        path_data = data.pop(path)
+        buf = np.zeros(size, dtype="b")
+        for range_offset in list(path_data.keys()):
+            chunk = path_data.pop(range_offset)
+            buf[range_offset[0] : range_offset[1]] = np.frombuffer(
+                chunk, dtype="b"
+            )
+        buffers.append(buf.tobytes())
+    return buffers, {}
+
+
+def _get_remote_bytes_contiguous(
+    remote_paths,
+    fs,
+    *,
+    byte_range=None,
+    read_ahead=None,
+    bytes_per_thread=None,
+):
+    # Use byte_range to set remote_starts and remote_ends
+    remote_starts = None
+    remote_ends = None
+    offset = 0
+    if byte_range:
+        assert len(remote_paths) == 1
+        start, stop = byte_range
+        remote_starts = [start] * len(remote_paths)
+        if start:
+            offset = 1
+        if stop:
+            remote_ends = [start + stop] * len(remote_paths)
+
+    # Collect buffers
+    buffers = _get_remote_bytes(
+        remote_paths,
+        fs,
+        remote_starts=remote_starts,
+        remote_ends=remote_ends,
+        read_ahead=read_ahead,
+        bytes_per_thread=bytes_per_thread,
+        use_proxy_files=False,
+        offset=offset,
+    )
+
+    # Adjust byte_range to trim unnecessary bytes.
+    # Note that we keep the byte-range shifted by one
+    # byte so that the libcudf reader still follows the
+    # correct code path.
+    # TODO: Get rid of this strange workaround!
+    if offset:
+        byte_range = (offset, byte_range[1])
+
+    return buffers, {"byte_range": byte_range}
+
+
+def _get_remote_bytes(
+    remote_paths,
+    fs,
+    *,
+    remote_starts=None,
+    remote_ends=None,
+    read_ahead=None,
+    bytes_per_thread=None,
+    use_proxy_files=True,
+    offset=0,
+):
+    if isinstance(remote_paths, str):
+        remote_paths = [remote_paths]
+
+    if read_ahead is None:
+        read_ahead = _READ_AHEAD_DEFAULT
+
+    if remote_starts:
+        assert len(remote_starts) == len(remote_paths)
+    else:
+        remote_starts = [0] * len(remote_paths)
+
+    sizes = fs.sizes(remote_paths)
+    if remote_ends:
+        assert len(remote_ends) == len(remote_paths)
+        for i in range(len(remote_ends)):
+            remote_ends[i] = min(remote_ends[i] + read_ahead, sizes[i])
+    else:
+        remote_ends = sizes
+
+    # Construct list of paths, starts, and stops
+    paths, starts, ends = [], [], []
+    blocksize = bytes_per_thread or _BYTES_PER_THREAD_DEFAULT
+    for i, remote_path in enumerate(remote_paths):
+        for j in range(remote_starts[i], remote_ends[i], blocksize):
+            paths.append(remote_path)
+            starts.append(j)
+            ends.append(min(j + blocksize, remote_ends[i]))
+
+    # Collect the byte ranges
+    chunks = fs.cat_ranges(paths, starts, ends)
+
+    # Construct local byte buffers
+    buffers = []
+    path_counts = np.unique(paths, return_counts=True)[1]
+    for i, remote_path in enumerate(remote_paths):
+        size = (
+            sizes[i] if use_proxy_files else remote_ends[i] - remote_starts[i]
+        )
+        buf = np.zeros(size + offset, dtype="b")
+        for j in range(path_counts[i]):
+            start, end = starts[i + j] + offset, ends[i + j] + offset
+            if not use_proxy_files:
+                start -= remote_starts[i]
+                end -= remote_starts[i]
+            buf[start:end] = np.frombuffer(chunks.pop(0), dtype="b")
+        buffers.append(buf.tobytes())
+    return buffers
 
 
 def _open_remote_files(
@@ -1726,6 +1868,51 @@ def _open_remote_files(
         _set_context(pa_fs.open_input_file(fpath), context_stack)
         for fpath in paths
     ]
+
+
+def prefetch_remote_buffers(
+    paths,
+    fs,
+    *,
+    expand_paths=False,
+    bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
+    prefetcher=None,
+    prefetcher_options=None,
+):
+    # TODO: Add Docstring
+    # Gather bytes ahead of time for remote filesystems
+    if fs and paths and not _is_local_filesystem(fs):
+        prefetchers = {
+            "parquet": _get_remote_bytes_parquet,
+            "contiguous": _get_remote_bytes_contiguous,
+        }
+        if prefetcher not in prefetchers:
+            raise NotImplementedError(
+                f"{prefetcher} is not a supported remote-data prefetcher"
+            )
+
+        if expand_paths:
+            expanded_paths = []
+            if expand_paths is True:
+                expand_paths = "*"
+            for path in paths:
+                if is_directory(path_or_data=path, fs=fs):
+                    expanded_paths.extend(
+                        fs.glob(fs.sep.join([path, expand_paths]))
+                    )
+                else:
+                    expanded_paths.append(path)
+        else:
+            expanded_paths = paths
+
+        return prefetchers.get(prefetcher)(
+            expanded_paths,
+            fs,
+            bytes_per_thread=bytes_per_thread,
+            **(prefetcher_options or {}),
+        )
+    else:
+        return paths, {}
 
 
 @doc_get_reader_filepath_or_buffer()
@@ -1863,17 +2050,9 @@ def get_reader_filepath_or_buffer(
                     **(open_file_options or {}),
                 )
             else:
-                path_or_data = [
-                    BytesIO(
-                        _fsspec_data_transfer(
-                            fpath,
-                            fs=fs,
-                            mode=mode,
-                            bytes_per_thread=bytes_per_thread,
-                        )
-                    )
-                    for fpath in paths
-                ]
+                path_or_data = _get_remote_bytes(
+                    paths, fs, bytes_per_thread=bytes_per_thread
+                )
             if len(path_or_data) == 1:
                 path_or_data = path_or_data[0]
 
@@ -1883,11 +2062,8 @@ def get_reader_filepath_or_buffer(
         if use_python_file_object:
             path_or_data = ArrowPythonFile(path_or_data)
         else:
-            path_or_data = BytesIO(
-                _fsspec_data_transfer(
-                    path_or_data, mode=mode, bytes_per_thread=bytes_per_thread
-                )
-            )
+            # Remote file is already open - Just read it
+            path_or_data = BytesIO(path_or_data.read())
 
     return path_or_data, compression
 
@@ -2178,27 +2354,6 @@ def _fsspec_data_transfer(
     )
 
     return buf.tobytes()
-
-
-def _merge_ranges(byte_ranges, max_block=256_000_000, max_gap=64_000):
-    # Simple utility to merge small/adjacent byte ranges
-    new_ranges = []
-    if not byte_ranges:
-        # Early return
-        return new_ranges
-
-    offset, size = byte_ranges[0]
-    for new_offset, new_size in byte_ranges[1:]:
-        gap = new_offset - (offset + size)
-        if gap > max_gap or (size + new_size + gap) > max_block:
-            # Gap is too large or total read is too large
-            new_ranges.append((offset, size))
-            offset = new_offset
-            size = new_size
-            continue
-        size += new_size + gap
-    new_ranges.append((offset, size))
-    return new_ranges
 
 
 def _assign_block(fs, path_or_fob, local_buffer, offset, nbytes):

@@ -387,6 +387,15 @@ def test_read_parquet_filters(s3_base, s3so, pdf_ext, precache):
                 open_file_options={"precache_options": {"method": precache}},
             )
 
+            # Check that default case doesn't warn and is correct
+            if precache is None:
+                default = cudf.read_parquet(
+                    f"s3://{bucket}/{fname}",
+                    storage_options=s3so,
+                    filters=filters,
+                )
+                assert_eq(pdf_ext.iloc[:0], default.reset_index(drop=True))
+
     # All row-groups should be filtered out
     assert_eq(pdf_ext.iloc[:0], got.reset_index(drop=True))
 

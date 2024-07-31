@@ -341,8 +341,18 @@ def read_parquet_metadata(filepath_or_buffer):
         path_or_data=filepath_or_buffer, storage_options=None
     )
 
-    # Check if filepath or buffer
-    filepath_or_buffer = paths if paths else filepath_or_buffer
+    if fs and paths:
+        filepath_or_buffer, _ = ioutils.prefetch_remote_buffers(
+            paths,
+            fs,
+            prefetcher="parquet",
+            prefetcher_options={
+                "columns": [],
+                "row_groups": [],
+            },
+        )
+    else:
+        filepath_or_buffer = paths if paths else filepath_or_buffer
 
     # List of filepaths or buffers
     filepaths_or_buffers = []
@@ -607,7 +617,22 @@ def read_parquet(
             categorical_partitions=categorical_partitions,
             dataset_kwargs=dataset_kwargs,
         )
-    filepath_or_buffer = paths if paths else filepath_or_buffer
+
+    # Prefetch remote data if possible
+    if fs and paths and not use_python_file_object:
+        filepath_or_buffer, _ = ioutils.prefetch_remote_buffers(
+            paths,
+            fs,
+            bytes_per_thread=bytes_per_thread,
+            prefetcher="parquet",
+            prefetcher_options={
+                "columns": columns,
+                # All paths must have the same row-group selection
+                "row_groups": row_groups[0] if row_groups else None,
+            },
+        )
+    else:
+        filepath_or_buffer = paths if paths else filepath_or_buffer
 
     filepaths_or_buffers = []
     if use_python_file_object:
