@@ -395,7 +395,7 @@ struct parquet_field_binary_list
   : public parquet_field_list<std::vector<uint8_t>, FieldType::BINARY> {
   parquet_field_binary_list(int f, std::vector<std::vector<uint8_t>>& v) : parquet_field_list(f, v)
   {
-    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) mutable {
+    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       auto const l = cpr->get_u32();
       CUDF_EXPECTS(l <= static_cast<size_t>(cpr->m_end - cpr->m_cur), "binary length mismatch");
 
