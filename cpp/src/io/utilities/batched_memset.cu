@@ -26,7 +26,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace io::detail {
 
 void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
@@ -68,4 +68,4 @@ void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
 }
 
 }  // namespace io::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

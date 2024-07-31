@@ -1521,9 +1521,9 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
         out_buf.create_with_mask(
           out_buf.type.id() == type_id::LIST && l_idx < max_depth ? num_rows + 1 : num_rows,
           cudf::mask_state::UNINITIALIZED,
+          false,
           _stream,
-          _mr,
-          false);
+          _mr);
         // Using uin64_t is safe as we are relying on the allocation padding for the buffers to be
         // large enough that we can always write a multiple of 8 byte words
         memset_bufs.push_back(cudf::device_span<uint64_t>(
@@ -1608,7 +1608,7 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
 
           // allocate
           // we're going to start null mask as all valid and then turn bits off if necessary
-          out_buf.create_with_mask(size, cudf::mask_state::UNINITIALIZED, _stream, _mr, false);
+          out_buf.create_with_mask(size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
           // Using uin64_t is safe as we are relying on the allocation padding for the buffers to be
           // large enough that we can always write a multiple of 8 byte words
           memset_bufs.push_back(cudf::device_span<uint64_t>(
