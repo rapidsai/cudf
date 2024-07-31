@@ -244,7 +244,7 @@ namespace detail {
  * @return A tuple containing the column tree, identifier for each column and the maximum row index
  * in each column
  */
-
+CUDF_EXPORT
 std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   tree_meta_t& tree,
   device_span<NodeIndexT> original_col_ids,
@@ -370,6 +370,7 @@ get_array_children_indices(TreeDepthT row_array_children_level,
  * @return A tuple of column tree representation of JSON string, column ids of columns, and
  * max row offsets of columns
  */
+CUDF_EXPORT
 std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 reduce_to_column_tree(tree_meta_t& tree,
                       device_span<NodeIndexT> original_col_ids,
