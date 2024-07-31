@@ -138,10 +138,11 @@ std::unique_ptr<column> compute_column(table_view const& table,
 
 std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
+                                       rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_column(table, expr, cudf::get_default_stream(), mr);
+  return detail::compute_column(table, expr, stream, mr);
 }
 
 }  // namespace cudf
