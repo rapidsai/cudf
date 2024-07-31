@@ -5857,7 +5857,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
         """
-        array_data = np.ndarray | cupy.ndarray
+        array_data: np.ndarray | cupy.ndarray
         if hasattr(data, "__cuda_array_interface__"):
             array_data = cupy.asarray(data, order="F")
         elif hasattr(data, "__array_interface__"):

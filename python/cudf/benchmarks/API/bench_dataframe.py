@@ -18,6 +18,7 @@ def bench_construction(benchmark, N):
 
 
 @pytest.mark.parametrize("N", [100, 100_000])
+@pytest.mark.pandas_incompatible
 def bench_construction_numba_device_array(benchmark, N):
     benchmark(cudf.DataFrame, numba.cuda.to_device(numpy.ones((100, N))))
 
