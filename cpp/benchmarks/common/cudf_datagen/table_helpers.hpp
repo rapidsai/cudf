@@ -43,40 +43,30 @@
   //            (P_PARTKEY modulo 1000)
   // )
   // /100
-  auto val_a = cudf::binary_operation(p_partkey,
-                                      cudf::numeric_scalar<cudf::size_type>(10),
-                                      cudf::binary_operator::DIV,
-                                      cudf::data_type{cudf::type_id::FLOAT64});
+  auto table             = cudf::table_view({p_partkey});
+  auto p_partkey_col_ref = cudf::ast::column_reference(0);
 
-  auto val_b = cudf::binary_operation(val_a->view(),
-                                      cudf::numeric_scalar<cudf::size_type>(20001),
-                                      cudf::binary_operator::MOD,
-                                      cudf::data_type{cudf::type_id::INT64});
+  auto scalar_10    = cudf::numeric_scalar<cudf::size_type>(10);
+  auto scalar_100   = cudf::numeric_scalar<cudf::size_type>(100);
+  auto scalar_1000  = cudf::numeric_scalar<cudf::size_type>(1000);
+  auto scalar_20001 = cudf::numeric_scalar<cudf::size_type>(20001);
+  auto scalar_90000 = cudf::numeric_scalar<cudf::size_type>(90000);
 
-  auto val_c = cudf::binary_operation(p_partkey,
-                                      cudf::numeric_scalar<cudf::size_type>(1000),
-                                      cudf::binary_operator::MOD,
-                                      cudf::data_type{cudf::type_id::INT64});
+  auto literal_10    = cudf::ast::literal(scalar_10);
+  auto literal_100   = cudf::ast::literal(scalar_100);
+  auto literal_1000  = cudf::ast::literal(scalar_1000);
+  auto literal_20001 = cudf::ast::literal(scalar_20001);
+  auto literal_90000 = cudf::ast::literal(scalar_90000);
 
-  auto val_d = cudf::binary_operation(val_c->view(),
-                                      cudf::numeric_scalar<cudf::size_type>(100),
-                                      cudf::binary_operator::MUL,
-                                      cudf::data_type{cudf::type_id::INT64});
-  // 90000 + val_b + val_d
-  auto val_e = cudf::binary_operation(val_b->view(),
-                                      cudf::numeric_scalar<cudf::size_type>(90000),
-                                      cudf::binary_operator::ADD,
-                                      cudf::data_type{cudf::type_id::INT64});
+  auto expr_a = cudf::ast::operation(cudf::ast::ast_operator::DIV, p_partkey_col_ref, literal_10);
+  auto expr_b = cudf::ast::operation(cudf::ast::ast_operator::MOD, expr_a, literal_20001);
+  auto expr_c = cudf::ast::operation(cudf::ast::ast_operator::MOD, p_partkey_col_ref, literal_1000);
+  auto expr_d = cudf::ast::operation(cudf::ast::ast_operator::MUL, expr_c, literal_100);
+  auto expr_e = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_b, expr_d);
+  auto expr_f = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_e, literal_90000);
+  auto final_expr = cudf::ast::operation(cudf::ast::ast_operator::DIV, expr_f, literal_100);
 
-  auto val_f = cudf::binary_operation(val_e->view(),
-                                      val_d->view(),
-                                      cudf::binary_operator::ADD,
-                                      cudf::data_type{cudf::type_id::INT32});
-
-  return cudf::binary_operation(val_f->view(),
-                                cudf::numeric_scalar<cudf::size_type>(100),
-                                cudf::binary_operator::DIV,
-                                cudf::data_type{cudf::type_id::FLOAT64});
+  return cudf::compute_column(table, final_expr, mr);
 }
 
 /**
