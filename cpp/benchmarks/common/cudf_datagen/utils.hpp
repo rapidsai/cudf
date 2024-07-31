@@ -83,6 +83,7 @@ void write_parquet(cudf::table_view tbl,
                    std::vector<std::string> const& col_names)
 {
   CUDF_FUNC_RANGE();
+  std::cout << __func__ << " " << path << std::endl;
   auto const sink_info = cudf::io::sink_info(path);
   cudf::io::table_metadata metadata;
   std::vector<cudf::io::column_name_info> col_name_infos;
@@ -286,8 +287,8 @@ struct gen_rand_num {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::column> gen_rand_str_col(int64_t const& lower,
-                                               int64_t const& upper,
+std::unique_ptr<cudf::column> gen_rand_str_col(cudf::size_type const& lower,
+                                               cudf::size_type const& upper,
                                                cudf::size_type const& num_rows,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
@@ -296,7 +297,7 @@ std::unique_ptr<cudf::column> gen_rand_str_col(int64_t const& lower,
   rmm::device_uvector<cudf::size_type> offsets(num_rows + 1, stream);
 
   // The first element will always be 0 since it the offset of the first string.
-  int64_t initial_offset{0};
+  cudf::size_type initial_offset{0};
   offsets.set_element(0, initial_offset, stream);
 
   // We generate the lengths of the strings randomly for each row and
@@ -350,8 +351,8 @@ std::unique_ptr<cudf::column> gen_rand_num_col(T const& lower,
   CUDF_FUNC_RANGE();
   cudf::data_type type = get_cudf_type<T>();
   auto col = cudf::make_numeric_column(type, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
-  int64_t begin = 0;
-  int64_t end   = num_rows;
+  cudf::size_type begin = 0;
+  cudf::size_type end   = num_rows;
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator(begin),
                     thrust::make_counting_iterator(end),
@@ -469,7 +470,8 @@ std::unique_ptr<cudf::column> gen_phone_col(cudf::size_type const& num_rows,
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename T>
-std::unique_ptr<cudf::column> gen_rep_seq_col(T const& limit,
+std::unique_ptr<cudf::column> gen_rep_seq_col(T const& seq_length,
+                                              bool zero_indexed,
                                               cudf::size_type const& num_rows,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
@@ -477,11 +479,12 @@ std::unique_ptr<cudf::column> gen_rep_seq_col(T const& limit,
   CUDF_FUNC_RANGE();
   auto pkey                    = gen_primary_key_col<cudf::size_type>(0, num_rows, stream, mr);
   auto repeat_seq_zero_indexed = cudf::binary_operation(pkey->view(),
-                                                        cudf::numeric_scalar<T>(limit),
+                                                        cudf::numeric_scalar<T>(seq_length),
                                                         cudf::binary_operator::MOD,
                                                         get_cudf_type<T>(),
                                                         stream,
                                                         mr);
+  if (zero_indexed) { return repeat_seq_zero_indexed; }
   return cudf::binary_operation(repeat_seq_zero_indexed->view(),
                                 cudf::numeric_scalar<T>(1),
                                 cudf::binary_operator::ADD,
@@ -490,7 +493,7 @@ std::unique_ptr<cudf::column> gen_rep_seq_col(T const& limit,
                                 mr);
 }
 
-std::unique_ptr<cudf::column> gen_addr_col(int64_t const& num_rows,
+std::unique_ptr<cudf::column> gen_addr_col(cudf::size_type const& num_rows,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
