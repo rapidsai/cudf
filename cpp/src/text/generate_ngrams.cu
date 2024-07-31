@@ -36,7 +36,8 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
 
-#include <cub/cub.cuh>
+#include <cooperative_groups.h>
+#include <cooperative_groups/reduce.h>
 #include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/functional.h>
@@ -181,22 +182,21 @@ CUDF_KERNEL void count_char_ngrams_kernel(cudf::column_device_view const d_strin
                                           cudf::size_type* d_counts)
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
-  if (idx >= (static_cast<cudf::thread_index_type>(d_strings.size()) * cudf::detail::warp_size)) {
-    return;
-  }
-
-  using warp_reduce = cub::WarpReduce<cudf::size_type>;
-  __shared__ typename warp_reduce::TempStorage temp_storage;
 
   auto const str_idx = idx / cudf::detail::warp_size;
+  if (str_idx >= d_strings.size()) { return; }
   if (d_strings.is_null(str_idx)) {
     d_counts[str_idx] = 0;
     return;
   }
+
+  namespace cg = cooperative_groups;
+  auto warp    = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+
   auto const d_str = d_strings.element<cudf::string_view>(str_idx);
   auto const end   = d_str.data() + d_str.size_bytes();
 
-  auto const lane_idx   = idx % cudf::detail::warp_size;
+  auto const lane_idx   = warp.thread_rank();
   cudf::size_type count = 0;
   for (auto itr = d_str.data() + (lane_idx * bytes_per_thread); itr < end;
        itr += cudf::detail::warp_size * bytes_per_thread) {
@@ -204,7 +204,7 @@ CUDF_KERNEL void count_char_ngrams_kernel(cudf::column_device_view const d_strin
       count += static_cast<cudf::size_type>(cudf::strings::detail::is_begin_utf8_char(*s));
     }
   }
-  auto const char_count = warp_reduce(temp_storage).Sum(count);
+  auto const char_count = cg::reduce(warp, count, cg::plus<int>());
   if (lane_idx == 0) { d_counts[str_idx] = std::max(0, char_count - ngrams + 1); }
 }
 
