@@ -556,6 +556,8 @@ nitpick_ignore = [
     ("py:class", "Dtype"),
     # The following are erroneously warned due to
     # https://github.com/sphinx-doc/sphinx/issues/11225
+    ("py:obj", "cudf.DatetimeIndex.time"),
+    ("py:obj", "cudf.DatetimeIndex.date"),
     ("py:obj", "cudf.Index.values_host"),
     ("py:class", "pa.Array"),
     ("py:class", "ScalarLike"),
