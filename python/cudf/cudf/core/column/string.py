@@ -5360,6 +5360,16 @@ class StringMethods(ColumnMethods):
             The seeds used for the hash algorithm.
             Must be of type uint32.
 
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> ls = cudf.Series([["this", "is", "my"], ["favorite", "book"]])
+        >>> seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
+        >>> ls.str.word_minhash(seeds=seeds)
+        0     [21141582, 1232889953, 1268336794]
+        1    [962346254, 2321233602, 1354839212]
+        dtype: list
         """
         if seeds is None:
             seeds_column = column.as_column(0, dtype=np.uint32, length=1)
@@ -5386,6 +5396,16 @@ class StringMethods(ColumnMethods):
             The seeds used for the hash algorithm.
             Must be of type uint64.
 
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> ls = cudf.Series([["this", "is", "my"], ["favorite", "book"]])
+        >>> seeds = cudf.Series([0, 1, 2], dtype=np.uint64)
+        >>> ls.str.word_minhash64(seeds)
+        0    [2603139454418834912, 8644371945174847701, 5541030711534384340]
+        1    [5240044617220523711, 5847101123925041457, 153762819128779913]
+        dtype: list
         """
         if seeds is None:
             seeds_column = column.as_column(0, dtype=np.uint64, length=1)
