@@ -2759,6 +2759,98 @@ class TimedeltaIndex(Index):
             return pd.Timedelta(value)
         return value
 
+    def as_unit(self, unit: str, round_ok: bool = True) -> Self:
+        """
+        Convert to a dtype with the given unit resolution.
+
+        Currently not implemented.
+
+        Parameters
+        ----------
+        unit : {'s', 'ms', 'us', 'ns'}
+        round_ok : bool, default True
+            If False and the conversion requires rounding, raise ValueError.
+        """
+        raise NotImplementedError("as_unit is currently not implemented")
+
+    @property
+    def freq(self) -> cudf.DateOffset | None:
+        raise NotImplementedError("freq is currently not implemented")
+
+    @property
+    def freqstr(self) -> str:
+        raise NotImplementedError("freqstr is currently not implemented")
+
+    @property
+    def resolution(self) -> str:
+        """
+        Returns day, hour, minute, second, millisecond or microsecond
+        """
+        raise NotImplementedError("resolution is currently not implemented")
+
+    @property
+    def unit(self) -> str:
+        return self._column.time_unit
+
+    def to_pytimedelta(self) -> np.ndarray:
+        """
+        Return an ndarray of ``datetime.timedelta`` objects.
+
+        Returns
+        -------
+        numpy.ndarray
+            An ndarray of ``datetime.timedelta`` objects.
+        """
+        return self.to_pandas().to_pytimedelta()
+
+    @property
+    def asi8(self) -> cupy.ndarray:
+        return self._column.astype("int64").values
+
+    def sum(self, *, skipna: bool = True, axis: int | None = 0):
+        return self._column.sum(skipna=skipna)
+
+    def mean(self, *, skipna: bool = True, axis: int | None = 0):
+        return self._column.mean(skipna=skipna)
+
+    def median(self, *, skipna: bool = True, axis: int | None = 0):
+        return self._column.median(skipna=skipna)
+
+    def std(self, *, skipna: bool = True, axis: int | None = 0, ddof: int = 1):
+        return self._column.std(skipna=skipna, ddof=ddof)
+
+    def total_seconds(self) -> cupy.ndarray:
+        """
+        Return total duration of each element expressed in seconds.
+
+        This method is currently not implemented.
+        """
+        return self._column.total_seconds().values
+
+    def ceil(self, freq: str) -> Self:
+        """
+        Ceil to the specified resolution.
+
+        This method is currently not implemented.
+        """
+        return type(self)._from_data({self.name: self._column.ceil(freq)})
+
+    def floor(self, freq: str) -> Self:
+        """
+        Floor to the specified resolution.
+
+        This method is currently not implemented.
+        """
+        return type(self)._from_data({self.name: self._column.floor(freq)})
+
+    def round(self, freq: str) -> Self:
+        """
+        Round to the specified resolution.
+
+        This method is currently not implemented.
+        """
+        return type(self)._from_data({self.name: self._column.round(freq)})
+
     @property  # type: ignore
     @_performance_tracking
     def days(self):
