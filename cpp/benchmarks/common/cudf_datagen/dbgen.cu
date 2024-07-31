@@ -549,7 +549,7 @@ std::unique_ptr<cudf::table> generate_part(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-void generate_orders_lineitem(
+auto generate_orders_lineitem_part(
   cudf::size_type const& scale_factor,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
@@ -566,7 +566,6 @@ void generate_orders_lineitem(
 
   // Generate the `part` table
   auto part = generate_part(scale_factor, stream, mr);
-  write_parquet(part->view(), "part.parquet", schema_part);
 
   // Join the `part` and partial `lineitem` tables, then calculate the `l_extendedprice` column,
   // add the column to the `lineitem` table, and write the `lineitem` table to a parquet file
@@ -599,13 +598,13 @@ void generate_orders_lineitem(
 
   // Create the `orders` table
   auto orders = std::make_unique<cudf::table>(std::move(orders_independent_columns));
-  write_parquet(orders->view(), "orders.parquet", schema_orders);
 
   // Create the `lineitem` table
   std::vector<cudf::size_type> lineitem_indices(16);
   std::iota(lineitem_indices.begin(), lineitem_indices.end(), 1);
-  auto lineitem = lineitem_temp->select(lineitem_indices);
-  write_parquet(lineitem, "lineitem.parquet", schema_lineitem);
+  auto lineitem = std::make_unique<cudf::table>(lineitem_temp->select(lineitem_indices));
+
+  return std::make_tuple(std::move(orders), std::move(lineitem), std::move(part));
 }
 
 /**
@@ -831,22 +830,25 @@ int main(int argc, char** argv)
   auto resource                    = create_memory_resource(memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
 
-  generate_orders_lineitem(scale_factor);
+  auto [orders, lineitem, part] = generate_orders_lineitem_part(scale_factor);
+  write_parquet(std::move(orders), "orders.parquet", schema_orders);
+  write_parquet(std::move(lineitem), "lineitem.parquet", schema_lineitem);
+  write_parquet(std::move(part), "part.parquet", schema_part);
 
   auto partsupp = generate_partsupp(scale_factor);
-  write_parquet(partsupp->view(), "partsupp.parquet", schema_partsupp);
+  write_parquet(std::move(partsupp), "partsupp.parquet", schema_partsupp);
 
   auto supplier = generate_supplier(scale_factor);
-  write_parquet(supplier->view(), "supplier.parquet", schema_supplier);
+  write_parquet(std::move(supplier), "supplier.parquet", schema_supplier);
 
   auto customer = generate_customer(scale_factor);
-  write_parquet(customer->view(), "customer.parquet", schema_customer);
+  write_parquet(std::move(customer), "customer.parquet", schema_customer);
 
   auto nation = generate_nation();
-  write_parquet(nation->view(), "nation.parquet", schema_nation);
+  write_parquet(std::move(nation), "nation.parquet", schema_nation);
 
   auto region = generate_region();
-  write_parquet(region->view(), "region.parquet", schema_region);
+  write_parquet(std::move(region), "region.parquet", schema_region);
 
   return 0;
 }
