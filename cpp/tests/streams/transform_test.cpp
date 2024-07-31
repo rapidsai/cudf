@@ -34,7 +34,7 @@ TEST_F(TransformTest, ComputeColumn)
   auto expression = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
 
   auto expected = cudf::test::fixed_width_column_wrapper<int32_t>{13, 27, 21, 50};
-  auto result   = cudf::compute_column(table, expression);
+  auto result   = cudf::compute_column(table, expression, cudf::test::default_stream());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
