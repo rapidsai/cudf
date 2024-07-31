@@ -160,18 +160,18 @@ std::unique_ptr<cudf::table> perform_left_join(
   return std::make_unique<cudf::table>(std::move(joined_cols));
 }
 
+constexpr size_t POOL_SIZE = 2147483648;
+
 // RMM memory resource creation utilities
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
 inline auto make_pool()
 {
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    make_cuda(), rmm::percent_of_free_device_memory(90));
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda(), POOL_SIZE);
 }
 inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
 inline auto make_managed_pool()
 {
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    make_managed(), rmm::percent_of_free_device_memory(90));
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_managed(), POOL_SIZE);
 }
 inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
   std::string const& mode)
