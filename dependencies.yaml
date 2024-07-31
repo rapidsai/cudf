@@ -287,7 +287,7 @@ dependencies:
       - output_types: conda
         packages:
           - fmt>=10.1.1,<11
-          - flatbuffers
+          - flatbuffers==24.3.25
           - librmm==24.8.*,>=0.0.0a0
           - libkvikio==24.8.*,>=0.0.0a0
           - librdkafka>=1.9.0,<1.10.0a0
