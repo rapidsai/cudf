@@ -137,7 +137,7 @@ class parquet_field_bool : public parquet_field {
 struct parquet_field_bool_list : public parquet_field_list<bool, FieldType::BOOLEAN_TRUE> {
   parquet_field_bool_list(int f, std::vector<bool>& v) : parquet_field_list(f, v)
   {
-    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) mutable {
+    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       auto const current_byte = cpr->getb();
       assert_bool_field_type(current_byte);
       val[i] = current_byte == static_cast<int>(FieldType::BOOLEAN_TRUE);
@@ -188,7 +188,7 @@ template <typename T, FieldType EXPECTED_TYPE>
 struct parquet_field_int_list : public parquet_field_list<T, EXPECTED_TYPE> {
   parquet_field_int_list(int f, std::vector<T>& v) : parquet_field_list<T, EXPECTED_TYPE>(f, v)
   {
-    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) mutable {
+    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       val[i] = cpr->get_zigzag<T>();
     };
     this->bind_read_func(read_value);
@@ -229,7 +229,7 @@ class parquet_field_string : public parquet_field {
 struct parquet_field_string_list : public parquet_field_list<std::string, FieldType::BINARY> {
   parquet_field_string_list(int f, std::vector<std::string>& v) : parquet_field_list(f, v)
   {
-    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) mutable {
+    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       auto const l = cpr->get_u32();
       CUDF_EXPECTS(l < static_cast<size_t>(cpr->m_end - cpr->m_cur), "string length mismatch");
 
@@ -269,7 +269,7 @@ struct parquet_field_enum_list : public parquet_field_list<Enum, FieldType::I32>
   parquet_field_enum_list(int f, std::vector<Enum>& v)
     : parquet_field_list<Enum, FieldType::I32>(f, v)
   {
-    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) mutable {
+    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       val[i] = static_cast<Enum>(cpr->get_i32());
     };
     this->bind_read_func(read_value);
@@ -354,7 +354,7 @@ struct parquet_field_struct_list : public parquet_field_list<T, FieldType::STRUC
   parquet_field_struct_list(int f, std::vector<T>& v)
     : parquet_field_list<T, FieldType::STRUCT>(f, v)
   {
-    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) mutable {
+    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       cpr->read(&val[i]);
     };
     this->bind_read_func(read_value);
