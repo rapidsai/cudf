@@ -318,8 +318,7 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
         auto num_levels      = *dev_num_levels_ptr;
         list_ancestors[node] = node;
         for (int level = 0; level <= num_levels; level++) {
-          if (list_ancestors[node] > 0)
-            list_ancestors[node] = colidx[rowidx[list_ancestors[node]]];
+          if (list_ancestors[node] > 0) list_ancestors[node] = colidx[rowidx[list_ancestors[node]]];
           if (list_ancestors[node] == 0 || column_categories[list_ancestors[node]] == NC_LIST)
             break;
         }
@@ -455,9 +454,9 @@ reduce_to_column_tree(tree_meta_t& tree,
     return !(parent_col_id == parent_node_sentinel ||
              column_categories[parent_col_id] == NC_LIST &&
                (!is_array_of_arrays || parent_col_id != row_array_parent_col_id));
-    return (parent_col_id != parent_node_sentinel) && 
-             (column_categories[parent_col_id] != NC_LIST) || 
-               (is_array_of_arrays == true && parent_col_id == row_array_parent_col_id);
+    return (parent_col_id != parent_node_sentinel) &&
+             (column_categories[parent_col_id] != NC_LIST) ||
+           (is_array_of_arrays == true && parent_col_id == row_array_parent_col_id);
   };
 
   // Mixed types in List children go to different columns,
@@ -546,5 +545,5 @@ reduce_to_column_tree(tree_meta_t& tree,
                     std::move(max_row_offsets)};
 }
 
-} // namespace detail
-} // namespace cudf::io::json
+}  // namespace detail
+}  // namespace cudf::io::json
