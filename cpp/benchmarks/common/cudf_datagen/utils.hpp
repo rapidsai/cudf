@@ -121,19 +121,20 @@ void write_parquet(std::unique_ptr<cudf::table> tbl,
   cudf::io::write_parquet(options);
 }
 
-std::unique_ptr<cudf::table> perform_left_join(
-  cudf::table_view const& left_input,
-  cudf::table_view const& right_input,
-  std::vector<cudf::size_type> const& left_on,
-  std::vector<cudf::size_type> const& right_on,
-  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
+std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_input,
+                                               cudf::table_view const& right_input,
+                                               std::vector<cudf::size_type> const& left_on,
+                                               std::vector<cudf::size_type> const& right_on,
+                                               cudf::null_equality compare_nulls,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  constexpr auto oob_policy                          = cudf::out_of_bounds_policy::NULLIFY;
-  auto const left_selected                           = left_input.select(left_on);
-  auto const right_selected                          = right_input.select(right_on);
-  auto const [left_join_indices, right_join_indices] = cudf::left_join(
-    left_selected, right_selected, compare_nulls, rmm::mr::get_current_device_resource());
+  constexpr auto oob_policy = cudf::out_of_bounds_policy::NULLIFY;
+  auto const left_selected  = left_input.select(left_on);
+  auto const right_selected = right_input.select(right_on);
+  auto const [left_join_indices, right_join_indices] =
+    cudf::left_join(left_selected, right_selected, compare_nulls, mr);
 
   auto const left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
   auto const right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
@@ -141,8 +142,8 @@ std::unique_ptr<cudf::table> perform_left_join(
   auto const left_indices_col  = cudf::column_view{left_indices_span};
   auto const right_indices_col = cudf::column_view{right_indices_span};
 
-  auto const left_result  = cudf::gather(left_input, left_indices_col, oob_policy);
-  auto const right_result = cudf::gather(right_input, right_indices_col, oob_policy);
+  auto const left_result  = cudf::gather(left_input, left_indices_col, oob_policy, stream, mr);
+  auto const right_result = cudf::gather(right_input, right_indices_col, oob_policy, stream, mr);
 
   auto joined_cols = left_result->release();
   auto right_cols  = right_result->release();
