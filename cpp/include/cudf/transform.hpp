@@ -83,12 +83,14 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  *
  * @param table The table used for expression evaluation
  * @param expr The root of the expression tree
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource
  * @return Output column
  */
 std::unique_ptr<column> compute_column(
   table_view const& table,
   ast::expression const& expr,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
