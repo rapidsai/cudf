@@ -13,6 +13,7 @@ if [ ! -d "datafusion" ]; then
     git clone https://github.com/JayjeetAtGithub/datafusion.git datafusion
 fi
 cd datafusion/benchmarks/
+git checkout 154d093
 
 # Generate the data
 # Currently, we support only scale factor 1 and 10
