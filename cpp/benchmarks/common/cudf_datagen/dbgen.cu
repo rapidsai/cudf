@@ -250,10 +250,9 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
                                                      cudf::data_type{cudf::type_id::INT8},
                                                      stream,
                                                      mr);
-    auto const gather_map     = cudf::table_view({
-      cudf::test::fixed_width_column_wrapper<int8_t>({0, 1, 2}).release()->view(),
-      cudf::test::strings_column_wrapper({"N", "A", "R"}).release()->view(),
-    });
+    auto const indices        = cudf::test::fixed_width_column_wrapper<int8_t>({0, 1, 2}).release();
+    auto const keys           = cudf::test::strings_column_wrapper({"N", "A", "R"}).release();
+    auto const gather_map     = cudf::table_view({indices->view(), keys->view()});
     auto const gathered_table = cudf::gather(
       gather_map, ternary_mask->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
     return std::make_unique<cudf::column>(gathered_table->get_column(1));
@@ -266,12 +265,10 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
     auto const pred =
       cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref, current_date_literal);
     auto mask = cudf::compute_column(cudf::table_view({l_shipdate_ts->view()}), pred, mr);
-    auto mask_index_type = cudf::cast(mask->view(), cudf::data_type{cudf::type_id::INT8});
-
-    auto const gather_map     = cudf::table_view({
-      cudf::test::fixed_width_column_wrapper<int8_t>({0, 1}).release()->view(),
-      cudf::test::strings_column_wrapper({"O", "F"}).release()->view(),
-    });
+    auto mask_index_type      = cudf::cast(mask->view(), cudf::data_type{cudf::type_id::INT8});
+    auto const indices        = cudf::test::fixed_width_column_wrapper<int8_t>({0, 1}).release();
+    auto const keys           = cudf::test::strings_column_wrapper({"O", "F"}).release();
+    auto const gather_map     = cudf::table_view({indices->view(), keys->view()});
     auto const gathered_table = cudf::gather(
       gather_map, mask_index_type->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
     return std::make_tuple(std::make_unique<cudf::column>(gathered_table->get_column(1)),
