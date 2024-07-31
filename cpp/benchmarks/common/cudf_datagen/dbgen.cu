@@ -404,7 +404,7 @@ std::unique_ptr<cudf::table> generate_orders_dependent(
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<cudf::table> generate_partsupp(
-  int64_t const& scale_factor,
+  cudf::size_type const& scale_factor,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
@@ -414,10 +414,8 @@ std::unique_ptr<cudf::table> generate_partsupp(
   cudf::size_type const ps_num_rows = scale_factor * 800'000;
 
   // Generate the `ps_partkey` column
-  auto const p_partkey = gen_primary_key_col<int64_t>(1, p_num_rows, stream, mr);
-
-  // Generate the `ps_partkey` column
   auto ps_partkey = [&]() {
+    auto const p_partkey = gen_primary_key_col<int64_t>(1, p_num_rows, stream, mr);
     auto const rep_table = cudf::repeat(cudf::table_view({p_partkey->view()}), 4, stream, mr);
     return std::make_unique<cudf::column>(rep_table->get_column(0));
   }();
@@ -820,7 +818,7 @@ int main(int argc, char** argv)
     return 1;
   }
 
-  int32_t scale_factor = std::atoi(argv[1]);
+  cudf::size_type scale_factor = std::atoi(argv[1]);
   std::cout << "Generating scale factor: " << scale_factor << std::endl;
 
   std::string memory_resource_type = argv[2];

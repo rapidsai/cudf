@@ -176,8 +176,8 @@
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 [[nodiscard]] std::unique_ptr<cudf::column> calc_ps_suppkey(cudf::column_view const& ps_partkey,
-                                                            int64_t const& scale_factor,
-                                                            int64_t const& num_rows,
+                                                            cudf::size_type const& scale_factor,
+                                                            cudf::size_type const& num_rows,
                                                             rmm::cuda_stream_view stream,
                                                             rmm::device_async_resource_ref mr)
 {
@@ -191,7 +191,7 @@
     s_empty->view(), 0, num_rows, cudf::numeric_scalar<int64_t>(10'000 * scale_factor), stream, mr);
 
   // Generate the `i` col
-  auto i = gen_rep_seq_col(4, num_rows, stream, mr);
+  auto i = gen_rep_seq_col<int64_t>(4, num_rows, stream, mr);
 
   // Create a table view out of `p_partkey`, `s`, and `i`
   auto table = cudf::table_view({ps_partkey, s->view(), i->view()});
