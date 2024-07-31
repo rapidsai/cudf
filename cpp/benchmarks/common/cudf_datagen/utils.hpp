@@ -436,7 +436,8 @@ std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string>
   // Build a single column containing `num_rows` random numbers
   auto const rand_keys = gen_rand_num_col<int64_t>(0, string_set.size() - 1, num_rows, stream, mr);
 
-  auto const gathered_table = cudf::gather(vocab_table, rand_keys->view());
+  auto const gathered_table = cudf::gather(
+    vocab_table, rand_keys->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
   return std::make_unique<cudf::column>(gathered_table->get_column(1));
 }
 

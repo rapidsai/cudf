@@ -25,6 +25,7 @@ std::unique_ptr<cudf::table> generate_orders_independent(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
+  CUDF_FUNC_RANGE();
   cudf::size_type const o_num_rows = 1'500'000 * scale_factor;
 
   // Generate the non-dependent columns of the `orders` table
@@ -129,6 +130,7 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
+  CUDF_FUNC_RANGE();
   auto const o_num_rows = orders_independent.num_rows();
   // Generate the `lineitem` table. For each row in the `orders` table,
   // we have a random number (between 1 and 7) of rows in the `lineitem` table
@@ -167,43 +169,42 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
                                         mr);
 
   // Generate the `l_orderkey` column
-  auto const l_orderkey = l_base->get_column(2);
+  auto l_orderkey = std::make_unique<cudf::column>(l_base->get_column(2));
 
   // Generate the `l_partkey` column
-  auto const l_partkey =
-    gen_rand_num_col<int64_t>(1, 200'000 * scale_factor, l_num_rows, stream, mr);
+  auto l_partkey = gen_rand_num_col<int64_t>(1, 200'000 * scale_factor, l_num_rows, stream, mr);
 
   // Generate the `l_suppkey` column
-  auto const l_suppkey = calc_l_suppkey(l_partkey->view(), scale_factor, l_num_rows, stream, mr);
+  auto l_suppkey = calc_l_suppkey(l_partkey->view(), scale_factor, l_num_rows, stream, mr);
 
   // Generate the `l_linenumber` column
-  auto const l_linenumber = gen_rep_seq_col(7, l_num_rows, stream, mr);
+  auto l_linenumber = gen_rep_seq_col(7, l_num_rows, stream, mr);
 
   // Generate the `l_quantity` column
-  auto const l_quantity = gen_rand_num_col<int64_t>(1, 50, l_num_rows, stream, mr);
+  auto l_quantity = gen_rand_num_col<int64_t>(1, 50, l_num_rows, stream, mr);
 
   // Generate the `l_discount` column
-  auto const l_discount = gen_rand_num_col<double>(0.0, 0.10, l_num_rows, stream, mr);
+  auto l_discount = gen_rand_num_col<double>(0.0, 0.10, l_num_rows, stream, mr);
 
   // Generate the `l_tax` column
-  auto const l_tax = gen_rand_num_col<double>(0.0, 0.08, l_num_rows, stream, mr);
+  auto l_tax = gen_rand_num_col<double>(0.0, 0.08, l_num_rows, stream, mr);
 
   // Get the `l_orderdate` column from the `l_base` table
   auto const ol_orderdate_ts = l_base->get_column(3);
 
   // Generate the `l_shipdate` column
   auto const l_shipdate_rand_add_days = gen_rand_num_col<int32_t>(1, 121, l_num_rows, stream, mr);
-  auto const l_shipdate_ts =
+  auto l_shipdate_ts =
     add_calendrical_days(ol_orderdate_ts.view(), l_shipdate_rand_add_days->view(), stream, mr);
 
   // Generate the `l_commitdate` column
   auto const l_commitdate_rand_add_days = gen_rand_num_col<int32_t>(30, 90, l_num_rows, stream, mr);
-  auto const l_commitdate_ts =
+  auto l_commitdate_ts =
     add_calendrical_days(ol_orderdate_ts.view(), l_commitdate_rand_add_days->view(), stream, mr);
 
   // Generate the `l_receiptdate` column
   auto const l_receiptdate_rand_add_days = gen_rand_num_col<int32_t>(1, 30, l_num_rows, stream, mr);
-  auto const l_receiptdate_ts =
+  auto l_receiptdate_ts =
     add_calendrical_days(l_shipdate_ts->view(), l_receiptdate_rand_add_days->view(), stream, mr);
 
   // Define the current date as per clause 4.2.2.12 of the TPC-H specification
@@ -221,7 +222,6 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
   auto const l_returnflag_binary_mask_int =
     cudf::cast(l_returnflag_binary_mask->view(), cudf::data_type{cudf::type_id::INT64}, stream, mr);
 
-  // use copy if else here
   auto const binarty_to_ternary_multiplier =
     gen_rep_seq_col(2, l_num_rows, stream, mr);  // 1, 2, 1, 2,...
   auto const l_returnflag_ternary_mask =
@@ -232,20 +232,16 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
                            stream,
                            mr);
 
-  auto const l_returnflag_ternary_mask_str =
-    cudf::strings::from_integers(l_returnflag_ternary_mask->view(), stream, mr);
-
-  // use gather here
-  auto const l_returnflag_replace_target =
-    cudf::test::strings_column_wrapper({"0", "1", "2"}).release();
-  auto const l_returnflag_replace_with =
-    cudf::test::strings_column_wrapper({"N", "A", "R"}).release();
-
-  auto const l_returnflag = cudf::strings::replace(l_returnflag_ternary_mask_str->view(),
-                                                   l_returnflag_replace_target->view(),
-                                                   l_returnflag_replace_with->view(),
-                                                   stream,
-                                                   mr);
+  auto const gather_map     = cudf::table_view({
+    cudf::test::fixed_width_column_wrapper<int64_t>({0, 1, 2}).release()->view(),
+    cudf::test::strings_column_wrapper({"N", "A", "R"}).release()->view(),
+  });
+  auto const gathered_table = cudf::gather(gather_map,
+                                           l_returnflag_ternary_mask->view(),
+                                           cudf::out_of_bounds_policy::DONT_CHECK,
+                                           stream,
+                                           mr);
+  auto l_returnflag         = std::make_unique<cudf::column>(gathered_table->get_column(1));
 
   // Generate the `l_linestatus` column
   // if `l_shipdate` > current_date then "F" else "O"
@@ -253,40 +249,43 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
   auto const l_shipdate_ts_col_ref = cudf::ast::column_reference(0);
   auto const l_linestatus_pred     = cudf::ast::operation(
     cudf::ast::ast_operator::GREATER, l_shipdate_ts_col_ref, current_date_literal);
-  auto const l_linestatus_mask =
+  auto l_linestatus_mask =
     cudf::compute_column(cudf::table_view({l_shipdate_ts->view()}), l_linestatus_pred, mr);
 
   // use gather here instead
-  auto const l_linestatus = cudf::strings::from_booleans(
+  auto l_linestatus = cudf::strings::from_booleans(
     l_linestatus_mask->view(), cudf::string_scalar("F"), cudf::string_scalar("O"), stream, mr);
 
   // Generate the `l_shipinstruct` column
-  auto const l_shipinstruct = gen_rand_str_col_from_set(vocab_instructions, l_num_rows, stream, mr);
+  auto l_shipinstruct = gen_rand_str_col_from_set(vocab_instructions, l_num_rows, stream, mr);
 
   // Generate the `l_shipmode` column
-  auto const l_shipmode = gen_rand_str_col_from_set(vocab_modes, l_num_rows, stream, mr);
+  auto l_shipmode = gen_rand_str_col_from_set(vocab_modes, l_num_rows, stream, mr);
 
   // Generate the `l_comment` column
-  // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto const l_comment = gen_rand_str_col(10, 43, l_num_rows, stream, mr);
+  // NOTE: This column is not compliant with
+  // clause 4.2.2.10 of the TPC-H specification
+  auto l_comment = gen_rand_str_col(10, 43, l_num_rows, stream, mr);
 
-  auto view = cudf::table_view({l_linestatus_mask->view(),
-                                l_orderkey.view(),
-                                l_partkey->view(),
-                                l_suppkey->view(),
-                                l_linenumber->view(),
-                                l_quantity->view(),
-                                l_discount->view(),
-                                l_tax->view(),
-                                l_shipdate_ts->view(),
-                                l_commitdate_ts->view(),
-                                l_receiptdate_ts->view(),
-                                l_returnflag->view(),
-                                l_linestatus->view(),
-                                l_shipinstruct->view(),
-                                l_shipmode->view(),
-                                l_comment->view()});
-  return std::make_unique<cudf::table>(view);
+  // Generate the `lineitem_partial` table
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(std::move(l_linestatus_mask));
+  columns.push_back(std::move(l_orderkey));
+  columns.push_back(std::move(l_partkey));
+  columns.push_back(std::move(l_suppkey));
+  columns.push_back(std::move(l_linenumber));
+  columns.push_back(std::move(l_quantity));
+  columns.push_back(std::move(l_discount));
+  columns.push_back(std::move(l_tax));
+  columns.push_back(std::move(l_shipdate_ts));
+  columns.push_back(std::move(l_commitdate_ts));
+  columns.push_back(std::move(l_receiptdate_ts));
+  columns.push_back(std::move(l_returnflag));
+  columns.push_back(std::move(l_linestatus));
+  columns.push_back(std::move(l_shipinstruct));
+  columns.push_back(std::move(l_shipmode));
+  columns.push_back(std::move(l_comment));
+  return std::make_unique<cudf::table>(std::move(columns));
 }
 
 std::unique_ptr<cudf::table> generate_orders_dependent(
@@ -294,13 +293,14 @@ std::unique_ptr<cudf::table> generate_orders_dependent(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
+  CUDF_FUNC_RANGE();
   auto const l_linestatus_mask = lineitem.column(0);
   auto const l_orderkey        = lineitem.column(1);
   auto const l_discount        = lineitem.column(6);
   auto const l_tax             = lineitem.column(7);
   auto const l_extendedprice   = lineitem.column(16);
 
-  std::vector<cudf::column_view> orders_dependent_columns;
+  std::vector<std::unique_ptr<cudf::column>> orders_dependent_columns;
 
   // Generate the `o_totalprice` column
   // We calculate the `charge` column, which is a function of `l_extendedprice`,
@@ -311,9 +311,9 @@ std::unique_ptr<cudf::table> generate_orders_dependent(
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.push_back(cudf::groupby::aggregation_request());
   requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-  requests[0].values    = l_charge->view();
-  auto const agg_result = gb.aggregate(requests);
-  orders_dependent_columns.push_back(agg_result.second[0].results[0]->view());
+  requests[0].values = l_charge->view();
+  auto agg_result    = gb.aggregate(requests);
+  orders_dependent_columns.push_back(std::move(agg_result.second[0].results[0]));
 
   // Generate the `o_orderstatus` column
   auto const keys2 = cudf::table_view({l_orderkey});
@@ -363,13 +363,11 @@ std::unique_ptr<cudf::table> generate_orders_dependent(
     cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, sum_ref, zero_literal);
   auto const expr_b =
     cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_b_left, expr_b_right);
-  auto const mask_b        = cudf::compute_column(table, expr_b);
-  auto const o_orderstatus = cudf::copy_if_else(
+  auto const mask_b  = cudf::compute_column(table, expr_b);
+  auto o_orderstatus = cudf::copy_if_else(
     cudf::string_scalar("P"), o_orderstatus_intermediate->view(), mask_b->view());
-  orders_dependent_columns.push_back(o_orderstatus->view());
-
-  auto view = cudf::table_view(orders_dependent_columns);
-  return std::make_unique<cudf::table>(view);
+  orders_dependent_columns.push_back(std::move(o_orderstatus));
+  return std::make_unique<cudf::table>(std::move(orders_dependent_columns));
 }
 
 /**
@@ -386,35 +384,30 @@ std::unique_ptr<cudf::table> generate_partsupp(
 {
   CUDF_FUNC_RANGE();
   std::cout << __func__ << std::endl;
-  cudf::size_type const num_rows_part = scale_factor * 200'000;
-  cudf::size_type const num_rows      = scale_factor * 800'000;
+  cudf::size_type const p_num_rows  = scale_factor * 200'000;
+  cudf::size_type const ps_num_rows = scale_factor * 800'000;
 
   // Generate the `ps_partkey` column
-  auto const p_partkey = gen_primary_key_col(1, num_rows_part, stream, mr);
+  auto const p_partkey = gen_primary_key_col(1, p_num_rows, stream, mr);
 
+  // Generate the `ps_partkey` column
   auto ps_partkey = [&]() {
-    auto const rep_freq_empty = cudf::make_numeric_column(
-      cudf::data_type{cudf::type_id::INT64}, num_rows_part, cudf::mask_state::UNALLOCATED, stream);
-    auto const rep_freq = cudf::fill(
-      rep_freq_empty->view(), 0, num_rows_part, cudf::numeric_scalar<int64_t>(4), stream, mr);
-    // use the repeat api with count field
-    auto const rep_table =
-      cudf::repeat(cudf::table_view({p_partkey->view()}), rep_freq->view(), stream, mr);
+    auto const rep_table = cudf::repeat(cudf::table_view({p_partkey->view()}), 4, stream, mr);
     return std::make_unique<cudf::column>(rep_table->get_column(0));
   }();
 
   // Generate the `ps_suppkey` column
-  auto ps_suppkey = calc_ps_suppkey(ps_partkey->view(), scale_factor, num_rows, stream, mr);
+  auto ps_suppkey = calc_ps_suppkey(ps_partkey->view(), scale_factor, ps_num_rows, stream, mr);
 
   // Generate the `ps_availqty` column
-  auto ps_availqty = gen_rand_num_col<int64_t>(1, 9999, num_rows, stream, mr);
+  auto ps_availqty = gen_rand_num_col<int64_t>(1, 9999, ps_num_rows, stream, mr);
 
   // Generate the `ps_supplycost` column
-  auto ps_supplycost = gen_rand_num_col<double>(1.0, 1000.0, num_rows, stream, mr);
+  auto ps_supplycost = gen_rand_num_col<double>(1.0, 1000.0, ps_num_rows, stream, mr);
 
   // Generate the `ps_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto ps_comment = gen_rand_str_col(49, 198, num_rows, stream, mr);
+  auto ps_comment = gen_rand_str_col(49, 198, ps_num_rows, stream, mr);
 
   // Create the `partsupp` table
   std::vector<std::unique_ptr<cudf::column>> columns;
@@ -525,7 +518,14 @@ std::unique_ptr<cudf::table> generate_part(
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-void generate_orders_lineitem_part(
+/**
+ * @brief Generate the `orders` and `lineitem` tables
+ *
+ * @param scale_factor The scale factor to generate
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+void generate_orders_lineitem(
   int64_t const& scale_factor,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
@@ -797,7 +797,7 @@ int main(int argc, char** argv)
   auto resource                    = create_memory_resource(memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
 
-  generate_orders_lineitem_part(scale_factor);
+  generate_orders_lineitem(scale_factor);
   auto partsupp = generate_partsupp(scale_factor);
   write_parquet(partsupp->view(), "partsupp.parquet", schema_partsupp);
 
