@@ -836,8 +836,8 @@ int main(int argc, char** argv)
   auto partsupp = generate_partsupp(scale_factor);
   write_parquet(partsupp->view(), "partsupp.parquet", schema_partsupp);
 
-  // auto supplier = generate_supplier(scale_factor);
-  // write_parquet(supplier->view(), "supplier.parquet", schema_supplier);
+  auto supplier = generate_supplier(scale_factor);
+  write_parquet(supplier->view(), "supplier.parquet", schema_supplier);
 
   auto customer = generate_customer(scale_factor);
   write_parquet(customer->view(), "customer.parquet", schema_customer);
