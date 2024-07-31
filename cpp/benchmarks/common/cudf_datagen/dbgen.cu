@@ -32,86 +32,95 @@ std::unique_ptr<cudf::table> generate_orders_independent(
   // Generate a primary key column for the `orders` table
   // required for internal operations, but will not be
   // written into the parquet file
-  auto const o_pkey = gen_primary_key_col(0, o_num_rows, stream, mr);
+  auto o_pkey = gen_primary_key_col(0, o_num_rows, stream, mr);
 
   // Generate the `o_orderkey` column
-  auto const o_orderkey_candidates = gen_primary_key_col(1, 4 * o_num_rows, stream, mr);
-  auto const o_orderkey_unsorted   = cudf::sample(cudf::table_view({o_orderkey_candidates->view()}),
-                                                o_num_rows,
-                                                cudf::sample_with_replacement::FALSE,
-                                                0,
-                                                stream,
-                                                mr);
-  auto const o_orderkey =
-    cudf::sort_by_key(o_orderkey_unsorted->view(),
-                      cudf::table_view({o_orderkey_unsorted->view().column(0)}),
-                      {},
-                      {},
-                      stream,
-                      mr)
-      ->get_column(0);
+  auto o_orderkey = [&]() {
+    auto const o_orderkey_candidates = gen_primary_key_col(1, 4 * o_num_rows, stream, mr);
+    auto const o_orderkey_unsorted = cudf::sample(cudf::table_view({o_orderkey_candidates->view()}),
+                                                  o_num_rows,
+                                                  cudf::sample_with_replacement::FALSE,
+                                                  0,
+                                                  stream,
+                                                  mr);
+    auto const o_orderkey_view =
+      cudf::sort_by_key(o_orderkey_unsorted->view(),
+                        cudf::table_view({o_orderkey_unsorted->view().column(0)}),
+                        {},
+                        {},
+                        stream,
+                        mr)
+        ->get_column(0);
+    return std::make_unique<cudf::column>(o_orderkey_view);
+  }();
 
   // Generate the `o_custkey` column
   // NOTE: This column does not comply with the specs which
   // specifies that every value % 3 != 0
-  auto const o_custkey = gen_rand_num_col<int64_t>(1, o_num_rows, o_num_rows, stream, mr);
+  auto o_custkey = gen_rand_num_col<int64_t>(1, o_num_rows, o_num_rows, stream, mr);
 
   // Generate the `o_orderdate` column
-  auto const o_orderdate_year  = gen_rand_str_col_from_set(years, o_num_rows, stream, mr);
-  auto const o_orderdate_month = gen_rand_str_col_from_set(months, o_num_rows, stream, mr);
-  auto const o_orderdate_day   = gen_rand_str_col_from_set(days, o_num_rows, stream, mr);
-  auto const o_orderdate_str   = cudf::strings::concatenate(
-    cudf::table_view(
-      {o_orderdate_year->view(), o_orderdate_month->view(), o_orderdate_day->view()}),
-    cudf::string_scalar("-"),
-    cudf::string_scalar("", false),
-    cudf::strings::separator_on_nulls::YES,
-    stream,
-    mr);
+  auto o_orderdate_ts = [&]() {
+    auto const o_orderdate_year  = gen_rand_str_col_from_set(years, o_num_rows, stream, mr);
+    auto const o_orderdate_month = gen_rand_str_col_from_set(months, o_num_rows, stream, mr);
+    auto const o_orderdate_day   = gen_rand_str_col_from_set(days, o_num_rows, stream, mr);
+    auto const o_orderdate_str   = cudf::strings::concatenate(
+      cudf::table_view(
+        {o_orderdate_year->view(), o_orderdate_month->view(), o_orderdate_day->view()}),
+      cudf::string_scalar("-"),
+      cudf::string_scalar("", false),
+      cudf::strings::separator_on_nulls::NO,
+      stream,
+      mr);
 
-  auto const o_orderdate_ts =
-    cudf::strings::to_timestamps(o_orderdate_str->view(),
-                                 cudf::data_type{cudf::type_id::TIMESTAMP_DAYS},
-                                 std::string("%Y-%m-%d"),
-                                 stream,
-                                 mr);
+    return cudf::strings::to_timestamps(o_orderdate_str->view(),
+                                        cudf::data_type{cudf::type_id::TIMESTAMP_DAYS},
+                                        std::string("%Y-%m-%d"),
+                                        stream,
+                                        mr);
+  }();
 
   // Generate the `o_orderpriority` column
-  auto const o_orderpriority = gen_rand_str_col_from_set(vocab_priorities, o_num_rows, stream, mr);
+  auto o_orderpriority = gen_rand_str_col_from_set(vocab_priorities, o_num_rows, stream, mr);
 
   // Generate the `o_clerk` column
-  auto const clerk_repeat = gen_rep_str_col("Clerk#", o_num_rows, stream, mr);
-  auto const random_c = gen_rand_num_col<int64_t>(1, 1'000 * scale_factor, o_num_rows, stream, mr);
-  auto const random_c_str = cudf::strings::from_integers(random_c->view(), stream, mr);
-  auto const random_c_str_padded =
-    cudf::strings::pad(random_c_str->view(), 9, cudf::strings::side_type::LEFT, "0", stream, mr);
-  auto const o_clerk = cudf::strings::concatenate(
-    cudf::table_view({clerk_repeat->view(), random_c_str_padded->view()}),
-    cudf::string_scalar(""),
-    cudf::string_scalar("", false),
-    cudf::strings::separator_on_nulls::YES,
-    stream,
-    mr);
+  auto o_clerk = [&]() {
+    auto const clerk_repeat = gen_rep_str_col("Clerk#", o_num_rows, stream, mr);
+    auto const random_c =
+      gen_rand_num_col<int64_t>(1, 1'000 * scale_factor, o_num_rows, stream, mr);
+    auto const random_c_str        = cudf::strings::from_integers(random_c->view(), stream, mr);
+    auto const random_c_str_padded = cudf::strings::zfill(random_c_str->view(), 9, stream, mr);
+    return cudf::strings::concatenate(
+      cudf::table_view({clerk_repeat->view(), random_c_str_padded->view()}),
+      cudf::string_scalar(""),
+      cudf::string_scalar("", false),
+      cudf::strings::separator_on_nulls::NO,
+      stream,
+      mr);
+  }();
 
   // Generate the `o_shippriority` column
-  auto const empty = cudf::make_numeric_column(
-    cudf::data_type{cudf::type_id::INT64}, o_num_rows, cudf::mask_state::UNALLOCATED, stream);
-  auto const o_shippriority =
-    cudf::fill(empty->view(), 0, o_num_rows, cudf::numeric_scalar<int64_t>(0), stream, mr);
+  auto o_shippriority = [&]() {
+    auto const empty = cudf::make_numeric_column(
+      cudf::data_type{cudf::type_id::INT64}, o_num_rows, cudf::mask_state::UNALLOCATED, stream);
+    return cudf::fill(empty->view(), 0, o_num_rows, cudf::numeric_scalar<int64_t>(0), stream, mr);
+  }();
 
   // Generate the `o_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
-  auto const o_comment = gen_rand_str_col(19, 78, o_num_rows, stream, mr);
+  auto o_comment = gen_rand_str_col(19, 78, o_num_rows, stream, mr);
 
-  auto view = cudf::table_view({o_pkey->view(),
-                                o_orderkey.view(),
-                                o_custkey->view(),
-                                o_orderdate_ts->view(),
-                                o_orderpriority->view(),
-                                o_clerk->view(),
-                                o_shippriority->view(),
-                                o_comment->view()});
-  return std::make_unique<cudf::table>(view);
+  // Generate the `orders_indenpendent` table
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(std::move(o_pkey));
+  columns.push_back(std::move(o_orderkey));
+  columns.push_back(std::move(o_custkey));
+  columns.push_back(std::move(o_orderdate_ts));
+  columns.push_back(std::move(o_orderpriority));
+  columns.push_back(std::move(o_clerk));
+  columns.push_back(std::move(o_shippriority));
+  columns.push_back(std::move(o_comment));
+  return std::make_unique<cudf::table>(std::move(columns));
 }
 
 std::unique_ptr<cudf::table> generate_lineitem_partial(
@@ -378,19 +387,21 @@ std::unique_ptr<cudf::table> generate_partsupp(
   CUDF_FUNC_RANGE();
   std::cout << __func__ << std::endl;
   cudf::size_type const num_rows_part = scale_factor * 200'000;
-  // num rows partsupp
-  cudf::size_type const num_rows = scale_factor * 800'000;
+  cudf::size_type const num_rows      = scale_factor * 800'000;
 
   // Generate the `ps_partkey` column
-  auto const p_partkey      = gen_primary_key_col(1, num_rows_part, stream, mr);
-  auto const rep_freq_empty = cudf::make_numeric_column(
-    cudf::data_type{cudf::type_id::INT64}, num_rows_part, cudf::mask_state::UNALLOCATED, stream);
-  auto const rep_freq = cudf::fill(
-    rep_freq_empty->view(), 0, num_rows_part, cudf::numeric_scalar<int64_t>(4), stream, mr);
-  // use the repeat api with count field
-  auto const rep_table =
-    cudf::repeat(cudf::table_view({p_partkey->view()}), rep_freq->view(), stream, mr);
-  auto ps_partkey = std::make_unique<cudf::column>(rep_table->get_column(0));
+  auto const p_partkey = gen_primary_key_col(1, num_rows_part, stream, mr);
+
+  auto ps_partkey = [&]() {
+    auto const rep_freq_empty = cudf::make_numeric_column(
+      cudf::data_type{cudf::type_id::INT64}, num_rows_part, cudf::mask_state::UNALLOCATED, stream);
+    auto const rep_freq = cudf::fill(
+      rep_freq_empty->view(), 0, num_rows_part, cudf::numeric_scalar<int64_t>(4), stream, mr);
+    // use the repeat api with count field
+    auto const rep_table =
+      cudf::repeat(cudf::table_view({p_partkey->view()}), rep_freq->view(), stream, mr);
+    return std::make_unique<cudf::column>(rep_table->get_column(0));
+  }();
 
   // Generate the `ps_suppkey` column
   auto ps_suppkey = calc_ps_suppkey(ps_partkey->view(), scale_factor, num_rows, stream, mr);
@@ -452,32 +463,37 @@ std::unique_ptr<cudf::table> generate_part(
       mr);
   }();
 
-  // Generate the `p_mfgr` column
-  auto const mfgr_repeat     = gen_rep_str_col("Manufacturer#", num_rows, stream, mr);
+  // Generate the `p_mfgr` and `p_brand` columns
   auto const random_values_m = gen_rand_num_col<int64_t>(1, 5, num_rows, stream, mr);
   auto const random_values_m_str =
     cudf::strings::from_integers(random_values_m->view(), stream, mr);
-  auto p_mfgr =
-    cudf::strings::concatenate(cudf::table_view({mfgr_repeat->view(), random_values_m_str->view()}),
-                               cudf::string_scalar(""),
-                               cudf::string_scalar("", false),
-                               cudf::strings::separator_on_nulls::NO,
-                               stream,
-                               mr);
 
-  // Generate the `p_brand` column
-  auto const brand_repeat    = gen_rep_str_col("Brand#", num_rows, stream, mr);
   auto const random_values_n = gen_rand_num_col<int64_t>(1, 5, num_rows, stream, mr);
   auto const random_values_n_str =
     cudf::strings::from_integers(random_values_n->view(), stream, mr);
-  auto p_brand = cudf::strings::concatenate(
-    cudf::table_view(
-      {brand_repeat->view(), random_values_m_str->view(), random_values_n_str->view()}),
-    cudf::string_scalar(""),
-    cudf::string_scalar("", false),
-    cudf::strings::separator_on_nulls::NO,
-    stream,
-    mr);
+
+  auto p_mfgr = [&]() {
+    auto const mfgr_repeat = gen_rep_str_col("Manufacturer#", num_rows, stream, mr);
+    return cudf::strings::concatenate(
+      cudf::table_view({mfgr_repeat->view(), random_values_m_str->view()}),
+      cudf::string_scalar(""),
+      cudf::string_scalar("", false),
+      cudf::strings::separator_on_nulls::NO,
+      stream,
+      mr);
+  }();
+
+  auto p_brand = [&]() {
+    auto const brand_repeat = gen_rep_str_col("Brand#", num_rows, stream, mr);
+    return cudf::strings::concatenate(
+      cudf::table_view(
+        {brand_repeat->view(), random_values_m_str->view(), random_values_n_str->view()}),
+      cudf::string_scalar(""),
+      cudf::string_scalar("", false),
+      cudf::strings::separator_on_nulls::NO,
+      stream,
+      mr);
+  }();
 
   // Generate the `p_type` column
   auto p_type = gen_rand_str_col_from_set(gen_vocab_types(), num_rows, stream, mr);
@@ -584,16 +600,14 @@ std::unique_ptr<cudf::table> generate_supplier(
 
   // Generate the `s_name` column
   auto s_name = [&]() {
-    auto const supplier_repeat = gen_rep_str_col("Supplier#", num_rows, stream, mr);
-    auto const s_suppkey_str   = cudf::strings::from_integers(s_suppkey->view(), stream, mr);
-    // TODO: use cudf::zfill instead
-    auto const s_suppkey_str_padded =
-      cudf::strings::pad(s_suppkey_str->view(), 9, cudf::strings::side_type::LEFT, "0", stream, mr);
+    auto const supplier_repeat      = gen_rep_str_col("Supplier#", num_rows, stream, mr);
+    auto const s_suppkey_str        = cudf::strings::from_integers(s_suppkey->view(), stream, mr);
+    auto const s_suppkey_str_padded = cudf::strings::zfill(s_suppkey_str->view(), 9, stream, mr);
     return cudf::strings::concatenate(
       cudf::table_view({supplier_repeat->view(), s_suppkey_str_padded->view()}),
       cudf::string_scalar(""),
       cudf::string_scalar("", false),
-      cudf::strings::separator_on_nulls::YES,
+      cudf::strings::separator_on_nulls::NO,
       stream,
       mr);
   }();
@@ -648,11 +662,9 @@ std::unique_ptr<cudf::table> generate_customer(
 
   // Generate the `c_name` column
   auto c_name = [&]() {
-    auto const customer_repeat = gen_rep_str_col("Customer#", num_rows, stream, mr);
-    auto const c_custkey_str   = cudf::strings::from_integers(c_custkey->view(), stream, mr);
-    // TODO: use cudf::zfill
-    auto const c_custkey_str_padded =
-      cudf::strings::pad(c_custkey_str->view(), 9, cudf::strings::side_type::LEFT, "0", stream, mr);
+    auto const customer_repeat      = gen_rep_str_col("Customer#", num_rows, stream, mr);
+    auto const c_custkey_str        = cudf::strings::from_integers(c_custkey->view(), stream, mr);
+    auto const c_custkey_str_padded = cudf::strings::zfill(c_custkey_str->view(), 9, stream, mr);
     return cudf::strings::concatenate(
       cudf::table_view({customer_repeat->view(), c_custkey_str_padded->view()}),
       cudf::string_scalar(""),
@@ -730,6 +742,7 @@ std::unique_ptr<cudf::table> generate_nation(
   std::vector<std::unique_ptr<cudf::column>> columns;
   columns.push_back(std::move(n_nationkey));
   columns.push_back(std::move(n_name));
+  columns.push_back(std::move(n_regionkey));
   columns.push_back(std::move(n_comment));
   return std::make_unique<cudf::table>(std::move(columns));
 }
