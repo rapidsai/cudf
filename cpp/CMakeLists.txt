@@ -365,6 +365,7 @@ add_library(
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/arrow_utilities.cpp
+  src/interop/decimal_conversion_utilities.cu
   src/interop/to_arrow.cu
   src/interop/to_arrow_device.cu
   src/interop/to_arrow_host.cu
@@ -712,8 +713,10 @@ set_target_properties(
              CXX_STANDARD_REQUIRED ON
              # For std:: support of __int128_t. Can be removed once using cuda::std
              CXX_EXTENSIONS ON
+             CXX_VISIBILITY_PRESET hidden
              CUDA_STANDARD 17
              CUDA_STANDARD_REQUIRED ON
+             CUDA_VISIBILITY_PRESET hidden
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
 )
@@ -888,8 +891,10 @@ if(CUDF_BUILD_TESTUTIL)
                # set target compile options
                CXX_STANDARD 17
                CXX_STANDARD_REQUIRED ON
+               CXX_VISIBILITY_PRESET hidden
                CUDA_STANDARD 17
                CUDA_STANDARD_REQUIRED ON
+               CUDA_VISIBILITY_PRESET hidden
                POSITION_INDEPENDENT_CODE ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
   )

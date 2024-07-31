@@ -30,3 +30,7 @@ target_compile_features(tpch_q6 PRIVATE cxx_std_17)
 add_executable(tpch_q9 q9.cpp)
 target_link_libraries(tpch_q9 PRIVATE cudf::cudf)
 target_compile_features(tpch_q9 PRIVATE cxx_std_17)
+
+add_executable(tpch_q10 q10.cpp)
+target_link_libraries(tpch_q10 PRIVATE cudf::cudf)
+target_compile_features(tpch_q10 PRIVATE cxx_std_17)

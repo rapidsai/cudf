@@ -17,11 +17,12 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup reshape_transpose
  * @{
@@ -48,4 +49,4 @@ std::pair<std::unique_ptr<column>, table_view> transpose(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

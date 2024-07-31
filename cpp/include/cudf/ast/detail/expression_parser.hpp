@@ -29,9 +29,8 @@
 #include <numeric>
 #include <optional>
 
-namespace cudf {
-namespace ast {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace ast::detail {
 
 /**
  * @brief Node data reference types.
@@ -328,8 +327,6 @@ class expression_parser {
   std::vector<generic_scalar_device_view> _literals;
 };
 
-}  // namespace detail
+}  // namespace ast::detail
 
-}  // namespace ast
-
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
