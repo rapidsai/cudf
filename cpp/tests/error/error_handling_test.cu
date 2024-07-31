@@ -50,6 +50,8 @@ CUDF_KERNEL void test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
 // calls.
 TEST(StreamCheck, FailedKernel)
 {
+  if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { GTEST_SKIP(); }
+
   rmm::cuda_stream stream;
   int a;
   test_kernel<<<0, 0, 0, stream.value()>>>(&a);
@@ -61,6 +63,8 @@ TEST(StreamCheck, FailedKernel)
 
 TEST(StreamCheck, CatchFailedKernel)
 {
+  if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { GTEST_SKIP(); }
+
   rmm::cuda_stream stream;
   int a;
   test_kernel<<<0, 0, 0, stream.value()>>>(&a);
