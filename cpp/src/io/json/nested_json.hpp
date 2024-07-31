@@ -195,6 +195,10 @@ struct csr {
   rmm::device_uvector<NodeIndexT> colidx;
 };
 
+/*
+ * @brief Auxiliary column tree properties that are required to construct the device json
+ * column subtree, but not required for the final cudf column construction.
+ */
 struct column_tree_properties {
   rmm::device_uvector<NodeT> categories;
   rmm::device_uvector<size_type> max_row_offsets;
