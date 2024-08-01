@@ -424,7 +424,7 @@ def hash_object_cudf_index(ind, index=None):
         return ind.to_frame(index=False).hash_values()
 
     col = cudf.core.column.as_column(ind)
-    return cudf.Series(col).hash_values()
+    return cudf.Series._from_column(col).hash_values()
 
 
 @group_split_dispatch.register((cudf.Series, cudf.DataFrame))
