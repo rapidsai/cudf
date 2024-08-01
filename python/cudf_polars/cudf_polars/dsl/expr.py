@@ -813,6 +813,7 @@ class StringFunction(Expr):
                 )
             )
         elif self.name == pl_expr.StringFunction.Strptime:
+            # TODO: ignores ambiguous
             format, strict, exact, cache = self.options
             col = self.children[0].evaluate(df, context=context, mapping=mapping)
 
@@ -850,7 +851,6 @@ class StringFunction(Expr):
                         res.columns()[0], self.dtype, format.encode()
                     )
                 )
-
             raise NotImplementedError("Strptime")
         raise NotImplementedError(
             f"StringFunction {self.name}"
