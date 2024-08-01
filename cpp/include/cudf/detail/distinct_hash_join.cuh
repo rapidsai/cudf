@@ -109,33 +109,19 @@ struct distinct_hash_join {
   using cuco_storage_type   = cuco::storage<1>;
 
   /// Hash table type
-  using hash_table_type = std::variant<
-    cuco::static_set<cuco::pair<hash_value_type, rhs_index_type>,
-                     cuco::extent<size_type>,
-                     cuda::thread_scope_device,
-                     comparator_adapter<cudf::experimental::row::equality::
-                                          strong_index_comparator_adapter<row_comparator>>,
-                     probing_scheme_type,
-                     cudf::detail::cuco_allocator,
-                     cuco_storage_type>,
-    cuco::static_set<
-      cuco::pair<hash_value_type, rhs_index_type>,
-      cuco::extent<size_type>,
-      cuda::thread_scope_device,
-      comparator_adapter<cudf::experimental::row::equality::strong_index_comparator_adapter<
-        row_comparator_no_nested>>,
-      probing_scheme_type,
-      cudf::detail::cuco_allocator,
-      cuco_storage_type>,
-    cuco::static_set<
-      cuco::pair<hash_value_type, rhs_index_type>,
-      cuco::extent<size_type>,
-      cuda::thread_scope_device,
-      comparator_adapter<cudf::experimental::row::equality::strong_index_comparator_adapter<
-        row_comparator_no_compound>>,
-      probing_scheme_type,
-      cudf::detail::cuco_allocator,
-      cuco_storage_type>>;
+  template <typename Comparator>
+  using static_set_with_comparator = cuco::static_set<
+    cuco::pair<hash_value_type, rhs_index_type>,
+    cuco::extent<size_type>,
+    cuda::thread_scope_device,
+    comparator_adapter<
+      cudf::experimental::row::equality::strong_index_comparator_adapter<Comparator>>,
+    probing_scheme_type,
+    cudf::detail::cuco_allocator,
+    cuco_storage_type>;
+  using hash_table_type = std::variant<static_set_with_comparator<row_comparator>,
+                                       static_set_with_comparator<row_comparator_no_nested>,
+                                       static_set_with_comparator<row_comparator_no_compound>>;
 
   bool _has_nulls;  ///< true if nulls are present in either build table or probe table
   cudf::null_equality _nulls_equal;  ///< whether to consider nulls as equal
