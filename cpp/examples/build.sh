@@ -57,6 +57,7 @@ build_example() {
 }
 
 build_example basic
+build_example drop_duplicates
 build_example tpch
 build_example strings
 build_example nested_types
