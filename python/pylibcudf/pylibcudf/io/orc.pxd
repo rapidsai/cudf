@@ -20,7 +20,7 @@ cpdef TableWithMetadata read_orc(
     list columns = *,
     list stripes = *,
     size_type skip_rows = *,
-    size_type num_rows = *,
+    size_type nrows = *,
     bool use_index = *,
     bool use_np_dtypes = *,
     DataType timestamp_type = *,

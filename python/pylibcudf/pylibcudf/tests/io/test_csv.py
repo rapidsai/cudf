@@ -9,7 +9,7 @@ import pylibcudf as plc
 import pytest
 from pylibcudf.io.types import CompressionType
 from utils import (
-    _convert_numeric_types_to_floating,
+    _convert_types,
     assert_table_and_meta_eq,
     make_source,
     write_source_str,
@@ -148,7 +148,12 @@ def test_read_csv_dtypes(csv_table_data, source_or_sink, usecols):
     if usecols is not None:
         pa_table = pa_table.select(usecols)
 
-    dtypes, new_fields = _convert_numeric_types_to_floating(pa_table)
+    dtypes, new_fields = _convert_types(
+        pa_table,
+        lambda typ: pa.types.is_unsigned_integer(typ)
+        or pa.types.is_integer(typ),
+        pa.float64(),
+    )
     # Extract the dtype out of the (name, type, child_types) tuple
     # (read_csv doesn't support this format since it doesn't support nested columns)
     dtypes = {name: dtype for name, dtype, _ in dtypes}
