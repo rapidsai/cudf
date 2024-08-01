@@ -1,7 +1,12 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t
-from pylibcudf.libcudf.types cimport data_type, size_type, type_id
+from pylibcudf.libcudf.types cimport (
+    data_type,
+    size_of as cpp_size_of,
+    size_type,
+    type_id,
+)
 from pylibcudf.libcudf.utilities.type_dispatcher cimport type_to_id
 
 from pylibcudf.libcudf.types import type_id as TypeId  # no-cython-lint, isort:skip
@@ -68,6 +73,15 @@ cdef class DataType:
         ret.c_obj = dt
         return ret
 
+cpdef size_type size_of(DataType t):
+    """Returns the size in bytes of elements of the specified data_type.
+
+    Only fixed-width types are supported.
+
+    For details, see :cpp:func:`size_of`.
+    """
+    with nogil:
+        return cpp_size_of(t.c_obj)
 
 SIZE_TYPE = DataType(type_to_id[size_type]())
 SIZE_TYPE_ID = SIZE_TYPE.id()

@@ -12,12 +12,10 @@ from rmm._lib.device_buffer cimport DeviceBuffer
 
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
-from .types cimport DataType, type_id
+from .types cimport DataType, size_of, type_id
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 import functools
-
-import numpy as np
 
 
 cdef class Column:
@@ -300,14 +298,15 @@ cdef class Column:
             raise ValueError("mask not yet supported.")
 
         typestr = iface['typestr'][1:]
+        data_type = _datatype_from_dtype_desc(typestr)
+
         if not is_c_contiguous(
             iface['shape'],
             iface['strides'],
-            np.dtype(typestr).itemsize
+            size_of(data_type)
         ):
             raise ValueError("Data must be C-contiguous")
 
-        data_type = _datatype_from_dtype_desc(typestr)
         size = iface['shape'][0]
         return Column(
             data_type,
