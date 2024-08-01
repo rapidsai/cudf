@@ -42,3 +42,16 @@ cpdef Column from_timestamps(
         )
 
     return Column.from_libcudf(move(c_result))
+
+cpdef Column is_timestamp(
+    Column input,
+    const string& format
+):
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = cpp_convert_datetime.is_timestamp(
+            input.view(),
+            format
+        )
+
+    return Column.from_libcudf(move(c_result))

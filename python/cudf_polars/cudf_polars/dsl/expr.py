@@ -813,7 +813,44 @@ class StringFunction(Expr):
                 )
             )
         elif self.name == pl_expr.StringFunction.Strptime:
-            # TODO: Implement strptime
+            format, strict, exact, cache = self.options
+            col = self.children[0].evaluate(df, context=context, mapping=mapping)
+
+            if format is None:
+                raise NotImplementedError("Strptime requires a format string")
+
+            if cache:
+                raise NotImplementedError("Strptime cache is a CPU feature")
+
+            if not exact:
+                raise NotImplementedError("Strptime does not support exact=False")
+            not_timestamps = plc.unary.unary_operation(
+                plc.strings.convert.convert_datetime.is_timestamp(
+                    col.obj, format.encode()
+                ),
+                plc.unary.UnaryOperator.NOT,
+            )
+
+            if strict:
+                reduced = plc.reduce.reduce(
+                    not_timestamps,
+                    plc.aggregation.min(),
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
+                any_malformed = plc.interop.to_arrow(reduced).as_py()
+                if any_malformed:
+                    raise ValueError("Malformed datetime string")
+            else:
+                null = plc.interop.from_arrow(pa.scalar(None, type=pa.string()))
+                res = plc.copying.boolean_mask_scatter(
+                    [null], plc.Table([col.obj]), not_timestamps
+                )
+                return Column(
+                    plc.strings.convert.convert_datetime.to_timestamps(
+                        res.columns()[0], self.dtype, format.encode()
+                    )
+                )
+
             raise NotImplementedError("Strptime")
         raise NotImplementedError(
             f"StringFunction {self.name}"
