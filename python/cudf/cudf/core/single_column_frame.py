@@ -140,7 +140,7 @@ class SingleColumnFrame(Frame, NotIterable):
         2    <NA>
         dtype: object
         """
-        return cls(ColumnBase.from_arrow(array))
+        raise NotImplementedError
 
     @_performance_tracking
     def to_arrow(self) -> pa.Array:

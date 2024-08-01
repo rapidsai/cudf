@@ -53,14 +53,10 @@ class Frame(BinaryOperand, Scannable):
         A Frame representing the (optional) index columns.
     """
 
-    _data: "ColumnAccessor"
-
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
-    def __init__(self, data=None):
-        if data is None:
-            data = {}
-        self._data = cudf.core.column_accessor.ColumnAccessor(data)
+    def __init__(self, data: ColumnAccessor | MutableMapping[Any, ColumnBase]):
+        self._data = ColumnAccessor(data)
 
     @property
     def _num_columns(self) -> int:
