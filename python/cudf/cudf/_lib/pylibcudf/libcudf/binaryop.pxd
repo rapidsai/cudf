@@ -5,7 +5,7 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 
-from cudf._lib.pylibcudf.exception_handler cimport cudf_exception_handler
+from cudf._lib.pylibcudf.exception_handler cimport libcudf_exception_handler
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
 from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar

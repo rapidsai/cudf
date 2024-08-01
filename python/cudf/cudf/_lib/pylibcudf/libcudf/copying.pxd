@@ -8,7 +8,7 @@ from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport device_buffer
 
-from cudf._lib.pylibcudf.exception_handler cimport cudf_exception_handler
+from cudf._lib.pylibcudf.exception_handler cimport libcudf_exception_handler
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.column.column_view cimport (
     column_view,
