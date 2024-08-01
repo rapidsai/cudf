@@ -503,28 +503,33 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return frame._slice(row_spec.key)
         elif isinstance(row_spec, indexing_utils.ScalarIndexer):
             result = frame._gather(row_spec.key, keep_index=True)
+            new_name = result.index[0]
+            new_index = ensure_index(result.keys())
             # Attempt to turn into series.
-            try:
-                # Behaviour difference from pandas, which will merrily
-                # turn any heterogeneous set of columns into a series if
-                # you only ask for one row.
-                new_name = result.index[0]
-                ser = Series._concat(
-                    [result[name] for name in column_names],
-                )
-                ser.index = ensure_index(result.keys())
-                ser.name = new_name
-                return ser
-            except TypeError:
-                # Couldn't find a common type, Hence:
-                # Raise in pandas compatibility mode,
-                # or just return a 1xN dataframe otherwise
-                if cudf.get_option("mode.pandas_compatible"):
-                    raise TypeError(
-                        "All columns need to be of same type, please "
-                        "typecast to common dtype."
+            if len(column_names) == 0:
+                return Series([], index=new_index, name=new_name)
+            else:
+                try:
+                    # Behaviour difference from pandas, which will merrily
+                    # turn any heterogeneous set of columns into a series if
+                    # you only ask for one row.
+                    ser = Series._concat(
+                        [result[name] for name in column_names],
                     )
-                return result
+                except TypeError as err:
+                    # Couldn't find a common type, Hence:
+                    # Raise in pandas compatibility mode,
+                    # or just return a 1xN dataframe otherwise
+                    if cudf.get_option("mode.pandas_compatible"):
+                        raise TypeError(
+                            "All columns need to be of same type, please "
+                            "typecast to common dtype."
+                        ) from err
+                    return result
+                else:
+                    ser.index = new_index
+                    ser.name = new_name
+                    return ser
         elif isinstance(row_spec, indexing_utils.EmptyIndexer):
             return frame._empty_like(keep_index=True)
         assert_never(row_spec)
@@ -6343,7 +6348,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         length = len(self)
         return Series._from_column(
             as_column([length - col.null_count for col in self._columns]),
-            cudf.Index(self._data.names),
+            index=cudf.Index(self._data.names),
         )
 
     _SUPPORT_AXIS_LOOKUP = {

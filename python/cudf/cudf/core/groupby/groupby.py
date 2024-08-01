@@ -483,7 +483,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "ascending is currently not implemented."
             )
         return (
-            cudf.Series(
+            cudf.Series._from_column(
                 cudf.core.column.column_empty(
                     len(self.obj), "int8", masked=False
                 ),

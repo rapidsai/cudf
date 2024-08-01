@@ -544,8 +544,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2    <NA>
         dtype: object
         """
-        ca = ColumnAccessor({None: ColumnBase.from_arrow(array)}, verify=False)
-        return cls._from_data(ca)
+        return cls._from_column(ColumnBase.from_arrow(array))
 
     @classmethod
     @_performance_tracking

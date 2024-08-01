@@ -1122,10 +1122,10 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         >>> import cudf
         >>> import pyarrow as pa
         >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
-        Index(['a', 'b', None], dtype='object')
+        Index(['a', 'b', <NA>], dtype='object')
         """
         try:
-            return cls(ColumnBase.from_arrow(obj))
+            return cls._from_column(ColumnBase.from_arrow(obj))
         except TypeError:
             # Try interpreting object as a MultiIndex before failing.
             return cudf.MultiIndex.from_arrow(obj)
