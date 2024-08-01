@@ -3,7 +3,7 @@
 from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.exception_handler cimport cudf_exception_handler
+from cudf._lib.pylibcudf.exception_handler cimport cudf_exception_handler
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
 from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
