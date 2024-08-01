@@ -307,24 +307,46 @@ TEST_F(StringsSplitTest, SplitRecordWhitespaceWithMaxSplit)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
+TEST_F(StringsSplitTest, SplitAllEmpty)
+{
+  auto input     = cudf::test::strings_column_wrapper({"", "", "", ""});
+  auto sv        = cudf::strings_column_view(input);
+  auto empty     = cudf::string_scalar("");
+  auto delimiter = cudf::string_scalar("s");
+
+  auto result = cudf::strings::split(sv, delimiter);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(0), input);
+  result = cudf::strings::rsplit(sv, delimiter);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(0), input);
+
+  auto expected = cudf::test::strings_column_wrapper({"", "", "", ""}, {0, 0, 0, 0});
+  result        = cudf::strings::split(sv, empty);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view().column(0), expected);
+  result = cudf::strings::rsplit(sv, empty);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view().column(0), expected);
+}
+
 TEST_F(StringsSplitTest, SplitRecordAllEmpty)
 {
   auto input     = cudf::test::strings_column_wrapper({"", "", "", ""});
   auto sv        = cudf::strings_column_view(input);
-  auto delimiter = cudf::string_scalar("s");
   auto empty     = cudf::string_scalar("");
+  auto delimiter = cudf::string_scalar("s");
 
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
-  LCW expected({LCW{}, LCW{}, LCW{}, LCW{}});
+  LCW expected({LCW{""}, LCW{""}, LCW{""}, LCW{""}});
+  LCW expected_empty({LCW{}, LCW{}, LCW{}, LCW{}});
+  LCW expected_nulls({LCW{}, LCW{}, LCW{}, LCW{}}, cudf::test::iterators::all_nulls());
+
   auto result = cudf::strings::split_record(sv, delimiter);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
   result = cudf::strings::split_record(sv, empty);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected_empty);
 
   result = cudf::strings::rsplit_record(sv, delimiter);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
   result = cudf::strings::rsplit_record(sv, empty);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected_empty);
 }
 
 TEST_F(StringsSplitTest, MultiByteDelimiters)

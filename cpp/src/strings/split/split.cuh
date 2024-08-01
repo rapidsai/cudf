@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sequence.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/strings/detail/split_utils.cuh>
@@ -358,9 +359,11 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
     get_offset_value(input.offsets(), input.offset() + strings_count, stream) -
     get_offset_value(input.offsets(), input.offset(), stream);
   if (chars_bytes == 0) {
-    auto offsets = cudf::make_column_from_scalar(
-      numeric_scalar<int32_t>(0, true, stream), strings_count + 1, stream, mr);
-    auto tokens = rmm::device_uvector<string_index_pair>(0, stream);
+    auto offsets = cudf::detail::sequence(
+      strings_count + 1, numeric_scalar<int32_t>(0, true, stream), stream, mr);
+    auto tokens = rmm::device_uvector<string_index_pair>(strings_count, stream);
+    thrust::fill_n(
+      rmm::exec_policy(stream), tokens.begin(), strings_count, string_index_pair{"", 0});
     return std::pair{std::move(offsets), std::move(tokens)};
   }
   auto const d_offsets =
