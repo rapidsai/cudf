@@ -568,16 +568,19 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
 
 std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
                                                 size_type segment_length,
+                                                rmm::cuda_stream_view stream,
                                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_row_bit_count(t, segment_length, cudf::get_default_stream(), mr);
+  return detail::segmented_row_bit_count(t, segment_length, stream, mr);
 }
 
-std::unique_ptr<column> row_bit_count(table_view const& t, rmm::device_async_resource_ref mr)
+std::unique_ptr<column> row_bit_count(table_view const& t,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::row_bit_count(t, cudf::get_default_stream(), mr);
+  return detail::row_bit_count(t, stream, mr);
 }
 
 }  // namespace cudf
