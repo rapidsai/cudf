@@ -55,28 +55,28 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         const column_view& rhs,
         binary_operator op,
         data_type output_type
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] binary_operation (
         const column_view& lhs,
         const scalar& rhs,
         binary_operator op,
         data_type output_type
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] binary_operation (
         const column_view& lhs,
         const column_view& rhs,
         binary_operator op,
         data_type output_type
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] binary_operation (
         const column_view& lhs,
         const column_view& rhs,
         const string& op,
         data_type output_type
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler
 
 cdef extern from "cudf/binaryop.hpp" namespace "cudf::binops" nogil:
     cdef bool is_supported_operation(
@@ -84,4 +84,4 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf::binops" nogil:
         data_type lhs_type,
         data_type rhs_type,
         binary_operator op
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler
