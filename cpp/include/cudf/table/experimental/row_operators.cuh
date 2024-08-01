@@ -1517,7 +1517,7 @@ class device_row_comparator {
      * @brief Compares the specified elements for equality.
      *
      * is_equality_comparable differs from implementation for std::equality_comparable and considers
-     * void as and equality comparable type. Thus we need to disable this for when type is void.
+     * void as an equality comparable type. Thus we need to disable this for when type is void.
      *
      * @param lhs_element_index The index of the first element
      * @param rhs_element_index The index of the second element

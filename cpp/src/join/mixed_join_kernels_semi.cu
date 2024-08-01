@@ -15,7 +15,7 @@
  */
 
 #include "join/mixed_join_common_utils.cuh"
-#include "mixed_join_kernel_semi_impl.cuh"
+#include "join/mixed_join_kernel_semi_impl.cuh"
 
 namespace cudf {
 namespace detail {

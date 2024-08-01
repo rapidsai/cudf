@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "join_common_utils.cuh"
-#include "join_common_utils.hpp"
-#include "mixed_join_kernels_semi.cuh"
+#include "join/join_common_utils.cuh"
+#include "join/join_common_utils.hpp"
+#include "join/mixed_join_kernels_semi.cuh"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>

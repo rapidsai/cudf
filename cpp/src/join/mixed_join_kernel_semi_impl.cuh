@@ -17,7 +17,7 @@
 #include "join/join_common_utils.cuh"
 #include "join/join_common_utils.hpp"
 #include "join/mixed_join_common_utils.cuh"
-#include "mixed_join_kernels_semi.cuh"
+#include "join/mixed_join_kernels_semi.cuh"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
