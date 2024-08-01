@@ -1635,12 +1635,13 @@ def build_column(
         )
     elif isinstance(dtype, ListDtype):
         return cudf.core.column.ListColumn(
-            size=size,
+            data=None,
+            size=size,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            children=children,  # type: ignore[arg-type]
         )
     elif isinstance(dtype, IntervalDtype):
         return cudf.core.column.IntervalColumn(
