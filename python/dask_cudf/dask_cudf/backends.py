@@ -153,7 +153,7 @@ def _nonempty_series(s, idx=None):
         idx = _nonempty_index(s.index)
     data = _get_non_empty_data(s._column)
 
-    return cudf.Series(data, name=s.name, index=idx)
+    return cudf.Series._from_column(data, name=s.name, index=idx)
 
 
 @meta_nonempty.register(cudf.DataFrame)
