@@ -1993,7 +1993,6 @@ def test_parquet_partitioned_notimplemented(tmpdir_factory, kwargs):
     )
     pdf.to_parquet(pdf_dir, index=False, partition_cols=["b"])
 
-    # Check that cudf and pd return the same read
     with pytest.raises(NotImplementedError):
         cudf.read_parquet(pdf_dir, **kwargs)
 
@@ -3805,7 +3804,6 @@ def test_parquet_reader_nrows_skiprows(nrows, skip_rows):
     buffer = BytesIO()
     df.to_parquet(buffer)
     got = cudf.read_parquet(buffer, nrows=nrows, skip_rows=skip_rows)
-    # Check results
     assert_eq(expected, got)
 
 
