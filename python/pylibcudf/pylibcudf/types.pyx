@@ -9,6 +9,14 @@ from pylibcudf.libcudf.types cimport (
 )
 from pylibcudf.libcudf.utilities.type_dispatcher cimport type_to_id
 
+from pylibcudf.libcudf.types cimport (
+    data_type,
+    size_of as cpp_size_of,
+    size_type,
+    type_id,
+)
+from pylibcudf.libcudf.utilities.type_dispatcher cimport type_to_id
+
 from pylibcudf.libcudf.types import type_id as TypeId  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import nan_policy as NanPolicy  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import null_policy as NullPolicy  # no-cython-lint, isort:skip
