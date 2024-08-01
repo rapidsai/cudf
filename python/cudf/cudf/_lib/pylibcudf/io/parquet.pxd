@@ -28,7 +28,7 @@ cpdef read_parquet(
     bool convert_strings_to_categories = *,
     bool use_pandas_metadata = *,
     int64_t skip_rows = *,
-    size_type num_rows = *,
+    size_type nrows = *,
     # disabled see comment in parquet.pyx for more
     # ReaderColumnSchema reader_column_schema = *,
     # DataType timestamp_type = *
