@@ -86,7 +86,7 @@ cdef class Column:
         object mask=None,
         int offset=0,
         object null_count=None,
-        object children=()
+        tuple children=()
     ):
         self._size = size
         self._distinct_count = {}
@@ -295,11 +295,11 @@ cdef class Column:
                 dtypes = [
                     base_child.dtype for base_child in self.base_children
                 ]
-                self._children = [
+                self._children = tuple(
                     child._with_type_metadata(dtype) for child, dtype in zip(
                         children, dtypes
                     )
-                ]
+                )
         return self._children
 
     def set_base_children(self, value):
