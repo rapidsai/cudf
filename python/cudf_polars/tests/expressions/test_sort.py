@@ -8,7 +8,7 @@ import pytest
 
 import polars as pl
 
-import cudf._lib.pylibcudf as plc
+import pylibcudf as plc
 
 from cudf_polars import translate_ir
 from cudf_polars.testing.asserts import assert_gpu_result_equal

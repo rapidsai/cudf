@@ -39,18 +39,18 @@ from cudf._lib.types cimport (
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf._lib.types import dtype_from_pylibcudf_column
 
-
-cimport cudf._lib.pylibcudf.libcudf.copying as cpp_copying
-cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
-cimport cudf._lib.pylibcudf.libcudf.unary as libcudf_unary
-from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_contents
-from cudf._lib.pylibcudf.libcudf.column.column_factories cimport (
+cimport pylibcudf.libcudf.copying as cpp_copying
+cimport pylibcudf.libcudf.types as libcudf_types
+cimport pylibcudf.libcudf.unary as libcudf_unary
+from pylibcudf.libcudf.column.column cimport column, column_contents
+from pylibcudf.libcudf.column.column_factories cimport (
     make_column_from_scalar as cpp_make_column_from_scalar,
     make_numeric_column,
 )
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
+from pylibcudf.libcudf.scalar.scalar cimport scalar
+
 from cudf._lib.scalar cimport DeviceScalar
 
 

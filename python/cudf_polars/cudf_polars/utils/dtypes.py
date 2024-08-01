@@ -12,7 +12,7 @@ from typing_extensions import assert_never
 
 import polars as pl
 
-import cudf._lib.pylibcudf as plc
+import pylibcudf as plc
 
 __all__ = ["from_polars", "downcast_arrow_lists"]
 

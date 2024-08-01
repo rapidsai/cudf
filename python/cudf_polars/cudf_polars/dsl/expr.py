@@ -24,7 +24,7 @@ import pyarrow as pa
 
 from polars.polars import _expr_nodes as pl_expr
 
-import cudf._lib.pylibcudf as plc
+import pylibcudf as plc
 
 from cudf_polars.containers import Column, NamedColumn
 from cudf_polars.utils import dtypes, sorting

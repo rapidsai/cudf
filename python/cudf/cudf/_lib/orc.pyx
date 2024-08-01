@@ -14,23 +14,17 @@ from libcpp.vector cimport vector
 import datetime
 from collections import OrderedDict
 
-cimport cudf._lib.pylibcudf.libcudf.lists.lists_column_view as cpp_lists_column_view
+cimport pylibcudf.libcudf.lists.lists_column_view as cpp_lists_column_view
 
 try:
     import ujson as json
 except ImportError:
     import json
 
-cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
-from cudf._lib.column cimport Column
-from cudf._lib.io.utils cimport (
-    make_sink_info,
-    make_source_info,
-    update_column_struct_field_names,
-)
-from cudf._lib.pylibcudf.io.datasource cimport NativeFileDatasource
-from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
-from cudf._lib.pylibcudf.libcudf.io.orc cimport (
+cimport pylibcudf.libcudf.io.types as cudf_io_types
+from pylibcudf.io.datasource cimport NativeFileDatasource
+from pylibcudf.libcudf.io.data_sink cimport data_sink
+from pylibcudf.libcudf.io.orc cimport (
     chunked_orc_writer_options,
     orc_chunked_writer,
     orc_reader_options,
@@ -38,7 +32,7 @@ from cudf._lib.pylibcudf.libcudf.io.orc cimport (
     read_orc as libcudf_read_orc,
     write_orc as libcudf_write_orc,
 )
-from cudf._lib.pylibcudf.libcudf.io.orc_metadata cimport (
+from pylibcudf.libcudf.io.orc_metadata cimport (
     binary_statistics,
     bucket_statistics,
     column_statistics,
@@ -53,7 +47,7 @@ from cudf._lib.pylibcudf.libcudf.io.orc_metadata cimport (
     string_statistics,
     timestamp_statistics,
 )
-from cudf._lib.pylibcudf.libcudf.io.types cimport (
+from pylibcudf.libcudf.io.types cimport (
     column_in_metadata,
     compression_type,
     sink_info,
@@ -61,8 +55,15 @@ from cudf._lib.pylibcudf.libcudf.io.types cimport (
     table_input_metadata,
     table_with_metadata,
 )
-from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
-from cudf._lib.pylibcudf.libcudf.types cimport data_type, size_type, type_id
+from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.types cimport data_type, size_type, type_id
+
+from cudf._lib.column cimport Column
+from cudf._lib.io.utils cimport (
+    make_sink_info,
+    make_source_info,
+    update_column_struct_field_names,
+)
 from cudf._lib.variant cimport get_if as std_get_if, holds_alternative
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES

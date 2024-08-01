@@ -4,19 +4,19 @@ from cudf.core.buffer import acquire_spill_lock
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-
-from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
-from cudf._lib.pylibcudf.libcudf.strings.combine cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from pylibcudf.libcudf.strings.combine cimport (
     concatenate as cpp_concatenate,
     join_list_elements as cpp_join_list_elements,
     join_strings as cpp_join_strings,
     output_if_empty_list,
     separator_on_nulls,
 )
-from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.table.table_view cimport table_view
+
+from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport table_view_from_columns
 

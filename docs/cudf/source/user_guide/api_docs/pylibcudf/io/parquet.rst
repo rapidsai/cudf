@@ -2,5 +2,5 @@
 Parquet
 =======
 
-.. automodule:: cudf._lib.pylibcudf.io.parquet
+.. automodule:: pylibcudf.io.parquet
    :members:

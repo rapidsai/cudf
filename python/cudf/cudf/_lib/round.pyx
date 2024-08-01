@@ -4,8 +4,8 @@ from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
 
-import cudf._lib.pylibcudf as plc
-from cudf._lib.pylibcudf.round import RoundingMethod
+import pylibcudf as plc
+from pylibcudf.round import RoundingMethod
 
 
 @acquire_spill_lock()

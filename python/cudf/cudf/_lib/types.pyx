@@ -5,13 +5,11 @@ from enum import IntEnum
 import numpy as np
 import pandas as pd
 
+cimport pylibcudf.libcudf.types as libcudf_types
 from libcpp.memory cimport make_shared, shared_ptr
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 
-cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
-    lists_column_view,
-)
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
     underlying_type_t_order,

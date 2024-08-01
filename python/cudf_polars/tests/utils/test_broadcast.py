@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-import cudf._lib.pylibcudf as plc
+import pylibcudf as plc
 
 from cudf_polars.containers import NamedColumn
 from cudf_polars.dsl.ir import broadcast

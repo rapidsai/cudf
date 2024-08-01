@@ -4,15 +4,14 @@ from typing import Literal
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
-
-from rmm._lib.device_buffer cimport device_buffer
-
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport (
     column_view,
     mutable_column_view,
 )
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.types cimport size_type
+
+from rmm._lib.device_buffer cimport device_buffer
 
 
 cdef class Column:

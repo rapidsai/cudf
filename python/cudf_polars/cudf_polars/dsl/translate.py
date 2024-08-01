@@ -17,7 +17,7 @@ import polars as pl
 import polars.polars as plrs
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
-import cudf._lib.pylibcudf as plc
+import pylibcudf as plc
 
 from cudf_polars.dsl import expr, ir
 from cudf_polars.typing import NodeTraverser

@@ -13,7 +13,7 @@ import pyarrow as pa
 
 import polars as pl
 
-import cudf._lib.pylibcudf as plc
+import pylibcudf as plc
 
 from cudf_polars.containers.column import NamedColumn
 from cudf_polars.utils import dtypes

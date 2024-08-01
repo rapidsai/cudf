@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Literal, Protocol, Union
 
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
-import cudf._lib.pylibcudf as plc
+import pylibcudf as plc
 
 if TYPE_CHECKING:
     from typing import Callable

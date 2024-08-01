@@ -8,13 +8,13 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+from pylibcudf.libcudf.aggregation cimport rank_method
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.search cimport lower_bound, upper_bound
+from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.types cimport null_order, order as cpp_order
 
 from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.aggregation cimport rank_method
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.search cimport lower_bound, upper_bound
-from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
-from cudf._lib.pylibcudf.libcudf.types cimport null_order, order as cpp_order
 from cudf._lib.utils cimport (
     columns_from_pylibcudf_table,
     table_view_from_columns,
