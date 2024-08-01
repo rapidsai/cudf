@@ -58,12 +58,12 @@ class ListColumn(ColumnBase):
         if not (
             len(children) == 2
             and isinstance(children[0], NumericalColumn)
-            # TODO: Enforce unsigned integers?
-            and children[0].dtype.kind in "iu"
+            # TODO: Enforce int32_t (size_type) used in libcudf?
+            and children[0].dtype.kind == "i"
             and isinstance(children[1], ColumnBase)
         ):
             raise ValueError(
-                "children must a tuple of 2 columns of (integer offsets, list values)"
+                "children must a tuple of 2 columns of (signed integer offsets, list values)"
             )
         super().__init__(
             data=data,
