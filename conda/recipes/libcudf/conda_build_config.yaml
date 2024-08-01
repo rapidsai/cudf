@@ -31,6 +31,9 @@ librdkafka_version:
 fmt_version:
   - ">=10.1.1,<11"
 
+flatbuffers_version:
+  - "=24.3.25"
+
 spdlog_version:
   - ">=1.12.0,<1.13"
 
