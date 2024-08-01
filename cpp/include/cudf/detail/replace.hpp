@@ -24,7 +24,7 @@
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @copydoc cudf::replace_nulls(column_view const&, column_view const&,
@@ -102,4 +102,4 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
                                                  rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

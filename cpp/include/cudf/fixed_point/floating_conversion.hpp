@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <cuda/std/cmath>
@@ -24,7 +25,7 @@
 
 #include <cstring>
 
-namespace numeric {
+namespace CUDF_EXPORT numeric {
 
 /**
  * @addtogroup floating_conversion
@@ -392,30 +393,7 @@ CUDF_HOST_DEVICE inline T divide_power10_32bit(T value, int pow10)
 template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline T divide_power10_64bit(T value, int pow10)
 {
-  // See comments in divide_power10_32bit() for discussion.
-  switch (pow10) {
-    case 0: return value;
-    case 1: return value / 10U;
-    case 2: return value / 100U;
-    case 3: return value / 1000U;
-    case 4: return value / 10000U;
-    case 5: return value / 100000U;
-    case 6: return value / 1000000U;
-    case 7: return value / 10000000U;
-    case 8: return value / 100000000U;
-    case 9: return value / 1000000000U;
-    case 10: return value / 10000000000ULL;
-    case 11: return value / 100000000000ULL;
-    case 12: return value / 1000000000000ULL;
-    case 13: return value / 10000000000000ULL;
-    case 14: return value / 100000000000000ULL;
-    case 15: return value / 1000000000000000ULL;
-    case 16: return value / 10000000000000000ULL;
-    case 17: return value / 100000000000000000ULL;
-    case 18: return value / 1000000000000000000ULL;
-    case 19: return value / 10000000000000000000ULL;
-    default: return 0;
-  }
+  return value / ipow<uint64_t, Radix::BASE_10>(pow10);
 }
 
 /**
@@ -429,49 +407,7 @@ CUDF_HOST_DEVICE inline T divide_power10_64bit(T value, int pow10)
 template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline constexpr T divide_power10_128bit(T value, int pow10)
 {
-  // See comments in divide_power10_32bit() for an introduction.
-  switch (pow10) {
-    case 0: return value;
-    case 1: return value / 10U;
-    case 2: return value / 100U;
-    case 3: return value / 1000U;
-    case 4: return value / 10000U;
-    case 5: return value / 100000U;
-    case 6: return value / 1000000U;
-    case 7: return value / 10000000U;
-    case 8: return value / 100000000U;
-    case 9: return value / 1000000000U;
-    case 10: return value / 10000000000ULL;
-    case 11: return value / 100000000000ULL;
-    case 12: return value / 1000000000000ULL;
-    case 13: return value / 10000000000000ULL;
-    case 14: return value / 100000000000000ULL;
-    case 15: return value / 1000000000000000ULL;
-    case 16: return value / 10000000000000000ULL;
-    case 17: return value / 100000000000000000ULL;
-    case 18: return value / 1000000000000000000ULL;
-    case 19: return value / 10000000000000000000ULL;
-    case 20: return value / large_power_of_10<20>();
-    case 21: return value / large_power_of_10<21>();
-    case 22: return value / large_power_of_10<22>();
-    case 23: return value / large_power_of_10<23>();
-    case 24: return value / large_power_of_10<24>();
-    case 25: return value / large_power_of_10<25>();
-    case 26: return value / large_power_of_10<26>();
-    case 27: return value / large_power_of_10<27>();
-    case 28: return value / large_power_of_10<28>();
-    case 29: return value / large_power_of_10<29>();
-    case 30: return value / large_power_of_10<30>();
-    case 31: return value / large_power_of_10<31>();
-    case 32: return value / large_power_of_10<32>();
-    case 33: return value / large_power_of_10<33>();
-    case 34: return value / large_power_of_10<34>();
-    case 35: return value / large_power_of_10<35>();
-    case 36: return value / large_power_of_10<36>();
-    case 37: return value / large_power_of_10<37>();
-    case 38: return value / large_power_of_10<38>();
-    default: return 0;
-  }
+  return value / ipow<__uint128_t, Radix::BASE_10>(pow10);
 }
 
 /**
@@ -512,30 +448,7 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10_32bit(T value, int pow10)
 template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline constexpr T multiply_power10_64bit(T value, int pow10)
 {
-  // See comments in divide_power10_32bit() for discussion.
-  switch (pow10) {
-    case 0: return value;
-    case 1: return value * 10U;
-    case 2: return value * 100U;
-    case 3: return value * 1000U;
-    case 4: return value * 10000U;
-    case 5: return value * 100000U;
-    case 6: return value * 1000000U;
-    case 7: return value * 10000000U;
-    case 8: return value * 100000000U;
-    case 9: return value * 1000000000U;
-    case 10: return value * 10000000000ULL;
-    case 11: return value * 100000000000ULL;
-    case 12: return value * 1000000000000ULL;
-    case 13: return value * 10000000000000ULL;
-    case 14: return value * 100000000000000ULL;
-    case 15: return value * 1000000000000000ULL;
-    case 16: return value * 10000000000000000ULL;
-    case 17: return value * 100000000000000000ULL;
-    case 18: return value * 1000000000000000000ULL;
-    case 19: return value * 10000000000000000000ULL;
-    default: return 0;
-  }
+  return value * ipow<uint64_t, Radix::BASE_10>(pow10);
 }
 
 /**
@@ -549,49 +462,7 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10_64bit(T value, int pow10)
 template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline constexpr T multiply_power10_128bit(T value, int pow10)
 {
-  // See comments in divide_power10_128bit() for discussion.
-  switch (pow10) {
-    case 0: return value;
-    case 1: return value * 10U;
-    case 2: return value * 100U;
-    case 3: return value * 1000U;
-    case 4: return value * 10000U;
-    case 5: return value * 100000U;
-    case 6: return value * 1000000U;
-    case 7: return value * 10000000U;
-    case 8: return value * 100000000U;
-    case 9: return value * 1000000000U;
-    case 10: return value * 10000000000ULL;
-    case 11: return value * 100000000000ULL;
-    case 12: return value * 1000000000000ULL;
-    case 13: return value * 10000000000000ULL;
-    case 14: return value * 100000000000000ULL;
-    case 15: return value * 1000000000000000ULL;
-    case 16: return value * 10000000000000000ULL;
-    case 17: return value * 100000000000000000ULL;
-    case 18: return value * 1000000000000000000ULL;
-    case 19: return value * 10000000000000000000ULL;
-    case 20: return value * large_power_of_10<20>();
-    case 21: return value * large_power_of_10<21>();
-    case 22: return value * large_power_of_10<22>();
-    case 23: return value * large_power_of_10<23>();
-    case 24: return value * large_power_of_10<24>();
-    case 25: return value * large_power_of_10<25>();
-    case 26: return value * large_power_of_10<26>();
-    case 27: return value * large_power_of_10<27>();
-    case 28: return value * large_power_of_10<28>();
-    case 29: return value * large_power_of_10<29>();
-    case 30: return value * large_power_of_10<30>();
-    case 31: return value * large_power_of_10<31>();
-    case 32: return value * large_power_of_10<32>();
-    case 33: return value * large_power_of_10<33>();
-    case 34: return value * large_power_of_10<34>();
-    case 35: return value * large_power_of_10<35>();
-    case 36: return value * large_power_of_10<36>();
-    case 37: return value * large_power_of_10<37>();
-    case 38: return value * large_power_of_10<38>();
-    default: return 0;
-  }
+  return value * ipow<__uint128_t, Radix::BASE_10>(pow10);
 }
 
 /**
@@ -1272,4 +1143,4 @@ CUDF_HOST_DEVICE inline FloatingType convert_integral_to_floating(Rep const& val
 }  // namespace detail
 
 /** @} */  // end of group
-}  // namespace numeric
+}  // namespace CUDF_EXPORT numeric

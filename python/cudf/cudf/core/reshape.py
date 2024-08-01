@@ -502,6 +502,7 @@ def melt(
     var_name=None,
     value_name="value",
     col_level=None,
+    ignore_index: bool = True,
 ):
     """Unpivots a DataFrame from wide format to long format,
     optionally leaving identifier variables set.
@@ -566,6 +567,8 @@ def melt(
     """
     if col_level is not None:
         raise NotImplementedError("col_level != None is not supported yet.")
+    if ignore_index is not True:
+        raise NotImplementedError("ignore_index is currently not supported.")
 
     # Arg cleaning
 
@@ -932,14 +935,10 @@ def _pivot(df, index, columns):
     index_labels, index_idx = index._encode()
     column_labels = columns_labels.to_pandas().to_flat_index()
 
-    # the result of pivot always has a multicolumn
-    result = cudf.core.column_accessor.ColumnAccessor(
-        multiindex=True, level_names=(None,) + columns._data.names
-    )
-
     def as_tuple(x):
         return x if isinstance(x, tuple) else (x,)
 
+    result = {}
     for v in df:
         names = [as_tuple(v) + as_tuple(name) for name in column_labels]
         nrows = len(index_labels)
@@ -964,8 +963,12 @@ def _pivot(df, index, columns):
                 }
             )
 
+    # the result of pivot always has a multicolumn
+    ca = cudf.core.column_accessor.ColumnAccessor(
+        result, multiindex=True, level_names=(None,) + columns._data.names
+    )
     return cudf.DataFrame._from_data(
-        result, index=cudf.Index(index_labels, name=index.name)
+        ca, index=cudf.Index(index_labels, name=index.name)
     )
 
 
@@ -1060,7 +1063,7 @@ def pivot(data, columns=None, index=no_default, values=no_default):
     return result
 
 
-def unstack(df, level, fill_value=None):
+def unstack(df, level, fill_value=None, sort: bool = True):
     """
     Pivot one or more levels of the (necessarily hierarchical) index labels.
 
@@ -1080,6 +1083,9 @@ def unstack(df, level, fill_value=None):
         levels of the index to pivot
     fill_value
         Non-functional argument provided for compatibility with Pandas.
+    sort : bool, default True
+        Sort the level(s) in the resulting MultiIndex columns.
+
 
     Returns
     -------
@@ -1156,6 +1162,8 @@ def unstack(df, level, fill_value=None):
 
     if fill_value is not None:
         raise NotImplementedError("fill_value is not supported.")
+    elif sort is False:
+        raise NotImplementedError(f"{sort=} is not supported.")
     if pd.api.types.is_list_like(level):
         if not level:
             return df

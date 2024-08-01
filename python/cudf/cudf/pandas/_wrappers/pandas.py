@@ -26,6 +26,7 @@ from pandas.tseries.holiday import (
 )
 
 import cudf
+import cudf.core._compat
 
 from ..annotation import nvtx
 from ..fast_slow_proxy import (
@@ -260,18 +261,14 @@ def Index__new__(cls, *args, **kwargs):
     return self
 
 
-def name(self):
-    return self._fsproxy_wrapped._name
-
-
 def Index__setattr__(self, name, value):
     if name.startswith("_"):
         object.__setattr__(self, name, value)
         return
     if name == "name":
-        setattr(self._fsproxy_wrapped, "_name", value)
+        setattr(self._fsproxy_wrapped, "name", value)
     if name == "names":
-        setattr(self._fsproxy_wrapped, "_names", value)
+        setattr(self._fsproxy_wrapped, "names", value)
     return _FastSlowAttribute("__setattr__").__get__(self, type(self))(
         name, value
     )
@@ -300,7 +297,7 @@ Index = make_final_proxy_type(
         "_accessors": set(),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
-        "name": property(name),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -314,7 +311,7 @@ RangeIndex = make_final_proxy_type(
     additional_attributes={
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
-        "name": property(name),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -345,7 +342,7 @@ CategoricalIndex = make_final_proxy_type(
     additional_attributes={
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
-        "name": property(name),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -375,10 +372,10 @@ DatetimeIndex = make_final_proxy_type(
     bases=(Index,),
     additional_attributes={
         "__init__": _DELETE,
+        "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
-        "__setattr__": Index__setattr__,
-        "name": property(name),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -412,10 +409,10 @@ TimedeltaIndex = make_final_proxy_type(
     bases=(Index,),
     additional_attributes={
         "__init__": _DELETE,
+        "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
-        "__setattr__": Index__setattr__,
-        "name": property(name),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -470,10 +467,10 @@ PeriodIndex = make_final_proxy_type(
     bases=(Index,),
     additional_attributes={
         "__init__": _DELETE,
+        "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
-        "__setattr__": Index__setattr__,
-        "name": property(name),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -508,10 +505,6 @@ Period = make_final_proxy_type(
 )
 
 
-def names(self):
-    return self._fsproxy_wrapped._names
-
-
 MultiIndex = make_final_proxy_type(
     "MultiIndex",
     cudf.MultiIndex,
@@ -522,7 +515,7 @@ MultiIndex = make_final_proxy_type(
     additional_attributes={
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
-        "name": property(names),
+        "names": _FastSlowAttribute("names"),
     },
 )
 
@@ -564,13 +557,14 @@ StringArray = make_final_proxy_type(
     },
 )
 
-ArrowStringArrayNumpySemantics = make_final_proxy_type(
-    "ArrowStringArrayNumpySemantics",
-    _Unusable,
-    pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-)
+if cudf.core._compat.PANDAS_GE_210:
+    ArrowStringArrayNumpySemantics = make_final_proxy_type(
+        "ArrowStringArrayNumpySemantics",
+        _Unusable,
+        pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+    )
 
 ArrowStringArray = make_final_proxy_type(
     "ArrowStringArray",
@@ -709,10 +703,10 @@ IntervalIndex = make_final_proxy_type(
     bases=(Index,),
     additional_attributes={
         "__init__": _DELETE,
+        "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
-        "__setattr__": Index__setattr__,
-        "name": property(name),
+        "name": _FastSlowAttribute("name"),
     },
 )
 

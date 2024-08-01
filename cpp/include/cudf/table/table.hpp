@@ -31,7 +31,7 @@
  * @brief Class definition for cudf::table
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief A set of cudf::column's of the same size.
@@ -194,4 +194,4 @@ class table {
   size_type _num_rows{};
 };
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

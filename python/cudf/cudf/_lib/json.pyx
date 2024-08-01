@@ -99,7 +99,7 @@ cpdef read_json(object filepaths_or_buffers,
         else:
             raise TypeError("`dtype` must be 'list like' or 'dict'")
 
-    if cudf.get_option("mode.pandas_compatible") and lines:
+    if cudf.get_option("io.json.low_memory") and lines:
         res_cols, res_col_names, res_child_names = plc.io.json.chunked_read_json(
             plc.io.SourceInfo(filepaths_or_buffers),
             processed_dtypes,

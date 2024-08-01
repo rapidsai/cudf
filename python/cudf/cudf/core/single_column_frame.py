@@ -11,9 +11,7 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
-    is_bool_dtype,
     is_integer,
-    is_integer_dtype,
     is_numeric_dtype,
 )
 from cudf.core.column import ColumnBase, as_column
@@ -91,12 +89,6 @@ class SingleColumnFrame(Frame, NotIterable):
     def shape(self) -> tuple[int]:
         """Get a tuple representing the dimensionality of the Index."""
         return (len(self),)
-
-    def __bool__(self):
-        raise TypeError(
-            f"The truth value of a {type(self)} is ambiguous. Use "
-            "a.empty, a.bool(), a.item(), a.any() or a.all()."
-        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -359,9 +351,9 @@ class SingleColumnFrame(Frame, NotIterable):
             arg = as_column(arg)
             if len(arg) == 0:
                 arg = cudf.core.column.column_empty(0, dtype="int32")
-            if is_integer_dtype(arg.dtype):
+            if arg.dtype.kind in "iu":
                 return self._column.take(arg)
-            if is_bool_dtype(arg.dtype):
+            if arg.dtype.kind == "b":
                 if (bn := len(arg)) != (n := len(self)):
                     raise IndexError(
                         f"Boolean mask has wrong length: {bn} not {n}"
@@ -397,3 +389,10 @@ class SingleColumnFrame(Frame, NotIterable):
         result = cudf._lib.copying.copy_if_else(input_col, other, cond)
 
         return _make_categorical_like(result, self_column)
+
+    @_performance_tracking
+    def transpose(self):
+        """Return the transpose, which is by definition self."""
+        return self
+
+    T = property(transpose, doc=transpose.__doc__)
