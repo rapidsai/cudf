@@ -4415,7 +4415,9 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         Booleans indicating if dates are the first day of the month.
         """
-        return (self.day == 1).fillna(False)
+        return self._return_result_like_self(
+            self.series._column.is_month_start
+        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -4462,9 +4464,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         11    31
         dtype: int16
         """
-        return self._return_result_like_self(
-            libcudf.datetime.days_in_month(self.series._column)
-        )
+        return self._return_result_like_self(self.series._column.days_in_month)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4505,9 +4505,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         8    False
         dtype: bool
         """  # noqa: E501
-        last_day_col = libcudf.datetime.last_day_of_month(self.series._column)
-        last_day = self._return_result_like_self(last_day_col)
-        return (self.day == last_day.dt.day).fillna(False)
+        return self._return_result_like_self(self.series._column.is_month_end)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4546,13 +4544,9 @@ class DatetimeProperties(BaseDatelikeProperties):
         7    False
         dtype: bool
         """
-        day = self.series._column.get_dt_field("day")
-        first_month = self.series._column.get_dt_field("month").isin(
-            [1, 4, 7, 10]
+        return self._return_result_like_self(
+            self.series._column.is_quarter_start
         )
-
-        result = ((day == cudf.Scalar(1)) & first_month).fillna(False)
-        return self._return_result_like_self(result)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4591,15 +4585,9 @@ class DatetimeProperties(BaseDatelikeProperties):
         7    False
         dtype: bool
         """
-        day = self.series._column.get_dt_field("day")
-        last_day = libcudf.datetime.last_day_of_month(self.series._column)
-        last_day = last_day.get_dt_field("day")
-        last_month = self.series._column.get_dt_field("month").isin(
-            [3, 6, 9, 12]
+        return self._return_result_like_self(
+            self.series._column.is_quarter_end
         )
-
-        result = ((day == last_day) & last_month).fillna(False)
-        return self._return_result_like_self(result)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4627,10 +4615,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    True
         dtype: bool
         """
-        outcol = self.series._column.get_dt_field(
-            "day_of_year"
-        ) == cudf.Scalar(1)
-        return self._return_result_like_self(outcol.fillna(False))
+        return self._return_result_like_self(self.series._column.is_year_start)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4658,13 +4643,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    False
         dtype: bool
         """
-        day_of_year = self.series._column.get_dt_field("day_of_year")
-        leap_dates = libcudf.datetime.is_leap_year(self.series._column)
-
-        leap = day_of_year == cudf.Scalar(366)
-        non_leap = day_of_year == cudf.Scalar(365)
-        result = cudf._lib.copying.copy_if_else(leap, non_leap, leap_dates)
-        return self._return_result_like_self(result.fillna(False))
+        return self._return_result_like_self(self.series._column.is_year_end)
 
     @_performance_tracking
     def _get_dt_field(self, field: str) -> Series:
