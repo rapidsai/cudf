@@ -317,7 +317,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         >>> import pyarrow as pa
         >>> import cudf
         >>> cudf.core.column.ColumnBase.from_arrow(pa.array([1, 2, 3, 4]))
-        <cudf.core.column.numerical.NumericalColumn object at 0x7f8865497ef0>
+        <cudf.core.column.NumericalColumn object at 0x7f8865497ef0>
         """
         if not isinstance(array, (pa.Array, pa.ChunkedArray)):
             raise TypeError("array should be PyArrow array or chunked array")
@@ -1368,7 +1368,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         >>> col = as_column(['foo', 'bar', 'foo', 'baz'])
         >>> cats = as_column(['foo', 'bar', 'baz'])
         >>> col._label_encoding(cats)
-        <cudf.core.column.numerical.NumericalColumn object at 0x7f99bf3155c0>
+        <cudf.core.column.NumericalColumn object at 0x7f99bf3155c0>
         [
           0,
           1,
@@ -1378,7 +1378,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         dtype: int8
         >>> cats = as_column(['foo', 'bar'])
         >>> col._label_encoding(cats)
-        <cudf.core.column.numerical.NumericalColumn object at 0x7f99bfde0e40>
+        <cudf.core.column.NumericalColumn object at 0x7f99bfde0e40>
         [
           0,
           1,
@@ -1506,7 +1506,7 @@ def column_empty(
     elif isinstance(dtype, CategoricalDtype):
         data = None
         children = (
-            build_column(
+            cudf.core.column.NumericalColumn(
                 data=as_buffer(
                     rmm.DeviceBuffer(
                         size=row_count

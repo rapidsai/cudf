@@ -2434,12 +2434,10 @@ class DatetimeIndex(Index):
         return result
 
     @_performance_tracking
-    def _get_dt_field(self, field):
+    def _get_dt_field(self, field: str) -> Index:
+        """Return an Index of a numerical component of the DatetimeIndex."""
         out_column = self._values.get_dt_field(field)
-        # column.column_empty_like always returns a Column object
-        # but we need a NumericalColumn for Index..
-        # how should this be handled?
-        out_column = column.build_column(
+        out_column = NumericalColumn(
             data=out_column.base_data,
             dtype=out_column.dtype,
             mask=out_column.base_mask,
@@ -3412,7 +3410,7 @@ class IntervalIndex(Index):
         left_col = breaks.slice(0, len(breaks) - 1)
         right_col = breaks.slice(1, len(breaks))
         # For indexing, children should both have 0 offset
-        right_col = column.build_column(
+        right_col = type(right_col)(
             data=right_col.data,
             dtype=right_col.dtype,
             size=right_col.size,
