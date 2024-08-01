@@ -188,10 +188,9 @@ class ListColumn(ColumnBase):
         else:
             super().set_base_data(value)
 
-    def set_base_children(self, value: tuple[ColumnBase, ...]):
+    def set_base_children(self, value: tuple[NumericalColumn, ColumnBase]):  # type: ignore[override]
         super().set_base_children(value)
-        _, values = value
-        self._dtype = cudf.ListDtype(element_type=values.dtype)
+        self._dtype = cudf.ListDtype(element_type=value[1].dtype)
 
     @property
     def __cuda_array_interface__(self):
