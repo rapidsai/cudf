@@ -185,33 +185,6 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
   }
 }
 
-template <typename RowHasher>
-using hash_set_type =
-  cuco::static_set<size_type,
-                   cuco::extent<int64_t>,
-                   cuda::thread_scope_device,
-                   RowHasher,
-                   cuco::linear_probing<1,
-                                        cudf::experimental::row::hash::device_row_hasher<
-                                          cudf::hashing::detail::default_hash,
-                                          cudf::nullate::DYNAMIC>>,
-                   cudf::detail::cuco_allocator,
-                   cuco::storage<1>>;
-
-template <typename RowHasher>
-using hash_map_type =
-  cuco::static_map<size_type,
-                   size_type,
-                   cuco::extent<int64_t>,
-                   cuda::thread_scope_device,
-                   RowHasher,
-                   cuco::linear_probing<1,
-                                        cudf::experimental::row::hash::device_row_hasher<
-                                          cudf::hashing::detail::default_hash,
-                                          cudf::nullate::DYNAMIC>>,
-                   cudf::detail::cuco_allocator,
-                   cuco::storage<1>>;
-
 rmm::device_uvector<size_type> distinct_indices(table_view const& input,
                                                 duplicate_keep_option keep,
                                                 null_equality nulls_equal,
@@ -233,19 +206,24 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
   auto const row_hash  = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const row_equal = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
+  auto const probing_scheme = cuco::linear_probing<
+    1,
+    cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                     cudf::nullate::DYNAMIC>>{
+    row_hash.device_hasher(has_nulls)};
+
   auto const helper_func = [&](auto const& d_equal) {
-    using RowHasher = std::decay_t<decltype(d_equal)>;
     // If we don't care about order, just gather indices of distinct keys taken from set.
     if (keep == duplicate_keep_option::KEEP_ANY) {
-      auto set = hash_set_type<RowHasher>{num_rows,
-                                          0.5,  // desired load factor
-                                          cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-                                          d_equal,
-                                          {row_hash.device_hasher(has_nulls)},
-                                          {},
-                                          {},
-                                          cudf::detail::cuco_allocator{stream},
-                                          stream.value()};
+      auto set = cuco::static_set{num_rows,
+                                  0.5,  // desired load factor
+                                  cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+                                  d_equal,
+                                  probing_scheme,
+                                  {},
+                                  {},
+                                  cudf::detail::cuco_allocator{stream},
+                                  stream.value()};
 
       auto const iter = thrust::counting_iterator<cudf::size_type>{0};
       set.insert_async(iter, iter + num_rows, stream.value());
@@ -255,17 +233,16 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
       return output_indices;
     }
 
-    auto const init = reduction_init_value(keep);
-    auto map        = hash_map_type<RowHasher>{num_rows,
-                                               0.5,  // desired load factor
-                                               cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-                                               cuco::empty_value{init},
-                                               d_equal,
-                                               {row_hash.device_hasher(has_nulls)},
-                                               {},
-                                               {},
-                                               cudf::detail::cuco_allocator{stream},
-                                               stream.value()};
+    auto map = cuco::static_map{num_rows,
+                                0.5,  // desired load factor
+                                cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+                                cuco::empty_value{reduction_init_value(keep)},
+                                d_equal,
+                                probing_scheme,
+                                {},
+                                {},
+                                cudf::detail::cuco_allocator{stream},
+                                stream.value()};
     return process_keep(map, num_rows, keep, stream, mr);
   };
 
