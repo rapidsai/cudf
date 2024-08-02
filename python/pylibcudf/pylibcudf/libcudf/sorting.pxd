@@ -1,12 +1,9 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+cimport pylibcudf.libcudf.types as libcudf_types
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
-
-from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
-
-cimport pylibcudf.libcudf.types as libcudf_types
 from pylibcudf.libcudf.aggregation cimport rank_method
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view

@@ -75,7 +75,7 @@ if(NOT cudf_FOUND)
 
   # libcudf targets are excluded by default above via EXCLUDE_FROM_ALL to remove extraneous
   # components like headers from libcudacxx, but we do need the libraries. However, we want to
-  # control where they are installed to. Since there are multiple subpackages of cudf._lib that
+  # control where they are installed to. Since there are multiple subpackages of pylibcudf that
   # require access to libcudf, we place the library and all its dependent artifacts in the cudf
   # directory as a single source of truth and modify the other rpaths appropriately.
   set(cython_lib_dir pylibcudf)

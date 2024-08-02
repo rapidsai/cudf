@@ -6,8 +6,7 @@ from libcpp cimport bool
 from libcpp.optional cimport optional
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-
-from cudf._lib.variant cimport monostate, variant
+from pylibcudf.variant cimport monostate, variant
 
 
 cdef extern from "cudf/io/orc_metadata.hpp" \

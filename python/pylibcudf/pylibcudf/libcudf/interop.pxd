@@ -4,9 +4,6 @@ from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from pyarrow.lib cimport CScalar, CTable
-
-from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
-
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.table.table cimport table

@@ -2,9 +2,6 @@
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
-
-from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
-
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport (
     column_view,
