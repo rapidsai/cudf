@@ -79,15 +79,15 @@ compute_segmented_row_bit_count(cudf::table_view const& input, cudf::size_type s
 
 TEST_F(TransformTest, ComputeColumn)
 {
-  auto c_0   = cudf::test::fixed_width_column_wrapper<int32_t>{3, 20, 1, 50};
-  auto c_1   = cudf::test::fixed_width_column_wrapper<int32_t>{10, 7, 20, 0};
+  auto c_0   = cudf::test::fixed_width_column_wrapper<cudf::size_type>{3, 20, 1, 50};
+  auto c_1   = cudf::test::fixed_width_column_wrapper<cudf::size_type>{10, 7, 20, 0};
   auto table = cudf::table_view{{c_0, c_1}};
 
   auto col_ref_0  = cudf::ast::column_reference(0);
   auto col_ref_1  = cudf::ast::column_reference(1);
   auto expression = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
 
-  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>{13, 27, 21, 50};
+  auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>{13, 27, 21, 50};
   auto result   = cudf::compute_column(table, expression, cudf::test::get_default_stream());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -101,7 +101,7 @@ TEST_F(TransformTest, BoolsToMask)
   cudf::test::fixed_width_column_wrapper<bool> input_column(input.begin(), input.end());
 
   auto sample = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
-  cudf::test::fixed_width_column_wrapper<int32_t> expected(
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected(
     sample, sample + input.size(), input.begin());
 
   auto [null_mask, null_count] =
@@ -122,9 +122,9 @@ TEST_F(TransformTest, MaskToBools)
 
 TEST_F(TransformTest, Encode)
 {
-  cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 2, 3, 2, 3, 2, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> input{{1, 2, 3, 2, 3, 2, 1}};
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expect{{0, 1, 2, 1, 2, 1, 0}};
-  cudf::test::fixed_width_column_wrapper<TypeParam> expect_keys{{1, 2, 3}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expect_keys{{1, 2, 3}};
   auto const result = cudf::encode(cudf::table_view({input}), cudf::test::get_default_stream());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.first->view().column(0), expect_keys);
@@ -133,8 +133,8 @@ TEST_F(TransformTest, Encode)
 
 TEST_F(TransformTest, OneHotEncode)
 {
-  auto input    = cudf::test::fixed_width_column_wrapper<int32_t>{8, 8, 8, 9, 9};
-  auto category = cudf::test::fixed_width_column_wrapper<int32_t>{8, 9};
+  auto input    = cudf::test::fixed_width_column_wrapper<cudf::size_type>{8, 8, 8, 9, 9};
+  auto category = cudf::test::fixed_width_column_wrapper<cudf::size_type>{8, 9};
 
   auto col0 = cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 0, 0};
   auto col1 = cudf::test::fixed_width_column_wrapper<bool>{0, 0, 0, 1, 1};
@@ -149,29 +149,30 @@ TEST_F(TransformTest, OneHotEncode)
 
 TEST_F(TransformTest, NaNsToNulls)
 {
-  std::vector<int32_t> input = {1, 2, 3, 4, 5};
-  std::vector<bool> mask     = {true, true, true, true, false, false};
+  std::vector<cudf::size_type> input = {1, 2, 3, 4, 5};
+  std::vector<bool> mask             = {true, true, true, true, false, false};
 
-  auto input_column =
-    cudf::test::fixed_width_column_wrapper<int32_t>(input.begin(), input.end(), mask.begin());
+  auto input_column = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+    input.begin(), input.end(), mask.begin());
   auto expected_column = [&]() {
-    std::vector<int32_t> expected(input);
+    std::vector<cudf::size_type> expected(input);
     std::vector<bool> expected_mask;
 
     if (mask.size() > 0) {
-      std::transform(input.begin(),
-                     input.end(),
-                     mask.begin(),
-                     std::back_inserter(expected_mask),
-                     [](int32_t val, bool validity) { return validity and not std::isnan(val); });
+      std::transform(
+        input.begin(),
+        input.end(),
+        mask.begin(),
+        std::back_inserter(expected_mask),
+        [](cudf::size_type val, bool validity) { return validity and not std::isnan(val); });
     } else {
       std::transform(
-        input.begin(), input.end(), std::back_inserter(expected_mask), [](int32_t val) {
+        input.begin(), input.end(), std::back_inserter(expected_mask), [](cudf::size_type val) {
           return not std::isnan(val);
         });
     }
 
-    return cudf::test::fixed_width_column_wrapper<int32_t>(
+    return cudf::test::fixed_width_column_wrapper<cudf::size_type>(
              expected.begin(), expected.end(), expected_mask.begin())
       .release();
   }();
