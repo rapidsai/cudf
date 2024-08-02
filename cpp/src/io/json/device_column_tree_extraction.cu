@@ -16,8 +16,8 @@
 
 #include "io/utilities/parsing_utils.cuh"
 #include "io/utilities/string_parsing.hpp"
-#include "nested_json.hpp"
 #include "json_utils.hpp"
+#include "nested_json.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -65,8 +65,8 @@ namespace experimental::detail {
 using row_offset_t = size_type;
 
 rmm::device_uvector<row_offset_t> extract_device_column_subtree(
-  const csr &adjacency,
-  const column_tree_properties &props,
+  const csr& adjacency,
+  const column_tree_properties& props,
   cudf::io::json_reader_options reader_options,
   rmm::cuda_stream_view stream)
 {
@@ -76,11 +76,11 @@ rmm::device_uvector<row_offset_t> extract_device_column_subtree(
   CUDF_EXPECTS(reader_options.is_enabled_prune_columns() == false,
                "column pruning has not yet been implemented");
 
-  auto &rowidx = adjacency.rowidx;
-  auto &colidx = adjacency.colidx;
-  auto &categories = props.categories;
-  auto &max_row_offsets = props.max_row_offsets;
-  auto &num_levels = props.num_levels;
+  auto& rowidx          = adjacency.rowidx;
+  auto& colidx          = adjacency.colidx;
+  auto& categories      = props.categories;
+  auto& max_row_offsets = props.max_row_offsets;
+  auto& num_levels      = props.num_levels;
 
   // Traversing the column tree and annotating the device column subtree
   auto num_columns = rowidx.size() - 1;
@@ -94,27 +94,28 @@ rmm::device_uvector<row_offset_t> extract_device_column_subtree(
       rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator(0),
       num_columns,
-      [rowidx            = rowidx.begin(),
-       colidx            = colidx.begin(),
+      [rowidx         = rowidx.begin(),
+       colidx         = colidx.begin(),
        num_levels_ptr = num_levels.data(),
-       categories = categories.begin(),
-       err_ancestors = err_ancestors.begin()] __device__(NodeIndexT node) {
-        auto num_levels      = *num_levels_ptr;
+       categories     = categories.begin(),
+       err_ancestors  = err_ancestors.begin()] __device__(NodeIndexT node) {
+        auto num_levels     = *num_levels_ptr;
         err_ancestors[node] = node;
         for (int level = 0; level <= num_levels; level++) {
-          if (err_ancestors[node] == -1 || categories[err_ancestors[node]] == NC_ERR)
-            break;
-          if (err_ancestors[node] > 0) err_ancestors[node] = colidx[rowidx[err_ancestors[node]]];
-          else err_ancestors[node] = -1;
+          if (err_ancestors[node] == -1 || categories[err_ancestors[node]] == NC_ERR) break;
+          if (err_ancestors[node] > 0)
+            err_ancestors[node] = colidx[rowidx[err_ancestors[node]]];
+          else
+            err_ancestors[node] = -1;
         }
       });
-      thrust::gather_if(rmm::exec_policy_nosync(stream),
-                        err_ancestors.begin(),
-                        err_ancestors.end(),
-                        err_ancestors.begin(),
-                        thrust::make_constant_iterator(0),
-                        subtree_nrows.begin(),
-                        [] __device__(auto ancestor) { return ancestor != -1; });
+    thrust::gather_if(rmm::exec_policy_nosync(stream),
+                      err_ancestors.begin(),
+                      err_ancestors.end(),
+                      err_ancestors.begin(),
+                      thrust::make_constant_iterator(0),
+                      subtree_nrows.begin(),
+                      [] __device__(auto ancestor) { return ancestor != -1; });
   }
 
   // 2. Let's do some validation of the column tree based on its properties.
@@ -126,20 +127,21 @@ rmm::device_uvector<row_offset_t> extract_device_column_subtree(
   // (iv) If v is a struct, it can have a field name as child
   // (v) If v is a list, it can have string, val, list or struct as child
   // (vi) There can only be at most one string and one val child for a given node, but many struct,
-  //      list and field name children. 
+  //      list and field name children.
   // (vii) When mixed type support is disabled -
   //       (a) A mix of lists and structs in the same column is not supported i.e a field name and
-  //       list node cannot have both list and struct as children 
+  //       list node cannot have both list and struct as children
   //       (b) If there is a mix of str/val
   //       and list/struct in the same column, then str/val is discarded
 
   // Validation of (vii)(a)
   {
-    if(!reader_options.is_enabled_mixed_types_as_string()) {
-      auto num_field_and_list_nodes = thrust::count_if(
-        rmm::exec_policy_nosync(stream), categories.begin(), categories.end(), [] __device__(auto const ctg) {
-          return ctg == NC_FN || ctg == NC_LIST;
-        });
+    if (!reader_options.is_enabled_mixed_types_as_string()) {
+      auto num_field_and_list_nodes =
+        thrust::count_if(rmm::exec_policy_nosync(stream),
+                         categories.begin(),
+                         categories.end(),
+                         [] __device__(auto const ctg) { return ctg == NC_FN || ctg == NC_LIST; });
       rmm::device_uvector<NodeIndexT> field_and_list_nodes(num_field_and_list_nodes, stream);
       thrust::partition_copy(rmm::exec_policy_nosync(stream),
                              thrust::make_counting_iterator(0),
@@ -153,8 +155,9 @@ rmm::device_uvector<row_offset_t> extract_device_column_subtree(
         rmm::exec_policy_nosync(stream),
         field_and_list_nodes.begin(),
         field_and_list_nodes.end(),
-        [rowidx = rowidx.begin(), colidx = colidx.begin(), categories = categories.begin()] __device__(
-          NodeIndexT node) {
+        [rowidx     = rowidx.begin(),
+         colidx     = colidx.begin(),
+         categories = categories.begin()] __device__(NodeIndexT node) {
           NodeIndexT first_child_pos = rowidx[node] + 1;
           NodeIndexT last_child_pos  = rowidx[node + 1] - 1;
           bool has_struct_child      = false;
@@ -182,11 +185,12 @@ rmm::device_uvector<row_offset_t> extract_device_column_subtree(
   // (which are in turn found from the colidx of the parent u), then this leaf node should be
   // ignored, otherwise all good.
   {
-    if(!reader_options.is_enabled_mixed_types_as_string()) {
+    if (!reader_options.is_enabled_mixed_types_as_string()) {
       // TODO: use cub segmented reduce here!
       rmm::device_uvector<NodeIndexT> num_adjacent_nodes(
         num_columns + 1,
-        stream);  // since adjacent_difference requires that the output have the same length as input
+        stream);  // since adjacent_difference requires that the output have the same length as
+                  // input
       thrust::adjacent_difference(
         rmm::exec_policy_nosync(stream), rowidx.begin(), rowidx.end(), num_adjacent_nodes.begin());
       auto num_leaf_nodes = thrust::count_if(rmm::exec_policy_nosync(stream),
@@ -194,27 +198,32 @@ rmm::device_uvector<row_offset_t> extract_device_column_subtree(
                                              num_adjacent_nodes.end(),
                                              [] __device__(auto const adj) { return adj == 1; });
       rmm::device_uvector<NodeIndexT> leaf_nodes(num_leaf_nodes, stream);
-      thrust::copy_if(
-        rmm::exec_policy_nosync(stream),
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(0) + num_columns,
-        leaf_nodes.begin(),
-        [num_adjacent_nodes = num_adjacent_nodes.begin()] __device__(size_t node) { return num_adjacent_nodes[node] == 1; });
+      thrust::copy_if(rmm::exec_policy_nosync(stream),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(0) + num_columns,
+                      leaf_nodes.begin(),
+                      [num_adjacent_nodes = num_adjacent_nodes.begin()] __device__(size_t node) {
+                        return num_adjacent_nodes[node] == 1;
+                      });
 
-      auto rev_node_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(0) + num_columns);
+      auto rev_node_it =
+        thrust::make_reverse_iterator(thrust::make_counting_iterator(0) + num_columns);
       auto rev_leaf_nodes_it = thrust::make_reverse_iterator(leaf_nodes.begin());
-      // the node number that could be the leftmost leaf node is given by u = *(is_leftmost_leaf.second
+      // the node number that could be the leftmost leaf node is given by u =
+      // *(is_leftmost_leaf.second
       // - 1)
-      auto is_leftmost_leaf  = thrust::mismatch(
+      auto is_leftmost_leaf = thrust::mismatch(
         rmm::exec_policy_nosync(stream), rev_node_it, rev_node_it + num_columns, rev_leaf_nodes_it);
       NodeIndexT leftmost_leaf_node = leaf_nodes.element(
-        num_leaf_nodes - thrust::distance(rev_leaf_nodes_it, is_leftmost_leaf.second - 1) - 1, stream);
+        num_leaf_nodes - thrust::distance(rev_leaf_nodes_it, is_leftmost_leaf.second - 1) - 1,
+        stream);
 
-      // upper_bound search for u in rowidx for parent node v. Now check if any of the other child nodes
-      // of v is non-leaf i.e check if u is the first child of v. If yes, then leafmost_leaf_node is
-      // the leftmost leaf node. Otherwise, discard all children of v after and including u
-      auto parent_it =
-        thrust::upper_bound(rmm::exec_policy_nosync(stream), rowidx.begin(), rowidx.end(), leftmost_leaf_node);
+      // upper_bound search for u in rowidx for parent node v. Now check if any of the other child
+      // nodes of v is non-leaf i.e check if u is the first child of v. If yes, then
+      // leafmost_leaf_node is the leftmost leaf node. Otherwise, discard all children of v after
+      // and including u
+      auto parent_it = thrust::upper_bound(
+        rmm::exec_policy_nosync(stream), rowidx.begin(), rowidx.end(), leftmost_leaf_node);
       NodeIndexT parent           = thrust::distance(rowidx.begin(), parent_it - 1);
       NodeIndexT parent_adj_start = rowidx.element(parent, stream);
       NodeIndexT parent_adj_end   = rowidx.element(parent + 1, stream);
@@ -223,17 +232,19 @@ rmm::device_uvector<row_offset_t> extract_device_column_subtree(
                                              colidx.begin() + parent_adj_end,
                                              leftmost_leaf_node);
 
-      auto retained_leaf_nodes_it = leaf_nodes.begin() + num_leaf_nodes -
-                                    thrust::distance(rev_leaf_nodes_it, is_leftmost_leaf.second - 1) - 1;
+      auto retained_leaf_nodes_it =
+        leaf_nodes.begin() + num_leaf_nodes -
+        thrust::distance(rev_leaf_nodes_it, is_leftmost_leaf.second - 1) - 1;
       if (childnum_it != colidx.begin() + parent_adj_start + 1) {
         // discarding from u to last child of parent
         retained_leaf_nodes_it += thrust::distance(childnum_it, colidx.begin() + parent_adj_end);
       }
-      // now, all nodes from leaf_nodes.begin() to retained_leaf_nodes_it need to be discarded i.e. they
-      // are part of ignore_vals
+      // now, all nodes from leaf_nodes.begin() to retained_leaf_nodes_it need to be discarded i.e.
+      // they are part of ignore_vals
       thrust::scatter(rmm::exec_policy_nosync(stream),
                       thrust::make_constant_iterator(0),
-                      thrust::make_constant_iterator(0) + thrust::distance(leaf_nodes.begin(), retained_leaf_nodes_it),
+                      thrust::make_constant_iterator(0) +
+                        thrust::distance(leaf_nodes.begin(), retained_leaf_nodes_it),
                       leaf_nodes.begin(),
                       subtree_nrows.begin());
     }
@@ -245,28 +256,26 @@ rmm::device_uvector<row_offset_t> extract_device_column_subtree(
 }
 
 device_column_subtree_properties allocate_device_column_subtree_properties(
-    device_span<row_offset_t> subtree_nrows,
-    const column_tree_properties &props,
-    rmm::cuda_stream_view stream) 
+  device_span<row_offset_t> subtree_nrows,
+  const column_tree_properties& props,
+  rmm::cuda_stream_view stream)
 {
-  auto num_columns = subtree_nrows.size();
-  auto &categories = props.categories;
-  auto &max_row_offsets = props.max_row_offsets;
+  auto num_columns      = subtree_nrows.size();
+  auto& categories      = props.categories;
+  auto& max_row_offsets = props.max_row_offsets;
 
-  auto num_subtree_nodes = thrust::count_if(rmm::exec_policy_nosync(stream), subtree_nrows.begin(), subtree_nrows.end(), 
-    [] __device__(auto mro) {
-      return mro != 0;
-  });
+  auto num_subtree_nodes = thrust::count_if(rmm::exec_policy_nosync(stream),
+                                            subtree_nrows.begin(),
+                                            subtree_nrows.end(),
+                                            [] __device__(auto mro) { return mro != 0; });
   // For the subtree, we allocate memory for device column subtree properties
   rmm::device_uvector<NodeIndexT> subtree_properties_map(num_subtree_nodes, stream);
-  thrust::copy_if(rmm::exec_policy_nosync(stream), 
-      thrust::make_counting_iterator(0), 
-      thrust::make_counting_iterator(0) + num_columns,
-      subtree_nrows.begin(),
-      subtree_properties_map.begin(),
-      [] __device__(auto mro) {
-        return mro != 0;
-      });
+  thrust::copy_if(rmm::exec_policy_nosync(stream),
+                  thrust::make_counting_iterator(0),
+                  thrust::make_counting_iterator(0) + num_columns,
+                  subtree_nrows.begin(),
+                  subtree_properties_map.begin(),
+                  [] __device__(auto mro) { return mro != 0; });
   // TODO: three way partitioning in cub::If
   auto str_partitioning_idx_it =
     thrust::partition(rmm::exec_policy(stream),
@@ -279,8 +288,7 @@ device_column_subtree_properties allocate_device_column_subtree_properties(
   auto max_row_offsets_it =
     thrust::make_permutation_iterator(max_row_offsets.begin(), subtree_properties_map.begin());
   size_type string_offsets_size =
-    thrust::reduce(
-      rmm::exec_policy(stream), max_row_offsets_it, max_row_offsets_it + str_val_end) +
+    thrust::reduce(rmm::exec_policy(stream), max_row_offsets_it, max_row_offsets_it + str_val_end) +
     str_val_end;
   rmm::device_uvector<SymbolOffsetT> string_offsets(string_offsets_size, stream);
   rmm::device_uvector<SymbolOffsetT> string_lengths(string_offsets_size, stream);
@@ -297,9 +305,8 @@ device_column_subtree_properties allocate_device_column_subtree_properties(
     thrust::make_permutation_iterator(max_row_offsets.begin(), subtree_properties_map.begin()) +
     str_val_end;
   size_type child_offsets_size =
-    thrust::reduce(rmm::exec_policy(stream),
-                   max_row_offsets_it,
-                   max_row_offsets_it + (list_end - str_val_end)) +
+    thrust::reduce(
+      rmm::exec_policy(stream), max_row_offsets_it, max_row_offsets_it + (list_end - str_val_end)) +
     2 * (list_end - str_val_end);
   rmm::device_uvector<SymbolOffsetT> child_offsets(child_offsets_size, stream);
 
@@ -310,36 +317,34 @@ device_column_subtree_properties allocate_device_column_subtree_properties(
                                                  stream,
                                                  rmm::mr::get_current_device_resource());
 
-  return device_column_subtree_properties{
-                               std::move(string_offsets),
-                               std::move(string_lengths),
-                               std::move(child_offsets),
-                               std::move(validity)};
+  return device_column_subtree_properties{std::move(string_offsets),
+                                          std::move(string_lengths),
+                                          std::move(child_offsets),
+                                          std::move(validity)};
 }
 
-void initialize_device_column_subtree_properties(
-    device_column_subtree_properties &d_props,
-    device_span<row_offset_t> subtree_nrows,
-    tree_meta_t &tree,
-    device_span<NodeIndexT> original_col_ids,
-    device_span<row_offset_t> row_offsets,
-    column_tree_properties &c_props,
-    rmm::cuda_stream_view stream) {
-
-  auto num_nodes = tree.node_levels.size();
+void initialize_device_column_subtree_properties(device_column_subtree_properties& d_props,
+                                                 device_span<row_offset_t> subtree_nrows,
+                                                 tree_meta_t& tree,
+                                                 device_span<NodeIndexT> original_col_ids,
+                                                 device_span<row_offset_t> row_offsets,
+                                                 column_tree_properties& c_props,
+                                                 rmm::cuda_stream_view stream)
+{
+  auto num_nodes   = tree.node_levels.size();
   auto num_columns = c_props.categories.size();
   // now we actually do the annotation
   // relabel original_col_ids with the positions of the csr_unique_col_ids with same element. How do
   // we accomplish this? one idea is to sort the row offsets by node level. Just the way we did this
-  // for the csr_column_ids sort original_col_ids, extract subtree based on the annotation above, 
+  // for the csr_column_ids sort original_col_ids, extract subtree based on the annotation above,
   // and then initialize.
   auto [sorted_node_levels, sorted_node_levels_order] =
     cudf::io::json::detail::stable_sorted_key_order<size_t, TreeDepthT>(tree.node_levels, stream);
   auto row_offsets_it =
     thrust::make_permutation_iterator(row_offsets.begin(), sorted_node_levels_order.begin());
-  auto node_range_begin_it = thrust::make_permutation_iterator(tree.node_range_begin.begin(),
+  auto node_range_begin_it   = thrust::make_permutation_iterator(tree.node_range_begin.begin(),
                                                                sorted_node_levels_order.begin());
-  auto node_range_end_it   = thrust::make_permutation_iterator(tree.node_range_end.begin(),
+  auto node_range_end_it     = thrust::make_permutation_iterator(tree.node_range_end.begin(),
                                                              sorted_node_levels_order.begin());
   auto node_range_lengths_it = thrust::make_transform_iterator(
     thrust::make_zip_iterator(node_range_begin_it, node_range_end_it),
@@ -353,7 +358,10 @@ void initialize_device_column_subtree_properties(
                                                               sorted_node_levels_order.begin());
 
   rmm::device_uvector<row_offset_t> sorted_subtree_nrows(num_columns, stream);
-  thrust::copy(rmm::exec_policy_nosync(stream), subtree_nrows.begin(), subtree_nrows.end(), sorted_subtree_nrows.begin());
+  thrust::copy(rmm::exec_policy_nosync(stream),
+               subtree_nrows.begin(),
+               subtree_nrows.end(),
+               sorted_subtree_nrows.begin());
   thrust::sort_by_key(rmm::exec_policy_nosync(stream),
                       c_props.mapped_ids.begin(),
                       c_props.mapped_ids.end(),
@@ -392,17 +400,15 @@ void initialize_device_column_subtree_properties(
      node_col_ids_it,
      node_categories_it,
      row_offsets_it,
-     validity = static_cast<bitmask_type*>(
-       d_props.validity.data())] __device__(NodeIndexT node) {
+     validity = static_cast<bitmask_type*>(d_props.validity.data())] __device__(NodeIndexT node) {
       if (sorted_subtree_nrows[node_col_ids_it[node]] && node_categories_it[node] != NC_LIST)
         cudf::set_bit(validity, row_offsets_it[node]);
     });
 
   // scatter list offsets
-
 }
 
-} // namespace experimental::detail 
+}  // namespace experimental::detail
 
 namespace detail {
 /**
@@ -1036,5 +1042,5 @@ void make_device_json_column(device_span<SymbolT const> input,
   stream.synchronize();
 }
 
-} // namespace detail
-} // namespace cudf::io::json
+}  // namespace detail
+}  // namespace cudf::io::json

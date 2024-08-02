@@ -23,10 +23,10 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 
+#include <rmm/device_scalar.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
-#include <rmm/device_uvector.hpp>
-#include <rmm/device_scalar.hpp>
 
 #include <thrust/sequence.h>
 
@@ -237,7 +237,6 @@ struct device_column_subtree_properties {
   rmm::device_buffer validity;
 };
 
-
 /*
  * @brief Unvalidated column tree stored in Compressed Sparse Row (CSR) format. The device json
  * column subtree - the subgraph that conforms to column tree properties - is extracted and further
@@ -276,14 +275,14 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   rmm::cuda_stream_view stream);
 
 void make_device_json_column(device_span<SymbolT const> input,
-                                 tree_meta_t& tree,
-                                 device_span<NodeIndexT> col_ids,
-                                 device_span<size_type> row_offsets,
-                                 device_json_column& root,
-                                 bool is_array_of_arrays,
-                                 cudf::io::json_reader_options const& options,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr);
+                             tree_meta_t& tree,
+                             device_span<NodeIndexT> col_ids,
+                             device_span<size_type> row_offsets,
+                             device_json_column& root,
+                             bool is_array_of_arrays,
+                             cudf::io::json_reader_options const& options,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace experimental

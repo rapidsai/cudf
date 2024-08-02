@@ -146,7 +146,8 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   auto* dev_num_levels_ptr = thrust::max_element(
     rmm::exec_policy_nosync(stream), tree.node_levels.begin(), tree.node_levels.end());
   rmm::device_scalar<NodeIndexT> num_levels(stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(num_levels.data(), dev_num_levels_ptr, sizeof(NodeIndexT), cudaMemcpyDeviceToDevice, stream));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    num_levels.data(), dev_num_levels_ptr, sizeof(NodeIndexT), cudaMemcpyDeviceToDevice, stream));
 
   rmm::device_uvector<NodeIndexT> mapped_col_ids_copy(num_columns, stream);
   thrust::copy(rmm::exec_policy_nosync(stream),
@@ -335,10 +336,11 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
                       [] __device__(auto ancestor) { return ancestor != -1; });
   }
 
-  return std::tuple{
-    csr{std::move(rowidx), std::move(colidx)},
-    column_tree_properties{std::move(num_levels),
-      std::move(column_categories), std::move(max_row_offsets), std::move(mapped_col_ids)}};
+  return std::tuple{csr{std::move(rowidx), std::move(colidx)},
+                    column_tree_properties{std::move(num_levels),
+                                           std::move(column_categories),
+                                           std::move(max_row_offsets),
+                                           std::move(mapped_col_ids)}};
 }
 
 }  // namespace experimental::detail
