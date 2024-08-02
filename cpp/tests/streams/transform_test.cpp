@@ -120,7 +120,7 @@ TEST_F(TransformTest, MaskToBools)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, out->view());
 }
 
-TYPED_TEST(TransformTest, Encode)
+TEST_F(TransformTest, Encode)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 2, 3, 2, 3, 2, 1}};
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expect{{0, 1, 2, 1, 2, 1, 0}};
