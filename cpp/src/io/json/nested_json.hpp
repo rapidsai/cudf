@@ -25,6 +25,8 @@
 
 #include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
+#include <rmm/device_uvector.hpp>
+#include <rmm/device_scalar.hpp>
 
 #include <thrust/sequence.h>
 
@@ -201,6 +203,7 @@ enum class stack_behavior_t : char {
 constexpr auto list_child_name{"element"};
 
 namespace experimental {
+using row_offset_t = size_type;
 /*
  * @brief Sparse graph adjacency matrix stored in Compressed Sparse Row (CSR) format.
  */
@@ -214,10 +217,26 @@ struct csr {
  * column subtree, but not required for the final cudf column construction.
  */
 struct column_tree_properties {
+  rmm::device_scalar<NodeIndexT> num_levels;
   rmm::device_uvector<NodeT> categories;
-  rmm::device_uvector<size_type> max_row_offsets;
+  rmm::device_uvector<row_offset_t> max_row_offsets;
   rmm::device_uvector<NodeIndexT> mapped_ids;
 };
+
+/*
+ * @brief Positional and validity information for subgraph extracted from column tree. The offsets
+ * for each node in the member arrays can be obtained by segmented sums of the max_row_offsets array
+ * in column_tree_properties.
+ */
+struct device_column_subtree_properties {
+  rmm::device_uvector<row_offset_t> string_offsets;
+  rmm::device_uvector<row_offset_t> string_lengths;
+  // Row offsets
+  rmm::device_uvector<row_offset_t> child_offsets;
+  // Validity bitmap
+  rmm::device_buffer validity;
+};
+
 
 /*
  * @brief Unvalidated column tree stored in Compressed Sparse Row (CSR) format. The device json
@@ -228,20 +247,12 @@ struct column_tree_properties {
 struct column_tree {
   // position of nnzs
   csr adjacency;
-  rmm::device_uvector<NodeIndexT> rowidx;
-  rmm::device_uvector<NodeIndexT> colidx;
   // device_json_column properties
-  using row_offset_t = size_type;
   // Indicator array for the device column subtree
   // Stores the number of rows in the column if the node is part of device column subtree
   // Stores zero otherwise
   rmm::device_uvector<row_offset_t> subtree_nrows;
-  rmm::device_uvector<row_offset_t> string_offsets;
-  rmm::device_uvector<row_offset_t> string_lengths;
-  // Row offsets
-  rmm::device_uvector<row_offset_t> child_offsets;
-  // Validity bitmap
-  rmm::device_buffer validity;
+  device_column_subtree_properties d_props;
 };
 
 namespace detail {
@@ -262,10 +273,9 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   device_span<size_type> row_offsets,
   bool is_array_of_arrays,
   NodeIndexT const row_array_parent_col_id,
-  cudf::io::json_reader_options const& reader_options,
   rmm::cuda_stream_view stream);
 
-void make_device_json_column_csr(device_span<SymbolT const> input,
+void make_device_json_column(device_span<SymbolT const> input,
                                  tree_meta_t& tree,
                                  device_span<NodeIndexT> col_ids,
                                  device_span<size_type> row_offsets,
@@ -412,6 +422,35 @@ reduce_to_column_tree(tree_meta_t& tree,
  */
 cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
                                         rmm::cuda_stream_view stream);
+
+/**
+ * @brief Constructs `d_json_column` from node tree representation
+ * Newly constructed columns are insert into `root`'s children.
+ * `root` must be a list type.
+ *
+ * @param input Input JSON string device data
+ * @param tree Node tree representation of the JSON string
+ * @param col_ids Column ids of the nodes in the tree
+ * @param row_offsets Row offsets of the nodes in the tree
+ * @param root Root node of the `d_json_column` tree
+ * @param is_array_of_arrays Whether the tree is an array of arrays
+ * @param options Parsing options specifying the parsing behaviour
+ * options affecting behaviour are
+ *   is_enabled_lines: Whether the input is a line-delimited JSON
+ *   is_enabled_mixed_types_as_string: Whether to enable reading mixed types as string
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the device memory
+ * of child_offets and validity members of `d_json_column`
+ */
+void make_device_json_column(device_span<SymbolT const> input,
+                             tree_meta_t& tree,
+                             device_span<NodeIndexT> col_ids,
+                             device_span<size_type> row_offsets,
+                             device_json_column& root,
+                             bool is_array_of_arrays,
+                             cudf::io::json_reader_options const& options,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr);
 
 /**
  * @brief Parses the given JSON string and generates table from the given input.
