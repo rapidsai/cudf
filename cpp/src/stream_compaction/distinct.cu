@@ -33,6 +33,8 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cuco/static_map.cuh>
+#include <cuco/static_set.cuh>
+#include <thrust/iterator/discard_iterator.h>
 
 #include <functional>
 #include <utility>
@@ -77,24 +79,24 @@ rmm::device_uvector<cudf::size_type> dipatch_row_equal(
 }
 
 struct plus_op {
-  template <typename T, cuda::thread_scope Scope>
-  __device__ void operator()(cuda::atomic_ref<T, Scope> ref, T val)
+  template <cuda::thread_scope Scope>
+  __device__ void operator()(cuda::atomic_ref<size_type, Scope> ref, size_type const val)
   {
-    ref.fetch_add(1, cuda::memory_order_relaxed);
+    ref.fetch_add(static_cast<size_type>(1), cuda::memory_order_relaxed);
   }
 };
 
 struct min_op {
-  template <typename T, cuda::thread_scope Scope>
-  __device__ void operator()(cuda::atomic_ref<T, Scope> ref, T val)
+  template <cuda::thread_scope Scope>
+  __device__ void operator()(cuda::atomic_ref<size_type, Scope> ref, size_type const val)
   {
     ref.fetch_min(val, cuda::memory_order_relaxed);
   }
 };
 
 struct max_op {
-  template <typename T, cuda::thread_scope Scope>
-  __device__ void operator()(cuda::atomic_ref<T, Scope> ref, T val)
+  template <cuda::thread_scope Scope>
+  __device__ void operator()(cuda::atomic_ref<size_type, Scope> ref, size_type const val)
   {
     ref.fetch_max(val, cuda::memory_order_relaxed);
   }
@@ -108,66 +110,61 @@ rmm::device_uvector<size_type> process_keep(Map& map,
                                             rmm::device_async_resource_ref mr)
 {
   if ((keep == duplicate_keep_option::KEEP_FIRST) or (keep == duplicate_keep_option::KEEP_LAST)) {
-    auto pairs = thrust::make_transform_iterator(
-      thrust::counting_iterator<size_type>(0),
-      cuda::proclaim_return_type<cuco::pair<size_type, size_type>>([] __device__(size_type i) {
-        return cuco::pair<size_type, size_type>{i, i};
-      }));
+    auto output_indices = rmm::device_uvector<size_type>(num_rows, stream, mr);
+
+    auto pairs =
+      thrust::make_transform_iterator(thrust::counting_iterator<size_type>(0),
+                                      cuda::proclaim_return_type<cuco::pair<size_type, size_type>>(
+                                        [] __device__(size_type const i) {
+                                          return cuco::pair<size_type, size_type>{i, i};
+                                        }));
 
     if (keep == duplicate_keep_option::KEEP_FIRST) {
-      map.insert_or_apply(pairs, pairs + num_rows, min_op{}, stream.value());
+      map.insert_or_apply_async(pairs, pairs + num_rows, min_op{}, stream.value());
     } else {
-      map.insert_or_apply(pairs, pairs + num_rows, max_op{}, stream.value());
+      map.insert_or_apply_async(pairs, pairs + num_rows, max_op{}, stream.value());
     }
-    int map_size = map.size(stream.value());
-    auto keys    = rmm::device_uvector<size_type>(map_size, stream, mr);
-    auto values  = rmm::device_uvector<size_type>(map_size, stream, mr);
 
-    map.retrieve_all(keys.begin(), values.begin(), stream);
-    return values;
+    auto const [_, output_end] =
+      map.retrieve_all(thrust::make_discard_iterator(), output_indices.begin(), stream.value());
+    output_indices.resize(thrust::distance(output_indices.begin(), output_end), stream);
+    return output_indices;
   }
+
+  auto keys   = rmm::device_uvector<size_type>(num_rows, stream, mr);
+  auto values = rmm::device_uvector<size_type>(num_rows, stream, mr);
 
   auto pairs = thrust::make_transform_iterator(
     thrust::counting_iterator<size_type>(0),
-    cuda::proclaim_return_type<cuco::pair<size_type, size_type>>([] __device__(size_type i) {
+    cuda::proclaim_return_type<cuco::pair<size_type, size_type>>([] __device__(size_type const i) {
       return cuco::pair<size_type, size_type>{i, 1};
     }));
 
-  auto plusop = plus_op{};
-  map.insert_or_apply(pairs, pairs + num_rows, plusop, stream.value());
+  map.insert_or_apply_async(pairs, pairs + num_rows, plus_op{}, stream.value());
+  auto const [keys_end, _] = map.retrieve_all(keys.begin(), values.begin(), stream.value());
 
-  int map_size = map.size(stream.value());
-  auto keys    = rmm::device_uvector<size_type>(map_size, stream, mr);
-  auto values  = rmm::device_uvector<size_type>(map_size, stream, mr);
-  map.retrieve_all(keys.begin(), values.begin(), stream.value());
+  auto num_distinct_keys = thrust::distance(keys.begin(), keys_end);
+  keys.resize(num_distinct_keys, stream);
+  values.resize(num_distinct_keys, stream);
 
-  auto output_indices          = rmm::device_uvector<size_type>(map_size, stream, mr);
-  auto output_indices_filtered = rmm::device_uvector<size_type>(map_size, stream, mr);
+  auto output_indices = rmm::device_uvector<size_type>(num_distinct_keys, stream, mr);
 
-  thrust::for_each(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(map_size),
-    [values         = values.begin(),
-     keys           = keys.begin(),
-     output_indices = output_indices.begin()] __device__(size_type const idx) mutable {
-      if (values[idx] == size_type{1}) {
-        output_indices[idx] = keys[idx];
-      } else {
-        output_indices[idx] = -1;
-      }
-    });
+  auto const output_iter = cudf::detail::make_counting_transform_iterator(
+    size_type(0),
+    cuda::proclaim_return_type<size_type>(
+      [keys = keys.begin(), values = values.begin()] __device__(auto const idx) {
+        return values[idx] == size_type{1} ? keys[idx] : -1;
+      }));
 
   auto const map_end = thrust::copy_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
+    output_iter,
+    output_iter + num_distinct_keys,
     output_indices.begin(),
-    output_indices.end(),
-    output_indices_filtered.begin(),
     cuda::proclaim_return_type<bool>([] __device__(auto const idx) { return idx != -1; }));
 
-  output_indices_filtered.resize(thrust::distance(output_indices_filtered.begin(), map_end),
-                                 stream);
-  return output_indices_filtered;
+  output_indices.resize(thrust::distance(output_indices.begin(), map_end), stream);
+  return output_indices;
 }
 
 }  // namespace
