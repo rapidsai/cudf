@@ -313,8 +313,8 @@ class NumericalColumn(NumericalBaseColumn):
             return NotImplemented
 
     def int2ip(self) -> "cudf.core.column.StringColumn":
-        if self.dtype != cudf.dtype("int64"):
-            raise TypeError("Only int64 type can be converted to ip")
+        if self.dtype != cudf.dtype("uint32"):
+            raise TypeError("Only uint32 type can be converted to ip")
 
         return libcudf.string_casting.int2ip(self)
 
