@@ -43,6 +43,38 @@
 
 class TransformTest : public cudf::test::BaseFixture {};
 
+std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
+compute_segmented_row_bit_count(cudf::table_view const& input, cudf::size_type segment_length)
+{
+  // The expected values are computed with the assumption that
+  // the outputs of `cudf::row_bit_count` are correct.
+  // This should be fine as they are verified by their own unit tests in `row_bit_count_test.cu`.
+  auto const row_sizes    = cudf::row_bit_count(input);
+  auto const num_segments = cudf::util::div_rounding_up_safe(row_sizes->size(), segment_length);
+  auto expected =
+    cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_segments);
+
+  thrust::transform(
+    rmm::exec_policy(cudf::get_default_stream()),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(num_segments),
+    expected->mutable_view().begin<cudf::size_type>(),
+    cuda::proclaim_return_type<cudf::size_type>(
+      [segment_length,
+       num_segments,
+       num_rows = row_sizes->size(),
+       d_sizes  = row_sizes->view().begin<cudf::size_type>()] __device__(auto const segment_idx) {
+        // Since the number of rows may not divisible by segment_length,
+        // the last segment may be shorter than the others.
+        auto const size_begin = d_sizes + segment_idx * segment_length;
+        auto const size_end   = std::min(size_begin + segment_length, d_sizes + num_rows);
+        return thrust::reduce(thrust::seq, size_begin, size_end);
+      }));
+
+  auto actual = cudf::segmented_row_bit_count(input, segment_length);
+  return {std::move(expected), std::move(actual)};
+}
+
 template <class dtype, class Op, class Data>
 void test_udf(char const udf[], Op op, Data data_init, cudf::size_type size, bool is_ptx)
 {
@@ -252,33 +284,7 @@ TEST_F(TransformTest, SegmentedRowBitCount)
   auto const input = cudf::table_view({col});
 
   auto constexpr segment_length = 2;
-  auto const [expected, actual] = [&]() {
-    auto const row_sizes    = cudf::row_bit_count(input, cudf::test::get_default_stream());
-    auto const num_segments = cudf::util::div_rounding_up_safe(row_sizes->size(), segment_length);
-    auto expected =
-      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_segments);
-
-    thrust::transform(
-      rmm::exec_policy(cudf::test::get_default_stream()),
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(num_segments),
-      expected->mutable_view().begin<cudf::size_type>(),
-      cuda::proclaim_return_type<cudf::size_type>(
-        [segment_length,
-         num_segments,
-         num_rows = row_sizes->size(),
-         d_sizes  = row_sizes->view().begin<cudf::size_type>()] __device__(auto const segment_idx) {
-          // Since the number of rows may not divisible by segment_length,
-          // the last segment may be shorter than the others.
-          auto const size_begin = d_sizes + segment_idx * segment_length;
-          auto const size_end   = std::min(size_begin + segment_length, d_sizes + num_rows);
-          return thrust::reduce(thrust::seq, size_begin, size_end);
-        }));
-
-    auto actual =
-      cudf::segmented_row_bit_count(input, segment_length, cudf::test::get_default_stream());
-    return std::make_tuple(std::move(expected), std::move(actual));
-  }();
+  auto const [expected, actual] = compute_segmented_row_bit_count(input, segment_length);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *actual);
 }
