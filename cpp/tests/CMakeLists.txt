@@ -735,7 +735,7 @@ ConfigureTest(
   STREAM_MODE
   testing
 )
-ConfigureTest(STREAM_TRANSFORM_TEST streams/transform_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_TRANSFORM_TEST streams/transform_test.cu STREAM_MODE testing)
 ConfigureTest(STREAM_UNARY_TEST streams/unary_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
