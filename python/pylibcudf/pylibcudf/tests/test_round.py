@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
@@ -25,8 +26,6 @@ def test_round(column, round_mode, decimals):
         "half_to_even": plc.round.RoundingMethod.HALF_EVEN,
     }[round_mode]
     got = plc.round.round(column, decimals, method)
-    expect = pa.compute.round(
-        plc.interop.to_arrow(column), decimals, round_mode
-    )
+    expect = pc.round(plc.interop.to_arrow(column), decimals, round_mode)
 
     assert_column_eq(expect, got)

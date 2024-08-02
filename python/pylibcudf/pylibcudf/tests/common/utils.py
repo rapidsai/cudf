@@ -6,6 +6,7 @@ import os
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.compute as pc
 import pylibcudf as plc
 import pytest
 from pyarrow.parquet import write_table as pq_write_table
@@ -154,13 +155,13 @@ def assert_column_eq(
         for lh_arr, rh_arr in zip(lhs, rhs):
             # Check NaNs positions match
             # and then filter out nans
-            lhs_nans = pa.compute.is_nan(lh_arr)
-            rhs_nans = pa.compute.is_nan(rh_arr)
+            lhs_nans = pc.is_nan(lh_arr)
+            rhs_nans = pc.is_nan(rh_arr)
             assert lhs_nans.equals(rhs_nans)
 
-            if pa.compute.any(lhs_nans) or pa.compute.any(rhs_nans):
+            if pc.any(lhs_nans) or pc.any(rhs_nans):
                 # masks must be equal at this point
-                mask = pa.compute.fill_null(pa.compute.invert(lhs_nans), True)
+                mask = pc.fill_null(pc.invert(lhs_nans), True)
                 lh_arr = lh_arr.filter(mask)
                 rh_arr = rh_arr.filter(mask)
 

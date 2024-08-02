@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
@@ -222,7 +223,7 @@ def test_starts_with(data_col, target_scalar):
     pa_target_scalar, plc_target_scalar = target_scalar
     py_target = pa_target_scalar.as_py()
     got = plc.strings.find.starts_with(plc_data_col, plc_target_scalar)
-    expected = pa.compute.starts_with(pa_data_col, py_target)
+    expected = pc.starts_with(pa_data_col, py_target)
     assert_column_eq(expected, got)
 
 
@@ -241,7 +242,7 @@ def test_ends_with(data_col, target_scalar):
     pa_target_scalar, plc_target_scalar = target_scalar
     py_target = pa_target_scalar.as_py()
     got = plc.strings.find.ends_with(plc_data_col, plc_target_scalar)
-    expected = pa.compute.ends_with(pa_data_col, py_target)
+    expected = pc.ends_with(pa_data_col, py_target)
     assert_column_eq(expected, got)
 
 

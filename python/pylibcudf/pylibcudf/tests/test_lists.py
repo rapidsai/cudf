@@ -2,6 +2,7 @@
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.compute as pc
 import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
@@ -183,7 +184,7 @@ def test_extract_list_element_scalar(list_column):
     plc_column = plc.interop.from_arrow(pa.array(list_column))
 
     res = plc.lists.extract_list_element(plc_column, 0)
-    expect = pa.compute.list_element(list_column, 0)
+    expect = pc.list_element(list_column, 0)
 
     assert_column_eq(expect, res)
 

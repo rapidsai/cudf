@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
@@ -63,7 +64,7 @@ def test_replace(data_col, scalar_repl_target, scalar_repl, maxrepl):
         plc_data_col, plc_target, plc_repl, maxrepl
     )
 
-    expected = pa.compute.replace_substring(
+    expected = pc.replace_substring(
         pa_data_col,
         pattern=pa_target,
         replacement=pa_repl,
@@ -89,7 +90,7 @@ def test_replace_slice(data_col, scalar_repl, startstop):
         # count_characters on the input, take the max and set stop to that
         stop = 1000
 
-    expected = pa.compute.utf8_replace_slice(pa_data_col, start, stop, pa_repl)
+    expected = pc.utf8_replace_slice(pa_data_col, start, stop, pa_repl)
 
     assert_column_eq(expected, got)
 

@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
@@ -43,7 +44,7 @@ def plc_target_pat(pa_target_scalar):
 def test_contains_re(target_col, pa_target_scalar, plc_target_pat):
     pa_target_col, plc_target_col = target_col
     got = plc.strings.contains.contains_re(plc_target_col, plc_target_pat)
-    expected = pa.compute.match_substring_regex(
+    expected = pc.match_substring_regex(
         pa_target_col, pa_target_scalar.as_py()
     )
     assert_column_eq(got, expected)
