@@ -22,6 +22,7 @@ from uuid import uuid4
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pylibcudf
 from typing_extensions import Self
 
 import cudf
@@ -6276,7 +6277,7 @@ class IndexedFrame(Frame):
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
 
-        method_enum = libcudf.pylibcudf.aggregation.RankMethod[method.upper()]
+        method_enum = pylibcudf.aggregation.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
             raise ValueError(
                 "na_option must be one of 'keep', 'top', or 'bottom'"
