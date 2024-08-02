@@ -341,6 +341,7 @@ TEST_F(SegmentedSortInt, Bool)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
 }
 
+// Specific test for fix in https://github.com/rapidsai/cudf/pull/16463
 TEST_F(SegmentedSortInt, UnbalancedOffsets)
 {
   auto h_input = std::vector<int64_t>(3535);
@@ -352,6 +353,7 @@ TEST_F(SegmentedSortInt, UnbalancedOffsets)
     h_input, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto input    = cudf::column_view(cudf::device_span<int64_t const>(d_input));
   auto segments = cudf::test::fixed_width_column_wrapper<int32_t>({0, 4, 3533, 3535});
+  // full sort should match handcrafted input data here
   auto expected = cudf::sort(cudf::table_view({input}));
 
   auto input_view = cudf::table_view({input});
