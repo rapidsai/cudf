@@ -72,7 +72,8 @@ compute_segmented_row_bit_count(cudf::table_view const& input, cudf::size_type s
         return thrust::reduce(thrust::seq, size_begin, size_end);
       }));
 
-  auto actual = cudf::segmented_row_bit_count(input, segment_length);
+  auto actual =
+    cudf::segmented_row_bit_count(input, segment_length, cudf::test::get_default_stream());
   return {std::move(expected), std::move(actual)};
 }
 
@@ -103,11 +104,31 @@ TEST_F(TransformTest, BoolsToMask)
   cudf::test::fixed_width_column_wrapper<int32_t> expected(
     sample, sample + input.size(), input.begin());
 
-  auto [null_mask, null_count] = cudf::bools_to_mask(input_column, cudf::get_default_stream());
+  auto [null_mask, null_count] =
+    cudf::bools_to_mask(input_column, cudf::test::get_default_stream());
   cudf::column got_column(expected);
   got_column.set_null_mask(std::move(*null_mask), null_count);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got_column.view());
+}
+
+TEST_F(TransformTest, MaskToBools)
+{
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>({});
+  auto out      = cudf::mask_to_bools(nullptr, 0, 0, cudf::test::get_default_stream());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, out->view());
+}
+
+TYPED_TEST(TransformTest, Encode)
+{
+  cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 2, 3, 2, 3, 2, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expect{{0, 1, 2, 1, 2, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_keys{{1, 2, 3}};
+  auto const result = cudf::encode(cudf::table_view({input}), cudf::test::get_default_stream());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.first->view().column(0), expect_keys);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.second->view(), expect);
 }
 
 TEST_F(TransformTest, OneHotEncode)
@@ -194,10 +215,4 @@ TEST_F(TransformTest, SegmentedRowBitCount)
   auto constexpr segment_length = 2;
   auto const [expected, actual] = compute_segmented_row_bit_count(input, segment_length);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *actual);
-}
-
-TEST_F(TransformTest, Unary)
-{
-  cudf::test::fixed_width_column_wrapper<int32_t> const column{10, 20, 30, 40, 50};
-  cudf::cast(column, cudf::data_type{cudf::type_id::INT64}, cudf::test::get_default_stream());
 }
