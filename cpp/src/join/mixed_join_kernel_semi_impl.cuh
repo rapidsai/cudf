@@ -25,13 +25,8 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
-
-#include <cub/cub.cuh>
-
 namespace cudf {
 namespace detail {
-
-namespace cg = cooperative_groups;
 
 #pragma GCC diagnostic ignored "-Wattributes"
 
