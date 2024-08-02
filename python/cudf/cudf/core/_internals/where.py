@@ -47,7 +47,7 @@ def _check_and_cast_columns_with_other(
 
     other_is_scalar = is_scalar(other)
     if other_is_scalar:
-        if isinstance(other, float) and not np.isnan(other):
+        if isinstance(other, (float, np.floating)) and not np.isnan(other):
             try:
                 is_safe = source_dtype.type(other) == other
             except OverflowError:
@@ -110,7 +110,7 @@ def _make_categorical_like(result, column):
     if isinstance(column, cudf.core.column.CategoricalColumn):
         result = cudf.core.column.build_categorical_column(
             categories=column.categories,
-            codes=cudf.core.column.build_column(
+            codes=cudf.core.column.NumericalColumn(
                 result.base_data, dtype=result.dtype
             ),
             mask=result.base_mask,

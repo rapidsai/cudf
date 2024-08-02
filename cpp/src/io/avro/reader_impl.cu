@@ -554,9 +554,11 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
       auto d_global_dict_data = rmm::device_uvector<char>(0, stream);
 
       if (total_dictionary_entries > 0) {
-        auto h_global_dict      = std::vector<string_index_pair>(total_dictionary_entries);
-        auto h_global_dict_data = std::vector<char>(dictionary_data_size);
-        size_t dict_pos         = 0;
+        auto h_global_dict =
+          cudf::detail::make_host_vector<string_index_pair>(total_dictionary_entries, stream);
+        auto h_global_dict_data =
+          cudf::detail::make_host_vector<char>(dictionary_data_size, stream);
+        size_t dict_pos = 0;
 
         for (size_t i = 0; i < column_types.size(); ++i) {
           auto const col_idx          = selected_columns[i].first;

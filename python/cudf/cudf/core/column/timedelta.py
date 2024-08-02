@@ -251,12 +251,24 @@ class TimeDeltaColumn(ColumnBase):
     def time_unit(self) -> str:
         return np.datetime_data(self.dtype)[0]
 
+    def total_seconds(self) -> ColumnBase:
+        raise NotImplementedError("total_seconds is currently not implemented")
+
+    def ceil(self, freq: str) -> ColumnBase:
+        raise NotImplementedError("ceil is currently not implemented")
+
+    def floor(self, freq: str) -> ColumnBase:
+        raise NotImplementedError("floor is currently not implemented")
+
+    def round(self, freq: str) -> ColumnBase:
+        raise NotImplementedError("round is currently not implemented")
+
     def as_numerical_column(
         self, dtype: Dtype
-    ) -> "cudf.core.column.NumericalColumn":
-        col = column.build_column(
-            data=self.base_data,
-            dtype=np.int64,
+    ) -> cudf.core.column.NumericalColumn:
+        col = cudf.core.column.NumericalColumn(
+            data=self.base_data,  # type: ignore[arg-type]
+            dtype=np.dtype(np.int64),
             mask=self.base_mask,
             offset=self.offset,
             size=self.size,
@@ -287,11 +299,11 @@ class TimeDeltaColumn(ColumnBase):
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
-    def mean(self, skipna=None, dtype: Dtype = np.float64) -> pd.Timedelta:
+    def mean(self, skipna=None) -> pd.Timedelta:
         return pd.Timedelta(
             cast(
                 "cudf.core.column.NumericalColumn", self.astype("int64")
-            ).mean(skipna=skipna, dtype=dtype),
+            ).mean(skipna=skipna),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
@@ -345,12 +357,11 @@ class TimeDeltaColumn(ColumnBase):
         self,
         skipna: bool | None = None,
         min_count: int = 0,
-        dtype: Dtype = np.float64,
         ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
             cast("cudf.core.column.NumericalColumn", self.astype("int64")).std(
-                skipna=skipna, min_count=min_count, ddof=ddof, dtype=dtype
+                skipna=skipna, min_count=min_count, ddof=ddof
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)

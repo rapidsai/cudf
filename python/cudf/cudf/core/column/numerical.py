@@ -12,27 +12,16 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import pylibcudf
-from cudf.api.types import (
-    is_float_dtype,
-    is_integer,
-    is_integer_dtype,
-    is_scalar,
-)
-from cudf.core.column import (
-    ColumnBase,
-    as_column,
-    build_column,
-    column,
-    string,
-)
+from cudf.api.types import is_integer, is_scalar
+from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
+    find_common_type,
     min_column_type,
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
-    numeric_normalize_types,
 )
 
 from .numerical_base import NumericalBaseColumn
@@ -225,25 +214,17 @@ class NumericalColumn(NumericalBaseColumn):
                 tmp = self if reflect else other
                 # Guard against division by zero for integers.
                 if (
-                    (tmp.dtype.type in int_float_dtype_mapping)
-                    and (tmp.dtype.type != np.bool_)
-                    and (
-                        (
-                            (
-                                np.isscalar(tmp)
-                                or (
-                                    isinstance(tmp, cudf.Scalar)
-                                    # host to device copy
-                                    and tmp.is_valid()
-                                )
-                            )
-                            and (0 == tmp)
-                        )
-                        or ((isinstance(tmp, NumericalColumn)) and (0 in tmp))
-                    )
+                    tmp.dtype.type in int_float_dtype_mapping
+                    and tmp.dtype.kind != "b"
                 ):
-                    out_dtype = cudf.dtype("float64")
-
+                    if isinstance(tmp, NumericalColumn) and 0 in tmp:
+                        out_dtype = cudf.dtype("float64")
+                    elif isinstance(tmp, cudf.Scalar):
+                        if tmp.is_valid() and tmp == 0:
+                            # tmp == 0 can return NA
+                            out_dtype = cudf.dtype("float64")
+                    elif is_scalar(tmp) and tmp == 0:
+                        out_dtype = cudf.dtype("float64")
         if op in {
             "__lt__",
             "__gt__",
@@ -257,7 +238,7 @@ class NumericalColumn(NumericalBaseColumn):
             out_dtype = "bool"
 
         if op in {"__and__", "__or__", "__xor__"}:
-            if is_float_dtype(self.dtype) or is_float_dtype(other.dtype):
+            if self.dtype.kind == "f" or other.dtype.kind == "f":
                 raise TypeError(
                     f"Operation 'bitwise {op[2:-2]}' not supported between "
                     f"{self.dtype.type.__name__} and "
@@ -268,8 +249,8 @@ class NumericalColumn(NumericalBaseColumn):
 
         if (
             op == "__pow__"
-            and is_integer_dtype(self.dtype)
-            and (is_integer(other) or is_integer_dtype(other.dtype))
+            and self.dtype.kind in "iu"
+            and (is_integer(other) or other.dtype.kind in "iu")
         ):
             op = "INT_POW"
 
@@ -351,29 +332,23 @@ class NumericalColumn(NumericalBaseColumn):
     def as_datetime_column(
         self, dtype: Dtype
     ) -> cudf.core.column.DatetimeColumn:
-        return cast(
-            "cudf.core.column.DatetimeColumn",
-            build_column(
-                data=self.astype("int64").base_data,
-                dtype=dtype,
-                mask=self.base_mask,
-                offset=self.offset,
-                size=self.size,
-            ),
+        return cudf.core.column.DatetimeColumn(
+            data=self.astype("int64").base_data,  # type: ignore[arg-type]
+            dtype=dtype,
+            mask=self.base_mask,
+            offset=self.offset,
+            size=self.size,
         )
 
     def as_timedelta_column(
         self, dtype: Dtype
     ) -> cudf.core.column.TimeDeltaColumn:
-        return cast(
-            "cudf.core.column.TimeDeltaColumn",
-            build_column(
-                data=self.astype("int64").base_data,
-                dtype=dtype,
-                mask=self.base_mask,
-                offset=self.offset,
-                size=self.size,
-            ),
+        return cudf.core.column.TimeDeltaColumn(
+            data=self.astype("int64").base_data,  # type: ignore[arg-type]
+            dtype=dtype,
+            mask=self.base_mask,
+            offset=self.offset,
+            size=self.size,
         )
 
     def as_decimal_column(
@@ -395,7 +370,7 @@ class NumericalColumn(NumericalBaseColumn):
         if result_col.null_count == result_col.size:
             return True
 
-        return libcudf.reduce.reduce("all", result_col, dtype=np.bool_)
+        return libcudf.reduce.reduce("all", result_col)
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
@@ -406,7 +381,7 @@ class NumericalColumn(NumericalBaseColumn):
         elif skipna and result_col.null_count == result_col.size:
             return False
 
-        return libcudf.reduce.reduce("any", result_col, dtype=np.bool_)
+        return libcudf.reduce.reduce("any", result_col)
 
     @functools.cached_property
     def nan_count(self) -> int:
@@ -517,11 +492,15 @@ class NumericalColumn(NumericalBaseColumn):
             )
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
-        to_replace_col, replacement_col, replaced = numeric_normalize_types(
-            to_replace_col, replacement_col, self
+        common_type = find_common_type(
+            (to_replace_col.dtype, replacement_col.dtype, self.dtype)
         )
+        replaced = self.astype(common_type)
         df = cudf.DataFrame._from_data(
-            {"old": to_replace_col, "new": replacement_col}
+            {
+                "old": to_replace_col.astype(common_type),
+                "new": replacement_col.astype(common_type),
+            }
         )
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
@@ -646,7 +625,10 @@ class NumericalColumn(NumericalBaseColumn):
         if isinstance(dtype, CategoricalDtype):
             return column.build_categorical_column(
                 categories=dtype.categories._values,
-                codes=build_column(self.base_data, dtype=self.dtype),
+                codes=cudf.core.column.NumericalColumn(
+                    self.base_data,  # type: ignore[arg-type]
+                    dtype=self.dtype,
+                ),
                 mask=self.base_mask,
                 ordered=dtype.ordered,
                 size=self.size,
@@ -684,15 +666,16 @@ class NumericalColumn(NumericalBaseColumn):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
-        col_dtype = self.dtype
         if reduction_op in {"sum", "product"}:
-            col_dtype = (
-                col_dtype if col_dtype.kind == "f" else np.dtype("int64")
-            )
+            if self.dtype.kind == "f":
+                return self.dtype
+            return np.dtype("int64")
         elif reduction_op == "sum_of_squares":
-            col_dtype = np.result_dtype(col_dtype, np.dtype("uint64"))
+            return np.result_dtype(self.dtype, np.dtype("uint64"))
+        elif reduction_op in {"var", "std", "mean"}:
+            return np.dtype("float64")
 
-        return col_dtype
+        return super()._reduction_result_dtype(reduction_op)
 
 
 def _normalize_find_and_replace_input(

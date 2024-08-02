@@ -18,13 +18,14 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup transformation_binaryops
@@ -291,6 +292,17 @@ cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
 namespace binops {
 
 /**
+ * @brief Returns true if the binary operator is supported for the given input types.
+ *
+ * @param out The output data type
+ * @param lhs The left-hand cudf::data_type
+ * @param rhs The right-hand cudf::data_type
+ * @param op The binary operator
+ * @return true if the binary operator is supported for the given input types
+ */
+bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op);
+
+/**
  * @brief Computes output valid mask for op between a column and a scalar
  *
  * @param col     Column to compute the valid mask from
@@ -305,8 +317,13 @@ std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
-namespace compiled {
-namespace detail {
+}  // namespace binops
+
+/** @} */  // end of group
+}  // namespace CUDF_EXPORT cudf
+
+namespace CUDF_EXPORT cudf {
+namespace binops::compiled::detail {
 
 /**
  * @brief struct binary operation using `NaN` aware sorting physical element comparators
@@ -326,9 +343,5 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
                                     bool is_rhs_scalar,
                                     binary_operator op,
                                     rmm::cuda_stream_view stream);
-}  // namespace detail
-}  // namespace compiled
-}  // namespace binops
-
-/** @} */  // end of group
-}  // namespace cudf
+}  // namespace binops::compiled::detail
+}  // namespace CUDF_EXPORT cudf

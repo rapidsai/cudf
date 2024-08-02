@@ -24,12 +24,10 @@
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @copydoc cudf::tile
- *
- * @param stream CUDA stream used for device memory operations and kernel launches
  */
 std::unique_ptr<table> tile(table_view const& input,
                             size_type count,
@@ -38,12 +36,10 @@ std::unique_ptr<table> tile(table_view const& input,
 
 /**
  * @copydoc cudf::interleave_columns
- *
- * @param stream CUDA stream used for device memory operations and kernel launches
  */
 std::unique_ptr<column> interleave_columns(table_view const& input,
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
