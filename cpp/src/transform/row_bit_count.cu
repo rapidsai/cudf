@@ -561,7 +561,7 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
-  return segmented_row_bit_count(t, 1, stream, mr);
+  return detail::segmented_row_bit_count(t, 1, stream, mr);
 }
 
 }  // namespace detail
