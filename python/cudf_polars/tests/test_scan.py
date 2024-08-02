@@ -154,7 +154,8 @@ def test_scan_csv_column_renames_projection_schema(tmp_path):
         ("test*.csv", False),
     ],
 )
-def test_scan_csv_multi(tmp_path, filename, glob):
+@pytest.mark.parametrize("n_rows", [3, None])
+def test_scan_csv_multi(tmp_path, filename, glob, n_rows):
     with (tmp_path / "test1.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2\n3,4,5""")
     with (tmp_path / "test2.csv").open("w") as f:
@@ -162,7 +163,7 @@ def test_scan_csv_multi(tmp_path, filename, glob):
     with (tmp_path / "test*.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2\n3,4,5""")
     os.chdir(tmp_path)
-    q = pl.scan_csv(filename, glob=glob)
+    q = pl.scan_csv(filename, glob=glob, n_rows=n_rows)
 
     assert_gpu_result_equal(q)
 

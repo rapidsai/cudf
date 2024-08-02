@@ -76,7 +76,7 @@ def _translate_ir(
 def _(
     node: pl_ir.PythonScan, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    if visitor.version()[0] == 1:  # pragma: no cover
+    if visitor.version()[0] == 1:
         # https://github.com/pola-rs/polars/pull/17939
         # Versioning can be dropped once polars 1.4 is lowest
         # supported version.
@@ -87,7 +87,7 @@ def _(
             if predicate is not None
             else None
         )
-    else:
+    else:  # pragma: no cover; CI tests 1.4
         # version == 0
         options = node.options
         predicate = (
@@ -108,13 +108,32 @@ def _(
         cloud_options = None
     else:
         reader_options, cloud_options = map(json.loads, options)
+    file_options = node.file_options
+    with_columns = file_options.with_columns
+    n_rows = file_options.n_rows
+    if n_rows is None:
+        n_rows = -1  # All rows
+        skip_rows = 0  # Don't skip
+    else:
+        if visitor.version() >= (1, 0):
+            # Polars 1.4 n_rows property is (skip, nrows)
+            skip_rows, n_rows = n_rows
+        else:  # pragma: no cover; CI tests 1.4
+            # Polars 1.3 n_rows property is integer, skip rows was
+            # always zero because it was not pushed down to reader.
+            skip_rows = 0
+
+    row_index = file_options.row_index
     return ir.Scan(
         schema,
         typ,
         reader_options,
         cloud_options,
         node.paths,
-        node.file_options,
+        with_columns,
+        skip_rows,
+        n_rows,
+        row_index,
         translate_named_expr(visitor, n=node.predicate)
         if node.predicate is not None
         else None,
