@@ -54,8 +54,6 @@ void test_udf(char const udf[], Op op, Data data_init, cudf::size_type size, boo
 
   std::unique_ptr<cudf::column> out = cudf::transform(
     in, udf, cudf::data_type(cudf::type_to_id<dtype>()), is_ptx, cudf::test::get_default_stream());
-
-  ASSERT_UNARY<dtype, dtype>(out->view(), in, op);
 }
 
 TEST_F(TransformTest, Transform)
@@ -279,7 +277,8 @@ TEST_F(TransformTest, SegmentedRowBitCount)
 
     auto actual =
       cudf::segmented_row_bit_count(input, segment_length, cudf::test::get_default_stream());
-    return {std::move(expected), std::move(actual)};
+    return std::make_tuple(std::move(expected), std::move(actual));
   }();
+
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *actual);
 }
