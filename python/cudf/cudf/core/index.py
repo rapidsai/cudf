@@ -61,6 +61,7 @@ from cudf.utils.utils import _warn_no_dask_cudf, search_range
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
+    from datetime import tzinfo
 
 
 def ensure_index(index_like: Any) -> BaseIndex:
@@ -1680,7 +1681,7 @@ class DatetimeIndex(Index):
     copy : bool
         Make a copy of input.
     freq : str, optional
-        This is not yet supported
+        Frequency of the DatetimeIndex
     tz : pytz.timezone or dateutil.tz.tzfile
         This is not yet supported
     ambiguous : 'infer', bool-ndarray, 'NaT', default 'raise'
@@ -1846,6 +1847,210 @@ class DatetimeIndex(Index):
         return super().searchsorted(
             value, side=side, ascending=ascending, na_position=na_position
         )
+
+    def as_unit(self, unit: str, round_ok: bool = True) -> Self:
+        """
+        Convert to a dtype with the given unit resolution.
+
+        Currently not implemented.
+
+        Parameters
+        ----------
+        unit : {'s', 'ms', 'us', 'ns'}
+        round_ok : bool, default True
+            If False and the conversion requires rounding, raise ValueError.
+        """
+        raise NotImplementedError("as_unit is currently not implemented")
+
+    def mean(self, *, skipna: bool = True, axis: int | None = 0):
+        return self._column.mean(skipna=skipna)
+
+    def std(self, *, skipna: bool = True, axis: int | None = 0, ddof: int = 1):
+        return self._column.std(skipna=skipna, ddof=ddof)
+
+    def strftime(self, date_format: str) -> Index:
+        """
+        Convert to Index using specified date_format.
+
+        Return an Index of formatted strings specified by date_format, which
+        supports the same string format as the python standard library.
+
+        Parameters
+        ----------
+        date_format : str
+            Date format string (e.g. "%Y-%m-%d").
+        """
+        return Index._from_data(
+            {self.name: self._column.strftime(date_format)}
+        )
+
+    @property
+    def asi8(self) -> cupy.ndarray:
+        return self._column.astype("int64").values
+
+    @property
+    def inferred_freq(self) -> cudf.DateOffset | None:
+        raise NotImplementedError("inferred_freq is currently not implemented")
+
+    @property
+    def freq(self) -> cudf.DateOffset | None:
+        return self._freq
+
+    @freq.setter
+    def freq(self) -> None:
+        raise NotImplementedError("Setting freq is currently not supported.")
+
+    @property
+    def freqstr(self) -> str:
+        raise NotImplementedError("freqstr is currently not implemented")
+
+    @property
+    def resolution(self) -> str:
+        """
+        Returns day, hour, minute, second, millisecond or microsecond
+        """
+        raise NotImplementedError("resolution is currently not implemented")
+
+    @property
+    def unit(self) -> str:
+        return self._column.time_unit
+
+    @property
+    def tz(self) -> tzinfo | None:
+        """
+        Return the timezone.
+
+        Returns
+        -------
+        datetime.tzinfo or None
+            Returns None when the array is tz-naive.
+        """
+        return getattr(self.dtype, "tz", None)
+
+    @property
+    def tzinfo(self) -> tzinfo | None:
+        """
+        Alias for tz attribute
+        """
+        return self.tz
+
+    def to_pydatetime(self) -> np.ndarray:
+        """
+        Return an ndarray of ``datetime.datetime`` objects.
+
+        Returns
+        -------
+        numpy.ndarray
+            An ndarray of ``datetime.datetime`` objects.
+        """
+        return self.to_pandas().to_pydatetime()
+
+    def to_julian_date(self) -> Index:
+        return Index._from_data({self.name: self._column.to_julian_date()})
+
+    def to_period(self, freq) -> pd.PeriodIndex:
+        return self.to_pandas().to_period(freq=freq)
+
+    def normalize(self) -> Self:
+        """
+        Convert times to midnight.
+
+        Currently not implemented.
+        """
+        return type(self)._from_data({self.name: self._column.normalize()})
+
+    @property
+    def time(self) -> np.ndarray:
+        """
+        Returns numpy array of ``datetime.time`` objects.
+
+        The time part of the Timestamps.
+        """
+        return self.to_pandas().time
+
+    @property
+    def timetz(self) -> np.ndarray:
+        """
+        Returns numpy array of ``datetime.time`` objects with timezones.
+
+        The time part of the Timestamps.
+        """
+        return self.to_pandas().timetz
+
+    @property
+    def date(self) -> np.ndarray:
+        """
+        Returns numpy array of python ``datetime.date`` objects.
+
+        Namely, the date part of Timestamps without time and
+        timezone information.
+        """
+        return self.to_pandas().date
+
+    @property
+    def is_month_start(self) -> cupy.ndarray:
+        """
+        Booleans indicating if dates are the first day of the month.
+        """
+        return self._column.is_month_start.values
+
+    @property
+    def is_month_end(self) -> cupy.ndarray:
+        """
+        Booleans indicating if dates are the last day of the month.
+        """
+        return self._column.is_month_end.values
+
+    @property
+    def is_quarter_end(self) -> cupy.ndarray:
+        """
+        Booleans indicating if dates are the last day of the quarter.
+        """
+        return self._column.is_quarter_end.values
+
+    @property
+    def is_quarter_start(self) -> cupy.ndarray:
+        """
+        Booleans indicating if dates are the start day of the quarter.
+        """
+        return self._column.is_quarter_start.values
+
+    @property
+    def is_year_end(self) -> cupy.ndarray:
+        """
+        Booleans indicating if dates are the last day of the year.
+        """
+        return self._column.is_year_end.values
+
+    @property
+    def is_year_start(self) -> cupy.ndarray:
+        """
+        Booleans indicating if dates are the first day of the year.
+        """
+        return self._column.is_year_start.values
+
+    @property
+    def is_normalized(self) -> bool:
+        """
+        Returns True if all of the dates are at midnight ("no time")
+        """
+        return self._column.is_normalized
+
+    @property
+    def days_in_month(self) -> Index:
+        """
+        Get the total number of days in the month that the date falls on.
+        """
+        return Index._from_data({self.name: self._column.days_in_month})
+
+    daysinmonth = days_in_month
+
+    @property
+    def day_of_week(self) -> Index:
+        """
+        Get the day of week that the date falls on.
+        """
+        return Index._from_data({self.name: self._column.day_of_week})
 
     @property  # type: ignore
     @_performance_tracking
@@ -2554,6 +2759,98 @@ class TimedeltaIndex(Index):
             return pd.Timedelta(value)
         return value
 
+    def as_unit(self, unit: str, round_ok: bool = True) -> Self:
+        """
+        Convert to a dtype with the given unit resolution.
+
+        Currently not implemented.
+
+        Parameters
+        ----------
+        unit : {'s', 'ms', 'us', 'ns'}
+        round_ok : bool, default True
+            If False and the conversion requires rounding, raise ValueError.
+        """
+        raise NotImplementedError("as_unit is currently not implemented")
+
+    @property
+    def freq(self) -> cudf.DateOffset | None:
+        raise NotImplementedError("freq is currently not implemented")
+
+    @property
+    def freqstr(self) -> str:
+        raise NotImplementedError("freqstr is currently not implemented")
+
+    @property
+    def resolution(self) -> str:
+        """
+        Returns day, hour, minute, second, millisecond or microsecond
+        """
+        raise NotImplementedError("resolution is currently not implemented")
+
+    @property
+    def unit(self) -> str:
+        return self._column.time_unit
+
+    def to_pytimedelta(self) -> np.ndarray:
+        """
+        Return an ndarray of ``datetime.timedelta`` objects.
+
+        Returns
+        -------
+        numpy.ndarray
+            An ndarray of ``datetime.timedelta`` objects.
+        """
+        return self.to_pandas().to_pytimedelta()
+
+    @property
+    def asi8(self) -> cupy.ndarray:
+        return self._column.astype("int64").values
+
+    def sum(self, *, skipna: bool = True, axis: int | None = 0):
+        return self._column.sum(skipna=skipna)
+
+    def mean(self, *, skipna: bool = True, axis: int | None = 0):
+        return self._column.mean(skipna=skipna)
+
+    def median(self, *, skipna: bool = True, axis: int | None = 0):
+        return self._column.median(skipna=skipna)
+
+    def std(self, *, skipna: bool = True, axis: int | None = 0, ddof: int = 1):
+        return self._column.std(skipna=skipna, ddof=ddof)
+
+    def total_seconds(self) -> cupy.ndarray:
+        """
+        Return total duration of each element expressed in seconds.
+
+        This method is currently not implemented.
+        """
+        return self._column.total_seconds().values
+
+    def ceil(self, freq: str) -> Self:
+        """
+        Ceil to the specified resolution.
+
+        This method is currently not implemented.
+        """
+        return type(self)._from_data({self.name: self._column.ceil(freq)})
+
+    def floor(self, freq: str) -> Self:
+        """
+        Floor to the specified resolution.
+
+        This method is currently not implemented.
+        """
+        return type(self)._from_data({self.name: self._column.floor(freq)})
+
+    def round(self, freq: str) -> Self:
+        """
+        Round to the specified resolution.
+
+        This method is currently not implemented.
+        """
+        return type(self)._from_data({self.name: self._column.round(freq)})
+
     @property  # type: ignore
     @_performance_tracking
     def days(self):
@@ -3132,6 +3429,31 @@ class IntervalIndex(Index):
         )
         return IntervalIndex(interval_col, name=name, closed=closed)
 
+    @classmethod
+    def from_arrays(
+        cls,
+        left,
+        right,
+        closed: Literal["left", "right", "both", "neither"] = "right",
+        copy: bool = False,
+        dtype=None,
+    ) -> Self:
+        raise NotImplementedError("from_arrays is currently not supported.")
+
+    @classmethod
+    def from_tuples(
+        cls,
+        data,
+        closed: Literal["left", "right", "both", "neither"] = "right",
+        name=None,
+        copy: bool = False,
+        dtype=None,
+    ) -> IntervalIndex:
+        piidx = pd.IntervalIndex.from_tuples(
+            data, closed=closed, name=name, copy=copy, dtype=dtype
+        )
+        return cls.from_pandas(piidx)
+
     def __getitem__(self, index):
         raise NotImplementedError(
             "Getting a scalar from an IntervalIndex is not yet supported"
@@ -3145,6 +3467,104 @@ class IntervalIndex(Index):
 
     def _clean_nulls_from_index(self):
         return self
+
+    @property
+    def is_empty(self) -> cupy.ndarray:
+        """
+        Indicates if an interval is empty, meaning it contains no points.
+        """
+        return self._column.is_empty.values
+
+    @property
+    def is_non_overlapping_monotonic(self) -> bool:
+        """
+        Return a True if the IntervalIndex is non-overlapping and monotonic.
+        """
+        return self._column.is_non_overlapping_monotonic
+
+    @property
+    def is_overlapping(self) -> bool:
+        """
+        Return True if the IntervalIndex has overlapping intervals, else False.
+
+        Currently not implemented
+        """
+        return self._column.is_overlapping
+
+    @property
+    def length(self) -> Index:
+        """
+        Return an Index with entries denoting the length of each Interval.
+        """
+        return _index_from_data({None: self._column.length})
+
+    @property
+    def left(self) -> Index:
+        """
+        Return left bounds of the intervals in the IntervalIndex.
+
+        The left bounds of each interval in the IntervalIndex are
+        returned as an Index. The datatype of the left bounds is the
+        same as the datatype of the endpoints of the intervals.
+        """
+        return _index_from_data({None: self._column.left})
+
+    @property
+    def mid(self) -> Index:
+        """
+        Return the midpoint of each interval in the IntervalIndex as an Index.
+
+        Each midpoint is calculated as the average of the left and right bounds
+        of each interval.
+        """
+        return _index_from_data({None: self._column.mid})
+
+    @property
+    def right(self) -> Index:
+        """
+        Return right bounds of the intervals in the IntervalIndex.
+
+        The right bounds of each interval in the IntervalIndex are
+        returned as an Index. The datatype of the right bounds is the
+        same as the datatype of the endpoints of the intervals.
+        """
+        return _index_from_data({None: self._column.right})
+
+    def overlaps(self, other) -> cupy.ndarray:
+        """
+        Check elementwise if an Interval overlaps the values in the IntervalIndex.
+
+        Currently not supported.
+        """
+        return self._column.overlaps(other).values
+
+    def set_closed(
+        self, closed: Literal["left", "right", "both", "neither"]
+    ) -> Self:
+        """
+        Return an identical IntervalArray closed on the specified side.
+
+        Parameters
+        ----------
+        closed : {'left', 'right', 'both', 'neither'}
+            Whether the intervals are closed on the left-side, right-side, both
+            or neither.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.set_closed(closed)}
+        )
+
+    def to_tuples(self, na_tuple: bool = True) -> pd.Index:
+        """
+        Return an Index of tuples of the form (left, right).
+
+        Parameters
+        ----------
+        na_tuple : bool, default True
+            If ``True``, return ``NA`` as a tuple ``(nan, nan)``. If ``False``,
+            just return ``NA`` as ``nan``.
+        """
+        return self.to_pandas().to_tuples(na_tuple=na_tuple)
 
 
 @_performance_tracking
@@ -3391,9 +3811,11 @@ def _get_nearest_indexer(
     return indexer
 
 
-def _validate_freq(freq: Any) -> cudf.DateOffset:
+def _validate_freq(freq: Any) -> cudf.DateOffset | None:
     if isinstance(freq, str):
         return cudf.DateOffset._from_freqstr(freq)
+    elif freq is None:
+        return freq
     elif freq is not None and not isinstance(freq, cudf.DateOffset):
         raise ValueError(f"Invalid frequency: {freq}")
     return cast(cudf.DateOffset, freq)
