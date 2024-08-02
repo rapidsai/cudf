@@ -5,6 +5,7 @@ files:
     matrix:
       cuda: ["11.8", "12.5"]
       arch: [x86_64]
+    # TODO: add pylibcudf here?
     includes:
       - build_base
       - build_all
@@ -103,6 +104,7 @@ files:
       - run_cudf
       - pyarrow_run
       - depends_on_cupy
+      - depends_on_pylibcudf
   py_test_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -177,7 +179,7 @@ files:
       table: project
     includes:
       - run_cudf_polars
-      - depends_on_cudf
+      - depends_on_pylibcudf
   py_test_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -808,6 +810,31 @@ dependencies:
         packages:
           - dask-cuda==24.10.*,>=0.0.0a0
           - *numba
+  depends_on_pylibcudf:
+    common:
+      - output_types: conda
+        packages:
+          - &pylibcudf_unsuffixed pylibcudf==24.10.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          # This index is needed for rmm, cubinlinker, ptxcompiler.
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - pylibcudf-cu12==24.10.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
+              - pylibcudf-cu11==24.10.*,>=0.0.0a0
+          - {matrix: null, packages: [*pylibcudf_unsuffixed]}
   depends_on_cudf:
     common:
       - output_types: conda
