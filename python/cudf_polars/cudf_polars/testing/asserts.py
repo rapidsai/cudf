@@ -5,12 +5,11 @@
 
 from __future__ import annotations
 
-from functools import partial
 from typing import TYPE_CHECKING
 
+from polars import GPUEngine
 from polars.testing.asserts import assert_frame_equal
 
-from cudf_polars.callback import execute_with_cudf
 from cudf_polars.dsl.translate import translate_ir
 
 if TYPE_CHECKING:
@@ -81,17 +80,13 @@ def assert_gpu_result_equal(
         collect_kwargs = {}
     final_polars_collect_kwargs = collect_kwargs.copy()
     final_cudf_collect_kwargs = collect_kwargs.copy()
-    if polars_collect_kwargs is not None:
+    if polars_collect_kwargs is not None:  # pragma: no cover; not currently used
         final_polars_collect_kwargs.update(polars_collect_kwargs)
-    if cudf_collect_kwargs is not None:  # pragma: no cover
-        # exclude from coverage since not used ATM
-        # but this is probably still useful
+    if cudf_collect_kwargs is not None:  # pragma: no cover; not currently used
         final_cudf_collect_kwargs.update(cudf_collect_kwargs)
     expect = lazydf.collect(**final_polars_collect_kwargs)
-    got = lazydf.collect(
-        **final_cudf_collect_kwargs,
-        post_opt_callback=partial(execute_with_cudf, raise_on_fail=True),
-    )
+    engine = GPUEngine(raise_on_fail=True)
+    got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)
     assert_frame_equal(
         expect,
         got,
