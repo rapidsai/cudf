@@ -21,10 +21,9 @@ from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 import pyarrow as pa
+import pylibcudf as plc
 
 from polars.polars import _expr_nodes as pl_expr
-
-import pylibcudf as plc
 
 from cudf_polars.containers import Column, NamedColumn
 from cudf_polars.utils import dtypes, sorting

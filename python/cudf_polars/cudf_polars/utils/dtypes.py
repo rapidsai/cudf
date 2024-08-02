@@ -8,11 +8,10 @@ from __future__ import annotations
 from functools import cache
 
 import pyarrow as pa
+import pylibcudf as plc
 from typing_extensions import assert_never
 
 import polars as pl
-
-import pylibcudf as plc
 
 __all__ = ["from_polars", "downcast_arrow_lists"]
 

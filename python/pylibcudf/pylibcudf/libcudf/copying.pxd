@@ -11,7 +11,6 @@ from pylibcudf.libcudf.column.column_view cimport (
     column_view,
     mutable_column_view,
 )
-from pylibcudf.libcudf.exception_handler cimport cudf_exception_handler
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
