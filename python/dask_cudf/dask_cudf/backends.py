@@ -64,7 +64,10 @@ def _nonempty_index(idx):
         values = cudf.core.column.as_column(data)
         return cudf.DatetimeIndex(values, name=idx.name)
     elif isinstance(idx, cudf.CategoricalIndex):
-        return idx.take([0, 0])
+        values = cudf.core.column.build_categorical_column(
+            categories=idx.categories, codes=[0, 0], ordered=idx.ordered
+        )
+        return cudf.CategoricalIndex(values, name=idx.name)
     elif isinstance(idx, cudf.MultiIndex):
         levels = [meta_nonempty(lev) for lev in idx.levels]
         codes = [[0, 0]] * idx.nlevels
@@ -154,8 +157,9 @@ def meta_nonempty_cudf(x):
     columns_with_dtype = dict()
     res = {}
     for col_label, col in x._data.items():
+        dtype = col.dtype
         if isinstance(
-            col.dtype,
+            dtype,
             (cudf.ListDtype, cudf.StructDtype, cudf.CategoricalDtype),
         ):
             # 1. Not possible to hash and store list & struct types
@@ -164,10 +168,10 @@ def meta_nonempty_cudf(x):
             # 2. Not possible to hash `category` types as
             #    they often contain an underlying types to them.
             res[col_label] = _get_non_empty_data(col)
-        elif (meta_col := columns_with_dtype.get(col.dtype)) is not None:
-            res[col_label] = meta_col
         else:
-            columns_with_dtype[col.dtype] = _get_non_empty_data(col)
+            if dtype not in columns_with_dtype:
+                columns_with_dtype[dtype] = _get_non_empty_data(col)
+            res[col_label] = columns_with_dtype[dtype]
 
     return cudf.DataFrame._from_data(res, index=idx)
 
