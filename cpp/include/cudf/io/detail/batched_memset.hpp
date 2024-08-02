@@ -14,8 +14,18 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/resource_ref.hpp>
+
+#include <cub/device/device_copy.cuh>
+#include <cuda/functional>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/transform.h>
 
 namespace CUDF_EXPORT cudf {
 namespace io::detail {
@@ -32,9 +42,43 @@ namespace io::detail {
  *
  * @return The data in device spans all set to value
  */
-void batched_memset(std::vector<cudf::device_span<uint64_t>>& bufs,
-                    uint64_t const value,
-                    rmm::cuda_stream_view stream);
+template <typename T>
+void batched_memset(std::vector<cudf::device_span<T>>& bufs,
+                    T const value,
+                    rmm::cuda_stream_view stream)
+{
+  // define task and bytes parameters
+  auto const num_bufs = bufs.size();
+
+  // copy bufs into device memory and then get sizes
+  auto gpu_bufs =
+    cudf::detail::make_device_uvector_async(bufs, stream, rmm::mr::get_current_device_resource());
+
+  // get a vector with the sizes of all buffers
+  auto sizes = cudf::detail::make_counting_transform_iterator(
+    static_cast<std::size_t>(0),
+    cuda::proclaim_return_type<std::size_t>(
+      [gpu_bufs = gpu_bufs.data()] __device__(std::size_t i) { return gpu_bufs[i].size(); }));
+
+  // get an iterator with a constant value to memset
+  auto iter_in = thrust::make_constant_iterator(thrust::make_constant_iterator(value));
+
+  // get an iterator pointing to each device span
+  auto iter_out = thrust::make_transform_iterator(
+    thrust::counting_iterator<std::size_t>(0),
+    cuda::proclaim_return_type<T*>(
+      [gpu_bufs = gpu_bufs.data()] __device__(std::size_t i) { return gpu_bufs[i].data(); }));
+
+  size_t temp_storage_bytes = 0;
+
+  cub::DeviceCopy::Batched(nullptr, temp_storage_bytes, iter_in, iter_out, sizes, num_bufs, stream);
+
+  rmm::device_buffer d_temp_storage(
+    temp_storage_bytes, stream, rmm::mr::get_current_device_resource());
+
+  cub::DeviceCopy::Batched(
+    d_temp_storage.data(), temp_storage_bytes, iter_in, iter_out, sizes, num_bufs, stream);
+}
 
 }  // namespace io::detail
 }  // namespace CUDF_EXPORT cudf

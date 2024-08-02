@@ -44,9 +44,9 @@ namespace detail {
  *
  * @param type The intended data type to populate
  * @param size The number of elements to be represented by the mask
+ * @param memset_data Defines whether data should be memset to 0
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned device_buffer
- * @param memset_data Defines whether data should be memset to 0
  *
  * @return `rmm::device_buffer` Device buffer allocation
  */

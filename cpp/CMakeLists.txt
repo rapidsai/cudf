@@ -441,7 +441,6 @@ add_library(
   src/io/text/multibyte_split.cu
   src/io/utilities/arrow_io_source.cpp
   src/io/utilities/base64_utilities.cpp
-  src/io/utilities/batched_memset.cu
   src/io/utilities/column_buffer.cpp
   src/io/utilities/column_buffer_strings.cu
   src/io/utilities/config_utils.cpp

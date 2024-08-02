@@ -77,7 +77,7 @@ TEST(MultiBufferTestIntegral, BasicTest1)
     });
 
   // Function Call
-  cudf::io::detail::batched_memset(memset_bufs, 0UL, stream);
+  cudf::io::detail::batched_memset(memset_bufs, uint64_t{0}, stream);
 
   // Set all buffer regions to 0 for expected comparison
   std::for_each(
