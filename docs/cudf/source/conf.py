@@ -372,7 +372,7 @@ def _generate_namespaces(namespaces):
 _all_namespaces = _generate_namespaces(
     {
         # Note that io::datasource is actually a nested class
-        "cudf": {"io", "io::datasource", "strings", "ast", "ast::expression"},
+        "cudf": {"io", "io::datasource", "strings", "ast", "ast::expression", "io::text"},
         "numeric": {},
         "nvtext": {},
     }
@@ -556,6 +556,7 @@ nitpick_ignore = [
     ("py:class", "Dtype"),
     # The following are erroneously warned due to
     # https://github.com/sphinx-doc/sphinx/issues/11225
+    ("py:obj", "cudf.Index.values_host"),
     ("py:class", "pa.Array"),
     ("py:class", "ScalarLike"),
     ("py:class", "ParentType"),

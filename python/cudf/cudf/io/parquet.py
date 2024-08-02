@@ -15,6 +15,7 @@ from uuid import uuid4
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pyarrow import dataset as ds
 
 import cudf
@@ -22,7 +23,8 @@ from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import ioutils
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
+from cudf.utils.utils import maybe_filter_deprecation
 
 BYTE_SIZES = {
     "kb": 1000,
@@ -50,7 +52,7 @@ BYTE_SIZES = {
 }
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _write_parquet(
     df,
     paths,
@@ -73,6 +75,7 @@ def _write_parquet(
     column_encoding=None,
     column_type_length=None,
     output_as_binary=None,
+    write_arrow_schema=True,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -110,6 +113,7 @@ def _write_parquet(
         "column_encoding": column_encoding,
         "column_type_length": column_type_length,
         "output_as_binary": output_as_binary,
+        "write_arrow_schema": write_arrow_schema,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -130,7 +134,7 @@ def _write_parquet(
 
 # Logic chosen to match: https://arrow.apache.org/
 # docs/_modules/pyarrow/parquet.html#write_to_dataset
-@_cudf_nvtx_annotate
+@_performance_tracking
 def write_to_dataset(
     df,
     root_path,
@@ -154,6 +158,7 @@ def write_to_dataset(
     column_encoding=None,
     column_type_length=None,
     output_as_binary=None,
+    store_schema=False,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -242,6 +247,9 @@ def write_to_dataset(
     output_as_binary : set, optional, default None
         If a column name is present in the set, that column will be output as
         unannotated binary, rather than the default 'UTF-8'.
+    store_schema : bool, default False
+        If ``True``, enable computing and writing arrow schema to Parquet
+        file footer's key-value metadata section for faithful round-tripping.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
@@ -285,6 +293,7 @@ def write_to_dataset(
             column_encoding=column_encoding,
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
+            store_schema=store_schema,
         )
 
     else:
@@ -312,13 +321,14 @@ def write_to_dataset(
             column_encoding=column_encoding,
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
+            store_schema=store_schema,
         )
 
     return metadata
 
 
 @ioutils.doc_read_parquet_metadata()
-@_cudf_nvtx_annotate
+@_performance_tracking
 def read_parquet_metadata(filepath_or_buffer):
     """{docstring}"""
     # Multiple sources are passed as a list. If a single source is passed,
@@ -342,7 +352,7 @@ def read_parquet_metadata(filepath_or_buffer):
             path_or_data=source,
             compression=None,
             fs=fs,
-            use_python_file_object=True,
+            use_python_file_object=None,
             open_file_options=None,
             storage_options=None,
             bytes_per_thread=None,
@@ -360,7 +370,7 @@ def read_parquet_metadata(filepath_or_buffer):
     return libparquet.read_parquet_metadata(filepaths_or_buffers)
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _process_dataset(
     paths,
     fs,
@@ -515,7 +525,7 @@ def _process_dataset(
 
 
 @ioutils.doc_read_parquet()
-@_cudf_nvtx_annotate
+@_performance_tracking
 def read_parquet(
     filepath_or_buffer,
     engine="cudf",
@@ -524,7 +534,7 @@ def read_parquet(
     filters=None,
     row_groups=None,
     use_pandas_metadata=True,
-    use_python_file_object=True,
+    use_python_file_object=None,
     categorical_partitions=True,
     open_file_options=None,
     bytes_per_thread=None,
@@ -607,6 +617,9 @@ def read_parquet(
             row_groups=row_groups,
             fs=fs,
         )
+    have_nativefile = any(
+        isinstance(source, pa.NativeFile) for source in filepath_or_buffer
+    )
     for source in filepath_or_buffer:
         tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
@@ -654,19 +667,26 @@ def read_parquet(
         )
 
     # Convert parquet data to a cudf.DataFrame
-    df = _parquet_to_frame(
-        filepaths_or_buffers,
-        engine,
-        *args,
-        columns=columns,
-        row_groups=row_groups,
-        use_pandas_metadata=use_pandas_metadata,
-        partition_keys=partition_keys,
-        partition_categories=partition_categories,
-        dataset_kwargs=dataset_kwargs,
-        **kwargs,
-    )
 
+    # Don't want to warn if use_python_file_object causes us to get
+    # a NativeFile (there is a separate deprecation warning for that)
+    with maybe_filter_deprecation(
+        not have_nativefile,
+        message="Support for reading pyarrow's NativeFile is deprecated",
+        category=FutureWarning,
+    ):
+        df = _parquet_to_frame(
+            filepaths_or_buffers,
+            engine,
+            *args,
+            columns=columns,
+            row_groups=row_groups,
+            use_pandas_metadata=use_pandas_metadata,
+            partition_keys=partition_keys,
+            partition_categories=partition_categories,
+            dataset_kwargs=dataset_kwargs,
+            **kwargs,
+        )
     # Apply filters row-wise (if any are defined), and return
     df = _apply_post_filters(df, filters)
     if projected_columns:
@@ -785,7 +805,7 @@ def _apply_post_filters(
         return df
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _parquet_to_frame(
     paths_or_buffers,
     *args,
@@ -885,7 +905,7 @@ def _parquet_to_frame(
         return dfs[0]
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _read_parquet(
     filepaths_or_buffers,
     engine,
@@ -908,13 +928,13 @@ def _read_parquet(
                 "cudf engine doesn't support the "
                 f"following positional arguments: {list(args)}"
             )
-        if cudf.get_option("mode.pandas_compatible"):
-            return libparquet.ParquetReader(
+        if cudf.get_option("io.parquet.low_memory"):
+            return libparquet.read_parquet_chunked(
                 filepaths_or_buffers,
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
-            ).read()
+            )
         else:
             return libparquet.read_parquet(
                 filepaths_or_buffers,
@@ -941,7 +961,7 @@ def _read_parquet(
 
 
 @ioutils.doc_to_parquet()
-@_cudf_nvtx_annotate
+@_performance_tracking
 def to_parquet(
     df,
     path,
@@ -968,6 +988,7 @@ def to_parquet(
     column_encoding=None,
     column_type_length=None,
     output_as_binary=None,
+    store_schema=False,
     *args,
     **kwargs,
 ):
@@ -1023,6 +1044,7 @@ def to_parquet(
                 column_encoding=column_encoding,
                 column_type_length=column_type_length,
                 output_as_binary=output_as_binary,
+                store_schema=store_schema,
             )
 
         partition_info = (
@@ -1055,6 +1077,7 @@ def to_parquet(
             column_encoding=column_encoding,
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
+            write_arrow_schema=store_schema,
         )
 
     else:
@@ -1107,7 +1130,7 @@ def _get_estimated_file_size(df):
     return file_size
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _get_partitioned(
     df,
     root_path,
@@ -1145,7 +1168,7 @@ def _get_partitioned(
     return full_paths, metadata_file_paths, grouped_df, part_offsets, filename
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _get_groups_and_offsets(
     df,
     partition_cols,
@@ -1305,7 +1328,7 @@ class ParquetDatasetWriter:
 
     """
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __init__(
         self,
         path,
@@ -1355,7 +1378,7 @@ class ParquetDatasetWriter:
 
         self._file_sizes: dict[str, int] = {}
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def write_table(self, df):
         """
         Write a dataframe to the file/dataset
@@ -1486,7 +1509,7 @@ class ParquetDatasetWriter:
             self.path_cw_map.update({k: new_cw_idx for k in new_paths})
             self._chunked_writers[-1][0].write_table(grouped_df, part_info)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def close(self, return_metadata=False):
         """
         Close all open files and optionally return footer metadata as a binary

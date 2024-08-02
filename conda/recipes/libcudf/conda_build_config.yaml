@@ -17,7 +17,7 @@ c_stdlib_version:
   - "2.17"
 
 cmake_version:
-  - ">=3.26.4"
+  - ">=3.26.4,!=3.30.0"
 
 libarrow_version:
   - "==16.1.0"
@@ -30,6 +30,9 @@ librdkafka_version:
 
 fmt_version:
   - ">=10.1.1,<11"
+
+flatbuffers_version:
+  - "=24.3.25"
 
 spdlog_version:
   - ">=1.12.0,<1.13"

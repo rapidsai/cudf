@@ -8,6 +8,9 @@ from cudf._lib.pylibcudf.libcudf.column.column_view cimport (
     column_view,
     mutable_column_view,
 )
+from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
+    lists_column_view,
+)
 from cudf._lib.pylibcudf.libcudf.types cimport bitmask_type, size_type
 
 from .gpumemoryview cimport gpumemoryview
@@ -47,6 +50,7 @@ cdef class Column:
     cpdef gpumemoryview null_mask(self)
     cpdef list children(self)
     cpdef Column copy(self)
+    cpdef Column with_mask(self, gpumemoryview, size_type)
 
     cpdef ListColumnView list_view(self)
 
@@ -56,3 +60,4 @@ cdef class ListColumnView:
     cdef Column _column
     cpdef child(self)
     cpdef offsets(self)
+    cdef lists_column_view view(self) nogil

@@ -19,6 +19,7 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -26,7 +27,7 @@
 
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 //! Inner interfaces and implementations
 namespace detail {
 /**
@@ -48,4 +49,4 @@ std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
                                    rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

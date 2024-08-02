@@ -6,6 +6,7 @@ import functools
 import os
 import traceback
 import warnings
+from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
@@ -159,8 +160,9 @@ def _external_only_api(func, alternative=""):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         # Check the immediately preceding frame to see if it's in cudf.
-        frame, lineno = next(traceback.walk_stack(None))
-        fn = frame.f_code.co_filename
+        pre_frame = traceback.extract_stack(limit=2)[0]
+        fn = pre_frame.filename
+        lineno = pre_frame.lineno
         if _cudf_root in fn and _tests_root not in fn:
             raise RuntimeError(
                 f"External-only API called in {fn} at line {lineno}. "
@@ -402,3 +404,28 @@ def _all_bools_with_nulls(lhs, rhs, bool_fill_value):
     if result_mask is not None:
         result_col = result_col.set_mask(result_mask.as_mask())
     return result_col
+
+
+@contextmanager
+def maybe_filter_deprecation(
+    condition: bool, message: str, category: type[Warning]
+):
+    """Conditionally filter a warning category.
+
+    Parameters
+    ----------
+    condition
+        If true, filter the warning
+    message
+        Message to match, passed to :func:`warnings.filterwarnings`
+    category
+        Category of warning, passed to :func:`warnings.filterwarnings`
+    """
+    with warnings.catch_warnings():
+        if condition:
+            warnings.filterwarnings(
+                "ignore",
+                message,
+                category=category,
+            )
+        yield

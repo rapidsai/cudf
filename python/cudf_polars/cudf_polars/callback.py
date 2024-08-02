@@ -5,10 +5,14 @@
 
 from __future__ import annotations
 
+import os
+import warnings
 from functools import partial
 from typing import TYPE_CHECKING
 
 import nvtx
+
+from polars.exceptions import PerformanceWarning
 
 from cudf_polars.dsl.translate import translate_ir
 
@@ -34,7 +38,12 @@ def _callback(
         return ir.evaluate(cache={}).to_polars()
 
 
-def execute_with_cudf(nt: NodeTraverser, *, raise_on_fail: bool = False) -> None:
+def execute_with_cudf(
+    nt: NodeTraverser,
+    *,
+    raise_on_fail: bool = False,
+    exception: type[Exception] | tuple[type[Exception], ...] = Exception,
+) -> None:
     """
     A post optimization callback that attempts to execute the plan with cudf.
 
@@ -47,11 +56,21 @@ def execute_with_cudf(nt: NodeTraverser, *, raise_on_fail: bool = False) -> None
         Should conversion raise an exception rather than continuing
         without setting a callback.
 
+    exception
+        Optional exception, or tuple of exceptions, to catch during
+        translation. Defaults to ``Exception``.
+
     The NodeTraverser is mutated if the libcudf executor can handle the plan.
     """
     try:
         with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
             nt.set_udf(partial(_callback, translate_ir(nt)))
-    except NotImplementedError:
+    except exception as e:
+        if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
+            warnings.warn(
+                f"Query execution with GPU not supported, reason: {type(e)}: {e}",
+                PerformanceWarning,
+                stacklevel=2,
+            )
         if raise_on_fail:
             raise

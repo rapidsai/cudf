@@ -18,7 +18,6 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.labeling import label_bins
 from cudf._lib.search import search_sorted
-from cudf.api.types import is_datetime64_dtype, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals.timezones import (
     check_ambiguous_and_nonexistent,
@@ -178,43 +177,6 @@ def _resolve_mixed_dtypes(
     return cudf.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")
 
 
-def _get_datetime_format(col, dtype, time_unit):
-    format = _dtype_to_format_conversion.get(dtype.name, "%Y-%m-%d %H:%M:%S")
-    if format.endswith("f"):
-        sub_second_res_len = 3
-    else:
-        sub_second_res_len = 0
-
-    has_nanos = time_unit in {"ns"} and col.get_dt_field("nanosecond").any()
-    has_micros = (
-        time_unit in {"ns", "us"} and col.get_dt_field("microsecond").any()
-    )
-    has_millis = (
-        time_unit in {"ns", "us", "ms"}
-        and col.get_dt_field("millisecond").any()
-    )
-    has_seconds = col.get_dt_field("second").any()
-    has_minutes = col.get_dt_field("minute").any()
-    has_hours = col.get_dt_field("hour").any()
-    if sub_second_res_len:
-        if has_nanos:
-            # format should be intact and rest of the
-            # following conditions shouldn't execute.
-            pass
-        elif has_micros:
-            format = format[:-sub_second_res_len] + "%6f"
-        elif has_millis:
-            format = format[:-sub_second_res_len] + "%3f"
-        elif has_seconds or has_minutes or has_hours:
-            format = format[:-4]
-        else:
-            format = format.split(" ")[0]
-    else:
-        if not (has_seconds or has_minutes or has_hours):
-            format = format.split(" ")[0]
-    return format
-
-
 class DatetimeColumn(column.ColumnBase):
     """
     A Column implementation for Date-time types.
@@ -280,8 +242,8 @@ class DatetimeColumn(column.ColumnBase):
             return False
         elif ts.tzinfo is not None:
             ts = ts.tz_convert(None)
-        return ts.to_numpy().astype("int64") in self.as_numerical_column(
-            "int64"
+        return ts.to_numpy().astype("int64") in cast(
+            "cudf.core.column.NumericalColumn", self.astype("int64")
         )
 
     @functools.cached_property
@@ -381,9 +343,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def isocalendar(self) -> dict[str, ColumnBase]:
         return {
-            field: self.as_string_column("str", format=directive).astype(
-                "uint32"
-            )
+            field: self.strftime(format=directive).astype("uint32")
             for field, directive in zip(
                 ["year", "week", "day"], ["%G", "%V", "%u"]
             )
@@ -445,17 +405,12 @@ class DatetimeColumn(column.ColumnBase):
 
         return NotImplemented
 
-    def as_datetime_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> DatetimeColumn:
-        dtype = cudf.dtype(dtype)
+    def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
-    def as_timedelta_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.TimeDeltaColumn":
+    def as_timedelta_column(self, dtype: Dtype) -> None:  # type: ignore[override]
         raise TypeError(
             f"cannot astype a datetimelike from {self.dtype} to {dtype}"
         )
@@ -472,40 +427,69 @@ class DatetimeColumn(column.ColumnBase):
         )
         return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
-        if format is None:
-            format = _dtype_to_format_conversion.get(
-                self.dtype.name, "%Y-%m-%d %H:%M:%S"
+    def strftime(self, format: str) -> cudf.core.column.StringColumn:
+        if len(self) == 0:
+            return cast(
+                cudf.core.column.StringColumn,
+                column.column_empty(0, dtype="object", masked=False),
             )
-            if cudf.get_option("mode.pandas_compatible"):
-                format = _get_datetime_format(
-                    self, dtype=self.dtype, time_unit=self.time_unit
-                )
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
             names = cudf.core.column.column_empty(
                 0, dtype="object", masked=False
             )
-        if len(self) > 0:
-            return string._datetime_to_str_typecast_functions[
-                cudf.dtype(self.dtype)
-            ](self, format, names)
-        else:
-            return cast(
-                "cudf.core.column.StringColumn",
-                column.column_empty(0, dtype="object", masked=False),
-            )
+        return string._datetime_to_str_typecast_functions[self.dtype](
+            self, format, names
+        )
 
-    def mean(
-        self, skipna=None, min_count: int = 0, dtype=np.float64
-    ) -> ScalarLike:
+    def as_string_column(self) -> cudf.core.column.StringColumn:
+        format = _dtype_to_format_conversion.get(
+            self.dtype.name, "%Y-%m-%d %H:%M:%S"
+        )
+        if cudf.get_option("mode.pandas_compatible"):
+            if format.endswith("f"):
+                sub_second_res_len = 3
+            else:
+                sub_second_res_len = 0
+
+            has_nanos = (
+                self.time_unit in {"ns"}
+                and self.get_dt_field("nanosecond").any()
+            )
+            has_micros = (
+                self.time_unit in {"ns", "us"}
+                and self.get_dt_field("microsecond").any()
+            )
+            has_millis = (
+                self.time_unit in {"ns", "us", "ms"}
+                and self.get_dt_field("millisecond").any()
+            )
+            has_seconds = self.get_dt_field("second").any()
+            has_minutes = self.get_dt_field("minute").any()
+            has_hours = self.get_dt_field("hour").any()
+            if sub_second_res_len:
+                if has_nanos:
+                    # format should be intact and rest of the
+                    # following conditions shouldn't execute.
+                    pass
+                elif has_micros:
+                    format = format[:-sub_second_res_len] + "%6f"
+                elif has_millis:
+                    format = format[:-sub_second_res_len] + "%3f"
+                elif has_seconds or has_minutes or has_hours:
+                    format = format[:-4]
+                else:
+                    format = format.split(" ")[0]
+            elif not (has_seconds or has_minutes or has_hours):
+                format = format.split(" ")[0]
+        return self.strftime(format)
+
+    def mean(self, skipna=None, min_count: int = 0) -> ScalarLike:
         return pd.Timestamp(
-            self.as_numerical_column("int64").mean(
-                skipna=skipna, min_count=min_count, dtype=dtype
-            ),
+            cast(
+                "cudf.core.column.NumericalColumn", self.astype("int64")
+            ).mean(skipna=skipna, min_count=min_count),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
@@ -513,19 +497,20 @@ class DatetimeColumn(column.ColumnBase):
         self,
         skipna: bool | None = None,
         min_count: int = 0,
-        dtype: Dtype = np.float64,
         ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical_column("int64").std(
-                skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
+            cast("cudf.core.column.NumericalColumn", self.astype("int64")).std(
+                skipna=skipna, min_count=min_count, ddof=ddof
             )
             * _unit_to_nanoseconds_conversion[self.time_unit],
         ).as_unit(self.time_unit)
 
     def median(self, skipna: bool | None = None) -> pd.Timestamp:
         return pd.Timestamp(
-            self.as_numerical_column("int64").median(skipna=skipna),
+            cast(
+                "cudf.core.column.NumericalColumn", self.astype("int64")
+            ).median(skipna=skipna),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
@@ -534,18 +519,18 @@ class DatetimeColumn(column.ColumnBase):
             raise TypeError(
                 f"cannot perform cov with types {self.dtype}, {other.dtype}"
             )
-        return self.as_numerical_column("int64").cov(
-            other.as_numerical_column("int64")
-        )
+        return cast(
+            "cudf.core.column.NumericalColumn", self.astype("int64")
+        ).cov(cast("cudf.core.column.NumericalColumn", other.astype("int64")))
 
     def corr(self, other: DatetimeColumn) -> float:
         if not isinstance(other, DatetimeColumn):
             raise TypeError(
                 f"cannot perform corr with types {self.dtype}, {other.dtype}"
             )
-        return self.as_numerical_column("int64").corr(
-            other.as_numerical_column("int64")
-        )
+        return cast(
+            "cudf.core.column.NumericalColumn", self.astype("int64")
+        ).corr(cast("cudf.core.column.NumericalColumn", other.astype("int64")))
 
     def quantile(
         self,
@@ -554,7 +539,7 @@ class DatetimeColumn(column.ColumnBase):
         exact: bool,
         return_scalar: bool,
     ) -> ColumnBase:
-        result = self.as_numerical_column("int64").quantile(
+        result = self.astype("int64").quantile(
             q=q,
             interpolation=interpolation,
             exact=exact,
@@ -576,10 +561,8 @@ class DatetimeColumn(column.ColumnBase):
 
         # We check this on `other` before reflection since we already know the
         # dtype of `self`.
-        other_is_timedelta = is_timedelta64_dtype(other.dtype)
-        other_is_datetime64 = not other_is_timedelta and is_datetime64_dtype(
-            other.dtype
-        )
+        other_is_timedelta = other.dtype.kind == "m"
+        other_is_datetime64 = other.dtype.kind == "M"
         lhs, rhs = (other, self) if reflect else (self, other)
         out_dtype = None
 
@@ -643,20 +626,20 @@ class DatetimeColumn(column.ColumnBase):
     def indices_of(
         self, value: ScalarLike
     ) -> cudf.core.column.NumericalColumn:
-        value = column.as_column(
-            pd.to_datetime(value), dtype=self.dtype
-        ).as_numerical_column("int64")
-        return self.as_numerical_column("int64").indices_of(value)
+        value = (
+            pd.to_datetime(value).to_numpy().astype(self.dtype).astype("int64")
+        )
+        return self.astype("int64").indices_of(value)
 
     @property
     def is_unique(self) -> bool:
-        return self.as_numerical_column("int64").is_unique
+        return self.astype("int64").is_unique
 
     def isin(self, values: Sequence) -> ColumnBase:
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        if np.issubdtype(to_dtype, np.datetime64):
+        if to_dtype.kind == "M":  # type: ignore[union-attr]
             to_res, _ = np.datetime_data(to_dtype)
             self_res, _ = np.datetime_data(self.dtype)
 
@@ -870,10 +853,11 @@ class DatetimeTZColumn(DatetimeColumn):
         offsets_from_utc = offsets.take(indices, nullify=True)
         return self + offsets_from_utc
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
-        return self._local_time.as_string_column(dtype, format)
+    def strftime(self, format: str) -> cudf.core.column.StringColumn:
+        return self._local_time.strftime(format)
+
+    def as_string_column(self) -> cudf.core.column.StringColumn:
+        return self._local_time.as_string_column()
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(

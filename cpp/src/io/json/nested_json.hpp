@@ -21,6 +21,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/resource_ref.hpp>
 
@@ -28,10 +29,12 @@
 #include <vector>
 
 // Forward declaration of parse_options from parsing_utils.cuh
-namespace cudf::io {
+namespace cudf {
+namespace io {
+
 struct parse_options;
-}
-namespace cudf::io::json {
+
+namespace json {
 
 /**
  * @brief Struct that encapsulate all information of a columnar tree representation.
@@ -201,6 +204,7 @@ namespace detail {
  * @param[in] delimiter Specifies the delimiter to use as separator for JSON lines input
  * @param[in] stream The cuda stream to dispatch GPU kernels to
  */
+CUDF_EXPORT
 void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
                        stack_behavior_t stack_behavior,
@@ -216,6 +220,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
  * @param stream The cuda stream to dispatch GPU kernels to
  * @return Returns the post-processed token stream
  */
+CUDF_EXPORT
 std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> process_token_stream(
   device_span<PdaTokenT const> tokens,
   device_span<SymbolOffsetT const> token_indices,
@@ -247,6 +252,7 @@ void validate_token_stream(device_span<char const> d_input,
  * @return A tree representation of the input JSON string as vectors of node type, parent index,
  * level, begin index, and end index in the input JSON string
  */
+CUDF_EXPORT
 tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                     device_span<SymbolOffsetT const> token_indices,
                                     bool is_strict_nested_boundaries,
@@ -266,6 +272,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
  * @param mr Optional, resource with which to allocate
  * @return A tuple of the output column indices and the row offsets within each column for each node
  */
+CUDF_EXPORT
 std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 records_orient_tree_traversal(device_span<SymbolT const> d_input,
                               tree_meta_t const& d_tree,
@@ -330,6 +337,7 @@ cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& opt
  * @param mr Optional, resource with which to allocate
  * @return The data parsed from the given JSON input
  */
+CUDF_EXPORT
 table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
@@ -363,4 +371,6 @@ struct path_from_tree {
 
 }  // namespace detail
 
-}  // namespace cudf::io::json
+}  // namespace json
+}  // namespace io
+}  // namespace cudf

@@ -25,7 +25,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @copydoc cudf::drop_nulls(table_view const&, std::vector<size_type> const&,
@@ -88,8 +88,6 @@ std::unique_ptr<table> distinct(table_view const& input,
 
 /**
  * @copydoc cudf::stable_distinct
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> stable_distinct(table_view const& input,
                                        std::vector<size_type> const& keys,
@@ -150,4 +148,4 @@ cudf::size_type distinct_count(table_view const& input,
                                rmm::cuda_stream_view stream);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

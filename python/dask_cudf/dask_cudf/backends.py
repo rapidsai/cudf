@@ -43,7 +43,7 @@ from dask.utils import Dispatch, is_arraylike
 
 import cudf
 from cudf.api.types import is_string_dtype
-from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
 from .core import DataFrame, Index, Series
 
@@ -53,7 +53,7 @@ get_parallel_type.register(cudf.BaseIndex, lambda _: Index)
 
 
 @meta_nonempty.register(cudf.BaseIndex)
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _nonempty_index(idx):
     if isinstance(idx, cudf.core.index.RangeIndex):
         return cudf.core.index.RangeIndex(2, name=idx.name)
@@ -100,7 +100,7 @@ def _nest_list_data(data, leaf_type):
     return data
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _get_non_empty_data(s):
     if isinstance(s, cudf.core.column.CategoricalColumn):
         categories = (
@@ -147,7 +147,7 @@ def _get_non_empty_data(s):
 
 
 @meta_nonempty.register(cudf.Series)
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _nonempty_series(s, idx=None):
     if idx is None:
         idx = _nonempty_index(s.index)
@@ -157,7 +157,7 @@ def _nonempty_series(s, idx=None):
 
 
 @meta_nonempty.register(cudf.DataFrame)
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def meta_nonempty_cudf(x):
     idx = meta_nonempty(x.index)
     columns_with_dtype = dict()
@@ -182,18 +182,18 @@ def meta_nonempty_cudf(x):
 
 
 @make_meta_dispatch.register((cudf.Series, cudf.DataFrame))
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def make_meta_cudf(x, index=None):
     return x.head(0)
 
 
 @make_meta_dispatch.register(cudf.BaseIndex)
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def make_meta_cudf_index(x, index=None):
     return x[:0]
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _empty_series(name, dtype, index=None):
     if isinstance(dtype, str) and dtype == "category":
         return cudf.Series(
@@ -203,7 +203,7 @@ def _empty_series(name, dtype, index=None):
 
 
 @make_meta_obj.register(object)
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def make_meta_object_cudf(x, index=None):
     """Create an empty cudf object containing the desired metadata.
 
@@ -274,7 +274,7 @@ def make_meta_object_cudf(x, index=None):
 
 
 @concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.BaseIndex))
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def concat_cudf(
     dfs,
     axis=0,
@@ -299,13 +299,13 @@ def concat_cudf(
 @categorical_dtype_dispatch.register(
     (cudf.DataFrame, cudf.Series, cudf.BaseIndex)
 )
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def categorical_dtype_cudf(categories=None, ordered=False):
     return cudf.CategoricalDtype(categories=categories, ordered=ordered)
 
 
 @tolist_dispatch.register((cudf.Series, cudf.BaseIndex))
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def tolist_cudf(obj):
     return obj.to_pandas().tolist()
 
@@ -313,7 +313,7 @@ def tolist_cudf(obj):
 @is_categorical_dtype_dispatch.register(
     (cudf.Series, cudf.BaseIndex, cudf.CategoricalDtype, Series)
 )
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def is_categorical_dtype_cudf(obj):
     return cudf.api.types._is_categorical_dtype(obj)
 
@@ -324,7 +324,7 @@ def get_grouper_cudf(obj):
 
 
 @percentile_lookup.register((cudf.Series, cp.ndarray, cudf.BaseIndex))
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def percentile_cudf(a, q, interpolation="linear"):
     # Cudf dispatch to the equivalent of `np.percentile`:
     # https://numpy.org/doc/stable/reference/generated/numpy.percentile.html
@@ -400,7 +400,7 @@ def _table_to_cudf(obj, table, self_destruct=None, **kwargs):
 
 
 @union_categoricals_dispatch.register((cudf.Series, cudf.BaseIndex))
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def union_categoricals_cudf(
     to_union, sort_categories=False, ignore_order=False
 ):
@@ -410,7 +410,7 @@ def union_categoricals_cudf(
 
 
 @hash_object_dispatch.register((cudf.DataFrame, cudf.Series))
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def hash_object_cudf(frame, index=True):
     if index:
         frame = frame.reset_index()
@@ -418,7 +418,7 @@ def hash_object_cudf(frame, index=True):
 
 
 @hash_object_dispatch.register(cudf.BaseIndex)
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def hash_object_cudf_index(ind, index=None):
     if isinstance(ind, cudf.MultiIndex):
         return ind.to_frame(index=False).hash_values()
@@ -428,7 +428,7 @@ def hash_object_cudf_index(ind, index=None):
 
 
 @group_split_dispatch.register((cudf.Series, cudf.DataFrame))
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def group_split_cudf(df, c, k, ignore_index=False):
     return dict(
         zip(
@@ -443,7 +443,7 @@ def group_split_cudf(df, c, k, ignore_index=False):
 
 
 @sizeof_dispatch.register(cudf.DataFrame)
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def sizeof_cudf_dataframe(df):
     return int(
         sum(col.memory_usage for col in df._data.columns)
@@ -452,7 +452,7 @@ def sizeof_cudf_dataframe(df):
 
 
 @sizeof_dispatch.register((cudf.Series, cudf.BaseIndex))
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def sizeof_cudf_series_index(obj):
     return obj.memory_usage()
 
@@ -667,17 +667,10 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
         )
 
     @staticmethod
-    def read_json(*args, engine="auto", **kwargs):
-        return _default_backend(
-            dd.read_json,
-            *args,
-            engine=(
-                partial(cudf.read_json, engine=engine)
-                if isinstance(engine, str)
-                else engine
-            ),
-            **kwargs,
-        )
+    def read_json(*args, **kwargs):
+        from dask_cudf.io.json import read_json as read_json_impl
+
+        return read_json_impl(*args, **kwargs)
 
     @staticmethod
     def read_orc(*args, **kwargs):

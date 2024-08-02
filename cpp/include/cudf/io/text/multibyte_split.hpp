@@ -27,9 +27,14 @@
 #include <memory>
 #include <optional>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 namespace text {
+/**
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
 
 /**
  * @brief Parsing options for multibyte_split.
@@ -79,6 +84,7 @@ struct parse_options {
  * @param source The source string
  * @param delimiter UTF-8 encoded string for which to find offsets in the source
  * @param options the parsing options to use (including byte range)
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Memory resource to use for the device memory allocation
  * @return The strings found by splitting the source by the delimiter within the relevant byte
  * range.
@@ -87,18 +93,31 @@ std::unique_ptr<cudf::column> multibyte_split(
   data_chunk_source const& source,
   std::string const& delimiter,
   parse_options options             = {},
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<cudf::column> multibyte_split(
+/**
+ * @brief Splits the source text into a strings column using a multiple byte delimiter.
+ *
+ * @deprecated Since 24.08
+ *
+ * @param source The source input data encoded in UTF-8
+ * @param delimiter UTF-8 encoded string for which to find offsets in the source
+ * @param byte_range The position and size within `source` to produce the column from
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Memory resource to use for the device memory allocation
+ * @return The strings found by splitting the source by the delimiter within the relevant byte
+ * range.
+ */
+[[deprecated]] std::unique_ptr<cudf::column> multibyte_split(
   data_chunk_source const& source,
   std::string const& delimiter,
   std::optional<byte_range_info> byte_range,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<cudf::column> multibyte_split(data_chunk_source const& source,
-                                              std::string const& delimiter,
-                                              rmm::device_async_resource_ref mr);
+/** @} */  // end of group
 
 }  // namespace text
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

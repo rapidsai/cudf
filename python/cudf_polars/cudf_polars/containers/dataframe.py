@@ -5,22 +5,23 @@
 
 from __future__ import annotations
 
+import itertools
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
+
+import pyarrow as pa
 
 import polars as pl
 
 import cudf._lib.pylibcudf as plc
 
 from cudf_polars.containers.column import NamedColumn
+from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence, Set
 
-    import pyarrow as pa
     from typing_extensions import Self
-
-    import cudf
 
     from cudf_polars.containers import Column
 
@@ -49,8 +50,16 @@ class DataFrame:
             self.table,
             [plc.interop.ColumnMetadata(name=c.name) for c in self.columns],
         )
-
-        return cast(pl.DataFrame, pl.from_arrow(table))
+        return cast(pl.DataFrame, pl.from_arrow(table)).with_columns(
+            *(
+                pl.col(c.name).set_sorted(
+                    descending=c.order == plc.types.Order.DESCENDING
+                )
+                if c.is_sorted
+                else pl.col(c.name)
+                for c in self.columns
+            )
+        )
 
     @cached_property
     def column_names_set(self) -> frozenset[str]:
@@ -73,12 +82,31 @@ class DataFrame:
         return 0 if len(self.columns) == 0 else self.table.num_rows()
 
     @classmethod
-    def from_cudf(cls, df: cudf.DataFrame) -> Self:
-        """Create from a cudf dataframe."""
+    def from_polars(cls, df: pl.DataFrame) -> Self:
+        """
+        Create from a polars dataframe.
+
+        Parameters
+        ----------
+        df
+            Polars dataframe to convert
+
+        Returns
+        -------
+        New dataframe representing the input.
+        """
+        table = df.to_arrow()
+        schema = table.schema
+        for i, field in enumerate(schema):
+            schema = schema.set(
+                i, pa.field(field.name, dtypes.downcast_arrow_lists(field.type))
+            )
+        # No-op if the schema is unchanged.
+        d_table = plc.interop.from_arrow(table.cast(schema))
         return cls(
             [
-                NamedColumn(c.to_pylibcudf(mode="read"), name)
-                for name, c in df._data.items()
+                NamedColumn(column, h_col.name).copy_metadata(h_col)
+                for column, h_col in zip(d_table.columns(), df.iter_columns())
             ]
         )
 
@@ -160,7 +188,10 @@ class DataFrame:
         -----
         If column names overlap, newer names replace older ones.
         """
-        return type(self)([*self.columns, *columns])
+        columns = list(
+            {c.name: c for c in itertools.chain(self.columns, columns)}.values()
+        )
+        return type(self)(columns)
 
     def discard_columns(self, names: Set[str]) -> Self:
         """Drop columns by name."""

@@ -21,7 +21,9 @@
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/prefetch.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -81,11 +83,11 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
   auto const total_bytes =
     cudf::detail::sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets, stream);
 
-  auto const threshold = get_offset64_threshold();
-  CUDF_EXPECTS(is_large_strings_enabled() || (total_bytes < threshold),
+  auto const threshold = cudf::strings::get_offset64_threshold();
+  CUDF_EXPECTS(cudf::strings::is_large_strings_enabled() || (total_bytes < threshold),
                "Size of output exceeds the column size limit",
                std::overflow_error);
-  if (total_bytes >= get_offset64_threshold()) {
+  if (total_bytes >= cudf::strings::get_offset64_threshold()) {
     // recompute as int64 offsets when above the threshold
     offsets_column = make_numeric_column(
       data_type{type_id::INT64}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
@@ -185,6 +187,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
 
   // Now build the chars column
   rmm::device_uvector<char> chars(bytes, stream, mr);
+  cudf::experimental::prefetch::detail::prefetch("gather", chars, stream);
   size_and_exec_fn.d_chars = chars.data();
 
   // Execute the function fn again to fill in the chars data.

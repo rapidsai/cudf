@@ -1,4 +1,4 @@
-# libcudf C++ Developer Guide
+# libcudf C++ Developer Guide {#DEVELOPER_GUIDE}
 
 This document serves as a guide for contributors to libcudf C++ code. Developers should also refer
 to these additional files for further documentation of libcudf best practices.
@@ -52,15 +52,36 @@ header file in `cudf/cpp/include/cudf/`. For example, `cudf/cpp/include/cudf/cop
 contains the APIs for functions related to copying from one column to another. Note the `.hpp`
 file extension used to indicate a C++ header file.
 
-Header files should use the `#pragma once` include guard.
+External/public libcudf C++ API header files need to mark all symbols inside of them with `CUDF_EXPORT`.
+This is done by placing the macro on the `namespace cudf` as seen below. Markup on namespace
+require them not to be nested, so the `cudf` namespace must be kept by itself.
+
+```c++
+
+#pragma once
+
+namespace CUDF_EXPORT cudf {
+namespace lists {
+
+...
+
+
+} // namespace lists
+} // namespace CUDF_EXPORT cudf
+
+```
+
 
 The naming of external API headers should be consistent with the name of the folder that contains
 the source files that implement the API. For example, the implementation of the APIs found in
 `cudf/cpp/include/cudf/copying.hpp` are located in `cudf/src/copying`. Likewise, the unit tests for
 the APIs reside in `cudf/tests/copying/`.
 
-Internal API headers containing `detail` namespace definitions that are used across translation
-units inside libcudf should be placed in `include/cudf/detail`.
+Internal API headers containing `detail` namespace definitions that are either used across translation
+units inside libcudf should be placed in `include/cudf/detail`. Just like the public C++ API headers, any
+internal C++ API header requires `CUDF_EXPORT` markup on the `cudf` namespace so that the functions can be tested.
+
+All headers in cudf should use `#pragma once` for include guards.
 
 ## File extensions
 
@@ -469,7 +490,7 @@ libcudf throws under different circumstances, see the [section on error handling
 
 # libcudf API and Implementation
 
-## Streams
+## Streams {#streams}
 
 libcudf is in the process of adding support for asynchronous execution using
 CUDA streams. In order to facilitate the usage of streams, all new libcudf APIs
@@ -486,33 +507,37 @@ use only asynchronous versions of CUDA APIs with the stream parameter.
 
 In order to make the `detail` API callable from other libcudf functions, it should be exposed in a
 header placed in the `cudf/cpp/include/detail/` directory.
+The declaration is not necessary if no other libcudf functions call the `detail` function.
 
 For example:
 
 ```c++
 // cpp/include/cudf/header.hpp
-void external_function(...);
+void external_function(...,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 // cpp/include/cudf/detail/header.hpp
 namespace detail{
-void external_function(..., rmm::cuda_stream_view stream)
+void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 } // namespace detail
 
 // cudf/src/implementation.cpp
 namespace detail{
-    // Use the stream parameter in the detail implementation.
-    void external_function(..., rmm::cuda_stream_view stream){
-        // Implementation uses the stream with async APIs.
-        rmm::device_buffer buff(...,stream);
-        CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
-        kernel<<<..., stream>>>(...);
-        thrust::algorithm(rmm::exec_policy(stream), ...);
-    }
+// Use the stream parameter in the detail implementation.
+void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr){
+  // Implementation uses the stream with async APIs.
+  rmm::device_buffer buff(..., stream, mr);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
+  kernel<<<..., stream>>>(...);
+  thrust::algorithm(rmm::exec_policy(stream), ...);
+}
 } // namespace detail
 
-void external_function(...){
-    CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
-    detail::external_function(..., cudf::get_default_stream());
+void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
+  detail::external_function(..., stream, mr);
 }
 ```
 
@@ -703,28 +728,28 @@ The preferred style for how inputs are passed in and outputs are returned is the
     - `column_view const&`
   - Tables:
     - `table_view const&`
-    - Scalar:
-        - `scalar const&`
-    - Everything else:
-       - Trivial or inexpensively copied types
-          - Pass by value
-       - Non-trivial or expensive to copy types
-          - Pass by `const&`
+  - Scalar:
+    - `scalar const&`
+  - Everything else:
+    - Trivial or inexpensively copied types
+      - Pass by value
+    - Non-trivial or expensive to copy types
+      - Pass by `const&`
 - In/Outs
   - Columns:
     - `mutable_column_view&`
   - Tables:
     - `mutable_table_view&`
-    - Everything else:
-        - Pass by via raw pointer
+  - Everything else:
+    - Pass by via raw pointer
 - Outputs
   - Outputs should be *returned*, i.e., no output parameters
   - Columns:
     - `std::unique_ptr<column>`
   - Tables:
     - `std::unique_ptr<table>`
-    - Scalars:
-        - `std::unique_ptr<scalar>`
+  - Scalars:
+    - `std::unique_ptr<scalar>`
 
 
 ### Multiple Return Values
@@ -907,6 +932,10 @@ group a broad set of functions, further namespaces may be used. For example, the
 functions that are specific to columns of Strings. These functions reside in the `cudf::strings::`
 namespace. Similarly, functionality used exclusively for unit testing is in the `cudf::test::`
 namespace.
+
+The public function is expected to contain a call to `CUDF_FUNC_RANGE()` followed by a call to
+a `detail` function with same name and parameters as the public function.
+See the [Streams](#streams) section for an example of this pattern.
 
 ### Internal
 
