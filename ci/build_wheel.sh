@@ -12,4 +12,5 @@ rapids-generate-version > ./VERSION
 
 cd "${package_dir}"
 
+if
 python -m pip wheel . -w dist -vvv --no-deps --disable-pip-version-check
