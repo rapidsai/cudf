@@ -229,10 +229,10 @@ struct column_tree_properties {
  * in column_tree_properties.
  */
 struct device_column_subtree_properties {
-  rmm::device_uvector<row_offset_t> string_offsets;
-  rmm::device_uvector<row_offset_t> string_lengths;
+  rmm::device_uvector<SymbolOffsetT> string_offsets;
+  rmm::device_uvector<SymbolOffsetT> string_lengths;
   // Row offsets
-  rmm::device_uvector<row_offset_t> child_offsets;
+  rmm::device_uvector<SymbolOffsetT> child_offsets;
   // Validity bitmap
   rmm::device_buffer validity;
 };

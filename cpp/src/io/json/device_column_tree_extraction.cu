@@ -241,7 +241,7 @@ rmm::device_uvector<row_offset_t> extract_device_column_subtree(
 
   // (Optional?) TODO: Validation of the remaining column tree properties
 
-  return std::move(subtree_nrows);
+  return subtree_nrows;
 }
 
 device_column_subtree_properties allocate_device_column_subtree_properties(
@@ -282,8 +282,8 @@ device_column_subtree_properties allocate_device_column_subtree_properties(
     thrust::reduce(
       rmm::exec_policy(stream), max_row_offsets_it, max_row_offsets_it + str_val_end) +
     str_val_end;
-  rmm::device_uvector<row_offset_t> string_offsets(string_offsets_size, stream);
-  rmm::device_uvector<row_offset_t> string_lengths(string_offsets_size, stream);
+  rmm::device_uvector<SymbolOffsetT> string_offsets(string_offsets_size, stream);
+  rmm::device_uvector<SymbolOffsetT> string_lengths(string_offsets_size, stream);
 
   auto list_partitioning_idx_it =
     thrust::partition(rmm::exec_policy(stream),
@@ -301,7 +301,7 @@ device_column_subtree_properties allocate_device_column_subtree_properties(
                    max_row_offsets_it,
                    max_row_offsets_it + (list_end - str_val_end)) +
     2 * (list_end - str_val_end);
-  rmm::device_uvector<row_offset_t> child_offsets(child_offsets_size, stream);
+  rmm::device_uvector<SymbolOffsetT> child_offsets(child_offsets_size, stream);
 
   auto validity_buffer_size =
     thrust::reduce(rmm::exec_policy(stream), subtree_nrows.begin(), subtree_nrows.end());
@@ -319,10 +319,11 @@ device_column_subtree_properties allocate_device_column_subtree_properties(
 
 void initialize_device_column_subtree_properties(
     device_column_subtree_properties &d_props,
+    device_span<row_offset_t> subtree_nrows,
     tree_meta_t &tree,
     device_span<NodeIndexT> original_col_ids,
     device_span<row_offset_t> row_offsets,
-    const column_tree_properties &c_props,
+    column_tree_properties &c_props,
     rmm::cuda_stream_view stream) {
 
   auto num_nodes = tree.node_levels.size();
@@ -342,7 +343,7 @@ void initialize_device_column_subtree_properties(
                                                              sorted_node_levels_order.begin());
   auto node_range_lengths_it = thrust::make_transform_iterator(
     thrust::make_zip_iterator(node_range_begin_it, node_range_end_it),
-    cuda::proclaim_return_type<row_offset_t>([] __device__(auto range_it) {
+    cuda::proclaim_return_type<SymbolOffsetT>([] __device__(auto range_it) {
       return thrust::get<1>(range_it) - thrust::get<0>(range_it);
     }));
 
@@ -352,13 +353,14 @@ void initialize_device_column_subtree_properties(
                                                               sorted_node_levels_order.begin());
 
   rmm::device_uvector<row_offset_t> sorted_subtree_nrows(num_columns, stream);
+  thrust::copy(rmm::exec_policy_nosync(stream), subtree_nrows.begin(), subtree_nrows.end(), sorted_subtree_nrows.begin());
   thrust::sort_by_key(rmm::exec_policy_nosync(stream),
                       c_props.mapped_ids.begin(),
                       c_props.mapped_ids.end(),
                       sorted_subtree_nrows.begin());
 
   thrust::copy_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_zip_iterator(node_range_begin_it, node_range_lengths_it),
     thrust::make_zip_iterator(node_range_begin_it + num_nodes, node_range_lengths_it + num_nodes),
     thrust::make_counting_iterator(0),
@@ -371,8 +373,9 @@ void initialize_device_column_subtree_properties(
     });
 
   // row_offsets need to be prefix summed across columns for validity initialization
+  // TODO: replace replace_if with a transform input iterator and pass that to inclusive scan
   thrust::replace_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     row_offsets_it,
     row_offsets_it + num_nodes,
     thrust::make_counting_iterator(0),
@@ -380,9 +383,9 @@ void initialize_device_column_subtree_properties(
       NodeIndexT node) { return sorted_subtree_nrows[node_col_ids_it[node]] == 0; },
     0);
   thrust::inclusive_scan(
-    rmm::exec_policy(stream), row_offsets_it, row_offsets_it + num_nodes, row_offsets_it);
+    rmm::exec_policy_nosync(stream), row_offsets_it, row_offsets_it + num_nodes, row_offsets_it);
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator(0),
     num_nodes,
     [sorted_subtree_nrows = sorted_subtree_nrows.begin(),
