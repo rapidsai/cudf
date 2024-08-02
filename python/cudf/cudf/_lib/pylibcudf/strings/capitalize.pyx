@@ -100,7 +100,7 @@ cpdef Column is_title(Column input):
     -------
     pylibcudf.Column
         Column of type BOOL8
-    """"
+    """
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = cpp_capitalize.is_title(input.view())
