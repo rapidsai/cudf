@@ -930,13 +930,17 @@ def _fast_slow_function_call(
                             "Pandas debugging mode failed. "
                             f"The exception was {e}."
                         )
-    except Exception:
+    except Exception as err:
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
             domain="cudf_pandas",
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+            if _env_get_bool("LOG_FAST_FALLBACK", False):
+                from ._logger import log_fallback
+
+                log_fallback(slow_args, slow_kwargs, err)
             with disable_module_accelerator():
                 result = func(*slow_args, **slow_kwargs)
     return _maybe_wrap_result(result, func, *args, **kwargs), fast

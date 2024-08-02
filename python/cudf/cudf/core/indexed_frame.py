@@ -1495,9 +1495,7 @@ class IndexedFrame(Frame):
             **kwargs,
         )
 
-    def median(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
-    ):
+    def median(self, axis=None, skipna=True, numeric_only=None, **kwargs):
         """
         Return the median of the values for the requested axis.
 
@@ -1857,7 +1855,16 @@ class IndexedFrame(Frame):
     @_performance_tracking
     @copy_docstring(Rolling)
     def rolling(
-        self, window, min_periods=None, center=False, axis=0, win_type=None
+        self,
+        window,
+        min_periods=None,
+        center: bool = False,
+        win_type: str | None = None,
+        on=None,
+        axis=0,
+        closed: str | None = None,
+        step: int | None = None,
+        method: str = "single",
     ):
         return Rolling(
             self,
@@ -1865,7 +1872,11 @@ class IndexedFrame(Frame):
             min_periods=min_periods,
             center=center,
             axis=axis,
+            on=on,
             win_type=win_type,
+            closed=closed,
+            step=step,
+            method=method,
         )
 
     @copy_docstring(ExponentialMovingWindow)
@@ -1880,6 +1891,7 @@ class IndexedFrame(Frame):
         ignore_na: bool = False,
         axis: int = 0,
         times: str | np.ndarray | None = None,
+        method: Literal["single", "table"] = "single",
     ):
         return ExponentialMovingWindow(
             self,
@@ -1892,6 +1904,7 @@ class IndexedFrame(Frame):
             ignore_na=ignore_na,
             axis=axis,
             times=times,
+            method=method,
         )
 
     @_performance_tracking
@@ -3943,16 +3956,15 @@ class IndexedFrame(Frame):
         self,
         rule,
         axis=0,
-        closed=None,
-        label=None,
-        convention="start",
+        closed: Literal["right", "left"] | None = None,
+        label: Literal["right", "left"] | None = None,
+        convention: Literal["start", "end", "s", "e"] = "start",
         kind=None,
-        loffset=None,
-        base=None,
         on=None,
         level=None,
         origin="start_day",
         offset=None,
+        group_keys: bool = False,
     ):
         """
         Convert the frequency of ("resample") the given time series data.
@@ -4090,26 +4102,27 @@ class IndexedFrame(Frame):
                 "deprecated and will be removed in a future version. ",
                 FutureWarning,
             )
-        if (axis, convention, kind, loffset, base, origin, offset) != (
-            0,
-            "start",
-            None,
-            None,
-            None,
-            "start_day",
-            None,
-        ):
-            raise NotImplementedError(
-                "The following arguments are not "
-                "currently supported by resample:\n\n"
-                "- axis\n"
-                "- convention\n"
-                "- kind\n"
-                "- loffset\n"
-                "- base\n"
-                "- origin\n"
-                "- offset"
+            raise NotImplementedError("kind is currently not supported.")
+        if axis != 0:
+            warnings.warn(
+                "The 'axis' keyword in is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
             )
+            raise NotImplementedError("axis is currently not supported.")
+        if convention != "start":
+            warnings.warn(
+                "The 'convention' keyword in is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
+            raise NotImplementedError("convention is currently not supported.")
+        if origin != "start_day":
+            raise NotImplementedError("origin is currently not supported.")
+        if offset is not None:
+            raise NotImplementedError("offset is currently not supported.")
+        if group_keys is not False:
+            raise NotImplementedError("group_keys is currently not supported.")
         by = cudf.Grouper(
             key=on, freq=rule, closed=closed, label=label, level=level
         )
@@ -4120,7 +4133,13 @@ class IndexedFrame(Frame):
         )
 
     def dropna(
-        self, axis=0, how="any", thresh=None, subset=None, inplace=False
+        self,
+        axis=0,
+        how="any",
+        thresh=None,
+        subset=None,
+        inplace=False,
+        ignore_index: bool = False,
     ):
         """
         Drop rows (or columns) containing nulls from a Column.
@@ -4144,6 +4163,8 @@ class IndexedFrame(Frame):
             columns, subset is a list of rows to consider.
         inplace : bool, default False
             If True, do operation inplace and return None.
+        ignore_index : bool, default ``False``
+            If ``True``, the resulting axis will be labeled 0, 1, …, n - 1.
 
         Returns
         -------
@@ -4220,6 +4241,8 @@ class IndexedFrame(Frame):
         """
         if axis == 0:
             result = self._drop_na_rows(how=how, subset=subset, thresh=thresh)
+            if ignore_index:
+                result.index = RangeIndex(len(result))
         else:
             result = self._drop_na_columns(
                 how=how, subset=subset, thresh=thresh

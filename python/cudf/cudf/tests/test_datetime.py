@@ -7,6 +7,7 @@ import warnings
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pandas._testing as tm
 import pyarrow as pa
 import pytest
 
@@ -2429,3 +2430,109 @@ def test_day_month_name_locale_not_implemented(meth, klass):
         obj = obj.dt
     with pytest.raises(NotImplementedError):
         getattr(obj, meth)(locale="pt_BR.utf8")
+
+
+@pytest.mark.parametrize(
+    "attr",
+    [
+        "is_month_start",
+        "is_month_end",
+        "is_quarter_end",
+        "is_quarter_start",
+        "is_year_end",
+        "is_year_start",
+        "days_in_month",
+        "timetz",
+        "time",
+        "date",
+    ],
+)
+def test_dti_datetime_attributes(attr):
+    data = [
+        "2020-01-01",
+        "2020-01-31",
+        "2020-03-01",
+        "2020-03-31",
+        "2020-03-31",
+        "2020-12-31",
+        None,
+    ]
+    pd_dti = pd.DatetimeIndex(data, name="foo")
+    cudf_dti = cudf.from_pandas(pd_dti)
+
+    result = getattr(cudf_dti, attr)
+    expected = getattr(pd_dti, attr)
+    if isinstance(result, np.ndarray):
+        # numpy doesn't assert object arrays with NaT correctly
+        tm.assert_numpy_array_equal(result, expected)
+    else:
+        assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("attr", ["freq", "unit"])
+def test_dti_properties(attr):
+    pd_dti = pd.DatetimeIndex(
+        ["2020-01-01", "2020-01-02"], dtype="datetime64[ns]"
+    )
+    cudf_dti = cudf.DatetimeIndex(
+        ["2020-01-01", "2020-01-02"], dtype="datetime64[ns]"
+    )
+
+    result = getattr(cudf_dti, attr)
+    expected = getattr(pd_dti, attr)
+    assert result == expected
+
+
+def test_dti_asi8():
+    pd_dti = pd.DatetimeIndex(["2020-01-01", "2020-12-31"], name="foo")
+    cudf_dti = cudf.from_pandas(pd_dti)
+
+    result = pd_dti.asi8
+    expected = cudf_dti.asi8
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "method, kwargs",
+    [
+        ["mean", {}],
+        pytest.param(
+            "std",
+            {},
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/16444"
+            ),
+        ),
+        pytest.param(
+            "std",
+            {"ddof": 0},
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/16444"
+            ),
+        ),
+    ],
+)
+def test_dti_reduction(method, kwargs):
+    pd_dti = pd.DatetimeIndex(["2020-01-01", "2020-12-31"], name="foo")
+    cudf_dti = cudf.from_pandas(pd_dti)
+
+    result = getattr(cudf_dti, method)(**kwargs)
+    expected = getattr(pd_dti, method)(**kwargs)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "method, kwargs",
+    [
+        ["to_pydatetime", {}],
+        ["to_period", {"freq": "D"}],
+        ["strftime", {"date_format": "%Y-%m-%d"}],
+    ],
+)
+def test_dti_methods(method, kwargs):
+    pd_dti = pd.DatetimeIndex(["2020-01-01", "2020-12-31"], name="foo")
+    cudf_dti = cudf.from_pandas(pd_dti)
+
+    result = getattr(cudf_dti, method)(**kwargs)
+    expected = getattr(pd_dti, method)(**kwargs)
+    assert_eq(result, expected)
