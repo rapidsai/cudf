@@ -30,7 +30,7 @@ def test_read_parquet_basic(
 
     res = plc.io.parquet.read_parquet(
         plc.io.SourceInfo([source]),
-        num_rows=nrows,
+        nrows=nrows,
         skip_rows=skiprows,
         columns=columns,
     )

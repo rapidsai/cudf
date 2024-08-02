@@ -4,9 +4,9 @@ from libc.stdint cimport int32_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
-from pylibcudf.libcudf.exception_handler cimport cudf_exception_handler
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport data_type
 
@@ -54,28 +54,28 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         const column_view& rhs,
         binary_operator op,
         data_type output_type
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] binary_operation (
         const column_view& lhs,
         const scalar& rhs,
         binary_operator op,
         data_type output_type
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] binary_operation (
         const column_view& lhs,
         const column_view& rhs,
         binary_operator op,
         data_type output_type
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] binary_operation (
         const column_view& lhs,
         const column_view& rhs,
         const string& op,
         data_type output_type
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler
 
 cdef extern from "cudf/binaryop.hpp" namespace "cudf::binops" nogil:
     cdef bool is_supported_operation(
@@ -83,4 +83,4 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf::binops" nogil:
         data_type lhs_type,
         data_type rhs_type,
         binary_operator op
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler

@@ -21,11 +21,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import pyarrow as pa
+import pylibcudf as plc
 from typing_extensions import assert_never
 
 import polars as pl
-
-import pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import DataFrame, NamedColumn
@@ -321,7 +320,7 @@ class Scan(IR):
             tbl_w_meta = plc.io.parquet.read_parquet(
                 plc.io.SourceInfo(self.paths),
                 columns=with_columns,
-                num_rows=nrows,
+                nrows=nrows,
             )
             df = DataFrame.from_table(
                 tbl_w_meta.tbl,

@@ -24,7 +24,7 @@ from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
 cimport pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
 cimport pylibcudf.libcudf.io.types as cudf_io_types
-from libc.stdint cimport uint8_t
+from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
@@ -133,7 +133,10 @@ cdef object _process_metadata(object df,
                               object filepaths_or_buffers,
                               list pa_buffers,
                               bool allow_range_index,
-                              bool use_pandas_metadata):
+                              bool use_pandas_metadata,
+                              size_type nrows=-1,
+                              int64_t skip_rows=0,
+                              ):
 
     add_df_col_struct_names(df, child_names)
     index_col = None
@@ -222,9 +225,13 @@ cdef object _process_metadata(object df,
                 else:
                     idx = cudf.Index(cudf.core.column.column_empty(0))
             else:
+                start = range_index_meta["start"] + skip_rows
+                stop = range_index_meta["stop"]
+                if nrows != -1:
+                    stop = start + nrows
                 idx = cudf.RangeIndex(
-                    start=range_index_meta['start'],
-                    stop=range_index_meta['stop'],
+                    start=start,
+                    stop=stop,
                     step=range_index_meta['step'],
                     name=range_index_meta['name']
                 )
@@ -261,7 +268,9 @@ def read_parquet_chunked(
     row_groups=None,
     use_pandas_metadata=True,
     size_t chunk_read_limit=0,
-    size_t pass_read_limit=1024000000
+    size_t pass_read_limit=1024000000,
+    size_type nrows=-1,
+    int64_t skip_rows=0
 ):
     # Convert NativeFile buffers to NativeFileDatasource,
     # but save original buffers in case we need to use
@@ -288,7 +297,9 @@ def read_parquet_chunked(
         row_groups,
         use_pandas_metadata,
         chunk_read_limit=chunk_read_limit,
-        pass_read_limit=pass_read_limit
+        pass_read_limit=pass_read_limit,
+        skip_rows=skip_rows,
+        nrows=nrows,
     )
 
     tbl_w_meta = reader.read_chunk()
@@ -321,13 +332,16 @@ def read_parquet_chunked(
     df = _process_metadata(df, column_names, child_names,
                            per_file_user_data, row_groups,
                            filepaths_or_buffers, pa_buffers,
-                           allow_range_index, use_pandas_metadata)
+                           allow_range_index, use_pandas_metadata,
+                           nrows=nrows, skip_rows=skip_rows)
     return df
 
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                    use_pandas_metadata=True,
-                   Expression filters=None):
+                   Expression filters=None,
+                   size_type nrows=-1,
+                   int64_t skip_rows=0):
     """
     Cython function to call into libcudf API, see `read_parquet`.
 
@@ -363,6 +377,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         filters,
         convert_strings_to_categories = False,
         use_pandas_metadata = use_pandas_metadata,
+        skip_rows = skip_rows,
+        nrows = nrows,
     )
 
     df = cudf.DataFrame._from_data(
@@ -372,7 +388,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     df = _process_metadata(df, tbl_w_meta.column_names(include_children=False),
                            tbl_w_meta.child_names, tbl_w_meta.per_file_user_data,
                            row_groups, filepaths_or_buffers, pa_buffers,
-                           allow_range_index, use_pandas_metadata)
+                           allow_range_index, use_pandas_metadata,
+                           nrows=nrows, skip_rows=skip_rows)
     return df
 
 cpdef read_parquet_metadata(filepaths_or_buffers):
