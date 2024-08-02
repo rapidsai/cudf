@@ -6,9 +6,8 @@ from __future__ import annotations
 from functools import partial
 
 import pyarrow
-import pytest
-
 import pylibcudf as plc
+import pytest
 
 from cudf_polars.containers import Column, NamedColumn
 
