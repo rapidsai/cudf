@@ -32,6 +32,9 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <cuco/static_map.cuh>
+
+#include <functional>
 #include <utility>
 #include <vector>
 
@@ -72,7 +75,145 @@ rmm::device_uvector<cudf::size_type> dipatch_row_equal(
     return func(d_equal);
   }
 }
+
+struct plus_op {
+  template <typename T, cuda::thread_scope Scope>
+  __device__ void operator()(cuda::atomic_ref<T, Scope> ref, T val)
+  {
+    ref.fetch_add(1, cuda::memory_order_relaxed);
+  }
+};
+
+struct min_op {
+  template <typename T, cuda::thread_scope Scope>
+  __device__ void operator()(cuda::atomic_ref<T, Scope> ref, T val)
+  {
+    ref.fetch_min(val, cuda::memory_order_relaxed);
+  }
+};
+
+struct max_op {
+  template <typename T, cuda::thread_scope Scope>
+  __device__ void operator()(cuda::atomic_ref<T, Scope> ref, T val)
+  {
+    ref.fetch_max(val, cuda::memory_order_relaxed);
+  }
+};
+
+template <typename Map>
+rmm::device_uvector<size_type> process_keep(Map& map,
+                                            size_type num_rows,
+                                            duplicate_keep_option keep,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
+{
+  if ((keep == duplicate_keep_option::KEEP_FIRST) or (keep == duplicate_keep_option::KEEP_LAST)) {
+    auto pairs = thrust::make_transform_iterator(
+      thrust::counting_iterator<size_type>(0),
+      cuda::proclaim_return_type<cuco::pair<size_type, size_type>>([] __device__(size_type i) {
+        return cuco::pair<size_type, size_type>{i, i};
+      }));
+
+    if (keep == duplicate_keep_option::KEEP_FIRST) {
+      map.insert_or_apply(pairs, pairs + num_rows, min_op{}, stream.value());
+    } else {
+      map.insert_or_apply(pairs, pairs + num_rows, max_op{}, stream.value());
+    }
+    int map_size = map.size(stream.value());
+    auto keys    = rmm::device_uvector<size_type>(map_size, stream, mr);
+    auto values  = rmm::device_uvector<size_type>(map_size, stream, mr);
+
+    map.retrieve_all(keys.begin(), values.begin(), stream);
+    return values;
+  }
+
+  auto pairs = thrust::make_transform_iterator(
+    thrust::counting_iterator<size_type>(0),
+    cuda::proclaim_return_type<cuco::pair<size_type, size_type>>([] __device__(size_type i) {
+      return cuco::pair<size_type, size_type>{i, 1};
+    }));
+
+  auto plusop = plus_op{};
+  map.insert_or_apply(pairs, pairs + num_rows, plusop, stream.value());
+
+  int map_size = map.size(stream.value());
+  auto keys    = rmm::device_uvector<size_type>(map_size, stream, mr);
+  auto values  = rmm::device_uvector<size_type>(map_size, stream, mr);
+  map.retrieve_all(keys.begin(), values.begin(), stream.value());
+
+  auto output_indices          = rmm::device_uvector<size_type>(map_size, stream, mr);
+  auto output_indices_filtered = rmm::device_uvector<size_type>(map_size, stream, mr);
+
+  thrust::for_each(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(map_size),
+    [values         = values.begin(),
+     keys           = keys.begin(),
+     output_indices = output_indices.begin()] __device__(size_type const idx) mutable {
+      if (values[idx] == size_type{1}) {
+        output_indices[idx] = keys[idx];
+      } else {
+        output_indices[idx] = -1;
+      }
+    });
+
+  auto const map_end = thrust::copy_if(
+    rmm::exec_policy(stream),
+    output_indices.begin(),
+    output_indices.end(),
+    output_indices_filtered.begin(),
+    cuda::proclaim_return_type<bool>([] __device__(auto const idx) { return idx != -1; }));
+
+  output_indices_filtered.resize(thrust::distance(output_indices_filtered.begin(), map_end),
+                                 stream);
+  return output_indices_filtered;
+}
+
 }  // namespace
+
+/**
+ * @brief Return the reduction identity used to initialize results of `hash_reduce_by_row`.
+ *
+ * @param keep A value of `duplicate_keep_option` type, must not be `KEEP_ANY`.
+ * @return The initial reduction value.
+ */
+auto constexpr reduction_init_value(duplicate_keep_option keep)
+{
+  switch (keep) {
+    case duplicate_keep_option::KEEP_FIRST: return std::numeric_limits<size_type>::max();
+    case duplicate_keep_option::KEEP_LAST: return std::numeric_limits<size_type>::min();
+    case duplicate_keep_option::KEEP_NONE: return size_type{0};
+    default: CUDF_UNREACHABLE("This function should not be called with KEEP_ANY");
+  }
+}
+
+template <typename RowHasher>
+using hash_set_type =
+  cuco::static_set<size_type,
+                   cuco::extent<int64_t>,
+                   cuda::thread_scope_device,
+                   RowHasher,
+                   cuco::linear_probing<1,
+                                        cudf::experimental::row::hash::device_row_hasher<
+                                          cudf::hashing::detail::default_hash,
+                                          cudf::nullate::DYNAMIC>>,
+                   cudf::detail::cuco_allocator,
+                   cuco::storage<1>>;
+
+template <typename RowHasher>
+using hash_map_type =
+  cuco::static_map<size_type,
+                   size_type,
+                   cuco::extent<int64_t>,
+                   cuda::thread_scope_device,
+                   RowHasher,
+                   cuco::linear_probing<1,
+                                        cudf::experimental::row::hash::device_row_hasher<
+                                          cudf::hashing::detail::default_hash,
+                                          cudf::nullate::DYNAMIC>>,
+                   cudf::detail::cuco_allocator,
+                   cuco::storage<1>>;
 
 rmm::device_uvector<size_type> distinct_indices(table_view const& input,
                                                 duplicate_keep_option keep,
@@ -97,16 +238,38 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
 
   auto const helper_func = [&](auto const& d_equal) {
     using RowHasher = std::decay_t<decltype(d_equal)>;
-    auto set        = hash_set_type<RowHasher>{num_rows,
+    // If we don't care about order, just gather indices of distinct keys taken from set.
+    if (keep == duplicate_keep_option::KEEP_ANY) {
+      auto set = hash_set_type<RowHasher>{num_rows,
+                                          0.5,  // desired load factor
+                                          cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+                                          d_equal,
+                                          {row_hash.device_hasher(has_nulls)},
+                                          {},
+                                          {},
+                                          cudf::detail::cuco_allocator{stream},
+                                          stream.value()};
+
+      auto const iter = thrust::counting_iterator<cudf::size_type>{0};
+      set.insert_async(iter, iter + num_rows, stream.value());
+      auto output_indices   = rmm::device_uvector<size_type>(num_rows, stream, mr);
+      auto const output_end = set.retrieve_all(output_indices.begin(), stream.value());
+      output_indices.resize(thrust::distance(output_indices.begin(), output_end), stream);
+      return output_indices;
+    }
+
+    auto const init = reduction_init_value(keep);
+    auto map        = hash_map_type<RowHasher>{num_rows,
                                                0.5,  // desired load factor
                                                cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+                                               cuco::empty_value{init},
                                                d_equal,
                                                {row_hash.device_hasher(has_nulls)},
                                                {},
                                                {},
                                                cudf::detail::cuco_allocator{stream},
                                                stream.value()};
-    return detail::reduce_by_row(set, num_rows, keep, stream, mr);
+    return process_keep(map, num_rows, keep, stream, mr);
   };
 
   if (cudf::detail::has_nested_columns(input)) {
