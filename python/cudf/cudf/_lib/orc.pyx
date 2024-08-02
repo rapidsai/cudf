@@ -57,6 +57,7 @@ from pylibcudf.libcudf.io.types cimport (
 )
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport data_type, size_type, type_id
+from pylibcudf.variant cimport get_if as std_get_if, holds_alternative
 
 from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport (
@@ -64,7 +65,6 @@ from cudf._lib.io.utils cimport (
     make_source_info,
     update_column_struct_field_names,
 )
-from cudf._lib.variant cimport get_if as std_get_if, holds_alternative
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 

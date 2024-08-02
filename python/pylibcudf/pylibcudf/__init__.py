@@ -12,6 +12,7 @@ from . import (
     filling,
     groupby,
     interop,
+    io,
     join,
     lists,
     merge,
