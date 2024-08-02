@@ -11,6 +11,7 @@ files:
       - build_all
       - build_cpp
       - build_python_common
+      - build_python_pylibcudf
       - build_python_cudf
       - cuda
       - cuda_version
@@ -23,6 +24,8 @@ files:
       - rapids_build_setuptools
       - run_common
       - run_cudf
+      - run_cudf_polars
+      - run_pylibcudf
       - run_dask_cudf
       - run_custreamz
       - test_cpp
@@ -77,14 +80,14 @@ files:
       - docs
       - libarrow_run
       - py_version
-  py_rapids_build_cudf:
+  py_build_cudf:
     output: pyproject
     pyproject_dir: python/cudf
     extras:
       table: build-system
     includes:
       - rapids_build_skbuild
-  py_build_cudf:
+  py_rapids_build_cudf:
     output: pyproject
     pyproject_dir: python/cudf
     extras:
@@ -94,6 +97,7 @@ files:
       - build_base
       - build_python_common
       - build_python_cudf
+      - pylibcudf_build_dep
   py_run_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -114,7 +118,7 @@ files:
     includes:
       - test_python_common
       - test_python_cudf
-  py_rapids_build_cudf:
+  py_rapids_build_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
     extras:
@@ -130,7 +134,7 @@ files:
     includes:
       - build_base
       - build_python_common
-      - build_python_cudf
+      - build_python_pylibcudf
   py_run_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -363,11 +367,36 @@ dependencies:
           # Sync with conda build constraint & wheel run constraint.
           # TODO: Change to `2.0.*` for NumPy 2
           - numpy==1.23.*
-  build_python_cudf:
+  build_python_pylibcudf:
     common:
       - output_types: conda
         packages:
           - &rmm_unsuffixed rmm==24.10.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          # This index is needed for rmm-cu{11,12}.
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - rmm-cu12==24.10.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
+              - rmm-cu11==24.10.*,>=0.0.0a0
+          - {matrix: null, packages: [*rmm_unsuffixed]}
+  build_python_cudf:
+    common:
+      - output_types: conda
+        packages:
+          - *rmm_unsuffixed
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
@@ -386,12 +415,33 @@ dependencies:
               cuda_suffixed: "true"
             packages:
               - rmm-cu12==24.10.*,>=0.0.0a0
+              - pylibcudf-cu12==24.10.*,>=0.0.0a0
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
               - rmm-cu11==24.10.*,>=0.0.0a0
+              - pylibcudf-cu11==24.10.*,>=0.0.0a0
           - {matrix: null, packages: [*rmm_unsuffixed]}
+  pylibcudf_build_dep:
+    common:
+      - output_types: conda
+        packages:
+          - &pylibcudf_unsuffixed pylibcudf==24.10.*,>=0.0.0a0
+    specific:
+      - output_types: [pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - pylibcudf-cu12==24.10.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
+              - pylibcudf-cu11==24.10.*,>=0.0.0a0
+          - {matrix: null, packages: [*pylibcudf_unsuffixed]}
   libarrow_build:
     common:
       - output_types: conda
@@ -814,7 +864,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &pylibcudf_unsuffixed pylibcudf==24.10.*,>=0.0.0a0
+          - *pylibcudf_unsuffixed
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
