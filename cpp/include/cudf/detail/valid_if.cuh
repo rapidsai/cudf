@@ -27,6 +27,7 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <cuda/atomic>
 #include <thrust/distance.h>
 
 namespace cudf {
@@ -66,9 +67,12 @@ CUDF_KERNEL void valid_if_kernel(
     active_mask = __ballot_sync(active_mask, i < size);
   }
 
-  size_type block_valid_count =
+  size_type const block_valid_count =
     single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
-  if (threadIdx.x == 0) { atomicSub(null_count, block_valid_count); }
+  if (threadIdx.x == 0) {
+    cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*null_count};
+    ref.fetch_sub(block_valid_count, cuda::std::memory_order_relaxed);
+  }
 }
 
 /**
