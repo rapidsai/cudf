@@ -51,8 +51,7 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
     bpe_probe_scheme{bpe_hasher{input}},
     cuco::thread_scope_device,
     cuco_storage{},
-    cudf::detail::cuco_allocator<cuco::pair<cudf::size_type, cudf::size_type>>{
-      rmm::mr::polymorphic_allocator<cuco::pair<cudf::size_type, cudf::size_type>>{}, stream},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value());
 
   auto iter = cudf::detail::make_counting_transform_iterator(
@@ -76,8 +75,7 @@ std::unique_ptr<detail::mp_table_map_type> initialize_mp_table_map(
     mp_probe_scheme{mp_hasher{input}},
     cuco::thread_scope_device,
     cuco_storage{},
-    cudf::detail::cuco_allocator<cuco::pair<cudf::size_type, cudf::size_type>>{
-      rmm::mr::polymorphic_allocator<cuco::pair<cudf::size_type, cudf::size_type>>{}, stream},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value());
 
   auto iter = cudf::detail::make_counting_transform_iterator(

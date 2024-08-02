@@ -110,19 +110,17 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
       cudf::experimental::row::equality::preprocessed_table::create(_build, stream)},
     _preprocessed_probe{
       cudf::experimental::row::equality::preprocessed_table::create(_probe, stream)},
-    _hash_table{
-      build.num_rows(),
-      CUCO_DESIRED_LOAD_FACTOR,
-      cuco::empty_key{
-        cuco::pair{std::numeric_limits<hash_value_type>::max(), rhs_index_type{JoinNoneValue}}},
-      prepare_device_equal<HasNested>(
-        _preprocessed_build, _preprocessed_probe, has_nulls, compare_nulls),
-      {},
-      cuco::thread_scope_device,
-      cuco_storage_type{},
-      cudf::detail::cuco_allocator<cuco::pair<hash_value_type, rhs_index_type>>{
-        rmm::mr::polymorphic_allocator<cuco::pair<hash_value_type, rhs_index_type>>{}, stream},
-      stream.value()}
+    _hash_table{build.num_rows(),
+                CUCO_DESIRED_LOAD_FACTOR,
+                cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
+                                           rhs_index_type{JoinNoneValue}}},
+                prepare_device_equal<HasNested>(
+                  _preprocessed_build, _preprocessed_probe, has_nulls, compare_nulls),
+                {},
+                cuco::thread_scope_device,
+                cuco_storage_type{},
+                cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+                stream.value()}
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != this->_build.num_columns(), "Hash join build table is empty");

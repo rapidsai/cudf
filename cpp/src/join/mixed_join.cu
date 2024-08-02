@@ -131,8 +131,7 @@ mixed_join(
     cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
     cuco::empty_value{cudf::detail::JoinNoneValue},
     stream.value(),
-    cudf::detail::cuco_allocator<cuco::pair<hash_value_type, size_type>>{
-      rmm::mr::polymorphic_allocator<cuco::pair<hash_value_type, size_type>>{}, stream}};
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
@@ -398,8 +397,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
     cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
     cuco::empty_value{cudf::detail::JoinNoneValue},
     stream.value(),
-    cudf::detail::cuco_allocator<cuco::pair<hash_value_type, size_type>>{
-      rmm::mr::polymorphic_allocator<cuco::pair<hash_value_type, size_type>>{}, stream}};
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we

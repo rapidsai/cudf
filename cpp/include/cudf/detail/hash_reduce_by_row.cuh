@@ -31,11 +31,8 @@
 
 namespace cudf::detail {
 
-using hash_map_type =
-  cuco::legacy::static_map<size_type,
-                           size_type,
-                           cuda::thread_scope_device,
-                           cudf::detail::cuco_allocator<cuco::pair<size_type, size_type>>>;
+using hash_map_type = cuco::legacy::
+  static_map<size_type, size_type, cuda::thread_scope_device, cudf::detail::cuco_allocator<char>>;
 
 /**
  * @brief The base struct for customized reduction functor to perform reduce-by-key with keys are

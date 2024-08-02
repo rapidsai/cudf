@@ -568,16 +568,16 @@ std::unique_ptr<table> groupby(table_view const& keys,
   cudf::detail::result_cache sparse_results(requests.size());
 
   auto const comparator_helper = [&](auto const d_key_equal) {
-    auto const set = cuco::static_set{num_keys,
-                                      0.5,  // desired load factor
-                                      cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-                                      d_key_equal,
-                                      probing_scheme_type{d_row_hash},
-                                      cuco::thread_scope_device,
-                                      cuco::storage<1>{},
-                                      cudf::detail::cuco_allocator<cudf::size_type>{
-                                        rmm::mr::polymorphic_allocator<cudf::size_type>{}, stream},
-                                      stream.value()};
+    auto const set = cuco::static_set{
+      num_keys,
+      0.5,  // desired load factor
+      cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+      d_key_equal,
+      probing_scheme_type{d_row_hash},
+      cuco::thread_scope_device,
+      cuco::storage<1>{},
+      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+      stream.value()};
 
     // Compute all single pass aggs first
     compute_single_pass_aggs(keys,

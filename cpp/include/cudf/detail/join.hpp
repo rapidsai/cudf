@@ -55,12 +55,12 @@ enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_AN
 template <typename Hasher>
 struct hash_join {
  public:
-  using map_type = cuco::static_multimap<
-    hash_value_type,
-    cudf::size_type,
-    cuda::thread_scope_device,
-    cudf::detail::cuco_allocator<cuco::pair<hash_value_type, cudf::size_type>>,
-    cuco::legacy::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
+  using map_type =
+    cuco::static_multimap<hash_value_type,
+                          cudf::size_type,
+                          cuda::thread_scope_device,
+                          cudf::detail::cuco_allocator<char>,
+                          cuco::legacy::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
 
   hash_join()                            = delete;
   ~hash_join()                           = default;

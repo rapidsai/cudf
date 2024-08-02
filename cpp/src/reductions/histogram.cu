@@ -169,8 +169,7 @@ compute_row_frequencies(table_view const& input,
     cuco::empty_key{-1},
     cuco::empty_value{std::numeric_limits<size_type>::min()},
 
-    cudf::detail::cuco_allocator<cuco::pair<size_type, size_type>>{
-      rmm::mr::polymorphic_allocator<cuco::pair<size_type, size_type>>{}, stream},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value()};
 
   auto const preprocessed_input =

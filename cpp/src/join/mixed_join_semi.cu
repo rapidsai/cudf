@@ -167,8 +167,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     compute_hash_table_size(build.num_rows()),
     cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
     cuco::empty_value{cudf::detail::JoinNoneValue},
-    cudf::detail::cuco_allocator<cuco::pair<hash_value_type, size_type>>{
-      rmm::mr::polymorphic_allocator<cuco::pair<hash_value_type, size_type>>{}, stream},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value()};
 
   // Create hash table containing all keys found in right table
