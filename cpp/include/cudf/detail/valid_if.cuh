@@ -42,7 +42,8 @@ namespace detail {
  * @param[in] begin The beginning of the sequence of elements
  * @param[in] size The number of elements
  * @param[in] p The predicate to apply to each element
- * @param[out] null_count The count of unset bits in the output bitmask
+ * @param[out] null_count The count of unset bits in the output bitmask, which should be
+ * initialized to `size`
  */
 template <size_type block_size, typename InputIterator, typename Predicate>
 CUDF_KERNEL void valid_if_kernel(
