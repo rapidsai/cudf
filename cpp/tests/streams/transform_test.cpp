@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/ast/expressions.hpp>
@@ -128,8 +129,10 @@ TEST_F(TransformTest, OneHotEncode)
 TEST_F(TransformTest, NaNsToNulls)
 {
   std::vector<int32_t> input = {1, 2, 3, 4, 5};
+  std::vector<bool> mask     = {true, true, true, true, false, false};
 
-  auto input_column = cudf::test::fixed_width_column_wrapper<int32_t>(input.begin(), input.end());
+  auto input_column =
+    cudf::test::fixed_width_column_wrapper<int32_t>(input.begin(), input.end(), mask.begin());
   auto expected_column = [&]() {
     std::vector<int32_t> expected(input);
     std::vector<bool> expected_mask;
@@ -157,9 +160,8 @@ TEST_F(TransformTest, NaNsToNulls)
   cudf::column got(input_column);
   got.set_null_mask(std::move(*null_mask), null_count);
 
-  EXPECT_EQ(expected_column.null_count(), null_count);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column, got.view());
+  EXPECT_EQ(expected_column->null_count(), null_count);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column->view(), got.view());
 }
 
 TEST_F(TransformTest, RowBitCount)
