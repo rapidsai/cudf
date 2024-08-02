@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,9 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <type_traits>
 #include <vector>
@@ -337,4 +339,24 @@ TEST_F(SegmentedSortInt, Bool)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
   result = cudf::stable_segmented_sorted_order(cudf::table_view({test_col}), segments);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+}
+
+TEST_F(SegmentedSortInt, UnbalancedOffsets)
+{
+  auto h_input = std::vector<int64_t>(3535);
+  std::iota(h_input.begin(), h_input.end(), 1);
+  std::sort(h_input.begin(), h_input.end(), std::greater<int64_t>{});
+  std::fill_n(h_input.begin(), 4, 0);
+  std::fill(h_input.begin() + 3533, h_input.end(), 10000);
+  auto d_input = cudf::detail::make_device_uvector_sync(
+    h_input, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto input    = cudf::column_view(cudf::device_span<int64_t const>(d_input));
+  auto segments = cudf::test::fixed_width_column_wrapper<int32_t>({0, 4, 3533, 3535});
+  auto expected = cudf::sort(cudf::table_view({input}));
+
+  auto input_view = cudf::table_view({input});
+  auto result     = cudf::segmented_sort_by_key(input_view, input_view, segments);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view().column(0), expected->view().column(0));
+  result = cudf::stable_segmented_sort_by_key(input_view, input_view, segments);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view().column(0), expected->view().column(0));
 }
