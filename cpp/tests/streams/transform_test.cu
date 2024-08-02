@@ -220,13 +220,13 @@ TEST_F(TransformTest, OneHotEncode)
 
 TEST_F(TransformTest, NaNsToNulls)
 {
-  std::vector<cudf::size_type> input = {1, 2, 3, 4, 5};
+  std::vector<float> input = {1, 2, 3, 4, 5};
   std::vector<bool> mask             = {true, true, true, true, false, false};
 
-  auto input_column = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+  auto input_column = cudf::test::fixed_width_column_wrapper<float>(
     input.begin(), input.end(), mask.begin());
   auto expected_column = [&]() {
-    std::vector<cudf::size_type> expected(input);
+    std::vector<float> expected(input);
     std::vector<bool> expected_mask;
 
     if (mask.size() > 0) {
@@ -235,15 +235,15 @@ TEST_F(TransformTest, NaNsToNulls)
         input.end(),
         mask.begin(),
         std::back_inserter(expected_mask),
-        [](cudf::size_type val, bool validity) { return validity and not std::isnan(val); });
+        [](float val, bool validity) { return validity and not std::isnan(val); });
     } else {
       std::transform(
-        input.begin(), input.end(), std::back_inserter(expected_mask), [](cudf::size_type val) {
+        input.begin(), input.end(), std::back_inserter(expected_mask), [](float val) {
           return not std::isnan(val);
         });
     }
 
-    return cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+    return cudf::test::fixed_width_column_wrapper<float>(
              expected.begin(), expected.end(), expected_mask.begin())
       .release();
   }();
