@@ -552,7 +552,8 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                      cuco::linear_probing<1, hasher_type>{d_hasher},
                      {},
                      {},
-                     cudf::detail::cuco_allocator{stream},
+                     cudf::detail::cuco_allocator<cudf::size_type>{
+                       rmm::mr::polymorphic_allocator<cudf::size_type>{}, stream},
                      stream.value()};
   key_set.insert_if_async(iter,
                           iter + num_nodes,
@@ -740,7 +741,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
                                   cuco::linear_probing<1, hasher_type>{d_hashed_cache},
                                   {},
                                   {},
-                                  cudf::detail::cuco_allocator{stream},
+                                  cudf::detail::cuco_allocator<cudf::size_type>{
+                                    rmm::mr::polymorphic_allocator<cudf::size_type>{}, stream},
                                   stream.value()};
 
   // insert and convert node ids to unique set ids

@@ -126,11 +126,13 @@ mixed_join(
   auto build_view = table_device_view::create(build, stream);
 
   // Don't use multimap_type because we want a CG size of 1.
-  mixed_multimap_type hash_table{compute_hash_table_size(build.num_rows()),
-                                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-                                 cuco::empty_value{cudf::detail::JoinNoneValue},
-                                 stream.value(),
-                                 cudf::detail::cuco_allocator{stream}};
+  mixed_multimap_type hash_table{
+    compute_hash_table_size(build.num_rows()),
+    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+    cuco::empty_value{cudf::detail::JoinNoneValue},
+    stream.value(),
+    cudf::detail::cuco_allocator<cuco::pair<hash_value_type, size_type>>{
+      rmm::mr::polymorphic_allocator<cuco::pair<hash_value_type, size_type>>{}, stream}};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
@@ -391,11 +393,13 @@ compute_mixed_join_output_size(table_view const& left_equality,
   auto build_view = table_device_view::create(build, stream);
 
   // Don't use multimap_type because we want a CG size of 1.
-  mixed_multimap_type hash_table{compute_hash_table_size(build.num_rows()),
-                                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-                                 cuco::empty_value{cudf::detail::JoinNoneValue},
-                                 stream.value(),
-                                 cudf::detail::cuco_allocator{stream}};
+  mixed_multimap_type hash_table{
+    compute_hash_table_size(build.num_rows()),
+    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+    cuco::empty_value{cudf::detail::JoinNoneValue},
+    stream.value(),
+    cudf::detail::cuco_allocator<cuco::pair<hash_value_type, size_type>>{
+      rmm::mr::polymorphic_allocator<cuco::pair<hash_value_type, size_type>>{}, stream}};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we

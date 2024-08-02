@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "cudf/types.hpp"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
@@ -100,14 +102,15 @@ struct bpe_equal {
 
 using bpe_probe_scheme = cuco::linear_probing<1, bpe_hasher>;
 
-using merge_pairs_map_type = cuco::static_map<cudf::size_type,
-                                              cudf::size_type,
-                                              cuco::extent<std::size_t>,
-                                              cuda::thread_scope_device,
-                                              bpe_equal,
-                                              bpe_probe_scheme,
-                                              cudf::detail::cuco_allocator,
-                                              cuco_storage>;
+using merge_pairs_map_type =
+  cuco::static_map<cudf::size_type,
+                   cudf::size_type,
+                   cuco::extent<std::size_t>,
+                   cuda::thread_scope_device,
+                   bpe_equal,
+                   bpe_probe_scheme,
+                   cudf::detail::cuco_allocator<cuco::pair<cudf::size_type, cudf::size_type>>,
+                   cuco_storage>;
 
 /**
  * @brief Hasher function used for building and using the cuco static-map
@@ -158,14 +161,15 @@ struct mp_equal {
 
 using mp_probe_scheme = cuco::linear_probing<1, mp_hasher>;
 
-using mp_table_map_type = cuco::static_map<cudf::size_type,
-                                           cudf::size_type,
-                                           cuco::extent<std::size_t>,
-                                           cuda::thread_scope_device,
-                                           mp_equal,
-                                           mp_probe_scheme,
-                                           cudf::detail::cuco_allocator,
-                                           cuco_storage>;
+using mp_table_map_type =
+  cuco::static_map<cudf::size_type,
+                   cudf::size_type,
+                   cuco::extent<std::size_t>,
+                   cuda::thread_scope_device,
+                   mp_equal,
+                   mp_probe_scheme,
+                   cudf::detail::cuco_allocator<cuco::pair<cudf::size_type, cudf::size_type>>,
+                   cuco_storage>;
 
 }  // namespace detail
 

@@ -575,7 +575,8 @@ std::unique_ptr<table> groupby(table_view const& keys,
                                       probing_scheme_type{d_row_hash},
                                       cuco::thread_scope_device,
                                       cuco::storage<1>{},
-                                      cudf::detail::cuco_allocator{stream},
+                                      cudf::detail::cuco_allocator<cudf::size_type>{
+                                        rmm::mr::polymorphic_allocator<cudf::size_type>{}, stream},
                                       stream.value()};
 
     // Compute all single pass aggs first

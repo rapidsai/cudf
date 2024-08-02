@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/types.hpp"
 #include "text/utilities/tokenize_ops.cuh"
 
 #include <cudf/column/column.hpp>
@@ -92,16 +93,17 @@ struct vocab_equal {
   }
 };
 
-using probe_scheme        = cuco::linear_probing<1, vocab_hasher>;
-using cuco_storage        = cuco::storage<1>;
-using vocabulary_map_type = cuco::static_map<cudf::size_type,
-                                             cudf::size_type,
-                                             cuco::extent<std::size_t>,
-                                             cuda::thread_scope_device,
-                                             vocab_equal,
-                                             probe_scheme,
-                                             cudf::detail::cuco_allocator,
-                                             cuco_storage>;
+using probe_scheme = cuco::linear_probing<1, vocab_hasher>;
+using cuco_storage = cuco::storage<1>;
+using vocabulary_map_type =
+  cuco::static_map<cudf::size_type,
+                   cudf::size_type,
+                   cuco::extent<std::size_t>,
+                   cuda::thread_scope_device,
+                   vocab_equal,
+                   probe_scheme,
+                   cudf::detail::cuco_allocator<cuco::pair<cudf::size_type, cudf::size_type>>,
+                   cuco_storage>;
 }  // namespace
 }  // namespace detail
 
@@ -152,7 +154,8 @@ tokenize_vocabulary::tokenize_vocabulary(cudf::strings_column_view const& input,
     detail::probe_scheme{detail::vocab_hasher{*d_vocabulary}},
     cuco::thread_scope_device,
     detail::cuco_storage{},
-    cudf::detail::cuco_allocator{stream},
+    cudf::detail::cuco_allocator<cuco::pair<cudf::size_type, cudf::size_type>>{
+      rmm::mr::polymorphic_allocator<cuco::pair<cudf::size_type, cudf::size_type>>{}, stream},
     stream.value());
 
   // the row index is the token id (value for each key in the map)

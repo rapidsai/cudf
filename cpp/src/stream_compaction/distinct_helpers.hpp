@@ -57,7 +57,7 @@ using hash_set_type =
                                         cudf::experimental::row::hash::device_row_hasher<
                                           cudf::hashing::detail::default_hash,
                                           cudf::nullate::DYNAMIC>>,
-                   cudf::detail::cuco_allocator,
+                   cudf::detail::cuco_allocator<size_type>,
                    cuco::storage<1>>;
 
 /**

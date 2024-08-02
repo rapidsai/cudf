@@ -15,6 +15,9 @@
  */
 #pragma once
 
+#include "cudf/hashing.hpp"
+#include "cudf/types.hpp"
+
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
@@ -48,11 +51,14 @@ using mixed_multimap_type =
   cuco::static_multimap<hash_value_type,
                         size_type,
                         cuda::thread_scope_device,
-                        cudf::detail::cuco_allocator,
+                        cudf::detail::cuco_allocator<cuco::pair<hash_value_type, size_type>>,
                         cuco::legacy::double_hashing<1, hash_type, hash_type>>;
 
-using semi_map_type = cuco::legacy::
-  static_map<hash_value_type, size_type, cuda::thread_scope_device, cudf::detail::cuco_allocator>;
+using semi_map_type =
+  cuco::legacy::static_map<hash_value_type,
+                           size_type,
+                           cuda::thread_scope_device,
+                           cudf::detail::cuco_allocator<cuco::pair<hash_value_type, size_type>>>;
 
 using row_hash_legacy =
   cudf::row_hasher<cudf::hashing::detail::default_hash, cudf::nullate::DYNAMIC>;

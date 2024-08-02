@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "cudf/types.hpp"
 #include "join_common_utils.cuh"
 
 #include <cudf/copying.hpp>
@@ -370,11 +371,13 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
   : _has_nulls(has_nulls),
     _is_empty{build.num_rows() == 0},
     _nulls_equal{compare_nulls},
-    _hash_table{compute_hash_table_size(build.num_rows()),
-                cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-                cuco::empty_value{cudf::detail::JoinNoneValue},
-                stream.value(),
-                cudf::detail::cuco_allocator{stream}},
+    _hash_table{
+      compute_hash_table_size(build.num_rows()),
+      cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+      cuco::empty_value{cudf::detail::JoinNoneValue},
+      stream.value(),
+      cudf::detail::cuco_allocator<cuco::pair<hash_value_type, size_type>>{
+        rmm::mr::polymorphic_allocator<cuco::pair<hash_value_type, size_type>>{}, stream}},
     _build{build},
     _preprocessed_build{
       cudf::experimental::row::equality::preprocessed_table::create(_build, stream)}

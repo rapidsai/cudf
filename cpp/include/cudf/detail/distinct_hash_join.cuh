@@ -94,13 +94,14 @@ struct distinct_hash_join {
   using cuco_storage_type   = cuco::storage<1>;
 
   /// Hash table type
-  using hash_table_type = cuco::static_set<cuco::pair<hash_value_type, rhs_index_type>,
-                                           cuco::extent<size_type>,
-                                           cuda::thread_scope_device,
-                                           comparator_adapter<d_equal_type>,
-                                           probing_scheme_type,
-                                           cudf::detail::cuco_allocator,
-                                           cuco_storage_type>;
+  using hash_table_type =
+    cuco::static_set<cuco::pair<hash_value_type, rhs_index_type>,
+                     cuco::extent<size_type>,
+                     cuda::thread_scope_device,
+                     comparator_adapter<d_equal_type>,
+                     probing_scheme_type,
+                     cudf::detail::cuco_allocator<cuco::pair<hash_value_type, rhs_index_type>>,
+                     cuco_storage_type>;
 
   bool _has_nulls;  ///< true if nulls are present in either build table or probe table
   cudf::null_equality _nulls_equal;  ///< whether to consider nulls as equal

@@ -235,7 +235,8 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                   probing_scheme,
                                   {},
                                   {},
-                                  cudf::detail::cuco_allocator{stream},
+                                  cudf::detail::cuco_allocator<rhs_index_type>{
+                                    rmm::mr::polymorphic_allocator<rhs_index_type>{}, stream},
                                   stream.value()};
 
       if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
