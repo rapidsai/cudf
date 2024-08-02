@@ -3410,7 +3410,7 @@ class IntervalIndex(Index):
         left_col = breaks.slice(0, len(breaks) - 1)
         right_col = breaks.slice(1, len(breaks))
         # For indexing, children should both have 0 offset
-        right_col = type(right_col)(
+        right_col = column.build_column(
             data=right_col.data,
             dtype=right_col.dtype,
             size=right_col.size,
