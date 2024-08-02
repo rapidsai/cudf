@@ -82,7 +82,7 @@ requirements:
     - typing_extensions >=4.0.0
     - pandas >=2.0,<2.2.3dev0
     - cupy >=12.0.0
-    - numba >=0.57
+    - numba-cuda >= 0.0.13
     # TODO: Update `numpy` in `host` when dropping `<2.0a0`
     - numpy >=1.23,<2.0a0
     - {{ pin_compatible('pyarrow', max_pin='x.x') }}
