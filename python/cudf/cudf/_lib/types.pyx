@@ -16,8 +16,9 @@ from cudf._lib.types cimport (
     underlying_type_t_sorted,
 )
 
+import pylibcudf
+
 import cudf
-from cudf._lib import pylibcudf
 
 
 class TypeId(IntEnum):

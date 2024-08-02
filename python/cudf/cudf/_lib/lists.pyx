@@ -8,7 +8,7 @@ from pylibcudf.libcudf.types cimport null_order, size_type
 from cudf._lib.column cimport Column
 from cudf._lib.utils cimport columns_from_pylibcudf_table
 
-from cudf._lib import pylibcudf
+import pylibcudf
 
 from pylibcudf cimport Scalar
 

@@ -11,8 +11,9 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+import pylibcudf
+
 import cudf
-from cudf._lib import pylibcudf
 from cudf._lib.types import LIBCUDF_TO_SUPPORTED_NUMPY_TYPES
 from cudf.core.dtypes import ListDtype, StructDtype
 from cudf.core.missing import NA, NaT

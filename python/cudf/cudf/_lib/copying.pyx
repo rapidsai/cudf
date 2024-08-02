@@ -10,8 +10,9 @@ from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
+import pylibcudf
+
 import cudf
-from cudf._lib import pylibcudf
 from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
 
 from cudf._lib.column cimport Column

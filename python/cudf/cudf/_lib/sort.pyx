@@ -20,7 +20,7 @@ from cudf._lib.utils cimport (
     table_view_from_columns,
 )
 
-from cudf._lib import pylibcudf
+import pylibcudf
 
 
 @acquire_spill_lock()

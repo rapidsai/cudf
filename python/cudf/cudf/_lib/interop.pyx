@@ -4,7 +4,7 @@ from cpython cimport pycapsule
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib import pylibcudf
+import pylibcudf
 
 from pylibcudf.libcudf.interop cimport (
     DLManagedTensor,

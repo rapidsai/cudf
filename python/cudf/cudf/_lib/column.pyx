@@ -6,12 +6,12 @@ from typing import Literal
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pylibcudf
 
 import rmm
 
 import cudf
 import cudf._lib as libcudf
-from cudf._lib import pylibcudf
 from cudf.core.buffer import (
     Buffer,
     ExposureTrackedBuffer,

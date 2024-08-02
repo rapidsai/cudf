@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Any, Callable, Sequence, cast
 
 import numpy as np
 import pandas as pd
+import pylibcudf
 from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib import pylibcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core.column import (
     ColumnBase,
