@@ -102,6 +102,7 @@ def _nest_list_data(data, leaf_type):
 
 @_dask_cudf_performance_tracking
 def _get_non_empty_data(s):
+    """Return a non empty column as metadata."""
     if isinstance(s, cudf.core.column.CategoricalColumn):
         categories = (
             s.categories if len(s.categories) else [UNKNOWN_CATEGORIES]
@@ -128,7 +129,7 @@ def _get_non_empty_data(s):
         data = [{key: None for key in struct_dtype.fields.keys()}] * 2
         data = cudf.core.column.as_column(data, dtype=s.dtype)
     elif is_string_dtype(s.dtype):
-        data = pa.array(["cat", "dog"])
+        data = cudf.core.column.as_column(pa.array(["cat", "dog"]))
     elif isinstance(s.dtype, pd.DatetimeTZDtype):
         from cudf.utils.dtypes import get_time_unit
 
