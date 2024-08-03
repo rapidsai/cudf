@@ -16,11 +16,13 @@
 #pragma once
 
 #include <cudf/timezone.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf::detail {
+namespace CUDF_EXPORT cudf {
+namespace detail {
 
 /**
  * @copydoc cudf::make_timezone_transition_table(std::optional<std::string_view>, std::string_view,
@@ -34,4 +36,5 @@ std::unique_ptr<table> make_timezone_transition_table(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
-}  // namespace cudf::detail
+}  // namespace detail
+}  // namespace CUDF_EXPORT cudf

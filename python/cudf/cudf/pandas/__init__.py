@@ -7,6 +7,8 @@ import warnings
 
 import rmm.mr
 
+from cudf._lib import pylibcudf
+
 from .fast_slow_proxy import is_proxy_object
 from .magics import load_ipython_extension
 from .profiler import Profiler
@@ -15,6 +17,19 @@ __all__ = ["Profiler", "load_ipython_extension", "install", "is_proxy_object"]
 
 
 LOADED = False
+
+_SUPPORTED_PREFETCHES = {
+    "column_view::get_data",
+    "mutable_column_view::get_data",
+    "gather",
+    "hash_join",
+}
+
+
+def _enable_managed_prefetching(rmm_mode):
+    if "managed" in rmm_mode:
+        for key in _SUPPORTED_PREFETCHES:
+            pylibcudf.experimental.enable_prefetching(key)
 
 
 def install():
@@ -25,41 +40,39 @@ def install():
     global LOADED
     LOADED = loader is not None
 
-    if (rmm_mode := os.getenv("CUDF_PANDAS_RMM_MODE", None)) is not None:
-        # Check if a non-default memory resource is set
-        current_mr = rmm.mr.get_current_device_resource()
-        if not isinstance(current_mr, rmm.mr.CudaMemoryResource):
-            warnings.warn(
-                f"cudf.pandas detected an already configured memory resource, ignoring 'CUDF_PANDAS_RMM_MODE'={str(rmm_mode)}",
-                UserWarning,
-            )
-        free_memory, _ = rmm.mr.available_device_memory()
-        free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
+    rmm_mode = os.getenv("CUDF_PANDAS_RMM_MODE", "managed_pool")
+    # Check if a non-default memory resource is set
+    current_mr = rmm.mr.get_current_device_resource()
+    if not isinstance(current_mr, rmm.mr.CudaMemoryResource):
+        warnings.warn(
+            f"cudf.pandas detected an already configured memory resource, ignoring 'CUDF_PANDAS_RMM_MODE'={str(rmm_mode)}",
+            UserWarning,
+        )
+        return
 
-        if rmm_mode == "cuda":
-            mr = rmm.mr.CudaMemoryResource()
-            rmm.mr.set_current_device_resource(mr)
-        elif rmm_mode == "pool":
-            rmm.mr.set_current_device_resource(
-                rmm.mr.PoolMemoryResource(
-                    rmm.mr.get_current_device_resource(),
-                    initial_pool_size=free_memory,
-                )
-            )
-        elif rmm_mode == "async":
-            mr = rmm.mr.CudaAsyncMemoryResource(initial_pool_size=free_memory)
-            rmm.mr.set_current_device_resource(mr)
-        elif rmm_mode == "managed":
-            mr = rmm.mr.ManagedMemoryResource()
-            rmm.mr.set_current_device_resource(mr)
-        elif rmm_mode == "managed_pool":
-            mr = rmm.mr.PoolMemoryResource(
+    free_memory, _ = rmm.mr.available_device_memory()
+    free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
+    new_mr = current_mr
+    if rmm_mode == "pool":
+        new_mr = rmm.mr.PoolMemoryResource(
+            current_mr,
+            initial_pool_size=free_memory,
+        )
+    elif rmm_mode == "async":
+        new_mr = rmm.mr.CudaAsyncMemoryResource(initial_pool_size=free_memory)
+    elif rmm_mode == "managed":
+        new_mr = rmm.mr.PrefetchResourceAdaptor(rmm.mr.ManagedMemoryResource())
+    elif rmm_mode == "managed_pool":
+        new_mr = rmm.mr.PrefetchResourceAdaptor(
+            rmm.mr.PoolMemoryResource(
                 rmm.mr.ManagedMemoryResource(),
                 initial_pool_size=free_memory,
             )
-            rmm.mr.set_current_device_resource(mr)
-        else:
-            raise ValueError(f"Unsupported rmm mode: {rmm_mode}")
+        )
+    elif rmm_mode != "cuda":
+        raise ValueError(f"Unsupported {rmm_mode=}")
+    rmm.mr.set_current_device_resource(new_mr)
+    _enable_managed_prefetching(rmm_mode)
 
 
 def pytest_load_initial_conftests(early_config, parser, args):

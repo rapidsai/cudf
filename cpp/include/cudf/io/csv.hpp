@@ -31,7 +31,7 @@
 #include <variant>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 
 /**
@@ -1762,4 +1762,4 @@ void write_csv(csv_writer_options const& options,
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -34,14 +34,11 @@
 
 // Forward declaration
 namespace cudf::experimental::row::equality {
-class preprocessed_table;
+class CUDF_EXPORT preprocessed_table;
 }
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
-
-// Forward declaration
-class cuco_allocator;
 
 constexpr int DEFAULT_JOIN_CG_SIZE = 2;
 
@@ -188,4 +185,4 @@ struct hash_join {
                     rmm::device_async_resource_ref mr) const;
 };
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
