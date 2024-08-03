@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "distinct_helpers.hpp"
+
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
@@ -32,9 +34,6 @@
 
 #include <cuco/static_map.cuh>
 #include <cuco/static_set.cuh>
-#include <thrust/copy.h>
-#include <thrust/distance.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
 #include <functional>
