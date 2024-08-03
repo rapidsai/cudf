@@ -15,9 +15,6 @@
  */
 #pragma once
 
-#include "cudf/hashing.hpp"
-#include "cudf/types.hpp"
-
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>

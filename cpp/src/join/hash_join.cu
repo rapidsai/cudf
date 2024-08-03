@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "cudf/types.hpp"
 #include "join_common_utils.cuh"
 
 #include <cudf/copying.hpp>

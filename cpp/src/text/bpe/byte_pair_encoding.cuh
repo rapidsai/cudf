@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include "cudf/types.hpp"
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/cuco_helpers.hpp>

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "cudf/types.hpp"
 #include "text/utilities/tokenize_ops.cuh"
 
 #include <cudf/column/column.hpp>
