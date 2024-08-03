@@ -54,9 +54,14 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
 {
   auto const valid_count = col.size() - col.null_count();
 
+  // ddof is allowed to be negative, hence need to check for all nulls
+  if (valid_count == 0 || valid_count <= ddof) {
+    auto result = cudf::make_fixed_width_scalar(output_dtype, stream, mr);
+    result->set_valid_async(false, stream);
+    return result;
+  }
   // reduction by iterator
   auto dcol = cudf::column_device_view::create(col, stream);
-  std::unique_ptr<scalar> result;
   Op compound_op{};
 
   if (!cudf::is_dictionary(col.type())) {
@@ -64,25 +69,21 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
       auto it = thrust::make_transform_iterator(
         dcol->pair_begin<ElementType, true>(),
         compound_op.template get_null_replacing_element_transformer<ResultType>());
-      result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
+      return cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
         it, col.size(), compound_op, valid_count, ddof, stream, mr);
     } else {
       auto it = thrust::make_transform_iterator(
         dcol->begin<ElementType>(), compound_op.template get_element_transformer<ResultType>());
-      result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
+      return cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
         it, col.size(), compound_op, valid_count, ddof, stream, mr);
     }
   } else {
     auto it = thrust::make_transform_iterator(
       cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType>(*dcol, col.has_nulls()),
       compound_op.template get_null_replacing_element_transformer<ResultType>());
-    result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
+    return cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
       it, col.size(), compound_op, valid_count, ddof, stream, mr);
   }
-
-  // set scalar is valid
-  result->set_valid_async(col.null_count() < col.size(), stream);
-  return result;
 };
 
 // @brief result type dispatcher for compound reduction (a.k.a. mean, var, std)
