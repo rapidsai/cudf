@@ -473,15 +473,15 @@ class DatetimeColumn(column.ColumnBase):
 
     def as_numerical_column(
         self, dtype: Dtype
-    ) -> "cudf.core.column.NumericalColumn":
-        col = column.build_column(
-            data=self.base_data,
-            dtype=np.int64,
+    ) -> cudf.core.column.NumericalColumn:
+        col = cudf.core.column.NumericalColumn(
+            data=self.base_data,  # type: ignore[arg-type]
+            dtype=np.dtype(np.int64),
             mask=self.base_mask,
             offset=self.offset,
             size=self.size,
         )
-        return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
+        return cast(cudf.core.column.NumericalColumn, col.astype(dtype))
 
     def strftime(self, format: str) -> cudf.core.column.StringColumn:
         if len(self) == 0:
