@@ -15,6 +15,7 @@
  */
 
 #include "arrow_utilities.hpp"
+#include "decimal_conversion_utilities.cuh"
 #include "detail/arrow_allocator.hpp"
 
 #include <cudf/column/column.hpp>
@@ -158,8 +159,11 @@ std::shared_ptr<arrow::Array> unsupported_decimals_to_arrow(column_view input,
                                                             arrow::MemoryPool* ar_mr,
                                                             rmm::cuda_stream_view stream)
 {
-  auto buf =
-    detail::decimals_to_arrow<DeviceType>(input, stream, rmm::mr::get_current_device_resource());
+  auto buf = detail::convert_decimals_to_decimal128<DeviceType>(
+    input, stream, rmm::mr::get_current_device_resource());
+
+  // Synchronize stream here to ensure the decimal128 buffer is ready.
+  stream.synchronize();
 
   auto const buf_size_in_bytes = buf->size();
   auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);

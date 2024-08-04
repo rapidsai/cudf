@@ -34,7 +34,7 @@
 namespace {
 
 // Functor to reassemble a 128-bit value from four 64-bit chunks with overflow detection.
-class chunk_assembler : public thrust::unary_function<cudf::size_type, __int128_t> {
+class chunk_assembler {
  public:
   chunk_assembler(bool* overflows,
                   uint64_t const* chunks0,

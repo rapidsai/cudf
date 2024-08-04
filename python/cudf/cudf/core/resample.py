@@ -43,8 +43,10 @@ class _Resampler(GroupBy):
         by = _ResampleGrouping(obj, by)
         super().__init__(obj, by=by)
 
-    def agg(self, func):
-        result = super().agg(func)
+    def agg(self, func, *args, engine=None, engine_kwargs=None, **kwargs):
+        result = super().agg(
+            func, *args, engine=engine, engine_kwargs=engine_kwargs, **kwargs
+        )
         if len(self.grouping.bin_labels) != len(result):
             index = cudf.core.index.Index(
                 self.grouping.bin_labels, name=self.grouping.names[0]

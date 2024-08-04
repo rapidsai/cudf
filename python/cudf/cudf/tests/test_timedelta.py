@@ -1467,3 +1467,42 @@ def test_timedelta_series_cmpops_pandas_compatibility(data1, data2, op):
         got = op(gsr1, gsr2)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "method, kwargs",
+    [
+        ["sum", {}],
+        ["mean", {}],
+        ["median", {}],
+        ["std", {}],
+        ["std", {"ddof": 0}],
+    ],
+)
+def test_tdi_reductions(method, kwargs):
+    pd_tdi = pd.TimedeltaIndex(["1 day", "2 days", "3 days"])
+    cudf_tdi = cudf.from_pandas(pd_tdi)
+
+    result = getattr(pd_tdi, method)(**kwargs)
+    expected = getattr(cudf_tdi, method)(**kwargs)
+    assert result == expected
+
+
+def test_tdi_asi8():
+    pd_tdi = pd.TimedeltaIndex(["1 day", "2 days", "3 days"])
+    cudf_tdi = cudf.from_pandas(pd_tdi)
+
+    result = pd_tdi.asi8
+    expected = cudf_tdi.asi8
+    assert_eq(result, expected)
+
+
+def test_tdi_unit():
+    pd_tdi = pd.TimedeltaIndex(
+        ["1 day", "2 days", "3 days"], dtype="timedelta64[ns]"
+    )
+    cudf_tdi = cudf.from_pandas(pd_tdi)
+
+    result = pd_tdi.unit
+    expected = cudf_tdi.unit
+    assert result == expected

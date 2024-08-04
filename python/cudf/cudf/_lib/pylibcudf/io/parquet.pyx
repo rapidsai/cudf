@@ -26,7 +26,7 @@ cdef parquet_reader_options _setup_parquet_reader_options(
     bool convert_strings_to_categories = False,
     bool use_pandas_metadata = True,
     int64_t skip_rows = 0,
-    size_type num_rows = -1,
+    size_type nrows = -1,
     # ReaderColumnSchema reader_column_schema = None,
     # DataType timestamp_type = DataType(type_id.EMPTY)
 ):
@@ -40,8 +40,8 @@ cdef parquet_reader_options _setup_parquet_reader_options(
     )
     if row_groups is not None:
         opts.set_row_groups(row_groups)
-    if num_rows != -1:
-        opts.set_num_rows(num_rows)
+    if nrows != -1:
+        opts.set_num_rows(nrows)
     if skip_rows != 0:
         opts.set_skip_rows(skip_rows)
     if columns is not None:
@@ -73,7 +73,7 @@ cdef class ChunkedParquetReader:
         Whether to convert string columns to the category type
     skip_rows : int64_t, default 0
         The number of rows to skip from the start of the file.
-    num_rows : size_type, default -1
+    nrows : size_type, default -1
         The number of rows to read. By default, read the entire file.
     chunk_read_limit : size_t, default 0
         Limit on total number of bytes to be returned per read,
@@ -90,7 +90,7 @@ cdef class ChunkedParquetReader:
         bool use_pandas_metadata=True,
         bool convert_strings_to_categories=False,
         int64_t skip_rows = 0,
-        size_type num_rows = -1,
+        size_type nrows = -1,
         size_t chunk_read_limit=0,
         size_t pass_read_limit=1024000000
     ):
@@ -103,7 +103,7 @@ cdef class ChunkedParquetReader:
             convert_strings_to_categories=convert_strings_to_categories,
             use_pandas_metadata=use_pandas_metadata,
             skip_rows=skip_rows,
-            num_rows=num_rows,
+            nrows=nrows,
         )
 
         with nogil:
@@ -152,7 +152,7 @@ cpdef read_parquet(
     bool convert_strings_to_categories = False,
     bool use_pandas_metadata = True,
     int64_t skip_rows = 0,
-    size_type num_rows = -1,
+    size_type nrows = -1,
     # Disabled, these aren't used by cudf-python
     # we should only add them back in if there's user demand
     # ReaderColumnSchema reader_column_schema = None,
@@ -178,7 +178,7 @@ cpdef read_parquet(
         the per-file user metadata of the ``TableWithMetadata``
     skip_rows : int64_t, default 0
         The number of rows to skip from the start of the file.
-    num_rows : size_type, default -1
+    nrows : size_type, default -1
         The number of rows to read. By default, read the entire file.
 
     Returns
@@ -195,7 +195,7 @@ cpdef read_parquet(
         convert_strings_to_categories,
         use_pandas_metadata,
         skip_rows,
-        num_rows,
+        nrows,
     )
 
     with nogil:

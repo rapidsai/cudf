@@ -321,7 +321,7 @@ class Scan(IR):
             tbl_w_meta = plc.io.parquet.read_parquet(
                 plc.io.SourceInfo(self.paths),
                 columns=with_columns,
-                num_rows=nrows,
+                nrows=nrows,
             )
             df = DataFrame.from_table(
                 tbl_w_meta.tbl,

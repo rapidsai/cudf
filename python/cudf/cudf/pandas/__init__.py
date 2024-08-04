@@ -7,6 +7,8 @@ import warnings
 
 import rmm.mr
 
+from cudf._lib import pylibcudf
+
 from .fast_slow_proxy import is_proxy_object
 from .magics import load_ipython_extension
 from .profiler import Profiler
@@ -15,6 +17,19 @@ __all__ = ["Profiler", "load_ipython_extension", "install", "is_proxy_object"]
 
 
 LOADED = False
+
+_SUPPORTED_PREFETCHES = {
+    "column_view::get_data",
+    "mutable_column_view::get_data",
+    "gather",
+    "hash_join",
+}
+
+
+def _enable_managed_prefetching(rmm_mode):
+    if "managed" in rmm_mode:
+        for key in _SUPPORTED_PREFETCHES:
+            pylibcudf.experimental.enable_prefetching(key)
 
 
 def install():
@@ -33,7 +48,7 @@ def install():
             f"cudf.pandas detected an already configured memory resource, ignoring 'CUDF_PANDAS_RMM_MODE'={str(rmm_mode)}",
             UserWarning,
         )
-        return rmm_mode
+        return
 
     free_memory, _ = rmm.mr.available_device_memory()
     free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
@@ -57,7 +72,7 @@ def install():
     elif rmm_mode != "cuda":
         raise ValueError(f"Unsupported {rmm_mode=}")
     rmm.mr.set_current_device_resource(new_mr)
-    return rmm_mode
+    _enable_managed_prefetching(rmm_mode)
 
 
 def pytest_load_initial_conftests(early_config, parser, args):

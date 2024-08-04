@@ -264,10 +264,11 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
 }  // namespace detail
 
 std::unique_ptr<column> interleave_columns(table_view const& input,
+                                           rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::interleave_columns(input, cudf::get_default_stream(), mr);
+  return detail::interleave_columns(input, stream, mr);
 }
 
 }  // namespace cudf

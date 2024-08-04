@@ -199,6 +199,16 @@ bytes_per_thread : int, default None
     in parallel (using a python thread pool). Default allocation is
     {bytes_per_thread} bytes.
     This parameter is functional only when `use_python_file_object=False`.
+skiprows : int, default None
+    If not None, the number of rows to skip from the start of the file.
+
+    .. note::
+       This option is not supported when the low-memory mode is on.
+nrows : int, default None
+    If not None, the total number of rows to read.
+
+    .. note:
+       This option is not supported when the low-memory mode is on.
 
 Returns
 -------

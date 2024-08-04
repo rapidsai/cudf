@@ -51,6 +51,20 @@ cudaError_t prefetch_noexcept(std::string_view key,
                               rmm::cuda_stream_view stream,
                               rmm::cuda_device_id device_id) noexcept
 {
+  // Don't try to prefetch nullptrs or empty data. Sometimes libcudf has column
+  // views that use nullptrs with a nonzero size as an optimization.
+  if (ptr == nullptr) {
+    if (prefetch_config::instance().debug) {
+      std::cerr << "Skipping prefetch of nullptr" << std::endl;
+    }
+    return cudaSuccess;
+  }
+  if (size == 0) {
+    if (prefetch_config::instance().debug) {
+      std::cerr << "Skipping prefetch of size 0" << std::endl;
+    }
+    return cudaSuccess;
+  }
   if (prefetch_config::instance().get(key)) {
     if (prefetch_config::instance().debug) {
       std::cerr << "Prefetching " << size << " bytes for key " << key << " at location " << ptr

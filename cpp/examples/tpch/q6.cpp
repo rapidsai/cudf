@@ -84,7 +84,7 @@ int main(int argc, char const** argv)
     cudf::ast::ast_operator::GREATER_EQUAL, shipdate_ref, shipdate_lower_literal);
   auto const shipdate_pred_b =
     cudf::ast::operation(cudf::ast::ast_operator::LESS, shipdate_ref, shipdate_upper_literal);
-  auto lineitem_pred = std::make_unique<cudf::ast::operation>(
+  auto const lineitem_pred = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LOGICAL_AND, shipdate_pred_a, shipdate_pred_b);
   auto lineitem =
     read_parquet(args.dataset_dir + "/lineitem.parquet", lineitem_cols, std::move(lineitem_pred));

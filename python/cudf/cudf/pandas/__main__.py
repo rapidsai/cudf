@@ -72,17 +72,7 @@ def main():
 
     args = parser.parse_args()
 
-    rmm_mode = install()
-    if "managed" in rmm_mode:
-        for key in {
-            "column_view::get_data",
-            "mutable_column_view::get_data",
-            "gather",
-            "hash_join",
-        }:
-            from cudf._lib import pylibcudf
-
-            pylibcudf.experimental.enable_prefetching(key)
+    install()
     with profile(args.profile, args.line_profile, args.args[0]) as fn:
         args.args[0] = fn
         if args.module:

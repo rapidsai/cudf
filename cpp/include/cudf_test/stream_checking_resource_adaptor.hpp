@@ -156,16 +156,4 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
                                // cudf::test::get_default_stream() is observed.
 };
 
-/**
- * @brief Convenience factory to return a `stream_checking_resource_adaptor` around the
- * upstream resource `upstream`.
- *
- * @param upstream Reference to the upstream resource
- */
-inline stream_checking_resource_adaptor make_stream_checking_resource_adaptor(
-  rmm::device_async_resource_ref upstream, bool error_on_invalid_stream, bool check_default_stream)
-{
-  return stream_checking_resource_adaptor{upstream, error_on_invalid_stream, check_default_stream};
-}
-
 }  // namespace cudf::test

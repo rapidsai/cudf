@@ -502,6 +502,7 @@ def melt(
     var_name=None,
     value_name="value",
     col_level=None,
+    ignore_index: bool = True,
 ):
     """Unpivots a DataFrame from wide format to long format,
     optionally leaving identifier variables set.
@@ -566,6 +567,8 @@ def melt(
     """
     if col_level is not None:
         raise NotImplementedError("col_level != None is not supported yet.")
+    if ignore_index is not True:
+        raise NotImplementedError("ignore_index is currently not supported.")
 
     # Arg cleaning
 

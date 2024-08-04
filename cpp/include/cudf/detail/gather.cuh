@@ -518,7 +518,7 @@ struct column_gatherer_impl<struct_view> {
  * Positive indices are unchanged by this transformation.
  */
 template <typename map_type>
-struct index_converter : public thrust::unary_function<map_type, map_type> {
+struct index_converter {
   index_converter(size_type n_rows) : n_rows(n_rows) {}
 
   __device__ map_type operator()(map_type in) const { return ((in % n_rows) + n_rows) % n_rows; }

@@ -251,12 +251,24 @@ class TimeDeltaColumn(ColumnBase):
     def time_unit(self) -> str:
         return np.datetime_data(self.dtype)[0]
 
+    def total_seconds(self) -> ColumnBase:
+        raise NotImplementedError("total_seconds is currently not implemented")
+
+    def ceil(self, freq: str) -> ColumnBase:
+        raise NotImplementedError("ceil is currently not implemented")
+
+    def floor(self, freq: str) -> ColumnBase:
+        raise NotImplementedError("floor is currently not implemented")
+
+    def round(self, freq: str) -> ColumnBase:
+        raise NotImplementedError("round is currently not implemented")
+
     def as_numerical_column(
         self, dtype: Dtype
-    ) -> "cudf.core.column.NumericalColumn":
-        col = column.build_column(
-            data=self.base_data,
-            dtype=np.int64,
+    ) -> cudf.core.column.NumericalColumn:
+        col = cudf.core.column.NumericalColumn(
+            data=self.base_data,  # type: ignore[arg-type]
+            dtype=np.dtype(np.int64),
             mask=self.base_mask,
             offset=self.offset,
             size=self.size,

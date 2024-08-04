@@ -110,7 +110,7 @@ def _make_categorical_like(result, column):
     if isinstance(column, cudf.core.column.CategoricalColumn):
         result = cudf.core.column.build_categorical_column(
             categories=column.categories,
-            codes=cudf.core.column.build_column(
+            codes=cudf.core.column.NumericalColumn(
                 result.base_data, dtype=result.dtype
             ),
             mask=result.base_mask,

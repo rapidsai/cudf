@@ -1506,7 +1506,7 @@ def column_empty(
     elif isinstance(dtype, CategoricalDtype):
         data = None
         children = (
-            build_column(
+            cudf.core.column.NumericalColumn(
                 data=as_buffer(
                     rmm.DeviceBuffer(
                         size=row_count
@@ -1843,8 +1843,7 @@ def as_column(
         else:
             mask = None
 
-        arbitrary = cupy.asarray(arbitrary)
-        arbitrary = cupy.ascontiguousarray(arbitrary)
+        arbitrary = cupy.asarray(arbitrary, order="C")
 
         data = as_buffer(arbitrary, exposed=cudf.get_option("copy_on_write"))
         col = build_column(data, dtype=arbitrary.dtype, mask=mask)

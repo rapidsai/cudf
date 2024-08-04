@@ -15,9 +15,6 @@ export LIBCUDF_MEMCHECK_ENABLED=1
 for gt in ./*_TEST ; do
   test_name=$(basename ${gt})
   # Run gtests with compute-sanitizer
-  if [[ "$test_name" == "ERROR_TEST" ]] || [[ "$test_name" == "STREAM_IDENTIFICATION_TEST" ]]; then
-    continue
-  fi
   echo "Running compute-sanitizer on $test_name"
   compute-sanitizer --tool memcheck ${gt} "$@"
 done

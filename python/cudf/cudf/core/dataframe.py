@@ -46,10 +46,10 @@ from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
+    NumericalColumn,
     StructColumn,
     as_column,
     build_categorical_column,
-    build_column,
     column_empty,
     concat_columns,
 )
@@ -782,7 +782,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
-
             # descr is an optional field of the _cuda_ary_iface_
             if "descr" in arr_interface:
                 if len(arr_interface["descr"]) == 1:
@@ -3215,26 +3214,37 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    def insert(self, loc, name, value, nan_as_null=no_default):
+    def insert(
+        self,
+        loc,
+        column,
+        value,
+        allow_duplicates: bool = False,
+        nan_as_null=no_default,
+    ):
         """Add a column to DataFrame at the index specified by loc.
 
         Parameters
         ----------
         loc : int
             location to insert by index, cannot be greater then num columns + 1
-        name : number or string
-            name or label of column to be inserted
+        column : number or string
+            column or label of column to be inserted
         value : Series or array-like
         nan_as_null : bool, Default None
             If ``None``/``True``, converts ``np.nan`` values to
             ``null`` values.
             If ``False``, leaves ``np.nan`` values as is.
         """
+        if allow_duplicates is not False:
+            raise NotImplementedError(
+                "allow_duplicates is currently not implemented."
+            )
         if nan_as_null is no_default:
             nan_as_null = not cudf.get_option("mode.pandas_compatible")
         return self._insert(
             loc=loc,
-            name=name,
+            name=column,
             value=value,
             nan_as_null=nan_as_null,
             ignore_index=False,
@@ -4097,7 +4107,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     T = property(transpose, doc=transpose.__doc__)
 
     @_performance_tracking
-    def melt(self, **kwargs):
+    def melt(
+        self,
+        id_vars=None,
+        value_vars=None,
+        var_name=None,
+        value_name="value",
+        col_level=None,
+        ignore_index: bool = True,
+    ):
         """Unpivots a DataFrame from wide format to long format,
         optionally leaving identifier variables set.
 
@@ -4124,23 +4142,30 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         from cudf.core.reshape import melt
 
-        return melt(self, **kwargs)
+        return melt(
+            self,
+            id_vars=id_vars,
+            value_vars=value_vars,
+            var_name=var_name,
+            value_name=value_name,
+            col_level=col_level,
+            ignore_index=ignore_index,
+        )
 
     @_performance_tracking
     def merge(
         self,
         right,
+        how="inner",
         on=None,
         left_on=None,
         right_on=None,
         left_index=False,
         right_index=False,
-        how="inner",
         sort=False,
-        lsuffix=None,
-        rsuffix=None,
-        indicator=False,
         suffixes=("_x", "_y"),
+        indicator=False,
+        validate=None,
     ):
         """Merge GPU DataFrame objects by performing a database-style join
         operation by columns or indexes.
@@ -4241,17 +4266,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
             )
-
-        if lsuffix or rsuffix:
-            raise ValueError(
-                "The lsuffix and rsuffix keywords have been replaced with the "
-                "``suffixes=`` keyword.  "
-                "Please provide the following instead: \n\n"
-                "    suffixes=('%s', '%s')"
-                % (lsuffix or "_x", rsuffix or "_y")
-            )
-        else:
-            lsuffix, rsuffix = suffixes
+        if validate is not None:
+            raise NotImplementedError("validate is currently not supported.")
 
         lhs, rhs = self, right
         merge_cls = Merge
@@ -5835,17 +5851,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_performance_tracking
     def _from_arrays(
         cls,
-        data: np.ndarray | cupy.ndarray,
+        data,
         index=None,
         columns=None,
         nan_as_null=False,
     ):
-        """Convert a numpy/cupy array to DataFrame.
+        """
+        Convert an object implementing an array interface to DataFrame.
 
         Parameters
         ----------
-        data : numpy/cupy array of ndim 1 or 2,
-            dimensions greater than 2 are not supported yet.
+        data : object of ndim 1 or 2,
+            Object implementing ``__array_interface__`` or ``__cuda_array_interface__``
         index : Index or array-like
             Index to use for resulting frame. Will default to
             RangeIndex if no indexing information part of input data and
@@ -5857,13 +5874,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
         """
-        if data.ndim != 1 and data.ndim != 2:
+        array_data: np.ndarray | cupy.ndarray
+        if hasattr(data, "__cuda_array_interface__"):
+            array_data = cupy.asarray(data, order="F")
+        elif hasattr(data, "__array_interface__"):
+            array_data = np.asarray(data, order="F")
+        else:
             raise ValueError(
-                f"records dimension expected 1 or 2 but found: {data.ndim}"
+                "data must be an object implementing __cuda_array_interface__ or __array_interface__"
+            )
+
+        if array_data.ndim not in {1, 2}:
+            raise ValueError(
+                f"records dimension expected 1 or 2 but found: {array_data.ndim}"
             )
 
         if data.ndim == 2:
-            num_cols = data.shape[1]
+            num_cols = array_data.shape[1]
         else:
             # Since we validate ndim to be either 1 or 2 above,
             # this case can be assumed to be ndim == 1.
@@ -5881,14 +5908,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError("Duplicate column names are not allowed")
             names = columns
 
-        if data.ndim == 2:
+        if array_data.ndim == 2:
             ca_data = {
-                k: column.as_column(data[:, i], nan_as_null=nan_as_null)
+                k: column.as_column(array_data[:, i], nan_as_null=nan_as_null)
                 for i, k in enumerate(names)
             }
-        elif data.ndim == 1:
+        elif array_data.ndim == 1:
             ca_data = {
-                names[0]: column.as_column(data, nan_as_null=nan_as_null)
+                names[0]: column.as_column(array_data, nan_as_null=nan_as_null)
             }
 
         if index is not None:
@@ -5952,9 +5979,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         axis=0,
         numeric_only=True,
         interpolation=None,
+        method="single",
         columns=None,
         exact=True,
-        method="single",
     ):
         """
         Return values at the given quantile.
@@ -5980,14 +6007,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 * higher: `j`.
                 * nearest: `i` or `j` whichever is nearest.
                 * midpoint: (`i` + `j`) / 2.
-        columns : list of str
-            List of column names to include.
-        exact : boolean
-            Whether to use approximate or exact quantile algorithm.
         method : {'single', 'table'}, default `'single'`
             Whether to compute quantiles per-column ('single') or over all
             columns ('table'). When 'table', the only allowed interpolation
             methods are 'nearest', 'lower', and 'higher'.
+        columns : list of str
+            List of column names to include.
+        exact : boolean
+            Whether to use approximate or exact quantile algorithm.
 
         Returns
         -------
@@ -7309,25 +7336,47 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return result
 
     @_performance_tracking
-    def cov(self, **kwargs):
+    def cov(self, min_periods=None, ddof: int = 1, numeric_only: bool = False):
         """Compute the covariance matrix of a DataFrame.
 
         Parameters
         ----------
-        **kwargs
-            Keyword arguments to be passed to cupy.cov
+        min_periods : int, optional
+            Minimum number of observations required per pair of columns to
+            have a valid result.
+            Currently not supported.
+
+        ddof : int, default 1
+            Delta degrees of freedom.  The divisor used in calculations
+            is ``N - ddof``, where ``N`` represents the number of elements.
+
+        numeric_only : bool, default False
+            Include only `float`, `int` or `boolean` data.
+            Currently not supported.
 
         Returns
         -------
         cov : DataFrame
         """
-        cov = cupy.cov(self.values, rowvar=False)
+        if min_periods is not None:
+            raise NotImplementedError(
+                "min_periods is currently not supported."
+            )
+
+        if numeric_only is not False:
+            raise NotImplementedError(
+                "numeric_only is currently not supported."
+            )
+
+        cov = cupy.cov(self.values, ddof=ddof, rowvar=False)
         cols = self._data.to_pandas_index()
         df = DataFrame(cupy.asfortranarray(cov)).set_index(cols)
         df._set_columns_like(self._data)
         return df
 
-    def corr(self, method="pearson", min_periods=None):
+    def corr(
+        self, method="pearson", min_periods=None, numeric_only: bool = False
+    ):
         """Compute the correlation matrix of a DataFrame.
 
         Parameters
@@ -7356,6 +7405,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if min_periods is not None:
             raise NotImplementedError("Unsupported argument 'min_periods'")
+
+        if numeric_only is not False:
+            raise NotImplementedError(
+                "numeric_only is currently not supported."
+            )
 
         corr = cupy.corrcoef(values, rowvar=False)
         cols = self._data.to_pandas_index()
@@ -8489,7 +8543,7 @@ def _reassign_categories(categories, cols, col_idxs):
         if idx in categories:
             cols[name] = build_categorical_column(
                 categories=categories[idx],
-                codes=build_column(
+                codes=NumericalColumn(
                     cols[name].base_data, dtype=cols[name].dtype
                 ),
                 mask=cols[name].base_mask,

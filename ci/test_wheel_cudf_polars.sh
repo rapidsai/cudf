@@ -10,7 +10,7 @@ set -eou pipefail
 # files in cudf_polars/pylibcudf", rather than "are there changes
 # between upstream and this branch which touch cudf_polars/pylibcudf"
 # TODO: is the target branch exposed anywhere in an environment variable?
-if [ -n "$(git diff --name-only origin/branch-24.08...HEAD -- python/cudf_polars/ python/cudf/cudf/_lib/pylibcudf/)" ];
+if [ -n "$(git diff --name-only origin/branch-24.10...HEAD -- python/cudf_polars/ python/cudf/cudf/_lib/pylibcudf/)" ];
 then
     HAS_CHANGES=1
 else

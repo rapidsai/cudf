@@ -154,13 +154,6 @@ class tracking_resource_adaptor final : public base_tracking_resource_adaptor {
   }
 };
 
-template <typename Upstream>
-tracking_resource_adaptor<Upstream>* make_tracking_adaptor(Upstream* upstream,
-                                                           std::size_t size_alignment)
-{
-  return new tracking_resource_adaptor<Upstream>{upstream, size_alignment};
-}
-
 /**
  * @brief An RMM device memory resource adaptor that delegates to the wrapped resource
  * for most operations but will call Java to handle certain situations (e.g.: allocation failure).
