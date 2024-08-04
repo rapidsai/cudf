@@ -34,6 +34,9 @@ cdef class TableWithMetadata:
     cdef dict _parse_col_names(vector[column_name_info] infos)
 
     @staticmethod
+    cdef dict _parse_col_names(vector[column_name_info] infos)
+
+    @staticmethod
     cdef TableWithMetadata from_libcudf(table_with_metadata& tbl)
 
 cdef class SourceInfo:

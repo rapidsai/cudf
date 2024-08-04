@@ -7,6 +7,7 @@ import os
 import numpy as np
 import pyarrow as pa
 import pytest
+from pyarrow.orc import write_table as orc_write_table
 from pyarrow.parquet import write_table as pq_write_table
 
 from cudf._lib import pylibcudf as plc
@@ -240,13 +241,20 @@ def is_nested_list(typ):
     return nesting_level(typ)[0] > 1
 
 
-def _convert_numeric_types_to_floating(pa_table):
+def _convert_types(pa_table, input_pred, result_type):
     """
     Useful little helper for testing the
     dtypes option in I/O readers.
 
     Returns a tuple containing the pylibcudf dtypes
     and the new pyarrow schema
+
+    Parameters
+    ----------
+    input_pred : function
+        Predicate that evaluates to true for types to replace
+    result_type : pa.DataType
+        The type to cast to
     """
     dtypes = []
     new_fields = []
@@ -255,11 +263,9 @@ def _convert_numeric_types_to_floating(pa_table):
         child_types = []
 
         plc_type = plc.interop.from_arrow(field.type)
-        if pa.types.is_integer(field.type) or pa.types.is_unsigned_integer(
-            field.type
-        ):
-            plc_type = plc.interop.from_arrow(pa.float64())
-            field = field.with_type(pa.float64())
+        if input_pred(field.type):
+            plc_type = plc.interop.from_arrow(result_type)
+            field = field.with_type(result_type)
 
         dtypes.append((field.name, plc_type, child_types))
 
@@ -325,6 +331,16 @@ def make_source(path_or_buf, pa_table, format, **kwargs):
         # nested types) so we
         # will just use pyarrow directly to write this
         pq_write_table(
+            pa_table,
+            pa.PythonFile(path_or_buf)
+            if isinstance(path_or_buf, io.IOBase)
+            else path_or_buf,
+        )
+    elif format == "orc":
+        # The conversion to pandas is lossy (doesn't preserve
+        # nested types) so we
+        # will just use pyarrow directly to write this
+        orc_write_table(
             pa_table,
             pa.PythonFile(path_or_buf)
             if isinstance(path_or_buf, io.IOBase)
