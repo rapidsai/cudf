@@ -728,6 +728,10 @@ class StringFunction(Expr):
             format, strict, exact, cache = self.options
             if cache:
                 raise NotImplementedError("Strptime cache is a CPU feature")
+            if format is None:
+                raise NotImplementedError("Strptime format is required")
+            if not exact:
+                raise NotImplementedError("Strptime does not support exact=False")
 
     def do_evaluate(
         self,
@@ -821,11 +825,6 @@ class StringFunction(Expr):
             format, strict, exact, cache = self.options
             col = self.children[0].evaluate(df, context=context, mapping=mapping)
 
-            if format is None:
-                raise NotImplementedError("Strptime requires a format string")
-
-            if not exact:
-                raise NotImplementedError("Strptime does not support exact=False")
             not_timestamps = plc.unary.unary_operation(
                 plc.strings.convert.convert_datetime.is_timestamp(
                     col.obj, format.encode()

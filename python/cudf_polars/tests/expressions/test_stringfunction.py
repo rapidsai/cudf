@@ -167,13 +167,17 @@ def to_datetime_data():
 
 @pytest.mark.parametrize("cache", [True, False], ids=lambda cache: f"cache={cache}")
 @pytest.mark.parametrize("strict", [True, False], ids=lambda strict: f"strict={strict}")
-def test_to_datetime(to_datetime_data, cache, strict):
+@pytest.mark.parametrize("exact", [True, False], ids=lambda exact: f"exact={exact}")
+@pytest.mark.parametrize(
+    "format", ["%Y-%m-%d", None], ids=lambda format: f"format={format}"
+)
+def test_to_datetime(to_datetime_data, cache, strict, format, exact):
     query = to_datetime_data.select(
         pl.col("a").str.strptime(
-            pl.Datetime("ns"), format="%Y-%m-%d", cache=cache, strict=strict
+            pl.Datetime("ns"), format=format, cache=cache, strict=strict, exact=exact
         )
     )
-    if cache:
+    if cache or format is None or not exact:
         assert_ir_translation_raises(query, NotImplementedError)
         return
     else:
