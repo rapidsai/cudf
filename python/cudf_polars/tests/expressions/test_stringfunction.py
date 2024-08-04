@@ -165,8 +165,8 @@ def to_datetime_data():
     ).lazy()
 
 
-@pytest.mark.parametrize("cache", [True, False])
-@pytest.mark.parametrize("strict", [True, False])
+@pytest.mark.parametrize("cache", [True, False], ids=lambda cache: f"cache={cache}")
+@pytest.mark.parametrize("strict", [True, False], ids=lambda strict: f"strict={strict}")
 def test_to_datetime(to_datetime_data, cache, strict):
     query = to_datetime_data.select(
         pl.col("a").str.strptime(
