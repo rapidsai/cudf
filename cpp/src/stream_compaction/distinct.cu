@@ -32,9 +32,7 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-#include <cuco/static_map.cuh>
 #include <cuco/static_set.cuh>
-#include <thrust/iterator/discard_iterator.h>
 
 #include <functional>
 #include <utility>
@@ -77,113 +75,7 @@ rmm::device_uvector<cudf::size_type> dispatch_row_equal(
     return func(d_equal);
   }
 }
-
-struct plus_op {
-  template <cuda::thread_scope Scope>
-  __device__ void operator()(cuda::atomic_ref<size_type, Scope> ref, size_type const val)
-  {
-    ref.fetch_add(static_cast<size_type>(1), cuda::memory_order_relaxed);
-  }
-};
-
-struct min_op {
-  template <cuda::thread_scope Scope>
-  __device__ void operator()(cuda::atomic_ref<size_type, Scope> ref, size_type const val)
-  {
-    ref.fetch_min(val, cuda::memory_order_relaxed);
-  }
-};
-
-struct max_op {
-  template <cuda::thread_scope Scope>
-  __device__ void operator()(cuda::atomic_ref<size_type, Scope> ref, size_type const val)
-  {
-    ref.fetch_max(val, cuda::memory_order_relaxed);
-  }
-};
-
-template <typename Map>
-rmm::device_uvector<size_type> process_keep(Map& map,
-                                            size_type num_rows,
-                                            duplicate_keep_option keep,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
-{
-  if ((keep == duplicate_keep_option::KEEP_FIRST) or (keep == duplicate_keep_option::KEEP_LAST)) {
-    auto output_indices = rmm::device_uvector<size_type>(num_rows, stream, mr);
-
-    auto pairs =
-      thrust::make_transform_iterator(thrust::counting_iterator<size_type>(0),
-                                      cuda::proclaim_return_type<cuco::pair<size_type, size_type>>(
-                                        [] __device__(size_type const i) {
-                                          return cuco::pair<size_type, size_type>{i, i};
-                                        }));
-
-    if (keep == duplicate_keep_option::KEEP_FIRST) {
-      map.insert_or_apply_async(pairs, pairs + num_rows, min_op{}, stream.value());
-    } else {
-      map.insert_or_apply_async(pairs, pairs + num_rows, max_op{}, stream.value());
-    }
-
-    auto const [_, output_end] =
-      map.retrieve_all(thrust::make_discard_iterator(), output_indices.begin(), stream.value());
-    output_indices.resize(thrust::distance(output_indices.begin(), output_end), stream);
-    return output_indices;
-  }
-
-  auto keys   = rmm::device_uvector<size_type>(num_rows, stream, mr);
-  auto values = rmm::device_uvector<size_type>(num_rows, stream, mr);
-
-  auto pairs = thrust::make_transform_iterator(
-    thrust::counting_iterator<size_type>(0),
-    cuda::proclaim_return_type<cuco::pair<size_type, size_type>>([] __device__(size_type const i) {
-      return cuco::pair<size_type, size_type>{i, 1};
-    }));
-
-  map.insert_or_apply_async(pairs, pairs + num_rows, plus_op{}, stream.value());
-  auto const [keys_end, _] = map.retrieve_all(keys.begin(), values.begin(), stream.value());
-
-  auto num_distinct_keys = thrust::distance(keys.begin(), keys_end);
-  keys.resize(num_distinct_keys, stream);
-  values.resize(num_distinct_keys, stream);
-
-  auto output_indices = rmm::device_uvector<size_type>(num_distinct_keys, stream, mr);
-
-  auto const output_iter = cudf::detail::make_counting_transform_iterator(
-    size_type(0),
-    cuda::proclaim_return_type<size_type>(
-      [keys = keys.begin(), values = values.begin()] __device__(auto const idx) {
-        return values[idx] == size_type{1} ? keys[idx] : -1;
-      }));
-
-  auto const map_end = thrust::copy_if(
-    rmm::exec_policy_nosync(stream),
-    output_iter,
-    output_iter + num_distinct_keys,
-    output_indices.begin(),
-    cuda::proclaim_return_type<bool>([] __device__(auto const idx) { return idx != -1; }));
-
-  output_indices.resize(thrust::distance(output_indices.begin(), map_end), stream);
-  return output_indices;
-}
-
 }  // namespace
-
-/**
- * @brief Return the reduction identity used to initialize results of `hash_reduce_by_row`.
- *
- * @param keep A value of `duplicate_keep_option` type, must not be `KEEP_ANY`.
- * @return The initial reduction value.
- */
-auto constexpr reduction_init_value(duplicate_keep_option keep)
-{
-  switch (keep) {
-    case duplicate_keep_option::KEEP_FIRST: return std::numeric_limits<size_type>::max();
-    case duplicate_keep_option::KEEP_LAST: return std::numeric_limits<size_type>::min();
-    case duplicate_keep_option::KEEP_NONE: return size_type{0};
-    default: CUDF_UNREACHABLE("This function should not be called with KEEP_ANY");
-  }
-}
 
 rmm::device_uvector<size_type> distinct_indices(table_view const& input,
                                                 duplicate_keep_option keep,
@@ -206,24 +98,20 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
   auto const row_hash  = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const row_equal = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
-  auto const probing_scheme = cuco::linear_probing<
-    1,
-    cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                     cudf::nullate::DYNAMIC>>{
-    row_hash.device_hasher(has_nulls)};
-
   auto const helper_func = [&](auto const& d_equal) {
+    using RowHasher = cuda::std::decay_t<decltype(d_equal)>;
+
     // If we don't care about order, just gather indices of distinct keys taken from set.
     if (keep == duplicate_keep_option::KEEP_ANY) {
-      auto set = cuco::static_set{num_rows,
-                                  0.5,  // desired load factor
-                                  cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-                                  d_equal,
-                                  probing_scheme,
-                                  {},
-                                  {},
-                                  cudf::detail::cuco_allocator{stream},
-                                  stream.value()};
+      auto set = hash_set_type<RowHasher>{num_rows,
+                                          0.5,  // desired load factor
+                                          cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+                                          d_equal,
+                                          {row_hash.device_hasher(has_nulls)},
+                                          {},
+                                          {},
+                                          cudf::detail::cuco_allocator{stream},
+                                          stream.value()};
 
       auto const iter = thrust::counting_iterator<cudf::size_type>{0};
       set.insert_async(iter, iter + num_rows, stream.value());
@@ -233,17 +121,17 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
       return output_indices;
     }
 
-    auto map = cuco::static_map{num_rows,
-                                0.5,  // desired load factor
-                                cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-                                cuco::empty_value{reduction_init_value(keep)},
-                                d_equal,
-                                probing_scheme,
-                                {},
-                                {},
-                                cudf::detail::cuco_allocator{stream},
-                                stream.value()};
-    return process_keep(map, num_rows, keep, stream, mr);
+    auto map = hash_map_type<RowHasher>{num_rows,
+                                        0.5,  // desired load factor
+                                        cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+                                        cuco::empty_value{reduction_init_value(keep)},
+                                        d_equal,
+                                        {row_hash.device_hasher(has_nulls)},
+                                        {},
+                                        {},
+                                        cudf::detail::cuco_allocator{stream},
+                                        stream.value()};
+    return reduce_by_row(map, num_rows, keep, stream, mr);
   };
 
   if (cudf::detail::has_nested_columns(input)) {
