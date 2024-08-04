@@ -724,6 +724,10 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "Slice only supports literal start and stop values"
                 )
+        elif self.name == pl_expr.StringFunction.Strptime:
+            format, strict, exact, cache = self.options
+            if cache:
+                raise NotImplementedError("Strptime cache is a CPU feature")
 
     def do_evaluate(
         self,
@@ -819,9 +823,6 @@ class StringFunction(Expr):
 
             if format is None:
                 raise NotImplementedError("Strptime requires a format string")
-
-            if cache:
-                raise NotImplementedError("Strptime cache is a CPU feature")
 
             if not exact:
                 raise NotImplementedError("Strptime does not support exact=False")

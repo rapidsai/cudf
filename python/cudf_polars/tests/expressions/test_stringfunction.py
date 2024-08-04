@@ -165,10 +165,12 @@ def to_datetime_data():
     ).lazy()
 
 
-def test_to_datetime(to_datetime_data):
+@pytest.mark.parametrize("cache", [True, False])
+@pytest.mark.parametrize("strict", [True, False])
+def test_to_datetime(to_datetime_data, cache, strict):
     query = to_datetime_data.select(
         pl.col("a").str.strptime(
-            pl.Datetime("ns"), format="%Y-%m-%d", cache=False, strict=False
+            pl.Datetime("ns"), format="%Y-%m-%d", cache=cache, strict=strict
         )
     )
-    assert_gpu_result_equal(query)
+    assert_ir_translation_raises(query, NotImplementedError)
