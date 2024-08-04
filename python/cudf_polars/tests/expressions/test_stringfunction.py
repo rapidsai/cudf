@@ -173,4 +173,8 @@ def test_to_datetime(to_datetime_data, cache, strict):
             pl.Datetime("ns"), format="%Y-%m-%d", cache=cache, strict=strict
         )
     )
-    assert_ir_translation_raises(query, NotImplementedError)
+    if cache:
+        assert_ir_translation_raises(query, NotImplementedError)
+        return
+    else:
+        assert_gpu_result_equal(query)
