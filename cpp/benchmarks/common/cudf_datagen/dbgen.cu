@@ -610,7 +610,7 @@ auto generate_orders_lineitem_part(
   // Create the `lineitem` table
   auto lineitem_temp_columns = lineitem_temp->release();
   lineitem_temp_columns.erase(lineitem_temp_columns.begin());
-  auto lineitem = std::make_unique<cudf::table>(lineitem_temp_columns);
+  auto lineitem = std::make_unique<cudf::table>(std::move(lineitem_temp_columns));
 
   return std::make_tuple(std::move(orders), std::move(lineitem), std::move(part));
 }
