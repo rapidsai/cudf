@@ -16,8 +16,6 @@
 #include "common.hpp"
 #include "groupby_results.hpp"
 
-#include <cudf_test/debug_utilities.hpp>
-
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
