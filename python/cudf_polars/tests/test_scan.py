@@ -60,12 +60,10 @@ def mask(request):
 @pytest.fixture(
     params=[
         None,
-        # (-1, 1),
         (1, 1),
     ],
     ids=[
         "no-slice",
-        # "slice-last",
         "slice-second",
     ],
 )
@@ -198,11 +196,11 @@ def test_scan_csv_column_renames_projection_schema(tmp_path):
 def test_scan_csv_multi(tmp_path, filename, glob, nrows_skiprows):
     n_rows, skiprows = nrows_skiprows
     with (tmp_path / "test1.csv").open("w") as f:
-        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+        f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
     with (tmp_path / "test2.csv").open("w") as f:
-        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+        f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
     with (tmp_path / "test*.csv").open("w") as f:
-        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+        f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
     os.chdir(tmp_path)
     q = pl.scan_csv(filename, glob=glob, n_rows=n_rows, skip_rows=skiprows)
 
