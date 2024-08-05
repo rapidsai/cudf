@@ -852,11 +852,9 @@ int main(int argc, char** argv)
   auto partsupp = generate_partsupp(scale_factor);
   write_parquet(std::move(partsupp), "partsupp.parquet", schema_partsupp);
 
-  // Max scale factor: 3000
   auto supplier = generate_supplier(scale_factor);
   write_parquet(std::move(supplier), "supplier.parquet", schema_supplier);
 
-  // Max scale factor: 180
   auto customer = generate_customer(scale_factor);
   write_parquet(std::move(customer), "customer.parquet", schema_customer);
 
