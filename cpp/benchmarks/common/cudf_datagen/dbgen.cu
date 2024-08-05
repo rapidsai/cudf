@@ -589,9 +589,9 @@ auto generate_orders_lineitem_part(
                                   mr);
   }();
 
-  auto lineitem_columns = lineitem_partial->release();
-  lineitem_columns.push_back(std::move(l_extendedprice));
-  auto lineitem_temp = std::make_unique<cudf::table>(std::move(lineitem_columns));
+  auto lineitem_partial_columns = lineitem_partial->release();
+  lineitem_partial_columns.push_back(std::move(l_extendedprice));
+  auto lineitem_temp = std::make_unique<cudf::table>(std::move(lineitem_partial_columns));
 
   // Generate the dependent columns of the `orders` table
   // and merge them with the independent columns
@@ -608,9 +608,9 @@ auto generate_orders_lineitem_part(
   auto orders = std::make_unique<cudf::table>(std::move(orders_independent_columns));
 
   // Create the `lineitem` table
-  std::vector<cudf::size_type> lineitem_indices(16);
-  std::iota(lineitem_indices.begin(), lineitem_indices.end(), 1);
-  auto lineitem = std::make_unique<cudf::table>(lineitem_temp->select(lineitem_indices));
+  auto lineitem_temp_columns = lineitem_temp->release();
+  lineitem_temp_columns.erase(lineitem_temp_columns.begin());
+  auto lineitem = std::make_unique<cudf::table>(lineitem_temp_columns);
 
   return std::make_tuple(std::move(orders), std::move(lineitem), std::move(part));
 }
