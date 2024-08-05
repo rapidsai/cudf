@@ -22,6 +22,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/filling.hpp>
@@ -38,6 +39,7 @@
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/table/table.hpp>
@@ -232,7 +234,7 @@ struct gen_rand_str {
 
   __host__ __device__ gen_rand_str(char* c) : chars(c), char_dist(44, 122) {}
 
-  __host__ __device__ void operator()(thrust::tuple<cudf::size_type, cudf::size_type> str_begin_end)
+  __host__ __device__ void operator()(thrust::tuple<int64_t, int64_t> str_begin_end)
   {
     auto begin = thrust::get<0>(str_begin_end);
     auto end   = thrust::get<1>(str_begin_end);
@@ -287,43 +289,24 @@ std::unique_ptr<cudf::column> gen_rand_str_col(cudf::size_type const& lower,
                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  rmm::device_uvector<cudf::size_type> offsets(num_rows + 1, stream);
+  auto offsets_begin =
+    cudf::detail::make_counting_transform_iterator(0, gen_rand_num<cudf::size_type>(lower, upper));
+  auto [offsets_column, computed_bytes] = cudf::strings::detail::make_offsets_child_column(
+    offsets_begin, offsets_begin + num_rows, stream, mr);
+  rmm::device_uvector<char> chars(computed_bytes, stream);
 
-  // The first element will always be 0 since it the offset of the first string.
-  cudf::size_type initial_offset{0};
-  offsets.set_element(0, initial_offset, stream);
-
-  // We generate the lengths of the strings randomly for each row and
-  // store them from the second element of the offsets vector.
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(num_rows),
-                    offsets.begin() + 1,
-                    gen_rand_num<cudf::size_type>(lower, upper));
-
-  // We then calculate the offsets by performing an inclusive scan on this
-  // vector.
-  thrust::inclusive_scan(rmm::exec_policy(stream), offsets.begin(), offsets.end(), offsets.begin());
-
-  // The last element is the total length of all the strings combined using
-  // which we allocate the memory for the `chars` vector, that holds the
-  // randomly generated characters for the strings.
-  auto const total_length = *thrust::device_pointer_cast(offsets.end() - 1);
-  rmm::device_uvector<char> chars(total_length, stream);
+  auto const offset_itr =
+    cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
   // We generate the strings in parallel into the `chars` vector using the
   // offsets vector generated above.
   thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_zip_iterator(offsets.begin(), offsets.begin() + 1),
+                     thrust::make_zip_iterator(offset_itr, offset_itr + 1),
                      num_rows,
                      gen_rand_str(chars.data()));
 
   return cudf::make_strings_column(
-    num_rows,
-    std::make_unique<cudf::column>(std::move(offsets), rmm::device_buffer{}, 0),
-    chars.release(),
-    0,
-    rmm::device_buffer{});
+    num_rows, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
 /**
@@ -388,11 +371,8 @@ std::unique_ptr<cudf::column> gen_rep_str_col(std::string const& value,
                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto const indices = rmm::device_uvector<cudf::string_view>(num_rows, stream);
-  auto const empty_str_col =
-    cudf::make_strings_column(indices, cudf::string_view(nullptr, 0), stream, mr);
   auto const scalar = cudf::string_scalar(value);
-  return cudf::fill(empty_str_col->view(), 0, num_rows, scalar, stream, mr);
+  return make_column_from_scalar(scalar, num_rows, stream, mr);
 }
 
 /**
