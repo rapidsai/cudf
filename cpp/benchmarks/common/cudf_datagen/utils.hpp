@@ -126,10 +126,10 @@ void write_parquet(std::unique_ptr<cudf::table> tbl,
   }
   metadata.schema_info            = col_name_infos;
   auto const table_input_metadata = cudf::io::table_input_metadata{metadata};
-  auto builder = cudf::io::parquet_writer_options::builder(sink_info, tbl->view());
+  auto builder                    = cudf::io::chunked_parquet_writer_options::builder(sink_info);
   builder.metadata(table_input_metadata);
   auto const options = builder.build();
-  cudf::io::write_parquet(options);
+  cudf::io::parquet_chunked_writer(options).write(tbl->view());
 }
 
 /**
