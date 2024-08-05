@@ -2121,4 +2121,90 @@ TEST_F(JoinTestLists, ListWithNullsUnequalLeftJoin)
   this->left_join(left_gold_map, right_gold_map, cudf::null_equality::UNEQUAL);
 }
 
+std::unique_ptr<cudf::table> InnerHashJoin(const cudf::table_view& probe_view,
+                                           const cudf::table_view& build_view,
+                                           const cudf::hash_join& hash_join_object,
+                                           const std::vector<int>& join_column_indices)
+{
+  try {
+    std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_indices, probe_indices;
+    std::tie(probe_indices, build_indices) =
+      hash_join_object.inner_join(probe_view.select(join_column_indices));
+    size_t out_rows = probe_indices->size();
+    auto left_indices_span =
+      cudf::device_span<cudf::size_type const>(probe_indices->data(), out_rows);
+    auto right_indices_span =
+      cudf::device_span<cudf::size_type const>(build_indices->data(), out_rows);
+    auto left_joined = cudf::gather(
+      probe_view, cudf::column_view{left_indices_span}, cudf::out_of_bounds_policy::DONT_CHECK);
+    auto right_joined = cudf::gather(
+      build_view, cudf::column_view{right_indices_span}, cudf::out_of_bounds_policy::DONT_CHECK);
+    auto left_cols  = left_joined->release();
+    auto right_cols = right_joined->release();
+    std::move(right_cols.begin(), right_cols.end(), std::back_inserter(left_cols));
+    return std::make_unique<cudf::table>(std::move(left_cols));
+  } catch (...) {
+    throw;
+  }
+}
+
+std::unique_ptr<cudf::table> MakeTable(column_wrapper<int32_t> col)
+{
+  std::vector<std::unique_ptr<cudf::column>> cols;
+  cols.push_back(col.release());
+  return std::make_unique<cudf::table>(std::move(cols));
+}
+
+std::unique_ptr<cudf::table> MakeTable(column_wrapper<int32_t> col1, column_wrapper<int32_t> col2)
+{
+  std::vector<std::unique_ptr<cudf::column>> cols;
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  return std::make_unique<cudf::table>(std::move(cols));
+}
+
+TEST_F(JoinTest, MultiParallelJoin)
+{
+  // build_table is the right table, proble_table is the left table
+  auto build_table = MakeTable(column_wrapper<int32_t>{{0, 1, 2, 3, 4}});
+
+  int join_count = 3;
+  std::vector<std::unique_ptr<cudf::table>> probe_tables(join_count);
+  std::vector<std::unique_ptr<cudf::table>> expected_results(join_count);
+  probe_tables[0]     = MakeTable(column_wrapper<int32_t>{{3, 4, 5, 6, 7}});
+  expected_results[0] = MakeTable(column_wrapper<int32_t>{{3, 4}}, column_wrapper<int32_t>{{3, 4}});
+
+  probe_tables[1] = MakeTable(column_wrapper<int32_t>{{0, 2, 4, 6, 8}});
+  expected_results[1] =
+    MakeTable(column_wrapper<int32_t>{{0, 2, 4}}, column_wrapper<int32_t>{{0, 2, 4}});
+
+  probe_tables[2]     = MakeTable(column_wrapper<int32_t>{{1, 3, 5, 7, 9}});
+  expected_results[2] = MakeTable(column_wrapper<int32_t>{{1, 3}}, column_wrapper<int32_t>{{1, 3}});
+
+  std::vector<int> join_column_indices = {0};
+  cudf::hash_join hash_join_obj(build_table->view().select(join_column_indices),
+                                cudf::null_equality::UNEQUAL);
+  // join tables in parallel
+  cudaDeviceSynchronize();
+
+  std::vector<std::thread> threads(join_count);
+  for (int i = 0; i < join_count; i++) {
+    threads[i] = std::thread([&, i] {
+      auto joined_table = InnerHashJoin(
+        probe_tables[i]->view(), build_table->view(), hash_join_obj, join_column_indices);
+      auto result_sort_order   = cudf::sorted_order(joined_table->view());
+      auto sorted_joined_table = cudf::gather(joined_table->view(), *result_sort_order);
+
+      auto expected_table      = expected_results[i]->view();
+      auto expected_sort_order = cudf::sorted_order(expected_table);
+      auto sorted_expected     = cudf::gather(expected_table, *expected_sort_order);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_expected, *sorted_joined_table);
+    });
+  }
+
+  for (int i = 0; i < join_count; i++) {
+    threads[i].join();
+  }
+}
+
 CUDF_TEST_PROGRAM_MAIN()
