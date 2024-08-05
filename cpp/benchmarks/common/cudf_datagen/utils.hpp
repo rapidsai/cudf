@@ -81,6 +81,9 @@
 #include <utility>
 #include <vector>
 
+/**
+ * @brief A class to log the peak memory usage of the GPU
+ */
 class memory_stats_logger {
  public:
   memory_stats_logger()
@@ -98,11 +101,17 @@ class memory_stats_logger {
   }
 
  private:
-  // TODO change to resource_ref once set_current_device_resource supports it
   rmm::mr::device_memory_resource* existing_mr;
   rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> statistics_mr;
 };
 
+/**
+ * @brief Write a cudf::table to a parquet file
+ *
+ * @param tbl The table to write
+ * @param path The path to write the parquet file to
+ * @param col_names The names of the columns in the table
+ */
 void write_parquet(std::unique_ptr<cudf::table> tbl,
                    std::string const& path,
                    std::vector<std::string> const& col_names)
@@ -123,6 +132,17 @@ void write_parquet(std::unique_ptr<cudf::table> tbl,
   cudf::io::write_parquet(options);
 }
 
+/**
+ * @brief Perform a left join operation on two tables
+ *
+ * @param left_input The left table
+ * @param right_input The right table
+ * @param left_on The indices of the columns to join on in the left table
+ * @param right_on The indices of the columns to join on in the right table
+ * @param compare_nulls The null equality comparison
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ */
 std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_input,
                                                cudf::table_view const& right_input,
                                                std::vector<cudf::size_type> const& left_on,
@@ -155,18 +175,18 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
   return std::make_unique<cudf::table>(std::move(joined_cols));
 }
 
-constexpr size_t POOL_SIZE = 2147483648;
-
 // RMM memory resource creation utilities
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
 inline auto make_pool()
 {
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda(), POOL_SIZE);
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+    make_cuda(), rmm::percent_of_free_device_memory(50));
 }
 inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
 inline auto make_managed_pool()
 {
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_managed(), POOL_SIZE);
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+    make_managed(), rmm::percent_of_free_device_memory(50));
 }
 inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
   std::string const& mode)
@@ -466,6 +486,13 @@ std::unique_ptr<cudf::column> gen_rep_seq_col(T const& seq_length,
                                 mr);
 }
 
+/**
+ * @brief Generate a column of random addresses according to TPC-H specification clause 4.2.2.7
+ *
+ * @param num_rows The number of rows in the column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
 std::unique_ptr<cudf::column> gen_addr_col(cudf::size_type const& num_rows,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
@@ -474,6 +501,14 @@ std::unique_ptr<cudf::column> gen_addr_col(cudf::size_type const& num_rows,
   return gen_rand_str_col(10, 40, num_rows, stream, mr);
 }
 
+/**
+ * @brief Add a column of days to a column of timestamp_days
+ *
+ * @param timestamp_days The column of timestamp_days
+ * @param days The column of days to add
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
 std::unique_ptr<cudf::column> add_calendrical_days(cudf::column_view const& timestamp_days,
                                                    cudf::column_view const& days,
                                                    rmm::cuda_stream_view stream,
