@@ -32,9 +32,7 @@ namespace io::detail {
 
 /**
  * @brief A helper function that takes in a vector of device spans and memsets them to the
- * value provided using batches sent to the GPU. Using uint64_t is safe as we are relying on the
- * allocation padding for the buffers to be large enough that we can always write a multiple of 8
- * byte words
+ * value provided using batches sent to the GPU.
  *
  * @param bufs Vector with device spans of data
  * @param value Value to memset all device spans to
@@ -43,7 +41,7 @@ namespace io::detail {
  * @return The data in device spans all set to value
  */
 template <typename T>
-void batched_memset(std::vector<cudf::device_span<T>>& bufs,
+void batched_memset(std::vector<cudf::device_span<T>> const& bufs,
                     T const value,
                     rmm::cuda_stream_view stream)
 {

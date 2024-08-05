@@ -1498,7 +1498,7 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
   // Casting to std::byte since data buffer pointer is void *
   std::vector<cudf::device_span<std::byte>> memset_bufs;
   // Validity Buffer is a uint32_t pointer
-  std::vector<cudf::device_span<uint32_t>> nullmask_bufs;
+  std::vector<cudf::device_span<cudf::bitmask_type>> nullmask_bufs;
 
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
     auto const& input_col  = _input_columns[idx];
@@ -1526,10 +1526,10 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
           _mr);
         memset_bufs.push_back(cudf::device_span<std::byte>(static_cast<std::byte*>(out_buf.data()),
                                                            out_buf.data_size()));
-        nullmask_bufs.push_back(cudf::device_span<uint32_t>(
+        nullmask_bufs.push_back(cudf::device_span<cudf::bitmask_type>(
           out_buf.null_mask(),
-          cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(uint32_t)) /
-            sizeof(uint32_t)));
+          cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
+            sizeof(cudf::bitmask_type)));
       }
     }
   }
@@ -1608,10 +1608,10 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
           out_buf.create_with_mask(size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
           memset_bufs.push_back(cudf::device_span<std::byte>(
             static_cast<std::byte*>(out_buf.data()), out_buf.data_size()));
-          nullmask_bufs.push_back(cudf::device_span<uint32_t>(
+          nullmask_bufs.push_back(cudf::device_span<cudf::bitmask_type>(
             out_buf.null_mask(),
-            cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(uint32_t)) /
-              sizeof(uint32_t)));
+            cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
+              sizeof(cudf::bitmask_type)));
         }
       }
     }
@@ -1619,7 +1619,8 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
 
   cudf::io::detail::batched_memset(memset_bufs, static_cast<std::byte>(0), _stream);
   // Need to set null mask bufs to all high bits
-  cudf::io::detail::batched_memset(nullmask_bufs, std::numeric_limits<uint32_t>::max(), _stream);
+  cudf::io::detail::batched_memset(
+    nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
 }
 
 std::vector<size_t> reader::impl::calculate_page_string_offsets()
