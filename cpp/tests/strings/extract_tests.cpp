@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -198,6 +199,32 @@ TEST_F(StringsExtractTests, DotAll)
   prog     = cudf::strings::regex_program::create(pattern);
   results  = cudf::strings::extract(view, *prog);
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
+}
+
+TEST_F(StringsExtractTests, SpecialNewLines)
+{
+  auto input = cudf::test::strings_column_wrapper({"zzé\xE2\x80\xA8qqq\xC2\x85zzé",
+                                                   "qqq\xC2\x85zzé\xE2\x80\xA8lll",
+                                                   "zzé",
+                                                   "",
+                                                   "zzé\xC2\x85",
+                                                   "zze\xE2\x80\xA9zzé\xC2\x85"});
+  auto view  = cudf::strings_column_view(input);
+
+  auto prog =
+    cudf::strings::regex_program::create("(^zzé$)", cudf::strings::regex_flags::EXT_NEWLINE);
+  auto results = cudf::strings::extract(view, *prog);
+  auto expected =
+    cudf::test::strings_column_wrapper({"", "", "zzé", "", "zzé", ""}, {0, 0, 1, 0, 1, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
+
+  auto both_flags = static_cast<cudf::strings::regex_flags>(
+    cudf::strings::regex_flags::EXT_NEWLINE | cudf::strings::regex_flags::MULTILINE);
+  auto prog_ml = cudf::strings::regex_program::create("^(zzé)$", both_flags);
+  results      = cudf::strings::extract(view, *prog_ml);
+  expected =
+    cudf::test::strings_column_wrapper({"zzé", "zzé", "zzé", "", "zzé", "zzé"}, {1, 1, 1, 0, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 
 TEST_F(StringsExtractTests, EmptyExtractTest)
