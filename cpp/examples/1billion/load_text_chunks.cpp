@@ -46,17 +46,21 @@ int main(int argc, char const** argv)
   }
 
   auto const input_file = std::string{argv[1]};
-  auto const mr_name    = std::string{argc > 2 ? std::string(argv[2]) : std::string("cuda")};
-  auto resource         = create_memory_resource(mr_name);
+  auto const divider    = (argc < 3) ? 10 : std::stoi(std::string(argv[2]));
+
+  std::cout << "input:   " << input_file << std::endl;
+  std::cout << "chunks:  " << divider << std::endl;
+
+  auto const mr_name = std::string("pool");  // "cuda"
+  auto resource      = create_memory_resource(mr_name);
   rmm::mr::set_current_device_resource(resource.get());
   auto stream = cudf::get_default_stream();
 
   std::filesystem::path p = input_file;
   auto const file_size    = std::filesystem::file_size(p);
 
-  int constexpr divider = 10;
-  auto byte_ranges      = cudf::io::text::create_byte_range_infos_consecutive(file_size, divider);
-  auto const source     = cudf::io::text::make_source_from_file(input_file);
+  auto byte_ranges  = cudf::io::text::create_byte_range_infos_consecutive(file_size, divider);
+  auto const source = cudf::io::text::make_source_from_file(input_file);
 
   std::vector<std::unique_ptr<cudf::table>> agg_data;
   for (auto& br : byte_ranges) {
@@ -85,7 +89,6 @@ int main(int argc, char const** argv)
   // now aggregate the aggregate results
   auto results = compute_final_aggregates(agg_data);
   std::cout << "number of keys = " << results->num_rows() << std::endl;
-  std::cout << "chunks = " << divider << std::endl;
 
   return 0;
 }
