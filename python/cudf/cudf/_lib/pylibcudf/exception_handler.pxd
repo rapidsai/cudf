@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 
 # See
@@ -24,7 +24,7 @@ cdef extern from *:
      * Since this function interoperates with Python's exception state, it
      * does not throw any C++ exceptions.
      */
-    void cudf_exception_handler()
+    void libcudf_exception_handler()
     {
       // Catch a handful of different errors here and turn them into the
       // equivalent Python errors.
@@ -66,4 +66,4 @@ cdef extern from *:
 
     }  // anonymous namespace
     """
-    cdef void cudf_exception_handler()
+    cdef void libcudf_exception_handler()

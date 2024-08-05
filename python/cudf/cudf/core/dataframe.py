@@ -46,10 +46,10 @@ from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
+    NumericalColumn,
     StructColumn,
     as_column,
     build_categorical_column,
-    build_column,
     column_empty,
     concat_columns,
 )
@@ -782,7 +782,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
-
             # descr is an optional field of the _cuda_ary_iface_
             if "descr" in arr_interface:
                 if len(arr_interface["descr"]) == 1:
@@ -5852,17 +5851,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_performance_tracking
     def _from_arrays(
         cls,
-        data: np.ndarray | cupy.ndarray,
+        data,
         index=None,
         columns=None,
         nan_as_null=False,
     ):
-        """Convert a numpy/cupy array to DataFrame.
+        """
+        Convert an object implementing an array interface to DataFrame.
 
         Parameters
         ----------
-        data : numpy/cupy array of ndim 1 or 2,
-            dimensions greater than 2 are not supported yet.
+        data : object of ndim 1 or 2,
+            Object implementing ``__array_interface__`` or ``__cuda_array_interface__``
         index : Index or array-like
             Index to use for resulting frame. Will default to
             RangeIndex if no indexing information part of input data and
@@ -5874,13 +5874,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
         """
-        if data.ndim != 1 and data.ndim != 2:
+        array_data: np.ndarray | cupy.ndarray
+        if hasattr(data, "__cuda_array_interface__"):
+            array_data = cupy.asarray(data, order="F")
+        elif hasattr(data, "__array_interface__"):
+            array_data = np.asarray(data, order="F")
+        else:
             raise ValueError(
-                f"records dimension expected 1 or 2 but found: {data.ndim}"
+                "data must be an object implementing __cuda_array_interface__ or __array_interface__"
+            )
+
+        if array_data.ndim not in {1, 2}:
+            raise ValueError(
+                f"records dimension expected 1 or 2 but found: {array_data.ndim}"
             )
 
         if data.ndim == 2:
-            num_cols = data.shape[1]
+            num_cols = array_data.shape[1]
         else:
             # Since we validate ndim to be either 1 or 2 above,
             # this case can be assumed to be ndim == 1.
@@ -5898,14 +5908,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError("Duplicate column names are not allowed")
             names = columns
 
-        if data.ndim == 2:
+        if array_data.ndim == 2:
             ca_data = {
-                k: column.as_column(data[:, i], nan_as_null=nan_as_null)
+                k: column.as_column(array_data[:, i], nan_as_null=nan_as_null)
                 for i, k in enumerate(names)
             }
-        elif data.ndim == 1:
+        elif array_data.ndim == 1:
             ca_data = {
-                names[0]: column.as_column(data, nan_as_null=nan_as_null)
+                names[0]: column.as_column(array_data, nan_as_null=nan_as_null)
             }
 
         if index is not None:
@@ -8533,7 +8543,7 @@ def _reassign_categories(categories, cols, col_idxs):
         if idx in categories:
             cols[name] = build_categorical_column(
                 categories=categories[idx],
-                codes=build_column(
+                codes=NumericalColumn(
                     cols[name].base_data, dtype=cols[name].dtype
                 ),
                 mask=cols[name].base_mask,
