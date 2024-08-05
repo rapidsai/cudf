@@ -51,7 +51,7 @@ namespace {
  * @param func The input functor to invoke
  */
 template <bool HasNested, typename Func>
-rmm::device_uvector<cudf::size_type> dipatch_row_equal(
+rmm::device_uvector<cudf::size_type> dispatch_row_equal(
   null_equality compare_nulls,
   nan_equality compare_nans,
   bool has_nulls,
@@ -110,9 +110,9 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
   };
 
   if (cudf::detail::has_nested_columns(input)) {
-    return dipatch_row_equal<true>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
+    return dispatch_row_equal<true>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
   } else {
-    return dipatch_row_equal<false>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
+    return dispatch_row_equal<false>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
   }
 }
 
