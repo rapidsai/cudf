@@ -23,15 +23,38 @@
 
 #include <nvbench/nvbench.cuh>
 
+#include <limits>
+
 NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_ms, "cudf::timestamp_ms", "cudf::timestamp_ms");
+
+cudf::duplicate_keep_option get_keep(std::string const& keep_str)
+{
+  if (keep_str == "any") {
+    return cudf::duplicate_keep_option::KEEP_ANY;
+  } else if(keep_str == "first") {
+    return cudf::duplicate_keep_option::KEEP_FIRST;
+  } else if(keep_str == "last") {
+    return cudf::duplicate_keep_option::KEEP_LAST;
+  } else {
+    return cudf::duplicate_keep_option::KEEP_NONE;
+  }
+}
 
 template <typename Type>
 void nvbench_distinct(nvbench::state& state, nvbench::type_list<Type>)
 {
   cudf::size_type const num_rows = state.get_int64("NumRows");
+  auto const keep = get_keep(state.get_string("keep"));
+  cudf::size_type const cardinality = state.get_int64("cardinality");
 
-  data_profile profile = data_profile_builder().cardinality(0).null_probability(0.01).distribution(
-    cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
+  if (cardinality > num_rows)
+  {
+    state.skip("cardinality > num_rows");
+    return;
+  }
+
+  data_profile profile = data_profile_builder().cardinality(cardinality).null_probability(0.01).distribution(
+    cudf::type_to_id<Type>(), distribution_id::UNIFORM, static_cast<Type>(0), std::numeric_limits<Type>::max());
 
   auto source_column = create_random_column(cudf::type_to_id<Type>(), row_count{num_rows}, profile);
 
@@ -42,18 +65,20 @@ void nvbench_distinct(nvbench::state& state, nvbench::type_list<Type>)
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto result = cudf::distinct(input_table,
                                  {0},
-                                 cudf::duplicate_keep_option::KEEP_ANY,
+                                 keep,
                                  cudf::null_equality::EQUAL,
                                  cudf::nan_equality::ALL_EQUAL);
   });
 }
 
-using data_type = nvbench::type_list<bool, int8_t, int32_t, int64_t, float, cudf::timestamp_ms>;
+using data_type = nvbench::type_list<int32_t, int64_t>;
 
 NVBENCH_BENCH_TYPES(nvbench_distinct, NVBENCH_TYPE_AXES(data_type))
   .set_name("distinct")
   .set_type_axes_names({"Type"})
-  .add_int64_axis("NumRows", {10'000, 100'000, 1'000'000, 10'000'000});
+  .add_string_axis("keep", {"any"})
+  .add_int64_axis("cardinality", {100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000})
+  .add_int64_axis("NumRows", {100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000});
 
 template <typename Type>
 void nvbench_distinct_list(nvbench::state& state, nvbench::type_list<Type>)
@@ -61,6 +86,7 @@ void nvbench_distinct_list(nvbench::state& state, nvbench::type_list<Type>)
   auto const size               = state.get_int64("ColumnSize");
   auto const dtype              = cudf::type_to_id<Type>();
   double const null_probability = state.get_float64("null_probability");
+  auto const keep = get_keep(state.get_string("keep"));
 
   auto builder = data_profile_builder().null_probability(null_probability);
   if (dtype == cudf::type_id::LIST) {
@@ -82,7 +108,7 @@ void nvbench_distinct_list(nvbench::state& state, nvbench::type_list<Type>)
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto result = cudf::distinct(*table,
                                  {0},
-                                 cudf::duplicate_keep_option::KEEP_ANY,
+                                 keep,
                                  cudf::null_equality::EQUAL,
                                  cudf::nan_equality::ALL_EQUAL);
   });
@@ -92,5 +118,6 @@ NVBENCH_BENCH_TYPES(nvbench_distinct_list,
                     NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, cudf::list_view>))
   .set_name("distinct_list")
   .set_type_axes_names({"Type"})
+  .add_string_axis("keep", {"any"})
   .add_float64_axis("null_probability", {0.0, 0.1})
   .add_int64_axis("ColumnSize", {100'000'000});
