@@ -51,8 +51,10 @@ compute_segmented_row_bit_count(cudf::table_view const& input, cudf::size_type s
   // This should be fine as they are verified by their own unit tests in `row_bit_count_test.cu`.
   auto const row_sizes    = cudf::row_bit_count(input, cudf::test::get_default_stream());
   auto const num_segments = cudf::util::div_rounding_up_safe(row_sizes->size(), segment_length);
-  auto expected =
-    cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_segments);
+  auto expected           = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32},
+                                                num_segments,
+                                                cudf::mask_state::UNALLOCATED,
+                                                cudf::test::get_default_stream());
 
   thrust::transform(
     rmm::exec_policy(cudf::test::get_default_stream()),
@@ -177,7 +179,7 @@ TEST_F(TransformTest, BoolsToMask)
 
   auto [null_mask, null_count] =
     cudf::bools_to_mask(input_column, cudf::test::get_default_stream());
-  cudf::column got_column(expected);
+  cudf::column got_column(expected, cudf::test::get_default_stream());
   got_column.set_null_mask(std::move(*null_mask), null_count);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got_column.view());
@@ -248,7 +250,7 @@ TEST_F(TransformTest, NaNsToNulls)
 
   auto [null_mask, null_count] =
     cudf::nans_to_nulls(input_column, cudf::test::get_default_stream());
-  cudf::column got(input_column);
+  cudf::column got(input_column, cudf::test::get_default_stream());
   got.set_null_mask(std::move(*null_mask), null_count);
 
   EXPECT_EQ(expected_column->null_count(), null_count);
