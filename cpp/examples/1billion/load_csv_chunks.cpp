@@ -16,8 +16,6 @@
 #include "common.hpp"
 #include "groupby_results.hpp"
 
-#include <cudf_test/debug_utilities.hpp>
-
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
@@ -60,23 +58,26 @@ int main(int argc, char const** argv)
     return 1;
   }
 
-  auto const csv_file = std::string{argv[1]};
-  auto const mr_name  = std::string{argc > 2 ? std::string(argv[2]) : std::string("cuda")};
-  auto resource       = create_memory_resource(mr_name);
+  auto const input_file = std::string{argv[1]};
+  auto const divider    = (argc < 3) ? 25 : std::stoi(std::string(argv[2]));
+
+  std::cout << "input:   " << input_file << std::endl;
+  std::cout << "chunks:  " << divider << std::endl;
+
+  auto const mr_name = std::string("pool");  // "cuda"
+  auto resource      = create_memory_resource(mr_name);
   rmm::mr::set_current_device_resource(resource.get());
   auto stream = cudf::get_default_stream();
 
-  std::filesystem::path p = csv_file;
+  std::filesystem::path p = input_file;
   auto const file_size    = std::filesystem::file_size(p);
 
   std::vector<std::unique_ptr<cudf::table>> agg_data;
-
-  int constexpr divider      = 25;
   std::size_t chunk_size     = file_size / divider;
   std::size_t start_pos      = 0;
   cudf::size_type total_rows = 0;
   do {
-    auto const input_table = load_chunk(csv_file, start_pos, chunk_size);
+    auto const input_table = load_chunk(input_file, start_pos, chunk_size);
     auto const read_rows   = input_table->num_rows();
     if (read_rows == 0) break;
 
@@ -99,6 +100,5 @@ int main(int argc, char const** argv)
   // now aggregate the aggregate results
   auto results = compute_final_aggregates(agg_data);
   std::cout << "number of keys = " << results->num_rows() << std::endl;
-  std::cout << "chunks = " << divider << std::endl;
   return 0;
 }
