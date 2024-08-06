@@ -61,6 +61,4 @@ def test_extraction(datetime_column, component, pc_fun):
     # libcudf produces an int16, arrow produces an int64
     expect = pc_fun(plc.interop.to_arrow(datetime_column)).cast(pa.int16())
 
-    print(plc.interop.to_arrow(got))
-    print(expect)
     assert_column_eq(expect, got)
