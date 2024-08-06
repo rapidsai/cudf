@@ -876,6 +876,25 @@ class StringFunction(Expr):
 
 class TemporalFunction(Expr):
     __slots__ = ("name", "options", "children")
+    _temporal_extraction_function_map: ClassVar[dict[pl_expr.TemporalFunction, str]] = {
+        pl_expr.TemporalFunction.Year: "year",
+        pl_expr.TemporalFunction.Month: "month",
+        pl_expr.TemporalFunction.Day: "day",
+        pl_expr.TemporalFunction.WeekDay: "weekday",
+        pl_expr.TemporalFunction.Hour: "hour",
+        pl_expr.TemporalFunction.Minute: "minute",
+        pl_expr.TemporalFunction.Second: "second",
+        # millisecond/microsecond/nanoseconds are implemented
+        # differently in polars, than seconds and above
+        # Instead of extracting the number of milliseconds/microseconds/nanoseconds
+        # we must get the sub-second part of the timestamp in
+        # nanoseconds and then scale appropriately
+        # TODO: this should be possible
+        # pl_expr.TemporalFunction.Millisecond: "millisecond",
+        # pl_expr.TemporalFunction.Microsecond: "microsecond",
+        # pl_expr.TemporalFunction.Nanosecond: "nanosecond",
+    }
+    _supported_temporal_functions = _temporal_extraction_function_map
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
@@ -890,8 +909,8 @@ class TemporalFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
-        if self.name != pl_expr.TemporalFunction.Year:
-            raise NotImplementedError(f"String function {self.name}")
+        if self.name not in TemporalFunction._supported_temporal_functions:
+            raise NotImplementedError(f"Temporal function {self.name}")
 
     def do_evaluate(
         self,
@@ -905,9 +924,14 @@ class TemporalFunction(Expr):
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
         ]
-        if self.name == pl_expr.TemporalFunction.Year:
+        if self.name in TemporalFunction._temporal_extraction_function_map:
             (column,) = columns
-            return Column(plc.datetime.extract_year(column.obj))
+            return Column(
+                plc.datetime.extract_datetime_component(
+                    column.obj,
+                    TemporalFunction._temporal_extraction_function_map[self.name],
+                )
+            )
         raise NotImplementedError(
             f"TemporalFunction {self.name}"
         )  # pragma: no cover; init trips first

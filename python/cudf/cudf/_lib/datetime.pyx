@@ -16,6 +16,8 @@ from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
+import cudf._lib.pylibcudf as plc
+
 
 @acquire_spill_lock()
 def add_months(Column col, Column months):
@@ -37,43 +39,9 @@ def add_months(Column col, Column months):
 
 @acquire_spill_lock()
 def extract_datetime_component(Column col, object field):
-
-    cdef unique_ptr[column] c_result
-    cdef column_view col_view = col.view()
-
-    with nogil:
-        if field == "year":
-            c_result = move(libcudf_datetime.extract_year(col_view))
-        elif field == "month":
-            c_result = move(libcudf_datetime.extract_month(col_view))
-        elif field == "day":
-            c_result = move(libcudf_datetime.extract_day(col_view))
-        elif field == "weekday":
-            c_result = move(libcudf_datetime.extract_weekday(col_view))
-        elif field == "hour":
-            c_result = move(libcudf_datetime.extract_hour(col_view))
-        elif field == "minute":
-            c_result = move(libcudf_datetime.extract_minute(col_view))
-        elif field == "second":
-            c_result = move(libcudf_datetime.extract_second(col_view))
-        elif field == "millisecond":
-            c_result = move(
-                libcudf_datetime.extract_millisecond_fraction(col_view)
-            )
-        elif field == "microsecond":
-            c_result = move(
-                libcudf_datetime.extract_microsecond_fraction(col_view)
-            )
-        elif field == "nanosecond":
-            c_result = move(
-                libcudf_datetime.extract_nanosecond_fraction(col_view)
-            )
-        elif field == "day_of_year":
-            c_result = move(libcudf_datetime.day_of_year(col_view))
-        else:
-            raise ValueError(f"Invalid datetime field: '{field}'")
-
-    result = Column.from_unique_ptr(move(c_result))
+    result = Column.from_pylibcudf(
+        plc.extract_datetime_component(col.to_pylibcudf(mode="read"))
+    )
 
     if field == "weekday":
         # Pandas counts Monday-Sunday as 0-6
