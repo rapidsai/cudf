@@ -287,6 +287,62 @@ class DatetimeColumn(column.ColumnBase):
         return self.get_dt_field("day_of_year")
 
     @property
+    def is_month_start(self) -> ColumnBase:
+        return (self.day == 1).fillna(False)
+
+    @property
+    def is_month_end(self) -> ColumnBase:
+        last_day_col = libcudf.datetime.last_day_of_month(self)
+        return (self.day == last_day_col.day).fillna(False)
+
+    @property
+    def is_quarter_end(self) -> ColumnBase:
+        last_month = self.month.isin([3, 6, 9, 12])
+        return (self.is_month_end & last_month).fillna(False)
+
+    @property
+    def is_quarter_start(self) -> ColumnBase:
+        first_month = self.month.isin([1, 4, 7, 10])
+        return (self.is_month_start & first_month).fillna(False)
+
+    @property
+    def is_year_end(self) -> ColumnBase:
+        day_of_year = self.day_of_year
+        leap_dates = libcudf.datetime.is_leap_year(self)
+
+        leap = day_of_year == cudf.Scalar(366)
+        non_leap = day_of_year == cudf.Scalar(365)
+        return libcudf.copying.copy_if_else(leap, non_leap, leap_dates).fillna(
+            False
+        )
+
+    @property
+    def is_year_start(self) -> ColumnBase:
+        return (self.day_of_year == 1).fillna(False)
+
+    @property
+    def days_in_month(self) -> ColumnBase:
+        return libcudf.datetime.days_in_month(self)
+
+    @property
+    def day_of_week(self) -> ColumnBase:
+        raise NotImplementedError("day_of_week is currently not implemented.")
+
+    @property
+    def is_normalized(self) -> bool:
+        raise NotImplementedError(
+            "is_normalized is currently not implemented."
+        )
+
+    def to_julian_date(self) -> ColumnBase:
+        raise NotImplementedError(
+            "to_julian_date is currently not implemented."
+        )
+
+    def normalize(self) -> ColumnBase:
+        raise NotImplementedError("normalize is currently not implemented.")
+
+    @property
     def values(self):
         """
         Return a CuPy representation of the DateTimeColumn.
@@ -417,15 +473,15 @@ class DatetimeColumn(column.ColumnBase):
 
     def as_numerical_column(
         self, dtype: Dtype
-    ) -> "cudf.core.column.NumericalColumn":
-        col = column.build_column(
-            data=self.base_data,
-            dtype=np.int64,
+    ) -> cudf.core.column.NumericalColumn:
+        col = cudf.core.column.NumericalColumn(
+            data=self.base_data,  # type: ignore[arg-type]
+            dtype=np.dtype(np.int64),
             mask=self.base_mask,
             offset=self.offset,
             size=self.size,
         )
-        return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
+        return cast(cudf.core.column.NumericalColumn, col.astype(dtype))
 
     def strftime(self, format: str) -> cudf.core.column.StringColumn:
         if len(self) == 0:

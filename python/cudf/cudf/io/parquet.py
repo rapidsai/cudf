@@ -540,6 +540,8 @@ def read_parquet(
     bytes_per_thread=None,
     dataset_kwargs=None,
     allow_mismatched_pq_schemas=False,
+    nrows=None,
+    skip_rows=None,
     *args,
     **kwargs,
 ):
@@ -687,6 +689,8 @@ def read_parquet(
             partition_keys=partition_keys,
             partition_categories=partition_categories,
             dataset_kwargs=dataset_kwargs,
+            nrows=nrows,
+            skip_rows=skip_rows,
             **kwargs,
         )
     # Apply filters row-wise (if any are defined), and return
@@ -815,6 +819,8 @@ def _parquet_to_frame(
     partition_keys=None,
     partition_categories=None,
     dataset_kwargs=None,
+    nrows=None,
+    skip_rows=None,
     **kwargs,
 ):
     # If this is not a partitioned read, only need
@@ -822,9 +828,16 @@ def _parquet_to_frame(
     if not partition_keys:
         return _read_parquet(
             paths_or_buffers,
+            nrows=nrows,
+            skip_rows=skip_rows,
             *args,
             row_groups=row_groups,
             **kwargs,
+        )
+
+    if nrows is not None or skip_rows is not None:
+        raise NotImplementedError(
+            "nrows/skip_rows is not supported when reading a partitioned parquet dataset"
         )
 
     partition_meta = None
@@ -915,6 +928,8 @@ def _read_parquet(
     row_groups=None,
     use_pandas_metadata=None,
     allow_mismatched_pq_schemas=False,
+    nrows=None,
+    skip_rows=None,
     *args,
     **kwargs,
 ):
@@ -938,14 +953,22 @@ def _read_parquet(
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
                 allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
+                nrows=nrows if nrows is not None else -1,
+                skip_rows=skip_rows if skip_rows is not None else 0,
             )
         else:
+            if nrows is None:
+                nrows = -1
+            if skip_rows is None:
+                skip_rows = 0
             return libparquet.read_parquet(
                 filepaths_or_buffers,
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
                 allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
+                nrows=nrows,
+                skip_rows=skip_rows,
             )
     else:
         if (
