@@ -26,21 +26,24 @@ namespace cudf::experimental::prefetch {
 
 namespace detail {
 
-PrefetchConfig& PrefetchConfig::instance()
+prefetch_config& prefetch_config::instance()
 {
-  static PrefetchConfig instance;
+  static prefetch_config instance;
   return instance;
 }
 
-bool PrefetchConfig::get(std::string_view key)
+bool prefetch_config::get(std::string_view key)
 {
-  // Default to not prefetching
-  if (config_values.find(key.data()) == config_values.end()) {
-    return (config_values[key.data()] = false);
-  }
-  return config_values[key.data()];
+  std::shared_lock<std::shared_mutex> lock(config_mtx);
+  auto const it = config_values.find(key.data());
+  return it == config_values.end() ? false : it->second;  // default to not prefetching
 }
-void PrefetchConfig::set(std::string_view key, bool value) { config_values[key.data()] = value; }
+
+void prefetch_config::set(std::string_view key, bool value)
+{
+  std::lock_guard<std::shared_mutex> lock(config_mtx);
+  config_values[key.data()] = value;
+}
 
 cudaError_t prefetch_noexcept(std::string_view key,
                               void const* ptr,
@@ -48,8 +51,22 @@ cudaError_t prefetch_noexcept(std::string_view key,
                               rmm::cuda_stream_view stream,
                               rmm::cuda_device_id device_id) noexcept
 {
-  if (PrefetchConfig::instance().get(key)) {
-    if (PrefetchConfig::instance().debug) {
+  // Don't try to prefetch nullptrs or empty data. Sometimes libcudf has column
+  // views that use nullptrs with a nonzero size as an optimization.
+  if (ptr == nullptr) {
+    if (prefetch_config::instance().debug) {
+      std::cerr << "Skipping prefetch of nullptr" << std::endl;
+    }
+    return cudaSuccess;
+  }
+  if (size == 0) {
+    if (prefetch_config::instance().debug) {
+      std::cerr << "Skipping prefetch of size 0" << std::endl;
+    }
+    return cudaSuccess;
+  }
+  if (prefetch_config::instance().get(key)) {
+    if (prefetch_config::instance().debug) {
       std::cerr << "Prefetching " << size << " bytes for key " << key << " at location " << ptr
                 << std::endl;
     }
@@ -78,12 +95,15 @@ void prefetch(std::string_view key,
 
 }  // namespace detail
 
-void enable_prefetching(std::string_view key) { detail::PrefetchConfig::instance().set(key, true); }
+void enable_prefetching(std::string_view key)
+{
+  detail::prefetch_config::instance().set(key, true);
+}
 
 void disable_prefetching(std::string_view key)
 {
-  detail::PrefetchConfig::instance().set(key, false);
+  detail::prefetch_config::instance().set(key, false);
 }
 
-void prefetch_debugging(bool enable) { detail::PrefetchConfig::instance().debug = enable; }
+void prefetch_debugging(bool enable) { detail::prefetch_config::instance().debug = enable; }
 }  // namespace cudf::experimental::prefetch

@@ -928,9 +928,9 @@ class UnaryFunction(Expr):
         if self.name not in (
             "mask_nans",
             "round",
-            "setsorted",
+            "set_sorted",
             "unique",
-            "dropnull",
+            "drop_nulls",
             "fill_null",
         ):
             raise NotImplementedError(f"Unary function {name=}")
@@ -991,7 +991,7 @@ class UnaryFunction(Expr):
             if maintain_order:
                 return Column(column).sorted_like(values)
             return Column(column)
-        elif self.name == "setsorted":
+        elif self.name == "set_sorted":
             (column,) = (
                 child.evaluate(df, context=context, mapping=mapping)
                 for child in self.children
@@ -1018,7 +1018,7 @@ class UnaryFunction(Expr):
                 order=order,
                 null_order=null_order,
             )
-        elif self.name == "dropnull":
+        elif self.name == "drop_nulls":
             (column,) = (
                 child.evaluate(df, context=context, mapping=mapping)
                 for child in self.children
@@ -1231,7 +1231,11 @@ class Cast(Expr):
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
         super().__init__(dtype)
         self.children = (value,)
-        if not plc.unary.is_supported_cast(self.dtype, value.dtype):
+        if not (
+            plc.traits.is_fixed_width(self.dtype)
+            and plc.traits.is_fixed_width(value.dtype)
+            and plc.unary.is_supported_cast(value.dtype, self.dtype)
+        ):
             raise NotImplementedError(
                 f"Can't cast {self.dtype.id().name} to {value.dtype.id().name}"
             )
@@ -1467,13 +1471,14 @@ class BinOp(Expr):
         super().__init__(dtype)
         self.op = op
         self.children = (left, right)
-        if (
-            op in (plc.binaryop.BinaryOperator.ADD, plc.binaryop.BinaryOperator.SUB)
-            and plc.traits.is_chrono(left.dtype)
-            and plc.traits.is_chrono(right.dtype)
-            and not dtypes.have_compatible_resolution(left.dtype.id(), right.dtype.id())
+        if not plc.binaryop.is_supported_operation(
+            self.dtype, left.dtype, right.dtype, op
         ):
-            raise NotImplementedError("Casting rules for timelike types")
+            raise NotImplementedError(
+                f"Operation {op.name} not supported "
+                f"for types {left.dtype.id().name} and {right.dtype.id().name} "
+                f"with output type {self.dtype.id().name}"
+            )
 
     _MAPPING: ClassVar[dict[pl_expr.Operator, plc.binaryop.BinaryOperator]] = {
         pl_expr.Operator.Eq: plc.binaryop.BinaryOperator.EQUAL,

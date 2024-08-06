@@ -190,24 +190,35 @@ class Scan(IR):
     """Cloud-related authentication options, currently ignored."""
     paths: list[str]
     """List of paths to read from."""
-    file_options: Any
-    """Options for reading the file.
-
-    Attributes are:
-    - ``with_columns: list[str]`` of projected columns to return.
-    - ``n_rows: int``: Number of rows to read.
-    - ``row_index: tuple[name, offset] | None``: Add an integer index
-        column with given name.
-    """
+    with_columns: list[str]
+    """Projected columns to return."""
+    skip_rows: int
+    """Rows to skip at the start when reading."""
+    n_rows: int
+    """Number of rows to read after skipping."""
+    row_index: tuple[str, int] | None
+    """If not None add an integer index column of the given name."""
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
     def __post_init__(self) -> None:
         """Validate preconditions."""
-        if self.typ not in ("csv", "parquet"):
+        if self.typ not in ("csv", "parquet", "ndjson"):  # pragma: no cover
+            # This line is unhittable ATM since IPC/Anonymous scan raise
+            # on the polars side
             raise NotImplementedError(f"Unhandled scan type: {self.typ}")
+        if self.typ == "ndjson" and (self.n_rows != -1 or self.skip_rows != 0):
+            raise NotImplementedError("row limit in scan for json reader")
+        if self.skip_rows < 0:
+            # TODO: polars has this implemented for parquet,
+            # maybe we can do this too?
+            raise NotImplementedError("slice pushdown for negative slices")
+        if self.typ == "csv" and self.skip_rows != 0:  # pragma: no cover
+            # This comes from slice pushdown, but that
+            # optimization doesn't happen right now
+            raise NotImplementedError("skipping rows in CSV reader")
         if self.cloud_options is not None and any(
-            self.cloud_options[k] is not None for k in ("aws", "azure", "gcp")
+            self.cloud_options.get(k) is not None for k in ("aws", "azure", "gcp")
         ):
             raise NotImplementedError(
                 "Read from cloud storage"
@@ -232,13 +243,19 @@ class Scan(IR):
                 # Need to do some file introspection to get the number
                 # of columns so that column projection works right.
                 raise NotImplementedError("Reading CSV without header")
+        elif self.typ == "ndjson":
+            # TODO: consider handling the low memory option here
+            # (maybe use chunked JSON reader)
+            if self.reader_options["ignore_errors"]:
+                raise NotImplementedError(
+                    "ignore_errors is not supported in the JSON reader"
+                )
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
-        options = self.file_options
-        with_columns = options.with_columns
-        row_index = options.row_index
-        nrows = self.file_options.n_rows if self.file_options.n_rows is not None else -1
+        with_columns = self.with_columns
+        row_index = self.row_index
+        n_rows = self.n_rows
         if self.typ == "csv":
             parse_options = self.reader_options["parse_options"]
             sep = chr(parse_options["separator"])
@@ -272,6 +289,7 @@ class Scan(IR):
 
             # polars skips blank lines at the beginning of the file
             pieces = []
+            read_partial = n_rows != -1
             for p in self.paths:
                 skiprows = self.reader_options["skip_rows"]
                 path = Path(p)
@@ -293,9 +311,13 @@ class Scan(IR):
                     comment=comment,
                     decimal=decimal,
                     dtypes=self.schema,
-                    nrows=nrows,
+                    nrows=n_rows,
                 )
                 pieces.append(tbl_w_meta)
+                if read_partial:
+                    n_rows -= tbl_w_meta.tbl.num_rows()
+                    if n_rows <= 0:
+                        break
             tables, colnames = zip(
                 *(
                     (piece.tbl, piece.column_names(include_children=False))
@@ -310,13 +332,36 @@ class Scan(IR):
             tbl_w_meta = plc.io.parquet.read_parquet(
                 plc.io.SourceInfo(self.paths),
                 columns=with_columns,
-                num_rows=nrows,
+                num_rows=n_rows,
+                skip_rows=self.skip_rows,
             )
             df = DataFrame.from_table(
                 tbl_w_meta.tbl,
                 # TODO: consider nested column names?
                 tbl_w_meta.column_names(include_children=False),
             )
+        elif self.typ == "ndjson":
+            json_schema: list[tuple[str, str, list]] = [
+                (name, typ, []) for name, typ in self.schema.items()
+            ]
+            plc_tbl_w_meta = plc.io.json.read_json(
+                plc.io.SourceInfo(self.paths),
+                lines=True,
+                dtypes=json_schema,
+                prune_columns=True,
+            )
+            # TODO: I don't think cudf-polars supports nested types in general right now
+            # (but when it does, we should pass child column names from nested columns in)
+            df = DataFrame.from_table(
+                plc_tbl_w_meta.tbl, plc_tbl_w_meta.column_names(include_children=False)
+            )
+            col_order = list(self.schema.keys())
+            # TODO: remove condition when dropping support for polars 1.0
+            # https://github.com/pola-rs/polars/pull/17363
+            if row_index is not None and row_index[0] in self.schema:
+                col_order.remove(row_index[0])
+            if col_order is not None:
+                df = df.select(col_order)
         else:
             raise NotImplementedError(
                 f"Unhandled scan type: {self.typ}"
@@ -592,7 +637,7 @@ class Join(IR):
     right_on: list[expr.NamedExpr]
     """List of expressions used as keys in the right frame."""
     options: tuple[
-        Literal["inner", "left", "full", "leftsemi", "leftanti", "cross"],
+        Literal["inner", "left", "right", "full", "leftsemi", "leftanti", "cross"],
         bool,
         tuple[int, int] | None,
         str | None,
@@ -618,7 +663,7 @@ class Join(IR):
     @staticmethod
     @cache
     def _joiners(
-        how: Literal["inner", "left", "full", "leftsemi", "leftanti"],
+        how: Literal["inner", "left", "right", "full", "leftsemi", "leftanti"],
     ) -> tuple[
         Callable, plc.copying.OutOfBoundsPolicy, plc.copying.OutOfBoundsPolicy | None
     ]:
@@ -628,7 +673,7 @@ class Join(IR):
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
             )
-        elif how == "left":
+        elif how == "left" or how == "right":
             return (
                 plc.join.left_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
@@ -652,8 +697,7 @@ class Join(IR):
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 None,
             )
-        else:
-            assert_never(how)
+        assert_never(how)
 
     def _reorder_maps(
         self,
@@ -747,8 +791,12 @@ class Join(IR):
             table = plc.copying.gather(left.table, lg, left_policy)
             result = DataFrame.from_table(table, left.column_names)
         else:
+            if how == "right":
+                # Right join is a left join with the tables swapped
+                left, right = right, left
+                left_on, right_on = right_on, left_on
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
-            if how == "left":
+            if how == "left" or how == "right":
                 # Order of left table is preserved
                 lg, rg = self._reorder_maps(
                     left.num_rows, lg, left_policy, right.num_rows, rg, right_policy
@@ -775,6 +823,9 @@ class Join(IR):
                     )
                 )
                 right = right.discard_columns(right_on.column_names_set)
+            if how == "right":
+                # Undo the swap for right join before gluing together.
+                left, right = right, left
             right = right.rename_columns(
                 {
                     name: f"{name}{suffix}"

@@ -6,7 +6,6 @@ import pytest
 
 import polars as pl
 
-from cudf_polars import execute_with_cudf
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
@@ -47,4 +46,4 @@ def test_gather_out_of_bounds(negative):
     query = ldf.select(pl.col("a").gather(pl.col("b")))
 
     with pytest.raises(pl.exceptions.ComputeError):
-        query.collect(post_opt_callback=execute_with_cudf)
+        query.collect(engine="gpu")

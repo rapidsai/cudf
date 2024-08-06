@@ -17,7 +17,7 @@ def join_nulls(request):
     return request.param
 
 
-@pytest.fixture(params=["inner", "left", "semi", "anti", "full"])
+@pytest.fixture(params=["inner", "left", "right", "semi", "anti", "full"])
 def how(request):
     return request.param
 

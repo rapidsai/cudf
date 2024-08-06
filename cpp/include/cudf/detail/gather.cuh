@@ -571,13 +571,13 @@ void gather_bitmask(table_view const& source,
         not target[i]->nullable()) {
       auto const state =
         op == gather_bitmask_op::PASSTHROUGH ? mask_state::ALL_VALID : mask_state::UNINITIALIZED;
-      auto mask = detail::create_null_mask(target[i]->size(), state, stream, mr);
+      auto mask = cudf::create_null_mask(target[i]->size(), state, stream, mr);
       target[i]->set_null_mask(std::move(mask), 0);
     }
   }
 
   // Make device array of target bitmask pointers
-  std::vector<bitmask_type*> target_masks(target.size());
+  auto target_masks = make_host_vector<bitmask_type*>(target.size(), stream);
   std::transform(target.begin(), target.end(), target_masks.begin(), [](auto const& col) {
     return col->mutable_view().null_mask();
   });
