@@ -841,10 +841,11 @@ class TemporalFunction(Expr):
         pl_expr.TemporalFunction.Hour: "hour",
         pl_expr.TemporalFunction.Minute: "minute",
         pl_expr.TemporalFunction.Second: "second",
-        # millisecond/microsecond are implemented
+        # millisecond/microsecond/nanoseconds are implemented
         # differently in polars, than seconds and above
-        # Instead of extracting the number of milliseconds/microseconds
-        # we must get the nanoseconds and then scale appropriately
+        # Instead of extracting the number of milliseconds/microseconds/nanoseconds
+        # we must get the sub-second part of the timestamp in
+        # nanoseconds and then scale appropriately
         # TODO: this should be possible
         # pl_expr.TemporalFunction.Millisecond: "millisecond",
         # pl_expr.TemporalFunction.Microsecond: "microsecond",
