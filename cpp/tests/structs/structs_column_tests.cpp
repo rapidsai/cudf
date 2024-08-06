@@ -448,12 +448,12 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3; });
   auto [null_mask, null_count] =
     detail::make_null_mask(list_of_struct_of_list_validity, list_of_struct_of_list_validity + 5);
-  auto list_of_struct_of_list = cudf::make_lists_column(
-    5,
-    std::move(fixed_width_column_wrapper<size_type>{0, 2, 4, 6, 8, 10}.release()),
-    std::move(struct_of_lists_col),
-    null_count,
-    std::move(null_mask));
+  auto list_of_struct_of_list =
+    cudf::make_lists_column(5,
+                            fixed_width_column_wrapper<size_type>{0, 2, 4, 6, 8, 10}.release(),
+                            std::move(struct_of_lists_col),
+                            null_count,
+                            std::move(null_mask));
 
   // Compare with expected values.
 
@@ -468,12 +468,12 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
 
   std::tie(null_mask, null_count) =
     detail::make_null_mask(list_of_struct_of_list_validity, list_of_struct_of_list_validity + 5);
-  auto expected_level3_list = cudf::make_lists_column(
-    5,
-    std::move(fixed_width_column_wrapper<size_type>{0, 0, 2, 4, 4, 6}.release()),
-    std::move(expected_level2_struct),
-    null_count,
-    std::move(null_mask));
+  auto expected_level3_list =
+    cudf::make_lists_column(5,
+                            fixed_width_column_wrapper<size_type>{0, 0, 2, 4, 4, 6}.release(),
+                            std::move(expected_level2_struct),
+                            null_count,
+                            std::move(null_mask));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*list_of_struct_of_list, *expected_level3_list);
 }
@@ -498,12 +498,12 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfListOfStruct)
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3; });
   auto [null_mask, null_count] = detail::make_null_mask(list_validity, list_validity + 5);
 
-  auto lists_col = cudf::make_lists_column(
-    5,
-    std::move(fixed_width_column_wrapper<size_type>{0, 2, 4, 6, 8, 10}.release()),
-    std::move(structs_col),
-    null_count,
-    std::move(null_mask));
+  auto lists_col =
+    cudf::make_lists_column(5,
+                            fixed_width_column_wrapper<size_type>{0, 2, 4, 6, 8, 10}.release(),
+                            std::move(structs_col),
+                            null_count,
+                            std::move(null_mask));
 
   std::vector<std::unique_ptr<cudf::column>> cols;
   cols.push_back(std::move(lists_col));
@@ -519,12 +519,12 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfListOfStruct)
 
   std::tie(null_mask, null_count) = detail::make_null_mask(list_validity, list_validity + 5);
 
-  auto expected_lists_col = cudf::make_lists_column(
-    5,
-    std::move(fixed_width_column_wrapper<size_type>{0, 2, 4, 6, 8, 10}.release()),
-    std::move(expected_structs_col),
-    null_count,
-    std::move(null_mask));
+  auto expected_lists_col =
+    cudf::make_lists_column(5,
+                            fixed_width_column_wrapper<size_type>{0, 2, 4, 6, 8, 10}.release(),
+                            std::move(expected_structs_col),
+                            null_count,
+                            std::move(null_mask));
 
   // Test that the lists child column is as expected.
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_lists_col, struct_of_list_of_struct->child(0));

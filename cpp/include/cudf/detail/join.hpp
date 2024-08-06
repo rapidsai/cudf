@@ -59,7 +59,7 @@ struct hash_join {
     cuco::static_multimap<hash_value_type,
                           cudf::size_type,
                           cuda::thread_scope_device,
-                          cudf::detail::cuco_allocator,
+                          cudf::detail::cuco_allocator<char>,
                           cuco::legacy::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
 
   hash_join()                            = delete;
