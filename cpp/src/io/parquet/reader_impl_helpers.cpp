@@ -886,7 +886,7 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
 {
   // schema_idx_maps will only have > 0 size when we are reading matching column projection from
   // mismatched Parquet sources.
-  if (src_idx and schema_idx_maps.size()) {
+  if (src_idx and not schema_idx_maps.empty()) {
     auto const& schema_idx_map = schema_idx_maps[src_idx - 1];
     CUDF_EXPECTS(schema_idx_map.find(schema_idx) != schema_idx_map.end(),
                  "Unmapped schema index encountered in the specified source tree",
@@ -1410,7 +1410,7 @@ aggregate_reader_metadata::select_columns(
         output_column_schemas.push_back(top_level_col_schema_idx);
 
         // Map the column's schema_idx across the rest of the data sources if required.
-        if (per_file_metadata.size() > 1 and schema_idx_maps.size()) {
+        if (per_file_metadata.size() > 1 and not schema_idx_maps.empty()) {
           std::for_each(thrust::make_counting_iterator(static_cast<size_t>(1)),
                         thrust::make_counting_iterator(per_file_metadata.size()),
                         [&](auto const pfm_idx) {
