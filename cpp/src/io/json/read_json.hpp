@@ -78,7 +78,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
  *
  * The datasources passed to the JSON reader are split into batches demarcated by byte range
  * offsets and read iteratively. The batch size is capped at INT_MAX bytes, which is the
- * default value returned by the function. This value can be overriden at runtime using the
+ * default value returned by the function. This value can be overridden at runtime using the
  * environment variable LIBCUDF_JSON_BATCH_SIZE
  *
  * @return size in bytes
