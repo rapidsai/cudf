@@ -16,14 +16,12 @@
 #include "common.hpp"
 #include "groupby_results.hpp"
 
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/text/data_chunk_source_factories.hpp>
-#include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/strings/convert/convert_floats.hpp>
-#include <cudf/strings/split/split.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -35,52 +33,59 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include <thread>
 
-using elapsed_t = std::chrono::duration<double>;
-using result_t  = std::unique_ptr<cudf::table>;
+using elapsed_t  = std::chrono::duration<double>;
+using byte_range = std::pair<std::size_t, std::size_t>;
+using result_t   = std::unique_ptr<cudf::table>;
+
+std::unique_ptr<cudf::table> load_chunk(std::string const& input_file,
+                                        std::size_t start,
+                                        std::size_t size,
+                                        rmm::cuda_stream_view stream)
+{
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{input_file})
+      .header(-1)
+      .delimiter(';')
+      .doublequote(false)
+      .byte_range_offset(start)
+      .byte_range_size(size)
+      .dtypes(std::vector<cudf::data_type>{cudf::data_type{cudf::type_id::STRING},
+                                           cudf::data_type{cudf::type_id::FLOAT32}})
+      .na_filter(false);
+  return cudf::io::read_csv(in_opts, stream).tbl;
+}
 
 struct chunk_fn {
-  cudf::io::text::data_chunk_source const& source;
+  std::string input_file;
   std::vector<result_t>& agg_data;
   rmm::cuda_stream_view stream;
 
-  std::vector<cudf::io::text::byte_range_info> byte_ranges{};
+  std::vector<byte_range> byte_ranges{};
 
-  void add_range(cudf::io::text::byte_range_info const& br)
+  void add_range(std::size_t start, std::size_t size)
   {
-    // byte_ranges.insert(byte_ranges.end(), br);
-    byte_ranges.push_back(br);
+    byte_ranges.push_back(byte_range{start, size});
   }
 
   void operator()()
   {
     // process each byte range assigned to this thread
     for (auto& br : byte_ranges) {
-      // load byte-range from the file into 2 strings columns (cities, temps)
-      auto splits = [&] {
-        cudf::io::text::parse_options options{br, false};
-        auto raw_data_column = cudf::io::text::multibyte_split(source, "\n", options, stream);
-        auto const sv        = cudf::strings_column_view(raw_data_column->view());
-        auto const delimiter = cudf::string_scalar{";", true, stream};
-        return cudf::strings::split(sv, delimiter, 1, stream);
-      }();
+      auto const input_table = load_chunk(input_file, br.first, br.second, stream);
+      auto const read_rows   = input_table->num_rows();
+      if (read_rows == 0) continue;
 
-      // convert temps strings to floats
-      auto temps  = cudf::strings::to_floats(cudf::strings_column_view(splits->view().column(1)),
-                                            cudf::data_type{cudf::type_id::FLOAT32},
-                                            stream);
-      auto cities = std::move(splits->release().front());
+      auto const cities = input_table->view().column(0);
+      auto const temps  = input_table->view().column(1);
 
-      // compute aggregations on this chunk
       std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
       aggregations.emplace_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
       aggregations.emplace_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
       aggregations.emplace_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
       aggregations.emplace_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
-      auto result = compute_results(cities->view(), temps->view(), std::move(aggregations), stream);
+      auto result = compute_results(cities, temps, std::move(aggregations), stream);
 
-      // store sorted results
       agg_data.emplace_back(
         cudf::sort_by_key(result->view(), result->view().select({0}), {}, {}, stream));
     }
@@ -97,7 +102,7 @@ int main(int argc, char const** argv)
   }
 
   auto const input_file   = std::string{argv[1]};
-  auto const divider      = (argc < 3) ? 10 : std::stoi(std::string(argv[2]));
+  auto const divider      = (argc < 3) ? 25 : std::stoi(std::string(argv[2]));
   auto const thread_count = (argc < 4) ? 2 : std::stoi(std::string(argv[3]));
 
   std::cout << "input:   " << input_file << std::endl;
@@ -112,19 +117,20 @@ int main(int argc, char const** argv)
   std::filesystem::path p = input_file;
   auto const file_size    = std::filesystem::file_size(p);
 
-  auto byte_ranges  = cudf::io::text::create_byte_range_infos_consecutive(file_size, divider);
-  auto const source = cudf::io::text::make_source_from_file(input_file);
+  std::size_t chunk_size = file_size / divider + ((file_size % divider) != 0);
+  std::size_t start_pos  = 0;
 
-  // use multiple threads assigning a stream per thread
   auto stream_pool = rmm::cuda_stream_pool(thread_count);
   std::vector<std::vector<result_t>> chunk_results(thread_count);
 
   std::vector<chunk_fn> chunks;
   for (auto& cr : chunk_results) {
-    chunks.emplace_back(chunk_fn{*source, cr, stream_pool.get_stream()});
+    chunks.emplace_back(chunk_fn{input_file, cr, stream_pool.get_stream()});
   }
-  for (std::size_t i = 0; i < byte_ranges.size(); ++i) {
-    chunks[i % thread_count].add_range(byte_ranges[i]);
+  for (std::size_t i = 0; i < divider; ++i) {
+    auto start = i * chunk_size;
+    auto size  = std::min(chunk_size, file_size - start);
+    chunks[i % thread_count].add_range(start, size);
   }
   std::vector<std::thread> threads;
   for (auto& c : chunks) {
@@ -145,9 +151,8 @@ int main(int argc, char const** argv)
     begin += c.size();
   }
 
-  // now aggregate the threads' aggregate results
-  auto results = compute_final_aggregates(agg_data, stream);
+  // now aggregate the aggregate results
+  auto results = compute_final_aggregates(agg_data);
   std::cout << "number of keys = " << results->num_rows() << std::endl;
-
   return 0;
 }
