@@ -841,9 +841,14 @@ class TemporalFunction(Expr):
         pl_expr.TemporalFunction.Hour: "hour",
         pl_expr.TemporalFunction.Minute: "minute",
         pl_expr.TemporalFunction.Second: "second",
-        pl_expr.TemporalFunction.Millisecond: "millisecond",
-        pl_expr.TemporalFunction.Microsecond: "microsecond",
-        pl_expr.TemporalFunction.Nanosecond: "nanosecond",
+        # millisecond/microsecond are implemented
+        # differently in polars, than seconds and above
+        # Instead of extracting the number of milliseconds/microseconds
+        # we must get the nanoseconds and then scale appropriately
+        # TODO: this should be possible
+        # pl_expr.TemporalFunction.Millisecond: "millisecond",
+        # pl_expr.TemporalFunction.Microsecond: "microsecond",
+        # pl_expr.TemporalFunction.Nanosecond: "nanosecond",
     }
     _supported_temporal_functions = _temporal_extraction_function_map
     _non_child = ("dtype", "name", "options")

@@ -47,9 +47,6 @@ def test_datetime_dataframe_scan(dtype):
         methodcaller("hour"),
         methodcaller("minute"),
         methodcaller("second"),
-        methodcaller("millisecond"),
-        methodcaller("microsecond"),
-        methodcaller("nanosecond"),
     ],
 )
 def test_datetime_extract(field):
@@ -58,15 +55,16 @@ def test_datetime_extract(field):
             "datetimes": pl.datetime_range(
                 datetime.datetime(2020, 1, 1),
                 datetime.datetime(2021, 12, 30),
-                "3m14h15s999ns",
+                "3mo14h15s999ns",
                 eager=True,
             )
         }
     )
+
     q = ldf.select(field(pl.col("datetimes").dt))
 
     with pytest.raises(AssertionError):
-        # polars produces int32, libcudf produces int16 for the year extraction
+        # polars produces int32, libcudf produces int16 for extraction methods
         # libcudf can lose data here.
         # https://github.com/rapidsai/cudf/issues/16196
         assert_gpu_result_equal(q)
@@ -97,12 +95,10 @@ def test_date_extract(field):
         {"dates": [datetime.date(2024, 1, 1), datetime.date(2024, 10, 11)]}
     )
 
-    print(ldf.collect())
-
     q = ldf.select(field(pl.col("dates").dt))
 
     with pytest.raises(AssertionError):
-        # polars produces int32, libcudf produces int16 for the year extraction
+        # polars produces int32, libcudf produces int16 for extraction methods
         # libcudf can lose data here.
         # https://github.com/rapidsai/cudf/issues/16196
         assert_gpu_result_equal(q)
