@@ -15,9 +15,11 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/hash_reduce_by_row.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/reduction/detail/histogram.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 
@@ -36,9 +38,6 @@
 namespace cudf::reduction::detail {
 
 namespace {
-
-// Always use 64-bit signed integer for storing count.
-using histogram_count_type = int64_t;
 
 /**
  * @brief Building a histogram by gathering distinct rows from the input table and their
@@ -127,7 +126,7 @@ compute_row_frequencies(table_view const& input,
       [d_partial_output = partial_counts ? partial_counts.value().begin<histogram_count_type>()
                                          : nullptr] __device__(size_type const idx) {
         auto const increment = d_partial_output ? d_partial_output[idx] : histogram_count_type{1};
-        return cuco::pair<size_type, histogram_count_type>{idx, increment};
+        return cuco::pair{idx, increment};
       }));
 
   // Always compare NaNs as equal.
@@ -140,16 +139,17 @@ compute_row_frequencies(table_view const& input,
     cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                      cudf::nullate::DYNAMIC>;
 
-  auto map = cuco::static_map{input.num_rows(),
-                              0.5,
-                              cuco::empty_key<size_type>{-1},
-                              cuco::empty_value<histogram_count_type>{0},
-                              key_equal,
-                              cuco::linear_probing<1, row_hash>{key_hasher},
-                              {},
-                              {},
-                              cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-                              stream.value()};
+  auto map = cuco::static_map{
+    input.num_rows(),
+    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+    cuco::empty_key<size_type>{-1},
+    cuco::empty_value<histogram_count_type>{0},
+    key_equal,
+    cuco::linear_probing<1, row_hash>{key_hasher},
+    {},
+    {},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream.value()};
 
   // TODO: use `insert_or_apply` init overload for better performance
   map.insert_or_apply(pair_iter, pair_iter + input.num_rows(), plus_op{}, stream.value());

@@ -59,10 +59,11 @@ std::unique_ptr<column> build_histogram(column_view const& values,
     cudf::reduction::detail::compute_row_frequencies(labeled_values, partial_counts, stream, mr);
 
   // compute_row_frequencies does not provide stable ordering
-  thrust::sort_by_key(rmm::exec_policy(stream),
-                      distinct_indices->begin(),
-                      distinct_indices->end(),
-                      distinct_counts->mutable_view().begin<int64_t>());
+  thrust::sort_by_key(
+    rmm::exec_policy(stream),
+    distinct_indices->begin(),
+    distinct_indices->end(),
+    distinct_counts->mutable_view().begin<cudf::reduction::detail::histogram_count_type>());
 
   // Gather the distinct rows for the output histogram.
   auto out_table = cudf::detail::gather(labeled_values,

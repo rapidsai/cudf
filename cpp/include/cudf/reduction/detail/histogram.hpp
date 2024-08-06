@@ -31,6 +31,9 @@
 namespace CUDF_EXPORT cudf {
 namespace reduction::detail {
 
+// Always use 64-bit signed integer for storing count.
+using histogram_count_type = int64_t;
+
 /**
  * @brief Compute the frequency for each distinct row in the input table.
  *
