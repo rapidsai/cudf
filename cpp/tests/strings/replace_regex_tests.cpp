@@ -245,6 +245,40 @@ TEST_F(StringsReplaceRegexTest, Multiline)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, br_expected);
 }
 
+TEST_F(StringsReplaceRegexTest, SpecialNewLines)
+{
+  auto input = cudf::test::strings_column_wrapper({"zzé\xE2\x80\xA8qqq\xC2\x85zzé",
+                                                   "qqq\xC2\x85zzé\xE2\x80\xA8lll",
+                                                   "zzé",
+                                                   "",
+                                                   "zzé\xC2\x85",
+                                                   "abc\xE2\x80\xA9zzé\xC2\x85"});
+  auto view  = cudf::strings_column_view(input);
+  auto repl  = cudf::string_scalar("_");
+  auto prog =
+    cudf::strings::regex_program::create("^zzé$", cudf::strings::regex_flags::EXT_NEWLINE);
+  auto results  = cudf::strings::replace_re(view, *prog, repl);
+  auto expected = cudf::test::strings_column_wrapper({"zzé\xE2\x80\xA8qqq\xC2\x85zzé",
+                                                      "qqq\xC2\x85zzé\xE2\x80\xA8lll",
+                                                      "_",
+                                                      "",
+                                                      "_\xC2\x85",
+                                                      "abc\xE2\x80\xA9zzé\xC2\x85"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+
+  auto both_flags = static_cast<cudf::strings::regex_flags>(
+    cudf::strings::regex_flags::EXT_NEWLINE | cudf::strings::regex_flags::MULTILINE);
+  auto prog_ml = cudf::strings::regex_program::create("^zzé$", both_flags);
+  results      = cudf::strings::replace_re(view, *prog_ml, repl);
+  expected     = cudf::test::strings_column_wrapper({"_\xE2\x80\xA8qqq\xC2\x85_",
+                                                     "qqq\xC2\x85_\xE2\x80\xA8lll",
+                                                     "_",
+                                                     "",
+                                                     "_\xC2\x85",
+                                                     "abc\xE2\x80\xA9_\xC2\x85"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+}
+
 TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexTest)
 {
   std::vector<char const*> h_strings{"the quick brown fox jumps over the lazy dog",
