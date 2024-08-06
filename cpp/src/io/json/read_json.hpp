@@ -37,6 +37,20 @@ constexpr size_t min_subchunk_size        = 10000;
 constexpr int estimated_compression_ratio = 4;
 constexpr int max_subchunks_prealloced    = 3;
 
+/**
+ * @brief Read from array of data sources into RMM buffer. The size of the returned device span
+          can be larger than the number of bytes requested from the list of sources when
+          the range to be read spans across multiple sources. This is due to the delimiter
+          characters inserted after the end of each accessed source.
+ *
+ * @param buffer Device span buffer to which data is read
+ * @param sources Array of data sources
+ * @param compression Compression format of source
+ * @param range_offset Number of bytes to skip from source start
+ * @param range_size Number of bytes to read from source
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @returns A subspan of the input device span containing data read
+ */
 device_span<char> ingest_raw_input(device_span<char> buffer,
                                    host_span<std::unique_ptr<datasource>> sources,
                                    compression_type compression,
@@ -44,14 +58,33 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                                    size_t range_size,
                                    rmm::cuda_stream_view stream);
 
+/**
+ * @brief Reads and returns the entire data set in batches.
+ *
+ * @param sources Input `datasource` objects to read the dataset from
+ * @param reader_opts Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource to use for device memory allocation
+ *
+ * @return cudf::table object that contains the array of cudf::column.
+ */
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& reader_opts,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);
 
-size_type find_first_delimiter(device_span<char const> d_data,
-                               char const delimiter,
-                               rmm::cuda_stream_view stream);
+/**
+ * @brief Return the upper bound on the batch size for the JSON reader. 
+ *
+ * The datasources passed to the JSON reader are split into batches demarcated by byte range
+ * offsets and read iteratively. The batch size is capped at INT_MAX bytes, which is the
+ * default value returned by the function. This value can be overriden at runtime using the 
+ * environment variable LIBCUDF_JSON_BATCH_SIZE
+ *
+ * @return size in bytes
+ */
+size_t get_batch_size_upper_bound();
+
 
 }  // namespace io::json::detail
 }  // namespace CUDF_EXPORT cudf

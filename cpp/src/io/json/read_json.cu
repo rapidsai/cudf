@@ -51,19 +51,23 @@ size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
 }
 
 /**
- * @brief Read from array of data sources into RMM buffer. The size of the returned device span
-          can be larger than the number of bytes requested from the list of sources when
-          the range to be read spans across multiple sources. This is due to the delimiter
-          characters inserted after the end of each accessed source.
+ * @brief Extract the first delimiter character position in the string
  *
- * @param buffer Device span buffer to which data is read
- * @param sources Array of data sources
- * @param compression Compression format of source
- * @param range_offset Number of bytes to skip from source start
- * @param range_size Number of bytes to read from source
+ * @param d_data Device span in which to search for delimiter character
+ * @param delimiter Delimiter character to search for
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @returns A subspan of the input device span containing data read
+ *
+ * @return Position of first delimiter character in device array
  */
+size_type find_first_delimiter(device_span<char const> d_data,
+                               char const delimiter,
+                               rmm::cuda_stream_view stream)
+{
+  auto const first_delimiter_position =
+    thrust::find(rmm::exec_policy(stream), d_data.begin(), d_data.end(), delimiter);
+  return first_delimiter_position != d_data.end() ? first_delimiter_position - d_data.begin() : -1;
+}
+
 device_span<char> ingest_raw_input(device_span<char> buffer,
                                    host_span<std::unique_ptr<datasource>> sources,
                                    compression_type compression,
@@ -270,6 +274,14 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
 }
 
+size_t get_batch_size_upper_bound() {
+  auto const batch_size_str = std::getenv("LIBCUDF_JSON_BATCH_SIZE");
+  size_t const batch_size    = batch_size_str != nullptr ? std::atol(batch_size_str) : 0L;
+  return (batch_size > 0 && batch_size < std::numeric_limits<int32_t>::max())
+           ? batch_size
+           : std::numeric_limits<int32_t>::max();
+}
+
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& reader_opts,
                               rmm::cuda_stream_view stream,
@@ -303,8 +315,9 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                                                : std::min(chunk_size, total_source_size - chunk_offset);
 
   size_t const size_per_subchunk = estimate_size_per_subchunk(chunk_size);
-  size_t const batch_size_ub =
-    std::numeric_limits<int>::max() - (max_subchunks_prealloced * size_per_subchunk);
+  size_t const batch_size_upper_bound = get_batch_size_upper_bound();
+  size_t const batch_size =
+    batch_size_upper_bound - (max_subchunks_prealloced * size_per_subchunk);
 
   /*
    * Identify the position (zero-indexed) of starting source file from which to begin
@@ -337,8 +350,8 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     // If the current source file can subsume multiple batches, we split the file until the
     // boundary of the last batch exceeds the end of the file (indexed by `pref_source_size`)
     while (pref_bytes_size < end_bytes_size &&
-           pref_source_size >= std::min(pref_bytes_size + batch_size_ub, end_bytes_size)) {
-      auto next_batch_size = std::min(batch_size_ub, end_bytes_size - pref_bytes_size);
+           pref_source_size >= std::min(pref_bytes_size + batch_size, end_bytes_size)) {
+      auto next_batch_size = std::min(batch_size, end_bytes_size - pref_bytes_size);
       batch_offsets.push_back(batch_offsets.back() + next_batch_size);
       pref_bytes_size += next_batch_size;
     }
