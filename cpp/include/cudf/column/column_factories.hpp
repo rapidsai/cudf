@@ -380,6 +380,18 @@ std::unique_ptr<column> make_strings_column(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief TODO
+ * @param strings_batch
+ * @param stream
+ * @param mr
+ * @return
+ */
+std::vector<std::unique_ptr<column>> make_strings_column_batch(
+  std::vector<cudf::device_span<thrust::pair<char const*, size_type> const>> strings_batch,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Construct a STRING type column given a device span of string_view.
  *
  * The total number of char bytes must not exceed the maximum size of size_type.

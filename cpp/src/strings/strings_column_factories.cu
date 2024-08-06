@@ -32,6 +32,43 @@
 
 namespace cudf {
 
+namespace strings::detail {
+std::vector<std::unique_ptr<column>> make_strings_column_batch(
+  std::vector<cudf::device_span<thrust::pair<char const*, size_type> const>> strings_batch,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  std::vector<std::unique_ptr<column>> output;
+  std::vector<std::unique_ptr<column>> offsets;
+  std::vector<int64_t> chars_sizes;
+  std::vector<rmm::device_buffer> null_masks;
+  std::vector<size_type> null_counts;
+
+  return output;
+}
+
+}  // namespace strings::detail
+
+std::vector<std::unique_ptr<column>> make_strings_column_batch(
+  std::vector<cudf::device_span<thrust::pair<char const*, size_type> const>> strings_batch,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return cudf::strings::detail::make_strings_column_batch(strings_batch, stream, mr);
+}
+
+// Create a strings-type column from vector of pointer/size pairs
+std::unique_ptr<column> make_strings_column(
+  device_span<thrust::pair<char const*, size_type> const> strings,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  return cudf::strings::detail::make_strings_column(strings.begin(), strings.end(), stream, mr);
+}
+
 namespace {
 struct string_view_to_pair {
   string_view null_placeholder;
@@ -45,17 +82,6 @@ struct string_view_to_pair {
 };
 
 }  // namespace
-
-// Create a strings-type column from vector of pointer/size pairs
-std::unique_ptr<column> make_strings_column(
-  device_span<thrust::pair<char const*, size_type> const> strings,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-
-  return cudf::strings::detail::make_strings_column(strings.begin(), strings.end(), stream, mr);
-}
 
 std::unique_ptr<column> make_strings_column(device_span<string_view const> string_views,
                                             string_view null_placeholder,
