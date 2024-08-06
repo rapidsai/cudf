@@ -29,7 +29,7 @@
 
 #include <vector>
 
-static void BM_strings_column_construction(nvbench::state& state)
+static void BM_make_strings_column(nvbench::state& state)
 {
   auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const has_nulls = static_cast<bool>(state.get_int64("has_nulls"));
@@ -62,7 +62,7 @@ static void BM_strings_column_construction(nvbench::state& state)
   });
 }
 
-static void BM_strings_column_batch_construction(nvbench::state& state)
+static void BM_make_strings_column_batch(nvbench::state& state)
 {
   auto const num_rows   = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const has_nulls  = static_cast<bool>(state.get_int64("has_nulls"));
@@ -79,7 +79,9 @@ static void BM_strings_column_batch_construction(nvbench::state& state)
 
   using string_index_pair = thrust::pair<char const*, cudf::size_type>;
   auto const stream       = cudf::get_default_stream();
-  auto input              = std::vector<rmm::device_uvector<string_index_pair>>{};
+  auto input_data         = std::vector<rmm::device_uvector<string_index_pair>>{};
+  auto input              = std::vector<cudf::device_span<string_index_pair const>>{};
+  input_data.reserve(batch_size);
   input.reserve(batch_size);
   for (auto i = 0; i < batch_size; ++i) {
     auto const d_data_ptr =
@@ -92,24 +94,23 @@ static void BM_strings_column_batch_construction(nvbench::state& state)
                        auto const row = data_col.element<cudf::string_view>(idx);
                        return string_index_pair{row.data(), row.size_bytes()};
                      });
-    input.push_back(std::move(batch_input));
+    input_data.emplace_back(std::move(batch_input));
+    input.emplace_back(input_data.back());
   }
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    for (auto const& batch : input) {
-      [[maybe_unused]] auto const output = cudf::make_strings_column(batch, stream);
-    }
+    [[maybe_unused]] auto const output = cudf::make_strings_column_batch(input, stream);
   });
 }
 
-NVBENCH_BENCH(BM_strings_column_construction)
-  .set_name("strings_column_construction")
+NVBENCH_BENCH(BM_make_strings_column)
+  .set_name("make_strings_column")
   .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000, 200'000'000})
   .add_int64_axis("has_nulls", {0, 1});
 
-NVBENCH_BENCH(BM_strings_column_batch_construction)
-  .set_name("strings_column_batch_construction")
+NVBENCH_BENCH(BM_make_strings_column_batch)
+  .set_name("make_strings_column_batch")
   .add_int64_axis("num_rows", {1'000'000, 10'000'000, 20'000'000})
   .add_int64_axis("has_nulls", {0, 1})
   .add_int64_axis("batch_size", {5, 10, 15, 20});
