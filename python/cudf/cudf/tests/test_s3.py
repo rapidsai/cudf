@@ -65,6 +65,9 @@ def s3_base(endpoint_ip, endpoint_port):
         os.environ["AWS_SECURITY_TOKEN"] = "foobar_security_token"
         os.environ["AWS_SESSION_TOKEN"] = "foobar_session_token"
         os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
+        os.environ["AWS_ENDPOINT_URL"] = (
+            f"http://{endpoint_ip}:{endpoint_port}"
+        )
 
         # Launching moto in server mode, i.e., as a separate process
         # with an S3 endpoint on localhost
@@ -228,6 +231,7 @@ def test_write_csv(s3_base, s3so, pdf, chunksize):
 @pytest.mark.parametrize("columns", [None, ["Float", "String"]])
 @pytest.mark.parametrize("precache", [None, "parquet"])
 @pytest.mark.parametrize("use_python_file_object", [True, False])
+@pytest.mark.parametrize("use_kvikio_s3", [True, False])
 def test_read_parquet(
     s3_base,
     s3so,
@@ -236,6 +240,7 @@ def test_read_parquet(
     columns,
     precache,
     use_python_file_object,
+    use_kvikio_s3,
 ):
     fname = "test_parquet_reader.parquet"
     bucket = "parquet"
@@ -257,6 +262,7 @@ def test_read_parquet(
                 bytes_per_thread=bytes_per_thread,
                 columns=columns,
                 use_python_file_object=use_python_file_object,
+                use_kvikio_s3=use_kvikio_s3,
             )
     expect = pdf[columns] if columns else pdf
     assert_eq(expect, got1)

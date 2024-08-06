@@ -157,7 +157,7 @@ cdef class SourceInfo:
             for src in sources:
                 if not isinstance(src, (os.PathLike, str)):
                     raise ValueError("All sources must be of the same type!")
-                if not os.path.isfile(src):
+                if not os.path.isfile(src) and "s3://" not in str(src):
                     raise FileNotFoundError(errno.ENOENT,
                                             os.strerror(errno.ENOENT),
                                             src)
