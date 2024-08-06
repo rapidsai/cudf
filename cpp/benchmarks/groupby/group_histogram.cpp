@@ -23,9 +23,9 @@
 
 template <typename Type>
 void groupby_histogram_helper(nvbench::state& state,
-                        cudf::size_type num_rows,
-                        cudf::size_type cardinality,
-                        double null_probability)
+                              cudf::size_type num_rows,
+                              cudf::size_type cardinality,
+                              double null_probability)
 {
   auto const keys = [&] {
     data_profile const profile =
@@ -59,12 +59,11 @@ void groupby_histogram_helper(nvbench::state& state,
   auto const mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { 
-              auto const result = gb_obj.aggregate(requests); 
-        });
+             [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
   auto const elapsed_time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(num_rows) / elapsed_time / 1'000'000., "Mrows/s");
-  state.add_buffer_size(mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 template <typename Type>
@@ -74,6 +73,10 @@ void bench_groupby_histogram(nvbench::state& state, nvbench::type_list<Type>)
   auto const num_rows         = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const null_probability = state.get_float64("null_probability");
 
+  if (cardinality > num_rows) {
+    state.skip("cardinality > num_rows");
+    return;
+  }
   groupby_histogram_helper<Type>(state, num_rows, cardinality, null_probability);
 }
 
@@ -81,6 +84,5 @@ NVBENCH_BENCH_TYPES(bench_groupby_histogram,
                     NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, int64_t, float, double>))
   .set_name("groupby_histogram")
   .add_float64_axis("null_probability", {0, 0.1, 0.9})
-  .add_int64_axis("cardinality", {10, 20, 50, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000})
-  .add_int64_power_of_two_axis("num_rows", {12, 18, 24});
-
+  .add_int64_axis("cardinality", {100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000})
+  .add_int64_axis("num_rows", {100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000});
