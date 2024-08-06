@@ -6004,9 +6004,9 @@ class StringColumn(column.ColumnBase):
 
         n_bytes_to_view = str_end_byte_offset - str_byte_offset
 
-        to_view = column.build_column(
-            self.base_data,
-            dtype=cudf.api.types.dtype("int8"),
+        to_view = cudf.core.column.NumericalColumn(
+            self.base_data,  # type: ignore[arg-type]
+            dtype=np.dtype(np.int8),
             offset=str_byte_offset,
             size=n_bytes_to_view,
         )

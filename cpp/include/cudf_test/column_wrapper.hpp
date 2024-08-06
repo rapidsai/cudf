@@ -1337,7 +1337,7 @@ class lists_column_wrapper : public detail::column_wrapper {
   lists_column_wrapper(std::initializer_list<SourceElementT> elements) : column_wrapper{}
   {
     build_from_non_nested(
-      std::move(cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements).release()));
+      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements).release());
   }
 
   /**
@@ -1361,7 +1361,7 @@ class lists_column_wrapper : public detail::column_wrapper {
   lists_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
     build_from_non_nested(
-      std::move(cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end).release()));
+      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end).release());
   }
 
   /**
@@ -1386,7 +1386,7 @@ class lists_column_wrapper : public detail::column_wrapper {
     : column_wrapper{}
   {
     build_from_non_nested(
-      std::move(cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements, v).release()));
+      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements, v).release());
   }
 
   /**
@@ -1413,8 +1413,8 @@ class lists_column_wrapper : public detail::column_wrapper {
   lists_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    build_from_non_nested(std::move(
-      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end, v).release()));
+    build_from_non_nested(
+      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end, v).release());
   }
 
   /**
@@ -1435,7 +1435,7 @@ class lists_column_wrapper : public detail::column_wrapper {
   lists_column_wrapper(std::initializer_list<std::string> elements) : column_wrapper{}
   {
     build_from_non_nested(
-      std::move(cudf::test::strings_column_wrapper(elements.begin(), elements.end()).release()));
+      cudf::test::strings_column_wrapper(elements.begin(), elements.end()).release());
   }
 
   /**
@@ -1460,7 +1460,7 @@ class lists_column_wrapper : public detail::column_wrapper {
     : column_wrapper{}
   {
     build_from_non_nested(
-      std::move(cudf::test::strings_column_wrapper(elements.begin(), elements.end(), v).release()));
+      cudf::test::strings_column_wrapper(elements.begin(), elements.end(), v).release());
   }
 
   /**
