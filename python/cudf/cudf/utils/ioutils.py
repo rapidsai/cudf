@@ -199,9 +199,6 @@ bytes_per_thread : int, default None
     in parallel (using a python thread pool). Default allocation is
     {bytes_per_thread} bytes.
     This parameter is functional only when `use_python_file_object=False`.
-allow_mismatched_pq_schemas : boolean, default False
-    If True, enables reading (matching) columns specified in `columns` and `filters`
-    options from the input files with otherwise mismatched schemas.
 skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
 
@@ -212,6 +209,9 @@ nrows : int, default None
 
     .. note:
        This option is not supported when the low-memory mode is on.
+allow_mismatched_pq_schemas : boolean, default False
+    If True, enables reading (matching) columns specified in `columns` and `filters`
+    options from the input files with otherwise mismatched schemas.
 
 Returns
 -------

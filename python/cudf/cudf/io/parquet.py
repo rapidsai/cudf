@@ -539,9 +539,9 @@ def read_parquet(
     open_file_options=None,
     bytes_per_thread=None,
     dataset_kwargs=None,
-    allow_mismatched_pq_schemas=False,
     nrows=None,
     skip_rows=None,
+    allow_mismatched_pq_schemas=False,
     *args,
     **kwargs,
 ):
@@ -685,12 +685,12 @@ def read_parquet(
             columns=columns,
             row_groups=row_groups,
             use_pandas_metadata=use_pandas_metadata,
-            allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
             partition_keys=partition_keys,
             partition_categories=partition_categories,
             dataset_kwargs=dataset_kwargs,
             nrows=nrows,
             skip_rows=skip_rows,
+            allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
             **kwargs,
         )
     # Apply filters row-wise (if any are defined), and return
@@ -927,9 +927,9 @@ def _read_parquet(
     columns=None,
     row_groups=None,
     use_pandas_metadata=None,
-    allow_mismatched_pq_schemas=False,
     nrows=None,
     skip_rows=None,
+    allow_mismatched_pq_schemas=False,
     *args,
     **kwargs,
 ):
@@ -952,9 +952,9 @@ def _read_parquet(
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
-                allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
                 nrows=nrows if nrows is not None else -1,
                 skip_rows=skip_rows if skip_rows is not None else 0,
+                allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
             )
         else:
             if nrows is None:
@@ -966,9 +966,9 @@ def _read_parquet(
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
-                allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
                 nrows=nrows,
                 skip_rows=skip_rows,
+                allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
             )
     else:
         if (

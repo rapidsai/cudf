@@ -209,14 +209,15 @@ class aggregate_reader_metadata {
    * Extracts the schema_idx'th column chunk metadata from the specified row group index of the
    * src_idx'th file. Note that the schema_idx is actually the index in the zeroth file which may
    * not be the same in all files, in which case, the schema_idx is mapped to the corresponding
-   * index in the src_idx'th file and returned. An out_of_range error is thrown if schema_idx
+   * index in the src_idx'th file and returned. A range_error error is thrown if schema_idx
    * doesn't exist or isn't mapped to the src_idx file.
    *
    * @param row_group_index The row group index in the file to extract column chunk metadata from.
    * @param src_idx The per_file_metadata index to extract extract column chunk metadata from.
    * @param schema_idx The schema_idx of the column chunk to be extracted
    *
-   * @return The requested column chunk metadata or an out_of_range error if the schema index isn't
+   * @return The requested column chunk metadata or a range_error error if the schema index isn't
+   * valid.
    */
   [[nodiscard]] ColumnChunkMetaData const& get_column_metadata(size_type row_group_index,
                                                                size_type src_idx,
