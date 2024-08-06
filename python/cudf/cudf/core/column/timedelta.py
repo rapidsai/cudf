@@ -265,10 +265,10 @@ class TimeDeltaColumn(ColumnBase):
 
     def as_numerical_column(
         self, dtype: Dtype
-    ) -> "cudf.core.column.NumericalColumn":
-        col = column.build_column(
-            data=self.base_data,
-            dtype=np.int64,
+    ) -> cudf.core.column.NumericalColumn:
+        col = cudf.core.column.NumericalColumn(
+            data=self.base_data,  # type: ignore[arg-type]
+            dtype=np.dtype(np.int64),
             mask=self.base_mask,
             offset=self.offset,
             size=self.size,
