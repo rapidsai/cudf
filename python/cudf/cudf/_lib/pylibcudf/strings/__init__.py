@@ -10,4 +10,7 @@ from . import (
     regex_program,
     replace,
     slice,
+    strip,
 )
+
+from .side_type import SideType

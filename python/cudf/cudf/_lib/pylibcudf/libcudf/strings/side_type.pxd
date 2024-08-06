@@ -4,7 +4,7 @@ from libc.stdint cimport int32_t
 
 cdef extern from "cudf/strings/side_type.hpp" namespace "cudf::strings" nogil:
 
-    ctypedef enum side_type:
+    cpdef enum class side_type(int32_t):
         LEFT 'cudf::strings::side_type::LEFT'
         RIGHT 'cudf::strings::side_type::RIGHT'
         BOTH 'cudf::strings::side_type::BOTH'
