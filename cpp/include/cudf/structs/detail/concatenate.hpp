@@ -18,13 +18,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace structs {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace structs::detail {
 
 /**
  * @brief Returns a single column by concatenating the given vector of structs columns.
@@ -54,6 +54,5 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace structs
-}  // namespace cudf
+}  // namespace structs::detail
+}  // namespace CUDF_EXPORT cudf

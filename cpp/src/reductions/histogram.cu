@@ -148,7 +148,7 @@ compute_row_frequencies(table_view const& input,
                               cuco::linear_probing<1, row_hash>{key_hasher},
                               {},
                               {},
-                              cudf::detail::cuco_allocator{stream},
+                              cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
                               stream.value()};
 
   // TODO: use `insert_or_apply` init overload for better performance

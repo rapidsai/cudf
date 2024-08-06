@@ -46,10 +46,10 @@ from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
+    NumericalColumn,
     StructColumn,
     as_column,
     build_categorical_column,
-    build_column,
     column_empty,
     concat_columns,
 )
@@ -83,8 +83,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
     find_common_type,
     is_column_like,
-    min_scalar_type,
-    numeric_normalize_types,
+    min_signed_type,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin, _external_only_api
@@ -102,20 +101,6 @@ _cupy_nan_methods_map = {
     "std": "nanstd",
     "var": "nanvar",
 }
-
-_numeric_reduction_ops = (
-    "mean",
-    "min",
-    "max",
-    "sum",
-    "product",
-    "prod",
-    "std",
-    "var",
-    "kurtosis",
-    "kurt",
-    "skew",
-)
 
 
 def _shape_mismatch_error(x, y):
@@ -490,6 +475,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                     {key: ca._data[key] for key in column_names},
                     multiindex=ca.multiindex,
                     level_names=ca.level_names,
+                    verify=False,
                 ),
                 index=index,
             )
@@ -500,6 +486,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                     {key: ca._data[key] for key in column_names},
                     multiindex=ca.multiindex,
                     level_names=ca.level_names,
+                    verify=False,
                 ),
                 index=index,
             )
@@ -609,6 +596,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     dtype : dtype, default None
         Data type to force. Only a single dtype is allowed.
         If None, infer.
+    copy : bool or None, default None
+        Copy data from inputs.
+        Currently not implemented.
     nan_as_null : bool, Default True
         If ``None``/``True``, converts ``np.nan`` values to
         ``null`` values.
@@ -695,8 +685,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         index=None,
         columns=None,
         dtype=None,
+        copy=None,
         nan_as_null=no_default,
     ):
+        if copy is not None:
+            raise NotImplementedError("copy is not currently implemented.")
         super().__init__()
         if nan_as_null is no_default:
             nan_as_null = not cudf.get_option("mode.pandas_compatible")
@@ -780,6 +773,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     else None,
                     rangeindex=rangeindex,
                     label_dtype=label_dtype,
+                    verify=False,
                 )
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
@@ -788,7 +782,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
-
             # descr is an optional field of the _cuda_ary_iface_
             if "descr" in arr_interface:
                 if len(arr_interface["descr"]) == 1:
@@ -923,7 +916,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             final_index = ensure_index(index)
 
         series_lengths = list(map(len, data))
-        data = numeric_normalize_types(*data)
+        common_dtype = find_common_type([obj.dtype for obj in data])
+        data = [obj.astype(common_dtype) for obj in data]
         if series_lengths.count(series_lengths[0]) == len(series_lengths):
             # Calculating the final dataframe columns by
             # getting union of all `index` of the Series objects.
@@ -939,7 +933,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
                 if not series.index.equals(final_columns):
                     series = series.reindex(final_columns)
-                self._data[idx] = column.as_column(series._column)
+                self._data[idx] = series._column
 
             # Setting `final_columns` to self._index so
             # that the resulting `transpose` will be have
@@ -1537,6 +1531,25 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # cudf error.
             pass
         return NotImplemented
+
+    def __arrow_c_stream__(self, requested_schema=None):
+        """
+        Export the cudf DataFrame as an Arrow C stream PyCapsule.
+
+        Parameters
+        ----------
+        requested_schema : PyCapsule, default None
+            The schema to which the dataframe should be casted, passed as a
+            PyCapsule containing a C ArrowSchema representation of the
+            requested schema. Currently not implemented.
+
+        Returns
+        -------
+        PyCapsule
+        """
+        if requested_schema is not None:
+            raise NotImplementedError("requested_schema is not supported")
+        return self.to_arrow().__arrow_c_stream__()
 
     # The _get_numeric_data method is necessary for dask compatibility.
     @_performance_tracking
@@ -2249,6 +2262,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self,
         orient: str = "dict",
         into: type[dict] = dict,
+        index: bool = True,
     ) -> dict | list[dict]:
         """
         Convert the DataFrame to a dictionary.
@@ -2281,6 +2295,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             in the return value.  Can be the actual class or an empty
             instance of the mapping type you want.  If you want a
             collections.defaultdict, you must pass it initialized.
+
+        index : bool, default True
+            Whether to include the index item (and index_names item if `orient`
+            is 'tight') in the returned dictionary. Can only be ``False``
+            when `orient` is 'split' or 'tight'. Note that when `orient` is
+            'records', this parameter does not take effect (index item always
+            not included).
 
         Returns
         -------
@@ -2363,7 +2384,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise TypeError(f"unsupported type: {into}")
             return cons(self.items())  # type: ignore[misc]
 
-        return self.to_pandas().to_dict(orient=orient, into=into)
+        return self.to_pandas().to_dict(orient=orient, into=into, index=index)
 
     @_performance_tracking
     def scatter_by_map(
@@ -2750,7 +2771,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Chrome                200          0.02
 
         .. pandas-compat::
-            **DataFrame.reindex**
+            :meth:`pandas.DataFrame.reindex`
 
             Note: One difference from Pandas is that ``NA`` is used for rows
             that do not match, rather than ``NaN``. One side effect of this is
@@ -2822,6 +2843,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             index=index,
             inplace=False,
             fill_value=fill_value,
+            level=level,
+            method=method,
+            limit=limit,
+            tolerance=tolerance,
         )
 
     @_performance_tracking
@@ -2939,7 +2964,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # label-like
             if is_scalar(col) or isinstance(col, tuple):
                 if col in self._column_names:
-                    data_to_add.append(self[col])
+                    data_to_add.append(self[col]._column)
                     names.append(col)
                     if drop:
                         to_drop.append(col)
@@ -2954,7 +2979,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             elif isinstance(
                 col, (cudf.Series, cudf.Index, pd.Series, pd.Index)
             ):
-                data_to_add.append(col)
+                data_to_add.append(as_column(col))
                 names.append(col.name)
             else:
                 try:
@@ -3018,7 +3043,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    def where(self, cond, other=None, inplace=False):
+    def where(self, cond, other=None, inplace=False, axis=None, level=None):
+        if axis is not None:
+            raise NotImplementedError("axis is not supported.")
+        elif level is not None:
+            raise NotImplementedError("level is not supported.")
+
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
             _make_categorical_like,
@@ -3160,7 +3190,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
     )
     def reset_index(
-        self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
+        self,
+        level=None,
+        drop=False,
+        inplace=False,
+        col_level=0,
+        col_fill="",
+        allow_duplicates: bool = False,
+        names: abc.Hashable | abc.Sequence[abc.Hashable] | None = None,
     ):
         return self._mimic_inplace(
             DataFrame._from_data(
@@ -3169,32 +3206,45 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     drop=drop,
                     col_level=col_level,
                     col_fill=col_fill,
+                    allow_duplicates=allow_duplicates,
+                    names=names,
                 )
             ),
             inplace=inplace,
         )
 
     @_performance_tracking
-    def insert(self, loc, name, value, nan_as_null=no_default):
+    def insert(
+        self,
+        loc,
+        column,
+        value,
+        allow_duplicates: bool = False,
+        nan_as_null=no_default,
+    ):
         """Add a column to DataFrame at the index specified by loc.
 
         Parameters
         ----------
         loc : int
             location to insert by index, cannot be greater then num columns + 1
-        name : number or string
-            name or label of column to be inserted
+        column : number or string
+            column or label of column to be inserted
         value : Series or array-like
         nan_as_null : bool, Default None
             If ``None``/``True``, converts ``np.nan`` values to
             ``null`` values.
             If ``False``, leaves ``np.nan`` values as is.
         """
+        if allow_duplicates is not False:
+            raise NotImplementedError(
+                "allow_duplicates is currently not implemented."
+            )
         if nan_as_null is no_default:
             nan_as_null = not cudf.get_option("mode.pandas_compatible")
         return self._insert(
             loc=loc,
-            name=name,
+            name=column,
             value=value,
             nan_as_null=nan_as_null,
             ignore_index=False,
@@ -3350,7 +3400,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         5     2     5    20
 
         .. pandas-compat::
-            **DataFrame.diff**
+            :meth:`pandas.DataFrame.diff`
 
             Diff currently only supports numeric dtype columns.
         """
@@ -3555,7 +3605,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         30  3  6
 
         .. pandas-compat::
-            **DataFrame.rename**
+            :meth:`pandas.DataFrame.rename`
 
             * Not Supporting: level
 
@@ -3628,7 +3678,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return result
 
     @_performance_tracking
-    def add_prefix(self, prefix):
+    def add_prefix(self, prefix, axis=None):
+        if axis is not None:
+            raise NotImplementedError("axis is currently not implemented.")
         # TODO: Change to deep=False when copy-on-write is default
         out = self.copy(deep=True)
         out.columns = [
@@ -3637,7 +3689,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return out
 
     @_performance_tracking
-    def add_suffix(self, suffix):
+    def add_suffix(self, suffix, axis=None):
+        if axis is not None:
+            raise NotImplementedError("axis is currently not implemented.")
         # TODO: Change to deep=False when copy-on-write is default
         out = self.copy(deep=True)
         out.columns = [
@@ -3670,7 +3724,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             ``DataFrame`` is returned.
 
         .. pandas-compat::
-            **DataFrame.agg**
+            :meth:`pandas.DataFrame.agg`
 
             * Not supporting: ``axis``, ``*args``, ``**kwargs``
 
@@ -3843,7 +3897,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Brunei      434000    12128      BN
 
         .. pandas-compat::
-            **DataFrame.nlargest**
+            :meth:`pandas.DataFrame.nlargest`
 
             - Only a single column is supported in *columns*
         """
@@ -3915,7 +3969,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Nauru         337000  182      NR
 
         .. pandas-compat::
-            **DataFrame.nsmallest**
+            :meth:`pandas.DataFrame.nsmallest`
 
             - Only a single column is supported in *columns*
         """
@@ -3997,7 +4051,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         a new (ncol x nrow) dataframe. self is (nrow x ncol)
 
         .. pandas-compat::
-            **DataFrame.transpose, DataFrame.T**
+            :meth:`pandas.DataFrame.transpose`, :attr:`pandas.DataFrame.T`
 
             Not supporting *copy* because default and only behavior is
             copy=True
@@ -4053,7 +4107,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     T = property(transpose, doc=transpose.__doc__)
 
     @_performance_tracking
-    def melt(self, **kwargs):
+    def melt(
+        self,
+        id_vars=None,
+        value_vars=None,
+        var_name=None,
+        value_name="value",
+        col_level=None,
+        ignore_index: bool = True,
+    ):
         """Unpivots a DataFrame from wide format to long format,
         optionally leaving identifier variables set.
 
@@ -4080,23 +4142,30 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         from cudf.core.reshape import melt
 
-        return melt(self, **kwargs)
+        return melt(
+            self,
+            id_vars=id_vars,
+            value_vars=value_vars,
+            var_name=var_name,
+            value_name=value_name,
+            col_level=col_level,
+            ignore_index=ignore_index,
+        )
 
     @_performance_tracking
     def merge(
         self,
         right,
+        how="inner",
         on=None,
         left_on=None,
         right_on=None,
         left_index=False,
         right_index=False,
-        how="inner",
         sort=False,
-        lsuffix=None,
-        rsuffix=None,
-        indicator=False,
         suffixes=("_x", "_y"),
+        indicator=False,
+        validate=None,
     ):
         """Merge GPU DataFrame objects by performing a database-style join
         operation by columns or indexes.
@@ -4188,7 +4257,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         from both sides.
 
         .. pandas-compat::
-            **DataFrame.merge**
+            :meth:`pandas.DataFrame.merge`
 
             DataFrames merges in cuDF result in non-deterministic row
             ordering.
@@ -4197,17 +4266,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
             )
-
-        if lsuffix or rsuffix:
-            raise ValueError(
-                "The lsuffix and rsuffix keywords have been replaced with the "
-                "``suffixes=`` keyword.  "
-                "Please provide the following instead: \n\n"
-                "    suffixes=('%s', '%s')"
-                % (lsuffix or "_x", rsuffix or "_y")
-            )
-        else:
-            lsuffix, rsuffix = suffixes
+        if validate is not None:
+            raise NotImplementedError("validate is currently not supported.")
 
         lhs, rhs = self, right
         merge_cls = Merge
@@ -4244,6 +4304,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         lsuffix="",
         rsuffix="",
         sort=False,
+        validate: str | None = None,
     ):
         """Join columns with other DataFrame on index or on a key column.
 
@@ -4257,19 +4318,33 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             column names when avoiding conflicts.
         sort : bool
             Set to True to ensure sorted ordering.
+        validate : str, optional
+            If specified, checks if join is of specified type.
+
+            * "one_to_one" or "1:1": check if join keys are unique in both left
+              and right datasets.
+            * "one_to_many" or "1:m": check if join keys are unique in left dataset.
+            * "many_to_one" or "m:1": check if join keys are unique in right dataset.
+            * "many_to_many" or "m:m": allowed, but does not result in checks.
+
+            Currently not supported.
 
         Returns
         -------
         joined : DataFrame
 
         .. pandas-compat::
-            **DataFrame.join**
+            :meth:`pandas.DataFrame.join`
 
             - *other* must be a single DataFrame for now.
             - *on* is not supported yet due to lack of multi-index support.
         """
         if on is not None:
             raise NotImplementedError("The on parameter is not yet supported")
+        elif validate is not None:
+            raise NotImplementedError(
+                "The validate parameter is not yet supported"
+            )
 
         df = self.merge(
             other,
@@ -4306,7 +4381,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         as_index=True,
         sort=no_default,
         group_keys=False,
-        squeeze=False,
         observed=True,
         dropna=True,
     ):
@@ -4317,7 +4391,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             as_index,
             sort,
             group_keys,
-            squeeze,
             observed,
             dropna,
         )
@@ -4385,7 +4458,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1 2018-10-08
 
         .. pandas-compat::
-            **DataFrame.query**
+            :meth:`pandas.DataFrame.query`
 
             One difference from pandas is that ``query`` currently only
             supports numeric, datetime, timedelta, or bool dtypes.
@@ -4420,7 +4493,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_performance_tracking
     def apply(
-        self, func, axis=1, raw=False, result_type=None, args=(), **kwargs
+        self,
+        func,
+        axis=1,
+        raw=False,
+        result_type=None,
+        args=(),
+        by_row: Literal[False, "compat"] = "compat",
+        engine: Literal["python", "numba"] = "python",
+        engine_kwargs: dict[str, bool] | None = None,
+        **kwargs,
     ):
         """
         Apply a function along an axis of the DataFrame.
@@ -4448,6 +4530,24 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             Not yet supported
         args: tuple
             Positional arguments to pass to func in addition to the dataframe.
+        by_row : False or "compat", default "compat"
+            Only has an effect when ``func`` is a listlike or dictlike of funcs
+            and the func isn't a string.
+            If "compat", will if possible first translate the func into pandas
+            methods (e.g. ``Series().apply(np.sum)`` will be translated to
+            ``Series().sum()``). If that doesn't work, will try call to apply again with
+            ``by_row=True`` and if that fails, will call apply again with
+            ``by_row=False`` (backward compatible).
+            If False, the funcs will be passed the whole Series at once.
+
+            Currently not supported.
+        engine : {'python', 'numba'}, default 'python'
+            Unused. Added for compatibility with pandas.
+        engine_kwargs : dict
+            Unused. Added for compatibility with pandas.
+        **kwargs
+            Additional keyword arguments to pass as keywords arguments to
+            `func`.
 
         Examples
         --------
@@ -4598,13 +4698,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>
         """
         if axis != 1:
-            raise ValueError(
+            raise NotImplementedError(
                 "DataFrame.apply currently only supports row wise ops"
             )
         if raw:
-            raise ValueError("The `raw` kwarg is not yet supported.")
+            raise NotImplementedError("The `raw` kwarg is not yet supported.")
         if result_type is not None:
-            raise ValueError("The `result_type` kwarg is not yet supported.")
+            raise NotImplementedError(
+                "The `result_type` kwarg is not yet supported."
+            )
+        if by_row != "compat":
+            raise NotImplementedError("by_row is currently not supported.")
 
         return self._apply(func, _get_row_kernel, *args, **kwargs)
 
@@ -4698,7 +4802,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result = {}
         for name, col in self._data.items():
             apply_sr = Series._from_data({None: col})
-            result[name] = apply_sr.apply(_func)
+            result[name] = apply_sr.apply(_func)._column
 
         return DataFrame._from_data(result, index=self.index)
 
@@ -5447,10 +5551,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2  3  6
 
         .. pandas-compat::
-            **DataFrame.from_arrow**
+            `pandas.DataFrame.from_arrow`
 
-            -   Does not support automatically setting index column(s) similar
-                to how ``to_pandas`` works for PyArrow Tables.
+            This method does not exist in pandas but it is similar to
+            how :meth:`pyarrow.Table.to_pandas` works for PyArrow Tables i.e.
+            it does not support automatically setting index column(s).
         """
         index_col = None
         col_index_names = None
@@ -5504,7 +5609,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return out
 
     @_performance_tracking
-    def to_arrow(self, preserve_index=None):
+    def to_arrow(self, preserve_index=None) -> pa.Table:
         """
         Convert to a PyArrow Table.
 
@@ -5594,18 +5699,36 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return out.replace_schema_metadata(metadata)
 
     @_performance_tracking
-    def to_records(self, index=True):
+    def to_records(self, index=True, column_dtypes=None, index_dtypes=None):
         """Convert to a numpy recarray
 
         Parameters
         ----------
         index : bool
             Whether to include the index in the output.
+        column_dtypes : str, type, dict, default None
+            If a string or type, the data type to store all columns. If
+            a dictionary, a mapping of column names and indices (zero-indexed)
+            to specific data types. Currently not supported.
+        index_dtypes : str, type, dict, default None
+            If a string or type, the data type to store all index levels. If
+            a dictionary, a mapping of index level names and indices
+            (zero-indexed) to specific data types.
+            This mapping is applied only if `index=True`.
+            Currently not supported.
 
         Returns
         -------
         numpy recarray
         """
+        if column_dtypes is not None:
+            raise NotImplementedError(
+                "column_dtypes is currently not supported."
+            )
+        elif index_dtypes is not None:
+            raise NotImplementedError(
+                "column_dtypes is currently not supported."
+            )
         members = [("index", self.index.dtype)] if index else []
         members += [(col, self[col].dtype) for col in self._data.names]
         dtype = np.dtype(members)
@@ -5618,7 +5741,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @classmethod
     @_performance_tracking
-    def from_records(cls, data, index=None, columns=None, nan_as_null=False):
+    def from_records(
+        cls,
+        data,
+        index=None,
+        exclude=None,
+        columns=None,
+        coerce_float: bool = False,
+        nrows: int | None = None,
+        nan_as_null=False,
+    ):
         """
         Convert structured or record ndarray to DataFrame.
 
@@ -5628,13 +5760,32 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         index : str, array-like
             The name of the index column in *data*.
             If None, the default index is used.
+        exclude : sequence, default None
+            Columns or fields to exclude.
+            Currently not implemented.
         columns : list of str
             List of column names to include.
+        coerce_float : bool, default False
+            Attempt to convert values of non-string, non-numeric objects (like
+            decimal.Decimal) to floating point, useful for SQL result sets.
+            Currently not implemented.
+        nrows : int, default None
+            Number of rows to read if data is an iterator.
+            Currently not implemented.
 
         Returns
         -------
         DataFrame
         """
+        if exclude is not None:
+            raise NotImplementedError("exclude is currently not supported.")
+        if coerce_float is not False:
+            raise NotImplementedError(
+                "coerce_float is currently not supported."
+            )
+        if nrows is not None:
+            raise NotImplementedError("nrows is currently not supported.")
+
         if data.ndim != 1 and data.ndim != 2:
             raise ValueError(
                 f"records dimension expected 1 or 2 but found {data.ndim}"
@@ -5688,6 +5839,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 ),
                 level_names=level_names,
                 label_dtype=getattr(columns, "dtype", None),
+                verify=False,
             ),
             index=new_index,
         )
@@ -5699,17 +5851,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_performance_tracking
     def _from_arrays(
         cls,
-        data: np.ndarray | cupy.ndarray,
+        data,
         index=None,
         columns=None,
         nan_as_null=False,
     ):
-        """Convert a numpy/cupy array to DataFrame.
+        """
+        Convert an object implementing an array interface to DataFrame.
 
         Parameters
         ----------
-        data : numpy/cupy array of ndim 1 or 2,
-            dimensions greater than 2 are not supported yet.
+        data : object of ndim 1 or 2,
+            Object implementing ``__array_interface__`` or ``__cuda_array_interface__``
         index : Index or array-like
             Index to use for resulting frame. Will default to
             RangeIndex if no indexing information part of input data and
@@ -5721,13 +5874,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
         """
-        if data.ndim != 1 and data.ndim != 2:
+        array_data: np.ndarray | cupy.ndarray
+        if hasattr(data, "__cuda_array_interface__"):
+            array_data = cupy.asarray(data, order="F")
+        elif hasattr(data, "__array_interface__"):
+            array_data = np.asarray(data, order="F")
+        else:
             raise ValueError(
-                f"records dimension expected 1 or 2 but found: {data.ndim}"
+                "data must be an object implementing __cuda_array_interface__ or __array_interface__"
+            )
+
+        if array_data.ndim not in {1, 2}:
+            raise ValueError(
+                f"records dimension expected 1 or 2 but found: {array_data.ndim}"
             )
 
         if data.ndim == 2:
-            num_cols = data.shape[1]
+            num_cols = array_data.shape[1]
         else:
             # Since we validate ndim to be either 1 or 2 above,
             # this case can be assumed to be ndim == 1.
@@ -5745,14 +5908,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError("Duplicate column names are not allowed")
             names = columns
 
-        if data.ndim == 2:
+        if array_data.ndim == 2:
             ca_data = {
-                k: column.as_column(data[:, i], nan_as_null=nan_as_null)
+                k: column.as_column(array_data[:, i], nan_as_null=nan_as_null)
                 for i, k in enumerate(names)
             }
-        elif data.ndim == 1:
+        elif array_data.ndim == 1:
             ca_data = {
-                names[0]: column.as_column(data, nan_as_null=nan_as_null)
+                names[0]: column.as_column(array_data, nan_as_null=nan_as_null)
             }
 
         if index is not None:
@@ -5774,6 +5937,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 ),
                 level_names=level_names,
                 label_dtype=getattr(columns, "dtype", None),
+                verify=False,
             ),
             index=index,
         )
@@ -5815,9 +5979,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         axis=0,
         numeric_only=True,
         interpolation=None,
+        method="single",
         columns=None,
         exact=True,
-        method="single",
     ):
         """
         Return values at the given quantile.
@@ -5843,14 +6007,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 * higher: `j`.
                 * nearest: `i` or `j` whichever is nearest.
                 * midpoint: (`i` + `j`) / 2.
-        columns : list of str
-            List of column names to include.
-        exact : boolean
-            Whether to use approximate or exact quantile algorithm.
         method : {'single', 'table'}, default `'single'`
             Whether to compute quantiles per-column ('single') or over all
             columns ('table'). When 'table', the only allowed interpolation
             methods are 'nearest', 'lower', and 'higher'.
+        columns : list of str
+            List of column names to include.
+        exact : boolean
+            Whether to use approximate or exact quantile algorithm.
 
         Returns
         -------
@@ -5884,7 +6048,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         0.5  2.5  55.0
 
         .. pandas-compat::
-            **DataFrame.quantile**
+            :meth:`pandas.DataFrame.quantile`
 
             One notable difference from Pandas is when DataFrame is of
             non-numeric types and result is expected to be a Series in case of
@@ -6174,7 +6338,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dtype: int64
 
         .. pandas-compat::
-            **DataFrame.count**
+            :meth:`pandas.DataFrame.count`
 
             Parameters currently not supported are `axis` and `numeric_only`.
         """
@@ -6184,10 +6348,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         length = len(self)
         return Series._from_data(
             {
-                None: [
-                    length - self._data[col].null_count
-                    for col in self._data.names
-                ]
+                None: as_column(
+                    [length - col.null_count for col in self._columns]
+                )
             },
             cudf.Index(self._data.names),
         )
@@ -6412,7 +6575,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1  <NA>    2.0
 
         .. pandas-compat::
-            **DataFrame.mode**
+            :meth:`pandas.DataFrame.transpose`
 
             ``axis`` parameter is currently not supported.
         """
@@ -7173,25 +7336,47 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return result
 
     @_performance_tracking
-    def cov(self, **kwargs):
+    def cov(self, min_periods=None, ddof: int = 1, numeric_only: bool = False):
         """Compute the covariance matrix of a DataFrame.
 
         Parameters
         ----------
-        **kwargs
-            Keyword arguments to be passed to cupy.cov
+        min_periods : int, optional
+            Minimum number of observations required per pair of columns to
+            have a valid result.
+            Currently not supported.
+
+        ddof : int, default 1
+            Delta degrees of freedom.  The divisor used in calculations
+            is ``N - ddof``, where ``N`` represents the number of elements.
+
+        numeric_only : bool, default False
+            Include only `float`, `int` or `boolean` data.
+            Currently not supported.
 
         Returns
         -------
         cov : DataFrame
         """
-        cov = cupy.cov(self.values, rowvar=False)
+        if min_periods is not None:
+            raise NotImplementedError(
+                "min_periods is currently not supported."
+            )
+
+        if numeric_only is not False:
+            raise NotImplementedError(
+                "numeric_only is currently not supported."
+            )
+
+        cov = cupy.cov(self.values, ddof=ddof, rowvar=False)
         cols = self._data.to_pandas_index()
         df = DataFrame(cupy.asfortranarray(cov)).set_index(cols)
         df._set_columns_like(self._data)
         return df
 
-    def corr(self, method="pearson", min_periods=None):
+    def corr(
+        self, method="pearson", min_periods=None, numeric_only: bool = False
+    ):
         """Compute the correlation matrix of a DataFrame.
 
         Parameters
@@ -7220,6 +7405,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if min_periods is not None:
             raise NotImplementedError("Unsupported argument 'min_periods'")
+
+        if numeric_only is not False:
+            raise NotImplementedError(
+                "numeric_only is currently not supported."
+            )
 
         corr = cupy.corrcoef(values, rowvar=False)
         cols = self._data.to_pandas_index()
@@ -7256,7 +7446,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             offset=0,
         )
         return cudf.Series._from_data(
-            cudf.core.column_accessor.ColumnAccessor({name: col}),
+            cudf.core.column_accessor.ColumnAccessor(
+                {name: col}, verify=False
+            ),
             index=self.index,
             name=name,
         )
@@ -7359,9 +7551,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_performance_tracking
     @copy_docstring(reshape.unstack)
-    def unstack(self, level=-1, fill_value=None):
+    def unstack(self, level=-1, fill_value=None, sort: bool = True):
         return cudf.core.reshape.unstack(
-            self, level=level, fill_value=fill_value
+            self, level=level, fill_value=fill_value, sort=sort
         )
 
     @_performance_tracking
@@ -7407,7 +7599,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return super()._explode(column, ignore_index)
 
     def pct_change(
-        self, periods=1, fill_method=no_default, limit=no_default, freq=None
+        self,
+        periods=1,
+        fill_method=no_default,
+        limit=no_default,
+        freq=None,
+        **kwargs,
     ):
         """
         Calculates the percent change between sequential elements
@@ -7432,6 +7629,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
+        **kwargs
+            Additional keyword arguments are passed into
+            `DataFrame.shift`.
 
         Returns
         -------
@@ -7477,7 +7677,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             data = self.fillna(method=fill_method, limit=limit)
 
         return data.diff(periods=periods) / data.shift(
-            periods=periods, freq=freq
+            periods=periods, freq=freq, **kwargs
         )
 
     def __dataframe__(
@@ -7594,7 +7794,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         The interleaved columns as a single column
 
         .. pandas-compat::
-            **DataFrame.interleave_columns**
+            `pandas.DataFrame.interleave_columns`
 
             This method does not exist in pandas but it can be run
             as ``pd.Series(np.vstack(df.to_numpy()).reshape((-1,)))``.
@@ -7696,7 +7896,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         4  5   2   7  3
 
         .. pandas-compat::
-            **DataFrame.eval**
+            :meth:`pandas.DataFrame.eval`
 
             * Additional kwargs are not supported.
             * Bitwise and logical operators are not dtype-dependent.
@@ -8305,7 +8505,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             )._column.unique()
             # Set the column dtype to the codes' dtype. The categories
             # will be re-assigned at the end
-            dtypes[idx] = min_scalar_type(len(categories[idx]))
+            dtypes[idx] = min_signed_type(len(categories[idx]))
         # Otherwise raise an error if columns have different dtypes
         elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
             raise ValueError("All columns must be the same type")
@@ -8343,7 +8543,7 @@ def _reassign_categories(categories, cols, col_idxs):
         if idx in categories:
             cols[name] = build_categorical_column(
                 categories=categories[idx],
-                codes=build_column(
+                codes=NumericalColumn(
                     cols[name].base_data, dtype=cols[name].dtype
                 ),
                 mask=cols[name].base_mask,

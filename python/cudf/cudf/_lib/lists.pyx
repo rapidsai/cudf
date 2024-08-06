@@ -3,27 +3,9 @@
 from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
-from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
-from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
-    lists_column_view,
-)
-from cudf._lib.pylibcudf.libcudf.lists.sorting cimport (
-    sort_lists as cpp_sort_lists,
-)
-from cudf._lib.pylibcudf.libcudf.lists.stream_compaction cimport (
-    distinct as cpp_distinct,
-)
-from cudf._lib.pylibcudf.libcudf.types cimport (
-    nan_equality,
-    null_equality,
-    null_order,
-    order,
-    size_type,
-)
+from cudf._lib.pylibcudf.libcudf.types cimport null_order, size_type
 from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 from cudf._lib import pylibcudf
@@ -51,53 +33,25 @@ def explode_outer(list source_columns, int explode_column_idx):
 
 @acquire_spill_lock()
 def distinct(Column col, bool nulls_equal, bool nans_all_equal):
-    """
-    nulls_equal == True indicates that libcudf should treat any two nulls as
-    equal, and as unequal otherwise.
-    nans_all_equal == True indicates that libcudf should treat any two
-    elements from {-nan, +nan} as equal, and as unequal otherwise.
-    """
-    cdef shared_ptr[lists_column_view] list_view = (
-        make_shared[lists_column_view](col.view())
-    )
-    cdef null_equality c_nulls_equal = (
-        null_equality.EQUAL if nulls_equal else null_equality.UNEQUAL
-    )
-    cdef nan_equality c_nans_equal = (
-        nan_equality.ALL_EQUAL if nans_all_equal else nan_equality.UNEQUAL
-    )
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_distinct(list_view.get()[0],
-                         c_nulls_equal,
-                         c_nans_equal)
+    return Column.from_pylibcudf(
+        pylibcudf.lists.distinct(
+            col.to_pylibcudf(mode="read"),
+            nulls_equal,
+            nans_all_equal,
         )
-    return Column.from_unique_ptr(move(c_result))
+    )
 
 
 @acquire_spill_lock()
 def sort_lists(Column col, bool ascending, str na_position):
-    cdef shared_ptr[lists_column_view] list_view = (
-        make_shared[lists_column_view](col.view())
-    )
-    cdef order c_sort_order = (
-        order.ASCENDING if ascending else order.DESCENDING
-    )
-    cdef null_order c_null_prec = (
-        null_order.BEFORE if na_position == "first" else null_order.AFTER
-    )
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_sort_lists(list_view.get()[0], c_sort_order, c_null_prec)
+    return Column.from_pylibcudf(
+        pylibcudf.lists.sort_lists(
+            col.to_pylibcudf(mode="read"),
+            ascending,
+            null_order.BEFORE if na_position == "first" else null_order.AFTER,
+            False,
         )
-
-    return Column.from_unique_ptr(move(c_result))
+    )
 
 
 @acquire_spill_lock()

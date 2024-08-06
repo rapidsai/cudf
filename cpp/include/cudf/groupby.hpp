@@ -21,6 +21,7 @@
 #include <cudf/replace.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -31,7 +32,7 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 //! `groupby` APIs
 namespace groupby {
 namespace detail {
@@ -420,4 +421,4 @@ class groupby {
 };
 /** @} */
 }  // namespace groupby
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

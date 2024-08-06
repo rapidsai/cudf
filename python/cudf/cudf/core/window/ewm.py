@@ -1,6 +1,8 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
-
 from __future__ import annotations
+
+import warnings
+from typing import Literal
 
 import numpy as np
 
@@ -56,7 +58,7 @@ class ExponentialMovingWindow(_RollingBase):
     the equivalent pandas method.
 
     .. pandas-compat::
-        **cudf.core.window.ExponentialMovingWindow**
+        :meth:`pandas.DataFrame.ewm`
 
         The parameters ``min_periods``, ``ignore_na``, ``axis``, and ``times``
         are not yet supported. Behavior is defined only for data that begins
@@ -103,34 +105,79 @@ class ExponentialMovingWindow(_RollingBase):
         ignore_na: bool = False,
         axis: int = 0,
         times: str | np.ndarray | None = None,
+        method: Literal["single", "table"] = "single",
     ):
-        if (min_periods, ignore_na, axis, times) != (0, False, 0, None):
+        if min_periods != 0:
             raise NotImplementedError(
-                "The parameters `min_periods`, `ignore_na`, "
-                "`axis`, and `times` are not yet supported."
+                "min_periods is currently not supported."
             )
-
+        if ignore_na is not False:
+            raise NotImplementedError("ignore_na is currently not supported.")
+        if axis != 0:
+            warnings.warn(
+                "axis is deprecated with will be removed in a future version. "
+                "Transpose the DataFrame first instead."
+            )
+            raise NotImplementedError("axis is currently not supported.")
+        if times is not None:
+            raise NotImplementedError("times is currently not supported.")
+        if method != "single":
+            raise NotImplementedError("method is currently not supported.")
         self.obj = obj
         self.adjust = adjust
         self.com = get_center_of_mass(com, span, halflife, alpha)
 
-    def mean(self):
+    def online(self, engine: str = "numba", engine_kwargs=None):
+        """
+        Return an ``OnlineExponentialMovingWindow`` object to calculate
+        exponentially moving window aggregations in an online method.
+
+        Currently not supported.
+        """
+        raise NotImplementedError("online is currently not supported.")
+
+    def mean(
+        self, numeric_only: bool = False, engine=None, engine_kwargs=None
+    ):
         """
         Calculate the ewm (exponential weighted moment) mean.
         """
+        if numeric_only is not False:
+            raise NotImplementedError(
+                "numeric_only is currently not supported."
+            )
+        if engine is not None:
+            raise NotImplementedError(
+                "engine is non-functional and added for compatibility with pandas."
+            )
+        if engine_kwargs is not None:
+            raise NotImplementedError(
+                "engine_kwargs is non-functional and added for compatibility with pandas."
+            )
         return self._apply_agg("ewma")
 
-    def var(self, bias):
-        raise NotImplementedError("ewmvar not yet supported.")
+    def sum(self, numeric_only: bool = False, engine=None, engine_kwargs=None):
+        raise NotImplementedError("sum not yet supported.")
 
-    def std(self, bias):
-        raise NotImplementedError("ewmstd not yet supported.")
+    def var(self, bias: bool = False, numeric_only: bool = False):
+        raise NotImplementedError("var not yet supported.")
 
-    def corr(self, other):
-        raise NotImplementedError("ewmcorr not yet supported.")
+    def std(self, bias: bool = False, numeric_only: bool = False):
+        raise NotImplementedError("std not yet supported.")
 
-    def cov(self, other):
-        raise NotImplementedError("ewmcov not yet supported.")
+    def corr(
+        self, other, pairwise: bool | None = None, numeric_only: bool = False
+    ):
+        raise NotImplementedError("corr not yet supported.")
+
+    def cov(
+        self,
+        other,
+        pairwise: bool | None = None,
+        bias: bool = False,
+        numeric_only: bool = False,
+    ):
+        raise NotImplementedError("cov not yet supported.")
 
     def _apply_agg_series(self, sr, agg_name):
         if not is_numeric_dtype(sr.dtype):

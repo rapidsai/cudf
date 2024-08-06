@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ namespace detail {
 /**
  * @copydoc cudf::test::detail::random_generator_incrementing_seed()
  */
-uint64_t random_generator_incrementing_seed()
+CUDF_EXPORT uint64_t random_generator_incrementing_seed()
 {
   static uint64_t seed = 0;
   return ++seed;

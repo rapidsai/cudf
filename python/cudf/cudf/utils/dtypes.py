@@ -1,7 +1,9 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 import cupy as cp
 import numpy as np
@@ -10,6 +12,9 @@ import pyarrow as pa
 from pandas.core.dtypes.common import infer_dtype_from_object
 
 import cudf
+
+if TYPE_CHECKING:
+    from cudf._typing import DtypeObj
 
 """Map numpy dtype to pyarrow types.
 Note that np.bool_ bitwidth (8) is different from pa.bool_ (1). Special
@@ -89,10 +94,6 @@ STRING_TYPES = {"object"}
 BOOL_TYPES = {"bool"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
-# The NumPy scalar types are a bit of a mess as they align with the C types
-# so for now we use the `sctypes` dict (although it was made private in 2.0)
-_NUMPY_SCTYPES = np.sctypes if hasattr(np, "sctypes") else np._core.sctypes
-
 
 def np_to_pa_dtype(dtype):
     """Util to convert numpy dtype to PyArrow dtype."""
@@ -112,12 +113,6 @@ def np_to_pa_dtype(dtype):
         # default fallback unit is ns
         return pa.duration("ns")
     return _np_pa_dtypes[cudf.dtype(dtype).type]
-
-
-def numeric_normalize_types(*args):
-    """Cast all args to a common type using numpy promotion logic"""
-    dtype = np.result_type(*[a.dtype for a in args])
-    return [a.astype(dtype) for a in args]
 
 
 def _find_common_type_decimal(dtypes):
@@ -330,32 +325,28 @@ def can_convert_to_column(obj):
     return is_column_like(obj) or cudf.api.types.is_list_like(obj)
 
 
-def min_scalar_type(a, min_size=8):
-    return min_signed_type(a, min_size=min_size)
-
-
-def min_signed_type(x, min_size=8):
+def min_signed_type(x: int, min_size: int = 8) -> np.dtype:
     """
     Return the smallest *signed* integer dtype
     that can represent the integer ``x``
     """
-    for int_dtype in _NUMPY_SCTYPES["int"]:
+    for int_dtype in (np.int8, np.int16, np.int32, np.int64):
         if (cudf.dtype(int_dtype).itemsize * 8) >= min_size:
             if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
-                return int_dtype
+                return np.dtype(int_dtype)
     # resort to using `int64` and let numpy raise appropriate exception:
     return np.int64(x).dtype
 
 
-def min_unsigned_type(x, min_size=8):
+def min_unsigned_type(x: int, min_size: int = 8) -> np.dtype:
     """
     Return the smallest *unsigned* integer dtype
     that can represent the integer ``x``
     """
-    for int_dtype in _NUMPY_SCTYPES["uint"]:
+    for int_dtype in (np.uint8, np.uint16, np.uint32, np.uint64):
         if (cudf.dtype(int_dtype).itemsize * 8) >= min_size:
             if 0 <= x <= np.iinfo(int_dtype).max:
-                return int_dtype
+                return np.dtype(int_dtype)
     # resort to using `uint64` and let numpy raise appropriate exception:
     return np.uint64(x).dtype
 
@@ -373,10 +364,10 @@ def min_column_type(x, expected_type):
     if x.null_count == len(x):
         return x.dtype
 
-    if np.issubdtype(x.dtype, np.floating):
+    if x.dtype.kind == "f":
         return get_min_float_dtype(x)
 
-    elif np.issubdtype(expected_type, np.integer):
+    elif cudf.dtype(expected_type).kind in "iu":
         max_bound_dtype = np.min_scalar_type(x.max())
         min_bound_dtype = np.min_scalar_type(x.min())
         result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
@@ -582,25 +573,18 @@ def _dtype_pandas_compatible(dtype):
     return dtype
 
 
-def _maybe_convert_to_default_type(dtype):
+def _maybe_convert_to_default_type(dtype: DtypeObj) -> DtypeObj:
     """Convert `dtype` to default if specified by user.
 
     If not specified, return as is.
     """
-    if cudf.get_option("default_integer_bitwidth"):
-        if cudf.api.types.is_signed_integer_dtype(dtype):
-            return cudf.dtype(
-                f'i{cudf.get_option("default_integer_bitwidth")//8}'
-            )
-        elif cudf.api.types.is_unsigned_integer_dtype(dtype):
-            return cudf.dtype(
-                f'u{cudf.get_option("default_integer_bitwidth")//8}'
-            )
-    if cudf.get_option(
-        "default_float_bitwidth"
-    ) and cudf.api.types.is_float_dtype(dtype):
-        return cudf.dtype(f'f{cudf.get_option("default_float_bitwidth")//8}')
-
+    if ib := cudf.get_option("default_integer_bitwidth"):
+        if dtype.kind == "i":
+            return cudf.dtype(f"i{ib//8}")
+        elif dtype.kind == "u":
+            return cudf.dtype(f"u{ib//8}")
+    if (fb := cudf.get_option("default_float_bitwidth")) and dtype.kind == "f":
+        return cudf.dtype(f"f{fb//8}")
     return dtype
 
 
