@@ -26,7 +26,7 @@ def test_translation_assert_raises():
     class E(Exception):
         pass
 
-    unsupported = df.group_by("a").agg(pl.col("a").cum_max().alias("b"))
+    unsupported = df.group_by("a").agg(pl.col("a").upper_bound().alias("b"))
     # Unsupported query should raise NotImplementedError
     assert_ir_translation_raises(unsupported, NotImplementedError)
 
