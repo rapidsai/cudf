@@ -6,12 +6,10 @@ set -e
 scale_factor=$1
 pwd=$(pwd)
 
-# Clone the datafusion repo
-# This clone of the datafusion repo is uses a single thread
-# so that a single parquet file is generated for every table\
-if [ ! -d "datafusion" ]; then
-    git clone https://github.com/apache/datafusion.git datafusion
-fi
+# Clone the datafusion repository and apply a patch
+# for single threaded data generation so that a
+# single parquet file is generated for each table
+git clone https://github.com/apache/datafusion.git datafusion
 cd datafusion/benchmarks/
 git checkout 679a85f
 git apply ${pwd}/tpch.patch
