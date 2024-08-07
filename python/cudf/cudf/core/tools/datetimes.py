@@ -18,6 +18,8 @@ from cudf._lib.strings.convert.convert_integers import (
 )
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
+from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.index import ensure_index
 
 # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
 _unit_map = {
@@ -275,7 +277,7 @@ def to_datetime(
                 format=format,
                 utc=utc,
             )
-            return cudf.Series(col, index=arg.index)
+            return cudf.Series._from_column(col, index=arg.index)
         else:
             col = _process_col(
                 col=column.as_column(arg),
@@ -286,9 +288,12 @@ def to_datetime(
                 utc=utc,
             )
             if isinstance(arg, (cudf.BaseIndex, pd.Index)):
-                return cudf.Index(col, name=arg.name)
+                ca = ColumnAccessor({arg.name: col}, verify=False)
+                return cudf.DatetimeIndex._from_data(ca)
             elif isinstance(arg, (cudf.Series, pd.Series)):
-                return cudf.Series(col, index=arg.index, name=arg.name)
+                return cudf.Series._from_column(
+                    col, name=arg.name, index=ensure_index(arg.index)
+                )
             elif is_scalar(arg):
                 return col.element_indexing(0)
             else:

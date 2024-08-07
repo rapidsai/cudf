@@ -1506,7 +1506,7 @@ def column_empty(
     elif isinstance(dtype, CategoricalDtype):
         data = None
         children = (
-            build_column(
+            cudf.core.column.NumericalColumn(
                 data=as_buffer(
                     rmm.DeviceBuffer(
                         size=row_count
