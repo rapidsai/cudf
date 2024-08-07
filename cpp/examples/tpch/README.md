@@ -5,7 +5,7 @@ Implements TPC-H queries using `libcudf`. We leverage the data generator (wrappe
 ## Requirements
 
 - Rust
-- Libcudf
+- [libcudf](https://github.com/rapidsai/cudf/blob/branch-24.08/CONTRIBUTING.md#setting-up-your-build-environment)
 
 ## Running Queries
 
