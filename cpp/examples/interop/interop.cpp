@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#include "arrow/array/array_binary.h"
-#include "arrow/type.h"
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/io/csv.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
+
+#include <arrow/array/array_binary.h>
+#include <arrow/type.h>
 
 // Helper functuons to create StringViews
 inline arrow::BinaryViewType::c_type ToInlineStringView(const void* data, int32_t size)
