@@ -15,12 +15,10 @@ from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
-from .types cimport DataType, type_id
+from .types cimport DataType, size_of, type_id
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 import functools
-
-import numpy as np
 
 
 cdef class Column:
@@ -175,6 +173,32 @@ cdef class Column:
             children,
         )
 
+    cpdef Column with_mask(self, gpumemoryview mask, size_type null_count):
+        """Augment this column with a new null mask.
+
+        Parameters
+        ----------
+        mask : gpumemoryview
+            New mask (or None to unset the mask)
+        null_count : int
+            New null count. If this is incorrect, bad things happen.
+
+        Returns
+        -------
+        New Column object sharing data with self (except for the mask which is new).
+        """
+        if mask is None and null_count > 0:
+            raise ValueError("Empty mask must have null count of zero")
+        return Column(
+            self._data_type,
+            self._size,
+            self._data,
+            mask,
+            null_count,
+            self._offset,
+            self._children,
+        )
+
     @staticmethod
     cdef Column from_column_view(const column_view& cv, Column owner):
         """Create a Column from a libcudf column_view.
@@ -230,6 +254,28 @@ cdef class Column:
         return Column.from_libcudf(move(c_result))
 
     @staticmethod
+    def all_null_like(Column like, size_type size):
+        """Create an all null column from a template.
+
+        Parameters
+        ----------
+        like : Column
+            Column whose type we should mimic
+        size : int
+            Number of rows in the resulting column.
+
+        Returns
+        -------
+        Column
+            An all-null column of `size` rows and type matching `like`.
+        """
+        cdef Scalar slr = Scalar.empty_like(like)
+        cdef unique_ptr[column] c_result
+        with nogil:
+            c_result = move(make_column_from_scalar(dereference(slr.get()), size))
+        return Column.from_libcudf(move(c_result))
+
+    @staticmethod
     def from_cuda_array_interface_obj(object obj):
         """Create a Column from an object with a CUDA array interface.
 
@@ -250,19 +296,20 @@ cdef class Column:
         column is in use.
         """
         data = gpumemoryview(obj)
-        iface = data.__cuda_array_interface__()
+        iface = data.__cuda_array_interface__
         if iface.get('mask') is not None:
             raise ValueError("mask not yet supported.")
 
         typestr = iface['typestr'][1:]
+        data_type = _datatype_from_dtype_desc(typestr)
+
         if not is_c_contiguous(
             iface['shape'],
             iface['strides'],
-            np.dtype(typestr).itemsize
+            size_of(data_type)
         ):
             raise ValueError("Data must be C-contiguous")
 
-        data_type = _datatype_from_dtype_desc(typestr)
         size = iface['shape'][0]
         return Column(
             data_type,
@@ -400,8 +447,8 @@ def is_c_contiguous(
     itemsize : int
         Size of an element in bytes.
 
-    Return
-    ------
+    Returns
+    -------
     bool
         The boolean answer.
     """

@@ -22,7 +22,7 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
-from cudf._lib.parquet import ParquetReader
+from cudf._lib.parquet import read_parquet_chunked
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -711,7 +711,8 @@ def test_parquet_reader_arrow_nativefile(parquet_path_or_buf):
     expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
     fs, path = pa_fs.FileSystem.from_uri(parquet_path_or_buf("filepath"))
     with fs.open_input_file(path) as fil:
-        got = cudf.read_parquet(fil)
+        with pytest.warns(FutureWarning):
+            got = cudf.read_parquet(fil)
 
     assert_eq(expect, got)
 
@@ -726,16 +727,18 @@ def test_parquet_reader_use_python_file_object(
     fs, _, paths = get_fs_token_paths(parquet_path_or_buf("filepath"))
 
     # Pass open fsspec file
-    with fs.open(paths[0], mode="rb") as fil:
-        got1 = cudf.read_parquet(
-            fil, use_python_file_object=use_python_file_object
-        )
+    with pytest.warns(FutureWarning):
+        with fs.open(paths[0], mode="rb") as fil:
+            got1 = cudf.read_parquet(
+                fil, use_python_file_object=use_python_file_object
+            )
     assert_eq(expect, got1)
 
     # Pass path only
-    got2 = cudf.read_parquet(
-        paths[0], use_python_file_object=use_python_file_object
-    )
+    with pytest.warns(FutureWarning):
+        got2 = cudf.read_parquet(
+            paths[0], use_python_file_object=use_python_file_object
+        )
     assert_eq(expect, got2)
 
 
@@ -1973,6 +1976,25 @@ def test_parquet_partitioned(tmpdir_factory, cols, filename):
         for _, _, files in os.walk(gdf_dir):
             for fn in files:
                 assert fn == filename
+
+
+@pytest.mark.parametrize("kwargs", [{"nrows": 1}, {"skip_rows": 1}])
+def test_parquet_partitioned_notimplemented(tmpdir_factory, kwargs):
+    # Checks that write_to_dataset is wrapping to_parquet
+    # as expected
+    pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
+    size = 100
+    pdf = pd.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="int64"),
+            "b": np.random.choice(list("abcd"), size=size),
+            "c": np.random.choice(np.arange(4), size=size),
+        }
+    )
+    pdf.to_parquet(pdf_dir, index=False, partition_cols=["b"])
+
+    with pytest.raises(NotImplementedError):
+        cudf.read_parquet(pdf_dir, **kwargs)
 
 
 @pytest.mark.parametrize("return_meta", [True, False])
@@ -3752,7 +3774,7 @@ def test_parquet_chunked_reader(
     )
     buffer = BytesIO()
     df.to_parquet(buffer)
-    reader = ParquetReader(
+    actual = read_parquet_chunked(
         [buffer],
         chunk_read_limit=chunk_read_limit,
         pass_read_limit=pass_read_limit,
@@ -3762,8 +3784,27 @@ def test_parquet_chunked_reader(
     expected = cudf.read_parquet(
         buffer, use_pandas_metadata=use_pandas_metadata, row_groups=row_groups
     )
-    actual = reader.read()
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "nrows,skip_rows",
+    [
+        (0, 0),
+        (1000, 0),
+        (0, 1000),
+        (1000, 10000),
+    ],
+)
+def test_parquet_reader_nrows_skiprows(nrows, skip_rows):
+    df = pd.DataFrame(
+        {"a": [1, 2, 3, 4] * 100000, "b": ["av", "qw", "hi", "xyz"] * 100000}
+    )
+    expected = df[skip_rows : skip_rows + nrows]
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+    got = cudf.read_parquet(buffer, nrows=nrows, skip_rows=skip_rows)
+    assert_eq(expected, got)
 
 
 def test_parquet_reader_pandas_compatibility():
@@ -3772,6 +3813,6 @@ def test_parquet_reader_pandas_compatibility():
     )
     buffer = BytesIO()
     df.to_parquet(buffer)
-    with cudf.option_context("mode.pandas_compatible", True):
+    with cudf.option_context("io.parquet.low_memory", True):
         expected = cudf.read_parquet(buffer)
     assert_eq(expected, df)

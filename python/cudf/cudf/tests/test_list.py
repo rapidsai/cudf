@@ -694,12 +694,7 @@ def test_list_scalar_host_construction_null(elem_type, nesting_level):
         dtype = cudf.ListDtype(dtype)
 
     slr = cudf.Scalar(None, dtype=dtype)
-    assert slr.value is (
-        cudf.NaT
-        if cudf.api.types.is_datetime64_dtype(slr.dtype)
-        or cudf.api.types.is_timedelta64_dtype(slr.dtype)
-        else cudf.NA
-    )
+    assert slr.value is (cudf.NaT if slr.dtype.kind in "mM" else cudf.NA)
 
 
 @pytest.mark.parametrize(
@@ -951,5 +946,5 @@ def test_empty_nested_list_uninitialized_offsets_memory_usage():
         null_count=col.null_count,
         children=(column_empty(0, col.children[0].dtype), empty_inner),
     )
-    ser = cudf.Series._from_data({None: col_empty_offset})
+    ser = cudf.Series._from_column(col_empty_offset)
     assert ser.memory_usage() == 8

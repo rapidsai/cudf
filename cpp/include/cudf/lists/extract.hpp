@@ -18,11 +18,12 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace lists {
 /**
  * @addtogroup lists_extract
@@ -113,4 +114,4 @@ std::unique_ptr<column> extract_list_element(
 
 /** @} */  // end of group
 }  // namespace lists
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

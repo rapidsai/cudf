@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -26,7 +27,7 @@
 
 #include <thrust/transform.h>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @brief Creates a column of `type_id::BOOL8` elements by applying a predicate to every element
@@ -101,4 +102,4 @@ std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
                                    rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

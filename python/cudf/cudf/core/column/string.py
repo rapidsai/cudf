@@ -358,7 +358,7 @@ class StringMethods(ColumnMethods):
             )
 
         if len(data) == 1 and data.null_count == 1:
-            data = [""]
+            data = cudf.core.column.as_column("", length=len(data))
         # We only want to keep the index if we are adding something to each
         # row, not if we are joining all the rows into a single string.
         out = self._return_or_inplace(data, retain_index=others is not None)
@@ -612,7 +612,7 @@ class StringMethods(ColumnMethods):
         dtype: object
 
         .. pandas-compat::
-            **StringMethods.extract**
+            :meth:`pandas.Series.str.extract`
 
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
@@ -738,7 +738,7 @@ class StringMethods(ColumnMethods):
         dtype: bool
 
         .. pandas-compat::
-            **StringMethods.contains**
+            :meth:`pandas.Series.str.contains`
 
             The parameters `case` and `na` are not yet supported and will
             raise a NotImplementedError if anything other than the default
@@ -974,7 +974,7 @@ class StringMethods(ColumnMethods):
         dtype: object
 
         .. pandas-compat::
-            **StringMethods.replace**
+            :meth:`pandas.Series.str.replace`
 
             The parameters `case` and `flags` are not yet supported and will
             raise a `NotImplementedError` if anything other than the default
@@ -2803,7 +2803,7 @@ class StringMethods(ColumnMethods):
                    )
 
         .. pandas-compat::
-            **StringMethods.partition**
+            :meth:`pandas.Series.str.partition`
 
             The parameter `expand` is not yet supported and will raise a
             `NotImplementedError` if anything other than the default
@@ -3527,7 +3527,7 @@ class StringMethods(ColumnMethods):
         Index([0, 0, 2, 1], dtype='int64')
 
         .. pandas-compat::
-            **StringMethods.count**
+            :meth:`pandas.Series.str.count`
 
             -   `flags` parameter currently only supports re.DOTALL
                 and re.MULTILINE.
@@ -3607,7 +3607,7 @@ class StringMethods(ColumnMethods):
         dtype: list
 
         .. pandas-compat::
-            **StringMethods.findall**
+            :meth:`pandas.Series.str.findall`
 
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
@@ -3623,7 +3623,7 @@ class StringMethods(ColumnMethods):
         data = libstrings.findall(self._column, pat, flags)
         return self._return_or_inplace(data)
 
-    def find_multiple(self, patterns: SeriesOrIndex) -> "cudf.Series":
+    def find_multiple(self, patterns: SeriesOrIndex) -> cudf.Series:
         """
         Find all first occurrences of patterns in the Series/Index.
 
@@ -3679,12 +3679,12 @@ class StringMethods(ColumnMethods):
                 f"got: {patterns_column.dtype}"
             )
 
-        return cudf.Series(
+        return cudf.Series._from_column(
             libstrings.find_multiple(self._column, patterns_column),
+            name=self._parent.name,
             index=self._parent.index
             if isinstance(self._parent, cudf.Series)
             else self._parent,
-            name=self._parent.name,
         )
 
     def isempty(self) -> SeriesOrIndex:
@@ -3811,7 +3811,7 @@ class StringMethods(ColumnMethods):
         dtype: bool
 
         .. pandas-compat::
-            **StringMethods.endswith**
+            :meth:`pandas.Series.str.endswith`
 
             `na` parameter is not yet supported, as cudf uses
             native strings instead of Python objects.
@@ -4264,7 +4264,7 @@ class StringMethods(ColumnMethods):
         dtype: bool
 
         .. pandas-compat::
-            **StringMethods.match**
+            :meth:`pandas.Series.str.match`
 
             Parameters `case` and `na` are currently not supported.
             The `flags` parameter currently only supports re.DOTALL and
@@ -4376,14 +4376,9 @@ class StringMethods(ColumnMethods):
         2    99
         dtype: int32
         """
-
-        new_col = libstrings.code_points(self._column)
-        if isinstance(self._parent, cudf.Series):
-            return cudf.Series(new_col, name=self._parent.name)
-        elif isinstance(self._parent, cudf.BaseIndex):
-            return cudf.Index(new_col, name=self._parent.name)
-        else:
-            return new_col
+        return self._return_or_inplace(
+            libstrings.code_points(self._column), retain_index=False
+        )
 
     def translate(self, table: dict) -> SeriesOrIndex:
         """
@@ -4694,7 +4689,9 @@ class StringMethods(ColumnMethods):
         if isinstance(self._parent, cudf.Series):
             lengths = self.len().fillna(0)
             index = self._parent.index.repeat(lengths)
-            return cudf.Series(result_col, name=self._parent.name, index=index)
+            return cudf.Series._from_column(
+                result_col, name=self._parent.name, index=index
+            )
         elif isinstance(self._parent, cudf.BaseIndex):
             return cudf.Index(result_col, name=self._parent.name)
         else:
@@ -5669,16 +5666,25 @@ class StringColumn(column.ColumnBase):
         result_col = _str_to_numeric_typecast_functions[out_dtype](string_col)
         return result_col
 
-    def _as_datetime_or_timedelta_column(self, dtype, format):
-        if len(self) == 0:
-            return cudf.core.column.column_empty(0, dtype=dtype)
-
-        # Check for None strings
-        if (self == "None").any():
-            raise ValueError("Could not convert `None` value to datetime")
-
-        is_nat = self == "NaT"
-        if dtype.kind == "M":
+    def strptime(
+        self, dtype: Dtype, format: str
+    ) -> cudf.core.column.DatetimeColumn | cudf.core.column.TimeDeltaColumn:
+        if dtype.kind not in "Mm":  # type: ignore[union-attr]
+            raise ValueError(
+                f"dtype must be datetime or timedelta type, not {dtype}"
+            )
+        elif self.null_count == len(self):
+            return column.column_empty(len(self), dtype=dtype, masked=True)  # type: ignore[return-value]
+        elif (self == "None").any():
+            raise ValueError(
+                "Cannot convert `None` value to datetime or timedelta."
+            )
+        elif dtype.kind == "M":  # type: ignore[union-attr]
+            if format.endswith("%z"):
+                raise NotImplementedError(
+                    "cuDF does not yet support timezone-aware datetimes"
+                )
+            is_nat = self == "NaT"
             without_nat = self.apply_boolean_mask(is_nat.unary_operator("not"))
             all_same_length = (
                 libstrings.count_characters(without_nat).distinct_count(
@@ -5699,61 +5705,43 @@ class StringColumn(column.ColumnBase):
             if not valid.all():
                 raise ValueError(f"Column contains invalid data for {format=}")
 
-        casting_func = (
-            str_cast.timestamp2int
-            if dtype.type == np.datetime64
-            else str_cast.timedelta2int
-        )
+            casting_func = str_cast.timestamp2int
+            add_back_nat = is_nat.any()
+        elif dtype.kind == "m":  # type: ignore[union-attr]
+            casting_func = str_cast.timedelta2int
+            add_back_nat = False
+
         result_col = casting_func(self, dtype, format)
 
-        if is_nat.any():
+        if add_back_nat:
             result_col[is_nat] = None
 
         return result_col
 
     def as_datetime_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.DatetimeColumn":
-        out_dtype = cudf.api.types.dtype(dtype)
-
-        # infer on host from the first not na element
-        # or return all null column if all values
-        # are null in current column
-        if format is None:
-            if self.null_count == len(self):
-                return cast(
-                    "cudf.core.column.DatetimeColumn",
-                    column.column_empty(
-                        len(self), dtype=out_dtype, masked=True
-                    ),
-                )
-            else:
-                format = datetime.infer_format(
-                    self.apply_boolean_mask(self.notnull()).element_indexing(0)
-                )
-
-        if format.endswith("%z"):
-            raise NotImplementedError(
-                "cuDF does not yet support timezone-aware datetimes"
-            )
-        return self._as_datetime_or_timedelta_column(out_dtype, format)
+        self, dtype: Dtype
+    ) -> cudf.core.column.DatetimeColumn:
+        not_null = self.apply_boolean_mask(self.notnull())
+        if len(not_null) == 0:
+            # We should hit the self.null_count == len(self) condition
+            # so format doesn't matter
+            format = ""
+        else:
+            # infer on host from the first not na element
+            format = datetime.infer_format(not_null.element_indexing(0))
+        return self.strptime(dtype, format)  # type: ignore[return-value]
 
     def as_timedelta_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.TimeDeltaColumn":
-        out_dtype = cudf.api.types.dtype(dtype)
-        if format is None:
-            format = "%D days %H:%M:%S"
-        return self._as_datetime_or_timedelta_column(out_dtype, format)
+        self, dtype: Dtype
+    ) -> cudf.core.column.TimeDeltaColumn:
+        return self.strptime(dtype, "%D days %H:%M:%S")  # type: ignore[return-value]
 
     def as_decimal_column(
         self, dtype: Dtype
     ) -> "cudf.core.column.DecimalBaseColumn":
         return libstrings.to_decimal(self, dtype)
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> StringColumn:
+    def as_string_column(self) -> StringColumn:
         return self
 
     @property
@@ -5943,9 +5931,9 @@ class StringColumn(column.ColumnBase):
 
         n_bytes_to_view = str_end_byte_offset - str_byte_offset
 
-        to_view = column.build_column(
-            self.base_data,
-            dtype=cudf.api.types.dtype("int8"),
+        to_view = cudf.core.column.NumericalColumn(
+            self.base_data,  # type: ignore[arg-type]
+            dtype=np.dtype(np.int8),
             offset=str_byte_offset,
             size=n_bytes_to_view,
         )

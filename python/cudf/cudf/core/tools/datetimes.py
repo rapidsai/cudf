@@ -6,7 +6,6 @@ import re
 import warnings
 from typing import Literal, Sequence
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 import pandas.tseries.offsets as pd_offset
@@ -19,6 +18,8 @@ from cudf._lib.strings.convert.convert_integers import (
 )
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
+from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.index import ensure_index
 
 # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
 _unit_map = {
@@ -216,25 +217,25 @@ def to_datetime(
                 + arg[unit_rev["day"]].astype("str").str.zfill(2)
             )
             format = "%Y-%m-%d"
-            col = new_series._column.as_datetime_column(
-                "datetime64[s]", format=format
-            )
-
             for u in ["h", "m", "s", "ms", "us", "ns"]:
                 value = unit_rev.get(u)
                 if value is not None and value in arg:
                     arg_col = arg._data[value]
-                    if arg_col.dtype.kind in ("f"):
-                        col = new_series._column.as_datetime_column(
-                            "datetime64[ns]", format=format
+                    if arg_col.dtype.kind == "f":
+                        col = new_series._column.strptime(
+                            cudf.dtype("datetime64[ns]"), format=format
                         )
                         break
-                    elif arg_col.dtype.kind in ("O"):
+                    elif arg_col.dtype.kind == "O":
                         if not cpp_is_integer(arg_col).all():
-                            col = new_series._column.as_datetime_column(
-                                "datetime64[ns]", format=format
+                            col = new_series._column.strptime(
+                                cudf.dtype("datetime64[ns]"), format=format
                             )
                             break
+            else:
+                col = new_series._column.strptime(
+                    cudf.dtype("datetime64[s]"), format=format
+                )
 
             times_column = None
             for u in ["h", "m", "s", "ms", "us", "ns"]:
@@ -276,7 +277,7 @@ def to_datetime(
                 format=format,
                 utc=utc,
             )
-            return cudf.Series(col, index=arg.index)
+            return cudf.Series._from_column(col, index=arg.index)
         else:
             col = _process_col(
                 col=column.as_column(arg),
@@ -287,9 +288,12 @@ def to_datetime(
                 utc=utc,
             )
             if isinstance(arg, (cudf.BaseIndex, pd.Index)):
-                return cudf.Index(col, name=arg.name)
+                ca = ColumnAccessor({arg.name: col}, verify=False)
+                return cudf.DatetimeIndex._from_data(ca)
             elif isinstance(arg, (cudf.Series, pd.Series)):
-                return cudf.Series(col, index=arg.index, name=arg.name)
+                return cudf.Series._from_column(
+                    col, name=arg.name, index=ensure_index(arg.index)
+                )
             elif is_scalar(arg):
                 return col.element_indexing(0)
             else:
@@ -334,15 +338,15 @@ def _process_col(
             col = (
                 col.astype("int")
                 .astype("str")
-                .as_datetime_column(
-                    dtype="datetime64[us]"
+                .strptime(
+                    dtype=cudf.dtype("datetime64[us]")
                     if "%f" in format
-                    else "datetime64[s]",
+                    else cudf.dtype("datetime64[s]"),
                     format=format,
                 )
             )
         else:
-            col = col.as_datetime_column(dtype="datetime64[ns]")
+            col = col.astype(dtype="datetime64[ns]")
 
     elif col.dtype.kind in "iu":
         if unit in ("D", "h", "m"):
@@ -353,11 +357,11 @@ def _process_col(
             col = col * factor
 
         if format is not None:
-            col = col.astype("str").as_datetime_column(
-                dtype=_unit_dtype_map[unit], format=format
+            col = col.astype("str").strptime(
+                dtype=cudf.dtype(_unit_dtype_map[unit]), format=format
             )
         else:
-            col = col.as_datetime_column(dtype=_unit_dtype_map[unit])
+            col = col.astype(dtype=cudf.dtype(_unit_dtype_map[unit]))
 
     elif col.dtype.kind == "O":
         if unit not in (None, "ns") or col.null_count == len(col):
@@ -384,8 +388,8 @@ def _process_col(
                     element=col.element_indexing(0),
                     dayfirst=dayfirst,
                 )
-            col = col.as_datetime_column(
-                dtype=_unit_dtype_map[unit],
+            col = col.strptime(
+                dtype=cudf.dtype(_unit_dtype_map[unit]),
                 format=format,
             )
     elif col.dtype.kind != "M":
@@ -894,7 +898,7 @@ def date_range(
         # integers and divide the number range evenly with `periods` elements.
         start = cudf.Scalar(start, dtype=dtype).value.astype("int64")
         end = cudf.Scalar(end, dtype=dtype).value.astype("int64")
-        arr = cp.linspace(start=start, stop=end, num=periods)
+        arr = np.linspace(start=start, stop=end, num=periods)
         result = cudf.core.column.as_column(arr).astype("datetime64[ns]")
         return cudf.DatetimeIndex._from_data({name: result}).tz_localize(tz)
 
@@ -991,8 +995,10 @@ def date_range(
         stop = end_estim.astype("int64")
         start = start.value.astype("int64")
         step = _offset_to_nanoseconds_lower_bound(offset)
-        arr = cp.arange(start=start, stop=stop, step=step, dtype="int64")
-        res = cudf.core.column.as_column(arr).astype("datetime64[ns]")
+        arr = range(int(start), int(stop), step)
+        res = cudf.core.column.as_column(arr, dtype="int64").astype(
+            "datetime64[ns]"
+        )
 
     return cudf.DatetimeIndex._from_data({name: res}, freq=freq).tz_localize(
         tz

@@ -86,18 +86,10 @@ struct vocab_equal {
     return lhs == rhs;  // all rows are expected to be unique
   }
   // used by find
-  // suppress "function was declared but never referenced warning"
-#pragma nv_diagnostic push
-#pragma nv_diag_suppress 177
-  __device__ bool operator()(cudf::size_type lhs, cudf::string_view const& rhs) const noexcept
-  {
-    return d_strings.element<cudf::string_view>(lhs) == rhs;
-  }
   __device__ bool operator()(cudf::string_view const& lhs, cudf::size_type rhs) const noexcept
   {
     return d_strings.element<cudf::string_view>(rhs) == lhs;
   }
-#pragma nv_diagnostic pop
 };
 
 using probe_scheme        = cuco::linear_probing<1, vocab_hasher>;
@@ -108,7 +100,7 @@ using vocabulary_map_type = cuco::static_map<cudf::size_type,
                                              cuda::thread_scope_device,
                                              vocab_equal,
                                              probe_scheme,
-                                             cudf::detail::cuco_allocator,
+                                             cudf::detail::cuco_allocator<char>,
                                              cuco_storage>;
 }  // namespace
 }  // namespace detail
@@ -160,7 +152,7 @@ tokenize_vocabulary::tokenize_vocabulary(cudf::strings_column_view const& input,
     detail::probe_scheme{detail::vocab_hasher{*d_vocabulary}},
     cuco::thread_scope_device,
     detail::cuco_storage{},
-    cudf::detail::cuco_allocator{stream},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value());
 
   // the row index is the token id (value for each key in the map)
