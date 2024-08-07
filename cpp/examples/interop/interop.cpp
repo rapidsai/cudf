@@ -19,6 +19,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/io/csv.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 
