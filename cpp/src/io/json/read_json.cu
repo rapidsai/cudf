@@ -61,7 +61,8 @@ size_t estimate_size_per_subchunk(size_t chunk_size)
   auto geometric_mean = [](double a, double b) { return std::sqrt(a * b); };
   // NOTE: heuristic for choosing subchunk size: geometric mean of minimum subchunk size (set to
   // 10kb) and the byte range size
-  return geometric_mean(std::ceil((double)chunk_size / num_subchunks), min_subchunk_size);
+  return geometric_mean(std::ceil(static_cast<double>(chunk_size) / num_subchunks),
+                        min_subchunk_size);
 }
 
 /**
@@ -78,6 +79,8 @@ int64_t get_batch_size_upper_bound()
 {
   auto const batch_size_str = std::getenv("LIBCUDF_JSON_BATCH_SIZE");
   int64_t const batch_size  = batch_size_str != nullptr ? std::atol(batch_size_str) : 0L;
+  auto const batch_limit    = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
+  return (batch_size > 0 && batch_size < batch_limit) ? batch_size : batch_limit;
   return (batch_size > 0 && batch_size < std::numeric_limits<int32_t>::max())
            ? batch_size
            : std::numeric_limits<int32_t>::max();
@@ -99,7 +102,7 @@ size_type find_first_delimiter(device_span<char const> d_data,
   auto const first_delimiter_position =
     thrust::find(rmm::exec_policy(stream), d_data.begin(), d_data.end(), delimiter);
   return first_delimiter_position != d_data.end()
-           ? thrust::distance(d_data.begin(), first_delimiter_position)
+           ? static_cast<size_type>(thrust::distance(d_data.begin(), first_delimiter_position))
            : -1;
 }
 
