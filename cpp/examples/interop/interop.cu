@@ -122,7 +122,7 @@ std::unique_ptr<cudf::column> ArrowStringViewToCudfColumn(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
-  // Convert the string views into chars and sizes
+  // Convert the string views into chars and offsets
   std::vector<std::string> strings;
   for (auto i = 0; i < array->length(); i++) {
     strings.push_back(array->GetString(i));
