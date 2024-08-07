@@ -269,9 +269,11 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
       auto startchar = static_cast<char_utf8>(jnk.startchar);
       switch (jnk.starttype) {
         case BOL:
-          if (pos == 0) break;
-          if (jnk.startchar != '^' && jnk.startchar != 'S') { return thrust::nullopt; }
-          break;
+          if (pos == 0) { break; }
+          if (startchar != '^' && startchar != 'S') { return thrust::nullopt; }
+          if (startchar != '\n') { break; }
+          --itr;
+          startchar = static_cast<char_utf8>('\n');
         case CHAR: {
           itr = find_char(startchar, dstr, itr);
           if (itr.byte_offset() >= dstr.size_bytes()) { return thrust::nullopt; }

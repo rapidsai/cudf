@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "special_chars.h"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -614,12 +616,12 @@ TEST_F(StringsContainsTests, MultiLine)
 
 TEST_F(StringsContainsTests, SpecialNewLines)
 {
-  auto input = cudf::test::strings_column_wrapper({"zzé\xE2\x80\xA8qqq\xC2\x85zzé",
-                                                   "qqq\xC2\x85zzé\xE2\x80\xA8lll",
+  auto input = cudf::test::strings_column_wrapper({"zzé" LINE_SEPARATOR "qqq" NEXT_LINE "zzé",
+                                                   "qqq" NEXT_LINE "zzé" LINE_SEPARATOR "lll",
                                                    "zzé",
                                                    "",
-                                                   "zzé\xC2\x85",
-                                                   "zze\xE2\x80\xA9zzé\xC2\x85"});
+                                                   "zzé" PARAGRAPH_SEPARATOR,
+                                                   "abc\nzzé" NEXT_LINE});
   auto view  = cudf::strings_column_view(input);
 
   auto pattern = std::string("^zzé$");
