@@ -10,10 +10,11 @@ pwd=$(pwd)
 # This clone of the datafusion repo is uses a single thread
 # so that a single parquet file is generated for every table\
 if [ ! -d "datafusion" ]; then
-    git clone https://github.com/JayjeetAtGithub/datafusion.git datafusion
+    git clone https://github.com/apache/datafusion.git datafusion
 fi
 cd datafusion/benchmarks/
-git checkout 154d093
+git checkout 679a85f
+git apply ${pwd}/tpch.patch
 
 # Generate the data
 # Currently, we support only scale factor 1 and 10

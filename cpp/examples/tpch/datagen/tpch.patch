@@ -1,0 +1,33 @@
+diff --git a/benchmarks/bench.sh b/benchmarks/bench.sh
+index 3b854f6dc..f000f09c0 100755
+--- a/benchmarks/bench.sh
++++ b/benchmarks/bench.sh
+@@ -311,6 +311,15 @@ data_tpch() {
+         $CARGO_COMMAND --bin tpch -- convert --input "${TPCH_DIR}" --output "${TPCH_DIR}" --format parquet
+         popd > /dev/null
+     fi
++
++    cp ${TPCH_DIR}/lineitem/part-0.parquet ${TPCH_DIR}/lineitem.parquet
++    cp ${TPCH_DIR}/orders/part-0.parquet ${TPCH_DIR}/orders.parquet
++    cp ${TPCH_DIR}/part/part-0.parquet ${TPCH_DIR}/part.parquet
++    cp ${TPCH_DIR}/partsupp/part-0.parquet ${TPCH_DIR}/partsupp.parquet
++    cp ${TPCH_DIR}/customer/part-0.parquet ${TPCH_DIR}/customer.parquet
++    cp ${TPCH_DIR}/supplier/part-0.parquet ${TPCH_DIR}/supplier.parquet
++    cp ${TPCH_DIR}/nation/part-0.parquet ${TPCH_DIR}/nation.parquet
++    cp ${TPCH_DIR}/region/part-0.parquet ${TPCH_DIR}/region.parquet
+ }
+ 
+ # Runs the tpch benchmark
+diff --git a/datafusion/common/src/config.rs b/datafusion/common/src/config.rs
+index b5204b343..84fd2e78d 100644
+--- a/datafusion/common/src/config.rs
++++ b/datafusion/common/src/config.rs
+@@ -250,7 +250,7 @@ config_namespace! {
+         /// concurrency.
+         ///
+         /// Defaults to the number of CPU cores on the system
+-        pub target_partitions: usize, default = num_cpus::get()
++        pub target_partitions: usize, default = 1
+ 
+         /// The default time zone
+         ///
