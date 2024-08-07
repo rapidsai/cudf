@@ -157,14 +157,14 @@ int main(int argc, char** argv)
   auto tbl_view                  = cudf::table_view({cudf_col->view()});
   std::vector<std::string> names = {"col_a"};
 
-  std::vector<char> out_buff;
+  std::vector<char> h_buffer;
   cudf::io::csv_writer_options writer_options =
-    cudf::io::csv_writer_options::builder(cudf::io::sink_info(&out_buff), tbl_view)
+    cudf::io::csv_writer_options::builder(cudf::io::sink_info(&h_buffer), tbl_view)
       .include_header(not names.empty())
       .names(names);
 
   cudf::io::write_csv(writer_options);
-  std::string result(out_buff.data());
+  std::string result(h_buffer.data());
   std::cout << result << std::endl;
 
   return 0;
