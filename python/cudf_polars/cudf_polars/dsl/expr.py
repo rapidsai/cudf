@@ -1107,8 +1107,6 @@ class UnaryFunction(Expr):
                 agg = plc.aggregation.min()
             elif self.name == "cum_max":
                 agg = plc.aggregation.max()
-            elif self.name == "cum_count":
-                agg = plc.aggregation.count()
 
             return Column(plc.reduce.scan(plc_col, agg, plc.reduce.ScanType.INCLUSIVE))
         raise NotImplementedError(
