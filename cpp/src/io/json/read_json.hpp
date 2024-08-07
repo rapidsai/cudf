@@ -73,17 +73,5 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);
 
-/**
- * @brief Return the upper bound on the batch size for the JSON reader.
- *
- * The datasources passed to the JSON reader are split into batches demarcated by byte range
- * offsets and read iteratively. The batch size is capped at INT_MAX bytes, which is the
- * default value returned by the function. This value can be overridden at runtime using the
- * environment variable LIBCUDF_JSON_BATCH_SIZE
- *
- * @return size in bytes
- */
-size_t get_batch_size_upper_bound();
-
 }  // namespace io::json::detail
 }  // namespace CUDF_EXPORT cudf
