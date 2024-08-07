@@ -12,5 +12,4 @@ from . import (
     slice,
     strip,
 )
-
 from .side_type import SideType

@@ -12,5 +12,4 @@ from . cimport (
     slice,
     strip,
 )
-
 from .side_type cimport side_type
