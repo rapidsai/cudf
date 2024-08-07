@@ -95,7 +95,7 @@ auto make_chars_and_offsets(std::vector<std::string> strings)
 };
 
 /**
- * @brief Convert an Arrow StringViewArray to a cudf column
+ * @brief Convert an Arrow StringViewArray to a cudf::column
  *
  * @param array The Arrow StringViewArray
  * @param stream The CUDA stream used for device memory operations and kernel launches
@@ -138,11 +138,9 @@ int main(int argc, char** argv)
   std::vector<std::shared_ptr<arrow::Buffer>> data_buffers;
   std::vector<arrow::BinaryViewType::c_type> views;
 
-  // Define the data buffers
+  // Define the data buffers and string views
   auto buffer_a = arrow::Buffer::FromString("helloworldapachearrowcudfnvidia");
   data_buffers.push_back(buffer_a);
-
-  // Define the string views
   views.push_back(ToStringView("helloworldapache", 0, 0));
   views.push_back(ToStringView("arrowcudfnvidia", 0, 16));
   views.push_back(ToInlineStringView("nvidia"));
@@ -151,9 +149,24 @@ int main(int argc, char** argv)
   auto string_view_col = MakeStringViewArray(data_buffers, views, true).ValueOrDie();
   std::cout << string_view_col->ToString() << std::endl;
 
-  // Convert the StringViewArray to a cudf column
+  // Convert the StringViewArray to a cudf::column
   auto cudf_col = ArrowStringViewToCudfColumn(string_view_col);
-  std::cout << cudf_col->size() << std::endl;
+
+  // Write the cudf::column as CSV
+  auto tbl_view                  = cudf::table_view({cudf_col->view()});
+  std::vector<std::string> names = {"col_a"};
+
+  std::vector<char> out_buff;
+  cudf::io::csv_writer_options writer_options =
+    cudf::io::csv_writer_options::builder(cudf::io::sink_info(&out_buff), tbl_view)
+      .include_header(not names.empty())
+      .names(names);
+
+  cudf::io::write_csv(writer_options);
+
+  for (auto& c : out_buff) {
+    std::cout << c;
+  }
 
   return 0;
 }
