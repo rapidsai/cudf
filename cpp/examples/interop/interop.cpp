@@ -87,9 +87,6 @@ auto make_chars_and_offsets(std::vector<std::string> strings)
     chars.insert(chars.end(), std::cbegin(str), std::cend(str));
     auto const last_offset = static_cast<std::size_t>(offsets.back());
     auto const next_offset = last_offset + str.length();
-    CUDF_EXPECTS(
-      next_offset < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
-      "Cannot use strings_column_wrapper to build a large strings column");
     offsets.push_back(static_cast<cudf::size_type>(next_offset));
   }
   return std::make_tuple(std::move(chars), std::move(offsets));
