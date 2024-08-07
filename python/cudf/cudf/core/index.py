@@ -808,22 +808,23 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         gather_map = cudf.core.column.as_column(gather_map)
-        return cudf.Index._from_data(
-            {self.name: self._values.take(gather_map, nullify, check_bounds)}
+        return cudf.Index._from_column(
+            self._column.take(gather_map, nullify, check_bounds),
+            name=self.name,
         )
 
     @_performance_tracking
     def _apply_boolean_mask(self, boolean_mask):
-        return cudf.Index._from_data(
-            {self.name: self._values.apply_boolean_mask(boolean_mask)}
+        return cudf.Index._from_column(
+            self._column.apply_boolean_mask(boolean_mask), name=self.name
         )
 
     def repeat(self, repeats, axis=None):
         return self._as_int_index().repeat(repeats, axis)
 
     def _split(self, splits):
-        return cudf.Index._from_data(
-            {self.name: self._as_int_index()._split(splits)}
+        return cudf.Index._from_column(
+            self._as_int_index()._split(splits), name=self.name
         )
 
     def _binaryop(self, other, op: str):
@@ -1912,8 +1913,8 @@ class DatetimeIndex(Index):
         date_format : str
             Date format string (e.g. "%Y-%m-%d").
         """
-        return Index._from_data(
-            {self.name: self._column.strftime(date_format)}
+        return Index._from_column(
+            self._column.strftime(date_format), name=self.name
         )
 
     @property
@@ -1978,7 +1979,9 @@ class DatetimeIndex(Index):
         return self.to_pandas().to_pydatetime()
 
     def to_julian_date(self) -> Index:
-        return Index._from_data({self.name: self._column.to_julian_date()})
+        return Index._from_column(
+            self._column.to_julian_date(), name=self.name
+        )
 
     def to_period(self, freq) -> pd.PeriodIndex:
         return self.to_pandas().to_period(freq=freq)
@@ -1989,7 +1992,9 @@ class DatetimeIndex(Index):
 
         Currently not implemented.
         """
-        return type(self)._from_data({self.name: self._column.normalize()})
+        return type(self)._from_column(
+            self._column.normalize(), name=self.name
+        )
 
     @property
     def time(self) -> np.ndarray:
@@ -2073,7 +2078,7 @@ class DatetimeIndex(Index):
         """
         Get the total number of days in the month that the date falls on.
         """
-        return Index._from_data({self.name: self._column.days_in_month})
+        return Index._from_column(self._column.days_in_month, name=self.name)
 
     daysinmonth = days_in_month
 
@@ -2082,7 +2087,7 @@ class DatetimeIndex(Index):
         """
         Get the day of week that the date falls on.
         """
-        return Index._from_data({self.name: self._column.day_of_week})
+        return Index._from_column(self._column.day_of_week, name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -2410,7 +2415,7 @@ class DatetimeIndex(Index):
                'Friday', 'Saturday'], dtype='object')
         """
         day_names = self._column.get_day_names(locale)
-        return Index._from_data({self.name: day_names})
+        return Index._from_column(day_names, name=self.name)
 
     @_performance_tracking
     def month_name(self, locale: str | None = None) -> Index:
@@ -2429,7 +2434,7 @@ class DatetimeIndex(Index):
         Index(['December', 'January', 'January', 'January', 'January', 'February'], dtype='object')
         """
         month_names = self._column.get_month_names(locale)
-        return Index._from_data({self.name: month_names})
+        return Index._from_column(month_names, name=self.name)
 
     @_performance_tracking
     def isocalendar(self) -> cudf.DataFrame:
@@ -2671,7 +2676,7 @@ class DatetimeIndex(Index):
                       dtype='datetime64[ns, Europe/London]')
         """  # noqa: E501
         result_col = self._column.tz_convert(tz)
-        return DatetimeIndex._from_data({self.name: result_col})
+        return DatetimeIndex._from_column(result_col, name=self.name)
 
     def repeat(self, repeats, axis=None):
         res = super().repeat(repeats, axis=axis)
