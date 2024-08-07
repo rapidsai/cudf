@@ -12,10 +12,10 @@ from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.utils import ioutils
 from cudf.utils.dtypes import _maybe_convert_to_default_type
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 @ioutils.doc_read_csv()
 def read_csv(
     filepath_or_buffer,
@@ -50,7 +50,7 @@ def read_csv(
     comment=None,
     delim_whitespace=False,
     byte_range=None,
-    use_python_file_object=True,
+    use_python_file_object=None,
     storage_options=None,
     bytes_per_thread=None,
 ):
@@ -132,10 +132,9 @@ def read_csv(
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
         specified_dtypes = {} if dtype is None else dtype
-        df_dtypes = df._dtypes
         unspecified_dtypes = {
-            name: df_dtypes[name]
-            for name in df._column_names
+            name: dtype
+            for name, dtype in df._dtypes
             if name not in specified_dtypes
         }
         default_dtypes = {}
@@ -152,7 +151,7 @@ def read_csv(
     return df
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 @ioutils.doc_to_csv()
 def to_csv(
     df,

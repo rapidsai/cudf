@@ -105,7 +105,7 @@ TEST_F(DLPackUntypedTests, MultipleTypesToDlpack)
 TEST_F(DLPackUntypedTests, InvalidNullsToDlpack)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col1({1, 2, 3, 4});
-  cudf::test::fixed_width_column_wrapper<int32_t> col2({1, 2, 3, 4}, {1, 0, 1, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> col2({1, 2, 3, 4}, {true, false, true, true});
   cudf::table_view input({col1, col2});
   EXPECT_THROW(cudf::to_dlpack(input), cudf::logic_error);
 }

@@ -6,6 +6,7 @@ from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
 
 import numpy as np
+import pandas as pd
 from pyarrow import dataset as pa_ds, parquet as pq
 
 from dask import dataframe as dd
@@ -32,6 +33,7 @@ from cudf.utils.ioutils import (
     _is_local_filesystem,
     _open_remote_files,
 )
+from cudf.utils.utils import maybe_filter_deprecation
 
 
 class CudfEngine(ArrowDatasetEngine):
@@ -41,6 +43,10 @@ class CudfEngine(ArrowDatasetEngine):
         meta_pd = super()._create_dd_meta(dataset_info, **kwargs)
 
         # Convert to cudf
+        # (drop unsupported timezone information)
+        for k, v in meta_pd.dtypes.items():
+            if isinstance(v, pd.DatetimeTZDtype) and v.tz is not None:
+                meta_pd[k] = meta_pd[k].dt.tz_localize(None)
         meta_cudf = cudf.from_pandas(meta_pd)
 
         # Re-set "object" dtypes to align with pa schema
@@ -105,39 +111,50 @@ class CudfEngine(ArrowDatasetEngine):
                     ),
                 )
 
-            # Use cudf to read in data
-            try:
-                df = cudf.read_parquet(
-                    paths_or_fobs,
-                    engine="cudf",
-                    columns=columns,
-                    row_groups=row_groups if row_groups else None,
-                    dataset_kwargs=dataset_kwargs,
-                    categorical_partitions=False,
-                    **kwargs,
-                )
-            except RuntimeError as err:
-                # TODO: Remove try/except after null-schema issue is resolved
-                # (See: https://github.com/rapidsai/cudf/issues/12702)
-                if len(paths_or_fobs) > 1:
-                    df = cudf.concat(
-                        [
-                            cudf.read_parquet(
-                                pof,
-                                engine="cudf",
-                                columns=columns,
-                                row_groups=row_groups[i]
-                                if row_groups
-                                else None,
-                                dataset_kwargs=dataset_kwargs,
-                                categorical_partitions=False,
-                                **kwargs,
-                            )
-                            for i, pof in enumerate(paths_or_fobs)
-                        ]
+            # Filter out deprecation warning unless the user
+            # specifies open_file_options and/or use_python_file_object.
+            # Otherwise, the FutureWarning is out of their control.
+            with maybe_filter_deprecation(
+                (
+                    not open_file_options
+                    and "use_python_file_object" not in kwargs
+                ),
+                message="Support for reading pyarrow's NativeFile is deprecated",
+                category=FutureWarning,
+            ):
+                # Use cudf to read in data
+                try:
+                    df = cudf.read_parquet(
+                        paths_or_fobs,
+                        engine="cudf",
+                        columns=columns,
+                        row_groups=row_groups if row_groups else None,
+                        dataset_kwargs=dataset_kwargs,
+                        categorical_partitions=False,
+                        **kwargs,
                     )
-                else:
-                    raise err
+                except RuntimeError as err:
+                    # TODO: Remove try/except after null-schema issue is resolved
+                    # (See: https://github.com/rapidsai/cudf/issues/12702)
+                    if len(paths_or_fobs) > 1:
+                        df = cudf.concat(
+                            [
+                                cudf.read_parquet(
+                                    pof,
+                                    engine="cudf",
+                                    columns=columns,
+                                    row_groups=row_groups[i]
+                                    if row_groups
+                                    else None,
+                                    dataset_kwargs=dataset_kwargs,
+                                    categorical_partitions=False,
+                                    **kwargs,
+                                )
+                                for i, pof in enumerate(paths_or_fobs)
+                            ]
+                        )
+                    else:
+                        raise err
 
         # Apply filters (if any are defined)
         df = _apply_post_filters(df, filters)
@@ -311,7 +328,7 @@ class CudfEngine(ArrowDatasetEngine):
 
             if index and (index[0] in df.columns):
                 df = df.set_index(index[0])
-            elif index is False and df.index.names != (None,):
+            elif index is False and df.index.names != [None]:
                 # If index=False, we shouldn't have a named index
                 df.reset_index(inplace=True)
 

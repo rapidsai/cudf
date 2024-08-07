@@ -19,10 +19,12 @@
 import datetime
 import filecmp
 import glob
+import inspect
 import os
 import re
 import sys
 import tempfile
+import warnings
 import xml.etree.ElementTree as ET
 
 from docutils.nodes import Text
@@ -69,6 +71,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_copybutton",
     "sphinx_remove_toctrees",
+    "sphinx.ext.linkcode",
     "numpydoc",
     "IPython.sphinxext.ipython_console_highlighting",
     "IPython.sphinxext.ipython_directive",
@@ -369,7 +372,7 @@ def _generate_namespaces(namespaces):
 _all_namespaces = _generate_namespaces(
     {
         # Note that io::datasource is actually a nested class
-        "cudf": {"io", "io::datasource", "strings", "ast", "ast::expression"},
+        "cudf": {"io", "io::datasource", "strings", "ast", "ast::expression", "io::text"},
         "numeric": {},
         "nvtext": {},
     }
@@ -551,11 +554,78 @@ def on_missing_reference(app, env, node, contnode):
 nitpick_ignore = [
     ("py:class", "SeriesOrIndex"),
     ("py:class", "Dtype"),
+    # The following are erroneously warned due to
+    # https://github.com/sphinx-doc/sphinx/issues/11225
+    ("py:obj", "cudf.Index.values_host"),
+    ("py:class", "pa.Array"),
+    ("py:class", "ScalarLike"),
+    ("py:class", "ParentType"),
+    ("py:class", "ColumnLike"),
     # TODO: Remove this when we figure out why typing_extensions doesn't seem
     # to map types correctly for intersphinx
     ("py:class", "typing_extensions.Self"),
 ]
 
+
+# Needed for the [source] button on the API docs to link to the github code
+# based on pandas doc/source/conf.py
+def linkcode_resolve(domain, info) -> str | None:
+    """
+    Determine the URL corresponding to Python object
+    """
+    if domain != "py":
+        return None
+
+    modname = info["module"]
+    fullname = info["fullname"]
+
+    submod = sys.modules.get(modname)
+    if submod is None:
+        return None
+
+    obj = submod
+    for part in fullname.split("."):
+        try:
+            with warnings.catch_warnings():
+                # Accessing deprecated objects will generate noisy warnings
+                warnings.simplefilter("ignore", FutureWarning)
+                obj = getattr(obj, part)
+        except AttributeError:
+            return None
+
+    try:
+        fn = inspect.getsourcefile(inspect.unwrap(obj))
+    except TypeError:
+        try:  # property
+            fn = inspect.getsourcefile(inspect.unwrap(obj.fget))
+        except (AttributeError, TypeError):
+            fn = None
+    if not fn:
+        return None
+
+    try:
+        source, lineno = inspect.getsourcelines(obj)
+    except TypeError:
+        try:  # property
+            source, lineno = inspect.getsourcelines(obj.fget)
+        except (AttributeError, TypeError):
+            lineno = None
+    except OSError:
+        lineno = None
+
+    if lineno:
+        linespec = f"#L{lineno}-L{lineno + len(source) - 1}"
+    else:
+        linespec = ""
+
+    fn = os.path.relpath(fn, start=os.path.dirname(cudf.__file__))
+    return (
+        f"https://github.com/rapidsai/cudf/blob/"
+        f"branch-{version}/python/cudf/cudf/{fn}{linespec}"
+    )
+
+# Needed for avoid build warning for PandasCompat extension
+suppress_warnings = ["myst.domains"]
 
 def setup(app):
     app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")

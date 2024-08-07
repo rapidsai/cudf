@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/detail/copy.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/assert.cuh>
@@ -217,10 +217,9 @@ struct column_gatherer_impl<Element, std::enable_if_t<is_rep_layout_compatible<E
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
   {
-    auto const num_rows = cudf::distance(gather_map_begin, gather_map_end);
-    auto const policy   = cudf::mask_allocation_policy::NEVER;
-    auto destination_column =
-      cudf::detail::allocate_like(source_column, num_rows, policy, stream, mr);
+    auto const num_rows     = cudf::distance(gather_map_begin, gather_map_end);
+    auto const policy       = cudf::mask_allocation_policy::NEVER;
+    auto destination_column = cudf::allocate_like(source_column, num_rows, policy, stream, mr);
 
     gather_helper(source_column.data<Element>(),
                   source_column.size(),
@@ -413,8 +412,8 @@ struct column_gatherer_impl<dictionary32> {
     auto keys_copy = std::make_unique<column>(dictionary.keys(), stream, mr);
     // Perform gather on just the indices
     column_view indices = dictionary.get_indices_annotated();
-    auto new_indices    = cudf::detail::allocate_like(
-      indices, output_count, cudf::mask_allocation_policy::NEVER, stream, mr);
+    auto new_indices =
+      cudf::allocate_like(indices, output_count, cudf::mask_allocation_policy::NEVER, stream, mr);
     gather_helper(
       cudf::detail::indexalator_factory::make_input_iterator(indices),
       indices.size(),
@@ -572,13 +571,13 @@ void gather_bitmask(table_view const& source,
         not target[i]->nullable()) {
       auto const state =
         op == gather_bitmask_op::PASSTHROUGH ? mask_state::ALL_VALID : mask_state::UNINITIALIZED;
-      auto mask = detail::create_null_mask(target[i]->size(), state, stream, mr);
+      auto mask = cudf::create_null_mask(target[i]->size(), state, stream, mr);
       target[i]->set_null_mask(std::move(mask), 0);
     }
   }
 
   // Make device array of target bitmask pointers
-  std::vector<bitmask_type*> target_masks(target.size());
+  auto target_masks = make_host_vector<bitmask_type*>(target.size(), stream);
   std::transform(target.begin(), target.end(), target_masks.begin(), [](auto const& col) {
     return col->mutable_view().null_mask();
   });

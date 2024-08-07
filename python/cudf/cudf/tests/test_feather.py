@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import os
 from string import ascii_letters
@@ -9,7 +9,8 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.testing._utils import NUMERIC_TYPES, assert_eq
+from cudf.testing import assert_eq
+from cudf.testing._utils import NUMERIC_TYPES
 
 
 @pytest.fixture(params=[0, 1, 10, 100])

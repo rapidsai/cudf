@@ -1,5 +1,6 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
+from cpython cimport pycapsule
 from cython.operator cimport dereference
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.utility cimport move
@@ -11,9 +12,15 @@ from functools import singledispatch
 
 from pyarrow import lib as pa
 
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.interop cimport (
+    ArrowArray,
+    ArrowArrayStream,
+    ArrowSchema,
     column_metadata,
     from_arrow as cpp_from_arrow,
+    from_arrow_column as cpp_from_arrow_column,
+    from_arrow_stream as cpp_from_arrow_stream,
     to_arrow as cpp_to_arrow,
 )
 from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport (
@@ -33,6 +40,34 @@ from .scalar cimport Scalar
 from .table cimport Table
 from .types cimport DataType, type_id
 
+ARROW_TO_PYLIBCUDF_TYPES = {
+    pa.int8(): type_id.INT8,
+    pa.int16(): type_id.INT16,
+    pa.int32(): type_id.INT32,
+    pa.int64(): type_id.INT64,
+    pa.uint8(): type_id.UINT8,
+    pa.uint16(): type_id.UINT16,
+    pa.uint32(): type_id.UINT32,
+    pa.uint64(): type_id.UINT64,
+    pa.float32(): type_id.FLOAT32,
+    pa.float64(): type_id.FLOAT64,
+    pa.bool_(): type_id.BOOL8,
+    pa.string(): type_id.STRING,
+    pa.duration('s'): type_id.DURATION_SECONDS,
+    pa.duration('ms'): type_id.DURATION_MILLISECONDS,
+    pa.duration('us'): type_id.DURATION_MICROSECONDS,
+    pa.duration('ns'): type_id.DURATION_NANOSECONDS,
+    pa.timestamp('s'): type_id.TIMESTAMP_SECONDS,
+    pa.timestamp('ms'): type_id.TIMESTAMP_MILLISECONDS,
+    pa.timestamp('us'): type_id.TIMESTAMP_MICROSECONDS,
+    pa.timestamp('ns'): type_id.TIMESTAMP_NANOSECONDS,
+    pa.date32(): type_id.TIMESTAMP_DAYS,
+    pa.null(): type_id.EMPTY,
+}
+
+LIBCUDF_TO_ARROW_TYPES = {
+    v: k for k, v in ARROW_TO_PYLIBCUDF_TYPES.items()
+}
 
 cdef column_metadata _metadata_to_libcudf(metadata):
     """Convert a ColumnMetadata object to C++ column_metadata.
@@ -77,15 +112,34 @@ def from_arrow(pyarrow_object, *, DataType data_type=None):
     raise TypeError("from_arrow only accepts Table and Scalar objects")
 
 
+@from_arrow.register(pa.DataType)
+def _from_arrow_datatype(pyarrow_object):
+    if isinstance(pyarrow_object, pa.Decimal128Type):
+        return DataType(type_id.DECIMAL128, scale=-pyarrow_object.scale)
+    elif isinstance(pyarrow_object, pa.StructType):
+        return DataType(type_id.STRUCT)
+    elif isinstance(pyarrow_object, pa.ListType):
+        return DataType(type_id.LIST)
+    else:
+        try:
+            return DataType(ARROW_TO_PYLIBCUDF_TYPES[pyarrow_object])
+        except KeyError:
+            raise TypeError(f"Unable to convert {pyarrow_object} to cudf datatype")
+
+
 @from_arrow.register(pa.Table)
 def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
     if data_type is not None:
         raise ValueError("data_type may not be passed for tables")
-    cdef shared_ptr[pa.CTable] arrow_table = pa.pyarrow_unwrap_table(pyarrow_object)
+    stream = pyarrow_object.__arrow_c_stream__()
+    cdef ArrowArrayStream* c_stream = (
+        <ArrowArrayStream*>pycapsule.PyCapsule_GetPointer(stream, "arrow_array_stream")
+    )
 
     cdef unique_ptr[table] c_result
     with nogil:
-        c_result = move(cpp_from_arrow(dereference(arrow_table)))
+        # The libcudf function here will release the stream.
+        c_result = move(cpp_from_arrow_stream(c_stream))
 
     return Table.from_libcudf(move(c_result))
 
@@ -147,8 +201,25 @@ def _from_arrow_scalar(pyarrow_object, *, DataType data_type=None):
 def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
     if data_type is not None:
         raise ValueError("data_type may not be passed for arrays")
-    pa_table = pa.table([pyarrow_object], [""])
-    return from_arrow(pa_table).columns()[0]
+
+    schema, array = pyarrow_object.__arrow_c_array__()
+    cdef ArrowSchema* c_schema = (
+        <ArrowSchema*>pycapsule.PyCapsule_GetPointer(schema, "arrow_schema")
+    )
+    cdef ArrowArray* c_array = (
+        <ArrowArray*>pycapsule.PyCapsule_GetPointer(array, "arrow_array")
+    )
+
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(cpp_from_arrow_column(c_schema, c_array))
+
+    # The capsule destructors should release automatically for us, but we
+    # choose to do it explicitly here for clarity.
+    c_schema.release(c_schema)
+    c_array.release(c_array)
+
+    return Column.from_libcudf(move(c_result))
 
 
 @singledispatch
@@ -168,6 +239,46 @@ def to_arrow(cudf_object, metadata=None):
         The converted object of type corresponding to the input type in PyArrow.
     """
     raise TypeError("to_arrow only accepts Table and Scalar objects")
+
+
+@to_arrow.register(DataType)
+def _to_arrow_datatype(cudf_object, **kwargs):
+    """
+    Convert a datatype to arrow.
+
+    Translation of some types requires extra information as a keyword
+    argument. Specifically:
+
+    - When translating a decimal type, provide ``precision``
+    - When translating a struct type, provide ``fields``
+    - When translating a list type, provide the wrapped ``value_type``
+    """
+    if cudf_object.id() in {type_id.DECIMAL32, type_id.DECIMAL64, type_id.DECIMAL128}:
+        if not (precision := kwargs.get("precision")):
+            raise ValueError(
+                "Precision must be provided for decimal types"
+            )
+            # no pa.decimal32 or pa.decimal64
+        return pa.decimal128(precision, -cudf_object.scale())
+    elif cudf_object.id() == type_id.STRUCT:
+        if not (fields := kwargs.get("fields")):
+            raise ValueError(
+                "Fields must be provided for struct types"
+            )
+        return pa.struct(fields)
+    elif cudf_object.id() == type_id.LIST:
+        if not (value_type := kwargs.get("value_type")):
+            raise ValueError(
+                "Value type must be provided for list types"
+            )
+        return pa.list_(value_type)
+    else:
+        try:
+            return LIBCUDF_TO_ARROW_TYPES[cudf_object.id()]
+        except KeyError:
+            raise TypeError(
+                f"Unable to convert {cudf_object.id()} to arrow datatype"
+            )
 
 
 @to_arrow.register(Table)

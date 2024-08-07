@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import decimal
 import operator
@@ -6,7 +7,7 @@ import pickle
 import textwrap
 import warnings
 from functools import cached_property
-from typing import Any, Callable, Dict, List, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -16,11 +17,18 @@ from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import cudf
-from cudf._typing import Dtype
-from cudf.core._compat import PANDAS_LT_300
+from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer
 from cudf.utils.docutils import doc_apply
+
+if PANDAS_GE_210:
+    PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.NumpyEADtype
+else:
+    PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.PandasDtype
+
+if TYPE_CHECKING:
+    from cudf._typing import Dtype
+    from cudf.core.buffer import Buffer
 
 
 def dtype(arbitrary):
@@ -69,7 +77,7 @@ def dtype(arbitrary):
             return np.dtype("object")
         else:
             return dtype(pd_dtype.numpy_dtype)
-    elif isinstance(pd_dtype, pd.core.dtypes.dtypes.NumpyEADtype):
+    elif isinstance(pd_dtype, PANDAS_NUMPY_DTYPE):
         return dtype(pd_dtype.numpy_dtype)
     elif isinstance(pd_dtype, pd.CategoricalDtype):
         return cudf.CategoricalDtype.from_pandas(pd_dtype)
@@ -82,11 +90,11 @@ def dtype(arbitrary):
 
 
 def _decode_type(
-    cls: Type,
+    cls: type,
     header: dict,
     frames: list,
-    is_valid_class: Callable[[Type, Type], bool] = operator.is_,
-) -> Tuple[dict, list, Type]:
+    is_valid_class: Callable[[type, type], bool] = operator.is_,
+) -> tuple[dict, list, type]:
     """Decode metadata-encoded type and check validity
 
     Parameters
@@ -186,10 +194,10 @@ class CategoricalDtype(_BaseDtype):
         Index(['b', 'a'], dtype='object')
         """
         if self._categories is None:
-            return cudf.core.index.as_index(
+            return cudf.Index(
                 cudf.core.column.column_empty(0, dtype="object", masked=False)
             )
-        return cudf.core.index.as_index(self._categories, copy=False)
+        return cudf.Index(self._categories, copy=False)
 
     @property
     def type(self):
@@ -479,8 +487,8 @@ class ListDtype(_BaseDtype):
     def __hash__(self):
         return hash(self._typ)
 
-    def serialize(self) -> Tuple[dict, list]:
-        header: Dict[str, Dtype] = {}
+    def serialize(self) -> tuple[dict, list]:
+        header: dict[str, Dtype] = {}
         header["type-serialized"] = pickle.dumps(type(self))
 
         frames = []
@@ -625,13 +633,13 @@ class StructDtype(_BaseDtype):
     def __hash__(self):
         return hash(self._typ)
 
-    def serialize(self) -> Tuple[dict, list]:
-        header: Dict[str, Any] = {}
+    def serialize(self) -> tuple[dict, list]:
+        header: dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
 
-        frames: List[Buffer] = []
+        frames: list[Buffer] = []
 
-        fields: Dict[str, Union[bytes, Tuple[Any, Tuple[int, int]]]] = {}
+        fields: dict[str, bytes | tuple[Any, tuple[int, int]]] = {}
 
         for k, dtype in self.fields.items():
             if isinstance(dtype, _BaseDtype):
@@ -821,7 +829,7 @@ class DecimalDtype(_BaseDtype):
         precision = max(len(metadata.digits), -metadata.exponent)
         return cls(precision, -metadata.exponent)
 
-    def serialize(self) -> Tuple[dict, list]:
+    def serialize(self) -> tuple[dict, list]:
         return (
             {
                 "type-serialized": pickle.dumps(type(self)),
@@ -934,7 +942,7 @@ class IntervalDtype(StructDtype):
     def __eq__(self, other):
         if isinstance(other, str):
             # This means equality isn't transitive but mimics pandas
-            return other == self.name
+            return other in (self.name, str(self))
         return (
             type(self) == type(other)
             and self.subtype == other.subtype
@@ -944,7 +952,7 @@ class IntervalDtype(StructDtype):
     def __hash__(self):
         return hash((self.subtype, self.closed))
 
-    def serialize(self) -> Tuple[dict, list]:
+    def serialize(self) -> tuple[dict, list]:
         header = {
             "type-serialized": pickle.dumps(type(self)),
             "fields": pickle.dumps((self.subtype, self.closed)),

@@ -19,13 +19,13 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace strings {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace strings::detail {
 
 /**
  * @copydoc cudf::strings::replace(strings_column_view const&, string_scalar const&,
@@ -39,14 +39,14 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 rmm::device_async_resource_ref mr);
 
 /**
- * @copydoc cudf::strings::replace(strings_column_view const&, strings_column_view const&,
+ * @copydoc cudf::strings::replace_multiple(strings_column_view const&, strings_column_view const&,
  * strings_column_view const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
  */
-std::unique_ptr<column> replace(strings_column_view const& strings,
-                                strings_column_view const& targets,
-                                strings_column_view const& repls,
-                                rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr);
+std::unique_ptr<column> replace_mutiple(strings_column_view const& strings,
+                                        strings_column_view const& targets,
+                                        strings_column_view const& repls,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::device_async_resource_ref mr);
 
 /**
  * @brief Replaces any null string entries with the given string.
@@ -100,6 +100,5 @@ std::unique_ptr<cudf::column> find_and_replace_all(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace strings
-}  // namespace cudf
+}  // namespace strings::detail
+}  // namespace CUDF_EXPORT cudf

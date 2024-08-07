@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -161,7 +161,7 @@ class byte_array_view {
    *
    * @return An empty byte_array_view
    */
-  [[nodiscard]] __device__ inline static byte_array_view min() { return byte_array_view(); }
+  [[nodiscard]] __device__ inline static byte_array_view min() { return {}; }
 
   /**
    * @brief Return a byte_array_view to interpret as maximum value
@@ -170,7 +170,7 @@ class byte_array_view {
    */
   [[nodiscard]] __device__ inline static byte_array_view max()
   {
-    return byte_array_view(nullptr, std::numeric_limits<std::size_t>::max());
+    return {nullptr, std::numeric_limits<std::size_t>::max()};
   }
 
  private:

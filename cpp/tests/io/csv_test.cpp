@@ -938,7 +938,7 @@ TEST_F(CsvReaderTest, Strings)
     outfile << names[0] << ',' << names[1] << '\n';
     outfile << "10,abc def ghi" << '\n';
     outfile << "20,\"jkl mno pqr\"" << '\n';
-    outfile << "30,stu \"\"vwx\"\" yz" << '\n';
+    outfile << R"(30,stu ""vwx"" yz)" << '\n';
   }
 
   cudf::io::csv_reader_options in_opts =
@@ -996,7 +996,7 @@ TEST_F(CsvReaderTest, StringsQuotesIgnored)
     std::ofstream outfile(filepath, std::ofstream::out);
     outfile << names[0] << ',' << names[1] << '\n';
     outfile << "10,\"abcdef ghi\"" << '\n';
-    outfile << "20,\"jkl \"\"mno\"\" pqr\"" << '\n';
+    outfile << R"(20,"jkl ""mno"" pqr")" << '\n';
     outfile << "30,stu \"vwx\" yz" << '\n';
   }
 

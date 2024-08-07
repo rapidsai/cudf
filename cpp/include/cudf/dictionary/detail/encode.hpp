@@ -23,9 +23,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace dictionary {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace dictionary::detail {
 /**
  * @brief Construct a dictionary column by dictionary encoding an existing column.
  *
@@ -84,6 +83,5 @@ std::unique_ptr<column> decode(dictionary_column_view const& dictionary_column,
  */
 data_type get_indices_type_for_size(size_type keys_size);
 
-}  // namespace detail
-}  // namespace dictionary
-}  // namespace cudf
+}  // namespace dictionary::detail
+}  // namespace CUDF_EXPORT cudf

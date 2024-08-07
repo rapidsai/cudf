@@ -20,6 +20,7 @@
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
@@ -28,9 +29,10 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 /**
  * @addtogroup io_readers
@@ -125,7 +127,7 @@ class orc_reader_options {
    *
    * @return Number of rows to skip from the start
    */
-  int64_t get_skip_rows() const { return _skip_rows; }
+  [[nodiscard]] int64_t get_skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of row to read.
@@ -133,35 +135,38 @@ class orc_reader_options {
    * @return Number of rows to read; `nullopt` if the option hasn't been set (in which case the file
    * is read until the end)
    */
-  std::optional<int64_t> const& get_num_rows() const { return _num_rows; }
+  [[nodiscard]] std::optional<int64_t> const& get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Whether to use row index to speed-up reading.
    *
    * @return `true` if row index is used to speed-up reading
    */
-  bool is_enabled_use_index() const { return _use_index; }
+  [[nodiscard]] bool is_enabled_use_index() const { return _use_index; }
 
   /**
    * @brief Whether to use numpy-compatible dtypes.
    *
    * @return `true` if numpy-compatible dtypes are used
    */
-  bool is_enabled_use_np_dtypes() const { return _use_np_dtypes; }
+  [[nodiscard]] bool is_enabled_use_np_dtypes() const { return _use_np_dtypes; }
 
   /**
    * @brief Returns timestamp type to which timestamp column will be cast.
    *
    * @return Timestamp type to which timestamp column will be cast
    */
-  data_type get_timestamp_type() const { return _timestamp_type; }
+  [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
    * @brief Returns fully qualified names of columns that should be read as 128-bit Decimal.
    *
    * @return Fully qualified names of columns that should be read as 128-bit Decimal
    */
-  std::vector<std::string> const& get_decimal128_columns() const { return _decimal128_columns; }
+  [[nodiscard]] std::vector<std::string> const& get_decimal128_columns() const
+  {
+    return _decimal128_columns;
+  }
 
   // Setters
 
@@ -422,7 +427,7 @@ class chunked_orc_reader {
    *
    * This is added just to satisfy cython.
    */
-  chunked_orc_reader() = default;
+  chunked_orc_reader();
 
   /**
    * @brief Construct the reader from input/output size limits, output row granularity, along with
@@ -603,8 +608,8 @@ class orc_writer_options {
    * @param sink The sink used for writer output
    * @param table Table to be written to output
    */
-  explicit orc_writer_options(sink_info const& sink, table_view const& table)
-    : _sink(sink), _table(table)
+  explicit orc_writer_options(sink_info sink, table_view table)
+    : _sink(std::move(sink)), _table(std::move(table))
   {
   }
 
@@ -676,7 +681,7 @@ class orc_writer_options {
    *
    * @return Row index stride
    */
-  auto get_row_index_stride() const
+  [[nodiscard]] auto get_row_index_stride() const
   {
     auto const unaligned_stride = std::min(_row_index_stride, get_stripe_size_rows());
     return unaligned_stride - unaligned_stride % 8;
@@ -1048,7 +1053,7 @@ class chunked_orc_writer_options {
    *
    * @param sink The sink used for writer output
    */
-  chunked_orc_writer_options(sink_info const& sink) : _sink(sink) {}
+  chunked_orc_writer_options(sink_info sink) : _sink(std::move(sink)) {}
 
  public:
   /**
@@ -1107,7 +1112,7 @@ class chunked_orc_writer_options {
    *
    * @return Row index stride
    */
-  auto get_row_index_stride() const
+  [[nodiscard]] auto get_row_index_stride() const
   {
     auto const unaligned_stride = std::min(_row_index_stride, get_stripe_size_rows());
     return unaligned_stride - unaligned_stride % 8;
@@ -1425,7 +1430,12 @@ class orc_chunked_writer {
    * @brief Default constructor, this should never be used.
    *        This is added just to satisfy cython.
    */
-  orc_chunked_writer() = default;
+  orc_chunked_writer();
+
+  /**
+   * @brief virtual destructor, Added so we don't leak detail types.
+   */
+  ~orc_chunked_writer();
 
   /**
    * @brief Constructor with chunked writer options
@@ -1455,4 +1465,4 @@ class orc_chunked_writer {
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

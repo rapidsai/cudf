@@ -31,7 +31,7 @@
  * @brief Class definition for cudf::table
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief A set of cudf::column's of the same size.
@@ -144,7 +144,7 @@ class table {
    */
 
   template <typename InputIterator>
-  table_view select(InputIterator begin, InputIterator end) const
+  [[nodiscard]] table_view select(InputIterator begin, InputIterator end) const
   {
     std::vector<column_view> columns(std::distance(begin, end));
     std::transform(
@@ -194,4 +194,4 @@ class table {
   size_type _num_rows{};
 };
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -14,6 +14,13 @@
  * limitations under the License.
  */
 
+// These interop functions are deprecated. We keep the code in this
+// test and will migrate the tests to export via the arrow C data
+// interface with to_arrow_host which arrow can consume. For now, the
+// test is commented out.
+
+#if 0
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
@@ -21,6 +28,7 @@
 #include <cudf/interop.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/table/table_view.hpp>
 
 struct ArrowTest : public cudf::test::BaseFixture {};
 
@@ -66,3 +74,5 @@ TEST_F(ArrowTest, FromArrowScalar)
   auto arrow_scalar = arrow::MakeScalar(value);
   cudf::from_arrow(*arrow_scalar, cudf::test::get_default_stream());
 }
+
+#endif

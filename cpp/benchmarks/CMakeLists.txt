@@ -40,8 +40,13 @@ target_include_directories(
 
 # Use an OBJECT library so we only compile these helper source files only once
 add_library(
-  cudf_benchmark_common OBJECT "${CUDF_SOURCE_DIR}/tests/utilities/random_seed.cpp"
-                               synchronization/synchronization.cpp io/cuio_common.cpp
+  cudf_benchmark_common OBJECT
+  "${CUDF_SOURCE_DIR}/tests/utilities/random_seed.cpp"
+  synchronization/synchronization.cpp
+  io/cuio_common.cpp
+  common/table_utilities.cpp
+  common/benchmark_utilities.cpp
+  common/nvbench_utilities.cpp
 )
 target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env>)
 add_custom_command(
@@ -163,8 +168,10 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
-ConfigureBench(JOIN_BENCH join/left_join.cu join/conditional_join.cu)
-ConfigureNVBench(JOIN_NVBENCH join/join.cu join/mixed_join.cu join/distinct_join.cu)
+ConfigureNVBench(
+  JOIN_NVBENCH join/left_join.cu join/conditional_join.cu join/join.cu join/mixed_join.cu
+  join/distinct_join.cu
+)
 
 # ##################################################################################################
 # * iterator benchmark ----------------------------------------------------------------------------
@@ -224,8 +231,8 @@ ConfigureBench(
 )
 
 ConfigureNVBench(
-  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_nunique.cpp groupby/group_rank.cpp
-  groupby/group_struct_keys.cpp
+  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_max_multithreaded.cpp
+  groupby/group_nunique.cpp groupby/group_rank.cpp groupby/group_struct_keys.cpp
 )
 
 # ##################################################################################################
@@ -264,6 +271,11 @@ ConfigureNVBench(PARQUET_MULTITHREAD_READER_NVBENCH io/parquet/parquet_reader_mu
 # ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------
 ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp io/orc/orc_reader_options.cpp)
+
+# ##################################################################################################
+# * orc multithreaded benchmark
+# --------------------------------------------------------------------------
+ConfigureNVBench(ORC_MULTITHREADED_NVBENCH io/orc/orc_reader_multithreaded.cpp)
 
 # ##################################################################################################
 # * csv reader benchmark --------------------------------------------------------------------------

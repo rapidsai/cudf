@@ -30,14 +30,12 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
-from cudf.testing import _utils as utils
+from cudf.testing import _utils as utils, assert_eq, assert_neq
 from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    assert_eq,
     assert_exceptions_equal,
-    assert_neq,
     does_not_raise,
     expect_warning_if,
     gen_rand,
@@ -1984,6 +1982,18 @@ def test_from_arrow(nelem, data_type):
     np.testing.assert_array_equal(s.to_pandas(), gs.to_numpy())
 
 
+def test_from_arrow_chunked_categories():
+    # Verify that categories are properly deduplicated across chunked arrays.
+    indices = pa.array([0, 1, 0, 1, 2, 0, None, 2])
+    dictionary = pa.array(["foo", "bar", "baz"])
+    dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
+    chunked_array = pa.chunked_array([dict_array, dict_array])
+    table = pa.table({"a": chunked_array})
+    df = cudf.DataFrame.from_arrow(table)
+    final_dictionary = df["a"].dtype.categories.to_arrow().to_pylist()
+    assert sorted(final_dictionary) == sorted(dictionary.to_pylist())
+
+
 @pytest.mark.parametrize("nelem", [0, 2, 3, 100, 1000])
 @pytest.mark.parametrize("data_type", dtypes)
 def test_to_arrow(nelem, data_type):
@@ -3648,6 +3658,12 @@ def test_dataframe_mulitindex_sort_index(
         assert_eq(expected, got)
 
 
+def test_sort_index_axis_1_ignore_index_true_columnaccessor_state_names():
+    gdf = cudf.DataFrame([[1, 2, 3]], columns=["b", "a", "c"])
+    result = gdf.sort_index(axis=1, ignore_index=True)
+    assert result._data.names == tuple(result._data.keys())
+
+
 @pytest.mark.parametrize("dtype", dtypes + ["category"])
 def test_dataframe_0_row_dtype(dtype):
     if dtype == "category":
@@ -5218,7 +5234,7 @@ def test_rowwise_ops(data, op, skipna, numeric_only):
             else (pdf[column].notna().count() == 0)
         )
         or cudf.api.types.is_numeric_dtype(pdf[column].dtype)
-        or cudf.api.types.is_bool_dtype(pdf[column].dtype)
+        or pdf[column].dtype.kind == "b"
         for column in pdf
     ):
         with pytest.raises(TypeError):
@@ -5441,9 +5457,7 @@ def test_rowwise_ops_datetime_dtypes(data, op, skipna, numeric_only):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    if not numeric_only and not all(
-        cudf.api.types.is_datetime64_dtype(dt) for dt in gdf.dtypes
-    ):
+    if not numeric_only and not all(dt.kind == "M" for dt in gdf.dtypes):
         with pytest.raises(TypeError):
             got = getattr(gdf, op)(
                 axis=1, skipna=skipna, numeric_only=numeric_only
@@ -9454,6 +9468,24 @@ def test_explode(data, labels, ignore_index, p_index, label_to_explode):
     assert_eq(expect, got, check_dtype=False)
 
 
+def test_explode_preserve_categorical():
+    gdf = cudf.DataFrame(
+        {
+            "A": [[1, 2], None, [2, 3]],
+            "B": cudf.Series([0, 1, 2], dtype="category"),
+        }
+    )
+    result = gdf.explode("A")
+    expected = cudf.DataFrame(
+        {
+            "A": [1, 2, None, 2, 3],
+            "B": cudf.Series([0, 0, 1, 2, 2], dtype="category"),
+        }
+    )
+    expected.index = cudf.Index([0, 0, 1, 2, 2])
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "df,ascending,expected",
     [
@@ -9955,6 +9987,20 @@ def test_dataframe_nunique(data):
 
 
 @pytest.mark.parametrize(
+    "columns",
+    [
+        pd.RangeIndex(2, name="foo"),
+        pd.MultiIndex.from_arrays([[1, 2], [2, 3]], names=["foo", 1]),
+        pd.Index([3, 5], dtype=np.int8, name="foo"),
+    ],
+)
+def test_nunique_preserve_column_in_index(columns):
+    df = cudf.DataFrame([[1, 2]], columns=columns)
+    result = df.nunique().index.to_pandas()
+    assert_eq(result, columns, exact=True)
+
+
+@pytest.mark.parametrize(
     "data",
     [{"key": [0, 1, 1, 0, 0, 1], "val": [1, 8, 3, 9, -3, 8]}],
 )
@@ -9974,6 +10020,14 @@ def test_dataframe_rename_duplicate_column():
         ValueError, match="Duplicate column names are not allowed"
     ):
         gdf.rename(columns={"a": "b"}, inplace=True)
+
+
+def test_dataframe_rename_columns_keep_type():
+    gdf = cudf.DataFrame([[1, 2, 3]])
+    gdf.columns = cudf.Index([4, 5, 6], dtype=np.int8)
+    result = gdf.rename({4: 50}, axis="columns").columns
+    expected = pd.Index([50, 5, 6], dtype=np.int8)
+    assert_eq(result, expected)
 
 
 @pytest_unmark_spilling
@@ -10779,7 +10833,7 @@ def test_dataframe_contains(name, contains, other_names):
         expectation = contains is cudf.NA and name is cudf.NA
         assert (contains in pdf) == expectation
         assert (contains in gdf) == expectation
-    elif pd.api.types.is_float_dtype(gdf.columns.dtype):
+    elif gdf.columns.dtype.kind == "f":
         # In some cases, the columns are converted to an Index[float] based on
         # the other column names. That casts name values from None to np.nan.
         expectation = contains is np.nan and (name is None or name is np.nan)
@@ -10968,7 +11022,7 @@ def test_squeeze(axis, data):
     assert_eq(result, expected)
 
 
-@pytest.mark.parametrize("column", [range(1), np.array([1], dtype=np.int8)])
+@pytest.mark.parametrize("column", [range(1, 2), np.array([1], dtype=np.int8)])
 @pytest.mark.parametrize(
     "operation",
     [
@@ -10979,6 +11033,16 @@ def test_squeeze(axis, data):
         lambda df: abs(df),
         lambda df: -df,
         lambda df: ~df,
+        lambda df: df.cumsum(),
+        lambda df: df.replace(1, 2),
+        lambda df: df.replace(10, 20),
+        lambda df: df.clip(0, 10),
+        lambda df: df.rolling(1).mean(),
+        lambda df: df.interpolate(),
+        lambda df: df.shift(),
+        lambda df: df.sort_values(1),
+        lambda df: df.round(),
+        lambda df: df.rank(),
     ],
 )
 def test_op_preserves_column_metadata(column, operation):
@@ -11012,3 +11076,36 @@ def test_dataframe_loc_int_float(dtype1, dtype2):
     expected = pdf.loc[pidx]
 
     assert_eq(actual, expected, check_index_type=True, check_dtype=True)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        cudf.DataFrame(range(2)),
+        None,
+        [cudf.Series(range(2))],
+        [[0], [1]],
+        {1: range(2)},
+        cupy.arange(2),
+    ],
+)
+def test_init_with_index_no_shallow_copy(data):
+    idx = cudf.RangeIndex(2)
+    df = cudf.DataFrame(data, index=idx)
+    assert df.index is idx
+
+
+def test_from_records_with_index_no_shallow_copy():
+    idx = cudf.RangeIndex(2)
+    data = np.array([(1.0, 2), (3.0, 4)], dtype=[("x", "<f8"), ("y", "<i8")])
+    df = cudf.DataFrame(data.view(np.recarray), index=idx)
+    assert df.index is idx
+
+
+def test_bool_raises():
+    assert_exceptions_equal(
+        lfunc=bool,
+        rfunc=bool,
+        lfunc_args_and_kwargs=[[cudf.DataFrame()]],
+        rfunc_args_and_kwargs=[[pd.DataFrame()]],
+    )

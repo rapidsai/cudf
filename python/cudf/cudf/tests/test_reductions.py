@@ -11,13 +11,8 @@ import pytest
 import cudf
 from cudf import Series
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
-from cudf.testing import _utils as utils
-from cudf.testing._utils import (
-    NUMERIC_TYPES,
-    assert_eq,
-    expect_warning_if,
-    gen_rand,
-)
+from cudf.testing import _utils as utils, assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, expect_warning_if, gen_rand
 
 params_dtype = NUMERIC_TYPES
 
@@ -253,13 +248,8 @@ def test_sum_masked(nelem):
 
 def test_sum_boolean():
     s = Series(np.arange(100000))
-    got = (s > 1).sum(dtype=np.int32)
+    got = (s > 1).sum()
     expect = 99998
-
-    assert expect == got
-
-    got = (s > 1).sum(dtype=np.bool_)
-    expect = True
 
     assert expect == got
 
@@ -376,3 +366,11 @@ def test_reduction_column_multiindex():
     result = df.mean()
     expected = df.to_pandas().mean()
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("op", ["sum", "product"])
+def test_dtype_deprecated(op):
+    ser = cudf.Series(range(5))
+    with pytest.warns(FutureWarning):
+        result = getattr(ser, op)(dtype=np.dtype(np.int8))
+    assert isinstance(result, np.int8)

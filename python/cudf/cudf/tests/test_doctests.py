@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 import contextlib
 import doctest
 import inspect
@@ -8,6 +8,7 @@ import os
 
 import numpy as np
 import pytest
+from packaging import version
 
 import cudf
 
@@ -79,6 +80,16 @@ class TestDoctests:
         os.chdir(tmp_path)
         yield
         os.chdir(original_directory)
+
+    @pytest.fixture(autouse=True)
+    def prinoptions(cls):
+        # TODO: NumPy now prints scalars as `np.int8(1)`, etc. this should
+        #       be adapted evantually.
+        if version.parse(np.__version__) >= version.parse("2.0"):
+            with np.printoptions(legacy="1.25"):
+                yield
+        else:
+            yield
 
     @pytest.mark.parametrize(
         "docstring",

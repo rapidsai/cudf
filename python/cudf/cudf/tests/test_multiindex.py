@@ -21,13 +21,8 @@ import pytest
 import cudf
 from cudf.api.extensions import no_default
 from cudf.core.column import as_column
-from cudf.core.index import as_index
-from cudf.testing._utils import (
-    assert_eq,
-    assert_exceptions_equal,
-    assert_neq,
-    expect_warning_if,
-)
+from cudf.testing import assert_eq, assert_neq
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 @contextmanager
@@ -158,8 +153,6 @@ def test_multiindex_swaplevel():
 
 
 def test_string_index():
-    from cudf.core.index import Index
-
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = cudf.from_pandas(pdf)
     stringIndex = ["a", "b", "c", "d", "e"]
@@ -170,11 +163,11 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = Index(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = cudf.Index(["a", "b", "c", "d", "e"], name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = as_index(as_column(["a", "b", "c", "d", "e"]), name="name")
+    stringIndex = cudf.Index(as_column(["a", "b", "c", "d", "e"]), name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
@@ -839,25 +832,17 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
 
         # Assert ._levels identity
         lptrs = [
-            lv._data._data[None].base_data.get_ptr(mode="read")
-            for lv in mi1._levels
+            lv._column.base_data.get_ptr(mode="read") for lv in mi1._levels
         ]
         rptrs = [
-            lv._data._data[None].base_data.get_ptr(mode="read")
-            for lv in mi2._levels
+            lv._column.base_data.get_ptr(mode="read") for lv in mi2._levels
         ]
 
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
         # Assert ._codes identity
-        lptrs = [
-            c.base_data.get_ptr(mode="read")
-            for _, c in mi1._codes._data.items()
-        ]
-        rptrs = [
-            c.base_data.get_ptr(mode="read")
-            for _, c in mi2._codes._data.items()
-        ]
+        lptrs = [c.base_data.get_ptr(mode="read") for c in mi1._codes]
+        rptrs = [c.base_data.get_ptr(mode="read") for c in mi2._codes]
 
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
@@ -2164,4 +2149,24 @@ def test_multi_index_contains_hashable():
         lambda: [] in pidx,
         lfunc_args_and_kwargs=((),),
         rfunc_args_and_kwargs=((),),
+    )
+
+
+@pytest.mark.parametrize("array", [[1, 2], [1, None], [None, None]])
+@pytest.mark.parametrize("dropna", [True, False])
+def test_nunique(array, dropna):
+    arrays = [array, [3, 4]]
+    gidx = cudf.MultiIndex.from_arrays(arrays)
+    pidx = pd.MultiIndex.from_arrays(arrays)
+    result = gidx.nunique(dropna=dropna)
+    expected = pidx.nunique(dropna=dropna)
+    assert result == expected
+
+
+def test_bool_raises():
+    assert_exceptions_equal(
+        lfunc=bool,
+        rfunc=bool,
+        lfunc_args_and_kwargs=[[cudf.MultiIndex.from_arrays([range(1)])]],
+        rfunc_args_and_kwargs=[[pd.MultiIndex.from_arrays([range(1)])]],
     )

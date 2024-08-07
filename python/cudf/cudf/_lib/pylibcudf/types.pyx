@@ -2,12 +2,14 @@
 
 from libc.stdint cimport int32_t
 
-from cudf._lib.pylibcudf.libcudf.types cimport data_type, type_id
+from cudf._lib.pylibcudf.libcudf.types cimport data_type, size_type, type_id
+from cudf._lib.pylibcudf.libcudf.utilities.type_dispatcher cimport type_to_id
 
 from cudf._lib.pylibcudf.libcudf.types import type_id as TypeId  # no-cython-lint, isort:skip
 from cudf._lib.pylibcudf.libcudf.types import nan_policy as NanPolicy  # no-cython-lint, isort:skip
 from cudf._lib.pylibcudf.libcudf.types import null_policy as NullPolicy  # no-cython-lint, isort:skip
 from cudf._lib.pylibcudf.libcudf.types import interpolation as Interpolation  # no-cython-lint, isort:skip
+from cudf._lib.pylibcudf.libcudf.types import mask_state as MaskState  # no-cython-lint, isort:skip
 from cudf._lib.pylibcudf.libcudf.types import nan_equality as NanEquality  # no-cython-lint, isort:skip
 from cudf._lib.pylibcudf.libcudf.types import null_equality as NullEquality  # no-cython-lint, isort:skip
 from cudf._lib.pylibcudf.libcudf.types import null_order as NullOrder  # no-cython-lint, isort:skip
@@ -22,7 +24,7 @@ cdef class DataType:
 
     Parameters
     ----------
-    id : TypeId
+    id : type_id
         The type's identifier
     scale : int
         The scale associated with the data. Only used for decimal data types.
@@ -51,6 +53,9 @@ cdef class DataType:
             self.c_obj == (<DataType>other).c_obj
         )
 
+    def __hash__(self):
+        return hash((self.c_obj.id(), self.c_obj.scale()))
+
     @staticmethod
     cdef DataType from_libcudf(data_type dt):
         """Create a DataType from a libcudf data_type.
@@ -63,3 +68,7 @@ cdef class DataType:
         cdef DataType ret = DataType.__new__(DataType, type_id.EMPTY)
         ret.c_obj = dt
         return ret
+
+
+SIZE_TYPE = DataType(type_to_id[size_type]())
+SIZE_TYPE_ID = SIZE_TYPE.id()

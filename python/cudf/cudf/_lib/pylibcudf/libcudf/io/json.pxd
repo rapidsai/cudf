@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint8_t
+from libc.stdint cimport int32_t, uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
@@ -18,6 +18,10 @@ cdef extern from "cudf/io/json.hpp" \
     cdef struct schema_element:
         data_type type
         map[string, schema_element] child_types
+
+    cpdef enum class json_recovery_mode_t(int32_t):
+        FAIL
+        RECOVER_WITH_NULL
 
     cdef cppclass json_reader_options:
         json_reader_options() except +
@@ -87,11 +91,11 @@ cdef extern from "cudf/io/json.hpp" \
         json_reader_options_builder& dayfirst(
             bool val
         ) except +
-        json_reader_options_builder& legacy(
-            bool val
-        ) except +
         json_reader_options_builder& keep_quotes(
             bool val
+        ) except +
+        json_reader_options_builder& recovery_mode(
+            json_recovery_mode_t val
         ) except +
 
         json_reader_options build() except +

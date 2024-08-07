@@ -20,45 +20,45 @@ from cudf._lib.pylibcudf.libcudf.types cimport size_type
 cdef extern from "cudf/io/types.hpp" \
         namespace "cudf::io" nogil:
 
-    ctypedef enum quote_style:
-        QUOTE_MINIMAL "cudf::io::quote_style::MINIMAL"
-        QUOTE_ALL "cudf::io::quote_style::ALL"
-        QUOTE_NONNUMERIC "cudf::io::quote_style::NONNUMERIC"
-        QUOTE_NONE "cudf::io::quote_style::NONE"
+    cpdef enum class quote_style(int32_t):
+        MINIMAL
+        ALL
+        NONNUMERIC
+        NONE
 
-    ctypedef enum compression_type:
-        NONE "cudf::io::compression_type::NONE"
-        AUTO "cudf::io::compression_type::AUTO"
-        SNAPPY "cudf::io::compression_type::SNAPPY"
-        GZIP "cudf::io::compression_type::GZIP"
-        BZIP2 "cudf::io::compression_type::BZIP2"
-        BROTLI "cudf::io::compression_type::BROTLI"
-        ZIP "cudf::io::compression_type::ZIP"
-        XZ "cudf::io::compression_type::XZ"
-        ZLIB "cudf::io::compression_type::ZLIB"
-        LZ4 "cudf::io::compression_type::LZ4"
-        LZO "cudf::io::compression_type::LZO"
-        ZSTD "cudf::io::compression_type::ZSTD"
+    cpdef enum class compression_type(int32_t):
+        NONE
+        AUTO
+        SNAPPY
+        GZIP
+        BZIP2
+        BROTLI
+        ZIP
+        XZ
+        ZLIB
+        LZ4
+        LZO
+        ZSTD
 
-    ctypedef enum io_type:
-        FILEPATH "cudf::io::io_type::FILEPATH"
-        HOST_BUFFER "cudf::io::io_type::HOST_BUFFER"
-        VOID "cudf::io::io_type::VOID"
-        USER_IMPLEMENTED "cudf::io::io_type::USER_IMPLEMENTED"
+    cpdef enum class io_type(int32_t):
+        FILEPATH
+        HOST_BUFFER
+        VOID
+        USER_IMPLEMENTED
 
-    ctypedef enum statistics_freq:
+    cpdef enum class statistics_freq(int32_t):
         STATISTICS_NONE = 0,
         STATISTICS_ROWGROUP = 1,
         STATISTICS_PAGE = 2,
         STATISTICS_COLUMN = 3,
 
-    ctypedef enum dictionary_policy:
+    cpdef enum class dictionary_policy(int32_t):
         NEVER = 0,
         ADAPTIVE = 1,
         ALWAYS = 2,
 
     cdef extern from "cudf/io/types.hpp" namespace "cudf::io" nogil:
-        cpdef enum class column_encoding:
+        cpdef enum class column_encoding(int32_t):
             USE_DEFAULT = -1
             DICTIONARY = 0
             PLAIN = 1
@@ -81,6 +81,7 @@ cdef extern from "cudf/io/types.hpp" \
         map[string, string] user_data
         vector[unordered_map[string, string]] per_file_user_data
         vector[column_name_info] schema_info
+        vector[size_t] num_rows_per_source
 
     cdef cppclass table_with_metadata:
         unique_ptr[table] tbl

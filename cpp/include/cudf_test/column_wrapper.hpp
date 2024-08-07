@@ -24,7 +24,6 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -33,6 +32,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -51,7 +51,7 @@
 #include <memory>
 #include <numeric>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace test {
 namespace detail {
 /**
@@ -226,6 +226,9 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   using namespace numeric;
   using RepType = typename ElementTo::rep;
 
+  CUDF_EXPECTS(std::all_of(begin, end, [](ElementFrom v) { return v.scale() == 0; }),
+               "Only zero-scale fixed-point values are supported");
+
   auto to_rep            = [](ElementTo fp) { return fp.value(); };
   auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
   auto const size        = cudf::distance(begin, end);
@@ -314,7 +317,12 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end, Validity
   for (auto str = begin; str < end; ++str) {
     std::string tmp = (*v++) ? std::string(*str) : std::string{};
     chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
-    offsets.push_back(offsets.back() + tmp.length());
+    auto const last_offset = static_cast<std::size_t>(offsets.back());
+    auto const next_offset = last_offset + tmp.length();
+    CUDF_EXPECTS(
+      next_offset < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+      "Cannot use strings_column_wrapper to build a large strings column");
+    offsets.push_back(static_cast<cudf::size_type>(next_offset));
   }
   return std::pair(std::move(chars), std::move(offsets));
 };
@@ -1121,14 +1129,20 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    *
    * @return column_view to keys column
    */
-  column_view keys() const { return cudf::dictionary_column_view{wrapped->view()}.keys(); }
+  [[nodiscard]] column_view keys() const
+  {
+    return cudf::dictionary_column_view{wrapped->view()}.keys();
+  }
 
   /**
    * @brief Access indices column view
    *
    * @return column_view to indices column
    */
-  column_view indices() const { return cudf::dictionary_column_view{wrapped->view()}.indices(); }
+  [[nodiscard]] column_view indices() const
+  {
+    return cudf::dictionary_column_view{wrapped->view()}.indices();
+  }
 
   /**
    * @brief Default constructor initializes an empty dictionary column of strings
@@ -1741,7 +1755,7 @@ class lists_column_wrapper : public detail::column_wrapper {
       normalize_column(lists_column_view(col).child(),
                        lists_column_view(expected_hierarchy).child()),
       col.null_count(),
-      cudf::detail::copy_bitmask(
+      cudf::copy_bitmask(
         col, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
       cudf::test::get_default_stream());
   }
@@ -1792,7 +1806,10 @@ class lists_column_wrapper : public detail::column_wrapper {
     return {std::move(cols), std::move(stubs)};
   }
 
-  column_view get_view() const { return root ? lists_column_view(*wrapped).child() : *wrapped; }
+  [[nodiscard]] column_view get_view() const
+  {
+    return root ? lists_column_view(*wrapped).child() : *wrapped;
+  }
 
   int depth = 0;
   bool root = false;
@@ -1953,4 +1970,4 @@ class structs_column_wrapper : public detail::column_wrapper {
 };
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

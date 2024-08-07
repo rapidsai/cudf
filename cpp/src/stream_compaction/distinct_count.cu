@@ -15,16 +15,17 @@
  */
 
 #include "stream_compaction_common.cuh"
-#include "stream_compaction_common.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
@@ -187,7 +188,11 @@ cudf::size_type distinct_count(column_view const& input,
                                nan_policy nan_handling,
                                rmm::cuda_stream_view stream)
 {
-  if (0 == input.size() or input.null_count() == input.size()) { return 0; }
+  if (0 == input.size()) { return 0; }
+
+  if (input.null_count() == input.size()) {
+    return static_cast<size_type>(null_handling == null_policy::INCLUDE);
+  }
 
   auto count = detail::distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
 

@@ -21,6 +21,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -32,7 +33,7 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief Enum to indicate whether the distinct join table has nested columns or not
@@ -43,13 +44,24 @@ enum class has_nested : bool { YES, NO };
 
 // forward declaration
 namespace hashing::detail {
+
+/**
+ * @brief Forward declaration for our Murmur Hash 3 implementation
+ */
 template <typename T>
 class MurmurHash3_x86_32;
 }  // namespace hashing::detail
 namespace detail {
+
+/**
+ * @brief Forward declaration for our hash join
+ */
 template <typename T>
 class hash_join;
 
+/**
+ * @brief Forward declaration for our distinct hash join
+ */
 template <cudf::has_nested HasNested>
 class distinct_hash_join;
 }  // namespace detail
@@ -336,8 +348,8 @@ class hash_join {
    * the result of performing an inner join between two tables with `build` and `probe`
    * as the join keys .
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
              std::optional<std::size_t> output_size = {},
              rmm::cuda_stream_view stream           = cudf::get_default_stream(),
@@ -359,10 +371,10 @@ class hash_join {
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a left join between two tables with `build` and `probe`
-   * as the join keys .
+   * as the join keys.
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size = {},
             rmm::cuda_stream_view stream           = cudf::get_default_stream(),
@@ -386,8 +398,8 @@ class hash_join {
    * the result of performing a full join between two tables with `build` and `probe`
    * as the join keys .
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
   full_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size = {},
             rmm::cuda_stream_view stream           = cudf::get_default_stream(),
@@ -440,7 +452,7 @@ class hash_join {
    * @return The exact number of output when performing a full join between two tables with `build`
    * and `probe` as the join keys .
    */
-  std::size_t full_join_size(
+  [[nodiscard]] std::size_t full_join_size(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) const;
@@ -492,12 +504,12 @@ class distinct_hash_join {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned indices' device memory.
    *
-   * @return A pair of columns [`build_indices`, `probe_indices`] that can be used to construct
-   * the result of performing an inner join between two tables with `build` and `probe`
-   * as the join keys.
+   * @return A pair of columns [`build_indices`, `probe_indices`] that can be used to
+   * construct the result of performing an inner join between two tables
+   * with `build` and `probe` as the join keys.
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(rmm::cuda_stream_view stream      = cudf::get_default_stream(),
              rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) const;
 
@@ -512,10 +524,11 @@ class distinct_hash_join {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
-   * @return A `build_indices` column that can be used to construct the result of performing a left
-   * join between two tables with `build` and `probe` as the join keys.
+   * @return A `build_indices` column that can be used to construct the result of
+   * performing a left join between two tables with `build` and `probe` as the join
+   * keys.
    */
-  std::unique_ptr<rmm::device_uvector<size_type>> left_join(
+  [[nodiscard]] std::unique_ptr<rmm::device_uvector<size_type>> left_join(
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) const;
 
@@ -1178,4 +1191,4 @@ std::size_t conditional_left_anti_join_size(
   ast::expression const& binary_predicate,
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
