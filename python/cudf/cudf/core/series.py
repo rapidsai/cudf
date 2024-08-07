@@ -69,6 +69,8 @@ from cudf.utils.dtypes import (
 from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
+    import pyarrow as pa
+
     from cudf._typing import (
         ColumnLike,
         DataFrameOrSeries,
@@ -294,8 +296,8 @@ class _SeriesLocIndexer(_FrameIndexer):
             return result
         try:
             arg = self._loc_to_iloc(arg)
-        except (TypeError, KeyError, IndexError, ValueError):
-            raise KeyError(arg)
+        except (TypeError, KeyError, IndexError, ValueError) as err:
+            raise KeyError(arg) from err
 
         return self._frame.iloc[arg]
 
@@ -394,8 +396,10 @@ class _SeriesLocIndexer(_FrameIndexer):
             return _indices_from_labels(self._frame, arg)
 
         else:
-            arg = cudf.core.series.Series(cudf.core.column.as_column(arg))
-            if arg.dtype in (bool, np.bool_):
+            arg = cudf.core.series.Series._from_column(
+                cudf.core.column.as_column(arg)
+            )
+            if arg.dtype.kind == "b":
                 return arg
             else:
                 indices = _indices_from_labels(self._frame, arg)
@@ -510,7 +514,37 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         col = cudf.core.column.categorical.pandas_categorical_as_column(
             categorical, codes=codes
         )
-        return Series(data=col)
+        return Series._from_column(col)
+
+    @classmethod
+    @_performance_tracking
+    def from_arrow(cls, array: pa.Array):
+        """Create from PyArrow Array/ChunkedArray.
+
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+            PyArrow Object which has to be converted.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        SingleColumnFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
+        0       a
+        1       b
+        2    <NA>
+        dtype: object
+        """
+        return cls._from_column(ColumnBase.from_arrow(array))
 
     @classmethod
     @_performance_tracking
@@ -560,7 +594,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
         """
         col = as_column(data).set_mask(mask)
-        return cls(data=col)
+        ca = ColumnAccessor({None: col}, verify=False)
+        return cls._from_data(ca)
 
     @_performance_tracking
     def __init__(
@@ -586,10 +621,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
             if isinstance(data, (pd.Series, Series)):
                 index_from_data = ensure_index(data.index)
-        elif isinstance(data, ColumnAccessor):
+        elif isinstance(data, (ColumnAccessor, ColumnBase)):
             raise TypeError(
                 "Use cudf.Series._from_data for constructing a Series from "
-                "ColumnAccessor"
+                "ColumnAccessor or a ColumnBase"
             )
         elif isinstance(data, dict):
             if not data:
@@ -655,6 +690,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             self._data = reindexed._data
             self._index = second_index
         self._check_data_index_length_match()
+
+    @classmethod
+    @_performance_tracking
+    def _from_column(
+        cls,
+        column: ColumnBase,
+        *,
+        name: abc.Hashable = None,
+        index: BaseIndex | None = None,
+    ) -> Self:
+        ca = ColumnAccessor({name: column}, verify=False)
+        return cls._from_data(ca, index=index)
 
     @classmethod
     @_performance_tracking
@@ -1535,17 +1582,21 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @classmethod
     @_performance_tracking
-    def _concat(cls, objs, axis=0, index=True):
+    def _concat(cls, objs, axis=0, index: bool = True):
         # Concatenate index if not provided
         if index is True:
             if isinstance(objs[0].index, cudf.MultiIndex):
-                index = cudf.MultiIndex._concat([o.index for o in objs])
+                result_index = cudf.MultiIndex._concat([o.index for o in objs])
             else:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", FutureWarning)
-                    index = cudf.core.index.Index._concat(
+                    result_index = cudf.core.index.Index._concat(
                         [o.index for o in objs]
                     )
+        elif index is False:
+            result_index = None
+        else:
+            raise ValueError(f"{index=} must be a bool")
 
         names = {obj.name for obj in objs}
         if len(names) == 1:
@@ -1597,7 +1648,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if len(objs):
             col = col._with_type_metadata(objs[0].dtype)
 
-        return cls(data=col, index=index, name=name)
+        return cls._from_data(
+            ColumnAccessor({name: col}, verify=False), index=result_index
+        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -2709,8 +2762,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if len(val_counts) > 0:
             val_counts = val_counts[val_counts == val_counts.iloc[0]]
 
-        return Series._from_data(
-            {self.name: val_counts.index.sort_values()._column}, name=self.name
+        return Series._from_column(
+            val_counts.index.sort_values()._column, name=self.name
         )
 
     @_performance_tracking
@@ -2999,8 +3052,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 f"to isin(), you passed a [{type(values).__name__}]"
             )
 
-        return Series._from_data(
-            {self.name: self._column.isin(values)}, index=self.index
+        return Series._from_column(
+            self._column.isin(values), name=self.name, index=self.index
         )
 
     @_performance_tracking
@@ -3036,7 +3089,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         res = self._column.unique()
         if cudf.get_option("mode.pandas_compatible"):
             return res.values
-        return Series(res, name=self.name)
+        return Series._from_column(res, name=self.name)
 
     @_performance_tracking
     def value_counts(
@@ -3268,8 +3321,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if return_scalar:
             return result
 
-        return Series._from_data(
-            data={self.name: result},
+        return Series._from_column(
+            result,
+            name=self.name,
             index=cudf.Index(np_array_q) if quant_index else None,
         )
 
@@ -3351,8 +3405,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    2
         dtype: int32
         """
-        return Series(
-            cudf.core.column.numerical.digitize(self._column, bins, right)
+        return Series._from_column(
+            cudf.core.column.numerical.digitize(self._column, bins, right),
+            name=self.name,
         )
 
     @_performance_tracking
@@ -5293,10 +5348,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     elif b_col.null_count:
         null_values = b_col.isnull()
     else:
-        return Series(result_col, index=index)
+        return Series._from_column(result_col, index=index)
 
     result_col[null_values] = False
     if equal_nan is True and a_col.null_count and b_col.null_count:
         result_col[equal_nulls] = True
 
-    return Series(result_col, index=index)
+    return Series._from_column(result_col, index=index)
