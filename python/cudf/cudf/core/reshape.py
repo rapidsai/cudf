@@ -484,9 +484,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         if len(new_objs) == 1 and not ignore_index:
             return new_objs[0]
         else:
-            return cudf.Series._concat(
-                objs, axis=axis, index=None if ignore_index else True
-            )
+            return cudf.Series._concat(objs, axis=axis, index=not ignore_index)
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, cudf.Index):
@@ -632,7 +630,7 @@ def melt(
     def _tile(A, reps):
         series_list = [A] * reps
         if reps > 0:
-            return cudf.Series._concat(objs=series_list, index=None)
+            return cudf.Series._concat(objs=series_list, index=False)
         else:
             return cudf.Series([], dtype=A.dtype)
 
@@ -661,7 +659,7 @@ def melt(
 
     # Step 3: add values
     mdata[value_name] = cudf.Series._concat(
-        objs=[frame[val] for val in value_vars], index=None
+        objs=[frame[val] for val in value_vars], index=False
     )
 
     return cudf.DataFrame(mdata)
