@@ -720,6 +720,7 @@ class StringFunction(Expr):
             pl_expr.StringFunction.StartsWith,
             pl_expr.StringFunction.Contains,
             pl_expr.StringFunction.Slice,
+            pl_expr.StringFunction.StripChars,
         ):
             raise NotImplementedError(f"String function {self.name}")
         if self.name == pl_expr.StringFunction.Contains:
@@ -796,6 +797,15 @@ class StringFunction(Expr):
                     plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
                 )
             )
+        elif self.name == pl_expr.StringFunction.StripChars:
+            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            expr_chars = self.children[1]
+            assert isinstance(expr_chars, Literal)
+            chars = plc.interop.from_arrow(expr_chars.value)
+            return Column(
+                plc.strings.strip.strip(column.obj, plc.strings.SideType.BOTH, chars)
+            )
+
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
