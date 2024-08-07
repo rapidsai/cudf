@@ -24,29 +24,29 @@
 #include <arrow/type.h>
 
 // Helper functuons to create StringViews
-inline arrow::BinaryViewType::c_type to_inline_string_view(const void* data, int32_t const& size)
+inline arrow::StringViewType::c_type to_inline_string_view(const void* data, int32_t const& size)
 {
-  arrow::BinaryViewType::c_type out;
+  arrow::StringViewType::c_type out;
   out.inlined = {size, {}};
   memcpy(&out.inlined.data, data, size);
   return out;
 }
-inline arrow::BinaryViewType::c_type to_inline_string_view(std::string_view const& v)
+inline arrow::StringViewType::c_type to_inline_string_view(std::string_view const& v)
 {
   return to_inline_string_view(v.data(), static_cast<int32_t>(v.size()));
 }
-inline arrow::BinaryViewType::c_type to_string_view(const void* data,
+inline arrow::StringViewType::c_type to_string_view(const void* data,
                                                     int32_t const& size,
                                                     int32_t const& buffer_index,
                                                     int32_t const& offset)
 {
-  if (size <= arrow::BinaryViewType::kInlineSize) { return to_inline_string_view(data, size); }
-  arrow::BinaryViewType::c_type out;
+  if (size <= arrow::StringViewType::kInlineSize) { return to_inline_string_view(data, size); }
+  arrow::StringViewType::c_type out;
   out.ref = {size, {}, buffer_index, offset};
   memcpy(&out.ref.prefix, data, sizeof(out.ref.prefix));
   return out;
 }
-inline arrow::BinaryViewType::c_type to_string_view(std::string_view const& v,
+inline arrow::StringViewType::c_type to_string_view(std::string_view const& v,
                                                     int32_t const& buffer_index,
                                                     int32_t const& offset)
 {
@@ -62,7 +62,7 @@ inline arrow::BinaryViewType::c_type to_string_view(std::string_view const& v,
  */
 arrow::Result<std::shared_ptr<arrow::StringViewArray>> make_string_view_array(
   arrow::BufferVector const& data_buffers,
-  std::vector<arrow::BinaryViewType::c_type> const& views,
+  std::vector<arrow::StringViewType::c_type> const& views,
   bool validate = true)
 {
   auto const length = static_cast<int64_t>(views.size());
@@ -136,7 +136,7 @@ std::unique_ptr<cudf::column> arrow_string_view_to_cudf_column(
 int main(int argc, char** argv)
 {
   std::vector<std::shared_ptr<arrow::Buffer>> data_buffers;
-  std::vector<arrow::BinaryViewType::c_type> views;
+  std::vector<arrow::StringViewType::c_type> views;
 
   // Define the data buffers and string views
   auto const buffer_a =
