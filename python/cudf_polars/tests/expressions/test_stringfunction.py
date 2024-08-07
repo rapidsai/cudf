@@ -154,6 +154,7 @@ def test_slice_column(slice_column_data):
     assert_ir_translation_raises(query, NotImplementedError)
 
 
+# TODO: add more tests
 def test_strip(ldf):
     q = ldf.select(pl.col("a").str.strip_chars("a"))
     assert_gpu_result_equal(q)
