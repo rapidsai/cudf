@@ -24,33 +24,33 @@
 #include <arrow/type.h>
 
 // Helper functuons to create StringViews
-inline arrow::BinaryViewType::c_type ToInlineStringView(const void* data, int32_t size)
+inline arrow::BinaryViewType::c_type to_inline_string_view(const void* data, int32_t size)
 {
   arrow::BinaryViewType::c_type out;
   out.inlined = {size, {}};
   memcpy(&out.inlined.data, data, size);
   return out;
 }
-inline arrow::BinaryViewType::c_type ToInlineStringView(std::string_view v)
+inline arrow::BinaryViewType::c_type to_inline_string_view(std::string_view v)
 {
-  return ToInlineStringView(v.data(), static_cast<int32_t>(v.size()));
+  return to_inline_string_view(v.data(), static_cast<int32_t>(v.size()));
 }
-inline arrow::BinaryViewType::c_type ToStringView(const void* data,
-                                                  int32_t size,
-                                                  int32_t buffer_index,
-                                                  int32_t offset)
+inline arrow::BinaryViewType::c_type to_string_view(const void* data,
+                                                    int32_t size,
+                                                    int32_t buffer_index,
+                                                    int32_t offset)
 {
-  if (size <= arrow::BinaryViewType::kInlineSize) { return ToInlineStringView(data, size); }
+  if (size <= arrow::BinaryViewType::kInlineSize) { return to_inline_string_view(data, size); }
   arrow::BinaryViewType::c_type out;
   out.ref = {size, {}, buffer_index, offset};
   memcpy(&out.ref.prefix, data, sizeof(out.ref.prefix));
   return out;
 }
-inline arrow::BinaryViewType::c_type ToStringView(std::string_view v,
-                                                  int32_t buffer_index,
-                                                  int32_t offset)
+inline arrow::BinaryViewType::c_type to_string_view(std::string_view v,
+                                                    int32_t buffer_index,
+                                                    int32_t offset)
 {
-  return ToStringView(v.data(), static_cast<int32_t>(v.size()), buffer_index, offset);
+  return to_string_view(v.data(), static_cast<int32_t>(v.size()), buffer_index, offset);
 }
 
 /**
@@ -65,8 +65,8 @@ arrow::Result<std::shared_ptr<arrow::StringViewArray>> MakeStringViewArray(
   const std::vector<arrow::BinaryViewType::c_type>& views,
   bool validate = true)
 {
-  auto length = static_cast<int64_t>(views.size());
-  auto arr    = std::make_shared<arrow::StringViewArray>(
+  auto const length = static_cast<int64_t>(views.size());
+  auto arr          = std::make_shared<arrow::StringViewArray>(
     arrow::utf8_view(), length, arrow::Buffer::FromVector(views), std::move(data_buffers));
   if (validate) { RETURN_NOT_OK(arr->ValidateFull()); }
   return arr;
@@ -141,21 +141,21 @@ int main(int argc, char** argv)
   // Define the data buffers and string views
   auto buffer_a = arrow::Buffer::FromString("hello rapids teamapache arrow interopnvidiacudf");
   data_buffers.push_back(buffer_a);
-  views.push_back(ToStringView("hello rapid steam", 0, 0));
-  views.push_back(ToStringView("apache arrow interop", 0, 17));
-  views.push_back(ToInlineStringView("nvidia"));
-  views.push_back(ToInlineStringView("cudf"));
+  views.push_back(to_string_view("hello rapid steam", 0, 0));
+  views.push_back(to_string_view("apache arrow interop", 0, 17));
+  views.push_back(to_inline_string_view("nvidia"));
+  views.push_back(to_inline_string_view("cudf"));
 
   // Create a StringViewArray
-  auto string_view_col = MakeStringViewArray(data_buffers, views, true).ValueOrDie();
+  auto const string_view_col = MakeStringViewArray(data_buffers, views, true).ValueOrDie();
   std::cout << string_view_col->ToString() << std::endl;
 
   // Convert the StringViewArray to a cudf::column
-  auto cudf_col = ArrowStringViewToCudfColumn(string_view_col);
+  auto const cudf_col = ArrowStringViewToCudfColumn(string_view_col);
 
   // Write the cudf::column as CSV
-  auto tbl_view                  = cudf::table_view({cudf_col->view()});
-  std::vector<std::string> names = {"col_a"};
+  auto const tbl_view                  = cudf::table_view({cudf_col->view()});
+  std::vector<std::string> const names = {"col_a"};
 
   std::vector<char> h_buffer;
   cudf::io::csv_writer_options writer_options =
@@ -164,7 +164,7 @@ int main(int argc, char** argv)
       .names(names);
 
   cudf::io::write_csv(writer_options);
-  std::string result(h_buffer.data(), h_buffer.size());
+  auto const result = std::string(h_buffer.data(), h_buffer.size());
   std::cout << result << std::endl;
 
   return 0;
