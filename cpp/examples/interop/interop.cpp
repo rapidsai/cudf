@@ -140,11 +140,12 @@ int main(int argc, char** argv)
   std::vector<arrow::BinaryViewType::c_type> views;
 
   // Define the data buffers and string views
-  auto buffer_a = arrow::Buffer::FromString("helloworldapachearrowcudfnvidia");
+  auto buffer_a = arrow::Buffer::FromString("hellorapidsteamapachearrowinteropnvidiacudf");
   data_buffers.push_back(buffer_a);
-  views.push_back(ToStringView("helloworldapache", 0, 0));
-  views.push_back(ToStringView("arrowcudfnvidia", 0, 16));
+  views.push_back(ToStringView("hellorapidsteam", 0, 0));
+  views.push_back(ToStringView("apachearrowinterop", 0, 15));
   views.push_back(ToInlineStringView("nvidia"));
+  views.push_back(ToInlineStringView("cudf"));
 
   // Create a StringViewArray
   auto string_view_col = MakeStringViewArray(data_buffers, views, true).ValueOrDie();
