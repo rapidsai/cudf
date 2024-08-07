@@ -15,6 +15,6 @@ project(
 
 include(../fetch_dependencies.cmake)
 
-add_executable(interop interop.cpp)
+add_executable(interop interop.cu)
 target_link_libraries(interop PRIVATE cudf::cudf)
 target_compile_features(interop PRIVATE cxx_std_17)
