@@ -124,6 +124,8 @@ ConfigureTest(
   groupby/keys_tests.cpp
   groupby/lists_tests.cpp
   groupby/m2_tests.cpp
+  groupby/max_by_tests.cpp
+  groupby/min_by_tests.cpp
   groupby/min_tests.cpp
   groupby/max_scan_tests.cpp
   groupby/max_tests.cpp

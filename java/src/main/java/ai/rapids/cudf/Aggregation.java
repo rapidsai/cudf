@@ -70,7 +70,9 @@ abstract class Aggregation {
         TDIGEST(31), // This can take a delta argument for accuracy level
         MERGE_TDIGEST(32), // This can take a delta argument for accuracy level
         HISTOGRAM(33),
-        MERGE_HISTOGRAM(34);
+        MERGE_HISTOGRAM(34),
+        MAX_BY(35),
+        MIN_BY(36);
 
         final int nativeId;
 
@@ -673,6 +675,32 @@ abstract class Aggregation {
      */
     static ArgMinAggregation argMin() {
         return new ArgMinAggregation();
+    }
+
+    static MaxByAggregation maxBy() {
+        return new MaxByAggregation();
+    }
+
+    /**
+     * Corresponding value of the maximum order element along with the maximum order.
+     */
+    static final class MaxByAggregation extends NoParamAggregation {
+        private MaxByAggregation() {
+            super(Kind.MAX_BY);
+        }
+    }
+
+    static MinByAggregation minBy() {
+        return new MinByAggregation();
+    }
+
+    /**
+     * Corresponding value of the minimum order element along with the minimum order.
+     */
+    static final class MinByAggregation extends NoParamAggregation {
+        private MinByAggregation() {
+            super(Kind.MIN_BY);
+        }
     }
 
     static final class NuniqueAggregation extends CountLikeAggregation {
