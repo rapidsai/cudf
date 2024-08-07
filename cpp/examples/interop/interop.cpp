@@ -60,7 +60,7 @@ inline arrow::BinaryViewType::c_type to_string_view(std::string_view const& v,
  * @param views The string views
  * @param validate Whether to validate the array
  */
-arrow::Result<std::shared_ptr<arrow::StringViewArray>> MakeStringViewArray(
+arrow::Result<std::shared_ptr<arrow::StringViewArray>> make_string_view_array(
   arrow::BufferVector const& data_buffers,
   std::vector<arrow::BinaryViewType::c_type> const& views,
   bool validate = true)
@@ -88,7 +88,7 @@ auto make_chars_and_offsets(std::vector<std::string> const& strings)
     auto const next_offset = last_offset + str.length();
     CUDF_EXPECTS(
       next_offset < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
-      "Cannot use ArrowStringViewToCudfColumn to build a large strings column");
+      "Cannot use arrow_string_view_to_cudf_column to build a large strings column");
     offsets.push_back(static_cast<cudf::size_type>(next_offset));
   }
   return std::make_tuple(std::move(chars), std::move(offsets));
@@ -101,7 +101,7 @@ auto make_chars_and_offsets(std::vector<std::string> const& strings)
  * @param stream The CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::column> ArrowStringViewToCudfColumn(
+std::unique_ptr<cudf::column> arrow_string_view_to_cudf_column(
   std::shared_ptr<arrow::StringViewArray> const& array,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
@@ -148,11 +148,11 @@ int main(int argc, char** argv)
   views.push_back(to_inline_string_view("cudf"));
 
   // Create a StringViewArray
-  auto const string_view_col = MakeStringViewArray(data_buffers, views, true).ValueOrDie();
+  auto const string_view_col = make_string_view_array(data_buffers, views, true).ValueOrDie();
   std::cout << string_view_col->ToString() << std::endl;
 
   // Convert the StringViewArray to a cudf::column
-  auto const cudf_col = ArrowStringViewToCudfColumn(string_view_col);
+  auto const cudf_col = arrow_string_view_to_cudf_column(string_view_col);
 
   // Write the cudf::column as CSV
   auto const tbl_view                  = cudf::table_view({cudf_col->view()});
