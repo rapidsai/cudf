@@ -720,6 +720,7 @@ class StringFunction(Expr):
             pl_expr.StringFunction.StartsWith,
             pl_expr.StringFunction.Contains,
             pl_expr.StringFunction.Slice,
+            pl_expr.StringFunction.Strptime,
         ):
             raise NotImplementedError(f"String function {self.name}")
         if self.name == pl_expr.StringFunction.Contains:
@@ -738,6 +739,14 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "Slice only supports literal start and stop values"
                 )
+        elif self.name == pl_expr.StringFunction.Strptime:
+            format, strict, exact, cache = self.options
+            if cache:
+                raise NotImplementedError("Strptime cache is a CPU feature")
+            if format is None:
+                raise NotImplementedError("Strptime format is required")
+            if not exact:
+                raise NotImplementedError("Strptime does not support exact=False")
 
     def do_evaluate(
         self,
@@ -826,6 +835,38 @@ class StringFunction(Expr):
                     else prefix.obj,
                 )
             )
+        elif self.name == pl_expr.StringFunction.Strptime:
+            # TODO: ignores ambiguous
+            format, strict, exact, cache = self.options
+            col = self.children[0].evaluate(df, context=context, mapping=mapping)
+
+            not_timestamps = plc.unary.unary_operation(
+                plc.strings.convert.convert_datetime.is_timestamp(
+                    col.obj, format.encode()
+                ),
+                plc.unary.UnaryOperator.NOT,
+            )
+
+            if strict:
+                reduced = plc.reduce.reduce(
+                    not_timestamps,
+                    plc.aggregation.min(),
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
+                any_malformed = plc.interop.to_arrow(reduced).as_py()
+                if any_malformed:
+                    raise ValueError("Malformed datetime string")
+            else:
+                null = plc.interop.from_arrow(pa.scalar(None, type=pa.string()))
+                res = plc.copying.boolean_mask_scatter(
+                    [null], plc.Table([col.obj]), not_timestamps
+                )
+                return Column(
+                    plc.strings.convert.convert_datetime.to_timestamps(
+                        res.columns()[0], self.dtype, format.encode()
+                    )
+                )
+            raise NotImplementedError("Strptime")
         raise NotImplementedError(
             f"StringFunction {self.name}"
         )  # pragma: no cover; handled by init raising

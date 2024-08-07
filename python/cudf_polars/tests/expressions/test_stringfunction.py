@@ -152,3 +152,35 @@ def test_slice_column(slice_column_data):
     else:
         query = slice_column_data.select(pl.col("a").str.slice(pl.col("start")))
     assert_ir_translation_raises(query, NotImplementedError)
+
+
+@pytest.fixture
+def to_datetime_data():
+    return pl.DataFrame(
+        {
+            "a": [
+                "2021-01-01",
+                "2021-01-02",
+                "abcd",
+            ]
+        }
+    ).lazy()
+
+
+@pytest.mark.parametrize("cache", [True, False], ids=lambda cache: f"cache={cache}")
+@pytest.mark.parametrize("strict", [True, False], ids=lambda strict: f"strict={strict}")
+@pytest.mark.parametrize("exact", [True, False], ids=lambda exact: f"exact={exact}")
+@pytest.mark.parametrize(
+    "format", ["%Y-%m-%d", None], ids=lambda format: f"format={format}"
+)
+def test_to_datetime(to_datetime_data, cache, strict, format, exact):
+    query = to_datetime_data.select(
+        pl.col("a").str.strptime(
+            pl.Datetime("ns"), format=format, cache=cache, strict=strict, exact=exact
+        )
+    )
+    if cache or format is None or not exact:
+        assert_ir_translation_raises(query, NotImplementedError)
+        return
+    else:
+        assert_gpu_result_equal(query)
