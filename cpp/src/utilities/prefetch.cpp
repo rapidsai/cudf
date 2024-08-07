@@ -34,13 +34,16 @@ prefetch_config& prefetch_config::instance()
 
 bool prefetch_config::get(std::string_view key)
 {
-  // Default to not prefetching
-  if (config_values.find(key.data()) == config_values.end()) {
-    return (config_values[key.data()] = false);
-  }
-  return config_values[key.data()];
+  std::shared_lock<std::shared_mutex> lock(config_mtx);
+  auto const it = config_values.find(key.data());
+  return it == config_values.end() ? false : it->second;  // default to not prefetching
 }
-void prefetch_config::set(std::string_view key, bool value) { config_values[key.data()] = value; }
+
+void prefetch_config::set(std::string_view key, bool value)
+{
+  std::lock_guard<std::shared_mutex> lock(config_mtx);
+  config_values[key.data()] = value;
+}
 
 cudaError_t prefetch_noexcept(std::string_view key,
                               void const* ptr,
@@ -48,6 +51,20 @@ cudaError_t prefetch_noexcept(std::string_view key,
                               rmm::cuda_stream_view stream,
                               rmm::cuda_device_id device_id) noexcept
 {
+  // Don't try to prefetch nullptrs or empty data. Sometimes libcudf has column
+  // views that use nullptrs with a nonzero size as an optimization.
+  if (ptr == nullptr) {
+    if (prefetch_config::instance().debug) {
+      std::cerr << "Skipping prefetch of nullptr" << std::endl;
+    }
+    return cudaSuccess;
+  }
+  if (size == 0) {
+    if (prefetch_config::instance().debug) {
+      std::cerr << "Skipping prefetch of size 0" << std::endl;
+    }
+    return cudaSuccess;
+  }
   if (prefetch_config::instance().get(key)) {
     if (prefetch_config::instance().debug) {
       std::cerr << "Prefetching " << size << " bytes for key " << key << " at location " << ptr

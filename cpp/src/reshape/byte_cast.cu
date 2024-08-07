@@ -167,11 +167,6 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
 
 }  // namespace
 
-/**
- * @copydoc cudf::byte_cast(column_view const&, flip_endianness, rmm::device_async_resource_ref)
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
 std::unique_ptr<column> byte_cast(column_view const& input,
                                   flip_endianness endian_configuration,
                                   rmm::cuda_stream_view stream,
@@ -183,15 +178,13 @@ std::unique_ptr<column> byte_cast(column_view const& input,
 
 }  // namespace detail
 
-/**
- * @copydoc cudf::byte_cast(column_view const&, flip_endianness, rmm::device_async_resource_ref)
- */
 std::unique_ptr<column> byte_cast(column_view const& input,
                                   flip_endianness endian_configuration,
+                                  rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::byte_cast(input, endian_configuration, cudf::get_default_stream(), mr);
+  return detail::byte_cast(input, endian_configuration, stream, mr);
 }
 
 }  // namespace cudf
