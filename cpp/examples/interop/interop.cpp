@@ -24,21 +24,21 @@
 #include <arrow/type.h>
 
 // Helper functuons to create StringViews
-inline arrow::BinaryViewType::c_type to_inline_string_view(const void* data, int32_t size)
+inline arrow::BinaryViewType::c_type to_inline_string_view(const void* data, int32_t const& size)
 {
   arrow::BinaryViewType::c_type out;
   out.inlined = {size, {}};
   memcpy(&out.inlined.data, data, size);
   return out;
 }
-inline arrow::BinaryViewType::c_type to_inline_string_view(std::string_view v)
+inline arrow::BinaryViewType::c_type to_inline_string_view(std::string_view const& v)
 {
   return to_inline_string_view(v.data(), static_cast<int32_t>(v.size()));
 }
 inline arrow::BinaryViewType::c_type to_string_view(const void* data,
-                                                    int32_t size,
-                                                    int32_t buffer_index,
-                                                    int32_t offset)
+                                                    int32_t const& size,
+                                                    int32_t const& buffer_index,
+                                                    int32_t const& offset)
 {
   if (size <= arrow::BinaryViewType::kInlineSize) { return to_inline_string_view(data, size); }
   arrow::BinaryViewType::c_type out;
@@ -46,9 +46,9 @@ inline arrow::BinaryViewType::c_type to_string_view(const void* data,
   memcpy(&out.ref.prefix, data, sizeof(out.ref.prefix));
   return out;
 }
-inline arrow::BinaryViewType::c_type to_string_view(std::string_view v,
-                                                    int32_t buffer_index,
-                                                    int32_t offset)
+inline arrow::BinaryViewType::c_type to_string_view(std::string_view const& v,
+                                                    int32_t const& buffer_index,
+                                                    int32_t const& offset)
 {
   return to_string_view(v.data(), static_cast<int32_t>(v.size()), buffer_index, offset);
 }
@@ -61,12 +61,12 @@ inline arrow::BinaryViewType::c_type to_string_view(std::string_view v,
  * @param validate Whether to validate the array
  */
 arrow::Result<std::shared_ptr<arrow::StringViewArray>> MakeStringViewArray(
-  arrow::BufferVector data_buffers,
-  const std::vector<arrow::BinaryViewType::c_type>& views,
+  arrow::BufferVector const& data_buffers,
+  std::vector<arrow::BinaryViewType::c_type> const& views,
   bool validate = true)
 {
   auto const length = static_cast<int64_t>(views.size());
-  auto arr          = std::make_shared<arrow::StringViewArray>(
+  auto const arr    = std::make_shared<arrow::StringViewArray>(
     arrow::utf8_view(), length, arrow::Buffer::FromVector(views), std::move(data_buffers));
   if (validate) { RETURN_NOT_OK(arr->ValidateFull()); }
   return arr;
@@ -78,7 +78,7 @@ arrow::Result<std::shared_ptr<arrow::StringViewArray>> MakeStringViewArray(
  *
  * @param strings The vector of strings
  */
-auto make_chars_and_offsets(std::vector<std::string> strings)
+auto make_chars_and_offsets(std::vector<std::string> const& strings)
 {
   std::vector<char> chars{};
   std::vector<cudf::size_type> offsets(1, 0);
@@ -102,7 +102,7 @@ auto make_chars_and_offsets(std::vector<std::string> strings)
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<cudf::column> ArrowStringViewToCudfColumn(
-  std::shared_ptr<arrow::StringViewArray> array,
+  std::shared_ptr<arrow::StringViewArray> const& array,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
@@ -111,7 +111,7 @@ std::unique_ptr<cudf::column> ArrowStringViewToCudfColumn(
   for (auto i = 0; i < array->length(); i++) {
     strings.push_back(array->GetString(i));
   }
-  auto [chars, offsets] = make_chars_and_offsets(strings);
+  auto const [chars, offsets] = make_chars_and_offsets(strings);
 
   // Copy the chars vector to the device
   rmm::device_uvector<char> d_chars(chars.size(), stream, mr);
@@ -139,7 +139,8 @@ int main(int argc, char** argv)
   std::vector<arrow::BinaryViewType::c_type> views;
 
   // Define the data buffers and string views
-  auto buffer_a = arrow::Buffer::FromString("hello rapids teamapache arrow interopnvidiacudf");
+  auto const buffer_a =
+    arrow::Buffer::FromString("hello rapids teamapache arrow interopnvidiacudf");
   data_buffers.push_back(buffer_a);
   views.push_back(to_string_view("hello rapid steam", 0, 0));
   views.push_back(to_string_view("apache arrow interop", 0, 17));
