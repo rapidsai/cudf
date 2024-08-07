@@ -87,6 +87,12 @@ arrow::Result<std::shared_ptr<arrow::StringViewArray>> MakeStringViewArray(
   return arr;
 }
 
+/**
+ * @brief Convert a vector of strings into a vector of
+ * individual chars and a vector of the sizes of the strings
+ *
+ * @param strings The vector of strings
+ */
 auto make_chars_and_sizes(std::vector<std::string> strings)
 {
   std::vector<char> chars{};
