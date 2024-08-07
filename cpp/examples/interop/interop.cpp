@@ -126,11 +126,15 @@ std::unique_ptr<cudf::column> arrow_string_view_to_cudf_column(
                                 offsets.size() * sizeof(cudf::size_type),
                                 cudaMemcpyDefault,
                                 stream.value()));
-  auto offsets_col = std::make_unique<cudf::column>(std::move(d_offsets), rmm::device_buffer{}, 0);
+  auto offsets_col =
+    std::make_unique<cudf::column>(std::move(d_offsets), rmm::device_buffer{0, stream, mr}, 0);
 
   // Create a string column out of the chars and offsets
-  return cudf::make_strings_column(
-    array->length(), std::move(offsets_col), d_chars.release(), 0, {});
+  return cudf::make_strings_column(array->length(),
+                                   std::move(offsets_col),
+                                   d_chars.release(),
+                                   0,
+                                   rmm::device_buffer{0, stream, mr});
 }
 
 int main(int argc, char** argv)
