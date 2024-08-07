@@ -164,10 +164,8 @@ int main(int argc, char** argv)
       .names(names);
 
   cudf::io::write_csv(writer_options);
-
-  for (auto& c : out_buff) {
-    std::cout << c;
-  }
+  std::string result(out_buff.data());
+  std::cout << result << std::endl;
 
   return 0;
 }
