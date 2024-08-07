@@ -358,7 +358,7 @@ class StringMethods(ColumnMethods):
             )
 
         if len(data) == 1 and data.null_count == 1:
-            data = [""]
+            data = cudf.core.column.as_column("", length=len(data))
         # We only want to keep the index if we are adding something to each
         # row, not if we are joining all the rows into a single string.
         out = self._return_or_inplace(data, retain_index=others is not None)
@@ -3623,7 +3623,7 @@ class StringMethods(ColumnMethods):
         data = libstrings.findall(self._column, pat, flags)
         return self._return_or_inplace(data)
 
-    def find_multiple(self, patterns: SeriesOrIndex) -> "cudf.Series":
+    def find_multiple(self, patterns: SeriesOrIndex) -> cudf.Series:
         """
         Find all first occurrences of patterns in the Series/Index.
 
@@ -3679,12 +3679,12 @@ class StringMethods(ColumnMethods):
                 f"got: {patterns_column.dtype}"
             )
 
-        return cudf.Series(
+        return cudf.Series._from_column(
             libstrings.find_multiple(self._column, patterns_column),
+            name=self._parent.name,
             index=self._parent.index
             if isinstance(self._parent, cudf.Series)
             else self._parent,
-            name=self._parent.name,
         )
 
     def isempty(self) -> SeriesOrIndex:
@@ -4376,14 +4376,9 @@ class StringMethods(ColumnMethods):
         2    99
         dtype: int32
         """
-
-        new_col = libstrings.code_points(self._column)
-        if isinstance(self._parent, cudf.Series):
-            return cudf.Series(new_col, name=self._parent.name)
-        elif isinstance(self._parent, cudf.BaseIndex):
-            return cudf.Index(new_col, name=self._parent.name)
-        else:
-            return new_col
+        return self._return_or_inplace(
+            libstrings.code_points(self._column), retain_index=False
+        )
 
     def translate(self, table: dict) -> SeriesOrIndex:
         """
@@ -4694,7 +4689,9 @@ class StringMethods(ColumnMethods):
         if isinstance(self._parent, cudf.Series):
             lengths = self.len().fillna(0)
             index = self._parent.index.repeat(lengths)
-            return cudf.Series(result_col, name=self._parent.name, index=index)
+            return cudf.Series._from_column(
+                result_col, name=self._parent.name, index=index
+            )
         elif isinstance(self._parent, cudf.BaseIndex):
             return cudf.Index(result_col, name=self._parent.name)
         else:
@@ -5934,9 +5931,9 @@ class StringColumn(column.ColumnBase):
 
         n_bytes_to_view = str_end_byte_offset - str_byte_offset
 
-        to_view = column.build_column(
-            self.base_data,
-            dtype=cudf.api.types.dtype("int8"),
+        to_view = cudf.core.column.NumericalColumn(
+            self.base_data,  # type: ignore[arg-type]
+            dtype=np.dtype(np.int8),
             offset=str_byte_offset,
             size=n_bytes_to_view,
         )

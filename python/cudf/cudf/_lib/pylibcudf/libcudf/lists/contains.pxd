@@ -3,7 +3,7 @@
 from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.exception_handler cimport cudf_exception_handler
+from cudf._lib.pylibcudf.exception_handler cimport libcudf_exception_handler
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
 from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
@@ -21,25 +21,25 @@ cdef extern from "cudf/lists/contains.hpp" namespace "cudf::lists" nogil:
     cdef unique_ptr[column] contains(
         const lists_column_view& lists,
         const scalar& search_key,
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] contains(
         const lists_column_view& lists,
         const column_view& search_keys,
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] contains_nulls(
         const lists_column_view& lists,
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] index_of(
         const lists_column_view& lists,
         const scalar& search_key,
         duplicate_find_option find_option,
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] index_of(
         const lists_column_view& lists,
         const column_view& search_keys,
         duplicate_find_option find_option,
-    ) except +cudf_exception_handler
+    ) except +libcudf_exception_handler

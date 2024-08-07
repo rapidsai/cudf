@@ -45,6 +45,7 @@
 #include <cudf/search.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -2789,7 +2790,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftDistinctJoinGatherMap
       auto has_nulls = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right)
                          ? cudf::nullable_join::YES
                          : cudf::nullable_join::NO;
-      if (cudf::detail::has_nested_columns(right)) {
+      if (cudf::has_nested_columns(right)) {
         cudf::distinct_hash_join<cudf::has_nested::YES> hash(right, left, has_nulls, nulleq);
         return hash.left_join();
       } else {
@@ -3010,7 +3011,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerDistinctJoinGatherMa
       std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
                 std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
         maps;
-      if (cudf::detail::has_nested_columns(right)) {
+      if (cudf::has_nested_columns(right)) {
         cudf::distinct_hash_join<cudf::has_nested::YES> hash(right, left, has_nulls, nulleq);
         maps = hash.inner_join();
       } else {

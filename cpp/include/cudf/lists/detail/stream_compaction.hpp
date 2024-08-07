@@ -17,11 +17,13 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf::lists::detail {
+namespace CUDF_EXPORT cudf {
+namespace lists::detail {
 
 /**
  * @copydoc cudf::lists::apply_boolean_mask
@@ -40,4 +42,5 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr);
 
-}  // namespace cudf::lists::detail
+}  // namespace lists::detail
+}  // namespace CUDF_EXPORT cudf

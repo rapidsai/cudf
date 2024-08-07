@@ -78,7 +78,7 @@ def assert_buffer_equal(buffer_and_dtype: tuple[_CuDFBuffer, Any], cudfcol):
     # FIXME: In gh-10202 some minimal fixes were added to unblock CI. But
     # currently only non-null values are compared, null positions are
     # unchecked.
-    non_null_idxs = ~cudf.Series(cudfcol).isna()
+    non_null_idxs = cudfcol.notnull()
     assert_eq(
         col_from_buf.apply_boolean_mask(non_null_idxs),
         cudfcol.apply_boolean_mask(non_null_idxs),
@@ -86,8 +86,8 @@ def assert_buffer_equal(buffer_and_dtype: tuple[_CuDFBuffer, Any], cudfcol):
     array_from_dlpack = cp.from_dlpack(buf.__dlpack__()).get()
     col_array = cp.asarray(cudfcol.data_array_view(mode="read")).get()
     assert_eq(
-        array_from_dlpack[non_null_idxs.to_numpy()].flatten(),
-        col_array[non_null_idxs.to_numpy()].flatten(),
+        array_from_dlpack[non_null_idxs.values_host].flatten(),
+        col_array[non_null_idxs.values_host].flatten(),
     )
 
 
