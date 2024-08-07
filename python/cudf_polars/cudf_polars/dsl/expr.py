@@ -21,6 +21,7 @@ from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 import pyarrow as pa
+import pyarrow.compute as pc
 
 from polars.polars import _expr_nodes as pl_expr
 
@@ -714,12 +715,14 @@ class StringFunction(Expr):
 
     def _validate_input(self):
         if self.name not in (
-            pl_expr.StringFunction.Lowercase,
-            pl_expr.StringFunction.Uppercase,
-            pl_expr.StringFunction.EndsWith,
-            pl_expr.StringFunction.StartsWith,
             pl_expr.StringFunction.Contains,
+            pl_expr.StringFunction.EndsWith,
+            pl_expr.StringFunction.Lowercase,
+            pl_expr.StringFunction.Replace,
+            pl_expr.StringFunction.ReplaceMany,
             pl_expr.StringFunction.Slice,
+            pl_expr.StringFunction.StartsWith,
+            pl_expr.StringFunction.Uppercase,
         ):
             raise NotImplementedError(f"String function {self.name}")
         if self.name == pl_expr.StringFunction.Contains:
@@ -733,6 +736,33 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
+        elif self.name == pl_expr.StringFunction.Replace:
+            _, literal = self.options
+            if not literal:
+                raise NotImplementedError("literal=False is not supported for replace")
+            if not all(isinstance(expr, Literal) for expr in self.children[1:]):
+                raise NotImplementedError("replace only supports scalar target")
+            target = self.children[1]
+            if target.value == pa.scalar("", type=pa.string()):
+                raise NotImplementedError(
+                    "libcudf replace does not support empty strings"
+                )
+        elif self.name == pl_expr.StringFunction.ReplaceMany:
+            (ascii_case_insensitive,) = self.options
+            if ascii_case_insensitive:
+                raise NotImplementedError(
+                    "ascii_case_insensitive not implemented for replace_many"
+                )
+            if not all(
+                isinstance(expr, (LiteralColumn, Literal)) for expr in self.children[1:]
+            ):
+                raise NotImplementedError("replace_many only supports literal inputs")
+            target = self.children[1]
+            if pc.any(pc.equal(target.value, "")).as_py():
+                raise NotImplementedError(
+                    "libcudf replace_many is implemented differently from polars "
+                    "for empty strings"
+                )
         elif self.name == pl_expr.StringFunction.Slice:
             if not all(isinstance(child, Literal) for child in self.children[1:]):
                 raise NotImplementedError(
@@ -826,6 +856,19 @@ class StringFunction(Expr):
                     else prefix.obj,
                 )
             )
+        elif self.name == pl_expr.StringFunction.Replace:
+            column, target, repl = columns
+            n, _ = self.options
+            return Column(
+                plc.strings.replace.replace(
+                    column.obj, target.obj_scalar, repl.obj_scalar, maxrepl=n
+                )
+            )
+        elif self.name == pl_expr.StringFunction.ReplaceMany:
+            column, target, repl = columns
+            return Column(
+                plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj)
+            )
         raise NotImplementedError(
             f"StringFunction {self.name}"
         )  # pragma: no cover; handled by init raising
@@ -885,9 +928,9 @@ class UnaryFunction(Expr):
         if self.name not in (
             "mask_nans",
             "round",
-            "setsorted",
+            "set_sorted",
             "unique",
-            "dropnull",
+            "drop_nulls",
             "fill_null",
         ):
             raise NotImplementedError(f"Unary function {name=}")
@@ -948,7 +991,7 @@ class UnaryFunction(Expr):
             if maintain_order:
                 return Column(column).sorted_like(values)
             return Column(column)
-        elif self.name == "setsorted":
+        elif self.name == "set_sorted":
             (column,) = (
                 child.evaluate(df, context=context, mapping=mapping)
                 for child in self.children
@@ -975,7 +1018,7 @@ class UnaryFunction(Expr):
                 order=order,
                 null_order=null_order,
             )
-        elif self.name == "dropnull":
+        elif self.name == "drop_nulls":
             (column,) = (
                 child.evaluate(df, context=context, mapping=mapping)
                 for child in self.children
