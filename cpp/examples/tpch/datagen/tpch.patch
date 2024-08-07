@@ -16,7 +16,7 @@ index 3b854f6dc..f000f09c0 100755
 +    cp ${TPCH_DIR}/nation/part-0.parquet ${TPCH_DIR}/nation.parquet
 +    cp ${TPCH_DIR}/region/part-0.parquet ${TPCH_DIR}/region.parquet
  }
- 
+
  # Runs the tpch benchmark
 diff --git a/datafusion/common/src/config.rs b/datafusion/common/src/config.rs
 index b5204b343..84fd2e78d 100644
@@ -28,6 +28,6 @@ index b5204b343..84fd2e78d 100644
          /// Defaults to the number of CPU cores on the system
 -        pub target_partitions: usize, default = num_cpus::get()
 +        pub target_partitions: usize, default = 1
- 
+
          /// The default time zone
          ///
