@@ -190,15 +190,14 @@ class Scan(IR):
     """Cloud-related authentication options, currently ignored."""
     paths: list[str]
     """List of paths to read from."""
-    file_options: Any
-    """Options for reading the file.
-
-    Attributes are:
-    - ``with_columns: list[str]`` of projected columns to return.
-    - ``n_rows: int``: Number of rows to read.
-    - ``row_index: tuple[name, offset] | None``: Add an integer index
-        column with given name.
-    """
+    with_columns: list[str]
+    """Projected columns to return."""
+    skip_rows: int
+    """Rows to skip at the start when reading."""
+    n_rows: int
+    """Number of rows to read after skipping."""
+    row_index: tuple[str, int] | None
+    """If not None add an integer index column of the given name."""
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
@@ -208,8 +207,16 @@ class Scan(IR):
             # This line is unhittable ATM since IPC/Anonymous scan raise
             # on the polars side
             raise NotImplementedError(f"Unhandled scan type: {self.typ}")
-        if self.typ == "ndjson" and self.file_options.n_rows is not None:
-            raise NotImplementedError("row limit in scan")
+        if self.typ == "ndjson" and (self.n_rows != -1 or self.skip_rows != 0):
+            raise NotImplementedError("row limit in scan for json reader")
+        if self.skip_rows < 0:
+            # TODO: polars has this implemented for parquet,
+            # maybe we can do this too?
+            raise NotImplementedError("slice pushdown for negative slices")
+        if self.typ == "csv" and self.skip_rows != 0:  # pragma: no cover
+            # This comes from slice pushdown, but that
+            # optimization doesn't happen right now
+            raise NotImplementedError("skipping rows in CSV reader")
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None for k in ("aws", "azure", "gcp")
         ):
@@ -246,10 +253,9 @@ class Scan(IR):
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
-        options = self.file_options
-        with_columns = options.with_columns
-        row_index = options.row_index
-        nrows = self.file_options.n_rows if self.file_options.n_rows is not None else -1
+        with_columns = self.with_columns
+        row_index = self.row_index
+        n_rows = self.n_rows
         if self.typ == "csv":
             parse_options = self.reader_options["parse_options"]
             sep = chr(parse_options["separator"])
@@ -283,6 +289,7 @@ class Scan(IR):
 
             # polars skips blank lines at the beginning of the file
             pieces = []
+            read_partial = n_rows != -1
             for p in self.paths:
                 skiprows = self.reader_options["skip_rows"]
                 path = Path(p)
@@ -304,9 +311,13 @@ class Scan(IR):
                     comment=comment,
                     decimal=decimal,
                     dtypes=self.schema,
-                    nrows=nrows,
+                    nrows=n_rows,
                 )
                 pieces.append(tbl_w_meta)
+                if read_partial:
+                    n_rows -= tbl_w_meta.tbl.num_rows()
+                    if n_rows <= 0:
+                        break
             tables, colnames = zip(
                 *(
                     (piece.tbl, piece.column_names(include_children=False))
@@ -321,7 +332,8 @@ class Scan(IR):
             tbl_w_meta = plc.io.parquet.read_parquet(
                 plc.io.SourceInfo(self.paths),
                 columns=with_columns,
-                num_rows=nrows,
+                num_rows=n_rows,
+                skip_rows=self.skip_rows,
             )
             df = DataFrame.from_table(
                 tbl_w_meta.tbl,

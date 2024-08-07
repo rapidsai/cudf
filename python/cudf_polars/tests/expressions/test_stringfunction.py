@@ -154,6 +154,63 @@ def test_slice_column(slice_column_data):
     assert_ir_translation_raises(query, NotImplementedError)
 
 
+@pytest.mark.parametrize(
+    "target, repl",
+    [("a", "a"), ("Wı", "☺"), ("FG", ""), ("doesnotexist", "blahblah")],  # noqa: RUF001
+)
+@pytest.mark.parametrize("n", [0, 3, -1])
+def test_replace_literal(ldf, target, repl, n):
+    query = ldf.select(pl.col("a").str.replace(target, repl, literal=True, n=n))
+    assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize("target, repl", [("", ""), ("a", pl.col("a"))])
+def test_replace_literal_unsupported(ldf, target, repl):
+    query = ldf.select(pl.col("a").str.replace(target, repl, literal=True))
+    assert_ir_translation_raises(query, NotImplementedError)
+
+
+def test_replace_re(ldf):
+    query = ldf.select(pl.col("a").str.replace("A", "a", literal=False))
+    assert_ir_translation_raises(query, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "target,repl",
+    [
+        (["A", "de", "kLm", "awef"], "a"),
+        (["A", "de", "kLm", "awef"], ""),
+        (["A", "de", "kLm", "awef"], ["a", "b", "c", "d"]),
+        (["A", "de", "kLm", "awef"], ["a", "b", "c", ""]),
+        (
+            pl.lit(pl.Series(["A", "de", "kLm", "awef"])),
+            pl.lit(pl.Series(["a", "b", "c", "d"])),
+        ),
+    ],
+)
+def test_replace_many(ldf, target, repl):
+    query = ldf.select(pl.col("a").str.replace_many(target, repl))
+
+    assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize(
+    "target,repl",
+    [(["A", ""], ["a", "b"]), (pl.col("a").drop_nulls(), pl.col("a").drop_nulls())],
+)
+def test_replace_many_notimplemented(ldf, target, repl):
+    query = ldf.select(pl.col("a").str.replace_many(target, repl))
+    assert_ir_translation_raises(query, NotImplementedError)
+
+
+def test_replace_many_ascii_case(ldf):
+    query = ldf.select(
+        pl.col("a").str.replace_many(["a", "b", "c"], "a", ascii_case_insensitive=True)
+    )
+
+    assert_ir_translation_raises(query, NotImplementedError)
+
+
 # TODO: add more tests
 def test_strip(ldf):
     q = ldf.select(pl.col("a").str.strip_chars("a"))
