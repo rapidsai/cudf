@@ -947,6 +947,12 @@ class UnaryFunction(Expr):
         self.children = children
         if self.name not in UnaryFunction._supported_fns:
             raise NotImplementedError(f"Unary function {name=}")
+        if self.name in UnaryFunction._supported_cum_aggs:
+            (reverse,) = self.options
+            if reverse:
+                raise NotImplementedError(
+                    "reverse=True is not supported for cumulative aggregations"
+                )
 
     def do_evaluate(
         self,
@@ -1053,9 +1059,6 @@ class UnaryFunction(Expr):
             return Column(plc.replace.replace_nulls(column.obj, arg))
         elif self.name in UnaryFunction._supported_cum_aggs:
             column = self.children[0].evaluate(df, context=context, mapping=mapping)
-            (reverse,) = self.options
-            if reverse:
-                raise NotImplementedError("reverse=True is not supported for cum_sum")
             # cum_sum casts
             # INT8, UInt8, Int16, UInt16 -> Int64 for overflow prevention
             # (cum_prod does the same, but with Int32/UInt32 too)
@@ -1106,10 +1109,7 @@ class UnaryFunction(Expr):
                 agg = plc.aggregation.max()
             elif self.name == "cum_count":
                 agg = plc.aggregation.count()
-            else:
-                # TODO: this is unreachable (theoretically)
-                # better way to do this is assert_never?
-                raise NotImplementedError("Unknown aggregation")
+
             return Column(plc.reduce.scan(plc_col, agg, plc.reduce.ScanType.INCLUSIVE))
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"

@@ -7,7 +7,10 @@ import pytest
 import polars as pl
 
 from cudf_polars.dsl import expr
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.fixture(
@@ -73,6 +76,15 @@ def test_bool_agg(agg, request):
     q = df.select(expr)
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("cum_agg", expr.UnaryFunction._supported_cum_aggs)
+def test_cum_agg_reverse_unsupported(cum_agg):
+    df = pl.LazyFrame({"a": [1, 2, 3]})
+    expr = getattr(pl.col("a"), cum_agg)(reverse=True)
+    q = df.select(expr)
+
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize(
