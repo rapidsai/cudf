@@ -46,15 +46,22 @@ struct chunk_fn {
   rmm::cuda_stream_view stream;
 
   std::vector<cudf::io::text::byte_range_info> byte_ranges{};
+  bool first_range{};
 
-  void add_range(cudf::io::text::byte_range_info const& br)
+  void add_range(cudf::io::text::byte_range_info br)
   {
-    // byte_ranges.insert(byte_ranges.end(), br);
     byte_ranges.push_back(br);
+    if (!first_range) { first_range = (br.offset() == 0); }
   }
 
   void operator()()
   {
+    using namespace std::chrono_literals;
+    // std::cout << std::this_thread::get_id() << "=" << first_range << std::endl;
+    if (!first_range) {
+      std::this_thread::sleep_for(350ms);  // add some fixed delay
+    }
+
     // process each byte range assigned to this thread
     for (auto& br : byte_ranges) {
       // load byte-range from the file into 2 strings columns (cities, temps)

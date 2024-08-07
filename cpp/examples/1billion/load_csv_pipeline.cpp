@@ -43,8 +43,9 @@ std::unique_ptr<cudf::table> load_chunk(std::string const& input_file,
                                         std::size_t size,
                                         rmm::cuda_stream_view stream)
 {
+  auto const source = cudf::io::datasource::create(input_file);
   cudf::io::csv_reader_options in_opts =
-    cudf::io::csv_reader_options::builder(cudf::io::source_info{input_file})
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{source.get()})
       .header(-1)
       .delimiter(';')
       .doublequote(false)
@@ -62,14 +63,22 @@ struct chunk_fn {
   rmm::cuda_stream_view stream;
 
   std::vector<byte_range> byte_ranges{};
+  bool first_range{};
 
   void add_range(std::size_t start, std::size_t size)
   {
     byte_ranges.push_back(byte_range{start, size});
+    if (!first_range) { first_range = (start == 0); }
   }
 
   void operator()()
   {
+    using namespace std::chrono_literals;
+    // std::cout << std::this_thread::get_id() << "=" << first_range << std::endl;
+    //  if (!first_range) {
+    //    std::this_thread::sleep_for(400ms);  // add some fixed delay
+    //  }
+
     // process each byte range assigned to this thread
     for (auto& br : byte_ranges) {
       auto const input_table = load_chunk(input_file, br.first, br.second, stream);
