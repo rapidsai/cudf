@@ -88,20 +88,26 @@ arrow::Result<std::shared_ptr<arrow::StringViewArray>> MakeStringViewArray(
 }
 
 /**
- * @brief Convert a vector of strings into a vector of
- * individual chars and a vector of the sizes of the strings
+ * @brief Convert a vector of strings into a vector of the
+ * constituent chars and a vector of offsets of the strings
+ * in the chars vector
  *
  * @param strings The vector of strings
  */
-auto make_chars_and_sizes(std::vector<std::string> strings)
+auto make_chars_and_offsets(std::vector<std::string> strings)
 {
   std::vector<char> chars{};
-  std::vector<cudf::size_type> sizes;
+  std::vector<cudf::size_type> offsets(1, 0);
   for (auto& str : strings) {
     chars.insert(chars.end(), std::cbegin(str), std::cend(str));
-    sizes.push_back(str.length());
+    auto const last_offset = static_cast<std::size_t>(offsets.back());
+    auto const next_offset = last_offset + tmp.length();
+    CUDF_EXPECTS(
+      next_offset < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+      "Cannot use strings_column_wrapper to build a large strings column");
+    offsets.push_back(static_cast<cudf::size_type>(next_offset));
   }
-  return std::make_tuple(std::move(chars), std::move(sizes));
+  return std::make_tuple(std::move(chars), std::move(offsets));
 };
 
 /**
@@ -121,31 +127,21 @@ std::unique_ptr<cudf::column> ArrowStringViewToCudfColumn(
   for (auto i = 0; i < array->length(); i++) {
     strings.push_back(array->GetString(i));
   }
-  auto [chars, sizes] = make_chars_and_sizes(strings);
+  auto [chars, offsets] = make_chars_and_offsets(strings);
 
-  // Copy the chars vector the device
+  // Copy the chars vector to the device
   rmm::device_uvector<char> d_chars(chars.size(), stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(
     d_chars.data(), chars.data(), chars.size() * sizeof(char), cudaMemcpyDefault, stream.value()));
 
-  // Insert a 0 at the beginning of the sizes vector
-  // so that upon performing an inclusive scan to
-  // generate the offsets, the first offset is 0
-  sizes.insert(sizes.begin(), 0);
-
-  // Copy the sizes vector to the device
-  rmm::device_uvector<cudf::size_type> d_sizes(sizes.size(), stream, mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(d_sizes.data(),
-                                sizes.data(),
-                                sizes.size() * sizeof(cudf::size_type),
+  // Copy the offsets vector to the device
+  // and wrap it in a cudf::column
+  rmm::device_uvector<cudf::size_type> d_offsets(offsets.size(), stream, mr);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_offsets.data(),
+                                offsets.data(),
+                                offsets.size() * sizeof(cudf::size_type),
                                 cudaMemcpyDefault,
                                 stream.value()));
-
-  // Perform an inclusive scan on the sizes vector to
-  // generate the offsets and wrap it as a cudf column
-  rmm::device_uvector<cudf::size_type> d_offsets(sizes.size(), stream);
-  thrust::inclusive_scan(
-    rmm::exec_policy(stream), d_sizes.begin(), d_sizes.end(), d_offsets.begin());
   auto offsets_col = std::make_unique<cudf::column>(std::move(d_offsets), rmm::device_buffer{}, 0);
 
   // Create a string column out of the chars and offsets
