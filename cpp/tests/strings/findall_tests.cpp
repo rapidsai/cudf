@@ -80,6 +80,31 @@ TEST_F(StringsFindallTests, DotAll)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
+TEST_F(StringsFindallTests, SpecialNewLines)
+{
+  auto input = cudf::test::strings_column_wrapper({"zzé\xE2\x80\xA8qqq\xC2\x85zzé",
+                                                   "qqq\xC2\x85zzé\xE2\x80\xA8lll",
+                                                   "zzé",
+                                                   "",
+                                                   "zzé\xC2\x85",
+                                                   "zze\xE2\x80\xA9zzé\xC2\x85"});
+  auto view  = cudf::strings_column_view(input);
+
+  auto prog =
+    cudf::strings::regex_program::create("(^zzé$)", cudf::strings::regex_flags::EXT_NEWLINE);
+  auto results = cudf::strings::findall(view, *prog);
+  using LCW    = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected({LCW{}, LCW{}, LCW{"zzé"}, LCW{}, LCW{"zzé"}, LCW{}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  auto both_flags = static_cast<cudf::strings::regex_flags>(
+    cudf::strings::regex_flags::EXT_NEWLINE | cudf::strings::regex_flags::MULTILINE);
+  auto prog_ml = cudf::strings::regex_program::create("^(zzé)$", both_flags);
+  results      = cudf::strings::findall(view, *prog_ml);
+  LCW expected_ml({LCW{"zzé", "zzé"}, LCW{"zzé"}, LCW{"zzé"}, LCW{}, LCW{"zzé"}, LCW{"zzé"}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected_ml);
+}
+
 TEST_F(StringsFindallTests, MediumRegex)
 {
   // This results in 15 regex instructions and falls in the 'medium' range.
