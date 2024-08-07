@@ -80,7 +80,7 @@ std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows,
 }
 
 // longer pattern lengths demand more working memory per string
-std::string patterns[] = {"^\\d+ [a-z]+", "[A-Z ]+\\d+ +\\d+[A-Z]+\\d+$", "5W43$"};
+std::string patterns[] = {"^\\d+ [a-z]+", "[A-Z ]+\\d+ +\\d+[A-Z]+\\d+$", "5W43"};
 
 static void bench_contains(nvbench::state& state)
 {
