@@ -147,7 +147,7 @@ def _nonempty_series(s, idx=None):
         idx = _nonempty_index(s.index)
     data = _get_non_empty_data(s._column)
 
-    return cudf.Series(data, name=s.name, index=idx)
+    return cudf.Series._from_column(data, name=s.name, index=idx)
 
 
 @meta_nonempty.register(cudf.DataFrame)
@@ -417,7 +417,7 @@ def hash_object_cudf_index(ind, index=None):
         return ind.to_frame(index=False).hash_values()
 
     col = cudf.core.column.as_column(ind)
-    return cudf.Series(col).hash_values()
+    return cudf.Series._from_column(col).hash_values()
 
 
 @group_split_dispatch.register((cudf.Series, cudf.DataFrame))
