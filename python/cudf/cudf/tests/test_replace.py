@@ -817,12 +817,12 @@ def test_fillna_string(ps_data, fill_value, inplace):
 def test_series_fillna_invalid_dtype(data_dtype):
     gdf = cudf.Series([1, 2, None, 3], dtype=data_dtype)
     fill_value = 2.5
-    with pytest.raises(TypeError) as raises:
-        gdf.fillna(fill_value)
-    raises.match(
+    msg = (
         f"Cannot safely cast non-equivalent"
         f" {type(fill_value).__name__} to {gdf.dtype.type.__name__}"
     )
+    with pytest.raises(TypeError, match=msg):
+        gdf.fillna(fill_value)
 
 
 @pytest.mark.parametrize("data_dtype", NUMERIC_TYPES)

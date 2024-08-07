@@ -60,7 +60,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf, search_range
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator, Hashable, Iterable
     from datetime import tzinfo
 
 
@@ -1073,6 +1073,16 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @classmethod
     @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None
+    ) -> Self:
+        ca = cudf.core.column_accessor.ColumnAccessor(
+            {name: column}, verify=False
+        )
+        return _index_from_data(ca)
+
+    @classmethod
+    @_performance_tracking
     def _from_data(cls, data: MutableMapping, name: Any = no_default) -> Self:
         out = super()._from_data(data=data)
         if name is not no_default:
@@ -1092,8 +1102,30 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     @classmethod
     @_performance_tracking
     def from_arrow(cls, obj):
+        """Create from PyArrow Array/ChunkedArray.
+
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+            PyArrow Object which has to be converted.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        SingleColumnFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
+        Index(['a', 'b', <NA>], dtype='object')
+        """
         try:
-            return cls(ColumnBase.from_arrow(obj))
+            return cls._from_column(ColumnBase.from_arrow(obj))
         except TypeError:
             # Try interpreting object as a MultiIndex before failing.
             return cudf.MultiIndex.from_arrow(obj)
@@ -1297,22 +1329,22 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             return _return_get_indexer_result(result.values)
 
         scatter_map, indices = libcudf.join.join([lcol], [rcol], how="inner")
-        (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
-        result_series = cudf.Series(result)
+        result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
+        result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
             result_series = _get_indexer_basic(
                 index=self,
                 positions=result_series,
                 method=method,
-                target_col=cudf.Series(needle),
+                target_col=cudf.Series._from_column(needle),
                 tolerance=tolerance,
             )
         elif method == "nearest":
             result_series = _get_nearest_indexer(
                 index=self,
                 positions=result_series,
-                target_col=cudf.Series(needle),
+                target_col=cudf.Series._from_column(needle),
                 tolerance=tolerance,
             )
         elif method is not None:
@@ -2434,12 +2466,10 @@ class DatetimeIndex(Index):
         return result
 
     @_performance_tracking
-    def _get_dt_field(self, field):
+    def _get_dt_field(self, field: str) -> Index:
+        """Return an Index of a numerical component of the DatetimeIndex."""
         out_column = self._values.get_dt_field(field)
-        # column.column_empty_like always returns a Column object
-        # but we need a NumericalColumn for Index..
-        # how should this be handled?
-        out_column = column.build_column(
+        out_column = NumericalColumn(
             data=out_column.base_data,
             dtype=out_column.dtype,
             mask=out_column.base_mask,
