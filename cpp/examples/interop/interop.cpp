@@ -74,8 +74,7 @@ arrow::Result<std::shared_ptr<arrow::StringViewArray>> MakeStringViewArray(
 
 /**
  * @brief Convert a vector of strings into a vector of the
- * constituent chars and a vector of offsets of the strings
- * in the chars vector
+ * constituent chars and a vector of offsets.
  *
  * @param strings The vector of strings
  */
