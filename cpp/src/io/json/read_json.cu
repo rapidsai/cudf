@@ -39,7 +39,7 @@
 
 namespace cudf::io::json::detail {
 
-namespace { 
+namespace {
 
 // Return total size of sources enclosing the passed range
 size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
@@ -54,7 +54,8 @@ size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
   });
 }
 
-// Return estimated size of subchunk using a heuristic involving the byte range size and the minimum subchunk size
+// Return estimated size of subchunk using a heuristic involving the byte range size and the minimum
+// subchunk size
 size_t estimate_size_per_subchunk(size_t chunk_size)
 {
   auto geometric_mean = [](double a, double b) { return std::sqrt(a * b); };
@@ -76,12 +77,11 @@ size_t estimate_size_per_subchunk(size_t chunk_size)
 int64_t get_batch_size_upper_bound()
 {
   auto const batch_size_str = std::getenv("LIBCUDF_JSON_BATCH_SIZE");
-  int64_t const batch_size   = batch_size_str != nullptr ? std::atol(batch_size_str) : 0L;
+  int64_t const batch_size  = batch_size_str != nullptr ? std::atol(batch_size_str) : 0L;
   return (batch_size > 0 && batch_size < std::numeric_limits<int32_t>::max())
            ? batch_size
            : std::numeric_limits<int32_t>::max();
 }
-
 
 /**
  * @brief Extract the first delimiter character position in the string
@@ -98,7 +98,9 @@ size_type find_first_delimiter(device_span<char const> d_data,
 {
   auto const first_delimiter_position =
     thrust::find(rmm::exec_policy(stream), d_data.begin(), d_data.end(), delimiter);
-  return first_delimiter_position != d_data.end() ? thrust::distance(d_data.begin(), first_delimiter_position) : -1;
+  return first_delimiter_position != d_data.end()
+           ? thrust::distance(d_data.begin(), first_delimiter_position)
+           : -1;
 }
 
 /**
@@ -218,7 +220,7 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
 }
 
-} // anonymous namespace
+}  // anonymous namespace
 
 device_span<char> ingest_raw_input(device_span<char> buffer,
                                    host_span<std::unique_ptr<datasource>> sources,
@@ -335,7 +337,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   chunk_size                     = !chunk_size ? total_source_size - chunk_offset
                                                : std::min(chunk_size, total_source_size - chunk_offset);
 
-  size_t const size_per_subchunk      = estimate_size_per_subchunk(chunk_size);
+  size_t const size_per_subchunk       = estimate_size_per_subchunk(chunk_size);
   int64_t const batch_size_upper_bound = get_batch_size_upper_bound();
   size_t const batch_size = batch_size_upper_bound - (max_subchunks_prealloced * size_per_subchunk);
 
