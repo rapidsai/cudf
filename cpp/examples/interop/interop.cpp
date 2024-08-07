@@ -165,7 +165,7 @@ int main(int argc, char** argv)
       .names(names);
 
   cudf::io::write_csv(writer_options);
-  std::string result(h_buffer.data());
+  std::string result(h_buffer.data(), h_buffer.size());
   std::cout << result << std::endl;
 
   return 0;
