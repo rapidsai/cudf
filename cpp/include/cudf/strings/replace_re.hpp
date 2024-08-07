@@ -25,7 +25,7 @@
 
 #include <optional>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 
 struct regex_program;
@@ -112,4 +112,4 @@ std::unique_ptr<column> replace_with_backrefs(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

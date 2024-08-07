@@ -21,10 +21,12 @@
 #include <rmm/device_uvector.hpp>
 
 #include <map>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 
-namespace cudf::experimental::prefetch {
+namespace CUDF_EXPORT cudf {
+namespace experimental::prefetch {
 
 namespace detail {
 
@@ -46,12 +48,16 @@ class prefetch_config {
   /**
    * @brief Get the value of a configuration key.
    *
+   * If the key does not exist, a `false` value will be returned.
+   *
    * @param key The configuration key.
    * @return The value of the configuration key.
    */
   bool get(std::string_view key);
   /**
    * @brief Set the value of a configuration key.
+   *
+   * This is a thread-safe operation.
    *
    * @param key The configuration key.
    * @param value The value to set.
@@ -67,6 +73,7 @@ class prefetch_config {
  private:
   prefetch_config() = default;                //< Private constructor to enforce singleton pattern
   std::map<std::string, bool> config_values;  //< Map of configuration keys to values
+  std::shared_mutex config_mtx;               //< Mutex for thread-safe config access
 };
 
 /**
@@ -152,4 +159,5 @@ void disable_prefetching(std::string_view key);
  */
 void prefetch_debugging(bool enable);
 
-}  // namespace cudf::experimental::prefetch
+}  // namespace experimental::prefetch
+}  // namespace CUDF_EXPORT cudf

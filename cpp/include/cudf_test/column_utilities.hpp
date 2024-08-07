@@ -24,11 +24,13 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
-namespace cudf::test {
+namespace CUDF_EXPORT cudf {
+namespace test {
 
 /**
  * @brief Verbosity level of output from column and table comparison functions.
@@ -194,7 +196,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
  *  `column_view`'s data, and second is the column's bitmask.
  */
 template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c);
+CUDF_EXPORT std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c);
 
 /**
  * @brief Copies the data and bitmask of a `column_view` of strings
@@ -207,7 +209,8 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
  * and second is the column's bitmask.
  */
 template <>
-std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c);
+CUDF_EXPORT std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(
+  column_view c);
 //! @endcond
 
 /**
@@ -233,7 +236,8 @@ struct large_strings_enabler {
   void disable();
 };
 
-}  // namespace cudf::test
+}  // namespace test
+}  // namespace CUDF_EXPORT cudf
 
 // Macros for showing line of failure.
 #define CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(lhs, rhs)        \
