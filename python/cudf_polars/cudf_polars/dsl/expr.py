@@ -918,6 +918,26 @@ class UnaryFunction(Expr):
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
+    _supported_misc_fns = frozenset(
+        {
+            "drop_nulls",
+            "fill_null",
+            "mask_nans",
+            "round",
+            "set_sorted",
+            "unique",
+        }
+    )
+    _supported_cum_aggs = frozenset(
+        {
+            "cum_min",
+            "cum_max",
+            "cum_prod",
+            "cum_sum",
+        }
+    )
+    _supported_fns = frozenset(_supported_misc_fns.union(_supported_cum_aggs))
+
     def __init__(
         self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
     ) -> None:
@@ -925,14 +945,7 @@ class UnaryFunction(Expr):
         self.name = name
         self.options = options
         self.children = children
-        if self.name not in (
-            "mask_nans",
-            "round",
-            "set_sorted",
-            "unique",
-            "drop_nulls",
-            "fill_null",
-        ):
+        if self.name not in UnaryFunction._supported_fns:
             raise NotImplementedError(f"Unary function {name=}")
 
     def do_evaluate(
@@ -1038,7 +1051,66 @@ class UnaryFunction(Expr):
                 )
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
             return Column(plc.replace.replace_nulls(column.obj, arg))
-
+        elif self.name in UnaryFunction._supported_cum_aggs:
+            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            (reverse,) = self.options
+            if reverse:
+                raise NotImplementedError("reverse=True is not supported for cum_sum")
+            # cum_sum casts
+            # INT8, UInt8, Int16, UInt16 -> Int64 for overflow prevention
+            # (cum_prod does the same, but with Int32/UInt32 too)
+            # xref https://github.com/pola-rs/polars/blob/3dda47e578e0b50a5bb7c459ebee6c5c76d41c75/crates/polars-ops/src/series/ops/cum_agg.rs#L141-L142
+            plc_col = column.obj
+            # TODO: can simplify check with is_integral and size_of(type) <= 2
+            # when cudf::size_of is exposed
+            needs_i64_cast = {
+                "cum_sum": {
+                    plc.types.TypeId.INT8,
+                    plc.types.TypeId.UINT8,
+                    plc.types.TypeId.INT16,
+                    plc.types.TypeId.UINT16,
+                },
+                "cum_prod": {
+                    plc.types.TypeId.BOOL8,
+                    plc.types.TypeId.INT8,
+                    plc.types.TypeId.UINT8,
+                    plc.types.TypeId.INT16,
+                    plc.types.TypeId.UINT16,
+                    plc.types.TypeId.UINT32,
+                    plc.types.TypeId.INT32,
+                },
+            }
+            if (
+                self.name in needs_i64_cast
+                and column.obj.type().id() in needs_i64_cast[self.name]
+            ):
+                plc_col = plc.unary.cast(
+                    plc_col, plc.types.DataType(plc.types.TypeId.INT64)
+                )
+            if (
+                self.name == "cum_sum"
+                and column.obj.type().id() == plc.types.TypeId.BOOL8
+            ):
+                # polars cum_sum bools by casting to uint32 first
+                # https://github.com/pola-rs/polars/blob/3dda47e578e0b50a5bb7c459ebee6c5c76d41c75/crates/polars-ops/src/series/ops/cum_agg.rs#L146-L149
+                plc_col = plc.unary.cast(
+                    plc_col, plc.types.DataType(plc.types.TypeId.UINT32)
+                )
+            if self.name == "cum_sum":
+                agg = plc.aggregation.sum()
+            elif self.name == "cum_prod":
+                agg = plc.aggregation.product()
+            elif self.name == "cum_min":
+                agg = plc.aggregation.min()
+            elif self.name == "cum_max":
+                agg = plc.aggregation.max()
+            elif self.name == "cum_count":
+                agg = plc.aggregation.count()
+            else:
+                # TODO: this is unreachable (theoretically)
+                # better way to do this is assert_never?
+                raise NotImplementedError("Unknown aggregation")
+            return Column(plc.reduce.scan(plc_col, agg, plc.reduce.ScanType.INCLUSIVE))
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
         )  # pragma: no cover; init trips first

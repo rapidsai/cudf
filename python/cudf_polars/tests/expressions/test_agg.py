@@ -10,12 +10,14 @@ from cudf_polars.dsl import expr
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-@pytest.fixture(params=sorted(expr.Agg._SUPPORTED))
+@pytest.fixture(
+    params=sorted(expr.Agg._SUPPORTED | expr.UnaryFunction._supported_cum_aggs)
+)
 def agg(request):
     return request.param
 
 
-@pytest.fixture(params=[pl.Int32, pl.Float32, pl.Int16])
+@pytest.fixture(params=[pl.Int32, pl.Float32, pl.Int16, pl.Int8, pl.UInt16])
 def dtype(request):
     return request.param
 
@@ -34,6 +36,11 @@ def df(dtype, with_nulls, is_sorted):
     if is_sorted:
         values = sorted(values, key=lambda x: -1000 if x is None else x)
 
+    if dtype.is_unsigned_integer():
+        values = pl.Series(values).abs()
+        if is_sorted:
+            values = values.sort()
+
     df = pl.LazyFrame({"a": values}, schema={"a": dtype})
     if is_sorted:
         return df.set_sorted("a")
@@ -50,6 +57,22 @@ def test_agg(df, agg):
         with pytest.raises(AssertionError):
             assert_gpu_result_equal(q)
     assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
+
+
+def test_bool_agg(agg, request):
+    if agg == "cum_min" or agg == "cum_max":
+        pytest.skip("Does not apply")
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=agg == "n_unique",
+            reason="Wrong dtype we get Int32, polars gets UInt32",
+        )
+    )
+    df = pl.LazyFrame({"a": [True, False, None, True]})
+    expr = getattr(pl.col("a"), agg)()
+    q = df.select(expr)
+
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
