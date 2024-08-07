@@ -16,8 +16,15 @@
 
 #include "arrow_utilities.hpp"
 
+#include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <nanoarrow/nanoarrow.h>
 
@@ -83,8 +90,32 @@ ArrowType id_to_arrow_type(cudf::type_id id)
     case cudf::type_id::FLOAT32: return NANOARROW_TYPE_FLOAT;
     case cudf::type_id::FLOAT64: return NANOARROW_TYPE_DOUBLE;
     case cudf::type_id::TIMESTAMP_DAYS: return NANOARROW_TYPE_DATE32;
+    case cudf::type_id::DECIMAL128: return NANOARROW_TYPE_DECIMAL128;
     default: CUDF_FAIL("Unsupported type_id conversion to arrow type", cudf::data_type_error);
   }
+}
+
+ArrowType id_to_arrow_storage_type(cudf::type_id id)
+{
+  switch (id) {
+    case cudf::type_id::TIMESTAMP_SECONDS:
+    case cudf::type_id::TIMESTAMP_MILLISECONDS:
+    case cudf::type_id::TIMESTAMP_MICROSECONDS:
+    case cudf::type_id::TIMESTAMP_NANOSECONDS: return NANOARROW_TYPE_INT64;
+    case cudf::type_id::DURATION_SECONDS:
+    case cudf::type_id::DURATION_MILLISECONDS:
+    case cudf::type_id::DURATION_MICROSECONDS:
+    case cudf::type_id::DURATION_NANOSECONDS: return NANOARROW_TYPE_INT64;
+    default: return id_to_arrow_type(id);
+  }
+}
+
+int initialize_array(ArrowArray* arr, ArrowType storage_type, cudf::column_view column)
+{
+  NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(arr, storage_type));
+  arr->length     = column.size();
+  arr->null_count = column.null_count();
+  return NANOARROW_OK;
 }
 
 }  // namespace detail

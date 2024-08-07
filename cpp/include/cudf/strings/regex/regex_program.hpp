@@ -21,7 +21,7 @@
 #include <memory>
 #include <string>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 
 /**
@@ -135,4 +135,4 @@ struct regex_program {
 
 /** @} */  // end of doxygen group
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

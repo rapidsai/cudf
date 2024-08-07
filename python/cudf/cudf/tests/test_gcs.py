@@ -46,7 +46,8 @@ def test_read_csv(pdf, monkeypatch, tmpdir):
     # use_python_file_object=True, because the pyarrow
     # `open_input_file` command will fail (since it doesn't
     # use the monkey-patched `open` definition)
-    got = cudf.read_csv(f"gcs://{fpath}", use_python_file_object=False)
+    with pytest.warns(FutureWarning):
+        got = cudf.read_csv(f"gcs://{fpath}", use_python_file_object=False)
     assert_eq(pdf, got)
 
     # AbstractBufferedFile -> PythonFile conversion

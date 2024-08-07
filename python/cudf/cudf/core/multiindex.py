@@ -150,7 +150,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         dtype=None,
         copy=False,
         name=None,
-        **kwargs,
+        verify_integrity=True,
     ):
         if sortorder is not None:
             raise NotImplementedError("sortorder is not yet supported")
@@ -524,8 +524,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             col.values for col in self._codes
         )
 
-    def get_slice_bound(self, label, side, kind=None):
-        raise NotImplementedError()
+    def get_slice_bound(self, label, side):
+        raise NotImplementedError(
+            "get_slice_bound is not currently implemented."
+        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -700,12 +702,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             data_table = cudf.concat(
                 [
                     frame,
-                    cudf.DataFrame(
-                        {
-                            "idx": cudf.Series(
-                                column.as_column(range(len(frame)))
-                            )
-                        }
+                    cudf.DataFrame._from_data(
+                        {"idx": column.as_column(range(len(frame)))}
                     ),
                 ],
                 axis=1,
@@ -784,7 +782,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             out_index.insert(
                 out_index._num_columns,
                 k,
-                cudf.Series._from_data({None: index._data.columns[k]}),
+                cudf.Series._from_column(index._data.columns[k]),
             )
 
         # determine if we should downcast from a DataFrame to a Series
@@ -850,7 +848,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         valid_indices = self._get_valid_indices_by_tuple(
             df.index, row_tuple, len(df.index)
         )
-        indices = cudf.Series(valid_indices)
+        if isinstance(valid_indices, column.ColumnBase):
+            indices = cudf.Series._from_column(valid_indices)
+        else:
+            indices = cudf.Series(valid_indices)
         result = df.take(indices)
         final = self._index_and_downcast(result, result.index, row_tuple)
         return final
@@ -1108,7 +1109,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @classmethod
     @_performance_tracking
-    def from_tuples(cls, tuples, names=None):
+    def from_tuples(cls, tuples, sortorder: int | None = None, names=None):
         """
         Convert list of tuples to MultiIndex.
 
@@ -1116,6 +1117,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ----------
         tuples : list / sequence of tuple-likes
             Each tuple is the index of one row/column.
+        sortorder : int or None
+            Level of sortedness (must be lexicographically sorted by that
+            level).
         names : list / sequence of str, optional
             Names for the levels in the index.
 
@@ -1142,12 +1146,23 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                    names=['number', 'color'])
         """
         # Use Pandas for handling Python host objects
-        pdi = pd.MultiIndex.from_tuples(tuples, names=names)
+        pdi = pd.MultiIndex.from_tuples(
+            tuples, sortorder=sortorder, names=names
+        )
         return cls.from_pandas(pdi)
 
     @_performance_tracking
     def to_numpy(self):
         return self.values_host
+
+    def to_flat_index(self):
+        """
+        Convert a MultiIndex to an Index of Tuples containing the level values.
+
+        This is not currently implemented
+        """
+        # TODO: Could implement as Index of ListDtype?
+        raise NotImplementedError("to_flat_index is not currently supported.")
 
     @property  # type: ignore
     @_performance_tracking
@@ -1215,7 +1230,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @classmethod
     @_performance_tracking
-    def from_frame(cls, df: pd.DataFrame | cudf.DataFrame, names=None):
+    def from_frame(
+        cls,
+        df: pd.DataFrame | cudf.DataFrame,
+        sortorder: int | None = None,
+        names=None,
+    ):
         """
         Make a MultiIndex from a DataFrame.
 
@@ -1223,6 +1243,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ----------
         df : DataFrame
             DataFrame to be converted to MultiIndex.
+        sortorder : int, optional
+            Level of sortedness (must be lexicographically sorted by that
+            level).
         names : list-like, optional
             If no names are provided, use the column names, or tuple of column
             names if the columns is a MultiIndex. If a sequence, overwrite
@@ -1273,11 +1296,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         else:
             source_data = df
         names = names if names is not None else source_data._column_names
-        return cls.from_arrays(source_data._columns, names=names)
+        return cls.from_arrays(
+            source_data._columns, sortorder=sortorder, names=names
+        )
 
     @classmethod
     @_performance_tracking
-    def from_product(cls, arrays, names=None):
+    def from_product(cls, iterables, sortorder: int | None = None, names=None):
         """
         Make a MultiIndex from the cartesian product of multiple iterables.
 
@@ -1285,6 +1310,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ----------
         iterables : list / sequence of iterables
             Each iterable has unique labels for each level of the index.
+        sortorder : int or None
+            Level of sortedness (must be lexicographically sorted by that
+            level).
         names : list / sequence of str, optional
             Names for the levels in the index.
             If not explicitly provided, names will be inferred from the
@@ -1314,7 +1342,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                    names=['number', 'color'])
         """
         # Use Pandas for handling Python host objects
-        pdi = pd.MultiIndex.from_product(arrays, names=names)
+        pdi = pd.MultiIndex.from_product(
+            iterables, sortorder=sortorder, names=names
+        )
         return cls.from_pandas(pdi)
 
     @classmethod
@@ -1712,8 +1742,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return super().fillna(value=value)
 
     @_performance_tracking
-    def unique(self):
-        return self.drop_duplicates(keep="first")
+    def unique(self, level: int | None = None) -> Self | cudf.Index:
+        if level is None:
+            return self.drop_duplicates(keep="first")
+        else:
+            return self.get_level_values(level).unique()
 
     @_performance_tracking
     def nunique(self, dropna: bool = True) -> int:
@@ -1891,8 +1924,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             *join_keys,
             how="inner",
         )
-        (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
-        result_series = cudf.Series(result)
+        result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
+        result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
             result_series = _get_indexer_basic(

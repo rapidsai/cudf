@@ -24,7 +24,6 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -33,6 +32,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -51,7 +51,7 @@
 #include <memory>
 #include <numeric>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace test {
 namespace detail {
 /**
@@ -1337,7 +1337,7 @@ class lists_column_wrapper : public detail::column_wrapper {
   lists_column_wrapper(std::initializer_list<SourceElementT> elements) : column_wrapper{}
   {
     build_from_non_nested(
-      std::move(cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements).release()));
+      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements).release());
   }
 
   /**
@@ -1361,7 +1361,7 @@ class lists_column_wrapper : public detail::column_wrapper {
   lists_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
     build_from_non_nested(
-      std::move(cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end).release()));
+      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end).release());
   }
 
   /**
@@ -1386,7 +1386,7 @@ class lists_column_wrapper : public detail::column_wrapper {
     : column_wrapper{}
   {
     build_from_non_nested(
-      std::move(cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements, v).release()));
+      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements, v).release());
   }
 
   /**
@@ -1413,8 +1413,8 @@ class lists_column_wrapper : public detail::column_wrapper {
   lists_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    build_from_non_nested(std::move(
-      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end, v).release()));
+    build_from_non_nested(
+      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end, v).release());
   }
 
   /**
@@ -1435,7 +1435,7 @@ class lists_column_wrapper : public detail::column_wrapper {
   lists_column_wrapper(std::initializer_list<std::string> elements) : column_wrapper{}
   {
     build_from_non_nested(
-      std::move(cudf::test::strings_column_wrapper(elements.begin(), elements.end()).release()));
+      cudf::test::strings_column_wrapper(elements.begin(), elements.end()).release());
   }
 
   /**
@@ -1460,7 +1460,7 @@ class lists_column_wrapper : public detail::column_wrapper {
     : column_wrapper{}
   {
     build_from_non_nested(
-      std::move(cudf::test::strings_column_wrapper(elements.begin(), elements.end(), v).release()));
+      cudf::test::strings_column_wrapper(elements.begin(), elements.end(), v).release());
   }
 
   /**
@@ -1755,7 +1755,7 @@ class lists_column_wrapper : public detail::column_wrapper {
       normalize_column(lists_column_view(col).child(),
                        lists_column_view(expected_hierarchy).child()),
       col.null_count(),
-      cudf::detail::copy_bitmask(
+      cudf::copy_bitmask(
         col, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
       cudf::test::get_default_stream());
   }
@@ -1970,4 +1970,4 @@ class structs_column_wrapper : public detail::column_wrapper {
 };
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

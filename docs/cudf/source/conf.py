@@ -556,9 +556,22 @@ nitpick_ignore = [
     ("py:class", "Dtype"),
     # The following are erroneously warned due to
     # https://github.com/sphinx-doc/sphinx/issues/11225
+    ("py:obj", "cudf.DatetimeIndex.time"),
+    ("py:obj", "cudf.DatetimeIndex.date"),
+    ("py:obj", "cudf.Index.values_host"),
+    ("py:obj", "cudf.Index.transpose"),
+    ("py:obj", "cudf.Index.T"),
+    ("py:obj", "cudf.Index.to_flat_index"),
+    ("py:obj", "cudf.MultiIndex.to_flat_index"),
+    ("py:meth", "pyarrow.Table.to_pandas"),
     ("py:class", "pa.Array"),
     ("py:class", "ScalarLike"),
     ("py:class", "ParentType"),
+    ("py:class", "pyarrow.lib.DataType"),
+    ("py:class", "pyarrow.lib.Table"),
+    ("py:class", "pyarrow.lib.Scalar"),
+    ("py:class", "pyarrow.lib.ChunkedArray"),
+    ("py:class", "pyarrow.lib.Array"),
     ("py:class", "ColumnLike"),
     # TODO: Remove this when we figure out why typing_extensions doesn't seem
     # to map types correctly for intersphinx

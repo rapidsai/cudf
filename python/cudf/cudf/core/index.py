@@ -52,17 +52,16 @@ from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    _NUMPY_SCTYPES,
     _maybe_convert_to_default_type,
     find_common_type,
     is_mixed_with_object_dtype,
-    numeric_normalize_types,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf, search_range
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator, Hashable, Iterable
+    from datetime import tzinfo
 
 
 def ensure_index(index_like: Any) -> BaseIndex:
@@ -80,6 +79,11 @@ class IndexMeta(type):
     """Custom metaclass for Index that overrides instance/subclass tests."""
 
     def __call__(cls, data, *args, **kwargs):
+        if kwargs.get("tupleize_cols", True) is not True:
+            raise NotImplementedError(
+                "tupleize_cols is currently not supported."
+            )
+
         if cls is Index:
             return as_index(
                 arbitrary=data,
@@ -351,18 +355,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def _data(self):
         return cudf.core.column_accessor.ColumnAccessor(
-            {self.name: self._values}
+            {self.name: self._values}, verify=False
         )
 
     @_performance_tracking
     def __contains__(self, item):
         hash(item)
-        if isinstance(item, bool) or not isinstance(
-            item,
-            tuple(
-                _NUMPY_SCTYPES["int"] + _NUMPY_SCTYPES["float"] + [int, float]
-            ),
-        ):
+        if not isinstance(item, (np.floating, np.integer, int, float)):
+            return False
+        elif isinstance(item, (np.timedelta64, np.datetime64, bool)):
+            # Cases that would pass the above check
             return False
         try:
             int_item = int(item)
@@ -539,8 +541,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
             )
         return 0
 
-    def unique(self) -> Self:
+    def unique(self, level: int | None = None) -> Self:
         # RangeIndex always has unique values
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
         return self.copy()
 
     @_performance_tracking
@@ -963,7 +969,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
             i = []
         return as_column(i, dtype=size_type_dtype)
 
-    def isin(self, values):
+    def isin(self, values, level=None):
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
@@ -1001,21 +1011,23 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
 class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     """
-    An array of orderable values that represent the indices of another Column
+    Immutable sequence used for indexing and alignment.
 
-    Attributes
-    ----------
-    _values: A Column object
-    name: A string
+    The basic object storing axis labels for all pandas objects.
 
     Parameters
     ----------
-    data : Column
-        The Column of data for this index
-    name : str optional
-        The name of the Index. If not provided, the Index adopts the value
-        Column's name. Otherwise if this name is different from the value
-        Column's, the data Column will be cloned to adopt this name.
+    data : array-like (1-dimensional)
+    dtype : str, numpy.dtype, or ExtensionDtype, optional
+        Data type for the output Index. If not specified, this will be
+        inferred from `data`.
+    copy : bool, default False
+        Copy input data.
+    name : object
+        Name to be stored in the index.
+    tupleize_cols : bool (default: True)
+        When True, attempt to create a MultiIndex if possible.
+        Currently not supported.
     """
 
     @_performance_tracking
@@ -1061,6 +1073,16 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @classmethod
     @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None
+    ) -> Self:
+        ca = cudf.core.column_accessor.ColumnAccessor(
+            {name: column}, verify=False
+        )
+        return _index_from_data(ca)
+
+    @classmethod
+    @_performance_tracking
     def _from_data(cls, data: MutableMapping, name: Any = no_default) -> Self:
         out = super()._from_data(data=data)
         if name is not no_default:
@@ -1080,8 +1102,30 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     @classmethod
     @_performance_tracking
     def from_arrow(cls, obj):
+        """Create from PyArrow Array/ChunkedArray.
+
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+            PyArrow Object which has to be converted.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        SingleColumnFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
+        Index(['a', 'b', <NA>], dtype='object')
+        """
         try:
-            return cls(ColumnBase.from_arrow(obj))
+            return cls._from_column(ColumnBase.from_arrow(obj))
         except TypeError:
             # Try interpreting object as a MultiIndex before failing.
             return cudf.MultiIndex.from_arrow(obj)
@@ -1285,22 +1329,22 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             return _return_get_indexer_result(result.values)
 
         scatter_map, indices = libcudf.join.join([lcol], [rcol], how="inner")
-        (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
-        result_series = cudf.Series(result)
+        result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
+        result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
             result_series = _get_indexer_basic(
                 index=self,
                 positions=result_series,
                 method=method,
-                target_col=cudf.Series(needle),
+                target_col=cudf.Series._from_column(needle),
                 tolerance=tolerance,
             )
         elif method == "nearest":
             result_series = _get_nearest_indexer(
                 index=self,
                 positions=result_series,
-                target_col=cudf.Series(needle),
+                target_col=cudf.Series._from_column(needle),
                 tolerance=tolerance,
             )
         elif method is not None:
@@ -1460,18 +1504,19 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     notnull = notna
 
     def _is_numeric(self):
-        return isinstance(
-            self._values, cudf.core.column.NumericalColumn
-        ) and self.dtype != cudf.dtype("bool")
+        return (
+            isinstance(self._values, cudf.core.column.NumericalColumn)
+            and self.dtype.kind != "b"
+        )
 
     def _is_boolean(self):
-        return self.dtype == cudf.dtype("bool")
+        return self.dtype.kind == "b"
 
     def _is_integer(self):
-        return cudf.api.types.is_integer_dtype(self.dtype)
+        return self.dtype.kind in "iu"
 
     def _is_floating(self):
-        return cudf.api.types.is_float_dtype(self.dtype)
+        return self.dtype.kind == "f"
 
     def _is_object(self):
         return isinstance(self._values, cudf.core.column.StringColumn)
@@ -1495,7 +1540,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         order=None,
         ascending=True,
         na_position="last",
-    ):
+    ) -> cupy.ndarray:
         """Return the integer indices that would sort the index.
 
         Parameters
@@ -1601,19 +1646,31 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                         f"either one of them to same dtypes."
                     )
 
-                if isinstance(self._values, cudf.core.column.NumericalColumn):
-                    if self.dtype != other.dtype:
-                        this, other = numeric_normalize_types(self, other)
+                if (
+                    isinstance(self._column, cudf.core.column.NumericalColumn)
+                    and self.dtype != other.dtype
+                ):
+                    common_type = find_common_type((self.dtype, other.dtype))
+                    this = this.astype(common_type)
+                    other = other.astype(common_type)
                 to_concat = [this, other]
 
         return self._concat(to_concat)
 
-    def unique(self):
+    def unique(self, level: int | None = None) -> Self:
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
         return cudf.core.index._index_from_data(
             {self.name: self._values.unique()}, name=self.name
         )
 
-    def isin(self, values):
+    def isin(self, values, level=None):
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
@@ -1656,7 +1713,7 @@ class DatetimeIndex(Index):
     copy : bool
         Make a copy of input.
     freq : str, optional
-        This is not yet supported
+        Frequency of the DatetimeIndex
     tz : pytz.timezone or dateutil.tz.tzfile
         This is not yet supported
     ambiguous : 'infer', bool-ndarray, 'NaT', default 'raise'
@@ -1734,8 +1791,18 @@ class DatetimeIndex(Index):
         if tz is not None:
             raise NotImplementedError("tz is not yet supported")
         if normalize is not False:
+            warnings.warn(
+                "The 'normalize' keyword is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
             raise NotImplementedError("normalize == True is not yet supported")
         if closed is not None:
+            warnings.warn(
+                "The 'closed' keyword is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
             raise NotImplementedError("closed is not yet supported")
         if ambiguous != "raise":
             raise NotImplementedError("ambiguous is not yet supported")
@@ -1812,6 +1879,210 @@ class DatetimeIndex(Index):
         return super().searchsorted(
             value, side=side, ascending=ascending, na_position=na_position
         )
+
+    def as_unit(self, unit: str, round_ok: bool = True) -> Self:
+        """
+        Convert to a dtype with the given unit resolution.
+
+        Currently not implemented.
+
+        Parameters
+        ----------
+        unit : {'s', 'ms', 'us', 'ns'}
+        round_ok : bool, default True
+            If False and the conversion requires rounding, raise ValueError.
+        """
+        raise NotImplementedError("as_unit is currently not implemented")
+
+    def mean(self, *, skipna: bool = True, axis: int | None = 0):
+        return self._column.mean(skipna=skipna)
+
+    def std(self, *, skipna: bool = True, axis: int | None = 0, ddof: int = 1):
+        return self._column.std(skipna=skipna, ddof=ddof)
+
+    def strftime(self, date_format: str) -> Index:
+        """
+        Convert to Index using specified date_format.
+
+        Return an Index of formatted strings specified by date_format, which
+        supports the same string format as the python standard library.
+
+        Parameters
+        ----------
+        date_format : str
+            Date format string (e.g. "%Y-%m-%d").
+        """
+        return Index._from_data(
+            {self.name: self._column.strftime(date_format)}
+        )
+
+    @property
+    def asi8(self) -> cupy.ndarray:
+        return self._column.astype("int64").values
+
+    @property
+    def inferred_freq(self) -> cudf.DateOffset | None:
+        raise NotImplementedError("inferred_freq is currently not implemented")
+
+    @property
+    def freq(self) -> cudf.DateOffset | None:
+        return self._freq
+
+    @freq.setter
+    def freq(self) -> None:
+        raise NotImplementedError("Setting freq is currently not supported.")
+
+    @property
+    def freqstr(self) -> str:
+        raise NotImplementedError("freqstr is currently not implemented")
+
+    @property
+    def resolution(self) -> str:
+        """
+        Returns day, hour, minute, second, millisecond or microsecond
+        """
+        raise NotImplementedError("resolution is currently not implemented")
+
+    @property
+    def unit(self) -> str:
+        return self._column.time_unit
+
+    @property
+    def tz(self) -> tzinfo | None:
+        """
+        Return the timezone.
+
+        Returns
+        -------
+        datetime.tzinfo or None
+            Returns None when the array is tz-naive.
+        """
+        return getattr(self.dtype, "tz", None)
+
+    @property
+    def tzinfo(self) -> tzinfo | None:
+        """
+        Alias for tz attribute
+        """
+        return self.tz
+
+    def to_pydatetime(self) -> np.ndarray:
+        """
+        Return an ndarray of ``datetime.datetime`` objects.
+
+        Returns
+        -------
+        numpy.ndarray
+            An ndarray of ``datetime.datetime`` objects.
+        """
+        return self.to_pandas().to_pydatetime()
+
+    def to_julian_date(self) -> Index:
+        return Index._from_data({self.name: self._column.to_julian_date()})
+
+    def to_period(self, freq) -> pd.PeriodIndex:
+        return self.to_pandas().to_period(freq=freq)
+
+    def normalize(self) -> Self:
+        """
+        Convert times to midnight.
+
+        Currently not implemented.
+        """
+        return type(self)._from_data({self.name: self._column.normalize()})
+
+    @property
+    def time(self) -> np.ndarray:
+        """
+        Returns numpy array of ``datetime.time`` objects.
+
+        The time part of the Timestamps.
+        """
+        return self.to_pandas().time
+
+    @property
+    def timetz(self) -> np.ndarray:
+        """
+        Returns numpy array of ``datetime.time`` objects with timezones.
+
+        The time part of the Timestamps.
+        """
+        return self.to_pandas().timetz
+
+    @property
+    def date(self) -> np.ndarray:
+        """
+        Returns numpy array of python ``datetime.date`` objects.
+
+        Namely, the date part of Timestamps without time and
+        timezone information.
+        """
+        return self.to_pandas().date
+
+    @property
+    def is_month_start(self) -> cupy.ndarray:
+        """
+        Booleans indicating if dates are the first day of the month.
+        """
+        return self._column.is_month_start.values
+
+    @property
+    def is_month_end(self) -> cupy.ndarray:
+        """
+        Booleans indicating if dates are the last day of the month.
+        """
+        return self._column.is_month_end.values
+
+    @property
+    def is_quarter_end(self) -> cupy.ndarray:
+        """
+        Booleans indicating if dates are the last day of the quarter.
+        """
+        return self._column.is_quarter_end.values
+
+    @property
+    def is_quarter_start(self) -> cupy.ndarray:
+        """
+        Booleans indicating if dates are the start day of the quarter.
+        """
+        return self._column.is_quarter_start.values
+
+    @property
+    def is_year_end(self) -> cupy.ndarray:
+        """
+        Booleans indicating if dates are the last day of the year.
+        """
+        return self._column.is_year_end.values
+
+    @property
+    def is_year_start(self) -> cupy.ndarray:
+        """
+        Booleans indicating if dates are the first day of the year.
+        """
+        return self._column.is_year_start.values
+
+    @property
+    def is_normalized(self) -> bool:
+        """
+        Returns True if all of the dates are at midnight ("no time")
+        """
+        return self._column.is_normalized
+
+    @property
+    def days_in_month(self) -> Index:
+        """
+        Get the total number of days in the month that the date falls on.
+        """
+        return Index._from_data({self.name: self._column.days_in_month})
+
+    daysinmonth = days_in_month
+
+    @property
+    def day_of_week(self) -> Index:
+        """
+        Get the day of week that the date falls on.
+        """
+        return Index._from_data({self.name: self._column.day_of_week})
 
     @property  # type: ignore
     @_performance_tracking
@@ -2195,12 +2466,10 @@ class DatetimeIndex(Index):
         return result
 
     @_performance_tracking
-    def _get_dt_field(self, field):
+    def _get_dt_field(self, field: str) -> Index:
+        """Return an Index of a numerical component of the DatetimeIndex."""
         out_column = self._values.get_dt_field(field)
-        # column.column_empty_like always returns a Column object
-        # but we need a NumericalColumn for Index..
-        # how should this be handled?
-        out_column = column.build_column(
+        out_column = NumericalColumn(
             data=out_column.base_data,
             dtype=out_column.dtype,
             mask=out_column.base_mask,
@@ -2479,6 +2748,14 @@ class TimedeltaIndex(Index):
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
 
+        if closed is not None:
+            warnings.warn(
+                "The 'closed' keyword is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
+            raise NotImplementedError("closed is not yet supported")
+
         if unit is not None:
             warnings.warn(
                 "The 'unit' keyword is "
@@ -2511,6 +2788,98 @@ class TimedeltaIndex(Index):
         ):
             return pd.Timedelta(value)
         return value
+
+    def as_unit(self, unit: str, round_ok: bool = True) -> Self:
+        """
+        Convert to a dtype with the given unit resolution.
+
+        Currently not implemented.
+
+        Parameters
+        ----------
+        unit : {'s', 'ms', 'us', 'ns'}
+        round_ok : bool, default True
+            If False and the conversion requires rounding, raise ValueError.
+        """
+        raise NotImplementedError("as_unit is currently not implemented")
+
+    @property
+    def freq(self) -> cudf.DateOffset | None:
+        raise NotImplementedError("freq is currently not implemented")
+
+    @property
+    def freqstr(self) -> str:
+        raise NotImplementedError("freqstr is currently not implemented")
+
+    @property
+    def resolution(self) -> str:
+        """
+        Returns day, hour, minute, second, millisecond or microsecond
+        """
+        raise NotImplementedError("resolution is currently not implemented")
+
+    @property
+    def unit(self) -> str:
+        return self._column.time_unit
+
+    def to_pytimedelta(self) -> np.ndarray:
+        """
+        Return an ndarray of ``datetime.timedelta`` objects.
+
+        Returns
+        -------
+        numpy.ndarray
+            An ndarray of ``datetime.timedelta`` objects.
+        """
+        return self.to_pandas().to_pytimedelta()
+
+    @property
+    def asi8(self) -> cupy.ndarray:
+        return self._column.astype("int64").values
+
+    def sum(self, *, skipna: bool = True, axis: int | None = 0):
+        return self._column.sum(skipna=skipna)
+
+    def mean(self, *, skipna: bool = True, axis: int | None = 0):
+        return self._column.mean(skipna=skipna)
+
+    def median(self, *, skipna: bool = True, axis: int | None = 0):
+        return self._column.median(skipna=skipna)
+
+    def std(self, *, skipna: bool = True, axis: int | None = 0, ddof: int = 1):
+        return self._column.std(skipna=skipna, ddof=ddof)
+
+    def total_seconds(self) -> cupy.ndarray:
+        """
+        Return total duration of each element expressed in seconds.
+
+        This method is currently not implemented.
+        """
+        return self._column.total_seconds().values
+
+    def ceil(self, freq: str) -> Self:
+        """
+        Ceil to the specified resolution.
+
+        This method is currently not implemented.
+        """
+        return type(self)._from_data({self.name: self._column.ceil(freq)})
+
+    def floor(self, freq: str) -> Self:
+        """
+        Floor to the specified resolution.
+
+        This method is currently not implemented.
+        """
+        return type(self)._from_data({self.name: self._column.floor(freq)})
+
+    def round(self, freq: str) -> Self:
+        """
+        Round to the specified resolution.
+
+        This method is currently not implemented.
+        """
+        return type(self)._from_data({self.name: self._column.round(freq)})
 
     @property  # type: ignore
     @_performance_tracking
@@ -2679,6 +3048,10 @@ class CategoricalIndex(Index):
             data = data.as_ordered(ordered=False)
         super().__init__(data, name=name)
 
+    @property
+    def ordered(self) -> bool:
+        return self._column.ordered
+
     @property  # type: ignore
     @_performance_tracking
     def codes(self):
@@ -2700,6 +3073,118 @@ class CategoricalIndex(Index):
 
     def _is_categorical(self):
         return True
+
+    def add_categories(self, new_categories) -> Self:
+        """
+        Add new categories.
+
+        `new_categories` will be included at the last/highest place in the
+        categories and will be unused directly after this call.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.add_categories(new_categories)}
+        )
+
+    def as_ordered(self) -> Self:
+        """
+        Set the Categorical to be ordered.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.as_ordered(ordered=True)}
+        )
+
+    def as_unordered(self) -> Self:
+        """
+        Set the Categorical to be unordered.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.as_ordered(ordered=False)}
+        )
+
+    def remove_categories(self, removals) -> Self:
+        """
+        Remove the specified categories.
+
+        `removals` must be included in the old categories.
+
+        Parameters
+        ----------
+        removals : category or list of categories
+           The categories which should be removed.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.remove_categories(removals)}
+        )
+
+    def remove_unused_categories(self) -> Self:
+        """
+        Remove categories which are not used.
+
+        This method is currently not supported.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.remove_unused_categories()}
+        )
+
+    def rename_categories(self, new_categories) -> Self:
+        """
+        Rename categories.
+
+        This method is currently not supported.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.rename_categories(new_categories)}
+        )
+
+    def reorder_categories(self, new_categories, ordered=None) -> Self:
+        """
+        Reorder categories as specified in new_categories.
+
+        ``new_categories`` need to include all old categories and no new category
+        items.
+
+        Parameters
+        ----------
+        new_categories : Index-like
+           The categories in new order.
+        ordered : bool, optional
+           Whether or not the categorical is treated as a ordered categorical.
+           If not given, do not change the ordered information.
+        """
+        return type(self)._from_data(
+            {
+                self.name: self._column.reorder_categories(
+                    new_categories, ordered=ordered
+                )
+            }
+        )
+
+    def set_categories(
+        self, new_categories, ordered=None, rename: bool = False
+    ) -> Self:
+        """
+        Set the categories to the specified new_categories.
+
+        Parameters
+        ----------
+        new_categories : list-like
+            The categories in new order.
+        ordered : bool, default None
+            Whether or not the categorical is treated as
+            a ordered categorical. If not given, do
+            not change the ordered information.
+        rename : bool, default False
+            Whether or not the `new_categories` should be
+            considered as a rename of the old categories
+            or as reordered categories.
+        """
+        return type(self)._from_data(
+            {
+                self.name: self._column.set_categories(
+                    new_categories, ordered=ordered, rename=rename
+                )
+            }
+        )
 
 
 @_performance_tracking
@@ -2862,6 +3347,7 @@ class IntervalIndex(Index):
         dtype=None,
         copy: bool = False,
         name=None,
+        verify_integrity: bool = True,
     ):
         name = _getdefault_name(data, name=name)
 
@@ -2973,6 +3459,31 @@ class IntervalIndex(Index):
         )
         return IntervalIndex(interval_col, name=name, closed=closed)
 
+    @classmethod
+    def from_arrays(
+        cls,
+        left,
+        right,
+        closed: Literal["left", "right", "both", "neither"] = "right",
+        copy: bool = False,
+        dtype=None,
+    ) -> Self:
+        raise NotImplementedError("from_arrays is currently not supported.")
+
+    @classmethod
+    def from_tuples(
+        cls,
+        data,
+        closed: Literal["left", "right", "both", "neither"] = "right",
+        name=None,
+        copy: bool = False,
+        dtype=None,
+    ) -> IntervalIndex:
+        piidx = pd.IntervalIndex.from_tuples(
+            data, closed=closed, name=name, copy=copy, dtype=dtype
+        )
+        return cls.from_pandas(piidx)
+
     def __getitem__(self, index):
         raise NotImplementedError(
             "Getting a scalar from an IntervalIndex is not yet supported"
@@ -2986,6 +3497,104 @@ class IntervalIndex(Index):
 
     def _clean_nulls_from_index(self):
         return self
+
+    @property
+    def is_empty(self) -> cupy.ndarray:
+        """
+        Indicates if an interval is empty, meaning it contains no points.
+        """
+        return self._column.is_empty.values
+
+    @property
+    def is_non_overlapping_monotonic(self) -> bool:
+        """
+        Return a True if the IntervalIndex is non-overlapping and monotonic.
+        """
+        return self._column.is_non_overlapping_monotonic
+
+    @property
+    def is_overlapping(self) -> bool:
+        """
+        Return True if the IntervalIndex has overlapping intervals, else False.
+
+        Currently not implemented
+        """
+        return self._column.is_overlapping
+
+    @property
+    def length(self) -> Index:
+        """
+        Return an Index with entries denoting the length of each Interval.
+        """
+        return _index_from_data({None: self._column.length})
+
+    @property
+    def left(self) -> Index:
+        """
+        Return left bounds of the intervals in the IntervalIndex.
+
+        The left bounds of each interval in the IntervalIndex are
+        returned as an Index. The datatype of the left bounds is the
+        same as the datatype of the endpoints of the intervals.
+        """
+        return _index_from_data({None: self._column.left})
+
+    @property
+    def mid(self) -> Index:
+        """
+        Return the midpoint of each interval in the IntervalIndex as an Index.
+
+        Each midpoint is calculated as the average of the left and right bounds
+        of each interval.
+        """
+        return _index_from_data({None: self._column.mid})
+
+    @property
+    def right(self) -> Index:
+        """
+        Return right bounds of the intervals in the IntervalIndex.
+
+        The right bounds of each interval in the IntervalIndex are
+        returned as an Index. The datatype of the right bounds is the
+        same as the datatype of the endpoints of the intervals.
+        """
+        return _index_from_data({None: self._column.right})
+
+    def overlaps(self, other) -> cupy.ndarray:
+        """
+        Check elementwise if an Interval overlaps the values in the IntervalIndex.
+
+        Currently not supported.
+        """
+        return self._column.overlaps(other).values
+
+    def set_closed(
+        self, closed: Literal["left", "right", "both", "neither"]
+    ) -> Self:
+        """
+        Return an identical IntervalArray closed on the specified side.
+
+        Parameters
+        ----------
+        closed : {'left', 'right', 'both', 'neither'}
+            Whether the intervals are closed on the left-side, right-side, both
+            or neither.
+        """
+        return type(self)._from_data(
+            {self.name: self._column.set_closed(closed)}
+        )
+
+    def to_tuples(self, na_tuple: bool = True) -> pd.Index:
+        """
+        Return an Index of tuples of the form (left, right).
+
+        Parameters
+        ----------
+        na_tuple : bool, default True
+            If ``True``, return ``NA`` as a tuple ``(nan, nan)``. If ``False``,
+            just return ``NA`` as ``nan``.
+        """
+        return self.to_pandas().to_tuples(na_tuple=na_tuple)
 
 
 @_performance_tracking
@@ -3232,9 +3841,11 @@ def _get_nearest_indexer(
     return indexer
 
 
-def _validate_freq(freq: Any) -> cudf.DateOffset:
+def _validate_freq(freq: Any) -> cudf.DateOffset | None:
     if isinstance(freq, str):
         return cudf.DateOffset._from_freqstr(freq)
+    elif freq is None:
+        return freq
     elif freq is not None and not isinstance(freq, cudf.DateOffset):
         raise ValueError(f"Invalid frequency: {freq}")
     return cast(cudf.DateOffset, freq)

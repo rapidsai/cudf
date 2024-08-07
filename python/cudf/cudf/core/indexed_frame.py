@@ -35,6 +35,7 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
+from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column
@@ -67,7 +68,6 @@ if TYPE_CHECKING:
         Dtype,
         NotImplementedType,
     )
-    from cudf.core._base_index import BaseIndex
 
 
 doc_reset_index_template = """
@@ -84,6 +84,9 @@ doc_reset_index_template = """
 {argument}
         inplace : bool, default False
             Modify the DataFrame in place (do not create a new object).
+        allow_duplicates : bool, default False
+            Allow duplicate column labels to be created.
+            Currently not supported.
 
         Returns
         -------
@@ -301,6 +304,10 @@ class IndexedFrame(Frame):
         index: BaseIndex | None = None,
     ):
         out = super()._from_data(data)
+        if not (index is None or isinstance(index, BaseIndex)):
+            raise ValueError(
+                f"index must be None or a cudf.Index not {type(index).__name__}"
+            )
         out._index = RangeIndex(out._data.nrows) if index is None else index
         return out
 
@@ -902,7 +909,7 @@ class IndexedFrame(Frame):
         return self._mimic_inplace(result, inplace=inplace)
 
     @_performance_tracking
-    def clip(self, lower=None, upper=None, inplace=False, axis=1):
+    def clip(self, lower=None, upper=None, axis=1, inplace=False):
         """
         Trim values at input threshold(s).
 
@@ -1492,9 +1499,7 @@ class IndexedFrame(Frame):
             **kwargs,
         )
 
-    def median(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
-    ):
+    def median(self, axis=None, skipna=True, numeric_only=None, **kwargs):
         """
         Return the median of the values for the requested axis.
 
@@ -1779,7 +1784,14 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def mask(self, cond, other=None, inplace: bool = False) -> Self | None:
+    def mask(
+        self,
+        cond,
+        other=None,
+        inplace: bool = False,
+        axis=None,
+        level=None,
+    ) -> Self | None:
         """
         Replace values where the condition is True.
 
@@ -1831,6 +1843,10 @@ class IndexedFrame(Frame):
         4       0
         dtype: int64
         """
+        if axis is not None:
+            raise NotImplementedError("axis is not supported.")
+        elif level is not None:
+            raise NotImplementedError("level is not supported.")
 
         if not hasattr(cond, "__invert__"):
             # We Invert `cond` below and call `where`, so
@@ -1843,7 +1859,16 @@ class IndexedFrame(Frame):
     @_performance_tracking
     @copy_docstring(Rolling)
     def rolling(
-        self, window, min_periods=None, center=False, axis=0, win_type=None
+        self,
+        window,
+        min_periods=None,
+        center: bool = False,
+        win_type: str | None = None,
+        on=None,
+        axis=0,
+        closed: str | None = None,
+        step: int | None = None,
+        method: str = "single",
     ):
         return Rolling(
             self,
@@ -1851,7 +1876,11 @@ class IndexedFrame(Frame):
             min_periods=min_periods,
             center=center,
             axis=axis,
+            on=on,
             win_type=win_type,
+            closed=closed,
+            step=step,
+            method=method,
         )
 
     @copy_docstring(ExponentialMovingWindow)
@@ -1866,6 +1895,7 @@ class IndexedFrame(Frame):
         ignore_na: bool = False,
         axis: int = 0,
         times: str | np.ndarray | None = None,
+        method: Literal["single", "table"] = "single",
     ):
         return ExponentialMovingWindow(
             self,
@@ -1878,6 +1908,7 @@ class IndexedFrame(Frame):
             ignore_na=ignore_na,
             axis=axis,
             times=times,
+            method=method,
         )
 
     @_performance_tracking
@@ -2042,13 +2073,26 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+    def shift(
+        self,
+        periods=1,
+        freq=None,
+        axis=0,
+        fill_value=None,
+        suffix: str | None = None,
+    ):
         """Shift values by `periods` positions."""
         axis = self._get_axis_from_axis_arg(axis)
         if axis != 0:
-            raise ValueError("Only axis=0 is supported.")
+            raise NotImplementedError("Only axis=0 is supported.")
         if freq is not None:
-            raise ValueError("The freq argument is not yet supported.")
+            raise NotImplementedError(
+                "The freq argument is not yet supported."
+            )
+        if suffix is not None:
+            raise NotImplementedError(
+                "The suffix argument is not yet supported."
+            )
 
         data_columns = (
             col.shift(periods, fill_value) for col in self._columns
@@ -2894,8 +2938,8 @@ class IndexedFrame(Frame):
         # Note that both Series and DataFrame return Series objects from this
         # calculation, necessitating the unfortunate circular reference to the
         # child class here.
-        return cudf.Series._from_data(
-            {None: libcudf.hash.hash([*self._columns], method, seed)},
+        return cudf.Series._from_column(
+            libcudf.hash.hash([*self._columns], method, seed),
             index=self.index,
         )
 
@@ -3179,13 +3223,13 @@ class IndexedFrame(Frame):
         distinct = libcudf.stream_compaction.distinct_indices(
             columns, keep=keep
         )
-        (result,) = libcudf.copying.scatter(
+        result = libcudf.copying.scatter(
             [cudf.Scalar(False, dtype=bool)],
             distinct,
             [as_column(True, length=len(self), dtype=bool)],
             bounds_check=False,
-        )
-        return cudf.Series(result, index=self.index)
+        )[0]
+        return cudf.Series._from_column(result, index=self.index)
 
     @_performance_tracking
     def _empty_like(self, keep_index=True) -> Self:
@@ -3225,7 +3269,9 @@ class IndexedFrame(Frame):
         ]
 
     @_performance_tracking
-    def bfill(self, value=None, axis=None, inplace=None, limit=None):
+    def bfill(
+        self, value=None, axis=None, inplace=None, limit=None, limit_area=None
+    ):
         """
         Synonym for :meth:`Series.fillna` with ``method='bfill'``.
 
@@ -3233,6 +3279,9 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
+        if limit_area is not None:
+            raise NotImplementedError("limit_area is currently not supported.")
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
             return self.fillna(
@@ -3264,7 +3313,14 @@ class IndexedFrame(Frame):
         return self.bfill(value=value, axis=axis, inplace=inplace, limit=limit)
 
     @_performance_tracking
-    def ffill(self, value=None, axis=None, inplace=None, limit=None):
+    def ffill(
+        self,
+        value=None,
+        axis=None,
+        inplace=None,
+        limit=None,
+        limit_area: Literal["inside", "outside", None] = None,
+    ):
         """
         Synonym for :meth:`Series.fillna` with ``method='ffill'``.
 
@@ -3272,6 +3328,9 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
+        if limit_area is not None:
+            raise NotImplementedError("limit_area is currently not supported.")
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
             return self.fillna(
@@ -3302,7 +3361,7 @@ class IndexedFrame(Frame):
         )
         return self.ffill(value=value, axis=axis, inplace=inplace, limit=limit)
 
-    def add_prefix(self, prefix):
+    def add_prefix(self, prefix, axis=None):
         """
         Prefix labels with string `prefix`.
 
@@ -3363,7 +3422,7 @@ class IndexedFrame(Frame):
                 Use `Series.add_prefix` or `DataFrame.add_prefix`"
         )
 
-    def add_suffix(self, suffix):
+    def add_suffix(self, suffix, axis=None):
         """
         Suffix labels with string `suffix`.
 
@@ -3451,7 +3510,7 @@ class IndexedFrame(Frame):
         col = _post_process_output_col(ans_col, retty)
 
         col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
-        result = cudf.Series._from_data({None: col}, self.index)
+        result = cudf.Series._from_column(col, index=self.index)
 
         return result
 
@@ -3464,6 +3523,7 @@ class IndexedFrame(Frame):
         kind="quicksort",
         na_position="last",
         ignore_index=False,
+        key=None,
     ):
         """Sort by the values along either axis.
 
@@ -3479,6 +3539,14 @@ class IndexedFrame(Frame):
             'first' puts nulls at the beginning, 'last' puts nulls at the end
         ignore_index : bool, default False
             If True, index will not be sorted.
+        key : callable, optional
+            Apply the key function to the values
+            before sorting. This is similar to the ``key`` argument in the
+            builtin ``sorted`` function, with the notable difference that
+            this ``key`` function should be *vectorized*. It should expect a
+            ``Series`` and return a Series with the same shape as the input.
+            It will be applied to each column in `by` independently.
+            Currently not supported.
 
         Returns
         -------
@@ -3518,6 +3586,8 @@ class IndexedFrame(Frame):
             )
         if axis != 0:
             raise NotImplementedError("`axis` not currently implemented.")
+        if key is not None:
+            raise NotImplementedError("key is not currently supported.")
 
         if len(self) == 0:
             return self
@@ -3642,6 +3712,10 @@ class IndexedFrame(Frame):
         index=None,
         inplace=False,
         fill_value=NA,
+        level=None,
+        method=None,
+        limit=None,
+        tolerance=None,
     ):
         """
         Helper for `.reindex`
@@ -3666,6 +3740,15 @@ class IndexedFrame(Frame):
         -------
         Series or DataFrame
         """
+        if method is not None:
+            raise NotImplementedError("method is not currently supported.")
+        if level is not None:
+            raise NotImplementedError("level is not currently supported.")
+        if limit is not None:
+            raise NotImplementedError("limit is not currently supported.")
+        if tolerance is not None:
+            raise NotImplementedError("tolerance is not currently supported.")
+
         if dtypes is None:
             dtypes = {}
 
@@ -3877,16 +3960,15 @@ class IndexedFrame(Frame):
         self,
         rule,
         axis=0,
-        closed=None,
-        label=None,
-        convention="start",
+        closed: Literal["right", "left"] | None = None,
+        label: Literal["right", "left"] | None = None,
+        convention: Literal["start", "end", "s", "e"] = "start",
         kind=None,
-        loffset=None,
-        base=None,
         on=None,
         level=None,
         origin="start_day",
         offset=None,
+        group_keys: bool = False,
     ):
         """
         Convert the frequency of ("resample") the given time series data.
@@ -4024,26 +4106,27 @@ class IndexedFrame(Frame):
                 "deprecated and will be removed in a future version. ",
                 FutureWarning,
             )
-        if (axis, convention, kind, loffset, base, origin, offset) != (
-            0,
-            "start",
-            None,
-            None,
-            None,
-            "start_day",
-            None,
-        ):
-            raise NotImplementedError(
-                "The following arguments are not "
-                "currently supported by resample:\n\n"
-                "- axis\n"
-                "- convention\n"
-                "- kind\n"
-                "- loffset\n"
-                "- base\n"
-                "- origin\n"
-                "- offset"
+            raise NotImplementedError("kind is currently not supported.")
+        if axis != 0:
+            warnings.warn(
+                "The 'axis' keyword in is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
             )
+            raise NotImplementedError("axis is currently not supported.")
+        if convention != "start":
+            warnings.warn(
+                "The 'convention' keyword in is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
+            raise NotImplementedError("convention is currently not supported.")
+        if origin != "start_day":
+            raise NotImplementedError("origin is currently not supported.")
+        if offset is not None:
+            raise NotImplementedError("offset is currently not supported.")
+        if group_keys is not False:
+            raise NotImplementedError("group_keys is currently not supported.")
         by = cudf.Grouper(
             key=on, freq=rule, closed=closed, label=label, level=level
         )
@@ -4054,7 +4137,13 @@ class IndexedFrame(Frame):
         )
 
     def dropna(
-        self, axis=0, how="any", thresh=None, subset=None, inplace=False
+        self,
+        axis=0,
+        how="any",
+        thresh=None,
+        subset=None,
+        inplace=False,
+        ignore_index: bool = False,
     ):
         """
         Drop rows (or columns) containing nulls from a Column.
@@ -4078,6 +4167,8 @@ class IndexedFrame(Frame):
             columns, subset is a list of rows to consider.
         inplace : bool, default False
             If True, do operation inplace and return None.
+        ignore_index : bool, default ``False``
+            If ``True``, the resulting axis will be labeled 0, 1, …, n - 1.
 
         Returns
         -------
@@ -4154,6 +4245,8 @@ class IndexedFrame(Frame):
         """
         if axis == 0:
             result = self._drop_na_rows(how=how, subset=subset, thresh=thresh)
+            if ignore_index:
+                result.index = RangeIndex(len(result))
         else:
             result = self._drop_na_columns(
                 how=how, subset=subset, thresh=thresh
@@ -4292,8 +4385,22 @@ class IndexedFrame(Frame):
 
         return self._gather(GatherMap(indices, len(self), nullify=False))
 
-    def _reset_index(self, level, drop, col_level=0, col_fill=""):
+    def _reset_index(
+        self,
+        level,
+        drop,
+        col_level=0,
+        col_fill="",
+        allow_duplicates: bool = False,
+        names: abc.Hashable | abc.Sequence[abc.Hashable] | None = None,
+    ):
         """Shared path for DataFrame.reset_index and Series.reset_index."""
+        if allow_duplicates is not False:
+            raise NotImplementedError(
+                "allow_duplicates is not currently supported."
+            )
+        elif names is not None:
+            raise NotImplementedError("names is not currently supported.")
         if level is not None:
             if (
                 isinstance(level, int)
@@ -5249,7 +5356,6 @@ class IndexedFrame(Frame):
         as_index=True,
         sort=no_default,
         group_keys=False,
-        squeeze=False,
         observed=True,
         dropna=True,
     ):
@@ -5258,11 +5364,6 @@ class IndexedFrame(Frame):
 
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
-
-        if squeeze is not False:
-            raise NotImplementedError(
-                "squeeze parameter is not yet implemented"
-            )
 
         if not observed:
             raise NotImplementedError(
@@ -6224,6 +6325,7 @@ class IndexedFrame(Frame):
                     multiindex=self._data.multiindex,
                     level_names=self._data.level_names,
                     label_dtype=self._data.label_dtype,
+                    verify=False,
                 ),
             )
         else:

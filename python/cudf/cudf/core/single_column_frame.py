@@ -12,15 +12,17 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_integer,
-    is_integer_dtype,
     is_numeric_dtype,
 )
 from cudf.core.column import ColumnBase, as_column
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import NotIterable
 
 if TYPE_CHECKING:
+    from collections.abc import Hashable
+
     import cupy
     import numpy
     import pyarrow as pa
@@ -91,12 +93,6 @@ class SingleColumnFrame(Frame, NotIterable):
         """Get a tuple representing the dimensionality of the Index."""
         return (len(self),)
 
-    def __bool__(self):
-        raise TypeError(
-            f"The truth value of a {type(self)} is ambiguous. Use "
-            "a.empty, a.bool(), a.item(), a.any() or a.all()."
-        )
-
     @property  # type: ignore
     @_performance_tracking
     def _num_columns(self) -> int:
@@ -119,35 +115,17 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @classmethod
     @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None
+    ) -> Self:
+        """Constructor for a single Column."""
+        ca = ColumnAccessor({name: column}, verify=False)
+        return cls._from_data(ca)
+
+    @classmethod
+    @_performance_tracking
     def from_arrow(cls, array) -> Self:
-        """Create from PyArrow Array/ChunkedArray.
-
-        Parameters
-        ----------
-        array : PyArrow Array/ChunkedArray
-            PyArrow Object which has to be converted.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Returns
-        -------
-        SingleColumnFrame
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
-        Index(['a', 'b', None], dtype='object')
-        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
-        0       a
-        1       b
-        2    <NA>
-        dtype: object
-        """
-        return cls(ColumnBase.from_arrow(array))
+        raise NotImplementedError
 
     @_performance_tracking
     def to_arrow(self) -> pa.Array:
@@ -358,7 +336,7 @@ class SingleColumnFrame(Frame, NotIterable):
             arg = as_column(arg)
             if len(arg) == 0:
                 arg = cudf.core.column.column_empty(0, dtype="int32")
-            if is_integer_dtype(arg.dtype):
+            if arg.dtype.kind in "iu":
                 return self._column.take(arg)
             if arg.dtype.kind == "b":
                 if (bn := len(arg)) != (n := len(self)):
@@ -396,3 +374,10 @@ class SingleColumnFrame(Frame, NotIterable):
         result = cudf._lib.copying.copy_if_else(input_col, other, cond)
 
         return _make_categorical_like(result, self_column)
+
+    @_performance_tracking
+    def transpose(self):
+        """Return the transpose, which is by definition self."""
+        return self
+
+    T = property(transpose, doc=transpose.__doc__)
