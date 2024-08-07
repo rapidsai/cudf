@@ -128,17 +128,24 @@ std::unique_ptr<cudf::column> ArrowStringViewToCudfColumn(
   CUDF_CUDA_TRY(cudaMemcpyAsync(
     d_chars.data(), chars.data(), chars.size() * sizeof(char), cudaMemcpyDefault, stream.value()));
 
+  // Insert a 0 at the beginning of the sizes vector
+  // so that upon performing an inclusive scan to
+  // generate the offsets, the first offset is 0
+  sizes.insert(sizes.begin(), 0);
+
   // Copy the sizes vector to the device
-  thrust::device_vector<cudf::size_type> d_sizes(sizes);
-  rmm::device_uvector<cudf::size_type> string_sizes(array->length() + 1, stream);
-  string_sizes.set_element(0, 0, stream);
-  thrust::copy(d_sizes.begin(), d_sizes.end(), string_sizes.begin() + 1);
+  rmm::device_uvector<cudf::size_type> d_sizes(sizes.size(), stream, mr);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_sizes.data(),
+                                sizes.data(),
+                                sizes.size() * sizeof(cudf::size_type),
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   // Perform an inclusive scan on the sizes vector to
   // generate the offsets and wrap it as a cudf column
-  rmm::device_uvector<cudf::size_type> d_offsets(array->length() + 1, stream);
+  rmm::device_uvector<cudf::size_type> d_offsets(sizes.size(), stream);
   thrust::inclusive_scan(
-    rmm::exec_policy(stream), string_sizes.begin(), string_sizes.end(), d_offsets.begin());
+    rmm::exec_policy(stream), d_sizes.begin(), d_sizes.end(), d_offsets.begin());
   auto offsets_col = std::make_unique<cudf::column>(std::move(d_offsets), rmm::device_buffer{}, 0);
 
   // Create a string column out of the chars and offsets
