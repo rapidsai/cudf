@@ -67,9 +67,9 @@ NVBENCH_BENCH_TYPES(nvbench_stable_distinct, NVBENCH_TYPE_AXES(data_type))
   .set_type_axes_names({"Type"})
   .add_string_axis("keep", {"any", "first", "last", "none"})
   .add_int64_axis("cardinality",
-                  {100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000})
+                  {100, 100'000, 10'000'000, 1'000'000'000})
   .add_int64_axis("NumRows",
-                  {100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000});
+                  {100, 100'000, 10'000'000, 1'000'000'000});
 
 template <typename Type>
 void nvbench_stable_distinct_list(nvbench::state& state, nvbench::type_list<Type>)
