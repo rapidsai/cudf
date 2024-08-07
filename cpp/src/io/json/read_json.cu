@@ -81,9 +81,6 @@ int64_t get_batch_size_upper_bound()
   int64_t const batch_size  = batch_size_str != nullptr ? std::atol(batch_size_str) : 0L;
   auto const batch_limit    = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
   return (batch_size > 0 && batch_size < batch_limit) ? batch_size : batch_limit;
-  return (batch_size > 0 && batch_size < std::numeric_limits<int32_t>::max())
-           ? batch_size
-           : std::numeric_limits<int32_t>::max();
 }
 
 /**
