@@ -2677,7 +2677,7 @@ def test_string_int_to_ipv4():
         ["0.0.0.0", None, "0.0.0.0", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
     )
 
-    got = cudf.Series(gsr._column.int2ip())
+    got = cudf.Series._from_column(gsr._column.int2ip())
 
     assert_eq(expected, got)
 

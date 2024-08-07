@@ -2041,7 +2041,7 @@ def test_series_ordered_dedup():
     sr = cudf.Series(np.random.randint(0, 100, 1000))
     # pandas unique() preserves order
     expect = pd.Series(sr.to_pandas().unique())
-    got = cudf.Series(sr._column.unique())
+    got = cudf.Series._from_column(sr._column.unique())
     assert_eq(expect.values, got.values)
 
 
@@ -2697,7 +2697,9 @@ def test_series_duplicate_index_reindex():
 def test_list_category_like_maintains_dtype():
     dtype = cudf.CategoricalDtype(categories=[1, 2, 3, 4], ordered=True)
     data = [1, 2, 3]
-    result = cudf.Series(cudf.core.column.as_column(data, dtype=dtype))
+    result = cudf.Series._from_column(
+        cudf.core.column.as_column(data, dtype=dtype)
+    )
     expected = pd.Series(data, dtype=dtype.to_pandas())
     assert_eq(result, expected)
 
@@ -2705,7 +2707,9 @@ def test_list_category_like_maintains_dtype():
 def test_list_interval_like_maintains_dtype():
     dtype = cudf.IntervalDtype(subtype=np.int8)
     data = [pd.Interval(1, 2)]
-    result = cudf.Series(cudf.core.column.as_column(data, dtype=dtype))
+    result = cudf.Series._from_column(
+        cudf.core.column.as_column(data, dtype=dtype)
+    )
     expected = pd.Series(data, dtype=dtype.to_pandas())
     assert_eq(result, expected)
 
