@@ -1,5 +1,9 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+
 import numpy as np
 import pandas as pd
 
@@ -17,8 +21,8 @@ class Timestamp(Scalar):
         super().__init__(ts)
 
     @property
-    def value(self) -> int:
-        return pd.Timestamp(super().value).value
+    def value(self) -> np.datetime64:
+        return super().value
 
     @property
     def year(self) -> int:
@@ -65,3 +69,30 @@ class Timestamp(Scalar):
     @classmethod
     def from_pandas(cls, obj: pd.Timestamp):
         return cls(obj)
+
+    @classmethod
+    def from_scalar(cls, obj: Scalar):
+        return cls(obj.value)
+
+    def _to_scalar(self):
+        return Scalar(self.value)
+
+    def __add__(self, other: timedelta | np.timedelta64):
+        return self.from_scalar(self._to_scalar() + other)
+
+    def __radd__(self, other: timedelta):
+        return self + other
+
+    def __sub__(
+        self, other: datetime | timedelta | np.timedelta64
+    ) -> pd.Timedelta:
+        if isinstance(other, datetime):
+            return pd.Timedelta(self.value - other)
+        elif isinstance(other, self.__class__):
+            return pd.Timedelta(self.value - other.value)
+        elif isinstance(other, (timedelta, np.timedelta64)):
+            return self.from_scalar(self._to_scalar() - other)
+        else:
+            raise TypeError(
+                f"Subtraction not supported between types {type(self)} and {type(other)}"
+            )
