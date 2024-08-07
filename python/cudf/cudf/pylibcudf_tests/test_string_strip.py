@@ -29,6 +29,18 @@ def plc_char(pa_char):
 
 # TODO: add more tests
 def test_strip(pa_col, plc_col, pa_char, plc_char):
-    expected = pa.compute.utf8_trim(pa_col, pa_char.as_py().encode())
+    def strip_string(st, char):
+        if st is None:
+            return None
+
+        elif char == "":
+            return st.strip()
+        return st.strip(char)
+
+    expected = pa.array(
+        [strip_string(x, pa_char.as_py()) for x in pa_col.to_pylist()],
+        type=pa.string(),
+    )
+
     got = plc.strings.strip.strip(plc_col, plc.strings.SideType.BOTH, plc_char)
     assert_column_eq(expected, got)
