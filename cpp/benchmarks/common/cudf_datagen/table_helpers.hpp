@@ -14,7 +14,51 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "rand_utilities.cuh"
+
+/**
+ * @brief Perform a left join operation between two tables
+ *
+ * @param left_input The left table
+ * @param right_input The right table
+ * @param left_on The indices of the columns to join on in the left table
+ * @param right_on The indices of the columns to join on in the right table
+ * @param compare_nulls The null equality comparison
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ */
+std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_input,
+                                               cudf::table_view const& right_input,
+                                               std::vector<cudf::size_type> const& left_on,
+                                               std::vector<cudf::size_type> const& right_on,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  constexpr auto oob_policy = cudf::out_of_bounds_policy::NULLIFY;
+  auto const left_selected  = left_input.select(left_on);
+  auto const right_selected = right_input.select(right_on);
+  auto const [left_join_indices, right_join_indices] =
+    cudf::left_join(left_selected, right_selected, cudf::null_equality::EQUAL, mr);
+
+  auto const left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
+  auto const right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
+
+  auto const left_indices_col  = cudf::column_view{left_indices_span};
+  auto const right_indices_col = cudf::column_view{right_indices_span};
+
+  auto const left_result  = cudf::gather(left_input, left_indices_col, oob_policy, stream, mr);
+  auto const right_result = cudf::gather(right_input, right_indices_col, oob_policy, stream, mr);
+
+  auto joined_cols = left_result->release();
+  auto right_cols  = right_result->release();
+  joined_cols.insert(joined_cols.end(),
+                     std::make_move_iterator(right_cols.begin()),
+                     std::make_move_iterator(right_cols.end()));
+  return std::make_unique<cudf::table>(std::move(joined_cols));
+}
 
 /**
  * @brief Generate the `p_retailprice` column of the `part` table

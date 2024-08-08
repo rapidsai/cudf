@@ -21,6 +21,8 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 
+namespace cudf {
+
 /**
  * @brief Generate a table out of the independent columns of the `orders` table
  *
@@ -172,14 +174,13 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
   auto const o_orderkey     = orders_independent.column(1);
   auto const o_orderdate_ts = orders_independent.column(3);
 
-  auto const left_table  = cudf::table_view({l_pkey->view()});
-  auto const right_table = cudf::table_view({o_pkey, o_orderkey, o_orderdate_ts});
-  auto const l_base_unsorted =
-    perform_left_join(left_table, right_table, {0}, {0}, cudf::null_equality::EQUAL, stream, mr);
-  auto const l_base = cudf::sort_by_key(l_base_unsorted->view(),
+  auto const left_table      = cudf::table_view({l_pkey->view()});
+  auto const right_table     = cudf::table_view({o_pkey, o_orderkey, o_orderdate_ts});
+  auto const l_base_unsorted = perform_left_join(left_table, right_table, {0}, {0}, stream, mr);
+  auto const l_base          = cudf::sort_by_key(l_base_unsorted->view(),
                                         cudf::table_view({l_base_unsorted->get_column(2).view()}),
-                                        {},
-                                        {},
+                                                 {},
+                                                 {},
                                         stream,
                                         mr);
 
@@ -575,9 +576,8 @@ auto generate_orders_lineitem_part(
   auto l_extendedprice = [&]() {
     auto const left = cudf::table_view(
       {lineitem_partial->get_column(2).view(), lineitem_partial->get_column(5).view()});
-    auto const right = cudf::table_view({part->get_column(0).view(), part->get_column(7).view()});
-    auto joined_table =
-      perform_left_join(left, right, {0}, {0}, cudf::null_equality::EQUAL, stream, mr);
+    auto const right  = cudf::table_view({part->get_column(0).view(), part->get_column(7).view()});
+    auto joined_table = perform_left_join(left, right, {0}, {0}, stream, mr);
     auto const l_quantity = joined_table->get_column(1);
     auto const l_quantity_fp =
       cudf::cast(l_quantity.view(), cudf::data_type{cudf::type_id::FLOAT64});
@@ -824,48 +824,50 @@ std::unique_ptr<cudf::table> generate_region(
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-int main(int argc, char** argv)
-{
-  if (argc < 3) {
-    std::cerr << "Usage: " << argv[0] << " [scale_factor]"
-              << " [memory_resource_type]" << std::endl;
-    return 1;
-  }
+}  // namespace cudf
 
-  cudf::size_type scale_factor = std::atoi(argv[1]);
-  std::cout << "Generating scale factor: " << scale_factor << std::endl;
+// int main(int argc, char** argv)
+// {
+//   if (argc < 3) {
+//     std::cerr << "Usage: " << argv[0] << " [scale_factor]"
+//               << " [memory_resource_type]" << std::endl;
+//     return 1;
+//   }
 
-  std::string memory_resource_type = argv[2];
-  auto resource                    = create_memory_resource(memory_resource_type);
-  rmm::mr::set_current_device_resource(resource.get());
+//   cudf::size_type scale_factor = std::atoi(argv[1]);
+//   std::cout << "Generating scale factor: " << scale_factor << std::endl;
 
-  auto const [free, total] = rmm::available_device_memory();
-  std::cout << "Total GPU memory: " << total << std::endl;
-  std::cout << "Available GPU memory: " << free << std::endl;
+//   std::string memory_resource_type = argv[2];
+//   auto resource                    = create_memory_resource(memory_resource_type);
+//   rmm::mr::set_current_device_resource(resource.get());
 
-  auto const mem_stats_logger = memory_stats_logger();
+//   auto const [free, total] = rmm::available_device_memory();
+//   std::cout << "Total GPU memory: " << total << std::endl;
+//   std::cout << "Available GPU memory: " << free << std::endl;
 
-  auto [orders, lineitem, part] = generate_orders_lineitem_part(scale_factor);
-  write_parquet(std::move(orders), "orders.parquet", schema_orders);
-  write_parquet(std::move(lineitem), "lineitem.parquet", schema_lineitem);
-  write_parquet(std::move(part), "part.parquet", schema_part);
+//   auto const mem_stats_logger = memory_stats_logger();
 
-  auto partsupp = generate_partsupp(scale_factor);
-  write_parquet(std::move(partsupp), "partsupp.parquet", schema_partsupp);
+//   auto [orders, lineitem, part] = generate_orders_lineitem_part(scale_factor);
+//   write_parquet(std::move(orders), "orders.parquet", schema_orders);
+//   write_parquet(std::move(lineitem), "lineitem.parquet", schema_lineitem);
+//   write_parquet(std::move(part), "part.parquet", schema_part);
 
-  auto supplier = generate_supplier(scale_factor);
-  write_parquet(std::move(supplier), "supplier.parquet", schema_supplier);
+//   auto partsupp = generate_partsupp(scale_factor);
+//   write_parquet(std::move(partsupp), "partsupp.parquet", schema_partsupp);
 
-  auto customer = generate_customer(scale_factor);
-  write_parquet(std::move(customer), "customer.parquet", schema_customer);
+//   auto supplier = generate_supplier(scale_factor);
+//   write_parquet(std::move(supplier), "supplier.parquet", schema_supplier);
 
-  auto nation = generate_nation();
-  write_parquet(std::move(nation), "nation.parquet", schema_nation);
+//   auto customer = generate_customer(scale_factor);
+//   write_parquet(std::move(customer), "customer.parquet", schema_customer);
 
-  auto region = generate_region();
-  write_parquet(std::move(region), "region.parquet", schema_region);
+//   auto nation = generate_nation();
+//   write_parquet(std::move(nation), "nation.parquet", schema_nation);
 
-  std::cout << "Peak GPU Memory Usage: " << mem_stats_logger.peak_memory_usage() << std::endl;
+//   auto region = generate_region();
+//   write_parquet(std::move(region), "region.parquet", schema_region);
 
-  return 0;
-}
+//   std::cout << "Peak GPU Memory Usage: " << mem_stats_logger.peak_memory_usage() << std::endl;
+
+//   return 0;
+// }

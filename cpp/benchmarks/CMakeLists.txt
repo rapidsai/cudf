@@ -17,7 +17,7 @@ find_package(Threads REQUIRED)
 add_library(cudf_datagen STATIC common/generate_input.cu)
 target_compile_features(cudf_datagen PUBLIC cxx_std_17 cuda_std_17)
 
-add_executable(cudf_tpch_datagen common/cudf_datagen/dbgen.cu)
+add_library(cudf_tpch_datagen STATIC common/cudf_datagen/dbgen.cu)
 target_compile_features(cudf_tpch_datagen PUBLIC cxx_std_17 cuda_std_17)
 
 target_compile_options(
@@ -134,6 +134,8 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
     EXCLUDE_FROM_ALL
   )
 endfunction()
+
+ConfigureBench(DATAGEN common/cudf_datagen/example.cu)
 
 # ##################################################################################################
 # * column benchmarks -----------------------------------------------------------------------------

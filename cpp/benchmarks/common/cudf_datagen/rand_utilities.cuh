@@ -69,55 +69,10 @@
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
 
-#include <ctime>
 #include <memory>
 #include <string>
-#include <typeinfo>
 #include <utility>
 #include <vector>
-
-/**
- * @brief Perform a left join operation on two tables
- *
- * @param left_input The left table
- * @param right_input The right table
- * @param left_on The indices of the columns to join on in the left table
- * @param right_on The indices of the columns to join on in the right table
- * @param compare_nulls The null equality comparison
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned table's device memory
- */
-std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_input,
-                                               cudf::table_view const& right_input,
-                                               std::vector<cudf::size_type> const& left_on,
-                                               std::vector<cudf::size_type> const& right_on,
-                                               cudf::null_equality compare_nulls,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  constexpr auto oob_policy = cudf::out_of_bounds_policy::NULLIFY;
-  auto const left_selected  = left_input.select(left_on);
-  auto const right_selected = right_input.select(right_on);
-  auto const [left_join_indices, right_join_indices] =
-    cudf::left_join(left_selected, right_selected, compare_nulls, mr);
-
-  auto const left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
-  auto const right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
-
-  auto const left_indices_col  = cudf::column_view{left_indices_span};
-  auto const right_indices_col = cudf::column_view{right_indices_span};
-
-  auto const left_result  = cudf::gather(left_input, left_indices_col, oob_policy, stream, mr);
-  auto const right_result = cudf::gather(right_input, right_indices_col, oob_policy, stream, mr);
-
-  auto joined_cols = left_result->release();
-  auto right_cols  = right_result->release();
-  joined_cols.insert(joined_cols.end(),
-                     std::make_move_iterator(right_cols.begin()),
-                     std::make_move_iterator(right_cols.end()));
-  return std::make_unique<cudf::table>(std::move(joined_cols));
-}
 
 // Convert a C++ type to a cudf::data_type
 template <typename T>
@@ -131,39 +86,6 @@ cudf::data_type get_cudf_type()
   if (std::is_same<T, float>::value) return cudf::data_type{cudf::type_id::FLOAT32};
   if (std::is_same<T, double>::value) return cudf::data_type{cudf::type_id::FLOAT64};
   CUDF_FAIL("Unsupported type for cudf::data_type");
-}
-
-/**
- * @brief Generate the `std::tm` structure from year, month, and day
- *
- * @param year The year
- * @param month The month
- * @param day The day
- */
-std::tm make_tm(int year, int month, int day)
-{
-  std::tm tm{};
-  tm.tm_year = year - 1900;
-  tm.tm_mon  = month - 1;
-  tm.tm_mday = day;
-  return tm;
-}
-
-/**
- * @brief Calculate the number of days since the UNIX epoch
- *
- * @param year The year
- * @param month The month
- * @param day The day
- */
-int32_t days_since_epoch(int year, int month, int day)
-{
-  std::tm tm             = make_tm(year, month, day);
-  std::tm epoch          = make_tm(1970, 1, 1);
-  std::time_t time       = std::mktime(&tm);
-  std::time_t epoch_time = std::mktime(&epoch);
-  double diff            = std::difftime(time, epoch_time) / (60 * 60 * 24);
-  return static_cast<int32_t>(diff);
 }
 
 // Functor for generating random strings
@@ -312,7 +234,7 @@ std::unique_ptr<cudf::column> gen_rep_str_col(std::string const& value,
 {
   CUDF_FUNC_RANGE();
   auto const scalar = cudf::string_scalar(value);
-  return make_column_from_scalar(scalar, num_rows, stream, mr);
+  return cudf::make_column_from_scalar(scalar, num_rows, stream, mr);
 }
 
 /**

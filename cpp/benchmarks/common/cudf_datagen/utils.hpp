@@ -15,7 +15,6 @@
  */
 
 #pragma once
-
 #include <cudf/io/parquet.hpp>
 
 #include <rmm/mr/device/cuda_memory_resource.hpp>
@@ -24,6 +23,8 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/device/statistics_resource_adaptor.hpp>
+
+#include <ctime>
 
 // RMM memory resource creation utilities
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
@@ -103,4 +104,37 @@ void write_parquet(std::unique_ptr<cudf::table> table,
   builder.metadata(table_input_metadata);
   auto const options = builder.build();
   cudf::io::parquet_chunked_writer(options).write(table->view());
+}
+
+/**
+ * @brief Generate the `std::tm` structure from year, month, and day
+ *
+ * @param year The year
+ * @param month The month
+ * @param day The day
+ */
+std::tm make_tm(int year, int month, int day)
+{
+  std::tm tm{};
+  tm.tm_year = year - 1900;
+  tm.tm_mon  = month - 1;
+  tm.tm_mday = day;
+  return tm;
+}
+
+/**
+ * @brief Calculate the number of days since the UNIX epoch
+ *
+ * @param year The year
+ * @param month The month
+ * @param day The day
+ */
+int32_t days_since_epoch(int year, int month, int day)
+{
+  std::tm tm             = make_tm(year, month, day);
+  std::tm epoch          = make_tm(1970, 1, 1);
+  std::time_t time       = std::mktime(&tm);
+  std::time_t epoch_time = std::mktime(&epoch);
+  double diff            = std::difftime(time, epoch_time) / (60 * 60 * 24);
+  return static_cast<int32_t>(diff);
 }
