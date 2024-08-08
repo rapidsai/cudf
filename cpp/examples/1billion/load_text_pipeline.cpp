@@ -119,6 +119,8 @@ int main(int argc, char const** argv)
   std::filesystem::path p = input_file;
   auto const file_size    = std::filesystem::file_size(p);
 
+  auto start = std::chrono::steady_clock::now();
+
   auto byte_ranges  = cudf::io::text::create_byte_range_infos_consecutive(file_size, divider);
   auto const source = cudf::io::text::make_source_from_file(input_file);
 
@@ -154,7 +156,10 @@ int main(int argc, char const** argv)
 
   // now aggregate the threads' aggregate results
   auto results = compute_final_aggregates(agg_data, stream);
-  std::cout << "number of keys = " << results->num_rows() << std::endl;
+  std::cout << "number of keys: " << results->num_rows() << std::endl;
+
+  auto elapsed = std::chrono::steady_clock::now() - start;
+  std::cout << "process time: " << (elapsed.count() / 1e9) << " seconds\n";
 
   return 0;
 }

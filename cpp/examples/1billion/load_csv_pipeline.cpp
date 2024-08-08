@@ -126,6 +126,8 @@ int main(int argc, char const** argv)
   std::filesystem::path p = input_file;
   auto const file_size    = std::filesystem::file_size(p);
 
+  auto start = std::chrono::steady_clock::now();
+
   std::size_t chunk_size = file_size / divider + ((file_size % divider) != 0);
   std::size_t start_pos  = 0;
 
@@ -162,6 +164,10 @@ int main(int argc, char const** argv)
 
   // now aggregate the aggregate results
   auto results = compute_final_aggregates(agg_data);
-  std::cout << "number of keys = " << results->num_rows() << std::endl;
+  std::cout << "number of keys: " << results->num_rows() << std::endl;
+
+  auto elapsed = std::chrono::steady_clock::now() - start;
+  std::cout << "process time: " << (elapsed.count() / 1e9) << " seconds\n";
+
   return 0;
 }
