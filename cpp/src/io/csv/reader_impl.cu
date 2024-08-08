@@ -614,7 +614,7 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
     d_valid_counts,
     stream);
 
-  auto const h_valid_counts = cudf::detail::make_std_vector_sync(d_valid_counts, stream);
+  auto const h_valid_counts = cudf::detail::make_host_vector_sync(d_valid_counts, stream);
   for (int i = 0; i < num_active_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
   }

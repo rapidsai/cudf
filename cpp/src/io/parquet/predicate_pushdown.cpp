@@ -468,7 +468,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   auto validity_it = cudf::detail::make_counting_transform_iterator(
     0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
 
-  auto is_row_group_required = cudf::detail::make_std_vector_sync(
+  auto const is_row_group_required = cudf::detail::make_host_vector_sync(
     device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()), stream);
 
   // Return only filtered row groups based on predicate

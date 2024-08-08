@@ -609,7 +609,7 @@ void gather_bitmask(table_view const& source,
        stream);
 
   // Copy the valid counts into each column
-  auto const valid_counts = make_std_vector_sync(d_valid_counts, stream);
+  auto const valid_counts = make_host_vector_sync(d_valid_counts, stream);
   for (size_t i = 0; i < target.size(); ++i) {
     if (target[i]->nullable()) {
       auto const null_count = target_rows - valid_counts[i];

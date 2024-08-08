@@ -1978,7 +1978,7 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
 
   // Gather the row group sizes and copy to host
   auto d_tmp_rowgroup_sizes = rmm::device_uvector<uint32_t>(segmentation.num_rowgroups(), stream);
-  std::map<uint32_t, std::vector<uint32_t>> rg_sizes;
+  std::map<uint32_t, cudf::detail::host_vector<uint32_t>> rg_sizes;
   for (auto const& [col_idx, esizes] : elem_sizes) {
     // Copy last elem in each row group - equal to row group size
     thrust::tabulate(rmm::exec_policy(stream),
@@ -1991,14 +1991,14 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
                        return src[rg_bounds[idx][col_idx].end - 1];
                      });
 
-    rg_sizes[col_idx] = cudf::detail::make_std_vector_async(d_tmp_rowgroup_sizes, stream);
+    rg_sizes.emplace(col_idx, cudf::detail::make_host_vector_async(d_tmp_rowgroup_sizes, stream));
   }
 
   return {std::move(elem_sizes), std::move(rg_sizes)};
 }
 
 std::map<uint32_t, size_t> decimal_column_sizes(
-  std::map<uint32_t, std::vector<uint32_t>> const& chunk_sizes)
+  std::map<uint32_t, cudf::detail::host_vector<uint32_t>> const& chunk_sizes)
 {
   std::map<uint32_t, size_t> column_sizes;
   std::transform(chunk_sizes.cbegin(),
@@ -2056,7 +2056,7 @@ auto set_rowgroup_char_counts(orc_table_view& orc_table,
                             orc_table.d_string_column_indices,
                             stream);
 
-  auto const h_counts = cudf::detail::make_std_vector_sync(counts, stream);
+  auto const h_counts = cudf::detail::make_host_vector_sync(counts, stream);
 
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column = orc_table.column(col_idx);
