@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -26,6 +26,7 @@ function(find_and_configure_nvcomp)
   if(TARGET nvcomp AND CUDF_USE_PER_THREAD_DEFAULT_STREAM)
     target_compile_definitions(nvcomp PRIVATE CUDA_API_PER_THREAD_DEFAULT_STREAM)
   endif()
+  target_link_libraries(nvcomp::nvcomp INTERFACE $<LINK_ONLY:CUDA::cuda_driver>)
 endfunction()
 
 find_and_configure_nvcomp()
