@@ -81,7 +81,7 @@ dependencies:
 - rich
 - rmm==24.10.*,>=0.0.0a0
 - s3fs>=2022.3.0
-- scikit-build-core>=0.7.0
+- scikit-build-core>=0.10.0
 - scipy
 - spdlog>=1.12.0,<1.13
 - sphinx
