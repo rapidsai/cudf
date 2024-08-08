@@ -19,6 +19,7 @@ import numpy as np
 from ..options import _env_get_bool
 from ..testing import assert_eq
 from .annotation import nvtx
+from .proxy_base import ProxyNDarrayBase
 
 
 def call_operator(fn, args, kwargs):
@@ -564,8 +565,12 @@ class _FinalProxy(_FastSlowProxy):
         _FinalProxy subclasses can override this classmethod if they
         need particular behaviour when wrapped up.
         """
-        proxy = object.__new__(cls)
-        proxy._fsproxy_wrapped = value
+        if np.ndarray in cls.__mro__:
+            proxy = ProxyNDarrayBase.__new__(cls, value)
+            proxy._fsproxy_wrapped = value
+        else:
+            proxy = object.__new__(cls)
+            proxy._fsproxy_wrapped = value
         return proxy
 
     def __reduce__(self):
