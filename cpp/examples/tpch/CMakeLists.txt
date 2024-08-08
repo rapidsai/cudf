@@ -15,22 +15,14 @@ project(
 
 include(../fetch_dependencies.cmake)
 
-add_executable(tpch_q1 q1.cpp)
-target_link_libraries(tpch_q1 PRIVATE cudf::cudf)
-target_compile_features(tpch_q1 PRIVATE cxx_std_17)
+function(ConfigureTPCHQuery CMAKE_QUERY_NAME)
+  add_executable(${CMAKE_QUERY_NAME} ${ARGN})
+  target_link_libraries(${CMAKE_QUERY_NAME} PUBLIC cudf::cudf)
+  target_compile_features(${CMAKE_QUERY_NAME} PUBLIC cxx_std_17)
+endfunction()
 
-add_executable(tpch_q5 q5.cpp)
-target_link_libraries(tpch_q5 PRIVATE cudf::cudf)
-target_compile_features(tpch_q5 PRIVATE cxx_std_17)
-
-add_executable(tpch_q6 q6.cpp)
-target_link_libraries(tpch_q6 PRIVATE cudf::cudf)
-target_compile_features(tpch_q6 PRIVATE cxx_std_17)
-
-add_executable(tpch_q9 q9.cpp)
-target_link_libraries(tpch_q9 PRIVATE cudf::cudf)
-target_compile_features(tpch_q9 PRIVATE cxx_std_17)
-
-add_executable(tpch_q10 q10.cpp)
-target_link_libraries(tpch_q10 PRIVATE cudf::cudf)
-target_compile_features(tpch_q10 PRIVATE cxx_std_17)
+ConfigureTPCHQuery(tpch_q1 q1.cpp)
+ConfigureTPCHQuery(tpch_q5 q5.cpp)
+ConfigureTPCHQuery(tpch_q6 q6.cpp)
+ConfigureTPCHQuery(tpch_q9 q9.cpp)
+ConfigureTPCHQuery(tpch_q10 q10.cpp)
