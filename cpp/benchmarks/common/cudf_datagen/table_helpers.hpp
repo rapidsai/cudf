@@ -19,6 +19,26 @@
 #include "rand_utilities.cuh"
 
 /**
+ * @brief Add a column of days to a column of timestamp_days
+ *
+ * @param timestamp_days The column of timestamp_days
+ * @param days The column of days to add
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<cudf::column> add_calendrical_days(cudf::column_view const& timestamp_days,
+                                                   cudf::column_view const& days,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  auto const days_duration_type = cudf::cast(days, cudf::data_type{cudf::type_id::DURATION_DAYS});
+  auto const data_type          = cudf::data_type{cudf::type_id::TIMESTAMP_DAYS};
+  return cudf::binary_operation(
+    timestamp_days, days_duration_type->view(), cudf::binary_operator::ADD, data_type, stream, mr);
+}
+
+/**
  * @brief Perform a left join operation between two tables
  *
  * @param left_input The left table
@@ -71,6 +91,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
                                                                rmm::cuda_stream_view stream,
                                                                rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   // Expression: (90000 + ((p_partkey/10) modulo 20001) + 100 * (p_partkey modulo 1000)) / 100
   auto table             = cudf::table_view({p_partkey});
   auto p_partkey_col_ref = cudf::ast::column_reference(0);
@@ -114,6 +135,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
                                                            rmm::cuda_stream_view stream,
                                                            rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   // Expression: (l_partkey + (i * (s/4 + (int)(l_partkey - 1)/s))) % s + 1
 
   // Generate the `s` col
@@ -184,6 +206,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
                                                             rmm::cuda_stream_view stream,
                                                             rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   // Expression: ps_suppkey = (ps_partkey + (i * (s/4 + (int)(ps_partkey - 1)/s))) % s + 1
 
   // Generate the `s` col
@@ -250,6 +273,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
                                                  rmm::cuda_stream_view stream,
                                                  rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   auto const sum_agg           = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
   auto const l_num_rows_scalar = cudf::reduce(
     o_orderkey_repeat_freqs, *sum_agg, cudf::data_type{cudf::type_id::INT32}, stream, mr);
@@ -272,6 +296,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
+  CUDF_FUNC_RANGE();
   auto const one                = cudf::numeric_scalar<double>(1);
   auto const one_minus_discount = cudf::binary_operation(
     one, discount, cudf::binary_operator::SUB, cudf::data_type{cudf::type_id::FLOAT64}, stream, mr);

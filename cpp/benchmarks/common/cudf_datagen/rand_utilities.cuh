@@ -78,6 +78,7 @@
 template <typename T>
 cudf::data_type get_cudf_type()
 {
+  CUDF_FUNC_RANGE();
   if (std::is_same<T, bool>::value) return cudf::data_type{cudf::type_id::BOOL8};
   if (std::is_same<T, int8_t>::value) return cudf::data_type{cudf::type_id::INT8};
   if (std::is_same<T, int16_t>::value) return cudf::data_type{cudf::type_id::INT16};
@@ -296,24 +297,4 @@ std::unique_ptr<cudf::column> gen_rep_seq_col(T const& seq_length,
                                 get_cudf_type<T>(),
                                 stream,
                                 mr);
-}
-
-/**
- * @brief Add a column of days to a column of timestamp_days
- *
- * @param timestamp_days The column of timestamp_days
- * @param days The column of days to add
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- */
-std::unique_ptr<cudf::column> add_calendrical_days(cudf::column_view const& timestamp_days,
-                                                   cudf::column_view const& days,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  auto const days_duration_type = cudf::cast(days, cudf::data_type{cudf::type_id::DURATION_DAYS});
-  auto const data_type          = cudf::data_type{cudf::type_id::TIMESTAMP_DAYS};
-  return cudf::binary_operation(
-    timestamp_days, days_duration_type->view(), cudf::binary_operator::ADD, data_type, stream, mr);
 }

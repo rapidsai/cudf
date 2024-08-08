@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-#include "schema.hpp"
 #include "table_helpers.hpp"
-#include "utils.hpp"
 #include "vocab.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf {
+namespace datagen {
 
 /**
  * @brief Generate a table out of the independent columns of the `orders` table
@@ -233,8 +232,9 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
   }();
 
   // Define the current date as per clause 4.2.2.12 of the TPC-H specification
+  constexpr cudf::size_type current_date_days_since_epoch = 9'298;
   auto current_date =
-    cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 6, 17), true);
+    cudf::timestamp_scalar<cudf::timestamp_D>(current_date_days_since_epoch, true);
   auto current_date_literal = cudf::ast::literal(current_date);
 
   // Generate the `l_returnflag` column
@@ -552,7 +552,8 @@ std::unique_ptr<cudf::table> generate_part(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-auto generate_orders_lineitem_part(
+std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>>
+generate_orders_lineitem_part(
   cudf::size_type const& scale_factor,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
@@ -824,50 +825,5 @@ std::unique_ptr<cudf::table> generate_region(
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
+}  // namespace datagen
 }  // namespace cudf
-
-// int main(int argc, char** argv)
-// {
-//   if (argc < 3) {
-//     std::cerr << "Usage: " << argv[0] << " [scale_factor]"
-//               << " [memory_resource_type]" << std::endl;
-//     return 1;
-//   }
-
-//   cudf::size_type scale_factor = std::atoi(argv[1]);
-//   std::cout << "Generating scale factor: " << scale_factor << std::endl;
-
-//   std::string memory_resource_type = argv[2];
-//   auto resource                    = create_memory_resource(memory_resource_type);
-//   rmm::mr::set_current_device_resource(resource.get());
-
-//   auto const [free, total] = rmm::available_device_memory();
-//   std::cout << "Total GPU memory: " << total << std::endl;
-//   std::cout << "Available GPU memory: " << free << std::endl;
-
-//   auto const mem_stats_logger = memory_stats_logger();
-
-//   auto [orders, lineitem, part] = generate_orders_lineitem_part(scale_factor);
-//   write_parquet(std::move(orders), "orders.parquet", schema_orders);
-//   write_parquet(std::move(lineitem), "lineitem.parquet", schema_lineitem);
-//   write_parquet(std::move(part), "part.parquet", schema_part);
-
-//   auto partsupp = generate_partsupp(scale_factor);
-//   write_parquet(std::move(partsupp), "partsupp.parquet", schema_partsupp);
-
-//   auto supplier = generate_supplier(scale_factor);
-//   write_parquet(std::move(supplier), "supplier.parquet", schema_supplier);
-
-//   auto customer = generate_customer(scale_factor);
-//   write_parquet(std::move(customer), "customer.parquet", schema_customer);
-
-//   auto nation = generate_nation();
-//   write_parquet(std::move(nation), "nation.parquet", schema_nation);
-
-//   auto region = generate_region();
-//   write_parquet(std::move(region), "region.parquet", schema_region);
-
-//   std::cout << "Peak GPU Memory Usage: " << mem_stats_logger.peak_memory_usage() << std::endl;
-
-//   return 0;
-// }
