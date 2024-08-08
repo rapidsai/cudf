@@ -1592,10 +1592,8 @@ def build_column(
             children=children,
         )
     elif dtype.type is np.datetime64:
-        if data is None:
-            raise TypeError("Must specify data buffer")
         return cudf.core.column.DatetimeColumn(
-            data=data,
+            data=data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             size=size,
@@ -1603,10 +1601,8 @@ def build_column(
             null_count=null_count,
         )
     elif isinstance(dtype, pd.DatetimeTZDtype):
-        if data is None:
-            raise TypeError("Must specify data buffer")
         return cudf.core.column.datetime.DatetimeTZColumn(
-            data=data,
+            data=data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             size=size,
@@ -1614,10 +1610,8 @@ def build_column(
             null_count=null_count,
         )
     elif dtype.type is np.timedelta64:
-        if data is None:
-            raise TypeError("Must specify data buffer")
         return cudf.core.column.TimeDeltaColumn(
-            data=data,
+            data=data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             size=size,
