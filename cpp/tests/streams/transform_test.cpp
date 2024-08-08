@@ -31,8 +31,8 @@
 
 class TransformTest : public cudf::test::BaseFixture {};
 
-template <class dtype, class Op, class Data>
-void test_udf(char const udf[], Op op, Data data_init, cudf::size_type size, bool is_ptx)
+template <class dtype, class Data>
+void test_udf(char const udf[], Data data_init, cudf::size_type size, bool is_ptx)
 {
   auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   auto data_iter = cudf::detail::make_counting_transform_iterator(0, data_init);
@@ -94,10 +94,9 @@ __device__ inline void    fdsf   (
 }
 )***";
 
-  auto op        = [](float a) { return a * a * a * a; };
   auto data_init = [](cudf::size_type row) { return row % 3; };
-  test_udf<float>(cuda, op, data_init, 500, false);
-  test_udf<float>(ptx, op, data_init, 500, true);
+  test_udf<float>(cuda, data_init, 500, false);
+  test_udf<float>(ptx, data_init, 500, true);
 }
 
 TEST_F(TransformTest, ComputeColumn)
