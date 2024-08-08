@@ -65,8 +65,8 @@ class ColumnMethods(NotIterable):
         """
         if inplace:
             self._parent._mimic_inplace(
-                self._parent.__class__._from_data(
-                    {self._parent.name: new_col}
+                type(self._parent)._from_column(
+                    new_col, name=self._parent.name
                 ),
                 inplace=True,
             )

@@ -1077,10 +1077,13 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def _from_column(
         cls, column: ColumnBase, *, name: Hashable = None
     ) -> Self:
-        ca = cudf.core.column_accessor.ColumnAccessor(
-            {name: column}, verify=False
-        )
-        return _index_from_data(ca)
+        if cls is Index:
+            ca = cudf.core.column_accessor.ColumnAccessor(
+                {name: column}, verify=False
+            )
+            return _index_from_data(ca)
+        else:
+            return super()._from_column(column, name=name)
 
     @classmethod
     @_performance_tracking
@@ -1853,6 +1856,17 @@ class DatetimeIndex(Index):
         cls, data: MutableMapping, name: Any = no_default, freq: Any = None
     ):
         result = super()._from_data(data, name)
+        result._freq = _validate_freq(freq)
+        return result
+
+    @classmethod
+    @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None, freq: Any = None
+    ) -> Self:
+        if column.dtype.kind != "M":
+            raise ValueError("column must have a datetime type.")
+        result = super()._from_column(column, name=name)
         result._freq = _validate_freq(freq)
         return result
 
@@ -2637,8 +2651,8 @@ class DatetimeIndex(Index):
         to 'NaT'.
         """  # noqa: E501
         result_col = self._column.tz_localize(tz, ambiguous, nonexistent)
-        return DatetimeIndex._from_data(
-            {self.name: result_col}, freq=self._freq
+        return DatetimeIndex._from_column(
+            result_col, name=self.name, freq=self._freq
         )
 
     def tz_convert(self, tz: str | None):
@@ -2783,6 +2797,15 @@ class TimedeltaIndex(Index):
             data = data.copy()
 
         super().__init__(data, name=name)
+
+    @classmethod
+    @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None, freq: Any = None
+    ) -> Self:
+        if column.dtype.kind != "m":
+            raise ValueError("column must have a timedelta type.")
+        return super()._from_column(column, name=name)
 
     def __getitem__(self, index):
         value = super().__getitem__(index)
@@ -3054,6 +3077,15 @@ class CategoricalIndex(Index):
         elif ordered is False and data.ordered is True:
             data = data.as_ordered(ordered=False)
         super().__init__(data, name=name)
+
+    @classmethod
+    @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None, freq: Any = None
+    ) -> Self:
+        if not isinstance(column.dtype, cudf.CategoricalDtype):
+            raise ValueError("column must have a categorial type.")
+        return super()._from_column(column, name=name)
 
     @property
     def ordered(self) -> bool:
@@ -3400,6 +3432,15 @@ class IntervalIndex(Index):
     @property
     def closed(self):
         return self.dtype.closed
+
+    @classmethod
+    @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None, freq: Any = None
+    ) -> Self:
+        if not isinstance(column.dtype, cudf.IntervalDtype):
+            raise ValueError("column must have a interval type.")
+        return super()._from_column(column, name=name)
 
     @classmethod
     @_performance_tracking

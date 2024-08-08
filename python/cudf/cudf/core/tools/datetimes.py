@@ -1000,9 +1000,9 @@ def date_range(
             "datetime64[ns]"
         )
 
-    return cudf.DatetimeIndex._from_data({name: res}, freq=freq).tz_localize(
-        tz
-    )
+    return cudf.DatetimeIndex._from_column(
+        res, name=name, freq=freq
+    ).tz_localize(tz)
 
 
 def _has_fixed_frequency(freq: DateOffset) -> bool:
