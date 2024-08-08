@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-#include "utils.hpp"
-
-#include <memory>
+#include "rand_utilities.cuh"
 
 /**
  * @brief Generate the `p_retailprice` column of the `part` table
@@ -53,6 +51,7 @@
   auto expr_f = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_e, literal_90000);
   auto final_expr = cudf::ast::operation(cudf::ast::ast_operator::DIV, expr_f, literal_100);
 
+  // Execute the AST expression
   return cudf::compute_column(table, final_expr, mr);
 }
 
@@ -127,23 +126,6 @@
 }
 
 /**
- * @brief Calculate the cardinality of the `lineitem` table
- *
- * @param o_orderkey_repeat_freqs The frequency of each `o_orderkey` value in the `lineitem` table
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- */
-[[nodiscard]] cudf::size_type calc_l_cardinality(cudf::column_view const& o_orderkey_repeat_freqs,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::device_async_resource_ref mr)
-{
-  auto const sum_agg           = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
-  auto const l_num_rows_scalar = cudf::reduce(
-    o_orderkey_repeat_freqs, *sum_agg, cudf::data_type{cudf::type_id::INT32}, stream, mr);
-  return reinterpret_cast<cudf::numeric_scalar<cudf::size_type>*>(l_num_rows_scalar.get())->value();
-}
-
-/**
  * @brief Generate the `ps_suppkey` column of the `partsupp` table
  *
  * @param ps_partkey The `ps_partkey` column of the `partsupp` table
@@ -214,6 +196,23 @@
 }
 
 /**
+ * @brief Calculate the cardinality of the `lineitem` table
+ *
+ * @param o_orderkey_repeat_freqs The frequency of each `o_orderkey` value in the `lineitem` table
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+[[nodiscard]] cudf::size_type calc_l_cardinality(cudf::column_view const& o_orderkey_repeat_freqs,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::device_async_resource_ref mr)
+{
+  auto const sum_agg           = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
+  auto const l_num_rows_scalar = cudf::reduce(
+    o_orderkey_repeat_freqs, *sum_agg, cudf::data_type{cudf::type_id::INT32}, stream, mr);
+  return reinterpret_cast<cudf::numeric_scalar<cudf::size_type>*>(l_num_rows_scalar.get())->value();
+}
+
+/**
  * @brief Calculate the charge column for the `lineitem` table
  *
  * @param extendedprice The `l_extendedprice` column
@@ -246,4 +245,49 @@
                                 cudf::data_type{cudf::type_id::FLOAT64},
                                 stream,
                                 mr);
+}
+
+/**
+ * @brief Generate a column of random addresses according to TPC-H specification clause 4.2.2.7
+ *
+ * @param num_rows The number of rows in the column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+[[nodiscard]] std::unique_ptr<cudf::column> gen_addr_col(cudf::size_type const& num_rows,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return gen_rand_str_col(10, 40, num_rows, stream, mr);
+}
+
+/**
+ * @brief Generate a phone number column according to TPC-H specification clause 4.2.2.9
+ *
+ * @param num_rows The number of rows in the column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+[[nodiscard]] std::unique_ptr<cudf::column> gen_phone_col(cudf::size_type const& num_rows,
+                                                          rmm::cuda_stream_view stream,
+                                                          rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  auto const part_a =
+    cudf::strings::from_integers(gen_rand_num_col<int16_t>(10, 34, num_rows, stream, mr)->view());
+  auto const part_b =
+    cudf::strings::from_integers(gen_rand_num_col<int16_t>(100, 999, num_rows, stream, mr)->view());
+  auto const part_c =
+    cudf::strings::from_integers(gen_rand_num_col<int16_t>(100, 999, num_rows, stream, mr)->view());
+  auto const part_d = cudf::strings::from_integers(
+    gen_rand_num_col<int16_t>(1000, 9999, num_rows, stream, mr)->view());
+  auto const phone_parts_table =
+    cudf::table_view({part_a->view(), part_b->view(), part_c->view(), part_d->view()});
+  return cudf::strings::concatenate(phone_parts_table,
+                                    cudf::string_scalar("-"),
+                                    cudf::string_scalar("", false),
+                                    cudf::strings::separator_on_nulls::NO,
+                                    stream,
+                                    mr);
 }

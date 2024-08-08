@@ -16,6 +16,7 @@
 
 #include "schema.hpp"
 #include "table_helpers.hpp"
+#include "utils.hpp"
 #include "vocab.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
