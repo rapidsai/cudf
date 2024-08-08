@@ -2514,9 +2514,7 @@ class DatetimeIndex(Index):
         >>> gIndex.ceil("T")
         DatetimeIndex(['2020-05-31 08:06:00', '1999-12-31 18:41:00'], dtype='datetime64[ns]')
         """  # noqa: E501
-        out_column = self._values.ceil(freq)
-
-        return self.__class__._from_data({self.name: out_column})
+        return type(self)._from_column(self._column.ceil(freq), name=self.name)
 
     @_performance_tracking
     def floor(self, freq):
@@ -2547,9 +2545,9 @@ class DatetimeIndex(Index):
         >>> gIndex.floor("T")
         DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'], dtype='datetime64[ns]')
         """  # noqa: E501
-        out_column = self._values.floor(freq)
-
-        return self.__class__._from_data({self.name: out_column})
+        return type(self)._from_column(
+            self._column.floor(freq), name=self.name
+        )
 
     @_performance_tracking
     def round(self, freq):
@@ -2587,9 +2585,9 @@ class DatetimeIndex(Index):
         >>> dt_idx.round('T')
         DatetimeIndex(['2001-01-01 00:05:00', '2001-01-01 00:05:00', '2001-01-01 00:05:00'], dtype='datetime64[ns]')
         """  # noqa: E501
-        out_column = self._values.round(freq)
-
-        return self.__class__._from_data({self.name: out_column})
+        return type(self)._from_column(
+            self._column.round(freq), name=self.name
+        )
 
     def tz_localize(
         self,
@@ -2868,7 +2866,7 @@ class TimedeltaIndex(Index):
 
         This method is currently not implemented.
         """
-        return type(self)._from_data({self.name: self._column.ceil(freq)})
+        return type(self)._from_column(self._column.ceil(freq), name=self.name)
 
     def floor(self, freq: str) -> Self:
         """
@@ -2876,7 +2874,9 @@ class TimedeltaIndex(Index):
 
         This method is currently not implemented.
         """
-        return type(self)._from_data({self.name: self._column.floor(freq)})
+        return type(self)._from_column(
+            self._column.floor(freq), name=self.name
+        )
 
     def round(self, freq: str) -> Self:
         """
@@ -2884,7 +2884,9 @@ class TimedeltaIndex(Index):
 
         This method is currently not implemented.
         """
-        return type(self)._from_data({self.name: self._column.round(freq)})
+        return type(self)._from_column(
+            self._column.round(freq), name=self.name
+        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -3086,24 +3088,24 @@ class CategoricalIndex(Index):
         `new_categories` will be included at the last/highest place in the
         categories and will be unused directly after this call.
         """
-        return type(self)._from_data(
-            {self.name: self._column.add_categories(new_categories)}
+        return type(self)._from_column(
+            self._column.add_categories(new_categories), name=self.name
         )
 
     def as_ordered(self) -> Self:
         """
         Set the Categorical to be ordered.
         """
-        return type(self)._from_data(
-            {self.name: self._column.as_ordered(ordered=True)}
+        return type(self)._from_column(
+            self._column.as_ordered(ordered=True), name=self.name
         )
 
     def as_unordered(self) -> Self:
         """
         Set the Categorical to be unordered.
         """
-        return type(self)._from_data(
-            {self.name: self._column.as_ordered(ordered=False)}
+        return type(self)._from_column(
+            self._column.as_ordered(ordered=False), name=self.name
         )
 
     def remove_categories(self, removals) -> Self:
@@ -3117,8 +3119,8 @@ class CategoricalIndex(Index):
         removals : category or list of categories
            The categories which should be removed.
         """
-        return type(self)._from_data(
-            {self.name: self._column.remove_categories(removals)}
+        return type(self)._from_column(
+            self._column.remove_categories(removals), name=self.name
         )
 
     def remove_unused_categories(self) -> Self:
@@ -3127,8 +3129,8 @@ class CategoricalIndex(Index):
 
         This method is currently not supported.
         """
-        return type(self)._from_data(
-            {self.name: self._column.remove_unused_categories()}
+        return type(self)._from_column(
+            self._column.remove_unused_categories(), name=self.name
         )
 
     def rename_categories(self, new_categories) -> Self:
@@ -3137,8 +3139,8 @@ class CategoricalIndex(Index):
 
         This method is currently not supported.
         """
-        return type(self)._from_data(
-            {self.name: self._column.rename_categories(new_categories)}
+        return type(self)._from_column(
+            self._column.rename_categories(new_categories), name=self.name
         )
 
     def reorder_categories(self, new_categories, ordered=None) -> Self:
@@ -3156,12 +3158,9 @@ class CategoricalIndex(Index):
            Whether or not the categorical is treated as a ordered categorical.
            If not given, do not change the ordered information.
         """
-        return type(self)._from_data(
-            {
-                self.name: self._column.reorder_categories(
-                    new_categories, ordered=ordered
-                )
-            }
+        return type(self)._from_column(
+            self._column.reorder_categories(new_categories, ordered=ordered),
+            name=self.name,
         )
 
     def set_categories(
@@ -3183,12 +3182,11 @@ class CategoricalIndex(Index):
             considered as a rename of the old categories
             or as reordered categories.
         """
-        return type(self)._from_data(
-            {
-                self.name: self._column.set_categories(
-                    new_categories, ordered=ordered, rename=rename
-                )
-            }
+        return type(self)._from_column(
+            self._column.set_categories(
+                new_categories, ordered=ordered, rename=rename
+            ),
+            name=self.name,
         )
 
 
@@ -3585,8 +3583,8 @@ class IntervalIndex(Index):
             Whether the intervals are closed on the left-side, right-side, both
             or neither.
         """
-        return type(self)._from_data(
-            {self.name: self._column.set_closed(closed)}
+        return type(self)._from_column(
+            self._column.set_closed(closed), name=self.name
         )
 
     def to_tuples(self, na_tuple: bool = True) -> pd.Index:
