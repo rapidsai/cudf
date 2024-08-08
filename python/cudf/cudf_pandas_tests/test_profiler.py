@@ -42,7 +42,7 @@ def test_profiler():
     for name, func in per_function_stats.items():
         assert (
             len(func["cpu"]) == 0
-            if "Time" not in name
+            if "Timedelta" not in name
             else len(func["gpu"]) == 0
         )
 

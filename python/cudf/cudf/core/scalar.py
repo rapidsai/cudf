@@ -42,11 +42,11 @@ class CachedScalarInstanceMeta(type):
         self.__maxsize = maxsize
         self.__instances = OrderedDict()
 
-    def __call__(self, value, dtype=None):
+    def __call__(self, *args, **kwargs):
         # the cache key is constructed from the arguments, and also
         # the _types_ of the arguments, since objects of different
         # types can compare equal
-        cache_key = (value, type(value), dtype, type(dtype))
+        cache_key = (args, kwargs)
         try:
             # try retrieving an instance from the cache:
             self.__instances.move_to_end(cache_key)
@@ -54,7 +54,7 @@ class CachedScalarInstanceMeta(type):
         except KeyError:
             # if an instance couldn't be found in the cache,
             # construct it and add to cache:
-            obj = super().__call__(value, dtype=dtype)
+            obj = super().__call__(*args, **kwargs)
             try:
                 self.__instances[cache_key] = obj
             except TypeError:
@@ -65,7 +65,7 @@ class CachedScalarInstanceMeta(type):
             return obj
         except TypeError:
             # couldn't hash the arguments, don't cache:
-            return super().__call__(value, dtype=dtype)
+            return super().__call__(*args, **kwargs)
 
     def _clear_instance_cache(self):
         self.__instances.clear()
