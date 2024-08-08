@@ -23,11 +23,10 @@ CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 # node works correctly
 # With boa installed conda build forwards to the boa builder
 
-# TODO: enable once conda recipes written for pylibcudf
-# RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry mambabuild \
-#   --no-test \
-#   --channel "${CPP_CHANNEL}" \
-#   conda/recipes/pylibcudf
+RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry mambabuild \
+  --no-test \
+  --channel "${CPP_CHANNEL}" \
+  conda/recipes/pylibcudf
 
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry mambabuild \
   --no-test \
