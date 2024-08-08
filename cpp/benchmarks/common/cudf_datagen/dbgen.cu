@@ -546,7 +546,7 @@ std::unique_ptr<cudf::table> generate_part(
 }
 
 /**
- * @brief Generate the `orders` and `lineitem` tables
+ * @brief Generate the `orders`, `lineitem`, and `part` tables
  *
  * @param scale_factor The scale factor to generate
  * @param stream CUDA stream used for device memory operations and kernel launches
