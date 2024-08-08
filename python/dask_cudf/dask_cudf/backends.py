@@ -55,37 +55,31 @@ get_parallel_type.register(cudf.BaseIndex, lambda _: Index)
 @meta_nonempty.register(cudf.BaseIndex)
 @_dask_cudf_performance_tracking
 def _nonempty_index(idx):
-    if isinstance(idx, cudf.core.index.RangeIndex):
-        return cudf.core.index.RangeIndex(2, name=idx.name)
-    elif isinstance(idx, cudf.core.index.DatetimeIndex):
-        start = "1970-01-01"
-        data = np.array([start, "1970-01-02"], dtype=idx.dtype)
+    """Return a non-empty cudf.Index as metadata."""
+    # TODO: IntervalIndex, TimedeltaIndex?
+    if isinstance(idx, cudf.RangeIndex):
+        return cudf.RangeIndex(2, name=idx.name)
+    elif isinstance(idx, cudf.DatetimeIndex):
+        data = np.array(["1970-01-01", "1970-01-02"], dtype=idx.dtype)
         values = cudf.core.column.as_column(data)
-        return cudf.core.index.DatetimeIndex(values, name=idx.name)
-    elif isinstance(idx, cudf.core.index.CategoricalIndex):
-        key = tuple(idx._data.keys())
-        assert len(key) == 1
-        categories = idx._data[key[0]].categories
-        codes = [0, 0]
-        ordered = idx._data[key[0]].ordered
+        return cudf.DatetimeIndex(values, name=idx.name)
+    elif isinstance(idx, cudf.CategoricalIndex):
         values = cudf.core.column.build_categorical_column(
-            categories=categories, codes=codes, ordered=ordered
+            categories=idx.categories, codes=[0, 0], ordered=idx.ordered
         )
-        return cudf.core.index.CategoricalIndex(values, name=idx.name)
-    elif isinstance(idx, cudf.core.multiindex.MultiIndex):
+        return cudf.CategoricalIndex(values, name=idx.name)
+    elif isinstance(idx, cudf.MultiIndex):
         levels = [meta_nonempty(lev) for lev in idx.levels]
-        codes = [[0, 0] for i in idx.levels]
-        return cudf.core.multiindex.MultiIndex(
-            levels=levels, codes=codes, names=idx.names
-        )
-    elif isinstance(idx._column, cudf.core.column.StringColumn):
+        codes = [[0, 0]] * idx.nlevels
+        return cudf.MultiIndex(levels=levels, codes=codes, names=idx.names)
+    elif is_string_dtype(idx.dtype):
         return cudf.Index(["cat", "dog"], name=idx.name)
-    elif isinstance(idx, cudf.core.index.Index):
-        return cudf.core.index.Index(
-            np.arange(2, dtype=idx.dtype), name=idx.name
-        )
+    elif isinstance(idx, cudf.Index):
+        return cudf.Index(np.arange(2, dtype=idx.dtype), name=idx.name)
 
-    raise TypeError(f"Don't know how to handle index of type {type(idx)}")
+    raise TypeError(
+        f"Don't know how to handle index of type {type(idx).__name__}"
+    )
 
 
 def _nest_list_data(data, leaf_type):
@@ -101,50 +95,49 @@ def _nest_list_data(data, leaf_type):
 
 
 @_dask_cudf_performance_tracking
-def _get_non_empty_data(s):
-    """Return a non empty column as metadata."""
-    if isinstance(s, cudf.core.column.CategoricalColumn):
+def _get_non_empty_data(
+    s: cudf.core.column.ColumnBase,
+) -> cudf.core.column.ColumnBase:
+    """Return a non-empty column as metadata from a column."""
+    if isinstance(s.dtype, cudf.CategoricalDtype):
         categories = (
-            s.categories if len(s.categories) else [UNKNOWN_CATEGORIES]
+            s.categories if len(s.categories) else [UNKNOWN_CATEGORIES]  # type: ignore[attr-defined]
         )
         codes = cudf.core.column.as_column(
             0,
             dtype=cudf._lib.types.size_type_dtype,
             length=2,
         )
-        ordered = s.ordered
-        data = cudf.core.column.build_categorical_column(
+        ordered = s.ordered  # type: ignore[attr-defined]
+        return cudf.core.column.build_categorical_column(
             categories=categories, codes=codes, ordered=ordered
         )
-    elif isinstance(s, cudf.core.column.ListColumn):
+    elif isinstance(s.dtype, cudf.ListDtype):
         leaf_type = s.dtype.leaf_type
         if is_string_dtype(leaf_type):
             data = ["cat", "dog"]
         else:
             data = np.array([0, 1], dtype=leaf_type).tolist()
         data = _nest_list_data(data, s.dtype) * 2
-        data = cudf.core.column.as_column(data, dtype=s.dtype)
-    elif isinstance(s, cudf.core.column.StructColumn):
+        return cudf.core.column.as_column(data, dtype=s.dtype)
+    elif isinstance(s.dtype, cudf.StructDtype):
+        # Handles IntervalColumn
         struct_dtype = s.dtype
-        data = [{key: None for key in struct_dtype.fields.keys()}] * 2
-        data = cudf.core.column.as_column(data, dtype=s.dtype)
+        struct_data = [{key: None for key in struct_dtype.fields.keys()}] * 2
+        return cudf.core.column.as_column(struct_data, dtype=s.dtype)
     elif is_string_dtype(s.dtype):
-        data = cudf.core.column.as_column(pa.array(["cat", "dog"]))
+        return cudf.core.column.as_column(pa.array(["cat", "dog"]))
     elif isinstance(s.dtype, pd.DatetimeTZDtype):
-        from cudf.utils.dtypes import get_time_unit
-
-        data = cudf.date_range("2001-01-01", periods=2, freq=get_time_unit(s))
-        data = data.tz_localize(str(s.dtype.tz))._column
+        date_data = cudf.date_range("2001-01-01", periods=2, freq=s.time_unit)  # type: ignore[attr-defined]
+        return date_data.tz_localize(str(s.dtype.tz))._column
+    elif s.dtype.kind in "fiubmM":
+        return cudf.core.column.as_column(
+            np.arange(start=0, stop=2, dtype=s.dtype)
+        )
     else:
-        if pd.api.types.is_numeric_dtype(s.dtype):
-            data = cudf.core.column.as_column(
-                cp.arange(start=0, stop=2, dtype=s.dtype)
-            )
-        else:
-            data = cudf.core.column.as_column(
-                cp.arange(start=0, stop=2, dtype="int64")
-            ).astype(s.dtype)
-    return data
+        raise TypeError(
+            f"Don't know how to handle column of type {type(s).__name__}"
+        )
 
 
 @meta_nonempty.register(cudf.Series)
@@ -162,24 +155,25 @@ def _nonempty_series(s, idx=None):
 def meta_nonempty_cudf(x):
     idx = meta_nonempty(x.index)
     columns_with_dtype = dict()
-    res = cudf.DataFrame(index=idx)
-    for col in x._data.names:
-        dtype = str(x._data[col].dtype)
-        if dtype in ("list", "struct", "category"):
+    res = {}
+    for col_label, col in x._data.items():
+        dtype = col.dtype
+        if isinstance(
+            dtype,
+            (cudf.ListDtype, cudf.StructDtype, cudf.CategoricalDtype),
+        ):
             # 1. Not possible to hash and store list & struct types
             #    as they can contain different levels of nesting or
             #    fields.
-            # 2. Not possible to has `category` types as
+            # 2. Not possible to hash `category` types as
             #    they often contain an underlying types to them.
-            res._data[col] = _get_non_empty_data(x._data[col])
+            res[col_label] = _get_non_empty_data(col)
         else:
             if dtype not in columns_with_dtype:
-                columns_with_dtype[dtype] = cudf.core.column.as_column(
-                    _get_non_empty_data(x._data[col])
-                )
-            res._data[col] = columns_with_dtype[dtype]
+                columns_with_dtype[dtype] = _get_non_empty_data(col)
+            res[col_label] = columns_with_dtype[dtype]
 
-    return res
+    return cudf.DataFrame._from_data(res, index=idx)
 
 
 @make_meta_dispatch.register((cudf.Series, cudf.DataFrame))
@@ -197,9 +191,7 @@ def make_meta_cudf_index(x, index=None):
 @_dask_cudf_performance_tracking
 def _empty_series(name, dtype, index=None):
     if isinstance(dtype, str) and dtype == "category":
-        return cudf.Series(
-            [UNKNOWN_CATEGORIES], dtype=dtype, name=name, index=index
-        ).iloc[:0]
+        dtype = cudf.CategoricalDtype(categories=[UNKNOWN_CATEGORIES])
     return cudf.Series([], dtype=dtype, name=name, index=index)
 
 
@@ -337,7 +329,7 @@ def percentile_cudf(a, q, interpolation="linear"):
     if isinstance(q, Iterator):
         q = list(q)
 
-    if cudf.api.types._is_categorical_dtype(a.dtype):
+    if isinstance(a.dtype, cudf.CategoricalDtype):
         result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
 
         return (
@@ -346,7 +338,7 @@ def percentile_cudf(a, q, interpolation="linear"):
             ),
             n,
         )
-    if np.issubdtype(a.dtype, np.datetime64):
+    if a.dtype.kind == "M":
         result = a.quantile(
             [i / 100.0 for i in q], interpolation=interpolation
         )
