@@ -1216,8 +1216,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         if all(isinstance(obj, RangeIndex) for obj in non_empties):
             result = _concat_range_index(non_empties)
         else:
-            data = concat_columns([o._values for o in non_empties])
-            result = Index(data)
+            data = concat_columns([o._column for o in non_empties])
+            result = Index._from_column(data)
 
         names = {obj.name for obj in objs}
         if len(names) == 1:
@@ -1484,7 +1484,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def __getitem__(self, index):
         res = self._get_elements_from_column(index)
         if isinstance(res, ColumnBase):
-            res = Index(res, name=self.name)
+            res = Index._from_column(res, name=self.name)
         return res
 
     @property  # type: ignore
@@ -3093,11 +3093,11 @@ class CategoricalIndex(Index):
 
     @property  # type: ignore
     @_performance_tracking
-    def codes(self):
+    def codes(self) -> cudf.Index:
         """
         The category codes of this categorical.
         """
-        return Index(self._values.codes)
+        return Index._from_column(self._column.codes)
 
     @property  # type: ignore
     @_performance_tracking
@@ -3711,15 +3711,7 @@ def as_index(
     elif isinstance(arbitrary, BaseIndex):
         idx = arbitrary.copy(deep=copy).rename(name)
     elif isinstance(arbitrary, ColumnBase):
-        idx = _index_from_data({name: arbitrary})
-    elif isinstance(arbitrary, cudf.Series):
-        return as_index(
-            arbitrary._column,
-            nan_as_null=nan_as_null,
-            copy=copy,
-            name=name,
-            dtype=dtype,
-        )
+        raise ValueError("Use cudf.Index._from_column instead.")
     elif isinstance(arbitrary, (pd.RangeIndex, range)):
         idx = RangeIndex(
             start=arbitrary.start,
@@ -3739,11 +3731,9 @@ def as_index(
     elif isinstance(arbitrary, cudf.DataFrame) or is_scalar(arbitrary):
         raise ValueError("Index data must be 1-dimensional and list-like")
     else:
-        return as_index(
+        return Index._from_column(
             column.as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null),
-            copy=copy,
             name=name,
-            dtype=dtype,
         )
     if dtype is not None:
         idx = idx.astype(dtype)
@@ -3780,7 +3770,9 @@ def _concat_range_index(indexes: list[RangeIndex]) -> BaseIndex:
         elif step is None:
             # First non-empty index had only one element
             if obj.start == start:
-                result = Index(concat_columns([x._values for x in indexes]))
+                result = Index._from_column(
+                    concat_columns([x._column for x in indexes])
+                )
                 return result
             step = obj.start - start
 
@@ -3788,7 +3780,9 @@ def _concat_range_index(indexes: list[RangeIndex]) -> BaseIndex:
             next_ is not None and obj.start != next_
         )
         if non_consecutive:
-            result = Index(concat_columns([x._values for x in indexes]))
+            result = Index._from_column(
+                concat_columns([x._column for x in indexes])
+            )
             return result
         if step is not None:
             next_ = obj[-1] + step
