@@ -45,8 +45,7 @@ target_compile_options(
 
 target_link_libraries(
   cudf_tpch_datagen
-  PUBLIC GTest::gmock GTest::gtest benchmark::benchmark nvbench::nvbench Threads::Threads cudf
-         cudftestutil nvtx3::nvtx3-cpp
+  PUBLIC cudf cudftestutil nvtx3::nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
@@ -54,6 +53,12 @@ target_include_directories(
   cudf_tpch_datagen
   PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+)
+
+install(
+  TARGETS cudf_tpch_datagen
+  DESTINATION ${lib_dir}
+  EXPORT cudf-exports
 )
 
 # ##################################################################################################
