@@ -106,7 +106,7 @@ using merge_pairs_map_type = cuco::static_map<cudf::size_type,
                                               cuda::thread_scope_device,
                                               bpe_equal,
                                               bpe_probe_scheme,
-                                              cudf::detail::cuco_allocator,
+                                              cudf::detail::cuco_allocator<char>,
                                               cuco_storage>;
 
 /**
@@ -164,7 +164,7 @@ using mp_table_map_type = cuco::static_map<cudf::size_type,
                                            cuda::thread_scope_device,
                                            mp_equal,
                                            mp_probe_scheme,
-                                           cudf::detail::cuco_allocator,
+                                           cudf::detail::cuco_allocator<char>,
                                            cuco_storage>;
 
 }  // namespace detail

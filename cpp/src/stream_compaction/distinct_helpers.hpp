@@ -84,7 +84,7 @@ using hash_set_type =
                                         cudf::experimental::row::hash::device_row_hasher<
                                           cudf::hashing::detail::default_hash,
                                           cudf::nullate::DYNAMIC>>,
-                   cudf::detail::cuco_allocator,
+                   cudf::detail::cuco_allocator<char>,
                    cuco::storage<1>>;
 
 // The static_map type used to process `keep_first`, `keep_last` and `keep_none` option

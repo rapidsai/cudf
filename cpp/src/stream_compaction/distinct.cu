@@ -110,7 +110,7 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
                                           {row_hash.device_hasher(has_nulls)},
                                           {},
                                           {},
-                                          cudf::detail::cuco_allocator{stream},
+                                          cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
                                           stream.value()};
 
       auto const iter = thrust::counting_iterator<cudf::size_type>{0};
@@ -129,7 +129,7 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
                                         {row_hash.device_hasher(has_nulls)},
                                         {},
                                         {},
-                                        cudf::detail::cuco_allocator{stream},
+                                        cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
                                         stream.value()};
     return reduce_by_row(map, num_rows, keep, stream, mr);
   };
@@ -174,11 +174,11 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 duplicate_keep_option keep,
                                 null_equality nulls_equal,
                                 nan_equality nans_equal,
+                                rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct(
-    input, keys, keep, nulls_equal, nans_equal, cudf::get_default_stream(), mr);
+  return detail::distinct(input, keys, keep, nulls_equal, nans_equal, stream, mr);
 }
 
 std::unique_ptr<column> distinct_indices(table_view const& input,
