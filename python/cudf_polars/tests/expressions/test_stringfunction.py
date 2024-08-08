@@ -209,3 +209,23 @@ def test_replace_many_ascii_case(ldf):
     )
 
     assert_ir_translation_raises(query, NotImplementedError)
+
+
+@pytest.fixture(params=["a", "", " ", "123", None])
+def to_strip(request):
+    return request.param
+
+
+def test_strip_chars(ldf, to_strip):
+    q = ldf.select(pl.col("a").str.strip_chars(to_strip))
+    assert_gpu_result_equal(q)
+
+
+def test_strip_chars_start(ldf, to_strip):
+    q = ldf.select(pl.col("a").str.strip_chars_start(to_strip))
+    assert_gpu_result_equal(q)
+
+
+def test_strip_chars_end(ldf, to_strip):
+    q = ldf.select(pl.col("a").str.strip_chars_end(to_strip))
+    assert_gpu_result_equal(q)

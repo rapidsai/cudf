@@ -722,6 +722,9 @@ class StringFunction(Expr):
             pl_expr.StringFunction.ReplaceMany,
             pl_expr.StringFunction.Slice,
             pl_expr.StringFunction.StartsWith,
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
             pl_expr.StringFunction.Uppercase,
         ):
             raise NotImplementedError(f"String function {self.name}")
@@ -826,6 +829,32 @@ class StringFunction(Expr):
                     plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
                 )
             )
+        elif self.name in {
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+        }:
+            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            expr_chars = self.children[1]
+            assert isinstance(expr_chars, Literal)
+            # Polars api for chars:
+            # If set to None (default), all leading and trailing whitespace is removed
+            # libcudf api for chars:
+            # If to_strip is the empty string, whitespace characters are removed
+            if expr_chars.value == pa.scalar(None):
+                chars = plc.interop.from_arrow(pa.scalar("", type=pa.string()))
+            else:
+                chars = plc.interop.from_arrow(expr_chars.value)
+
+            if self.name == pl_expr.StringFunction.StripCharsStart:
+                side_type = plc.strings.SideType.LEFT
+            elif self.name == pl_expr.StringFunction.StripCharsEnd:
+                side_type = plc.strings.SideType.RIGHT
+            else:
+                side_type = plc.strings.SideType.BOTH
+
+            return Column(plc.strings.strip.strip(column.obj, side_type, chars))
+
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
