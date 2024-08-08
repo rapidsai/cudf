@@ -227,6 +227,17 @@ TEST_F(StringsExtractTests, SpecialNewLines)
   expected =
     cudf::test::strings_column_wrapper({"zzé", "zzé", "zzé", "", "zzé", "zzé"}, {1, 1, 1, 0, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
+
+  prog     = cudf::strings::regex_program::create("q(q.*l)l");
+  expected = cudf::test::strings_column_wrapper(
+    {"", "qq" LINE_SEPARATOR "zzé" NEXT_LINE "ll", "", "", "", ""}, {0, 1, 0, 0, 0, 0});
+  results = cudf::strings::extract(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
+  // expect no matches here since the newline(s) interrupts the pattern
+  prog = cudf::strings::regex_program::create("q(q.*l)l", cudf::strings::regex_flags::EXT_NEWLINE);
+  expected = cudf::test::strings_column_wrapper({"", "", "", "", "", ""}, {0, 0, 0, 0, 0, 0});
+  results  = cudf::strings::extract(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 
 TEST_F(StringsExtractTests, EmptyExtractTest)

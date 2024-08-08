@@ -97,7 +97,7 @@ TEST_F(StringsFindallTests, SpecialNewLines)
   auto results = cudf::strings::findall(view, *prog);
   using LCW    = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{}, LCW{}, LCW{"zzé"}, LCW{}, LCW{"zzé"}, LCW{}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 
   auto both_flags = static_cast<cudf::strings::regex_flags>(
     cudf::strings::regex_flags::EXT_NEWLINE | cudf::strings::regex_flags::MULTILINE);
@@ -105,7 +105,7 @@ TEST_F(StringsFindallTests, SpecialNewLines)
   results      = cudf::strings::findall(view, *prog_ml);
   LCW expected_ml(
     {LCW{"zzé", "zzé"}, LCW{"zzé"}, LCW{"zzé"}, LCW{}, LCW{"zzé"}, LCW{"zzé", "zzé"}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected_ml);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected_ml);
 }
 
 TEST_F(StringsFindallTests, MediumRegex)

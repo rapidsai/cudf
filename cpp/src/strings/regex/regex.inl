@@ -392,7 +392,7 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
           [[fallthrough]];
         }
         case ANYNL: id_activate = inst.u2.next_id; break;
-        case NCCLASS: [[fallthrough]];
+        case NCCLASS:
         case CCLASS: {
           auto const cls = get_class(inst.u1.cls_id);
           if (cls.is_match(static_cast<char32_t>(c), _codepoint_flags) == (inst.type == CCLASS)) {

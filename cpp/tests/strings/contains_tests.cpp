@@ -627,41 +627,48 @@ TEST_F(StringsContainsTests, SpecialNewLines)
   auto pattern = std::string("^zzé$");
   auto prog =
     cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::EXT_NEWLINE);
-  auto both_flags = static_cast<cudf::strings::regex_flags>(
-    cudf::strings::regex_flags::EXT_NEWLINE | cudf::strings::regex_flags::MULTILINE);
-  auto prog_ml = cudf::strings::regex_program::create(pattern, both_flags);
+  auto ml_flags = static_cast<cudf::strings::regex_flags>(cudf::strings::regex_flags::EXT_NEWLINE |
+                                                          cudf::strings::regex_flags::MULTILINE);
+  auto prog_ml  = cudf::strings::regex_program::create(pattern, ml_flags);
 
   auto expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 1, 0, 1, 0});
   auto results  = cudf::strings::contains_re(view, *prog);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0, 1, 1});
   results  = cudf::strings::contains_re(view, *prog_ml);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 1, 0, 1, 0});
   results  = cudf::strings::matches_re(view, *prog);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   expected = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 1, 0, 1, 0});
   results  = cudf::strings::matches_re(view, *prog_ml);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   auto counts = cudf::test::fixed_width_column_wrapper<int32_t>({0, 0, 1, 0, 1, 0});
   results     = cudf::strings::count_re(view, *prog);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, counts);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, counts);
   counts  = cudf::test::fixed_width_column_wrapper<int32_t>({2, 1, 1, 0, 1, 1});
   results = cudf::strings::count_re(view, *prog_ml);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, counts);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, counts);
 
   pattern  = std::string("q.*l");
   prog     = cudf::strings::regex_program::create(pattern);
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 1, 0, 0, 0, 0});
   results  = cudf::strings::contains_re(view, *prog);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   // inst ANY will stop matching on first 'newline' and so should not match anything here
   prog     = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::EXT_NEWLINE);
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 0, 0});
   results  = cudf::strings::contains_re(view, *prog);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  // including the DOTALL flag accepts the newline characters
+  auto dot_flags = static_cast<cudf::strings::regex_flags>(cudf::strings::regex_flags::EXT_NEWLINE |
+                                                           cudf::strings::regex_flags::DOTALL);
+  prog           = cudf::strings::regex_program::create(pattern, dot_flags);
+  expected       = cudf::test::fixed_width_column_wrapper<bool>({0, 1, 0, 0, 0, 0});
+  results        = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsContainsTests, EndOfString)
