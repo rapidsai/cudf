@@ -24,7 +24,7 @@
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/device/statistics_resource_adaptor.hpp>
 
-#include <cudf_benchmark/dbgen.hpp>
+#include <cudf_benchmark/tpch_datagen.hpp>
 
 /**
  * @brief Log the peak memory usage of the GPU
