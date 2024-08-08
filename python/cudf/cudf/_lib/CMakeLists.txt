@@ -69,5 +69,4 @@ link_to_pyarrow_headers("${targets_using_arrow_headers}")
 
 add_subdirectory(io)
 add_subdirectory(nvtext)
-add_subdirectory(pylibcudf)
 add_subdirectory(strings)

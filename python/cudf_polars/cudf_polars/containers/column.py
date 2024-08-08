@@ -8,7 +8,7 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING
 
-import cudf._lib.pylibcudf as plc
+import pylibcudf as plc
 
 if TYPE_CHECKING:
     from typing_extensions import Self

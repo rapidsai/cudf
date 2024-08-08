@@ -2,8 +2,8 @@
 
 from cudf._lib.utils cimport data_from_pylibcudf_io
 
-import cudf._lib.pylibcudf as plc
-from cudf._lib.pylibcudf.io.types import SourceInfo
+import pylibcudf as plc
+from pylibcudf.io.types import SourceInfo
 
 
 cpdef read_avro(datasource, columns=None, skip_rows=0, num_rows=-1):

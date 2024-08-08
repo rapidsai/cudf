@@ -22,6 +22,12 @@ CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 # TODO: Remove `--no-test` flag once importing on a CPU
 # node works correctly
 # With boa installed conda build forwards to the boa builder
+
+RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry mambabuild \
+  --no-test \
+  --channel "${CPP_CHANNEL}" \
+  conda/recipes/pylibcudf
+
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry mambabuild \
   --no-test \
   --channel "${CPP_CHANNEL}" \

@@ -10,8 +10,9 @@ from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
+import pylibcudf
+
 import cudf
-from cudf._lib import pylibcudf
 from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
 
 from cudf._lib.column cimport Column
@@ -24,19 +25,17 @@ from cudf._lib.utils cimport table_view_from_table
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
 
+cimport pylibcudf.libcudf.contiguous_split as cpp_contiguous_split
 from libcpp.memory cimport make_unique
-
-cimport cudf._lib.pylibcudf.libcudf.contiguous_split as cpp_contiguous_split
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.lists.gather cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.lists.gather cimport (
     segmented_gather as cpp_segmented_gather,
 )
-from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
-    lists_column_view,
-)
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
+from pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.types cimport size_type
+
 from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_table_view
 
 # workaround for https://github.com/cython/cython/issues/3885

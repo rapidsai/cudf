@@ -2,5 +2,5 @@
 datetime
 ========
 
-.. automodule:: cudf._lib.pylibcudf.datetime
+.. automodule:: pylibcudf.datetime
    :members:

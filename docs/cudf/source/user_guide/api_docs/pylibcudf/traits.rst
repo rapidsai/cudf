@@ -2,5 +2,5 @@
 traits
 ======
 
-.. automodule:: cudf._lib.pylibcudf.traits
+.. automodule:: pylibcudf.traits
    :members:

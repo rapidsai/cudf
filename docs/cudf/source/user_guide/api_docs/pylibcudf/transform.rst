@@ -2,5 +2,5 @@
 transform
 =========
 
-.. automodule:: cudf._lib.pylibcudf.transform
+.. automodule:: pylibcudf.transform
    :members:

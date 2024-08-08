@@ -1,10 +1,12 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-import cudf._lib.pylibcudf as plc
+import pylibcudf as plc
+
 from cudf.core.buffer import acquire_spill_lock
 
+from pylibcudf.libcudf.types cimport size_type
+
 from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 
 @acquire_spill_lock()

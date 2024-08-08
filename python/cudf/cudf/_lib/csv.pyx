@@ -1,13 +1,13 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+cimport pylibcudf.libcudf.types as libcudf_types
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+from pylibcudf.io.datasource cimport Datasource, NativeFileDatasource
 
-cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
-from cudf._lib.pylibcudf.io.datasource cimport Datasource, NativeFileDatasource
 from cudf._lib.types cimport dtype_to_pylibcudf_type
 
 import errno
@@ -22,23 +22,23 @@ import cudf
 from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
-
-from cudf._lib.io.utils cimport make_sink_info
-from cudf._lib.pylibcudf.libcudf.io.csv cimport (
+from pylibcudf.libcudf.io.csv cimport (
     csv_writer_options,
     write_csv as cpp_write_csv,
 )
-from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
-from cudf._lib.pylibcudf.libcudf.io.types cimport compression_type, sink_info
-from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.io.data_sink cimport data_sink
+from pylibcudf.libcudf.io.types cimport compression_type, sink_info
+from pylibcudf.libcudf.table.table_view cimport table_view
+
+from cudf._lib.io.utils cimport make_sink_info
 from cudf._lib.utils cimport data_from_pylibcudf_io, table_view_from_table
 
+import pylibcudf as plc
 from pyarrow.lib import NativeFile
 
-import cudf._lib.pylibcudf as plc
 from cudf.api.types import is_hashable
 
-from cudf._lib.pylibcudf.types cimport DataType
+from pylibcudf.types cimport DataType
 
 CSV_HEX_TYPE_MAP = {
     "hex": np.dtype("int64"),

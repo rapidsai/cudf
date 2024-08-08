@@ -3,9 +3,8 @@
 
 from __future__ import annotations
 
+import pylibcudf as plc
 import pytest
-
-import cudf._lib.pylibcudf as plc
 
 from cudf_polars.dsl import expr
 

@@ -2,5 +2,5 @@
 reshape
 =======
 
-.. automodule:: cudf._lib.pylibcudf.reshape
+.. automodule:: pylibcudf.reshape
    :members:

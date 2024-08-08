@@ -2,5 +2,5 @@
 copying
 =======
 
-.. automodule:: cudf._lib.pylibcudf.copying
+.. automodule:: pylibcudf.copying
    :members:

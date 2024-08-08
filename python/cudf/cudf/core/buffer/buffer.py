@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typing import Any, Literal, Mapping
 
 import numpy
+import pylibcudf
 from typing_extensions import Self
 
 import rmm
@@ -501,7 +502,7 @@ def get_ptr_and_size(array_interface: Mapping) -> tuple[int, int]:
     shape = array_interface["shape"] or (1,)
     strides = array_interface["strides"]
     itemsize = cudf.dtype(array_interface["typestr"]).itemsize
-    if strides is None or cudf._lib.pylibcudf.column.is_c_contiguous(
+    if strides is None or pylibcudf.column.is_c_contiguous(
         shape, strides, itemsize
     ):
         nelem = math.prod(shape)

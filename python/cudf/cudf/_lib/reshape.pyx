@@ -2,11 +2,12 @@
 
 from cudf.core.buffer import acquire_spill_lock
 
+from pylibcudf.libcudf.types cimport size_type
+
 from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from cudf._lib.utils cimport columns_from_pylibcudf_table
 
-import cudf._lib.pylibcudf as plc
+import pylibcudf as plc
 
 
 @acquire_spill_lock()

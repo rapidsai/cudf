@@ -2,5 +2,5 @@
 interop
 =======
 
-.. automodule:: cudf._lib.pylibcudf.interop
+.. automodule:: pylibcudf.interop
    :members:

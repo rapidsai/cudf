@@ -8,30 +8,30 @@ from cudf.core._internals.expressions import parse_expression
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.utils import cudautils
 
+cimport pylibcudf.libcudf.transform as libcudf_transform
 from cython.operator cimport dereference
 from libc.stdint cimport uintptr_t
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp.utility cimport move
-
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
-
-cimport cudf._lib.pylibcudf.libcudf.transform as libcudf_transform
-from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf cimport transform as plc_transform
-from cudf._lib.pylibcudf.expressions cimport Expression
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.expressions cimport expression
-from cudf._lib.pylibcudf.libcudf.table.table cimport table
-from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
-from cudf._lib.pylibcudf.libcudf.types cimport (
+from pylibcudf cimport transform as plc_transform
+from pylibcudf.expressions cimport Expression
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.expressions cimport expression
+from pylibcudf.libcudf.table.table cimport table
+from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.types cimport (
     bitmask_type,
     data_type,
     size_type,
     type_id,
 )
+
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+
+from cudf._lib.column cimport Column
 from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.utils cimport (
     columns_from_unique_ptr,

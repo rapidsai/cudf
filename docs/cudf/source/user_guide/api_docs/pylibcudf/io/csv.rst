@@ -2,5 +2,5 @@
 CSV
 ===
 
-.. automodule:: cudf._lib.pylibcudf.io.csv
+.. automodule:: pylibcudf.io.csv
    :members:

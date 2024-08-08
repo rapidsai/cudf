@@ -2,5 +2,5 @@
 Avro
 ====
 
-.. automodule:: cudf._lib.pylibcudf.io.avro
+.. automodule:: pylibcudf.io.avro
    :members:
