@@ -103,15 +103,16 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
 
     // If we don't care about order, just gather indices of distinct keys taken from set.
     if (keep == duplicate_keep_option::KEEP_ANY) {
-      auto set = hash_set_type<RowHasher>{num_rows,
-                                          0.5,  // desired load factor
-                                          cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-                                          d_equal,
-                                          {row_hash.device_hasher(has_nulls)},
-                                          {},
-                                          {},
-                                          cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-                                          stream.value()};
+      auto set = hash_set_type<RowHasher>{
+        num_rows,
+        0.5,  // desired load factor
+        cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+        d_equal,
+        {row_hash.device_hasher(has_nulls)},
+        {},
+        {},
+        cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+        stream.value()};
 
       auto const iter = thrust::counting_iterator<cudf::size_type>{0};
       set.insert_async(iter, iter + num_rows, stream.value());
@@ -121,16 +122,17 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
       return output_indices;
     }
 
-    auto map = hash_map_type<RowHasher>{num_rows,
-                                        0.5,  // desired load factor
-                                        cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-                                        cuco::empty_value{reduction_init_value(keep)},
-                                        d_equal,
-                                        {row_hash.device_hasher(has_nulls)},
-                                        {},
-                                        {},
-                                        cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-                                        stream.value()};
+    auto map = hash_map_type<RowHasher>{
+      num_rows,
+      0.5,  // desired load factor
+      cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+      cuco::empty_value{reduction_init_value(keep)},
+      d_equal,
+      {row_hash.device_hasher(has_nulls)},
+      {},
+      {},
+      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+      stream.value()};
     return reduce_by_row(map, num_rows, keep, stream, mr);
   };
 
