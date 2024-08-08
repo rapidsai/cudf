@@ -29,20 +29,7 @@
                                                                rmm::cuda_stream_view stream,
                                                                rmm::device_async_resource_ref mr)
 {
-  // (
-  //            90000
-  //            +
-  //            (
-  //                  (P_PARTKEY/10)
-  //                      modulo
-  //                       20001
-  //            )
-  //            +
-  //            100
-  //            *
-  //            (P_PARTKEY modulo 1000)
-  // )
-  // /100
+  // Expression: (90000 + ((p_partkey/10) modulo 20001) + 100 * (p_partkey modulo 1000)) / 100
   auto table             = cudf::table_view({p_partkey});
   auto p_partkey_col_ref = cudf::ast::column_reference(0);
 
