@@ -959,11 +959,9 @@ def date_range(
             # Mismatched sign between (end-start) and offset, return empty
             # column
             periods = 0
-        elif periods == 0:
-            # end == start, return exactly 1 timestamp (start)
-            periods = 1
         else:
-            # Since closed="both", ensure end point is included
+            # If end == start, periods == 0 and we return exactly 1 timestamp (start).
+            # Otherwise, since closed="both", we ensure the end point is included.
             periods += 1
 
     # We compute `end_estim` (the estimated upper bound of the date
