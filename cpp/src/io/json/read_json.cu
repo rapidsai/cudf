@@ -31,6 +31,7 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <thrust/distance.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/scatter.h>
 
@@ -38,6 +39,9 @@
 
 namespace cudf::io::json::detail {
 
+namespace {
+
+// Return total size of sources enclosing the passed range
 size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
                     size_t range_offset,
                     size_t range_size)
@@ -50,109 +54,55 @@ size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
   });
 }
 
-/**
- * @brief Read from array of data sources into RMM buffer. The size of the returned device span
-          can be larger than the number of bytes requested from the list of sources when
-          the range to be read spans across multiple sources. This is due to the delimiter
-          characters inserted after the end of each accessed source.
- *
- * @param buffer Device span buffer to which data is read
- * @param sources Array of data sources
- * @param compression Compression format of source
- * @param range_offset Number of bytes to skip from source start
- * @param range_size Number of bytes to read from source
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @returns A subspan of the input device span containing data read
- */
-device_span<char> ingest_raw_input(device_span<char> buffer,
-                                   host_span<std::unique_ptr<datasource>> sources,
-                                   compression_type compression,
-                                   size_t range_offset,
-                                   size_t range_size,
-                                   rmm::cuda_stream_view stream)
-{
-  CUDF_FUNC_RANGE();
-  // We append a line delimiter between two files to make sure the last line of file i and the first
-  // line of file i+1 don't end up on the same JSON line, if file i does not already end with a line
-  // delimiter.
-  auto constexpr num_delimiter_chars = 1;
-
-  if (compression == compression_type::NONE) {
-    auto delimiter_map = cudf::detail::make_empty_host_vector<size_t>(sources.size(), stream);
-    std::vector<size_t> prefsum_source_sizes(sources.size());
-    std::vector<std::unique_ptr<datasource::buffer>> h_buffers;
-    size_t bytes_read = 0;
-    std::transform_inclusive_scan(sources.begin(),
-                                  sources.end(),
-                                  prefsum_source_sizes.begin(),
-                                  std::plus<size_t>{},
-                                  [](std::unique_ptr<datasource> const& s) { return s->size(); });
-    auto upper =
-      std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
-    size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
-
-    auto const total_bytes_to_read =
-      std::min(range_size, prefsum_source_sizes.back() - range_offset);
-    range_offset -= start_source ? prefsum_source_sizes[start_source - 1] : 0;
-    for (size_t i = start_source; i < sources.size() && bytes_read < total_bytes_to_read; i++) {
-      if (sources[i]->is_empty()) continue;
-      auto data_size =
-        std::min(sources[i]->size() - range_offset, total_bytes_to_read - bytes_read);
-      auto destination = reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read +
-                         (num_delimiter_chars * delimiter_map.size());
-      if (sources[i]->is_device_read_preferred(data_size)) {
-        bytes_read += sources[i]->device_read(range_offset, data_size, destination, stream);
-      } else {
-        h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
-        auto const& h_buffer = h_buffers.back();
-        CUDF_CUDA_TRY(cudaMemcpyAsync(
-          destination, h_buffer->data(), h_buffer->size(), cudaMemcpyHostToDevice, stream.value()));
-        bytes_read += h_buffer->size();
-      }
-      range_offset = 0;
-      delimiter_map.push_back(bytes_read + (num_delimiter_chars * delimiter_map.size()));
-    }
-    // Removing delimiter inserted after last non-empty source is read
-    if (!delimiter_map.empty()) { delimiter_map.pop_back(); }
-
-    // If this is a multi-file source, we scatter the JSON line delimiters between files
-    if (sources.size() > 1) {
-      static_assert(num_delimiter_chars == 1,
-                    "Currently only single-character delimiters are supported");
-      auto const delimiter_source = thrust::make_constant_iterator('\n');
-      auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
-        delimiter_map, stream, rmm::mr::get_current_device_resource());
-      thrust::scatter(rmm::exec_policy_nosync(stream),
-                      delimiter_source,
-                      delimiter_source + d_delimiter_map.size(),
-                      d_delimiter_map.data(),
-                      buffer.data());
-    }
-    stream.synchronize();
-    return buffer.first(bytes_read + (delimiter_map.size() * num_delimiter_chars));
-  }
-  // TODO: allow byte range reading from multiple compressed files.
-  auto remaining_bytes_to_read = std::min(range_size, sources[0]->size() - range_offset);
-  auto hbuffer                 = std::vector<uint8_t>(remaining_bytes_to_read);
-  // Single read because only a single compressed source is supported
-  // Reading to host because decompression of a single block is much faster on the CPU
-  sources[0]->host_read(range_offset, remaining_bytes_to_read, hbuffer.data());
-  auto uncomp_data = decompress(compression, hbuffer);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(buffer.data(),
-                                reinterpret_cast<char*>(uncomp_data.data()),
-                                uncomp_data.size() * sizeof(char),
-                                cudaMemcpyHostToDevice,
-                                stream.value()));
-  stream.synchronize();
-  return buffer.first(uncomp_data.size());
-}
-
+// Return estimated size of subchunk using a heuristic involving the byte range size and the minimum
+// subchunk size
 size_t estimate_size_per_subchunk(size_t chunk_size)
 {
   auto geometric_mean = [](double a, double b) { return std::sqrt(a * b); };
   // NOTE: heuristic for choosing subchunk size: geometric mean of minimum subchunk size (set to
   // 10kb) and the byte range size
-  return geometric_mean(std::ceil((double)chunk_size / num_subchunks), min_subchunk_size);
+  return geometric_mean(std::ceil(static_cast<double>(chunk_size) / num_subchunks),
+                        min_subchunk_size);
+}
+
+/**
+ * @brief Return the upper bound on the batch size for the JSON reader.
+ *
+ * The datasources passed to the JSON reader are split into batches demarcated by byte range
+ * offsets and read iteratively. The batch size is capped at INT_MAX bytes, which is the
+ * default value returned by the function. This value can be overridden at runtime using the
+ * environment variable LIBCUDF_JSON_BATCH_SIZE
+ *
+ * @return size in bytes
+ */
+size_t get_batch_size_upper_bound()
+{
+  auto const batch_size_str = std::getenv("LIBCUDF_JSON_BATCH_SIZE");
+  int64_t const batch_size  = batch_size_str != nullptr ? std::atol(batch_size_str) : 0L;
+  auto const batch_limit    = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
+  auto const batch_size_upper_bound =
+    static_cast<size_t>((batch_size > 0 && batch_size < batch_limit) ? batch_size : batch_limit);
+  return batch_size_upper_bound;
+}
+
+/**
+ * @brief Extract the first delimiter character position in the string
+ *
+ * @param d_data Device span in which to search for delimiter character
+ * @param delimiter Delimiter character to search for
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return Position of first delimiter character in device array
+ */
+size_type find_first_delimiter(device_span<char const> d_data,
+                               char const delimiter,
+                               rmm::cuda_stream_view stream)
+{
+  auto const first_delimiter_position =
+    thrust::find(rmm::exec_policy(stream), d_data.begin(), d_data.end(), delimiter);
+  return first_delimiter_position != d_data.end()
+           ? static_cast<size_type>(thrust::distance(d_data.begin(), first_delimiter_position))
+           : -1;
 }
 
 /**
@@ -243,6 +193,8 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
     readbufspan.size() - first_delim_pos - shift_for_nonzero_offset);
 }
 
+// Helper function to read the current batch using byte range offsets and size
+// passed
 table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
                                json_reader_options const& reader_opts,
                                rmm::cuda_stream_view stream,
@@ -268,6 +220,91 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
     cudf::device_span<char const>(reinterpret_cast<char const*>(bufview.data()), bufview.size());
   stream.synchronize();
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
+}
+
+}  // anonymous namespace
+
+device_span<char> ingest_raw_input(device_span<char> buffer,
+                                   host_span<std::unique_ptr<datasource>> sources,
+                                   compression_type compression,
+                                   size_t range_offset,
+                                   size_t range_size,
+                                   rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  // We append a line delimiter between two files to make sure the last line of file i and the first
+  // line of file i+1 don't end up on the same JSON line, if file i does not already end with a line
+  // delimiter.
+  auto constexpr num_delimiter_chars = 1;
+
+  if (compression == compression_type::NONE) {
+    auto delimiter_map = cudf::detail::make_empty_host_vector<size_t>(sources.size(), stream);
+    std::vector<size_t> prefsum_source_sizes(sources.size());
+    std::vector<std::unique_ptr<datasource::buffer>> h_buffers;
+    size_t bytes_read = 0;
+    std::transform_inclusive_scan(sources.begin(),
+                                  sources.end(),
+                                  prefsum_source_sizes.begin(),
+                                  std::plus<size_t>{},
+                                  [](std::unique_ptr<datasource> const& s) { return s->size(); });
+    auto upper =
+      std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
+    size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
+
+    auto const total_bytes_to_read =
+      std::min(range_size, prefsum_source_sizes.back() - range_offset);
+    range_offset -= start_source ? prefsum_source_sizes[start_source - 1] : 0;
+    for (size_t i = start_source; i < sources.size() && bytes_read < total_bytes_to_read; i++) {
+      if (sources[i]->is_empty()) continue;
+      auto data_size =
+        std::min(sources[i]->size() - range_offset, total_bytes_to_read - bytes_read);
+      auto destination = reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read +
+                         (num_delimiter_chars * delimiter_map.size());
+      if (sources[i]->is_device_read_preferred(data_size)) {
+        bytes_read += sources[i]->device_read(range_offset, data_size, destination, stream);
+      } else {
+        h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
+        auto const& h_buffer = h_buffers.back();
+        CUDF_CUDA_TRY(cudaMemcpyAsync(
+          destination, h_buffer->data(), h_buffer->size(), cudaMemcpyHostToDevice, stream.value()));
+        bytes_read += h_buffer->size();
+      }
+      range_offset = 0;
+      delimiter_map.push_back(bytes_read + (num_delimiter_chars * delimiter_map.size()));
+    }
+    // Removing delimiter inserted after last non-empty source is read
+    if (!delimiter_map.empty()) { delimiter_map.pop_back(); }
+
+    // If this is a multi-file source, we scatter the JSON line delimiters between files
+    if (sources.size() > 1) {
+      static_assert(num_delimiter_chars == 1,
+                    "Currently only single-character delimiters are supported");
+      auto const delimiter_source = thrust::make_constant_iterator('\n');
+      auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
+        delimiter_map, stream, rmm::mr::get_current_device_resource());
+      thrust::scatter(rmm::exec_policy_nosync(stream),
+                      delimiter_source,
+                      delimiter_source + d_delimiter_map.size(),
+                      d_delimiter_map.data(),
+                      buffer.data());
+    }
+    stream.synchronize();
+    return buffer.first(bytes_read + (delimiter_map.size() * num_delimiter_chars));
+  }
+  // TODO: allow byte range reading from multiple compressed files.
+  auto remaining_bytes_to_read = std::min(range_size, sources[0]->size() - range_offset);
+  auto hbuffer                 = std::vector<uint8_t>(remaining_bytes_to_read);
+  // Single read because only a single compressed source is supported
+  // Reading to host because decompression of a single block is much faster on the CPU
+  sources[0]->host_read(range_offset, remaining_bytes_to_read, hbuffer.data());
+  auto uncomp_data = decompress(compression, hbuffer);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(buffer.data(),
+                                reinterpret_cast<char*>(uncomp_data.data()),
+                                uncomp_data.size() * sizeof(char),
+                                cudaMemcpyHostToDevice,
+                                stream.value()));
+  stream.synchronize();
+  return buffer.first(uncomp_data.size());
 }
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
@@ -302,9 +339,9 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   chunk_size                     = !chunk_size ? total_source_size - chunk_offset
                                                : std::min(chunk_size, total_source_size - chunk_offset);
 
-  size_t const size_per_subchunk = estimate_size_per_subchunk(chunk_size);
-  size_t const batch_size_ub =
-    std::numeric_limits<int>::max() - (max_subchunks_prealloced * size_per_subchunk);
+  size_t const size_per_subchunk      = estimate_size_per_subchunk(chunk_size);
+  size_t const batch_size_upper_bound = get_batch_size_upper_bound();
+  size_t const batch_size = batch_size_upper_bound - (max_subchunks_prealloced * size_per_subchunk);
 
   /*
    * Identify the position (zero-indexed) of starting source file from which to begin
@@ -337,8 +374,8 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     // If the current source file can subsume multiple batches, we split the file until the
     // boundary of the last batch exceeds the end of the file (indexed by `pref_source_size`)
     while (pref_bytes_size < end_bytes_size &&
-           pref_source_size >= std::min(pref_bytes_size + batch_size_ub, end_bytes_size)) {
-      auto next_batch_size = std::min(batch_size_ub, end_bytes_size - pref_bytes_size);
+           pref_source_size >= std::min(pref_bytes_size + batch_size, end_bytes_size)) {
+      auto next_batch_size = std::min(batch_size, end_bytes_size - pref_bytes_size);
       batch_offsets.push_back(batch_offsets.back() + next_batch_size);
       pref_bytes_size += next_batch_size;
     }
