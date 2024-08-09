@@ -26,7 +26,7 @@ RAPIDS_REPOSITORY=rmm \
 RAPIDS_BUILD_TYPE=pull-request \
 RAPIDS_REF_NAME=1644 \
 RAPIDS_SHA=0701559 \
-RAPIDS_PY_WHEEL_NAME="librmm_${RAPIDS_PY_CUDA_SUFFIX}" \
+RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" \
     rapids-download-wheels-from-s3 cpp /tmp/libcudf_dist
 
 RAPIDS_REPOSITORY=rmm \
@@ -37,7 +37,7 @@ RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" \
     rapids-download-wheels-from-s3 python /tmp/libcudf_dist
 
 echo "librmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo /tmp/libcudf_dist/librmm_*.whl)" >> /tmp/constraints.txt
-echo "rmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo /tmp/libcudf_dist/librmm_*.whl)" >> /tmp/constraints.txt
+echo "rmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo /tmp/libcudf_dist/rmm_*.whl)" >> /tmp/constraints.txt
 # --- end of section to remove ---#
 
 export PIP_CONSTRAINT="/tmp/constraints.txt"
