@@ -14,10 +14,23 @@
  * limitations under the License.
  */
 
+#include "rand_utilities.cuh"
 #include "table_helpers.hpp"
 #include "vocab.hpp"
 
+#include <cudf/ast/detail/operators.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/groupby.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/strings/combine.hpp>
+#include <cudf/strings/convert/convert_datetime.hpp>
+#include <cudf/strings/convert/convert_integers.hpp>
+#include <cudf/strings/padding.hpp>
+#include <cudf/transform.hpp>
+#include <cudf/unary.hpp>
+
+#include <cudf_benchmark/tpch_datagen.hpp>
 
 namespace cudf {
 namespace datagen {
@@ -29,10 +42,9 @@ namespace datagen {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::table> generate_orders_independent(
-  cudf::size_type const& scale_factor,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::table> generate_orders_independent(cudf::size_type const& scale_factor,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   cudf::size_type const o_num_rows = scale_factor * 1'500'000;
@@ -140,11 +152,10 @@ std::unique_ptr<cudf::table> generate_orders_independent(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::table> generate_lineitem_partial(
-  cudf::table_view const& orders_independent,
-  cudf::size_type const& scale_factor,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& orders_independent,
+                                                       cudf::size_type const& scale_factor,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto const o_num_rows = orders_independent.num_rows();
@@ -310,10 +321,9 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-std::unique_ptr<cudf::table> generate_orders_dependent(
-  cudf::table_view const& lineitem,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& lineitem,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto const l_linestatus_mask = lineitem.column(0);
@@ -404,10 +414,9 @@ std::unique_ptr<cudf::table> generate_orders_dependent(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::table> generate_partsupp(
-  cudf::size_type const& scale_factor,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::table> generate_partsupp(cudf::size_type const& scale_factor,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   std::cout << __func__ << std::endl;
@@ -453,10 +462,9 @@ std::unique_ptr<cudf::table> generate_partsupp(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::table> generate_part(
-  cudf::size_type const& scale_factor,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::table> generate_part(cudf::size_type const& scale_factor,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   std::cout << __func__ << std::endl;
@@ -553,10 +561,9 @@ std::unique_ptr<cudf::table> generate_part(
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>>
-generate_orders_lineitem_part(
-  cudf::size_type const& scale_factor,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+generate_orders_lineitem_part(cudf::size_type const& scale_factor,
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   std::cout << __func__ << std::endl;
@@ -624,10 +631,9 @@ generate_orders_lineitem_part(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::table> generate_supplier(
-  cudf::size_type const& scale_factor,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::table> generate_supplier(cudf::size_type const& scale_factor,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   std::cout << __func__ << std::endl;
@@ -687,10 +693,9 @@ std::unique_ptr<cudf::table> generate_supplier(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::table> generate_customer(
-  cudf::size_type const& scale_factor,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::table> generate_customer(cudf::size_type const& scale_factor,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   std::cout << __func__ << std::endl;
@@ -753,9 +758,8 @@ std::unique_ptr<cudf::table> generate_customer(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::table> generate_nation(
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::table> generate_nation(rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   std::cout << __func__ << std::endl;
@@ -795,9 +799,8 @@ std::unique_ptr<cudf::table> generate_nation(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::table> generate_region(
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::table> generate_region(rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   std::cout << __func__ << std::endl;

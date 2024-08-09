@@ -13,65 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/binaryop.hpp>
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/concatenate.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/datetime.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/filling.hpp>
-#include <cudf/groupby.hpp>
-#include <cudf/join.hpp>
-#include <cudf/lists/combine.hpp>
-#include <cudf/lists/filling.hpp>
-#include <cudf/reduction.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/sorting.hpp>
-#include <cudf/strings/combine.hpp>
-#include <cudf/strings/convert/convert_booleans.hpp>
-#include <cudf/strings/convert/convert_datetime.hpp>
-#include <cudf/strings/convert/convert_durations.hpp>
-#include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
-#include <cudf/strings/padding.hpp>
-#include <cudf/strings/replace.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/transform.hpp>
-#include <cudf/unary.hpp>
 
-#include <rmm/cuda_device.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/functional>
-#include <thrust/copy.h>
-#include <thrust/device_vector.h>
-#include <thrust/distance.h>
-#include <thrust/equal.h>
-#include <thrust/execution_policy.h>
-#include <thrust/generate.h>
-#include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/logical.h>
 #include <thrust/random.h>
-#include <thrust/reduce.h>
-#include <thrust/remove.h>
-#include <thrust/scan.h>
-#include <thrust/scatter.h>
-#include <thrust/sequence.h>
 #include <thrust/transform.h>
 
-#include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
 // Convert a C++ type to a cudf::data_type

@@ -18,6 +18,23 @@
 
 #include "rand_utilities.cuh"
 
+#include <cudf/aggregation.hpp>
+#include <cudf/ast/detail/operators.hpp>
+#include <cudf/ast/expressions.hpp>
+#include <cudf/binaryop.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/filling.hpp>
+#include <cudf/join.hpp>
+#include <cudf/reduction.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/combine.hpp>
+#include <cudf/strings/convert/convert_integers.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/transform.hpp>
+#include <cudf/unary.hpp>
+
 /**
  * @brief Add a column of days to a column of timestamp_days
  *
