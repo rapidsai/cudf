@@ -2181,8 +2181,11 @@ def test_unique_level():
     assert_eq(result, expected)
 
 
-def test_from_arrays_infer_names():
-    arrays = [pd.Index([1], name="foo"), pd.Index([2], name="bar")]
+@pytest.mark.parametrize(
+    "idx", [pd.Index, pd.CategoricalIndex, pd.DatetimeIndex, pd.TimedeltaIndex]
+)
+def test_from_arrays_infer_names(idx):
+    arrays = [idx([1], name="foo"), idx([2], name="bar")]
     expected = pd.MultiIndex.from_arrays(arrays)
     result = cudf.MultiIndex.from_arrays(arrays)
     assert_eq(result, expected)
