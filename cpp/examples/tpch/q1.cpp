@@ -148,6 +148,7 @@ int main(int argc, char const** argv)
   auto const stream = cudf::get_default_stream();
   auto const mr     = rmm::mr::get_current_device_resource();
 
+  // Start the timer to measure total query execution duration
   cudf::examples::timer timer;
 
   // Prepare the dataset by either generating tables in-memory using
@@ -193,6 +194,7 @@ int main(int argc, char const** argv)
                                              stream,
                                              mr);
 
+  // End the timer and print the duration in ms
   timer.print_elapsed_millis();
 
   // Write query result to a parquet file
