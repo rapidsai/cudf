@@ -16,6 +16,7 @@
 
 #include "io/fst/lookup_tables.cuh"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/types.hpp>
 
@@ -298,10 +299,11 @@ struct TransduceToNormalizedWS {
 
 namespace detail {
 
-void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<SymbolT>>& indata,
+void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& indata,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   static constexpr std::int32_t min_out = 0;
   static constexpr std::int32_t max_out = 2;
   auto parser =
@@ -311,25 +313,26 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<Symbo
                             normalize_quotes::TransduceToNormalizedQuotes{}),
                           stream);
 
-  rmm::device_uvector<SymbolT> outbuf(indata.size() * 2, stream, mr);
+  rmm::device_buffer outbuf(indata.size() * 2, stream, mr);
   rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
-  parser.Transduce(indata.data(),
+  parser.Transduce(reinterpret_cast<SymbolT const*>(indata.data()),
                    static_cast<SymbolOffsetT>(indata.size()),
-                   outbuf.data(),
+                   static_cast<SymbolT*>(outbuf.data()),
                    thrust::make_discard_iterator(),
                    outbuf_size.data(),
                    normalize_quotes::start_state,
                    stream);
 
   outbuf.resize(outbuf_size.value(stream), stream);
-  datasource::owning_buffer<rmm::device_uvector<SymbolT>> outdata(std::move(outbuf));
+  datasource::owning_buffer<rmm::device_buffer> outdata(std::move(outbuf));
   std::swap(indata, outdata);
 }
 
-void normalize_whitespace(datasource::owning_buffer<rmm::device_uvector<SymbolT>>& indata,
+void normalize_whitespace(datasource::owning_buffer<rmm::device_buffer>& indata,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   static constexpr std::int32_t min_out = 0;
   static constexpr std::int32_t max_out = 2;
   auto parser =
@@ -339,18 +342,18 @@ void normalize_whitespace(datasource::owning_buffer<rmm::device_uvector<SymbolT>
                             normalize_whitespace::TransduceToNormalizedWS{}),
                           stream);
 
-  rmm::device_uvector<SymbolT> outbuf(indata.size(), stream, mr);
+  rmm::device_buffer outbuf(indata.size(), stream, mr);
   rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
-  parser.Transduce(indata.data(),
+  parser.Transduce(reinterpret_cast<SymbolT const*>(indata.data()),
                    static_cast<SymbolOffsetT>(indata.size()),
-                   outbuf.data(),
+                   static_cast<SymbolT*>(outbuf.data()),
                    thrust::make_discard_iterator(),
                    outbuf_size.data(),
                    normalize_whitespace::start_state,
                    stream);
 
   outbuf.resize(outbuf_size.value(stream), stream);
-  datasource::owning_buffer<rmm::device_uvector<SymbolT>> outdata(std::move(outbuf));
+  datasource::owning_buffer<rmm::device_buffer> outdata(std::move(outbuf));
   std::swap(indata, outdata);
 }
 
