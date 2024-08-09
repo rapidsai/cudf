@@ -31,6 +31,9 @@
 namespace CUDF_EXPORT cudf {
 namespace reduction::detail {
 
+// Always use 64-bit signed integer for storing count.
+using histogram_count_type = int64_t;
+
 /**
  * @brief Compute the frequency for each distinct row in the input table.
  *
@@ -38,7 +41,7 @@ namespace reduction::detail {
  * @param partial_counts An optional column containing count for each row
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate memory of the returned objects
- * @return A pair of array contains the (stable-order) indices of the distinct rows in the input
+ * @return A pair of array contains the indices of the distinct rows in the input
  * table, and their corresponding distinct counts
  */
 [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>, std::unique_ptr<column>>
