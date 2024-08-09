@@ -164,6 +164,15 @@ class Profiler:
                 func_name = self.get_namespaced_function_name(func_obj)
                 self._call_stack.append((func_name, time.perf_counter()))
         elif (
+            event == "call"
+            and frame.f_code.co_name != "_fast_slow_function_call"
+            # TODO: Add a condition to filter other functions in same cell as %%cudf.pandas.profile
+        ):
+            if self._currkey is not None:
+                self._timer[self._currkey] = time.perf_counter()
+            self._call_stack.append(("other", time.perf_counter()))
+
+        elif (
             event == "return"
             and frame.f_code.co_name == "_fast_slow_function_call"
         ):
@@ -196,7 +205,22 @@ class Profiler:
                     self._per_func_results[func_name][key].append(
                         time.perf_counter() - start
                     )
-
+        elif (
+            event == "return"
+            and frame.f_code.co_name != "_fast_slow_function_call"
+            # TODO: Add a condition to filter other functions in same cell as %%cudf.pandas.profile
+        ):
+            if self._currkey is not None and arg is not None:
+                run_time = time.perf_counter() - self._timer[self._currkey]
+                self._results[self._currkey]["cpu_time"] = (
+                    run_time + self._results[self._currkey].get("cpu_time", 0)
+                )
+            func_name, start = self._call_stack.pop()
+            if arg is not None:
+                key = "cpu"
+                self._per_func_results["other"][key].append(
+                    time.perf_counter() - start
+                )
         return self._tracefunc
 
     @property

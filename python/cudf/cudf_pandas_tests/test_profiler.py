@@ -30,6 +30,7 @@ def test_profiler():
 
     per_function_stats = profiler.per_function_stats
     assert set(per_function_stats) == {
+        "other",
         "Timestamp",
         "DataFrame",
         "DataFrame.groupby",
@@ -42,12 +43,13 @@ def test_profiler():
     for name, func in per_function_stats.items():
         assert (
             len(func["cpu"]) == 0
-            if "Time" not in name
+            if "Time" not in name or "other" not in name
             else len(func["gpu"]) == 0
         )
 
     per_line_stats = profiler.per_line_stats
     calls = [
+        "other",
         "pd.DataFrame",
         "",
         "np.random.randint",
@@ -61,7 +63,11 @@ def test_profiler():
         # Check that the expected function calls were recorded.
         assert call in line_stats[1]
         # No CPU time
-        assert line_stats[3] == 0 if "Time" not in call else line_stats[2] == 0
+        assert (
+            line_stats[3] == 0
+            if "Time" not in call or "other" not in call
+            else line_stats[2] == 0
+        )
 
 
 def test_profiler_hasattr_exception():
