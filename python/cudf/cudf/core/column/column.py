@@ -1644,24 +1644,23 @@ def build_column(
         )
     elif isinstance(dtype, IntervalDtype):
         return cudf.core.column.IntervalColumn(
+            data=None,
+            size=size,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
-            size=size,
             offset=offset,
-            children=children,
             null_count=null_count,
+            children=children,  # type: ignore[arg-type]
         )
     elif isinstance(dtype, StructDtype):
-        if size is None:
-            raise TypeError("Must specify size")
         return cudf.core.column.StructColumn(
-            data=data,
+            data=None,
+            size=size,  # type: ignore[arg-type]
             dtype=dtype,
-            size=size,
-            offset=offset,
             mask=mask,
+            offset=offset,
             null_count=null_count,
-            children=children,
+            children=children,  # type: ignore[arg-type]
         )
     elif isinstance(dtype, cudf.Decimal64Dtype):
         if size is None:
