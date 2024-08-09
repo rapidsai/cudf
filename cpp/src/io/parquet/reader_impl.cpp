@@ -470,8 +470,10 @@ reader::impl::impl(std::size_t chunk_read_limit,
     _input_pass_read_limit{pass_read_limit}
 {
   // Open and parse the source dataset metadata
-  _metadata =
-    std::make_unique<aggregate_reader_metadata>(_sources, options.is_enabled_use_arrow_schema());
+  _metadata = std::make_unique<aggregate_reader_metadata>(
+    _sources,
+    options.is_enabled_use_arrow_schema(),
+    options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
 
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
@@ -769,11 +771,14 @@ parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
 
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources)
 {
-  // do not use arrow schema when reading information from parquet metadata.
+  // Do not use arrow schema when reading information from parquet metadata.
   static constexpr auto use_arrow_schema = false;
 
+  // Do not select any columns when only reading the parquet metadata.
+  static constexpr auto has_column_projection = false;
+
   // Open and parse the source dataset metadata
-  auto metadata = aggregate_reader_metadata(sources, use_arrow_schema);
+  auto metadata = aggregate_reader_metadata(sources, use_arrow_schema, has_column_projection);
 
   return parquet_metadata{parquet_schema{walk_schema(&metadata, 0)},
                           metadata.get_num_rows(),

@@ -541,6 +541,7 @@ def read_parquet(
     dataset_kwargs=None,
     nrows=None,
     skip_rows=None,
+    allow_mismatched_pq_schemas=False,
     *args,
     **kwargs,
 ):
@@ -689,6 +690,7 @@ def read_parquet(
             dataset_kwargs=dataset_kwargs,
             nrows=nrows,
             skip_rows=skip_rows,
+            allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
             **kwargs,
         )
     # Apply filters row-wise (if any are defined), and return
@@ -927,6 +929,7 @@ def _read_parquet(
     use_pandas_metadata=None,
     nrows=None,
     skip_rows=None,
+    allow_mismatched_pq_schemas=False,
     *args,
     **kwargs,
 ):
@@ -951,6 +954,7 @@ def _read_parquet(
                 use_pandas_metadata=use_pandas_metadata,
                 nrows=nrows if nrows is not None else -1,
                 skip_rows=skip_rows if skip_rows is not None else 0,
+                allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
             )
         else:
             if nrows is None:
@@ -964,6 +968,7 @@ def _read_parquet(
                 use_pandas_metadata=use_pandas_metadata,
                 nrows=nrows,
                 skip_rows=skip_rows,
+                allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
             )
     else:
         if (

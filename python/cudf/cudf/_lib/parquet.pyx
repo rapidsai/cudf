@@ -269,7 +269,8 @@ def read_parquet_chunked(
     size_t chunk_read_limit=0,
     size_t pass_read_limit=1024000000,
     size_type nrows=-1,
-    int64_t skip_rows=0
+    int64_t skip_rows=0,
+    allow_mismatched_pq_schemas=False
 ):
     # Convert NativeFile buffers to NativeFileDatasource,
     # but save original buffers in case we need to use
@@ -291,14 +292,15 @@ def read_parquet_chunked(
     allow_range_index = columns is not None and len(columns) != 0
 
     reader = ChunkedParquetReader(
-        plc.io.SourceInfo(new_bufs),
-        columns,
-        row_groups,
-        use_pandas_metadata,
+        source_info=plc.io.SourceInfo(new_bufs),
+        columns=columns,
+        row_groups=row_groups,
+        use_pandas_metadata=use_pandas_metadata,
         chunk_read_limit=chunk_read_limit,
         pass_read_limit=pass_read_limit,
         skip_rows=skip_rows,
         nrows=nrows,
+        allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
     )
 
     tbl_w_meta = reader.read_chunk()
@@ -340,7 +342,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                    use_pandas_metadata=True,
                    Expression filters=None,
                    size_type nrows=-1,
-                   int64_t skip_rows=0):
+                   int64_t skip_rows=0,
+                   allow_mismatched_pq_schemas=False):
     """
     Cython function to call into libcudf API, see `read_parquet`.
 
@@ -378,6 +381,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         use_pandas_metadata = use_pandas_metadata,
         skip_rows = skip_rows,
         nrows = nrows,
+        allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
     )
 
     df = cudf.DataFrame._from_data(
