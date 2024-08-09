@@ -16,7 +16,6 @@
 
 #include "io/fst/lookup_tables.cuh"
 
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/types.hpp>
 
