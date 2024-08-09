@@ -200,9 +200,13 @@ int main(int argc, char const** argv)
 {
   auto const args = parse_args(argc, argv);
 
-  // Use a memory pool
+  // Create a memory resource
   auto resource = create_memory_resource(args.memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
+
+  // Get the stream and mr
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = rmm::mr::get_current_device_resource();
 
   cudf::examples::timer timer;
 
