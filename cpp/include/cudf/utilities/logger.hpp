@@ -43,6 +43,11 @@ namespace CUDF_EXPORT cudf {
  *
  * @return spdlog::logger& The logger.
  */
-spdlog::logger& logger();
+// This is a workaround for Doxygen not being able to parse the `visibility` attribute
+/// \cond DOXYGEN_IGNORE
+// We need this symbol to be visible because this TU is marked as having all
+// symbols hidden by default in cpp/CMakelists.txt.
+__attribute__((visibility("default"))) spdlog::logger& logger();
+/// \endcond
 
 }  // namespace CUDF_EXPORT cudf

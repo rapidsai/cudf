@@ -11,8 +11,35 @@ rapids-logger "Running Pandas tests using $PANDAS_TESTS_BRANCH branch and rapids
 rapids-logger "PR number: ${RAPIDS_REF_NAME:-"unknown"}"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
-RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
-python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,pandas-tests]
+RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp ./local-cudf-dep
+RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./local-cudf-dep
+
+# --- start of section to remove ---#
+# TODO: remove this before merging
+# use librmm and rmm from https://github.com/rapidsai/rmm/pull/1644
+RAPIDS_REPOSITORY=rmm \
+RAPIDS_BUILD_TYPE=pull-request \
+RAPIDS_REF_NAME=1644 \
+RAPIDS_SHA=0701559 \
+RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" \
+    rapids-download-wheels-from-s3 cpp /tmp/local-rmm-dep
+
+RAPIDS_REPOSITORY=rmm \
+RAPIDS_BUILD_TYPE=pull-request \
+RAPIDS_REF_NAME=1644 \
+RAPIDS_SHA=0701559 \
+RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" \
+    rapids-download-wheels-from-s3 python /tmp/local-rmm-dep
+
+echo "librmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo /tmp/local-rmm-dep/librmm_*.whl)" >> /tmp/constraints.txt
+echo "rmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo /tmp/local-rmm-dep/rmm_*.whl)" >> /tmp/constraints.txt
+
+export PIP_CONSTRAINT=/tmp/constraints.txt
+# --- end of section to remove ---#
+
+
+python -m pip install "$(echo ./local-cudf-dep/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
+python -m pip install --find-links $(pwd)/local-cudf-dep "$(echo ./local-cudf-dep/cudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test,pandas-tests]"
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
