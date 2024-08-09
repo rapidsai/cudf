@@ -35,6 +35,32 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
 )
 
+add_library(cudf_tpch_datagen STATIC common/cudf_tpch_datagen/tpch_datagen.cu)
+target_compile_features(cudf_tpch_datagen PUBLIC cxx_std_17 cuda_std_17)
+
+target_compile_options(
+  cudf_tpch_datagen PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                           "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
+
+target_link_libraries(
+  cudf_tpch_datagen
+  PUBLIC cudf cudftestutil nvtx3::nvtx3-cpp
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+)
+
+target_include_directories(
+  cudf_tpch_datagen
+  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+)
+
+install(
+  TARGETS cudf_tpch_datagen
+  DESTINATION ${lib_dir}
+  EXPORT cudf-exports
+)
+
 # ##################################################################################################
 # * compiler function -----------------------------------------------------------------------------
 
