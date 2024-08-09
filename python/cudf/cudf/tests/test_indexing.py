@@ -2361,3 +2361,11 @@ def test_sliced_categorical_as_ordered():
         name="a",
     )
     assert_eq(result, expected)
+
+
+def test_duplicate_labels_raises():
+    df = cudf.DataFrame([[1, 2]], columns=["a", "b"])
+    with pytest.raises(ValueError):
+        df[["a", "a"]]
+    with pytest.raises(ValueError):
+        df.loc[:, ["a", "a"]]

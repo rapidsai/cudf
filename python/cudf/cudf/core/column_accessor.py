@@ -530,6 +530,10 @@ class ColumnAccessor(abc.MutableMapping):
             )
         else:
             data = {k: self._grouped_data[k] for k in key}
+            if len(data) != len(key):
+                raise ValueError(
+                    "Selecting duplicate column labels is not supported."
+                )
         if self.multiindex:
             data = dict(_to_flat_dict_inner(data))
         return self.__class__(
