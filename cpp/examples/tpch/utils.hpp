@@ -255,11 +255,14 @@ std::vector<T> concat(std::vector<T> const& lhs, std::vector<T> const& rhs)
  * @param predicate The filter predicate
  */
 [[nodiscard]] std::unique_ptr<table_with_names> apply_filter(
-  std::unique_ptr<table_with_names> const& table, cudf::ast::operation const& predicate)
+  std::unique_ptr<table_with_names> const& table,
+  cudf::ast::operation const& predicate,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto const boolean_mask = cudf::compute_column(table->table(), predicate);
-  auto result_table       = cudf::apply_boolean_mask(table->table(), boolean_mask->view());
+  auto const boolean_mask = cudf::compute_column(table->table(), predicate, stream, mr);
+  auto result_table = cudf::apply_boolean_mask(table->table(), boolean_mask->view(), stream, mr);
   return std::make_unique<table_with_names>(std::move(result_table), table->column_names());
 }
 

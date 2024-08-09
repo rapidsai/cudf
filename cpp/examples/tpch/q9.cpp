@@ -112,9 +112,13 @@ int main(int argc, char const** argv)
 {
   auto const args = parse_args(argc, argv);
 
-  // Use a memory pool
+  // Create a memory resource
   auto resource = create_memory_resource(args.memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
+
+  // Get the stream and mr
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = rmm::mr::get_current_device_resource();
 
   cudf::examples::timer timer;
 
@@ -136,7 +140,7 @@ int main(int argc, char const** argv)
   auto const p_name = part->table().column(1);
   auto const mask =
     cudf::strings::like(cudf::strings_column_view(p_name), cudf::string_scalar("%green%"));
-  auto const part_filtered = apply_mask(part, mask);
+  auto const part_filtered = apply_mask(part, mask, stream, mr);
 
   // Perform the joins
   auto const join_a = apply_inner_join(supplier, nation, {"s_nationkey"}, {"n_nationkey"});
@@ -152,7 +156,9 @@ int main(int argc, char const** argv)
   auto amount = calc_amount(joined_table->column("l_discount"),
                             joined_table->column("l_extendedprice"),
                             joined_table->column("ps_supplycost"),
-                            joined_table->column("l_quantity"));
+                            joined_table->column("l_quantity"),
+                            stream,
+                            mr);
 
   // Put together the `profit` table
   std::vector<std::unique_ptr<cudf::column>> profit_columns;
@@ -165,14 +171,19 @@ int main(int argc, char const** argv)
     std::move(profit_table), std::vector<std::string>{"nation", "o_year", "amount"});
 
   // Perform the groupby operation
-  auto const groupedby_table = apply_groupby(
-    profit,
-    groupby_context_t{{"nation", "o_year"},
-                      {{"amount", {{cudf::groupby_aggregation::SUM, "sum_profit"}}}}});
+  auto const groupedby_table =
+    apply_groupby(profit,
+                  groupby_context_t{{"nation", "o_year"},
+                                    {{"amount", {{cudf::groupby_aggregation::SUM, "sum_profit"}}}}},
+                  stream,
+                  mr);
 
   // Perform the orderby operation
-  auto const orderedby_table = apply_orderby(
-    groupedby_table, {"nation", "o_year"}, {cudf::order::ASCENDING, cudf::order::DESCENDING});
+  auto const orderedby_table = apply_orderby(groupedby_table,
+                                             {"nation", "o_year"},
+                                             {cudf::order::ASCENDING, cudf::order::DESCENDING},
+                                             stream,
+                                             mr);
 
   timer.print_elapsed_millis();
 

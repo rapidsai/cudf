@@ -93,9 +93,13 @@ int main(int argc, char const** argv)
 {
   auto const args = parse_args(argc, argv);
 
-  // Use a memory pool
+  // Create a memory resource
   auto resource = create_memory_resource(args.memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
+
+  // Get the stream and mr
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = rmm::mr::get_current_device_resource();
 
   cudf::examples::timer timer;
 
@@ -152,11 +156,13 @@ int main(int argc, char const** argv)
       {"c_custkey", "c_name", "c_acctbal", "c_phone", "n_name", "c_address", "c_comment"},
       {
         {"revenue", {{cudf::aggregation::Kind::SUM, "revenue"}}},
-      }});
+      }},
+    stream,
+    mr);
 
   // Perform the order by operation
   auto const orderedby_table =
-    apply_orderby(groupedby_table, {"revenue"}, {cudf::order::DESCENDING});
+    apply_orderby(groupedby_table, {"revenue"}, {cudf::order::DESCENDING}, stream, mr);
 
   timer.print_elapsed_millis();
 

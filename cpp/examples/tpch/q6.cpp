@@ -63,9 +63,13 @@ int main(int argc, char const** argv)
 {
   auto const args = parse_args(argc, argv);
 
-  // Use a memory pool
+  // Create a memory resource
   auto resource = create_memory_resource(args.memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
+
+  // Get the stream and mr
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = rmm::mr::get_current_device_resource();
 
   cudf::examples::timer timer;
 
@@ -122,12 +126,13 @@ int main(int argc, char const** argv)
   auto const filtered_table = apply_filter(lineitem, discount_quantity_pred);
 
   // Calculate the `revenue` column
-  auto revenue =
-    calc_revenue(filtered_table->column("l_extendedprice"), filtered_table->column("l_discount"));
+  auto revenue = calc_revenue(
+    filtered_table->column("l_extendedprice"), filtered_table->column("l_discount"), stream, mr);
 
   // Sum the `revenue` column
   auto const revenue_view = revenue->view();
-  auto const result_table = apply_reduction(revenue_view, cudf::aggregation::Kind::SUM, "revenue");
+  auto const result_table =
+    apply_reduction(revenue_view, cudf::aggregation::Kind::SUM, "revenue", stream, mr);
 
   timer.print_elapsed_millis();
 
