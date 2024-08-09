@@ -16,7 +16,6 @@
 
 #include "rand_utilities.cuh"
 #include "table_helpers.hpp"
-#include "vocab.hpp"
 
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
