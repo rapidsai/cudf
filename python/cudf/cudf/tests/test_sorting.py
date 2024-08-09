@@ -405,3 +405,23 @@ def test_dataframe_scatter_by_map_empty():
     df = DataFrame({"a": [], "b": []}, dtype="float64")
     scattered = df.scatter_by_map(df["a"])
     assert len(scattered) == 0
+
+
+def test_sort_values_by_index_level():
+    df = pd.DataFrame({"a": [1, 3, 2]}, index=pd.Index([1, 3, 2], name="b"))
+    cudf_df = DataFrame.from_pandas(df)
+    result = cudf_df.sort_values("b")
+    expected = df.sort_values("b")
+    assert_eq(result, expected)
+
+
+def test_sort_values_by_ambiguous():
+    df = pd.DataFrame({"a": [1, 3, 2]}, index=pd.Index([1, 3, 2], name="a"))
+    cudf_df = DataFrame.from_pandas(df)
+
+    assert_exceptions_equal(
+        lfunc=df.sort_values,
+        rfunc=cudf_df.sort_values,
+        lfunc_args_and_kwargs=(["a"], {}),
+        rfunc_args_and_kwargs=(["a"], {}),
+    )
