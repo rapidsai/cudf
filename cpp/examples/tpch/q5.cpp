@@ -240,7 +240,7 @@ int main(int argc, char const** argv)
 
   // Perform the order by operation
   auto const orderedby_table =
-    apply_orderby(groupedby_table, {"revenue"}, {cudf::order::DESCENDING});
+    apply_orderby(groupedby_table, {"revenue"}, {cudf::order::DESCENDING}, stream, mr);
 
   timer.print_elapsed_millis();
 
