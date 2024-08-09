@@ -206,7 +206,7 @@ TEST_F(StringsExtractTests, DotAll)
 TEST_F(StringsExtractTests, SpecialNewLines)
 {
   auto input = cudf::test::strings_column_wrapper({"zzé" NEXT_LINE "qqq" LINE_SEPARATOR "zzé",
-                                                   "qqq" LINE_SEPARATOR "zzé" NEXT_LINE "lll",
+                                                   "qqq" LINE_SEPARATOR "zzé\rlll",
                                                    "zzé",
                                                    "",
                                                    "zzé" NEXT_LINE,
@@ -228,9 +228,9 @@ TEST_F(StringsExtractTests, SpecialNewLines)
     cudf::test::strings_column_wrapper({"zzé", "zzé", "zzé", "", "zzé", "zzé"}, {1, 1, 1, 0, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 
-  prog     = cudf::strings::regex_program::create("q(q.*l)l");
-  expected = cudf::test::strings_column_wrapper(
-    {"", "qq" LINE_SEPARATOR "zzé" NEXT_LINE "ll", "", "", "", ""}, {0, 1, 0, 0, 0, 0});
+  prog = cudf::strings::regex_program::create("q(q.*l)l");
+  expected = cudf::test::strings_column_wrapper({"", "qq" LINE_SEPARATOR "zzé\rll", "", "", "", ""},
+                                                {0, 1, 0, 0, 0, 0});
   results = cudf::strings::extract(view, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   // expect no matches here since the newline(s) interrupts the pattern
