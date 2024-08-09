@@ -172,7 +172,7 @@ std::pair<cudf::table, std::string> create_parquet_typed_with_stats(std::string 
 int32_t compare_binary(std::vector<uint8_t> const& v1,
                        std::vector<uint8_t> const& v2,
                        cudf::io::parquet::detail::Type ptype,
-                       thrust::optional<cudf::io::parquet::detail::ConvertedType> const& ctype);
+                       cuda::std::optional<cudf::io::parquet::detail::ConvertedType> const& ctype);
 
 void expect_compression_stats_empty(std::shared_ptr<cudf::io::writer_compression_statistics> stats);
 
