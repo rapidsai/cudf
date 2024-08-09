@@ -9,16 +9,19 @@ import numpy as np
 
 import cudf
 from cudf import _lib as libcudf
+from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
 
 if TYPE_CHECKING:
     from cudf._typing import ScalarLike
+    from cudf.core.column.decimal import DecimalDtype
 
 
 class NumericalBaseColumn(ColumnBase, Scannable):
-    """A column composed of numerical data.
+    """
+    A column composed of numerical (bool, integer, float, decimal) data.
 
     This class encodes a standard interface for different types of columns
     containing numerical types of data. In particular, mathematical operations
@@ -41,6 +44,30 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         "cummin",
         "cummax",
     }
+
+    def __init__(
+        self,
+        data: Buffer,
+        size: int,
+        dtype: DecimalDtype | np.dtype,
+        mask: Buffer | None = None,
+        offset: int = 0,
+        null_count: int | None = None,
+        children: tuple = (),
+    ):
+        if not isinstance(data, Buffer):
+            raise ValueError("data must be a Buffer instance.")
+        if len(children) != 0:
+            raise ValueError(f"{type(self).__name__} must have no children.")
+        super().__init__(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
+        )
 
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls()

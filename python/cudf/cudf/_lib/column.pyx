@@ -88,6 +88,8 @@ cdef class Column:
         object null_count=None,
         object children=()
     ):
+        if size < 0:
+            raise ValueError("size must be >=0")
         self._size = size
         self._distinct_count = {}
         self._dtype = dtype
