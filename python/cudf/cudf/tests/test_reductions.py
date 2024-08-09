@@ -357,6 +357,7 @@ def test_reductions_axis_none_warning(op):
         expected = getattr(pdf, op)(axis=None)
     assert_eq(expected, actual, check_dtype=False)
 
+
 @pytest.mark.parametrize(
     "op",
     [
@@ -399,7 +400,9 @@ def test_dtype_deprecated(op):
     assert isinstance(result, np.int8)
 
 
-@pytest.mark.parametrize("columns", [pd.RangeIndex(2), pd.Index([0, 1], dtype="int8")])
+@pytest.mark.parametrize(
+    "columns", [pd.RangeIndex(2), pd.Index([0, 1], dtype="int8")]
+)
 def test_dataframe_axis_0_preserve_column_type_in_index(columns):
     pd_df = pd.DataFrame([[1, 2]], columns=columns)
     cudf_df = cudf.DataFrame.from_pandas(pd_df)

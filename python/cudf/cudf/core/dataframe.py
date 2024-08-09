@@ -5495,9 +5495,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if isinstance(dataframe, pd.DataFrame):
             data = {
-                i: column.as_column(
-                    col_value.array, nan_as_null=nan_as_null
-                )
+                i: column.as_column(col_value.array, nan_as_null=nan_as_null)
                 for i, (_, col_value) in enumerate(dataframe.items())
             }
             if isinstance(dataframe.index, pd.MultiIndex):

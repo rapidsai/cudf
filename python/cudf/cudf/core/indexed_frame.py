@@ -1489,7 +1489,9 @@ class IndexedFrame(Frame):
             **kwargs,
         )
 
-    def median(self, axis=no_default, skipna=True, numeric_only=None, **kwargs):
+    def median(
+        self, axis=no_default, skipna=True, numeric_only=None, **kwargs
+    ):
         """
         Return the median of the values for the requested axis.
 
