@@ -17,7 +17,7 @@ include(../fetch_dependencies.cmake)
 
 function(ConfigureTPCHQuery CMAKE_QUERY_NAME)
   add_executable(${CMAKE_QUERY_NAME} ${ARGN})
-  target_link_libraries(${CMAKE_QUERY_NAME} PUBLIC cudf::cudf)
+  target_link_libraries(${CMAKE_QUERY_NAME} PUBLIC cudf::cudf cudf::cudf_tpch_datagen)
   target_compile_features(${CMAKE_QUERY_NAME} PUBLIC cxx_std_17)
 endfunction()
 
