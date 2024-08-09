@@ -94,7 +94,7 @@
   return revenue;
 }
 
-[[nodiscard]] auto fetch_dataset(std::string dataset_dir)
+[[nodiscard]] auto prepare_dataset(std::string dataset_dir)
 {
   // Define the column projection for the `customer` table
   std::vector<std::string> const customer_cols = {"c_custkey", "c_nationkey"};
@@ -204,9 +204,10 @@ int main(int argc, char const** argv)
 
   cudf::examples::timer timer;
 
-  // Generate or read out tables from parquet files
+  // Prepare the dataset by either generating tables in-memory using
+  // the cudf tpch datagen or by reading parquet files provided by the user
   auto const [customer, orders, lineitem, supplier, nation, region] =
-    fetch_dataset(args.dataset_dir);
+    prepare_dataset(args.dataset_dir);
 
   // Perform the joins
   auto const join_a = apply_inner_join(region, nation, {"r_regionkey"}, {"n_regionkey"});
