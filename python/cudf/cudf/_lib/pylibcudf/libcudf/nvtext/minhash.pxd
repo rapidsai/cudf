@@ -20,3 +20,13 @@ cdef extern from "nvtext/minhash.hpp" namespace "nvtext" nogil:
         const column_view &seeds,
         const size_type width,
     ) except +
+
+    cdef unique_ptr[column] word_minhash(
+        const column_view &input,
+        const column_view &seeds
+    ) except +
+
+    cdef unique_ptr[column] word_minhash64(
+        const column_view &input,
+        const column_view &seeds
+    ) except +
