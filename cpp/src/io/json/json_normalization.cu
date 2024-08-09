@@ -303,7 +303,6 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& inda
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
   static constexpr std::int32_t min_out = 0;
   static constexpr std::int32_t max_out = 2;
   auto parser =
@@ -332,7 +331,6 @@ void normalize_whitespace(datasource::owning_buffer<rmm::device_buffer>& indata,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
   static constexpr std::int32_t min_out = 0;
   static constexpr std::int32_t max_out = 2;
   auto parser =
