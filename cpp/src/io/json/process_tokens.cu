@@ -19,6 +19,7 @@
 // #include "tabulate_output_iterator.cuh"
 #include "output_writer_iterator.h"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/detail/tokenize_json.hpp>
 
@@ -26,11 +27,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/scan.h>
 #include <thrust/transform_scan.h>
-#include <thrust/tuple.h>
-
-#include <sys/types.h>
 
 namespace cudf::io::json {
 namespace detail {
@@ -92,6 +89,7 @@ void validate_token_stream(device_span<char const> d_input,
                            cudf::io::json_reader_options const& options,
                            rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   if (options.is_strict_validation()) {
     using token_t = cudf::io::json::token_t;
     auto validate_values =
@@ -233,7 +231,7 @@ void validate_token_stream(device_span<char const> d_input,
       auto u_count = 0;
       for (SymbolOffsetT idx = start + 1; idx < end; idx++) {
         auto c = data[idx];
-        if (!allow_unquoted_control_chars && c >= 0 && c < 32) { return false; }
+        if (!allow_unquoted_control_chars && c >= '\0' && c < '\32') { return false; }
 
         switch (state) {
           case string_state::normal:
