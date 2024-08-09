@@ -381,7 +381,7 @@ struct groupby_context_t {
 {
   CUDF_FUNC_RANGE();
   auto const agg            = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
-  auto const result         = cudf::reduce(column, *agg, column.type(), 0, stream, mr);
+  auto const result         = cudf::reduce(column, *agg, column.type(), stream, mr);
   cudf::size_type const len = 1;
   auto col                  = cudf::make_column_from_scalar(*result, len);
   std::vector<std::unique_ptr<cudf::column>> columns;
