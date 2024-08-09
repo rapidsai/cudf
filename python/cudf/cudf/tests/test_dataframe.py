@@ -11115,3 +11115,9 @@ def test_bool_raises():
         lfunc_args_and_kwargs=[[cudf.DataFrame()]],
         rfunc_args_and_kwargs=[[pd.DataFrame()]],
     )
+
+
+def test_from_pandas_preserve_column_dtype():
+    df = pd.DataFrame([[1, 2]], columns=pd.Index([1, 2], dtype="int8"))
+    result = cudf.DataFrame.from_pandas(df)
+    pd.testing.assert_index_equal(result.columns, df.columns, exact=True)

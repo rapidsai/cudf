@@ -5494,14 +5494,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         if isinstance(dataframe, pd.DataFrame):
-            if not dataframe.columns.is_unique:
-                raise ValueError("Duplicate column names are not allowed")
-
             data = {
-                col_name: column.as_column(
+                i: column.as_column(
                     col_value.array, nan_as_null=nan_as_null
                 )
-                for col_name, col_value in dataframe.items()
+                for i, (_, col_value) in enumerate(dataframe.items())
             }
             if isinstance(dataframe.index, pd.MultiIndex):
                 index = cudf.MultiIndex.from_pandas(
@@ -5512,14 +5509,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     dataframe.index, nan_as_null=nan_as_null
                 )
             df = cls._from_data(data, index)
-            df._data._level_names = tuple(dataframe.columns.names)
-
-            if isinstance(dataframe.columns, pd.RangeIndex):
-                df._data.rangeindex = True
-            # Set columns only if it is a MultiIndex
-            elif isinstance(dataframe.columns, pd.MultiIndex):
-                df.columns = dataframe.columns
-
+            # Checks duplicate columns and sets column metadata
+            df.columns = dataframe.columns
             return df
         elif hasattr(dataframe, "__dataframe__"):
             # TODO: Probably should be handled in the constructor as
@@ -6379,18 +6370,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         source = self
 
         if axis is None:
-            # TODO: All numeric reduction ops?
-            if op in {
-                "sum",
-                "product",
-                "std",
-                "var",
-                "median",
-                "mean",
-                "min",
-                "max",
-            }:
-                # Do not remove until pandas 3.0 support is added.
+            # TODO(pandas3.0): Remove if/else for just axis = 2
+            if op in {"sum", "product", "std", "var"}:
+                # pandas only raises FutureWarning for these ops
+                # though it applies for all reductions
                 warnings.warn(
                     f"In a future version, {type(self).__name__}"
                     f".{op}(axis=None) will return a scalar {op} over "

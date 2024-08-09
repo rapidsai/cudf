@@ -357,6 +357,29 @@ def test_reductions_axis_none_warning(op):
         expected = getattr(pdf, op)(axis=None)
     assert_eq(expected, actual, check_dtype=False)
 
+@pytest.mark.parametrize(
+    "op",
+    [
+        "sum",
+        "product",
+        "std",
+        "var",
+        "kurt",
+        "kurtosis",
+        "skew",
+        "min",
+        "max",
+        "mean",
+        "median",
+    ],
+)
+def test_dataframe_reduction_no_args(op):
+    df = cudf.DataFrame({"a": range(10), "b": range(10)})
+    pdf = df.to_pandas()
+    result = getattr(df, op)()
+    expected = getattr(pdf, op)()
+    assert_eq(result, expected)
+
 
 def test_reduction_column_multiindex():
     idx = cudf.MultiIndex.from_tuples(
@@ -374,3 +397,12 @@ def test_dtype_deprecated(op):
     with pytest.warns(FutureWarning):
         result = getattr(ser, op)(dtype=np.dtype(np.int8))
     assert isinstance(result, np.int8)
+
+
+@pytest.mark.parametrize("columns", [pd.RangeIndex(2), pd.Index([0, 1], dtype="int8")])
+def test_dataframe_axis_0_preserve_column_type_in_index(columns):
+    pd_df = pd.DataFrame([[1, 2]], columns=columns)
+    cudf_df = cudf.DataFrame.from_pandas(pd_df)
+    result = cudf_df.sum(axis=0)
+    expected = pd_df.sum(axis=0)
+    assert_eq(result, expected, check_index_type=True)
