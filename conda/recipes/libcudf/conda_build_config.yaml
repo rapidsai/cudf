@@ -20,7 +20,7 @@ cmake_version:
   - ">=3.26.4,!=3.30.0"
 
 libarrow_version:
-  - "==16.1.0"
+  - "==17.0.0"
 
 dlpack_version:
   - ">=0.8,<1.0"
