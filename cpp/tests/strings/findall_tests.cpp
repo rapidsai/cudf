@@ -88,7 +88,7 @@ TEST_F(StringsFindallTests, SpecialNewLines)
                                                    "qqq\nzzé" PARAGRAPH_SEPARATOR "lll",
                                                    "zzé",
                                                    "",
-                                                   "zzé" LINE_SEPARATOR,
+                                                   "zzé\r",
                                                    "zzé" LINE_SEPARATOR "zzé" NEXT_LINE});
   auto view  = cudf::strings_column_view(input);
 

@@ -617,7 +617,7 @@ TEST_F(StringsContainsTests, MultiLine)
 TEST_F(StringsContainsTests, SpecialNewLines)
 {
   auto input = cudf::test::strings_column_wrapper({"zzé" LINE_SEPARATOR "qqq" NEXT_LINE "zzé",
-                                                   "qqq" NEXT_LINE "zzé" LINE_SEPARATOR "lll",
+                                                   "qqq\rzzé" LINE_SEPARATOR "lll",
                                                    "zzé",
                                                    "",
                                                    "zzé" PARAGRAPH_SEPARATOR,

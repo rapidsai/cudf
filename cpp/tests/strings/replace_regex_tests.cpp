@@ -254,7 +254,7 @@ TEST_F(StringsReplaceRegexTest, SpecialNewLines)
                                                      "zzé",
                                                      "",
                                                      "zzé" PARAGRAPH_SEPARATOR,
-                                                     "abc" NEXT_LINE "zzé" NEXT_LINE});
+                                                     "abc\rzzé\r"});
   auto view    = cudf::strings_column_view(input);
   auto repl    = cudf::string_scalar("_");
   auto pattern = std::string("^zzé$");
@@ -266,7 +266,7 @@ TEST_F(StringsReplaceRegexTest, SpecialNewLines)
                                                       "_",
                                                       "",
                                                       "_" PARAGRAPH_SEPARATOR,
-                                                      "abc" NEXT_LINE "zzé" NEXT_LINE});
+                                                      "abc\rzzé\r"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 
   auto both_flags = static_cast<cudf::strings::regex_flags>(
@@ -278,7 +278,7 @@ TEST_F(StringsReplaceRegexTest, SpecialNewLines)
                                                      "_",
                                                      "",
                                                      "_" PARAGRAPH_SEPARATOR,
-                                                     "abc" NEXT_LINE "_" NEXT_LINE});
+                                                     "abc\r_\r"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 
   auto repl_template = std::string("[\\1]");
@@ -290,7 +290,7 @@ TEST_F(StringsReplaceRegexTest, SpecialNewLines)
                                                  "[zzé]",
                                                  "",
                                                  "[zzé]" PARAGRAPH_SEPARATOR,
-                                                 "abc" NEXT_LINE "[zzé]" NEXT_LINE});
+                                                 "abc\r[zzé]\r"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
 
