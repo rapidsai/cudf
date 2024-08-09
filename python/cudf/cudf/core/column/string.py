@@ -549,6 +549,7 @@ class StringMethods(ColumnMethods):
         offset_col = col.children[0]
 
         return cudf.core.column.ListColumn(
+            data=None,
             size=len(col),
             dtype=cudf.ListDtype(col.dtype),
             mask=col.mask,
