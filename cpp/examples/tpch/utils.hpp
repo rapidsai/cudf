@@ -345,15 +345,17 @@ struct groupby_context_t {
 [[nodiscard]] std::unique_ptr<table_with_names> apply_orderby(
   std::unique_ptr<table_with_names> const& table,
   std::vector<std::string> const& sort_keys,
-  std::vector<cudf::order> const& sort_key_orders)
+  std::vector<cudf::order> const& sort_key_orders,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   std::vector<cudf::column_view> column_views;
   for (auto& key : sort_keys) {
     column_views.push_back(table->column(key));
   }
-  auto result_table =
-    cudf::sort_by_key(table->table(), cudf::table_view{column_views}, sort_key_orders);
+  auto result_table = cudf::sort_by_key(
+    table->table(), cudf::table_view{column_views}, sort_key_orders, {}, stream, mr);
   return std::make_unique<table_with_names>(std::move(result_table), table->column_names());
 }
 

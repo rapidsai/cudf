@@ -105,7 +105,9 @@
   return charge;
 }
 
-[[nodiscard]] std::unique_ptr<table_with_names> prepare_dataset(std::string dataset_dir)
+[[nodiscard]] std::unique_ptr<table_with_names> prepare_dataset(std::string dataset_dir,
+                                                                rmm::cuda_stream_view stream,
+                                                                rmm::device_async_resource_ref mr)
 {
   // Define the column projections and filter predicate for `lineitem` table
   std::vector<std::string> const lineitem_cols = {"l_returnflag",
