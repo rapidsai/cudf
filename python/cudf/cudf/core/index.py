@@ -2408,7 +2408,8 @@ class DatetimeIndex(Index):
                       dtype='datetime64[ns]', freq='D')
         >>> datetime_index.day_name()
         Index(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-               'Friday', 'Saturday', "Sunday"], dtype='object')
+               'Friday', 'Saturday', 'Sunday'],
+              dtype='object')
         """
         day_names = self._column.get_day_names(locale)
         return Index._from_data({self.name: day_names})
