@@ -21,6 +21,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 
+#include <cudf_benchmark/tpch_datagen.hpp>
+
+#include <memory>
+#include <utility>
+
 /**
  * @file q1.cpp
  * @brief Implement query 1 of the TPC-H benchmark.
@@ -100,16 +105,8 @@
   return charge;
 }
 
-int main(int argc, char const** argv)
+[[nodiscard]] std::unique_ptr<table_with_names> prepare_dataset(std::string dataset_dir)
 {
-  auto const args = parse_args(argc, argv);
-
-  // Use a memory pool
-  auto resource = create_memory_resource(args.memory_resource_type);
-  rmm::mr::set_current_device_resource(resource.get());
-
-  cudf::examples::timer timer;
-
   // Define the column projections and filter predicate for `lineitem` table
   std::vector<std::string> const lineitem_cols = {"l_returnflag",
                                                   "l_linestatus",
@@ -127,9 +124,32 @@ int main(int argc, char const** argv)
   auto const lineitem_pred          = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LESS_EQUAL, shipdate_ref, shipdate_upper_literal);
 
-  // Read out the `lineitem` table from parquet file
-  auto lineitem =
-    read_parquet(args.dataset_dir + "/lineitem.parquet", lineitem_cols, std::move(lineitem_pred));
+  if (dataset_dir == "cudf_datagen") {
+    auto [orders_cudf, lineitem_cudf, part_cudf] = cudf::datagen::generate_orders_lineitem_part(
+      1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    auto lineitem =
+      std::make_unique<table_with_names>(std::move(lineitem_cudf), cudf::datagen::schema::LINEITEM);
+    auto lineitem_projected = lineitem->select(lineitem_cols);
+    lineitem->to_parquet("lineitem.parquet");
+    return apply_filter(lineitem_projected, *lineitem_pred);
+  } else {
+    return read_parquet(dataset_dir + "/lineitem.parquet", lineitem_cols, std::move(lineitem_pred));
+  }
+}
+
+int main(int argc, char const** argv)
+{
+  auto const args = parse_args(argc, argv);
+
+  // Use a memory pool
+  auto resource = create_memory_resource(args.memory_resource_type);
+  rmm::mr::set_current_device_resource(resource.get());
+
+  cudf::examples::timer timer;
+
+  // Prepare the dataset by either generating tables in-memory using
+  // the cudf tpch datagen or by reading parquet files provided by the user
+  auto const lineitem = prepare_dataset(args.dataset_dir);
 
   // Calculate the discount price and charge columns and append to lineitem table
   auto disc_price =
