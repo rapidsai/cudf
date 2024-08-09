@@ -74,10 +74,6 @@ struct chunk_fn {
   void operator()()
   {
     using namespace std::chrono_literals;
-    // std::cout << std::this_thread::get_id() << "=" << first_range << std::endl;
-    //  if (!first_range) {
-    //    std::this_thread::sleep_for(400ms);  // add some fixed delay
-    //  }
 
     // process each byte range assigned to this thread
     for (auto& br : byte_ranges) {
@@ -164,10 +160,10 @@ int main(int argc, char const** argv)
 
   // now aggregate the aggregate results
   auto results = compute_final_aggregates(agg_data);
-  std::cout << "number of keys: " << results->num_rows() << std::endl;
 
-  auto elapsed = std::chrono::steady_clock::now() - start;
-  std::cout << "process time: " << (elapsed.count() / 1e9) << " seconds\n";
+  elapsed_t elapsed = std::chrono::steady_clock::now() - start;
+  std::cout << "number of keys: " << results->num_rows() << std::endl;
+  std::cout << "process time: " << elapsed.count() << " seconds\n";
 
   return 0;
 }

@@ -33,6 +33,8 @@
 #include <memory>
 #include <string>
 
+using elapsed_t = std::chrono::duration<double>;
+
 int main(int argc, char const** argv)
 {
   if (argc < 2) {
@@ -41,53 +43,44 @@ int main(int argc, char const** argv)
   }
 
   auto const input_file = std::string{argv[1]};
-  auto const mr_name    = std::string{argc > 2 ? std::string(argv[2]) : std::string("cuda")};
-  auto resource         = create_memory_resource(mr_name);
+  std::cout << "input:   " << input_file << std::endl;
+
+  auto const mr_name = std::string("pool");  // "cuda"
+  auto resource      = create_memory_resource(mr_name);
   rmm::mr::set_current_device_resource(resource.get());
   auto stream = cudf::get_default_stream();
 
-  auto start        = std::chrono::steady_clock::now();
+  auto start = std::chrono::steady_clock::now();
+
   auto const source = cudf::io::text::make_source_from_file(input_file);
   cudf::io::text::parse_options options;
-  options.strip_delimiters = false;  // true;
+  options.strip_delimiters = false;
   auto raw_data_column     = cudf::io::text::multibyte_split(*source, "\n", options);
 
-  std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
+  elapsed_t elapsed = std::chrono::steady_clock::now() - start;
   std::cout << "file load time: " << elapsed.count() << " seconds" << std::endl;
+  std::cout << "input rows: " << raw_data_column->size() << std::endl;
 
-  auto sv = cudf::strings_column_view(raw_data_column->view());
-  std::cout << "loaded size = " << sv.chars_size(stream) << std::endl;
-  std::cout << "input rows: " << sv.size() << std::endl;
+  auto sv        = cudf::strings_column_view(raw_data_column->view());
   auto delimiter = cudf::string_scalar{";"};
-
-  start       = std::chrono::steady_clock::now();
-  auto splits = cudf::strings::split(sv, delimiter, 1);
-  elapsed     = std::chrono::steady_clock::now() - start;
-  std::cout << "split: " << elapsed.count() << " seconds" << std::endl;
+  auto splits    = cudf::strings::split(sv, delimiter, 1);
 
   raw_data_column->release();  // no longer needed
 
-  start      = std::chrono::steady_clock::now();
-  auto temps = cudf::strings::to_floats(cudf::strings_column_view(splits->view().column(1)),
+  auto temps  = cudf::strings::to_floats(cudf::strings_column_view(splits->view().column(1)),
                                         cudf::data_type{cudf::type_id::FLOAT32});
-  elapsed    = std::chrono::steady_clock::now() - start;
-  std::cout << "float: " << elapsed.count() << " seconds" << std::endl;
   auto cities = std::move(splits->release().front());
-
-  sv = cudf::strings_column_view(cities->view());
-  std::cout << "Cities column: " << sv.chars_size(stream) << " bytes\n";
 
   std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
   aggregations.emplace_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
   aggregations.emplace_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
   aggregations.emplace_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
 
-  start       = std::chrono::steady_clock::now();
   auto result = compute_results(cities->view(), temps->view(), std::move(aggregations));
-  elapsed     = std::chrono::steady_clock::now() - start;
-  std::cout << "Process time: " << elapsed.count() << " seconds\n";
 
-  std::cout << "Output: " << result->num_rows() << " rows" << std::endl;
+  elapsed = std::chrono::steady_clock::now() - start;
+  std::cout << "number of keys: " << result->num_rows() << std::endl;
+  std::cout << "process time: " << elapsed.count() << " seconds\n";
 
   return 0;
 }

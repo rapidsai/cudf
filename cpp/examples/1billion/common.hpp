@@ -15,11 +15,6 @@
  */
 #pragma once
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
-
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
@@ -27,17 +22,6 @@
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <string>
-
-/**
- * @brief Process the cities and temperatures
- *
- *
- * @param cities The city names
- * @param temperatures The temperature values
- * @return aggregated results
- */
-std::unique_ptr<cudf::table> compute_results(cudf::column_view const& cities,
-                                             cudf::column_view const& temperatures);
 
 /**
  * @brief Create CUDA memory resource
