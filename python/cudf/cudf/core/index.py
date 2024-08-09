@@ -2414,11 +2414,13 @@ class DatetimeIndex(Index):
         >>> datetime_index = cudf.date_range("2016-12-31", "2017-01-08", freq="D")
         >>> datetime_index
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
-                       '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07'],
+                       '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                       '2017-01-08'],
                       dtype='datetime64[ns]', freq='D')
         >>> datetime_index.day_name()
         Index(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-               'Friday', 'Saturday'], dtype='object')
+               'Friday', 'Saturday', 'Sunday'],
+              dtype='object')
         """
         day_names = self._column.get_day_names(locale)
         return Index._from_data({self.name: day_names})
