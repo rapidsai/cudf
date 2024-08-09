@@ -9,14 +9,14 @@ package_dir="python/libcudf"
 # TODO: remove this before merging
 # use librmm and rmm from
 RAPIDS_REPOSITORY=rmm \
-RAPIDS_BUILD_TYPE=pull-requst \
+RAPIDS_BUILD_TYPE=pull-request \
 RAPIDS_REF_NAME=1644 \
 RAPIDS_SHA=0701559 \
 RAPIDS_PY_WHEEL_NAME="librmm_${RAPIDS_PY_CUDA_SUFFIX}" \
     rapids-download-wheels-from-s3 cpp /tmp/libcudf_dist
 
 RAPIDS_REPOSITORY=rmm \
-RAPIDS_BUILD_TYPE=pull-requst \
+RAPIDS_BUILD_TYPE=pull-request \
 RAPIDS_REF_NAME=1644 \
 RAPIDS_SHA=0701559 \
 RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" \
