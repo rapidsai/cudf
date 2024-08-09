@@ -539,15 +539,26 @@ class regex_parser {
                                                          : static_cast<int32_t>(LBRA);
       case ')': return RBRA;
       case '^': {
-        _chr = is_multiline(_flags) ? chr : '\n';
+        if (is_ext_newline(_flags)) {
+          _chr = is_multiline(_flags) ? 'S' : 'N';
+        } else {
+          _chr = is_multiline(_flags) ? chr : '\n';
+        }
         return BOL;
       }
       case '$': {
-        _chr = is_multiline(_flags) ? chr : '\n';
+        if (is_ext_newline(_flags)) {
+          _chr = is_multiline(_flags) ? 'S' : 'N';
+        } else {
+          _chr = is_multiline(_flags) ? chr : '\n';
+        }
         return EOL;
       }
       case '[': return build_cclass();
-      case '.': return dot_type;
+      case '.': {
+        _chr = is_ext_newline(_flags) ? 'N' : chr;
+        return dot_type;
+      }
     }
 
     if (std::find(quantifiers.begin(), quantifiers.end(), static_cast<char>(chr)) ==
@@ -959,7 +970,7 @@ class regex_compiler {
       _prog.inst_at(inst_id).u1.cls_id = class_id;
     } else if (token == CHAR) {
       _prog.inst_at(inst_id).u1.c = yy;
-    } else if (token == BOL || token == EOL) {
+    } else if (token == BOL || token == EOL || token == ANY) {
       _prog.inst_at(inst_id).u1.c = yy;
     }
     push_and(inst_id, inst_id);
@@ -1194,7 +1205,7 @@ void reprog::print(regex_flags const flags)
       case STAR: printf("   STAR next=%d", inst.u2.next_id); break;
       case PLUS: printf("   PLUS next=%d", inst.u2.next_id); break;
       case QUEST: printf("  QUEST next=%d", inst.u2.next_id); break;
-      case ANY: printf("    ANY next=%d", inst.u2.next_id); break;
+      case ANY: printf("    ANY '%c', next=%d", inst.u1.c, inst.u2.next_id); break;
       case ANYNL: printf("  ANYNL next=%d", inst.u2.next_id); break;
       case NOP: printf("    NOP next=%d", inst.u2.next_id); break;
       case BOL: {

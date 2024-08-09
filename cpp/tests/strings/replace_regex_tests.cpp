@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "special_chars.h"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -243,6 +245,53 @@ TEST_F(StringsReplaceRegexTest, Multiline)
   prog    = cudf::strings::regex_program::create(pattern);
   results = cudf::strings::replace_with_backrefs(sv, *prog, repl_template);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, br_expected);
+}
+
+TEST_F(StringsReplaceRegexTest, SpecialNewLines)
+{
+  auto input   = cudf::test::strings_column_wrapper({"zzé" NEXT_LINE "qqq" NEXT_LINE "zzé",
+                                                     "qqq" NEXT_LINE "zzé" NEXT_LINE "lll",
+                                                     "zzé",
+                                                     "",
+                                                     "zzé" PARAGRAPH_SEPARATOR,
+                                                     "abc\rzzé\r"});
+  auto view    = cudf::strings_column_view(input);
+  auto repl    = cudf::string_scalar("_");
+  auto pattern = std::string("^zzé$");
+  auto prog =
+    cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::EXT_NEWLINE);
+  auto results  = cudf::strings::replace_re(view, *prog, repl);
+  auto expected = cudf::test::strings_column_wrapper({"zzé" NEXT_LINE "qqq" NEXT_LINE "zzé",
+                                                      "qqq" NEXT_LINE "zzé" NEXT_LINE "lll",
+                                                      "_",
+                                                      "",
+                                                      "_" PARAGRAPH_SEPARATOR,
+                                                      "abc\rzzé\r"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+
+  auto both_flags = static_cast<cudf::strings::regex_flags>(
+    cudf::strings::regex_flags::EXT_NEWLINE | cudf::strings::regex_flags::MULTILINE);
+  auto prog_ml = cudf::strings::regex_program::create(pattern, both_flags);
+  results      = cudf::strings::replace_re(view, *prog_ml, repl);
+  expected     = cudf::test::strings_column_wrapper({"_" NEXT_LINE "qqq" NEXT_LINE "_",
+                                                     "qqq" NEXT_LINE "_" NEXT_LINE "lll",
+                                                     "_",
+                                                     "",
+                                                     "_" PARAGRAPH_SEPARATOR,
+                                                     "abc\r_\r"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+
+  auto repl_template = std::string("[\\1]");
+  pattern            = std::string("(^zzé$)");
+  prog               = cudf::strings::regex_program::create(pattern, both_flags);
+  results            = cudf::strings::replace_with_backrefs(view, *prog, repl_template);
+  expected = cudf::test::strings_column_wrapper({"[zzé]" NEXT_LINE "qqq" NEXT_LINE "[zzé]",
+                                                 "qqq" NEXT_LINE "[zzé]" NEXT_LINE "lll",
+                                                 "[zzé]",
+                                                 "",
+                                                 "[zzé]" PARAGRAPH_SEPARATOR,
+                                                 "abc\r[zzé]\r"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
 
 TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexTest)
