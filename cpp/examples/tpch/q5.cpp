@@ -209,7 +209,7 @@ int main(int argc, char const** argv)
   // Prepare the dataset by either generating tables in-memory using
   // the cudf tpch datagen or by reading parquet files provided by the user
   auto const [customer, orders, lineitem, supplier, nation, region] =
-    prepare_dataset(args.dataset_dir);
+    prepare_dataset(args.dataset_dir, stream, mr);
 
   // Perform the joins
   auto const join_a = apply_inner_join(region, nation, {"r_regionkey"}, {"n_regionkey"});
