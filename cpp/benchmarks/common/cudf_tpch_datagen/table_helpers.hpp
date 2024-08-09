@@ -205,7 +205,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
   auto final_expr = cudf::ast::operation(cudf::ast::ast_operator::DIV, expr_f, literal_100);
 
   // Execute the AST expression
-  return cudf::compute_column(table, final_expr, mr);
+  return cudf::compute_column(table, final_expr, stream, mr);
 }
 
 /**
@@ -276,7 +276,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
   auto final_expr = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_g, literal_1);
 
   // Execute the AST expression
-  return cudf::compute_column(table, final_expr, mr);
+  return cudf::compute_column(table, final_expr, stream, mr);
 }
 
 /**
@@ -347,7 +347,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
   auto final_expr = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_g, literal_1);
 
   // Execute the AST expression
-  return cudf::compute_column(table, final_expr, mr);
+  return cudf::compute_column(table, final_expr, stream, mr);
 }
 
 /**

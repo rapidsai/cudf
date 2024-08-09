@@ -254,7 +254,7 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
     auto const pred =
       cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, col_ref, current_date_literal);
     auto const binary_mask =
-      cudf::compute_column(cudf::table_view({l_receiptdate_ts->view()}), pred, mr);
+      cudf::compute_column(cudf::table_view({l_receiptdate_ts->view()}), pred, stream, mr);
 
     auto const multiplier     = gen_rep_seq_col<int8_t>(2, false, l_num_rows, stream, mr);
     auto const ternary_mask   = cudf::binary_operation(binary_mask->view(),
@@ -277,7 +277,7 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
     auto const col_ref = cudf::ast::column_reference(0);
     auto const pred =
       cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref, current_date_literal);
-    auto mask = cudf::compute_column(cudf::table_view({l_shipdate_ts->view()}), pred, mr);
+    auto mask = cudf::compute_column(cudf::table_view({l_shipdate_ts->view()}), pred, stream, mr);
     auto mask_index_type      = cudf::cast(mask->view(), cudf::data_type{cudf::type_id::INT8});
     auto const indices        = cudf::test::fixed_width_column_wrapper<int8_t>({0, 1}).release();
     auto const keys           = cudf::test::strings_column_wrapper({"O", "F"}).release();
