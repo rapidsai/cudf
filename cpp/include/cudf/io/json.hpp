@@ -331,20 +331,23 @@ class json_reader_options {
   }
 
   /**
-   * @brief Whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity, Infinity, and 
-   * -Infinity. strict validation must be enabled for this to work.
+   * @brief Whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity, Infinity,
+   * and -Infinity. strict validation must be enabled for this to work.
    *
    * @return true if leading zeros are allowed in numeric values
    */
   [[nodiscard]] bool is_allowed_nonnumeric_numbers() const { return _allow_nonnumeric_numbers; }
 
   /**
-   * @brief Whether in a quoted string should characters greater than or equal to 0 and less than 32 be allowed
-   * without some form of escaping. Strict validation must be enabled for this to work.
+   * @brief Whether in a quoted string should characters greater than or equal to 0 and less than 32
+   * be allowed without some form of escaping. Strict validation must be enabled for this to work.
    *
    * @return true if unquoted control chars are allowed.
    */
-  [[nodiscard]] bool is_allowed_unquoted_control_chars() const { return _allow_unquoted_control_chars; }
+  [[nodiscard]] bool is_allowed_unquoted_control_chars() const
+  {
+    return _allow_unquoted_control_chars;
+  }
 
   /**
    * @brief Returns additional values to recognize as null values.
@@ -499,7 +502,7 @@ class json_reader_options {
   void allow_numeric_leading_zeros(bool val) { _allow_numeric_leading_zeros = val; }
 
   /**
-   * @brief Set whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity, 
+   * @brief Set whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity,
    * Infinity, and -Infinity. strict validation must be enabled for this to work.
    *
    * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
@@ -507,11 +510,11 @@ class json_reader_options {
   void allow_nonnumeric_numbers(bool val) { _allow_nonnumeric_numbers = val; }
 
   /**
-   * @brief Set whether in a quoted string should characters greater than or equal to 0 
-   * and less than 32 be allowed without some form of escaping. Strict validation must 
+   * @brief Set whether in a quoted string should characters greater than or equal to 0
+   * and less than 32 be allowed without some form of escaping. Strict validation must
    * be enabled for this to work.
    *
-   * @param val true to indicate wether unquoted control chars are allowed.
+   * @param val true to indicate whether unquoted control chars are allowed.
    */
   void allow_unquoted_control_chars(bool val) { _allow_unquoted_control_chars = val; }
 
@@ -736,6 +739,7 @@ class json_reader_options_builder {
    * @brief Set whether json validation should be strict or not.
    *
    * @param val Boolean value to indicate whether json validation should be strict or not.
+   * @return this for chaining
    */
   json_reader_options_builder& strict_validation(bool val)
   {
@@ -757,12 +761,12 @@ class json_reader_options_builder {
   }
 
   /**
-   * @brief Set whether specific unquoted number values are valid JSON. The values are NaN, 
+   * @brief Set whether specific unquoted number values are valid JSON. The values are NaN,
    * +INF, -INF, +Infinity, Infinity, and -Infinity.
    * strict validation must be enabled for this to have any effect.
    *
-   * @param val Boolean value to indicate if unquoted nonnumeric values are
-   * valid json or not.
+   * @param val Boolean value to indicate if unquoted nonnumeric values are valid json or not.
+   * @return this for chaining
    */
   json_reader_options_builder& nonnumeric_numbers(bool val)
   {
@@ -771,10 +775,11 @@ class json_reader_options_builder {
   }
 
   /**
-   * @brief Set whether chars >= 0 and < 32 are allowed in a quoted string without 
+   * @brief Set whether chars >= 0 and < 32 are allowed in a quoted string without
    * some form of escaping. strict validation must be enabled for this to have any effect.
    *
    * @param val Boolean value to indicate if unquoted control chars are allowed or not.
+   * @return this for chaining
    */
   json_reader_options_builder& unquoted_control_chars(bool val)
   {

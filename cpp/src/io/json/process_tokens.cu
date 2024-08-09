@@ -54,34 +54,33 @@ struct write_if {
 
 enum class number_state {
   start = 0,
-  saw_neg, // not a complete state
+  saw_neg,  // not a complete state
   leading_zero,
   whole,
-  saw_radix, // not a complete state
+  saw_radix,  // not a complete state
   fraction,
-  start_exponent, // not a complete state
-  after_sign_exponent, // not a complete state
+  start_exponent,       // not a complete state
+  after_sign_exponent,  // not a complete state
   exponent
 };
 
 enum class string_state {
   normal = 0,
-  escaped, // not a complete state
-  escaped_u // not a complete state
+  escaped,   // not a complete state
+  escaped_u  // not a complete state
 };
 
-__device__ inline bool substr_eq(const char * data,
-    SymbolOffsetT const start,
-    SymbolOffsetT const end,
-    SymbolOffsetT const expected_len,
-    const char * expected) {
+__device__ inline bool substr_eq(const char* data,
+                                 SymbolOffsetT const start,
+                                 SymbolOffsetT const end,
+                                 SymbolOffsetT const expected_len,
+                                 const char* expected)
+{
   if (end - start != expected_len) {
     return false;
   } else {
     for (auto idx = 0; idx < expected_len; idx++) {
-      if (data[start + idx] != expected[idx]) {
-        return false;
-      }
+      if (data[start + idx] != expected[idx]) { return false; }
     }
   }
   return true;
@@ -96,9 +95,8 @@ void validate_token_stream(device_span<char const> d_input,
   if (options.is_strict_validation()) {
     using token_t = cudf::io::json::token_t;
     auto validate_values =
-      [data = d_input.data(),
-       allow_numeric_leading_zeros =
-         options.is_allowed_numeric_leading_zeros(),
+      [data                        = d_input.data(),
+       allow_numeric_leading_zeros = options.is_allowed_numeric_leading_zeros(),
        allow_nonnumeric =
          options.is_allowed_nonnumeric_numbers()] __device__(SymbolOffsetT start,
                                                              SymbolOffsetT end) -> bool {
@@ -117,7 +115,8 @@ void validate_token_stream(device_span<char const> d_input,
       } else if (allow_nonnumeric && c == 'I') {
         return substr_eq(data, start, end, 8, "Infinity");
       } else if (allow_nonnumeric && c == '+') {
-        return substr_eq(data, start, end, 4, "+INF") || substr_eq(data, start, end, 9, "+Infinity");
+        return substr_eq(data, start, end, 4, "+INF") ||
+               substr_eq(data, start, end, 9, "+Infinity");
       } else if ('-' == c || c <= '9' && 'c' >= '0') {
         // number
         auto num_state = number_state::start;
@@ -141,7 +140,8 @@ void validate_token_stream(device_span<char const> d_input,
               } else if (c >= '1' && c <= '9') {
                 num_state = number_state::whole;
               } else if (allow_nonnumeric && 'I' == c) {
-                return substr_eq(data, start, end, 4, "-INF") || substr_eq(data, start, end, 9, "-Infinity");
+                return substr_eq(data, start, end, 4, "-INF") ||
+                       substr_eq(data, start, end, 9, "-Infinity");
               } else {
                 return false;
               }
@@ -212,9 +212,8 @@ void validate_token_stream(device_span<char const> d_input,
           }
         }
         return num_state != number_state::after_sign_exponent &&
-          num_state != number_state::start_exponent &&
-          num_state != number_state::saw_neg &&
-          num_state != number_state::saw_radix;
+               num_state != number_state::start_exponent && num_state != number_state::saw_neg &&
+               num_state != number_state::saw_radix;
       } else {
         return false;
       }
@@ -222,54 +221,42 @@ void validate_token_stream(device_span<char const> d_input,
 
     auto validate_strings =
       [data = d_input.data(),
-       allow_unquoted_control_chars = 
+       allow_unquoted_control_chars =
          options.is_allowed_unquoted_control_chars()] __device__(SymbolOffsetT start,
                                                                  SymbolOffsetT end) -> bool {
       // This validates a quoted string. A string must match https://www.json.org/json-en.html
       // but we already know that it has a starting and ending " and all white space has been
       // stripped out. Also the base CUDF validation makes sure escaped chars are correct
-      // so we only need to worry about unquoted control chars     
+      // so we only need to worry about unquoted control chars
 
-      auto state = string_state::normal;
+      auto state   = string_state::normal;
       auto u_count = 0;
       for (SymbolOffsetT idx = start + 1; idx < end; idx++) {
         auto c = data[idx];
-        if (!allow_unquoted_control_chars && c >= 0 && c < 32) {
-          return false;
-        }
+        if (!allow_unquoted_control_chars && c >= 0 && c < 32) { return false; }
 
         switch (state) {
           case string_state::normal:
-            if (c == '\\') {
-              state = string_state::escaped;
-            }
+            if (c == '\\') { state = string_state::escaped; }
             break;
           case string_state::escaped:
             // in Spark you can allow any char to be escaped, but CUDF
             // validates it in some cases so we need to also validate it.
             if (c == 'u') {
-              state = string_state::escaped_u;
+              state   = string_state::escaped_u;
               u_count = 0;
-            } else if (c == '"' ||
-                c == '\\' ||
-                c == '/' ||
-                c == 'b' ||
-                c == 'f' ||
-                c == 'n' ||
-                c == 'r' ||
-                c == 't') {
+            } else if (c == '"' || c == '\\' || c == '/' || c == 'b' || c == 'f' || c == 'n' ||
+                       c == 'r' || c == 't') {
               state = string_state::normal;
             } else {
               return false;
             }
             break;
           case string_state::escaped_u:
-            if ((c >= '0' && c <= '9') ||
-                (c >= 'a' && c <= 'f') ||
-                (c >= 'A' && c <= 'F')) {
+            if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
               u_count++;
               if (u_count == 4) {
-                state = string_state::normal;
+                state   = string_state::normal;
                 u_count = 0;
               }
             } else {
@@ -289,8 +276,7 @@ void validate_token_stream(device_span<char const> d_input,
                       validate_strings] __device__(auto i) -> bool {
       if (tokens[i] == token_t::ValueEnd) {
         return !validate_values(token_indices[i - 1], token_indices[i]);
-      } else if (tokens[i] == token_t::FieldNameEnd ||
-          tokens[i] == token_t::StringEnd) {
+      } else if (tokens[i] == token_t::FieldNameEnd || tokens[i] == token_t::StringEnd) {
         return !validate_strings(token_indices[i - 1], token_indices[i]);
       }
       return false;
@@ -318,10 +304,10 @@ void validate_token_stream(device_span<char const> d_input,
                       count_it + num_tokens,
                       error.begin(),
                       predicate);  // in-place scan
-    //printf("error:");
-    //for (auto tk : cudf::detail::make_std_vector_sync(error, stream))
-    //  printf("%d ", tk);
-    //printf("\n");
+    // printf("error:");
+    // for (auto tk : cudf::detail::make_std_vector_sync(error, stream))
+    //   printf("%d ", tk);
+    // printf("\n");
 
     thrust::transform_inclusive_scan(rmm::exec_policy(stream),
                                      count_it,
@@ -330,10 +316,11 @@ void validate_token_stream(device_span<char const> d_input,
                                      transform_op,
                                      binary_op);  // in-place scan
   }
-  //printf("pre_process_token:");
-  //for (auto tk : cudf::detail::make_std_vector_sync(device_span<PdaTokenT const>(tokens), stream))
-  //  printf("%d ", tk);
-  //printf("\n");
+  // printf("pre_process_token:");
+  // for (auto tk : cudf::detail::make_std_vector_sync(device_span<PdaTokenT const>(tokens),
+  // stream))
+  //   printf("%d ", tk);
+  // printf("\n");
 
   // LE SB FB FE VB VE SE LE SB ER LE SB LB VB VE SE LE LE
   // 1   0  0  0  0  0  0  1  0  0  0  0  0  0  0  0  1  1

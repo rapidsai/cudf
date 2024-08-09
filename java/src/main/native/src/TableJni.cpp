@@ -1648,21 +1648,22 @@ Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource(JNIEnv* env,
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(JNIEnv* env,
-                                                                   jclass,
-                                                                   jlong buffer,
-                                                                   jlong buffer_length,
-                                                                   jboolean day_first,
-                                                                   jboolean lines,
-                                                                   jboolean recover_with_null,
-                                                                   jboolean normalize_single_quotes,
-                                                                   jboolean normalize_whitespace,
-                                                                   jboolean mixed_types_as_string,
-                                                                   jboolean keep_quotes,
-                                                                   jboolean strict_validation,
-                                                                   jboolean allow_leading_zeros,
-                                                                   jboolean allow_nonnumeric_numbers,
-                                                                   jboolean allow_unquoted_control)
+JNIEXPORT jlong JNICALL
+Java_ai_rapids_cudf_Table_readAndInferJSON(JNIEnv* env,
+                                           jclass,
+                                           jlong buffer,
+                                           jlong buffer_length,
+                                           jboolean day_first,
+                                           jboolean lines,
+                                           jboolean recover_with_null,
+                                           jboolean normalize_single_quotes,
+                                           jboolean normalize_whitespace,
+                                           jboolean mixed_types_as_string,
+                                           jboolean keep_quotes,
+                                           jboolean strict_validation,
+                                           jboolean allow_leading_zeros,
+                                           jboolean allow_nonnumeric_numbers,
+                                           jboolean allow_unquoted_control)
 {
   JNI_NULL_CHECK(env, buffer, "buffer cannot be null", 0);
   if (buffer_length <= 0) {
