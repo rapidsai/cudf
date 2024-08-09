@@ -5,6 +5,28 @@ set -euo pipefail
 
 package_dir="python/libcudf"
 
+# --- start of section to remove ---#
+# TODO: remove this before merging
+# use librmm and rmm from
+RAPIDS_REPOSITORY=rmm \
+RAPIDS_BUILD_TYPE=pull-requst \
+RAPIDS_REF_NAME=1644 \
+RAPIDS_SHA=0701559 \
+RAPIDS_PY_WHEEL_NAME="librmm_${RAPIDS_PY_CUDA_SUFFIX}" \
+    rapids-download-wheels-from-s3 cpp /tmp/libcudf_dist
+
+RAPIDS_REPOSITORY=rmm \
+RAPIDS_BUILD_TYPE=pull-requst \
+RAPIDS_REF_NAME=1644 \
+RAPIDS_SHA=0701559 \
+RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" \
+    rapids-download-wheels-from-s3 python /tmp/libcudf_dist
+
+echo "librmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo /tmp/libcudf_dist/librmm_*.whl)" >> /tmp/constraints.txt
+echo "rmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo /tmp/libcudf_dist/librmm_*.whl)" >> /tmp/constraints.txt
+export PIP_CONSTRAINT=/tmp/constraints.txt
+# --- end of section to remove ---#
+
 ./ci/build_wheel.sh ${package_dir}
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
