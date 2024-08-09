@@ -801,14 +801,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> s.dt.hour
         0    12
         1    13
+        2    14
         dtype: int16
         >>> s.dt.second
         0    0
         1    0
+        2    0
         dtype: int16
         >>> s.dt.day
         0    3
         1    3
+        2    3
         dtype: int16
 
         Returns

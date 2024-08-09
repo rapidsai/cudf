@@ -951,7 +951,7 @@ def date_range(
         end = cudf.Scalar(end, dtype=dtype)
         _is_increment_sequence = end >= start
 
-        periods = math.ceil(
+        periods = math.floor(
             int(end - start) / _offset_to_nanoseconds_lower_bound(offset)
         )
 
@@ -959,9 +959,10 @@ def date_range(
             # Mismatched sign between (end-start) and offset, return empty
             # column
             periods = 0
-        elif periods == 0:
-            # end == start, return exactly 1 timestamp (start)
-            periods = 1
+        else:
+            # If end == start, periods == 0 and we return exactly 1 timestamp (start).
+            # Otherwise, since closed="both", we ensure the end point is included.
+            periods += 1
 
     # We compute `end_estim` (the estimated upper bound of the date
     # range) below, but don't always use it.  We do this to ensure
