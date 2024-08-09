@@ -270,10 +270,13 @@ std::vector<T> concat(std::vector<T> const& lhs, std::vector<T> const& rhs)
  * @param mask The boolean mask
  */
 [[nodiscard]] std::unique_ptr<table_with_names> apply_mask(
-  std::unique_ptr<table_with_names> const& table, std::unique_ptr<cudf::column> const& mask)
+  std::unique_ptr<table_with_names> const& table,
+  std::unique_ptr<cudf::column> const& mask,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto result_table = cudf::apply_boolean_mask(table->table(), mask->view());
+  auto result_table = cudf::apply_boolean_mask(table->table(), mask->view(), stream, mr);
   return std::make_unique<table_with_names>(std::move(result_table), table->column_names());
 }
 
@@ -369,11 +372,13 @@ struct groupby_context_t {
 [[nodiscard]] std::unique_ptr<table_with_names> apply_reduction(
   cudf::column_view const& column,
   cudf::aggregation::Kind const& agg_kind,
-  std::string const& col_name)
+  std::string const& col_name,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto const agg            = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
-  auto const result         = cudf::reduce(column, *agg, column.type());
+  auto const result         = cudf::reduce(column, *agg, column.type(), 0, stream, mr);
   cudf::size_type const len = 1;
   auto col                  = cudf::make_column_from_scalar(*result, len);
   std::vector<std::unique_ptr<cudf::column>> columns;
