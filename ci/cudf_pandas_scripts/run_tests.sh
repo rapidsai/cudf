@@ -41,7 +41,7 @@ else
 
     # --- start of section to remove ---#
     # TODO: remove this before merging
-    # use librmm and rmm from
+    # use librmm and rmm from https://github.com/rapidsai/rmm/pull/1644
     RAPIDS_REPOSITORY=rmm \
     RAPIDS_BUILD_TYPE=pull-request \
     RAPIDS_REF_NAME=1644 \
