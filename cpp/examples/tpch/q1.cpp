@@ -23,9 +23,6 @@
 
 #include <cudf_benchmark/tpch_datagen.hpp>
 
-#include <memory>
-#include <utility>
-
 /**
  * @file q1.cpp
  * @brief Implement query 1 of the TPC-H benchmark.
@@ -127,8 +124,8 @@
     cudf::ast::ast_operator::LESS_EQUAL, shipdate_ref, shipdate_upper_literal);
 
   if (dataset_dir == "cudf_datagen") {
-    auto [orders_cudf, lineitem_cudf, part_cudf] = cudf::datagen::generate_orders_lineitem_part(
-      1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    auto [orders_cudf, lineitem_cudf, part_cudf] =
+      cudf::datagen::generate_orders_lineitem_part(1, stream, mr);
     auto lineitem =
       std::make_unique<table_with_names>(std::move(lineitem_cudf), cudf::datagen::schema::LINEITEM);
     auto lineitem_projected = lineitem->select(lineitem_cols);
