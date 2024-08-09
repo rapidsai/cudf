@@ -94,7 +94,9 @@
   return revenue;
 }
 
-[[nodiscard]] auto prepare_dataset(std::string dataset_dir)
+[[nodiscard]] auto prepare_dataset(std::string dataset_dir,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr)
 {
   // Define the column projection for the `customer` table
   std::vector<std::string> const customer_cols = {"c_custkey", "c_nationkey"};
@@ -178,12 +180,12 @@
 
     auto customer_projected        = customer->select(customer_cols);
     auto orders_projected          = orders->select(orders_cols);
-    auto orders_projected_filtered = apply_filter(orders_projected, *orders_pred);
+    auto orders_projected_filtered = apply_filter(orders_projected, *orders_pred, stream, mr);
     auto lineitem_projected        = lineitem->select(lineitem_cols);
     auto supplier_projected        = supplier->select(supplier_cols);
     auto nation_projected          = nation->select(nation_cols);
     auto region_projected          = region->select(region_cols);
-    auto region_projected_filtered = apply_filter(region_projected, *region_pred);
+    auto region_projected_filtered = apply_filter(region_projected, *region_pred, stream, mr);
 
     return std::make_tuple(std::move(customer_projected),
                            std::move(orders_projected_filtered),

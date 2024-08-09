@@ -123,7 +123,7 @@ int main(int argc, char const** argv)
     cudf::ast::operation(cudf::ast::ast_operator::LESS, quantity_ref, quantity_upper_literal);
   auto const discount_quantity_pred =
     cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, discount_pred, quantity_pred);
-  auto const filtered_table = apply_filter(lineitem, discount_quantity_pred);
+  auto const filtered_table = apply_filter(lineitem, discount_quantity_pred, stream, mr);
 
   // Calculate the `revenue` column
   auto revenue = calc_revenue(

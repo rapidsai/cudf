@@ -130,7 +130,7 @@
       std::make_unique<table_with_names>(std::move(lineitem_cudf), cudf::datagen::schema::LINEITEM);
     auto lineitem_projected = lineitem->select(lineitem_cols);
     lineitem->to_parquet("lineitem.parquet");
-    return apply_filter(lineitem_projected, *lineitem_pred);
+    return apply_filter(lineitem_projected, *lineitem_pred, stream, mr);
   } else {
     return read_parquet(dataset_dir + "/lineitem.parquet", lineitem_cols, std::move(lineitem_pred));
   }
