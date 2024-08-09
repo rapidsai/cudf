@@ -21,6 +21,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 
+#include <cudf_benchmark/tpch_datagen.hpp>
+
 /**
  * @file q5.cpp
  * @brief Implement query 5 of the TPC-H benchmark.
