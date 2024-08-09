@@ -19,7 +19,9 @@ import pyarrow as pa
 from pyarrow import dataset as ds
 
 import cudf
+import cudf.options
 from cudf._lib import parquet as libparquet
+from cudf.api.extensions import no_default
 from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import ioutils
@@ -541,10 +543,13 @@ def read_parquet(
     dataset_kwargs=None,
     nrows=None,
     skip_rows=None,
+    use_kvikio_s3=None,
     *args,
     **kwargs,
 ):
     """{docstring}"""
+    import s3fs.core
+
     if engine not in {"cudf", "pyarrow"}:
         raise ValueError(
             f"Only supported engines are {{'cudf', 'pyarrow'}}, got {engine=}"
@@ -579,6 +584,9 @@ def read_parquet(
     if columns is not None:
         if not is_list_like(columns):
             raise ValueError("Expected list like for columns")
+
+    if use_kvikio_s3 is None:
+        use_kvikio_s3 = cudf.options.get_option("kvikio_s3")
 
     # Start by trying construct a filesystem object, so we
     # can apply filters on remote file-systems
@@ -622,21 +630,48 @@ def read_parquet(
     have_nativefile = any(
         isinstance(source, pa.NativeFile) for source in filepath_or_buffer
     )
+    print(
+        f"read_parquet calling get_reader_filepath_or_buffer() - filepath_or_buffer: {filepath_or_buffer}, fs: {fs}"
+    )
     for source in filepath_or_buffer:
-        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            fs=fs,
-            use_python_file_object=use_python_file_object,
-            open_file_options=open_file_options,
-            storage_options=storage_options,
-            bytes_per_thread=bytes_per_thread,
-        )
+        source = ioutils.stringify_pathlike(source)
+        if use_kvikio_s3 and (
+            isinstance(fs, s3fs.core.S3FileSystem)
+            or isinstance(source, s3fs.core.S3File)
+        ):
+            tmp_source = source
+            if isinstance(source, str) and not source.startswith("s3://"):
+                tmp_source = f"s3://{source}"
+            elif isinstance(source, s3fs.core.S3File):
+                tmp_source = source.full_name
 
-        if compression is not None:
-            raise ValueError(
-                "URL content-encoding decompression is not supported"
+            # Trigger future warnings as in `ioutils.get_reader_filepath_or_buffer()`
+            if use_python_file_object not in (no_default, None):
+                warnings.warn(
+                    "The 'use_python_file_object' keyword is deprecated and "
+                    "will be removed in a future version.",
+                    FutureWarning,
+                )
+            if open_file_options is not None:
+                warnings.warn(
+                    "The 'open_file_options' keyword is deprecated and "
+                    "will be removed in a future version.",
+                    FutureWarning,
+                )
+        else:
+            tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
+                path_or_data=source,
+                compression=None,
+                fs=fs,
+                use_python_file_object=use_python_file_object,
+                open_file_options=open_file_options,
+                storage_options=storage_options,
+                bytes_per_thread=bytes_per_thread,
             )
+            if compression is not None:
+                raise ValueError(
+                    "URL content-encoding decompression is not supported"
+                )
         if isinstance(tmp_source, list):
             filepath_or_buffer.extend(tmp_source)
         else:
@@ -821,6 +856,9 @@ def _parquet_to_frame(
     skip_rows=None,
     **kwargs,
 ):
+    print(
+        f"_parquet_to_frame_parquet_to_frame() - paths_or_buffers: {paths_or_buffers}"
+    )
     # If this is not a partitioned read, only need
     # one call to `_read_parquet`
     if not partition_keys:

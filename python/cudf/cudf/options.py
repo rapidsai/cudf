@@ -351,6 +351,18 @@ _register_option(
     _make_contains_validator([False, True]),
 )
 
+_register_option(
+    "kvikio_s3",
+    _env_get_bool("CUDF_KVIKIO_S3", False),
+    textwrap.dedent(
+        """
+        Whether to use KvikIO's S3 backend or not.
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)
+
 
 class option_context(ContextDecorator):
     """

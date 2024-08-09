@@ -24,6 +24,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <kvikio/file_handle.hpp>
+#include <kvikio/remote_handle.hpp>
 
 #include <rmm/device_buffer.hpp>
 
@@ -427,12 +428,84 @@ class user_datasource_wrapper : public datasource {
   datasource* const source;  ///< A non-owning pointer to the user-implemented datasource
 };
 
+/**
+ * @brief
+ */
+class remote_file_source : public datasource {
+ public:
+  explicit remote_file_source(char const* filepath)
+  {
+    std::cout << "remote_file_source() - filepath: " << filepath << std::endl;
+    detail::force_init_cuda_context();
+    CUDF_EXPECTS(cufile_integration::is_kvikio_enabled(),
+                 "Please enable kvikio to access S3 files.");
+    _kvikio_file = kvikio::RemoteHandle(filepath);
+  }
+
+  ~remote_file_source() override = default;
+
+  [[nodiscard]] bool supports_device_read() const override { return true; }
+
+  [[nodiscard]] bool is_device_read_preferred(size_t size) const override { return true; }
+
+  [[nodiscard]] size_t size() const override { return _kvikio_file.nbytes(); }
+
+  std::future<size_t> device_read_async(size_t offset,
+                                        size_t size,
+                                        uint8_t* dst,
+                                        rmm::cuda_stream_view stream) override
+  {
+    CUDF_EXPECTS(supports_device_read(), "Remote reads are not supported for this file.");
+
+    auto const read_size = std::min(size, this->size() - offset);
+    return _kvikio_file.pread(dst, read_size, offset);
+  }
+
+  size_t device_read(size_t offset,
+                     size_t size,
+                     uint8_t* dst,
+                     rmm::cuda_stream_view stream) override
+  {
+    return device_read_async(offset, size, dst, stream).get();
+  }
+
+  std::unique_ptr<datasource::buffer> device_read(size_t offset,
+                                                  size_t size,
+                                                  rmm::cuda_stream_view stream) override
+  {
+    rmm::device_buffer out_data(size, stream);
+    size_t read = device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
+    out_data.resize(read, stream);
+    return datasource::buffer::create(std::move(out_data));
+  }
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    auto const read_size = std::min(size, this->size() - offset);
+    return _kvikio_file.pread(dst, read_size, offset).get();
+  }
+
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    auto const count = std::min(size, this->size() - offset);
+    std::vector<uint8_t> h_data(count);
+    this->host_read(offset, count, h_data.data());
+    return datasource::buffer::create(std::move(h_data));
+  }
+
+ private:
+  kvikio::RemoteHandle _kvikio_file;
+};
+
 }  // namespace
 
 std::unique_ptr<datasource> datasource::create(std::string const& filepath,
                                                size_t offset,
                                                size_t size)
 {
+  if (filepath.size() > 5 && filepath.substr(0, 5) == "s3://") {
+    return std::make_unique<remote_file_source>(filepath.c_str());
+  }
 #ifdef CUFILE_FOUND
   if (cufile_integration::is_always_enabled()) {
     // avoid mmap as GDS is expected to be used for most reads
