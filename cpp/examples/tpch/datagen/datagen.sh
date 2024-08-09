@@ -4,7 +4,7 @@
 set -e
 
 scale_factor=$1
-pwd=$(pwd)
+script_dir=$(pwd)
 
 # Clone the datafusion repository and apply a patch
 # for single threaded data generation so that a
@@ -13,7 +13,7 @@ rm -rf datafusion
 git clone https://github.com/apache/datafusion.git datafusion
 cd datafusion/
 git checkout 679a85f
-git apply ${pwd}/tpch.patch
+git apply ${script_dir}/tpch.patch
 cd benchmarks/
 
 # Generate the data
@@ -28,4 +28,4 @@ else
 fi
 
 # Correct the datatypes of the parquet files
-python3 ${pwd}/correct_datatypes.py data/tpch_sf${scale_factor}
+python3 ${script_dir}/correct_datatypes.py data/tpch_sf${scale_factor}

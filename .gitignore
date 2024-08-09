@@ -79,6 +79,7 @@ Debug
 build/
 cpp/build/
 cpp/examples/*/install/
+cpp/examples/*/build/
 cpp/examples/tpch/datagen/datafusion
 cpp/include/cudf/ipc_generated/*.h
 cpp/thirdparty/googletest/
