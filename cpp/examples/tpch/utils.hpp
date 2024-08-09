@@ -123,7 +123,8 @@ class table_with_names {
    *
    * @param col_names The names of the columns to select
    */
-  [[nodiscard]] std::unique_ptr<table_with_names> select(std::vector<std::string> const& col_names) const
+  [[nodiscard]] std::unique_ptr<table_with_names> select(
+    std::vector<std::string> const& col_names) const
   {
     CUDF_FUNC_RANGE();
     std::vector<cudf::size_type> col_indices;
@@ -131,7 +132,7 @@ class table_with_names {
       col_indices.push_back(col_id(col_name));
     }
     auto selected_tbl_view = tbl->select(col_indices);
-    auto selected_tbl = std::make_unique<cudf::table>(selected_tbl_view);
+    auto selected_tbl      = std::make_unique<cudf::table>(selected_tbl_view);
     return std::make_unique<table_with_names>(std::move(selected_tbl), col_names);
   }
   /**
