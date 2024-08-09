@@ -21,6 +21,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 
+#include <cudf_benchmark/tpch_datagen.hpp>
+
 /**
  * @file q1.cpp
  * @brief Implement query 1 of the TPC-H benchmark.
@@ -100,16 +102,10 @@
   return charge;
 }
 
-int main(int argc, char const** argv)
+[[nodiscard]] std::unique_ptr<table_with_names> prepare_dataset(std::string dataset_dir,
+                                                                rmm::cuda_stream_view stream,
+                                                                rmm::device_async_resource_ref mr)
 {
-  auto const args = parse_args(argc, argv);
-
-  // Use a memory pool
-  auto resource = create_memory_resource(args.memory_resource_type);
-  rmm::mr::set_current_device_resource(resource.get());
-
-  cudf::examples::timer timer;
-
   // Define the column projections and filter predicate for `lineitem` table
   std::vector<std::string> const lineitem_cols = {"l_returnflag",
                                                   "l_linestatus",
@@ -127,14 +123,42 @@ int main(int argc, char const** argv)
   auto const lineitem_pred          = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LESS_EQUAL, shipdate_ref, shipdate_upper_literal);
 
-  // Read out the `lineitem` table from parquet file
-  auto lineitem =
-    read_parquet(args.dataset_dir + "/lineitem.parquet", lineitem_cols, std::move(lineitem_pred));
+  if (dataset_dir == "cudf_datagen") {
+    auto [orders_cudf, lineitem_cudf, part_cudf] =
+      cudf::datagen::generate_orders_lineitem_part(1, stream, mr);
+    auto lineitem =
+      std::make_unique<table_with_names>(std::move(lineitem_cudf), cudf::datagen::schema::LINEITEM);
+    auto lineitem_projected = lineitem->select(lineitem_cols);
+    lineitem->to_parquet("lineitem.parquet");
+    return apply_filter(lineitem_projected, *lineitem_pred);
+  } else {
+    return read_parquet(dataset_dir + "/lineitem.parquet", lineitem_cols, std::move(lineitem_pred));
+  }
+}
+
+int main(int argc, char const** argv)
+{
+  auto const args = parse_args(argc, argv);
+
+  // Create a memory resource
+  auto resource = create_memory_resource(args.memory_resource_type);
+  rmm::mr::set_current_device_resource(resource.get());
+
+  // Get the stream and mr
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = rmm::mr::get_current_device_resource();
+
+  // Start the timer to measure total query execution duration
+  cudf::examples::timer timer;
+
+  // Prepare the dataset by either generating tables in-memory using
+  // the cudf tpch datagen or by reading parquet files provided by the user
+  auto const lineitem = prepare_dataset(args.dataset_dir, stream, mr);
 
   // Calculate the discount price and charge columns and append to lineitem table
-  auto disc_price =
-    calc_disc_price(lineitem->column("l_discount"), lineitem->column("l_extendedprice"));
-  auto charge = calc_charge(lineitem->column("l_tax"), disc_price->view());
+  auto disc_price = calc_disc_price(
+    lineitem->column("l_discount"), lineitem->column("l_extendedprice"), stream, mr);
+  auto charge = calc_charge(lineitem->column("l_tax"), disc_price->view(), stream, mr);
   (*lineitem).append(disc_price, "disc_price").append(charge, "charge");
 
   // Perform the group by operation
@@ -159,13 +183,18 @@ int main(int argc, char const** argv)
         {"charge",
          {{cudf::aggregation::Kind::SUM, "sum_charge"},
           {cudf::aggregation::Kind::COUNT_ALL, "count_order"}}},
-      }});
+      }},
+    stream,
+    mr);
 
   // Perform the order by operation
   auto const orderedby_table = apply_orderby(groupedby_table,
                                              {"l_returnflag", "l_linestatus"},
-                                             {cudf::order::ASCENDING, cudf::order::ASCENDING});
+                                             {cudf::order::ASCENDING, cudf::order::ASCENDING},
+                                             stream,
+                                             mr);
 
+  // End the timer and print the duration in ms
   timer.print_elapsed_millis();
 
   // Write query result to a parquet file

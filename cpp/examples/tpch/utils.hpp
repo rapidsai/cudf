@@ -36,6 +36,7 @@
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <ctime>
+#include <memory>
 
 // RMM memory resource creation utilities
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
@@ -96,7 +97,10 @@ class table_with_names {
   {
     CUDF_FUNC_RANGE();
     auto it = std::find(col_names.begin(), col_names.end(), col_name);
-    if (it == col_names.end()) { throw std::runtime_error("Column not found"); }
+    if (it == col_names.end()) {
+      std::string err_msg = "Column not found: " + col_name;
+      throw std::runtime_error(err_msg);
+    }
     return std::distance(col_names.begin(), it);
   }
   /**
@@ -119,14 +123,17 @@ class table_with_names {
    *
    * @param col_names The names of the columns to select
    */
-  [[nodiscard]] cudf::table_view select(std::vector<std::string> const& col_names) const
+  [[nodiscard]] std::unique_ptr<table_with_names> select(
+    std::vector<std::string> const& col_names) const
   {
     CUDF_FUNC_RANGE();
     std::vector<cudf::size_type> col_indices;
     for (auto const& col_name : col_names) {
       col_indices.push_back(col_id(col_name));
     }
-    return tbl->select(col_indices);
+    auto selected_tbl_view = tbl->select(col_indices);
+    auto selected_tbl      = std::make_unique<cudf::table>(selected_tbl_view);
+    return std::make_unique<table_with_names>(std::move(selected_tbl), col_names);
   }
   /**
    * @brief Write the table to a parquet file
@@ -283,10 +290,13 @@ struct groupby_context_t {
  * @param ctx The groupby context
  */
 [[nodiscard]] std::unique_ptr<table_with_names> apply_groupby(
-  std::unique_ptr<table_with_names> const& table, groupby_context_t const& ctx)
+  std::unique_ptr<table_with_names> const& table,
+  groupby_context_t const& ctx,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto const keys = table->select(ctx.keys);
+  auto const keys = table->select(ctx.keys)->table();
   cudf::groupby::groupby groupby_obj(keys);
   std::vector<std::string> result_column_names;
   result_column_names.insert(result_column_names.end(), ctx.keys.begin(), ctx.keys.end());
@@ -312,7 +322,7 @@ struct groupby_context_t {
   }
   auto agg_results = groupby_obj.aggregate(requests);
   std::vector<std::unique_ptr<cudf::column>> result_columns;
-  for (size_t i = 0; i < agg_results.first->num_columns(); i++) {
+  for (cudf::size_type i = 0; i < agg_results.first->num_columns(); i++) {
     auto col = std::make_unique<cudf::column>(agg_results.first->get_column(i));
     result_columns.push_back(std::move(col));
   }
@@ -335,15 +345,17 @@ struct groupby_context_t {
 [[nodiscard]] std::unique_ptr<table_with_names> apply_orderby(
   std::unique_ptr<table_with_names> const& table,
   std::vector<std::string> const& sort_keys,
-  std::vector<cudf::order> const& sort_key_orders)
+  std::vector<cudf::order> const& sort_key_orders,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   std::vector<cudf::column_view> column_views;
   for (auto& key : sort_keys) {
     column_views.push_back(table->column(key));
   }
-  auto result_table =
-    cudf::sort_by_key(table->table(), cudf::table_view{column_views}, sort_key_orders);
+  auto result_table = cudf::sort_by_key(
+    table->table(), cudf::table_view{column_views}, sort_key_orders, {}, stream, mr);
   return std::make_unique<table_with_names>(std::move(result_table), table->column_names());
 }
 
