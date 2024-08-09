@@ -234,7 +234,9 @@ int main(int argc, char const** argv)
                   groupby_context_t{{"n_name"},
                                     {
                                       {"revenue", {{cudf::aggregation::Kind::SUM, "revenue"}}},
-                                    }});
+                                    }},
+                  stream,
+                  mr);
 
   // Perform the order by operation
   auto const orderedby_table =
