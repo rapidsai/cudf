@@ -36,6 +36,7 @@
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <ctime>
+#include <memory>
 
 // RMM memory resource creation utilities
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
@@ -122,14 +123,16 @@ class table_with_names {
    *
    * @param col_names The names of the columns to select
    */
-  [[nodiscard]] cudf::table_view select(std::vector<std::string> const& col_names) const
+  [[nodiscard]] std::unique_ptr<table_with_names> select(std::vector<std::string> const& col_names) const
   {
     CUDF_FUNC_RANGE();
     std::vector<cudf::size_type> col_indices;
     for (auto const& col_name : col_names) {
       col_indices.push_back(col_id(col_name));
     }
-    return tbl->select(col_indices);
+    auto selected_tbl_view = tbl->select(col_indices);
+    auto selected_tbl = std::make_unique<cudf::table>(selected_tbl_view);
+    return std::make_unique<table_with_names>(std::move(selected_tbl), col_names);
   }
   /**
    * @brief Write the table to a parquet file
@@ -289,7 +292,7 @@ struct groupby_context_t {
   std::unique_ptr<table_with_names> const& table, groupby_context_t const& ctx)
 {
   CUDF_FUNC_RANGE();
-  auto const keys = table->select(ctx.keys);
+  auto const keys = table->select(ctx.keys)->table();
   cudf::groupby::groupby groupby_obj(keys);
   std::vector<std::string> result_column_names;
   result_column_names.insert(result_column_names.end(), ctx.keys.begin(), ctx.keys.end());
