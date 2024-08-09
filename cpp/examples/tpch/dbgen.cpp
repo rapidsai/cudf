@@ -129,18 +129,24 @@ int main(int argc, char** argv)
 
   auto [orders, lineitem, part] = cudf::datagen::generate_orders_lineitem_part(
     scale_factor, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  write_parquet(std::move(orders), "orders.parquet", cudf::datagen::schema::ORDERS);
+  write_parquet(std::move(lineitem), "lineitem.parquet", cudf::datagen::schema::LINEITEM);
+  write_parquet(std::move(part), "part.parquet", cudf::datagen::schema::PART);
 
   auto supplier = cudf::datagen::generate_supplier(
     scale_factor, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  write_parquet(std::move(supplier), "supplier.parquet", cudf::datagen::schema::SUPPLIER);
 
   auto customer = cudf::datagen::generate_customer(
     scale_factor, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  write_parquet(std::move(customer), "customer.parquet", cudf::datagen::schema::CUSTOMER);
 
   auto nation = cudf::datagen::generate_nation(cudf::get_default_stream(),
                                                rmm::mr::get_current_device_resource());
+  write_parquet(std::move(nation), "nation.parquet", cudf::datagen::schema::NATION);
 
   auto region = cudf::datagen::generate_region(cudf::get_default_stream(),
                                                rmm::mr::get_current_device_resource());
-  write_parquet(std::move(orders), "orders.parquet", cudf::datagen::schema::ORDERS);
+  write_parquet(std::move(region), "region.parquet", cudf::datagen::schema::REGION);
   std::cout << "Peak GPU Memory Usage: " << mem_stats_logger.peak_memory_usage() << std::endl;
 }
