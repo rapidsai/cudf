@@ -141,20 +141,24 @@ int main(int argc, char const** argv)
 {
   auto const args = parse_args(argc, argv);
 
-  // Use a memory pool
+  // Create a memory resource
   auto resource = create_memory_resource(args.memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
+
+  // Get the stream and mr
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = rmm::mr::get_current_device_resource();
 
   cudf::examples::timer timer;
 
   // Prepare the dataset by either generating tables in-memory using
   // the cudf tpch datagen or by reading parquet files provided by the user
-  auto const lineitem = prepare_dataset(args.dataset_dir);
+  auto const lineitem = prepare_dataset(args.dataset_dir, stream, mr);
 
   // Calculate the discount price and charge columns and append to lineitem table
-  auto disc_price =
-    calc_disc_price(lineitem->column("l_discount"), lineitem->column("l_extendedprice"));
-  auto charge = calc_charge(lineitem->column("l_tax"), disc_price->view());
+  auto disc_price = calc_disc_price(
+    lineitem->column("l_discount"), lineitem->column("l_extendedprice"), stream, mr);
+  auto charge = calc_charge(lineitem->column("l_tax"), disc_price->view(), stream, mr);
   (*lineitem).append(disc_price, "disc_price").append(charge, "charge");
 
   // Perform the group by operation
@@ -179,12 +183,16 @@ int main(int argc, char const** argv)
         {"charge",
          {{cudf::aggregation::Kind::SUM, "sum_charge"},
           {cudf::aggregation::Kind::COUNT_ALL, "count_order"}}},
-      }});
+      }},
+    stream,
+    mr);
 
   // Perform the order by operation
   auto const orderedby_table = apply_orderby(groupedby_table,
                                              {"l_returnflag", "l_linestatus"},
-                                             {cudf::order::ASCENDING, cudf::order::ASCENDING});
+                                             {cudf::order::ASCENDING, cudf::order::ASCENDING},
+                                             stream,
+                                             mr);
 
   timer.print_elapsed_millis();
 

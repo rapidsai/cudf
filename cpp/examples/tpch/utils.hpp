@@ -290,7 +290,10 @@ struct groupby_context_t {
  * @param ctx The groupby context
  */
 [[nodiscard]] std::unique_ptr<table_with_names> apply_groupby(
-  std::unique_ptr<table_with_names> const& table, groupby_context_t const& ctx)
+  std::unique_ptr<table_with_names> const& table,
+  groupby_context_t const& ctx,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto const keys = table->select(ctx.keys)->table();
