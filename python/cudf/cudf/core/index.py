@@ -453,12 +453,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     def _get_columns_by_label(self, labels) -> Index:
         # used in .sort_values
-        if isinstance(labels, Hashable) and labels == self.name:
-            return self._as_int_index()
-        elif list(self.names) == list(labels):
-            return self._as_int_index()
-        else:
-            raise KeyError(labels)
+        if isinstance(labels, Hashable):
+            if labels == self.name:
+                return self._as_int_index()
+        elif is_list_like(labels):
+            if list(self.names) == list(labels):
+                return self._as_int_index()
+        raise KeyError(labels)
 
     @_performance_tracking
     def equals(self, other) -> bool:

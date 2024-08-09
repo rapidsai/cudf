@@ -3593,7 +3593,7 @@ class IndexedFrame(Frame):
             return self
 
         try:
-            by_in_columns = by_columns = self._get_columns_by_label(by)
+            by_in_columns = self._get_columns_by_label(by)
         except KeyError:
             by_in_columns = None
         if self.ndim == 1:
