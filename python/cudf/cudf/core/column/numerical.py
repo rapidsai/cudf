@@ -13,13 +13,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import pylibcudf
 from cudf.api.types import is_integer, is_scalar
-from cudf.core.column import (
-    ColumnBase,
-    as_column,
-    build_column,
-    column,
-    string,
-)
+from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.errors import MixedTypeError
@@ -319,8 +313,8 @@ class NumericalColumn(NumericalBaseColumn):
             return NotImplemented
 
     def int2ip(self) -> "cudf.core.column.StringColumn":
-        if self.dtype != cudf.dtype("int64"):
-            raise TypeError("Only int64 type can be converted to ip")
+        if self.dtype != cudf.dtype("uint32"):
+            raise TypeError("Only uint32 type can be converted to ip")
 
         return libcudf.string_casting.int2ip(self)
 
@@ -338,29 +332,23 @@ class NumericalColumn(NumericalBaseColumn):
     def as_datetime_column(
         self, dtype: Dtype
     ) -> cudf.core.column.DatetimeColumn:
-        return cast(
-            "cudf.core.column.DatetimeColumn",
-            build_column(
-                data=self.astype("int64").base_data,
-                dtype=dtype,
-                mask=self.base_mask,
-                offset=self.offset,
-                size=self.size,
-            ),
+        return cudf.core.column.DatetimeColumn(
+            data=self.astype("int64").base_data,  # type: ignore[arg-type]
+            dtype=dtype,
+            mask=self.base_mask,
+            offset=self.offset,
+            size=self.size,
         )
 
     def as_timedelta_column(
         self, dtype: Dtype
     ) -> cudf.core.column.TimeDeltaColumn:
-        return cast(
-            "cudf.core.column.TimeDeltaColumn",
-            build_column(
-                data=self.astype("int64").base_data,
-                dtype=dtype,
-                mask=self.base_mask,
-                offset=self.offset,
-                size=self.size,
-            ),
+        return cudf.core.column.TimeDeltaColumn(
+            data=self.astype("int64").base_data,  # type: ignore[arg-type]
+            dtype=dtype,
+            mask=self.base_mask,
+            offset=self.offset,
+            size=self.size,
         )
 
     def as_decimal_column(
@@ -567,11 +555,8 @@ class NumericalColumn(NumericalBaseColumn):
 
                 if self.dtype.kind == "f":
                     # Exclude 'np.inf', '-np.inf'
-                    s = cudf.Series(self)
-                    # TODO: replace np.inf with cudf scalar when
-                    # https://github.com/rapidsai/cudf/pull/6297 merges
-                    non_infs = s[~((s == np.inf) | (s == -np.inf))]
-                    col = non_infs._column
+                    not_inf = (self != np.inf) & (self != -np.inf)
+                    col = self.apply_boolean_mask(not_inf)
                 else:
                     col = self
 
@@ -611,8 +596,7 @@ class NumericalColumn(NumericalBaseColumn):
             else:
                 filled = self.fillna(0)
                 return (
-                    cudf.Series(filled).astype(to_dtype).astype(filled.dtype)
-                    == cudf.Series(filled)
+                    filled.astype(to_dtype).astype(filled.dtype) == filled
                 ).all()
 
         # want to cast float to int:
@@ -627,7 +611,7 @@ class NumericalColumn(NumericalBaseColumn):
             # NOTE(seberg): it would make sense to limit to the mantissa range.
             if (float(self.min()) >= min_) and (float(self.max()) <= max_):
                 filled = self.fillna(0)
-                return (cudf.Series(filled) % 1 == 0).all()
+                return (filled % 1 == 0).all()
             else:
                 return False
 
@@ -637,7 +621,10 @@ class NumericalColumn(NumericalBaseColumn):
         if isinstance(dtype, CategoricalDtype):
             return column.build_categorical_column(
                 categories=dtype.categories._values,
-                codes=build_column(self.base_data, dtype=self.dtype),
+                codes=cudf.core.column.NumericalColumn(
+                    self.base_data,  # type: ignore[arg-type]
+                    dtype=self.dtype,
+                ),
                 mask=self.base_mask,
                 ordered=dtype.ordered,
                 size=self.size,

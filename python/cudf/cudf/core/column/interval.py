@@ -1,10 +1,17 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Literal
+
 import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core.column import StructColumn
+from cudf.core.column import StructColumn, as_column
 from cudf.core.dtypes import IntervalDtype
+
+if TYPE_CHECKING:
+    from cudf.core.column import ColumnBase
 
 
 class IntervalColumn(StructColumn):
@@ -83,6 +90,61 @@ class IntervalColumn(StructColumn):
             offset=struct_copy.offset,
             null_count=struct_copy.null_count,
             children=struct_copy.base_children,
+        )
+
+    @property
+    def is_empty(self) -> ColumnBase:
+        left_equals_right = (self.right == self.left).fillna(False)
+        not_closed_both = as_column(
+            self.dtype.closed != "both", length=len(self)
+        )
+        return left_equals_right & not_closed_both
+
+    @property
+    def is_non_overlapping_monotonic(self) -> bool:
+        raise NotImplementedError(
+            "is_overlapping is currently not implemented."
+        )
+
+    @property
+    def is_overlapping(self) -> bool:
+        raise NotImplementedError(
+            "is_overlapping is currently not implemented."
+        )
+
+    @property
+    def length(self) -> ColumnBase:
+        return self.right - self.left
+
+    @property
+    def left(self) -> ColumnBase:
+        return self.children[0]
+
+    @property
+    def mid(self) -> ColumnBase:
+        try:
+            return 0.5 * (self.left + self.right)
+        except TypeError:
+            # datetime safe version
+            return self.left + 0.5 * self.length
+
+    @property
+    def right(self) -> ColumnBase:
+        return self.children[1]
+
+    def overlaps(other) -> ColumnBase:
+        raise NotImplementedError("overlaps is not currently implemented.")
+
+    def set_closed(
+        self, closed: Literal["left", "right", "both", "neither"]
+    ) -> IntervalColumn:
+        return IntervalColumn(
+            size=self.size,
+            dtype=IntervalDtype(self.dtype.fields["left"], closed),
+            mask=self.base_mask,
+            offset=self.offset,
+            null_count=self.null_count,
+            children=self.base_children,
         )
 
     def as_interval_column(self, dtype):

@@ -3919,6 +3919,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
                      keep_option,
                      nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL,
                      cudf::nan_equality::ALL_EQUAL,
+                     cudf::get_default_stream(),
                      rmm::mr::get_current_device_resource());
     return convert_table_for_return(env, result);
   }

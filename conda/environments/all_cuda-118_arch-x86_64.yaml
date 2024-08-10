@@ -26,7 +26,7 @@ dependencies:
 - cupy>=12.0.0
 - cxx-compiler
 - cython>=3.0.3
-- dask-cuda==24.8.*,>=0.0.0a0
+- dask-cuda==24.10.*,>=0.0.0a0
 - dlpack>=0.8,<1.0
 - doxygen=1.9.1
 - fastavro>=0.22.9
@@ -44,10 +44,10 @@ dependencies:
 - libcufile=1.4.0.31
 - libcurand-dev=10.3.0.86
 - libcurand=10.3.0.86
-- libkvikio==24.8.*,>=0.0.0a0
+- libkvikio==24.10.*,>=0.0.0a0
 - libparquet==16.1.0.*
 - librdkafka>=1.9.0,<1.10.0a0
-- librmm==24.8.*,>=0.0.0a0
+- librmm==24.10.*,>=0.0.0a0
 - make
 - moto>=4.0.8
 - msgpack-python
@@ -78,11 +78,11 @@ dependencies:
 - python>=3.9,<3.12
 - pytorch>=2.1.0
 - rapids-build-backend>=0.3.0,<0.4.0.dev0
-- rapids-dask-dependency==24.8.*,>=0.0.0a0
+- rapids-dask-dependency==24.10.*,>=0.0.0a0
 - rich
-- rmm==24.8.*,>=0.0.0a0
+- rmm==24.10.*,>=0.0.0a0
 - s3fs>=2022.3.0
-- scikit-build-core>=0.7.0
+- scikit-build-core>=0.10.0
 - scipy
 - spdlog>=1.12.0,<1.13
 - sphinx
