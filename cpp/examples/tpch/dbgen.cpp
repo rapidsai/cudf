@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "utils.hpp"
+
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/parquet.hpp>
 
@@ -25,60 +27,6 @@
 #include <rmm/mr/device/statistics_resource_adaptor.hpp>
 
 #include <cudf_benchmark/tpch_datagen.hpp>
-
-/**
- * @brief Log the peak memory usage of the GPU
- */
-class memory_stats_logger {
- public:
-  memory_stats_logger()
-    : existing_mr(rmm::mr::get_current_device_resource()),
-      statistics_mr(rmm::mr::make_statistics_adaptor(existing_mr))
-  {
-    rmm::mr::set_current_device_resource(&statistics_mr);
-  }
-
-  ~memory_stats_logger() { rmm::mr::set_current_device_resource(existing_mr); }
-
-  [[nodiscard]] size_t peak_memory_usage() const noexcept
-  {
-    return statistics_mr.get_bytes_counter().peak;
-  }
-
- private:
-  rmm::mr::device_memory_resource* existing_mr;
-  rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> statistics_mr;
-};
-
-// RMM memory resource creation utilities
-inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
-inline auto make_pool()
-{
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    make_cuda(), rmm::percent_of_free_device_memory(50));
-}
-inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
-inline auto make_managed_pool()
-{
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    make_managed(), rmm::percent_of_free_device_memory(50));
-}
-
-/**
- * @brief Create an RMM memory resource based on the type
- *
- * @param rmm_type Type of memory resource to create
- */
-inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
-  std::string const& rmm_type)
-{
-  if (rmm_type == "cuda") return make_cuda();
-  if (rmm_type == "pool") return make_pool();
-  if (rmm_type == "managed") return make_managed();
-  if (rmm_type == "managed_pool") return make_managed_pool();
-  CUDF_FAIL("Unknown rmm_type parameter: " + rmm_type +
-            "\nExpecting: cuda, pool, managed, or managed_pool");
-}
 
 /**
  * @brief Write a cudf::table to a parquet file
