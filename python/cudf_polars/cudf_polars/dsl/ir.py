@@ -25,7 +25,6 @@ from typing_extensions import assert_never
 
 import polars as pl
 
-import cudf
 import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
@@ -191,26 +190,35 @@ class Scan(IR):
     """Cloud-related authentication options, currently ignored."""
     paths: list[str]
     """List of paths to read from."""
-    file_options: Any
-    """Options for reading the file.
-
-    Attributes are:
-    - ``with_columns: list[str]`` of projected columns to return.
-    - ``n_rows: int``: Number of rows to read.
-    - ``row_index: tuple[name, offset] | None``: Add an integer index
-        column with given name.
-    """
+    with_columns: list[str]
+    """Projected columns to return."""
+    skip_rows: int
+    """Rows to skip at the start when reading."""
+    n_rows: int
+    """Number of rows to read after skipping."""
+    row_index: tuple[str, int] | None
+    """If not None add an integer index column of the given name."""
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
     def __post_init__(self) -> None:
         """Validate preconditions."""
-        if self.file_options.n_rows is not None:
-            raise NotImplementedError("row limit in scan")
-        if self.typ not in ("csv", "parquet"):
+        if self.typ not in ("csv", "parquet", "ndjson"):  # pragma: no cover
+            # This line is unhittable ATM since IPC/Anonymous scan raise
+            # on the polars side
             raise NotImplementedError(f"Unhandled scan type: {self.typ}")
+        if self.typ == "ndjson" and (self.n_rows != -1 or self.skip_rows != 0):
+            raise NotImplementedError("row limit in scan for json reader")
+        if self.skip_rows < 0:
+            # TODO: polars has this implemented for parquet,
+            # maybe we can do this too?
+            raise NotImplementedError("slice pushdown for negative slices")
+        if self.typ == "csv" and self.skip_rows != 0:  # pragma: no cover
+            # This comes from slice pushdown, but that
+            # optimization doesn't happen right now
+            raise NotImplementedError("skipping rows in CSV reader")
         if self.cloud_options is not None and any(
-            self.cloud_options[k] is not None for k in ("aws", "azure", "gcp")
+            self.cloud_options.get(k) is not None for k in ("aws", "azure", "gcp")
         ):
             raise NotImplementedError(
                 "Read from cloud storage"
@@ -235,17 +243,20 @@ class Scan(IR):
                 # Need to do some file introspection to get the number
                 # of columns so that column projection works right.
                 raise NotImplementedError("Reading CSV without header")
+        elif self.typ == "ndjson":
+            # TODO: consider handling the low memory option here
+            # (maybe use chunked JSON reader)
+            if self.reader_options["ignore_errors"]:
+                raise NotImplementedError(
+                    "ignore_errors is not supported in the JSON reader"
+                )
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
-        options = self.file_options
-        with_columns = options.with_columns
-        row_index = options.row_index
+        with_columns = self.with_columns
+        row_index = self.row_index
+        n_rows = self.n_rows
         if self.typ == "csv":
-            dtype_map = {
-                name: cudf._lib.types.PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[typ.id()]
-                for name, typ in self.schema.items()
-            }
             parse_options = self.reader_options["parse_options"]
             sep = chr(parse_options["separator"])
             quote = chr(parse_options["quote_char"])
@@ -278,37 +289,79 @@ class Scan(IR):
 
             # polars skips blank lines at the beginning of the file
             pieces = []
+            read_partial = n_rows != -1
             for p in self.paths:
                 skiprows = self.reader_options["skip_rows"]
-                # TODO: read_csv expands globs which we should not do,
-                # because polars will already have handled them.
                 path = Path(p)
                 with path.open() as f:
                     while f.readline() == "\n":
                         skiprows += 1
-                pieces.append(
-                    cudf.read_csv(
-                        path,
-                        sep=sep,
-                        quotechar=quote,
-                        lineterminator=eol,
-                        names=column_names,
-                        header=header,
-                        usecols=usecols,
-                        na_filter=True,
-                        na_values=null_values,
-                        keep_default_na=False,
-                        skiprows=skiprows,
-                        comment=comment,
-                        decimal=decimal,
-                        dtype=dtype_map,
-                    )
+                tbl_w_meta = plc.io.csv.read_csv(
+                    plc.io.SourceInfo([path]),
+                    delimiter=sep,
+                    quotechar=quote,
+                    lineterminator=eol,
+                    col_names=column_names,
+                    header=header,
+                    usecols=usecols,
+                    na_filter=True,
+                    na_values=null_values,
+                    keep_default_na=False,
+                    skiprows=skiprows,
+                    comment=comment,
+                    decimal=decimal,
+                    dtypes=self.schema,
+                    nrows=n_rows,
                 )
-            df = DataFrame.from_cudf(cudf.concat(pieces))
+                pieces.append(tbl_w_meta)
+                if read_partial:
+                    n_rows -= tbl_w_meta.tbl.num_rows()
+                    if n_rows <= 0:
+                        break
+            tables, colnames = zip(
+                *(
+                    (piece.tbl, piece.column_names(include_children=False))
+                    for piece in pieces
+                )
+            )
+            df = DataFrame.from_table(
+                plc.concatenate.concatenate(list(tables)),
+                colnames[0],
+            )
         elif self.typ == "parquet":
-            cdf = cudf.read_parquet(self.paths, columns=with_columns)
-            assert isinstance(cdf, cudf.DataFrame)
-            df = DataFrame.from_cudf(cdf)
+            tbl_w_meta = plc.io.parquet.read_parquet(
+                plc.io.SourceInfo(self.paths),
+                columns=with_columns,
+                num_rows=n_rows,
+                skip_rows=self.skip_rows,
+            )
+            df = DataFrame.from_table(
+                tbl_w_meta.tbl,
+                # TODO: consider nested column names?
+                tbl_w_meta.column_names(include_children=False),
+            )
+        elif self.typ == "ndjson":
+            json_schema: list[tuple[str, str, list]] = [
+                (name, typ, []) for name, typ in self.schema.items()
+            ]
+            plc_tbl_w_meta = plc.io.json.read_json(
+                plc.io.SourceInfo(self.paths),
+                lines=True,
+                dtypes=json_schema,
+                prune_columns=True,
+            )
+            # TODO: I don't think cudf-polars supports nested types in general right now
+            # (but when it does, we should pass child column names from nested columns in)
+            df = DataFrame.from_table(
+                plc_tbl_w_meta.tbl, plc_tbl_w_meta.column_names(include_children=False)
+            )
+            col_order = list(self.schema.keys())
+            # TODO: remove condition when dropping support for polars 1.0
+            # https://github.com/pola-rs/polars/pull/17363
+            if row_index is not None and row_index[0] in self.schema:
+                col_order.remove(row_index[0])
+            if col_order is not None:
+                df = df.select(col_order)
         else:
             raise NotImplementedError(
                 f"Unhandled scan type: {self.typ}"
@@ -335,13 +388,7 @@ class Scan(IR):
                 null_order=plc.types.NullOrder.AFTER,
             )
             df = DataFrame([index, *df.columns])
-        # TODO: should be true, but not the case until we get
-        # cudf-classic out of the loop for IO since it converts date32
-        # to datetime.
-        # assert all(
-        #     c.obj.type() == dtype
-        #     for c, dtype in zip(df.columns, self.schema.values())
-        # )
+        assert all(c.obj.type() == self.schema[c.name] for c in df.columns)
         if self.predicate is None:
             return df
         else:
@@ -514,7 +561,7 @@ class GroupBy(IR):
             return max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, expr.Agg):
             return 1 + max(GroupBy.check_agg(child) for child in agg.children)
-        elif isinstance(agg, (expr.Len, expr.Col, expr.Literal)):
+        elif isinstance(agg, (expr.Len, expr.Col, expr.Literal, expr.LiteralColumn)):
             return 0
         else:
             raise NotImplementedError(f"No handler for {agg=}")
@@ -574,7 +621,7 @@ class GroupBy(IR):
         results = [
             req.evaluate(result_subs, mapping=mapping) for req in self.agg_requests
         ]
-        return DataFrame([*result_keys, *results]).slice(self.options.slice)
+        return DataFrame(broadcast(*result_keys, *results)).slice(self.options.slice)
 
 
 @dataclasses.dataclass
@@ -590,7 +637,7 @@ class Join(IR):
     right_on: list[expr.NamedExpr]
     """List of expressions used as keys in the right frame."""
     options: tuple[
-        Literal["inner", "left", "full", "leftsemi", "leftanti", "cross"],
+        Literal["inner", "left", "right", "full", "leftsemi", "leftanti", "cross"],
         bool,
         tuple[int, int] | None,
         str | None,
@@ -616,7 +663,7 @@ class Join(IR):
     @staticmethod
     @cache
     def _joiners(
-        how: Literal["inner", "left", "full", "leftsemi", "leftanti"],
+        how: Literal["inner", "left", "right", "full", "leftsemi", "leftanti"],
     ) -> tuple[
         Callable, plc.copying.OutOfBoundsPolicy, plc.copying.OutOfBoundsPolicy | None
     ]:
@@ -626,7 +673,7 @@ class Join(IR):
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
             )
-        elif how == "left":
+        elif how == "left" or how == "right":
             return (
                 plc.join.left_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
@@ -650,8 +697,60 @@ class Join(IR):
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 None,
             )
-        else:
-            assert_never(how)
+        assert_never(how)
+
+    def _reorder_maps(
+        self,
+        left_rows: int,
+        lg: plc.Column,
+        left_policy: plc.copying.OutOfBoundsPolicy,
+        right_rows: int,
+        rg: plc.Column,
+        right_policy: plc.copying.OutOfBoundsPolicy,
+    ) -> list[plc.Column]:
+        """
+        Reorder gather maps to satisfy polars join order restrictions.
+
+        Parameters
+        ----------
+        left_rows
+            Number of rows in left table
+        lg
+            Left gather map
+        left_policy
+            Nullify policy for left map
+        right_rows
+            Number of rows in right table
+        rg
+            Right gather map
+        right_policy
+            Nullify policy for right map
+
+        Returns
+        -------
+        list of reordered left and right gather maps.
+
+        Notes
+        -----
+        For a left join, the polars result preserves the order of the
+        left keys, and is stable wrt the right keys. For all other
+        joins, there is no order obligation.
+        """
+        dt = plc.interop.to_arrow(plc.types.SIZE_TYPE)
+        init = plc.interop.from_arrow(pa.scalar(0, type=dt))
+        step = plc.interop.from_arrow(pa.scalar(1, type=dt))
+        left_order = plc.copying.gather(
+            plc.Table([plc.filling.sequence(left_rows, init, step)]), lg, left_policy
+        )
+        right_order = plc.copying.gather(
+            plc.Table([plc.filling.sequence(right_rows, init, step)]), rg, right_policy
+        )
+        return plc.sorting.stable_sort_by_key(
+            plc.Table([lg, rg]),
+            plc.Table([*left_order.columns(), *right_order.columns()]),
+            [plc.types.Order.ASCENDING, plc.types.Order.ASCENDING],
+            [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
+        ).columns()
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -692,7 +791,16 @@ class Join(IR):
             table = plc.copying.gather(left.table, lg, left_policy)
             result = DataFrame.from_table(table, left.column_names)
         else:
+            if how == "right":
+                # Right join is a left join with the tables swapped
+                left, right = right, left
+                left_on, right_on = right_on, left_on
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
+            if how == "left" or how == "right":
+                # Order of left table is preserved
+                lg, rg = self._reorder_maps(
+                    left.num_rows, lg, left_policy, right.num_rows, rg, right_policy
+                )
             if coalesce and how == "inner":
                 right = right.discard_columns(right_on.column_names_set)
             left = DataFrame.from_table(
@@ -715,6 +823,9 @@ class Join(IR):
                     )
                 )
                 right = right.discard_columns(right_on.column_names_set)
+            if how == "right":
+                # Undo the swap for right join before gluing together.
+                left, right = right, left
             right = right.rename_columns(
                 {
                     name: f"{name}{suffix}"
@@ -1041,9 +1152,48 @@ class HConcat(IR):
     dfs: list[IR]
     """List of inputs."""
 
+    @staticmethod
+    def _extend_with_nulls(table: plc.Table, *, nrows: int) -> plc.Table:
+        """
+        Extend a table with nulls.
+
+        Parameters
+        ----------
+        table
+            Table to extend
+        nrows
+            Number of additional rows
+
+        Returns
+        -------
+        New pylibcudf table.
+        """
+        return plc.concatenate.concatenate(
+            [
+                table,
+                plc.Table(
+                    [
+                        plc.Column.all_null_like(column, nrows)
+                        for column in table.columns()
+                    ]
+                ),
+            ]
+        )
+
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
+        max_rows = max(df.num_rows for df in dfs)
+        # Horizontal concatenation extends shorter tables with nulls
+        dfs = [
+            df
+            if df.num_rows == max_rows
+            else DataFrame.from_table(
+                self._extend_with_nulls(df.table, nrows=max_rows - df.num_rows),
+                df.column_names,
+            )
+            for df in dfs
+        ]
         return DataFrame(
             list(itertools.chain.from_iterable(df.columns for df in dfs)),
         )

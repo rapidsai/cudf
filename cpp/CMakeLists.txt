@@ -216,6 +216,8 @@ include(cmake/thirdparty/get_fmt.cmake)
 include(cmake/thirdparty/get_spdlog.cmake)
 # find nanoarrow
 include(cmake/thirdparty/get_nanoarrow.cmake)
+# find thread_pool
+include(cmake/thirdparty/get_thread_pool.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
@@ -365,6 +367,7 @@ add_library(
   src/interop/arrow_utilities.cpp
   src/interop/to_arrow.cu
   src/interop/to_arrow_device.cu
+  src/interop/to_arrow_host.cu
   src/interop/from_arrow_device.cu
   src/interop/from_arrow_host.cu
   src/interop/from_arrow_stream.cu
@@ -669,9 +672,10 @@ add_library(
   src/unary/null_ops.cu
   src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
+  src/utilities/host_memory.cpp
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
-  src/utilities/pinned_memory.cpp
+  src/utilities/prefetch.cpp
   src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
@@ -707,8 +711,10 @@ set_target_properties(
              CXX_STANDARD_REQUIRED ON
              # For std:: support of __int128_t. Can be removed once using cuda::std
              CXX_EXTENSIONS ON
+             CXX_VISIBILITY_PRESET hidden
              CUDA_STANDARD 17
              CUDA_STANDARD_REQUIRED ON
+             CUDA_VISIBILITY_PRESET hidden
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
 )
@@ -804,7 +810,7 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
+  PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
           kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
 )
@@ -883,8 +889,10 @@ if(CUDF_BUILD_TESTUTIL)
                # set target compile options
                CXX_STANDARD 17
                CXX_STANDARD_REQUIRED ON
+               CXX_VISIBILITY_PRESET hidden
                CUDA_STANDARD 17
                CUDA_STANDARD_REQUIRED ON
+               CUDA_VISIBILITY_PRESET hidden
                POSITION_INDEPENDENT_CODE ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
   )

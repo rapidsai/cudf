@@ -85,6 +85,10 @@ class NodeTraverser(Protocol):
         """Convert the given expression to python rep."""
         ...
 
+    def version(self) -> tuple[int, int]:
+        """The IR version as `(major, minor)`."""
+        ...
+
     def set_udf(
         self,
         callback: Callable[[list[str] | None, str | None, int | None], pl.DataFrame],

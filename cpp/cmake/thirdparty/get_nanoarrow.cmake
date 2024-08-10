@@ -17,11 +17,11 @@ function(find_and_configure_nanoarrow)
   # Currently we need to always build nanoarrow so we don't pickup a previous installed version
   set(CPM_DOWNLOAD_nanoarrow ON)
   rapids_cpm_find(
-    nanoarrow 0.5.0
+    nanoarrow 0.6.0.dev
     GLOBAL_TARGETS nanoarrow
     CPM_ARGS
     GIT_REPOSITORY https://github.com/apache/arrow-nanoarrow.git
-    GIT_TAG 11e73a8c85b45e3d49c8c541b4e1497a649fe03c
+    GIT_TAG 1e2664a70ec14907409cadcceb14d79b9670bcdb
     GIT_SHALLOW FALSE
     OPTIONS "BUILD_SHARED_LIBS OFF" "NANOARROW_NAMESPACE cudf"
   )

@@ -34,7 +34,9 @@ def ldf(with_nulls):
     if with_nulls:
         a[4] = None
         a[-3] = None
-    return pl.LazyFrame({"a": a, "b": range(len(a))})
+    return pl.LazyFrame(
+        {"a": a, "b": range(len(a)), "c": [str(i) for i in range(len(a))]}
+    )
 
 
 slice_cases = [
@@ -84,7 +86,7 @@ def test_contains_re_non_strict_raises(ldf):
 
 
 def test_contains_re_non_literal_raises(ldf):
-    q = ldf.select(pl.col("a").str.contains(pl.col("b"), literal=False))
+    q = ldf.select(pl.col("a").str.contains(pl.col("c"), literal=False))
 
     assert_ir_translation_raises(q, NotImplementedError)
 
@@ -182,3 +184,60 @@ def test_to_datetime(to_datetime_data, cache, strict, format, exact):
         return
     else:
         assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize(
+    "target, repl",
+    [("a", "a"), ("Wı", "☺"), ("FG", ""), ("doesnotexist", "blahblah")],  # noqa: RUF001
+)
+@pytest.mark.parametrize("n", [0, 3, -1])
+def test_replace_literal(ldf, target, repl, n):
+    query = ldf.select(pl.col("a").str.replace(target, repl, literal=True, n=n))
+    assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize("target, repl", [("", ""), ("a", pl.col("a"))])
+def test_replace_literal_unsupported(ldf, target, repl):
+    query = ldf.select(pl.col("a").str.replace(target, repl, literal=True))
+    assert_ir_translation_raises(query, NotImplementedError)
+
+
+def test_replace_re(ldf):
+    query = ldf.select(pl.col("a").str.replace("A", "a", literal=False))
+    assert_ir_translation_raises(query, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "target,repl",
+    [
+        (["A", "de", "kLm", "awef"], "a"),
+        (["A", "de", "kLm", "awef"], ""),
+        (["A", "de", "kLm", "awef"], ["a", "b", "c", "d"]),
+        (["A", "de", "kLm", "awef"], ["a", "b", "c", ""]),
+        (
+            pl.lit(pl.Series(["A", "de", "kLm", "awef"])),
+            pl.lit(pl.Series(["a", "b", "c", "d"])),
+        ),
+    ],
+)
+def test_replace_many(ldf, target, repl):
+    query = ldf.select(pl.col("a").str.replace_many(target, repl))
+
+    assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize(
+    "target,repl",
+    [(["A", ""], ["a", "b"]), (pl.col("a").drop_nulls(), pl.col("a").drop_nulls())],
+)
+def test_replace_many_notimplemented(ldf, target, repl):
+    query = ldf.select(pl.col("a").str.replace_many(target, repl))
+    assert_ir_translation_raises(query, NotImplementedError)
+
+
+def test_replace_many_ascii_case(ldf):
+    query = ldf.select(
+        pl.col("a").str.replace_many(["a", "b", "c"], "a", ascii_case_insensitive=True)
+    )
+
+    assert_ir_translation_raises(query, NotImplementedError)

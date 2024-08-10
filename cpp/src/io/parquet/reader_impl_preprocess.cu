@@ -370,7 +370,7 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
                        rmm::cuda_stream_view stream)
 {
   auto const num_pages = pages.size();
-  std::vector<page_index_info> page_indexes(num_pages);
+  auto page_indexes    = cudf::detail::make_host_vector<page_index_info>(num_pages, stream);
 
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     auto const& chunk = chunks[c];
@@ -1031,8 +1031,8 @@ struct get_page_num_rows {
 };
 
 struct input_col_info {
-  int const schema_idx;
-  size_type const nesting_depth;
+  int schema_idx;
+  size_type nesting_depth;
 };
 
 /**
@@ -1235,8 +1235,10 @@ void reader::impl::preprocess_file(read_mode mode)
                    [](auto const& col) { return col.type; });
   }
 
-  std::tie(
-    _file_itm_data.global_skip_rows, _file_itm_data.global_num_rows, _file_itm_data.row_groups) =
+  std::tie(_file_itm_data.global_skip_rows,
+           _file_itm_data.global_num_rows,
+           _file_itm_data.row_groups,
+           _file_itm_data.num_rows_per_source) =
     _metadata->select_row_groups(_options.row_group_indices,
                                  _options.skip_rows,
                                  _options.num_rows,
@@ -1245,9 +1247,18 @@ void reader::impl::preprocess_file(read_mode mode)
                                  _expr_conv.get_converted_expr(),
                                  _stream);
 
+  // Inclusive scan the number of rows per source
+  if (not _expr_conv.get_converted_expr().has_value() and mode == read_mode::CHUNKED_READ) {
+    _file_itm_data.exclusive_sum_num_rows_per_source.resize(
+      _file_itm_data.num_rows_per_source.size());
+    thrust::inclusive_scan(_file_itm_data.num_rows_per_source.cbegin(),
+                           _file_itm_data.num_rows_per_source.cend(),
+                           _file_itm_data.exclusive_sum_num_rows_per_source.begin());
+  }
+
   // check for page indexes
-  _has_page_index = std::all_of(_file_itm_data.row_groups.begin(),
-                                _file_itm_data.row_groups.end(),
+  _has_page_index = std::all_of(_file_itm_data.row_groups.cbegin(),
+                                _file_itm_data.row_groups.cend(),
                                 [](auto const& row_group) { return row_group.has_page_index(); });
 
   if (_file_itm_data.global_num_rows > 0 && not _file_itm_data.row_groups.empty() &&
@@ -1512,8 +1523,8 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
 
   // compute output column sizes by examining the pages of the -input- columns
   if (has_lists) {
-    std::vector<input_col_info> h_cols_info;
-    h_cols_info.reserve(_input_columns.size());
+    auto h_cols_info =
+      cudf::detail::make_empty_host_vector<input_col_info>(_input_columns.size(), _stream);
     std::transform(_input_columns.cbegin(),
                    _input_columns.cend(),
                    std::back_inserter(h_cols_info),
