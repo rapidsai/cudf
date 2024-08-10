@@ -362,6 +362,10 @@ def test_replace_level_values_MultiColumn():
     got = ca.rename_levels(mapper={"a": "f"}, level=0)
     check_ca_equal(expect, got)
 
+    with pytest.raises(UserWarning):
+        got = ca.rename_levels(mapper={"a": "f"})
+        check_ca_equal(expect, got)
+
 
 def test_clear_nrows_empty_before():
     ca = ColumnAccessor({})
