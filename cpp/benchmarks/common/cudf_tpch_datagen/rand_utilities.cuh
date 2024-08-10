@@ -33,21 +33,6 @@
 #include <string>
 #include <vector>
 
-// Convert a C++ type to a cudf::data_type
-template <typename T>
-cudf::data_type get_cudf_type()
-{
-  CUDF_FUNC_RANGE();
-  if (std::is_same<T, bool>::value) return cudf::data_type{cudf::type_id::BOOL8};
-  if (std::is_same<T, int8_t>::value) return cudf::data_type{cudf::type_id::INT8};
-  if (std::is_same<T, int16_t>::value) return cudf::data_type{cudf::type_id::INT16};
-  if (std::is_same<T, int32_t>::value) return cudf::data_type{cudf::type_id::INT32};
-  if (std::is_same<T, int64_t>::value) return cudf::data_type{cudf::type_id::INT64};
-  if (std::is_same<T, float>::value) return cudf::data_type{cudf::type_id::FLOAT32};
-  if (std::is_same<T, double>::value) return cudf::data_type{cudf::type_id::FLOAT64};
-  CUDF_FAIL("Unsupported type for cudf::data_type");
-}
-
 // Functor for generating random strings
 struct gen_rand_str {
   char* chars;
@@ -147,8 +132,8 @@ std::unique_ptr<cudf::column> gen_rand_num_col(T const& lower,
                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  cudf::data_type type = get_cudf_type<T>();
-  auto col = cudf::make_numeric_column(type, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
+  auto col = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_to_id<T>()}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
   cudf::size_type begin = 0;
   cudf::size_type end   = num_rows;
   thrust::transform(rmm::exec_policy(stream),
@@ -246,14 +231,14 @@ std::unique_ptr<cudf::column> gen_rep_seq_col(T const& seq_length,
   auto repeat_seq_zero_indexed = cudf::binary_operation(pkey->view(),
                                                         cudf::numeric_scalar<T>(seq_length),
                                                         cudf::binary_operator::MOD,
-                                                        get_cudf_type<T>(),
+                                                        cudf::data_type{cudf::type_to_id<T>()},
                                                         stream,
                                                         mr);
   if (zero_indexed) { return repeat_seq_zero_indexed; }
   return cudf::binary_operation(repeat_seq_zero_indexed->view(),
                                 cudf::numeric_scalar<T>(1),
                                 cudf::binary_operator::ADD,
-                                get_cudf_type<T>(),
+                                cudf::data_type{cudf::type_to_id<T>()},
                                 stream,
                                 mr);
 }
