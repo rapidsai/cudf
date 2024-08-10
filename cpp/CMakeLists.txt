@@ -1023,9 +1023,11 @@ if(TARGET cudftestutil)
   set(_components_export_string COMPONENTS testing COMPONENTS_EXPORT_SET cudf-testing-exports)
 endif()
 
-install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
-                  ${CUDF_SOURCE_DIR}/include/cudf_benchmark ${CUDF_SOURCE_DIR}/include/nvtext
-                  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(
+  DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
+            ${CUDF_SOURCE_DIR}/include/cudf_benchmark ${CUDF_SOURCE_DIR}/include/nvtext
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
 
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
   install(TARGETS cudf_identify_stream_usage_mode_cudf DESTINATION ${lib_dir})
