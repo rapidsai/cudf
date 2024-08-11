@@ -90,6 +90,17 @@ generate_orders_lineitem_part(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Generate the `partsupp` table
+ *
+ * @param scale_factor The scale factor to generate
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<cudf::table> generate_partsupp(cudf::size_type const& scale_factor,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr);
+
+/**
  * @brief Generate the `supplier` table
  *
  * @param scale_factor The scale factor to generate
