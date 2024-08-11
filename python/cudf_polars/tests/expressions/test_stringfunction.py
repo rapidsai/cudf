@@ -179,7 +179,7 @@ def test_to_datetime(to_datetime_data, cache, strict, format, exact):
             pl.Datetime("ns"), format=format, cache=cache, strict=strict, exact=exact
         )
     )
-    if cache or format is None or not exact:
+    if cache or format is None or not exact or strict:
         assert_ir_translation_raises(query, NotImplementedError)
         return
     else:

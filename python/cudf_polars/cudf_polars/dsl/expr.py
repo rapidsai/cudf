@@ -777,6 +777,8 @@ class StringFunction(Expr):
                 raise NotImplementedError("Strptime format is required")
             if not exact:
                 raise NotImplementedError("Strptime does not support exact=False")
+            if strict:
+                raise NotImplementedError("Strptime does not support strict=True")
 
     def do_evaluate(
         self,
@@ -876,27 +878,15 @@ class StringFunction(Expr):
                 ),
                 plc.unary.UnaryOperator.NOT,
             )
-
-            if strict:
-                reduced = plc.reduce.reduce(
-                    not_timestamps,
-                    plc.aggregation.min(),
-                    plc.DataType(plc.TypeId.BOOL8),
+            null = plc.interop.from_arrow(pa.scalar(None, type=pa.string()))
+            res = plc.copying.boolean_mask_scatter(
+                [null], plc.Table([col.obj]), not_timestamps
+            )
+            return Column(
+                plc.strings.convert.convert_datetime.to_timestamps(
+                    res.columns()[0], self.dtype, format.encode()
                 )
-                any_malformed = plc.interop.to_arrow(reduced).as_py()
-                if any_malformed:
-                    raise ValueError("Malformed datetime string")
-            else:
-                null = plc.interop.from_arrow(pa.scalar(None, type=pa.string()))
-                res = plc.copying.boolean_mask_scatter(
-                    [null], plc.Table([col.obj]), not_timestamps
-                )
-                return Column(
-                    plc.strings.convert.convert_datetime.to_timestamps(
-                        res.columns()[0], self.dtype, format.encode()
-                    )
-                )
-            raise NotImplementedError("Strptime")
+            )
         elif self.name == pl_expr.StringFunction.Replace:
             column, target, repl = columns
             n, _ = self.options
