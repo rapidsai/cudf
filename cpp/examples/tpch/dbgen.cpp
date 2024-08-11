@@ -81,6 +81,10 @@ int main(int argc, char** argv)
   write_parquet(std::move(lineitem), "lineitem.parquet", cudf::datagen::schema::LINEITEM);
   write_parquet(std::move(part), "part.parquet", cudf::datagen::schema::PART);
 
+  auto partsupp = cudf::datagen::generate_partsupp(
+    scale_factor, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  write_parquet(std::move(partsupp), "partsupp.parquet", cudf::datagen::schema::PARTSUPP);
+
   auto supplier = cudf::datagen::generate_supplier(
     scale_factor, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   write_parquet(std::move(supplier), "supplier.parquet", cudf::datagen::schema::SUPPLIER);
