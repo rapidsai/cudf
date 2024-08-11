@@ -1298,6 +1298,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             column_names, aggs_per_column = kwargs.keys(), kwargs.values()
             columns = tuple(self.obj._data[x[1][0]] for x in kwargs.items())
             aggs_per_column = [x[1] for x in kwargs.values()]
+        else:
+            raise TypeError("Must provide at least one aggregation function.")
 
         # is_list_like performs type narrowing but type-checkers don't
         # know it. One could add a TypeGuard annotation to
