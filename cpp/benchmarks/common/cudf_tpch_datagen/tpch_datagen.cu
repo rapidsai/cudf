@@ -21,6 +21,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/round.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
@@ -210,10 +211,16 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
   auto l_quantity = gen_rand_num_col<int8_t>(1, 50, l_num_rows, stream, mr);
 
   // Generate the `l_discount` column
-  auto l_discount = gen_rand_num_col<double>(0.0, 0.10, l_num_rows, stream, mr);
+  auto l_discount = [&]() {
+    auto const col = gen_rand_num_col<double>(0.00, 0.10, l_num_rows, stream, mr);
+    return cudf::round(col->view(), 2);
+  }();
 
   // Generate the `l_tax` column
-  auto l_tax = gen_rand_num_col<double>(0.0, 0.08, l_num_rows, stream, mr);
+  auto l_tax = [&]() {
+    auto const col = gen_rand_num_col<double>(0.00, 0.08, l_num_rows, stream, mr);
+    return cudf::round(col->view(), 2);
+  }();
 
   // Get the `l_orderdate` column from the `l_base` table
   auto const ol_orderdate_ts = l_base->get_column(3);
@@ -438,7 +445,10 @@ std::unique_ptr<cudf::table> generate_partsupp(cudf::size_type const& scale_fact
   auto ps_availqty = gen_rand_num_col<int16_t>(1, 9999, ps_num_rows, stream, mr);
 
   // Generate the `ps_supplycost` column
-  auto ps_supplycost = gen_rand_num_col<double>(1.0, 1000.0, ps_num_rows, stream, mr);
+  auto ps_supplycost = [&]() {
+    auto const col = gen_rand_num_col<double>(1.00, 1000.00, ps_num_rows, stream, mr);
+    return cudf::round(col->view(), 2);
+  }();
 
   // Generate the `ps_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
@@ -667,7 +677,10 @@ std::unique_ptr<cudf::table> generate_supplier(cudf::size_type const& scale_fact
   auto s_phone = gen_phone_col(num_rows, stream, mr);
 
   // Generate the `s_acctbal` column
-  auto s_acctbal = gen_rand_num_col<double>(-999.99, 9999.99, num_rows, stream, mr);
+  auto s_acctbal = [&]() {
+    auto const col = gen_rand_num_col<double>(-999.99, 9999.99, num_rows, stream, mr);
+    return cudf::round(col->view(), 2);
+  }();
 
   // Generate the `s_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
@@ -729,7 +742,10 @@ std::unique_ptr<cudf::table> generate_customer(cudf::size_type const& scale_fact
   auto c_phone = gen_phone_col(num_rows, stream, mr);
 
   // Generate the `c_acctbal` column
-  auto c_acctbal = gen_rand_num_col<double>(-999.99, 9999.99, num_rows, stream, mr);
+  auto c_acctbal = [&]() {
+    auto const col = gen_rand_num_col<double>(-999.99, 9999.99, num_rows, stream, mr);
+    return cudf::round(col->view(), 2);
+  }();
 
   // Generate the `c_mktsegment` column
   auto c_mktsegment = gen_rand_str_col_from_set(vocab_segments, num_rows, stream, mr);
