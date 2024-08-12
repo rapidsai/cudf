@@ -22,6 +22,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -264,10 +265,37 @@ struct flatten_functor {
                       out.size() - 1);
   }
 
+  // dictionary
+  template <typename T, std::enable_if_t<std::is_same_v<T, dictionary32>>* = nullptr>
+  void operator()(column_view const& col,
+                  std::vector<cudf::column_view>& out,
+                  std::vector<column_info>& info,
+                  hierarchy_info& h_info,
+                  rmm::cuda_stream_view stream,
+                  size_type cur_depth,
+                  size_type cur_branch_depth,
+                  thrust::optional<int>)
+  {
+    out.push_back(col);
+    info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
+    auto const keys = dictionary_column_view(col).keys();
+    cudf::type_dispatcher(keys.type(),
+                          flatten_functor{},
+                          keys,
+                          out,
+                          info,
+                          h_info,
+                          stream,
+                          cur_depth + 1,
+                          cur_branch_depth,
+                          out.size() - 1);
+  }
+
   // everything else
   template <typename T, typename... Args>
   std::enable_if_t<!cudf::is_fixed_width<T>() && !std::is_same_v<T, string_view> &&
-                     !std::is_same_v<T, list_view> && !std::is_same_v<T, struct_view>,
+                     !std::is_same_v<T, list_view> && !std::is_same_v<T, struct_view> &&
+                     !std::is_same_v<T, dictionary32>,
                    void>
   operator()(Args&&...)
   {
@@ -395,6 +423,43 @@ __device__ size_type row_size_functor::operator()<struct_view>(column_device_vie
 {
   auto const num_rows{span.row_end - span.row_start};
   return (col.nullable() ? 1 : 0) * num_rows;  // cost of validity
+}
+
+struct size_of_helper {
+  cudf::data_type type;
+  template <typename T, std::enable_if_t<not is_integral_not_bool<T>()>* = nullptr>
+  constexpr int operator()() const
+  {
+    CUDF_UNREACHABLE("Invalid, non fixed-width element type.");
+    return 0;
+  }
+
+  template <typename T, std::enable_if_t<is_integral_not_bool<T>()>* = nullptr>
+  constexpr int operator()() const noexcept
+  {
+    return sizeof(T);
+  }
+};
+
+template <>
+__device__ size_type row_size_functor::operator()<dictionary32>(column_device_view const& col,
+                                                                row_span const& span)
+{
+  auto const num_rows{span.row_end - span.row_start};
+  if (num_rows == 0) {
+    // For empty columns, the `span` cannot have a row size.
+    return 0;
+  }
+
+  auto const& indices = col.child(dictionary_column_view::indices_column_index);
+  auto const row_start{span.row_start + col.offset()};
+  auto const row_end{span.row_end + col.offset()};
+  if (row_start == row_end) { return 0; }
+
+  auto const indices_size =
+    cudf::type_dispatcher(col.type(), size_of_helper{col.type()}) * CHAR_BIT;
+  auto const validity_size = col.nullable() ? 1 : 0;
+  return static_cast<size_type>(((indices_size + validity_size) * num_rows));
 }
 
 /**

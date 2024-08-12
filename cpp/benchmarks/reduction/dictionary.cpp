@@ -16,6 +16,7 @@
 
 #include <benchmarks/common/benchmark_utilities.hpp>
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/table_utilities.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
@@ -56,10 +57,7 @@ void BM_reduction_dictionary(benchmark::State& state,
 
   // The benchmark takes a column and produces two scalars.
   set_items_processed(state, column_size + 1);
-
-  // We don't set the metrics for the size read/written as row_bit_count() doesn't
-  // support the dictionary type yet (and so is estimate_size()).
-  // See https://github.com/rapidsai/cudf/issues/16121 for details.
+  set_bytes_processed(state, estimate_size(values->view()) + cudf::size_of(output_dtype));
 }
 
 #define concat(a, b, c) a##b##c
