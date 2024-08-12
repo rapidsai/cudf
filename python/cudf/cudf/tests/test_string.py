@@ -2672,12 +2672,14 @@ def test_string_ip4_to_int():
 
 
 def test_string_int_to_ipv4():
-    gsr = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449])
+    gsr = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449]).astype(
+        "uint32"
+    )
     expected = cudf.Series(
         ["0.0.0.0", None, "0.0.0.0", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
     )
 
-    got = cudf.Series(gsr._column.int2ip())
+    got = cudf.Series._from_column(gsr._column.int2ip())
 
     assert_eq(expected, got)
 
@@ -2718,7 +2720,7 @@ def test_string_isipv4():
 
 
 @pytest.mark.parametrize(
-    "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"int64", "uint64"}))
+    "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"uint32"}))
 )
 def test_string_int_to_ipv4_dtype_fail(dtype):
     gsr = cudf.Series([1, 2, 3, 4, 5]).astype(dtype)
