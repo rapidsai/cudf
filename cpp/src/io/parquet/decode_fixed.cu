@@ -195,13 +195,13 @@ struct decode_fixed_width_split_values_func {
 };
 
 template <int decode_block_size, bool nullable, typename level_t, typename state_buf>
-static __device__ int gpuUpdateValidityAndRowIndicesNested(
+static __device__ int gpuUpdateValidityAndRowIndicesNestedNonLists(
   int32_t target_value_count, page_state_s* s, state_buf* sb, level_t const* const def, int t)
 {
   constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
   constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
 
-  // how many (input) values we've processed in the page so far
+  // how many (input) values we've processed in the page so far, prior to this loop iteration
   int value_count = s->input_value_count;
 
   // cap by last row so that we don't process any rows past what we want to output.
@@ -217,69 +217,99 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
   while (value_count < capped_target_value_count) {
     int const batch_size = min(max_batch_size, capped_target_value_count - value_count);
 
-    // definition level. only need to process for nullable columns
-    int d = 0;
+    // get definition level. only need to process for nullable columns
+    int def_level;
     if constexpr (nullable) {
       if (def) {
-        d = t < batch_size
+        def_level = t < batch_size
               ? static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)])
               : -1;
       } else {
-        d = t < batch_size ? 1 : -1;
+        def_level = t < batch_size ? 1 : -1;
       }
+    } else {
+      def_level = 0;
     }
 
-    int const thread_value_count = t + 1;
-    int const block_value_count  = batch_size;
+    //Determine value count & row index
+    int const thread_value_count = t + 1; //# of output values from the view of this thread
+    int const block_value_count = batch_size;
+    int const row_index = t + value_count; //thread_row_index in old
+    int const in_row_bounds = (row_index >= row_index_lower_bound) && (row_index < last_row);
 
-    // compute our row index, whether we're in row bounds, and validity
-    int const row_index           = (thread_value_count + value_count) - 1;
-    int const in_row_bounds       = (row_index >= row_index_lower_bound) && (row_index < last_row);
-    int const in_write_row_bounds = ballot(row_index >= first_row && row_index < last_row);
-    int const write_start = __ffs(in_write_row_bounds) - 1;  // first bit in the warp to store
+    //per-warp variables used below for writing validity
+    int const in_write_row_bounds = (row_index >= first_row) && (row_index < last_row);
 
-    // iterate by depth
-    for (int d_idx = 0; d_idx <= max_depth; d_idx++) {
-      auto& ni = s->nesting_info[d_idx];
+    //bit mask of all threads that passed true
+    int const in_write_row_bounds_mask = ballot(in_write_row_bounds);
 
-      int is_valid;
-      if constexpr (nullable) {
-        is_valid = ((d >= ni.max_def_level) && in_row_bounds) ? 1 : 0;
-      } else {
-        is_valid = in_row_bounds;
+    // index of first set bit (in the warp to store)
+    int write_start = __ffs(in_write_row_bounds_mask) - 1;
+      
+    // remaining code is trivial for non-nullable, non-list columns: no need to iterate over depth
+    if constexpr (!nullable) {
+
+      // if this is valid and we're at the leaf, output dst_pos
+      int const is_valid = in_row_bounds;
+      if (is_valid) {
+        auto& ni = s->nesting_info[max_depth];
+        int const thread_valid_count = thread_value_count;
+
+        // for non-list types, the value count is always the same across
+        int const dst_pos = (value_count + thread_value_count) - 1;
+        int const src_pos = (ni.valid_count + thread_valid_count) - 1;
+        sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)] = dst_pos;
       }
 
-      // thread and block validity count
-      int thread_valid_count, block_valid_count;
-      if constexpr (nullable) {
+      // update valid_count
+      if (t == 0) { 
+        int const block_valid_count = block_value_count;
+        s->nesting_info[max_depth].valid_count += block_valid_count;
+      }
+
+      __syncthreads(); // publish modification of nesting_info value_count
+    } else {
+
+      // column is a nullable non-list: iterate by depth
+      for (int d_idx = 0; d_idx <= max_depth; d_idx++) {
+
+        auto& ni = s->nesting_info[d_idx];
+
+        // everything up to the max_def_level is a non-null value
+        int is_valid = ((def_level >= ni.max_def_level) && in_row_bounds) ? 1 : 0;
+
+        // thread and block validity count
+        // queries is_valid of all threads, stores prior total and total total
         using block_scan = cub::BlockScan<int, decode_block_size>;
         __shared__ typename block_scan::TempStorage scan_storage;
+        int thread_valid_count, block_valid_count;
         block_scan(scan_storage).InclusiveSum(is_valid, thread_valid_count, block_valid_count);
-        __syncthreads();
 
-        // validity is processed per-warp
+        // validity is processed per-warp (lane 0 writes), because writes are atomic
         //
-        // nested schemas always read and write to the same bounds (that is, read and write
-        // positions are already pre-bounded by first_row/num_rows). flat schemas will start reading
-        // at the first value, even if that is before first_row, because we cannot trivially jump to
-        // the correct position to start reading. since we are about to write the validity vector
+        // nested schemas always read and write to the same bounds 
+        // (that is, read and write positions are already pre-bounded by first_row/num_rows). 
+        // since we are about to write the validity vector
         // here we need to adjust our computed mask to take into account the write row bounds.
         int warp_null_count = 0;
-        if (write_start >= 0 && ni.valid_map != nullptr) {
-          int const valid_map_offset        = ni.valid_map_offset;
+        if ((write_start >= 0) && (ni.valid_map != nullptr)) {
           uint32_t const warp_validity_mask = ballot(is_valid);
-          // lane 0 from each warp writes out validity
           if ((t % cudf::detail::warp_size) == 0) {
-            int const vindex =
-              (value_count + thread_value_count) - 1;  // absolute input value index
-            int const bit_offset = (valid_map_offset + vindex + write_start) -
-                                   first_row;  // absolute bit offset into the output validity map
-            int const write_end = cudf::detail::warp_size -
-                                  __clz(in_write_row_bounds);  // last bit in the warp to store
-            int const bit_count = write_end - write_start;
-            warp_null_count     = bit_count - __popc(warp_validity_mask >> write_start);
+            // absolute input value index
+            int const vindex = (value_count + thread_value_count) - 1;
 
-            store_validity(bit_offset, ni.valid_map, warp_validity_mask >> write_start, bit_count);
+            // absolute bit offset into the output validity map
+            int const bit_offset = (ni.valid_map_offset + vindex + write_start) - first_row;
+
+            // last bit in the warp to store
+            int const write_end = cudf::detail::warp_size - __clz(in_write_row_bounds_mask);
+            int const bit_count = write_end - write_start; //in old is warp_valid_mask_bit_count
+
+            uint32_t const warp_output_valid_mask = warp_validity_mask >> write_start;
+
+            store_validity(bit_offset, ni.valid_map, warp_output_valid_mask, bit_count);
+
+            warp_null_count = bit_count - __popc(warp_output_valid_mask);
           }
         }
 
@@ -290,25 +320,20 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
         size_type const block_null_count =
           cudf::detail::single_lane_block_sum_reduce<decode_block_size, 0>(warp_null_count);
         if (t == 0) { ni.null_count += block_null_count; }
-      }
-      // trivial for non-nullable columns
-      else {
-        thread_valid_count = thread_value_count;
-        block_valid_count  = block_value_count;
-      }
 
-      // if this is valid and we're at the leaf, output dst_pos
-      __syncthreads();  // handle modification of ni.value_count from below
-      if (is_valid && d_idx == max_depth) {
-        // for non-list types, the value count is always the same across
-        int const dst_pos = (value_count + thread_value_count) - 1;
-        int const src_pos = (ni.valid_count + thread_valid_count) - 1;
-        sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)] = dst_pos;
-      }
-      __syncthreads();  // handle modification of ni.value_count from below
+        // if this is valid and we're at the leaf, output dst_pos
+        if (is_valid && d_idx == max_depth) {
+          // for non-list types, the value count is always the same across
+          __syncthreads();  // handle modification of ni.valid_count from below
+          int const dst_pos = (value_count + thread_value_count) - 1;
+          int const src_pos = (ni.valid_count + thread_valid_count) - 1;
+          sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)] = dst_pos;
+        }
+        __syncthreads();  // handle modification of ni.valid_count from below
 
-      // update stuff
-      if (t == 0) { ni.valid_count += block_valid_count; }
+        // update stuff
+        if (t == 0) { ni.valid_count += block_valid_count; }
+      } //END OF DEPTH LOOP
     }
 
     value_count += block_value_count;
@@ -351,27 +376,26 @@ static __device__ int gpuUpdateValidityAndRowIndicesFlat(
   while (value_count < capped_target_value_count) {
     int const batch_size = min(max_batch_size, capped_target_value_count - value_count);
 
-    // definition level. only need to process for nullable columns
-    int d = 0;
-    if constexpr (nullable) {
-      if (def) {
-        d = t < batch_size
-              ? static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)])
-              : -1;
-      } else {
-        d = t < batch_size ? 1 : -1;
-      }
-    }
-
     int const thread_value_count = t + 1;
     int const block_value_count  = batch_size;
 
     // compute our row index, whether we're in row bounds, and validity
     int const row_index     = (thread_value_count + value_count) - 1;
     int const in_row_bounds = (row_index >= row_index_lower_bound) && (row_index < last_row);
+
+    // determine if is valid
+    // everything up to the max_def_level is a non-null value
     int is_valid;
     if constexpr (nullable) {
-      is_valid = ((d > 0) && in_row_bounds) ? 1 : 0;
+      // get definition level. only need to process for nullable columns
+      if (t >= batch_size) {
+        is_valid = 0;
+      } else if (def) {
+        int const def_level = static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)]);
+        is_valid = ((def_level > 0) && in_row_bounds) ? 1 : 0;
+      } else {
+        is_valid = in_row_bounds;
+      }
     } else {
       is_valid = in_row_bounds;
     }
@@ -379,32 +403,37 @@ static __device__ int gpuUpdateValidityAndRowIndicesFlat(
     // thread and block validity count
     int thread_valid_count, block_valid_count;
     if constexpr (nullable) {
+      // use a scan to compute the total number of valid values, as well as the total number of valid 
+      // values for each individual thread (how many valids there are including me, but no one after me)
       using block_scan = cub::BlockScan<int, decode_block_size>;
       __shared__ typename block_scan::TempStorage scan_storage;
       block_scan(scan_storage).InclusiveSum(is_valid, thread_valid_count, block_valid_count);
       __syncthreads();
 
-      // validity is processed per-warp
+      // validity is processed per-warp, because storing is an atomic operation
       //
       // nested schemas always read and write to the same bounds (that is, read and write
       // positions are already pre-bounded by first_row/num_rows). flat schemas will start reading
       // at the first value, even if that is before first_row, because we cannot trivially jump to
       // the correct position to start reading. since we are about to write the validity vector
       // here we need to adjust our computed mask to take into account the write row bounds.
-      int const in_write_row_bounds = ballot(row_index >= first_row && row_index < last_row);
-      int const write_start = __ffs(in_write_row_bounds) - 1;  // first bit in the warp to store
-      int warp_null_count   = 0;
-      if (write_start >= 0) {
-        uint32_t const warp_validity_mask = ballot(is_valid);
+      int const in_write_row_bounds = row_index >= first_row && row_index < last_row;
+      int const in_write_row_bounds_mask = ballot(in_write_row_bounds);
+      //is first_thread_in_write_range in old
+      int const write_start = __ffs(in_write_row_bounds_mask) - 1;  // first bit in the warp to store
+
+      int warp_null_count = 0;
+      if ((write_start >= 0) && (ni.valid_map != nullptr)) {
+        uint32_t const warp_validity_mask = ballot(is_valid); // is warp_valid_mask in old
         // lane 0 from each warp writes out validity
         if ((t % cudf::detail::warp_size) == 0) {
           int const vindex = (value_count + thread_value_count) - 1;  // absolute input value index
           int const bit_offset = (valid_map_offset + vindex + write_start) -
                                  first_row;  // absolute bit offset into the output validity map
           int const write_end =
-            cudf::detail::warp_size - __clz(in_write_row_bounds);  // last bit in the warp to store
+            cudf::detail::warp_size - __clz(in_write_row_bounds_mask);  // last bit in the warp to store
           int const bit_count = write_end - write_start;
-          warp_null_count     = bit_count - __popc(warp_validity_mask >> write_start);
+          warp_null_count     = bit_count - __popc(warp_validity_mask >> write_start); //#set bits
 
           store_validity(bit_offset, ni.valid_map, warp_validity_mask >> write_start, bit_count);
         }
@@ -439,13 +468,266 @@ static __device__ int gpuUpdateValidityAndRowIndicesFlat(
   if (t == 0) {
     // update valid value count for decoding and total # of values we've processed
     ni.valid_count       = valid_count;
-    ni.value_count       = value_count;  // TODO: remove? this is unused in the non-list path
+    ni.value_count       = value_count;
     s->nz_count          = valid_count;
     s->input_value_count = value_count;
     s->input_row_count   = value_count;
   }
 
   return valid_count;
+}
+
+template <int decode_block_size, bool nullable, typename level_t, typename state_buf>
+static __device__ int gpuUpdateValidityAndRowIndicesNestedLists(
+  int32_t target_value_count, page_state_s* s, state_buf* sb, level_t const* const def, 
+  level_t const* const rep, int t)
+{
+  constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
+  constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
+
+  // how many (input) values we've processed in the page so far, prior to this loop iteration
+  int value_count = s->input_value_count;
+
+  // how many rows we've processed in the page so far
+  int input_row_count = s->input_row_count;
+if (t == 0) { printf("value_count %d, input_row_count %d\n", value_count, input_row_count); }
+
+  // cap by last row so that we don't process any rows past what we want to output.
+  int const first_row                 = s->first_row;
+  int const last_row                  = first_row + s->num_rows;
+if (t == 0) { printf("first_row %d, last_row %d, target_value_count %d\n", first_row, last_row, target_value_count); }
+
+  int const row_index_lower_bound = s->row_index_lower_bound;
+  int const max_depth = s->col.max_nesting_depth - 1;
+
+  __syncthreads();
+
+  while (value_count < target_value_count) {
+    bool const within_batch = value_count + t < target_value_count;
+
+    // get definition level. only need to process for nullable columns
+    int def_level;
+    if constexpr (nullable) {
+      if (def) {
+        def_level = within_batch
+              ? static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)])
+              : -1;
+      } else {
+        def_level = within_batch ? 1 : -1;
+      }
+    } else {
+      def_level = 0;
+    }
+
+    // use repitition level to get start/end depth
+    // different for each thread, as each thread has a different r/d
+    int start_depth = -1, end_depth = -1;
+    if (within_batch) {
+      int const index = rolling_index<state_buf::nz_buf_size>(value_count + t);
+      int const rep_level = rep[index];
+      //computed by generate_depth_remappings()
+      start_depth = s->nesting_info[rep_level].start_depth;
+      end_depth   = s->nesting_info[def_level].end_depth;
+if (t == 0) { printf("def_level %d, rep_level %d, start_depth %d, end_depth %d\n", \
+  def_level, rep_level, start_depth, end_depth); }
+    }
+
+    //Determine value count & row index
+    // track (page-relative) row index for the thread so we can compare against input bounds
+    // keep track of overall # of rows we've read.
+    int const is_new_row = start_depth == 0 ? 1 : 0; //TODO: UNCOMMENT
+    int thread_num_new_rows, total_num_new_rows;
+    using block_scan = cub::BlockScan<int, decode_block_size>;
+    __shared__ typename block_scan::TempStorage scan_storage;
+    block_scan(scan_storage).InclusiveSum(is_new_row, thread_num_new_rows, total_num_new_rows);
+    __syncthreads(); //Needed because scan_storage will be reused
+
+if (t == 0) { printf("thread_num_new_rows %d, total_num_new_rows %d\n", thread_num_new_rows, total_num_new_rows); }
+
+    int const row_index = input_row_count + (thread_num_new_rows - 1);
+    input_row_count += total_num_new_rows;
+    int const in_row_bounds = (row_index >= row_index_lower_bound) && (row_index < last_row);
+
+    // thread and block value count
+
+    // if we are within the range of nesting levels we should be adding value indices for
+    // is from/in current rep level to/in the rep level AT the depth with the def value
+    int in_nesting_bounds = ((0 >= start_depth && 0 <= end_depth) && in_row_bounds) ? 1 : 0;
+
+if (t == 0) { printf("row_index %d, in_row_bounds %d, in_nesting_bounds %d\n", \
+  row_index, in_row_bounds, in_nesting_bounds); }
+
+    // queries is_valid from all threads, stores prior total and total total
+    int thread_value_count = 0, block_value_count = 0;
+/*    int thread_value_count, block_value_count;
+    block_scan(scan_storage).ExclusiveSum(in_nesting_bounds, thread_value_count, block_value_count);
+*/
+    //bit mask of all threads that passed true
+    int const in_write_row_bounds_mask = ballot(in_row_bounds);
+
+if (t == 0) { printf("thread_value_count %d, block_value_count %d\n", thread_value_count, block_value_count); }
+
+    // column is either nullable or is a list (or both): iterate by depth
+    for (int d_idx = 0; d_idx <= max_depth; d_idx++) {
+
+      auto& ni = s->nesting_info[d_idx];
+
+      // everything up to the max_def_level is a non-null value
+      int is_valid;
+      if constexpr (nullable) {
+        is_valid = ((def_level >= ni.max_def_level) && in_nesting_bounds) ? 1 : 0;
+      } else {
+        is_valid = in_nesting_bounds;
+      }
+
+if (t == 0) { printf("nullable %d, depth %d, max_depth %d, is_valid %d\n", int(nullable), d_idx, max_depth, is_valid); }
+if (t < 10) { printf("t %d, is_valid %d\n", t, is_valid); }
+
+      // thread and block validity count
+      // queries is_valid of all threads, stores prior total and total total
+
+      // for nested lists, it's more complicated.  This block will visit 128 incoming values,
+      // however not all of them will necessarily represent a value at this nesting level. so
+      // the validity bit for thread t might actually represent output value t-6. the correct
+      // position for thread t's bit is thread_value_count. 
+      static_assert(decode_block_size <= 8*sizeof(__uint128_t), 
+        "This code relies on bits for block threads fitting within a uint128!");
+
+if (t < 10) { printf("t %d, thread_value_count %d\n", t, thread_value_count); }
+
+/*      using block_reduce = cub::BlockReduce<__uint128_t, decode_block_size>;
+      __shared__ typename block_reduce::TempStorage reduce_storage;
+      auto shifted_validity = static_cast<__uint128_t>(is_valid) << thread_value_count;
+      auto or_reducer = [](const __uint128_t& lhs, const __uint128_t& rhs){
+        return lhs | rhs;
+      };
+      __uint128_t block_valid_mask = block_reduce(reduce_storage).Reduce(shifted_validity, or_reducer);
+*/
+__uint128_t block_valid_mask = 0;
+
+      //Reduction result is only visible to thread zero, must share with other threads:
+/*      __shared__ __uint128_t block_valid_mask_storage;
+      if(t == 0) { block_valid_mask_storage = block_valid_mask; }
+      __syncthreads();
+      block_valid_mask = block_valid_mask_storage;
+*/
+      auto count_set_bits = [](__uint128_t bits){
+        return __popcll((uint64_t)bits) + __popcll((uint64_t)(bits >> 64));
+      };
+      auto thread_mask = (__uint128_t(1) << thread_value_count) - 1;
+      int const thread_valid_count = count_set_bits(block_valid_mask & thread_mask);
+
+if (t == 0) { printf("block_valid_mask %d, thread_valid_count %d\n", int(block_valid_mask), thread_valid_count); }
+if (t < 10) { printf("t %d, thread_valid_count %d\n", t, thread_valid_count); }
+
+      // compute warp and thread value counts for the -next- nesting level. we need to
+      // do this for nested schemas so that we can emit an offset for the -current- nesting
+      // level. more concretely : the offset for the current nesting level == current length of the
+      // next nesting level
+      int32_t next_thread_value_count = 0, next_block_value_count = 0;
+      int next_in_nesting_bounds = 0;
+      if (d_idx < max_depth) {
+        //mask is different between depths
+        next_in_nesting_bounds = 
+          (d_idx + 1 >= start_depth && d_idx + 1 <= end_depth && in_row_bounds) ? 1 : 0;
+/*
+        using block_scan = cub::BlockScan<int, decode_block_size>;
+        __shared__ typename block_scan::TempStorage scan_storage;
+        block_scan(scan_storage).ExclusiveSum(next_in_nesting_bounds, next_thread_value_count, next_block_value_count);
+*/
+if (t == 0) { printf("next_thread_value_count %d, next_block_value_count %d\n", next_thread_value_count, next_block_value_count); }
+
+        // if we're -not- at a leaf column and we're within nesting/row bounds
+        // and we have a valid data_out pointer, it implies this is a list column, so
+        // emit an offset.
+        if (in_nesting_bounds && ni.data_out != nullptr) {
+          int const idx             = ni.value_count + thread_value_count;
+          cudf::size_type const ofs = s->nesting_info[d_idx + 1].value_count +
+                                      next_thread_value_count +
+                                      s->nesting_info[d_idx + 1].page_start_value;
+          //STORE THE OFFSET FOR THE NEW LIST LOCATION
+          (reinterpret_cast<cudf::size_type*>(ni.data_out))[idx] = ofs;
+        }
+      }
+
+      // validity is processed per-warp (on lane 0's), because writes are atomic
+      //
+      // nested schemas always read and write to the same bounds 
+      // (that is, read and write positions are already pre-bounded by first_row/num_rows). 
+      // since we are about to write the validity vector
+      // here we need to adjust our computed mask to take into account the write row bounds.
+      int warp_null_count = 0;
+      if constexpr (nullable) {
+        if (ni.valid_map != nullptr) {
+          uint32_t const warp_validity_mask = ballot(is_valid);
+          if ((t % cudf::detail::warp_size) == 0) {
+            // absolute input value index
+            int const vindex = (value_count + thread_value_count) - 1;
+
+            // absolute bit offset into the output validity map
+//TODO: first_row??            
+            int const bit_offset = (ni.valid_map_offset + vindex) - first_row;
+
+            // last bit in the warp to store //in old is warp_valid_mask_bit_count
+            int const bit_count = cudf::detail::warp_size - __clz(in_write_row_bounds_mask);
+
+            store_validity(bit_offset, ni.valid_map, warp_validity_mask, bit_count);
+            warp_null_count = bit_count - __popc(warp_validity_mask);
+          }
+        }
+
+        // sum null counts. we have to do it this way instead of just incrementing by (value_count -
+        // valid_count) because valid_count also includes rows that potentially start before our row
+        // bounds. if we could come up with a way to clean that up, we could remove this and just
+        // compute it directly at the end of the kernel.
+        size_type const block_null_count =
+          cudf::detail::single_lane_block_sum_reduce<decode_block_size, 0>(warp_null_count);
+        if (t == 0) { ni.null_count += block_null_count; }
+      }
+
+      // if this is valid and we're at the leaf, output dst_pos
+      __syncthreads();  // handle modification of ni.valid_count from below
+      if (is_valid && d_idx == max_depth) {
+        // for non-list types, the value count is always the same across
+        int const dst_pos = (ni.value_count + thread_value_count) - 1;
+        int const src_pos = (ni.valid_count + thread_valid_count) - 1;
+        sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)] = dst_pos;
+      }
+      __syncthreads();  // handle modification of ni.value_count from below
+
+      // update stuff
+      if (t == 0) {
+        int const block_valid_count = count_set_bits(block_valid_mask);
+        ni.valid_count += block_valid_count;
+        ni.value_count += block_value_count;
+      }
+
+      // propagate value counts for the next depth level
+      block_value_count  = next_block_value_count;
+      thread_value_count = next_thread_value_count;
+      in_nesting_bounds  = next_in_nesting_bounds;
+    } //END OF DEPTH LOOP
+
+if (t == 0) { printf("END DEPTH LOOP\n"); }
+
+//TODO: Shouldn't we guard against threads going beyond the last row? Old algo didn't?
+    int const batch_size = min(max_batch_size, target_value_count - value_count);
+    value_count += batch_size;
+  }
+
+if (t == 0) { printf("END LOOP\n"); }
+
+  if (t == 0) {
+    // update valid value count for decoding and total # of values we've processed
+    s->nz_count          = s->nesting_info[max_depth].valid_count;
+    s->input_value_count = value_count;
+
+    // If we have lists # rows != # values
+    s->input_row_count = input_row_count;
+  }
+
+  __syncthreads();
+  return s->nesting_info[max_depth].valid_count;
 }
 
 // is the page marked nullable or not
@@ -494,6 +776,7 @@ template <typename level_t,
           decode_kernel_mask kernel_mask_t,
           bool has_dict_t,
           bool has_nesting_t,
+          bool has_lists_t,
           template <int block_size, typename state_buf>
           typename DecodeValuesFunc>
 CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
@@ -542,25 +825,22 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   bool const should_process_nulls = nullable && maybe_has_nulls(s);
 
   // shared buffer. all shared memory is suballocated out of here
-  // constexpr int shared_rep_size = has_lists_t ? cudf::util::round_up_unsafe(rle_run_buffer_size *
-  // sizeof(rle_run<level_t>), size_t{16}) : 0;
+  constexpr int shared_rep_size = has_lists_t ? cudf::util::round_up_unsafe(rle_run_buffer_size *
+    sizeof(rle_run<level_t>), size_t{16}) : 0;
   constexpr int shared_dict_size =
     has_dict_t
       ? cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run<uint32_t>), size_t{16})
       : 0;
   constexpr int shared_def_size =
     cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run<level_t>), size_t{16});
-  constexpr int shared_buf_size = /*shared_rep_size +*/ shared_dict_size + shared_def_size;
+  constexpr int shared_buf_size = shared_rep_size + shared_dict_size + shared_def_size;
   __shared__ __align__(16) uint8_t shared_buf[shared_buf_size];
 
   // setup all shared memory buffers
   int shared_offset = 0;
-  /*
-  rle_run<level_t> *rep_runs = reinterpret_cast<rle_run<level_t>*>(shared_buf + shared_offset);
-  if constexpr (has_lists_t){
-    shared_offset += shared_rep_size;
-  }
-  */
+  rle_run<level_t>* rep_runs = reinterpret_cast<rle_run<level_t>*>(shared_buf + shared_offset);
+  if constexpr (has_lists_t){ shared_offset += shared_rep_size; }
+
   rle_run<uint32_t>* dict_runs = reinterpret_cast<rle_run<uint32_t>*>(shared_buf + shared_offset);
   if constexpr (has_dict_t) { shared_offset += shared_dict_size; }
   rle_run<level_t>* def_runs = reinterpret_cast<rle_run<level_t>*>(shared_buf + shared_offset);
@@ -575,17 +855,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
                      def,
                      s->page.num_input_values);
   }
-  /*
+  
   rle_stream<level_t, decode_block_size_t, rolling_buf_size> rep_decoder{rep_runs};
   level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
-  if constexpr(has_lists_t){
+  if constexpr (has_lists_t){
     rep_decoder.init(s->col.level_bits[level_type::REPETITION],
                      s->abs_lvl_start[level_type::REPETITION],
                      s->abs_lvl_end[level_type::REPETITION],
                      rep,
                      s->page.num_input_values);
   }
-  */
 
   rle_stream<uint32_t, decode_block_size_t, rolling_buf_size> dict_stream{dict_runs};
   if constexpr (has_dict_t) {
@@ -605,17 +884,28 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   int valid_count     = 0;
   // the core loop. decode batches of level stream data using rle_stream objects
   // and pass the results to gpuDecodeValues
+
+if (t == 0) { printf("DECODE LOOP: has-list %d, has-nesting %d \n", int(has_lists_t), int(has_nesting_t)); }
+
   while (s->error == 0 && processed_count < s->page.num_input_values) {
     int next_valid_count;
 
     // only need to process definition levels if this is a nullable column
     if (should_process_nulls) {
+      if constexpr (has_lists_t){
+        rep_decoder.decode_next(t);
+      }
       processed_count += def_decoder.decode_next(t);
       __syncthreads();
 
       if constexpr (has_nesting_t) {
-        next_valid_count = gpuUpdateValidityAndRowIndicesNested<decode_block_size_t, true, level_t>(
-          processed_count, s, sb, def, t);
+        if constexpr (has_lists_t) {
+          next_valid_count = gpuUpdateValidityAndRowIndicesNestedLists<decode_block_size_t, true, level_t>(
+            processed_count, s, sb, def, rep, t);
+        } else {
+          next_valid_count = gpuUpdateValidityAndRowIndicesNestedNonLists<decode_block_size_t, true, level_t>(
+            processed_count, s, sb, def, t);
+        }
       } else {
         next_valid_count = gpuUpdateValidityAndRowIndicesFlat<decode_block_size_t, true, level_t>(
           processed_count, s, sb, def, t);
@@ -628,9 +918,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
       processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
 
       if constexpr (has_nesting_t) {
-        next_valid_count =
-          gpuUpdateValidityAndRowIndicesNested<decode_block_size_t, false, level_t>(
-            processed_count, s, sb, nullptr, t);
+        if constexpr (has_lists_t) {
+          next_valid_count =
+            gpuUpdateValidityAndRowIndicesNestedLists<decode_block_size_t, false, level_t>(
+              processed_count, s, sb, nullptr, rep, t);
+        } else {
+          next_valid_count =
+            gpuUpdateValidityAndRowIndicesNestedNonLists<decode_block_size_t, false, level_t>(
+              processed_count, s, sb, nullptr, t);
+        }
       } else {
         next_valid_count = gpuUpdateValidityAndRowIndicesFlat<decode_block_size_t, false, level_t>(
           processed_count, s, sb, nullptr, t);
@@ -664,6 +960,7 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
                                   size_t min_row,
                                   int level_type_size,
                                   bool has_nesting,
+                                  bool is_list,
                                   kernel_error::pointer error_code,
                                   rmm::cuda_stream_view stream)
 {
@@ -673,12 +970,23 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    if (has_nesting) {
+    if (is_list) {
+      gpuDecodePageDataGeneric<uint8_t,
+                               decode_block_size,
+                               decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST,
+                               false,
+                               true,
+                               true,
+                               decode_fixed_width_values_func>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(
+          pages.device_ptr(), chunks, min_row, num_rows, error_code);
+    } else if (has_nesting) {
       gpuDecodePageDataGeneric<uint8_t,
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED,
                                false,
                                true,
+                               false,
                                decode_fixed_width_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -686,6 +994,7 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
       gpuDecodePageDataGeneric<uint8_t,
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_NO_DICT,
+                               false,
                                false,
                                false,
                                decode_fixed_width_values_func>
@@ -693,12 +1002,23 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
     }
   } else {
-    if (has_nesting) {
+    if (is_list) {
+      gpuDecodePageDataGeneric<uint16_t,
+                               decode_block_size,
+                               decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST,
+                               false,
+                               true,
+                               true,
+                               decode_fixed_width_values_func>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(
+          pages.device_ptr(), chunks, min_row, num_rows, error_code);
+    } else if (has_nesting) {
       gpuDecodePageDataGeneric<uint16_t,
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED,
                                false,
                                true,
+                               false,
                                decode_fixed_width_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -706,6 +1026,7 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
       gpuDecodePageDataGeneric<uint16_t,
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_NO_DICT,
+                               false,
                                false,
                                false,
                                decode_fixed_width_values_func>
@@ -721,6 +1042,7 @@ void __host__ DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pa
                                       size_t min_row,
                                       int level_type_size,
                                       bool has_nesting,
+                                      bool is_list,
                                       kernel_error::pointer error_code,
                                       rmm::cuda_stream_view stream)
 {
@@ -730,12 +1052,23 @@ void __host__ DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pa
   dim3 dim_grid(pages.size(), 1);        // 1 thread block per page => # blocks
 
   if (level_type_size == 1) {
-    if (has_nesting) {
+    if (is_list) {
+      gpuDecodePageDataGeneric<uint8_t,
+                               decode_block_size,
+                               decode_kernel_mask::FIXED_WIDTH_DICT_LIST,
+                               true,
+                               true,
+                               true,
+                               decode_fixed_width_values_func>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(
+          pages.device_ptr(), chunks, min_row, num_rows, error_code);
+    } else if (has_nesting) {
       gpuDecodePageDataGeneric<uint8_t,
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_DICT_NESTED,
                                true,
                                true,
+                               false,
                                decode_fixed_width_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -744,18 +1077,30 @@ void __host__ DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pa
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_DICT,
                                true,
+                               false,
                                false,
                                decode_fixed_width_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
     }
   } else {
-    if (has_nesting) {
+    if (is_list) {
+      gpuDecodePageDataGeneric<uint16_t,
+                               decode_block_size,
+                               decode_kernel_mask::FIXED_WIDTH_DICT_LIST,
+                               true,
+                               true,
+                               true,
+                               decode_fixed_width_values_func>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(
+          pages.device_ptr(), chunks, min_row, num_rows, error_code);
+    } else if (has_nesting) {
       gpuDecodePageDataGeneric<uint16_t,
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_DICT_NESTED,
                                true,
                                true,
+                               false,
                                decode_fixed_width_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -765,6 +1110,7 @@ void __host__ DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pa
                                decode_kernel_mask::FIXED_WIDTH_DICT,
                                true,
                                false,
+                               true,
                                decode_fixed_width_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -779,6 +1125,7 @@ DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
                               size_t min_row,
                               int level_type_size,
                               bool has_nesting,
+                              bool is_list,
                               kernel_error::pointer error_code,
                               rmm::cuda_stream_view stream)
 {
@@ -788,12 +1135,23 @@ DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
   dim3 dim_grid(pages.size(), 1);        // 1 thread block per page => # blocks
 
   if (level_type_size == 1) {
-    if (has_nesting) {
+    if (is_list) {
+      gpuDecodePageDataGeneric<uint8_t,
+                               decode_block_size,
+                               decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST,
+                               true,
+                               true,
+                               true,
+                               decode_fixed_width_split_values_func>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(
+          pages.device_ptr(), chunks, min_row, num_rows, error_code);
+    } else if (has_nesting) {
       gpuDecodePageDataGeneric<uint8_t,
                                decode_block_size,
                                decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED,
                                true,
                                true,
+                               false,
                                decode_fixed_width_split_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -803,17 +1161,29 @@ DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
                                decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT,
                                true,
                                false,
+                               false,
                                decode_fixed_width_split_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
     }
   } else {
-    if (has_nesting) {
+    if (is_list) {
+      gpuDecodePageDataGeneric<uint16_t,
+                               decode_block_size,
+                               decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST,
+                               true,
+                               true,
+                               true,
+                               decode_fixed_width_split_values_func>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(
+          pages.device_ptr(), chunks, min_row, num_rows, error_code);
+    } else if (has_nesting) {
       gpuDecodePageDataGeneric<uint16_t,
                                decode_block_size,
                                decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED,
                                true,
                                true,
+                               false,
                                decode_fixed_width_split_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -822,6 +1192,7 @@ DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
                                decode_block_size,
                                decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT,
                                true,
+                               false,
                                false,
                                decode_fixed_width_split_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(

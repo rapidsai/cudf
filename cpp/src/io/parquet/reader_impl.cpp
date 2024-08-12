@@ -71,6 +71,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   // figure out which kernels to run
   auto const kernel_mask = GetAggregatedDecodeKernelMask(subpass.pages, _stream);
 
+printf("DECODE DATA PAGE, mask %d\n", kernel_mask);
+
   // Check to see if there are any string columns present. If so, then we need to get size info
   // for each string page. This size info will be used to pre-allocate memory for the column,
   // allowing the page decoder to write string data directly to the column buffer, rather than
@@ -274,6 +276,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                   skip_rows,
                                   level_type_size,
                                   false,
+                                  false,
                                   error_code.data(),
                                   streams[s_idx++]);
   }
@@ -285,6 +288,20 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                   num_rows,
                                   skip_rows,
                                   level_type_size,
+                                  true,
+                                  false,
+                                  error_code.data(),
+                                  streams[s_idx++]);
+  }
+
+  // launch byte stream split decoder, for list columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST) != 0) {
+    DecodeSplitPageFixedWidthData(subpass.pages,
+                                  pass.chunks,
+                                  num_rows,
+                                  skip_rows,
+                                  level_type_size,
+                                  true,
                                   true,
                                   error_code.data(),
                                   streams[s_idx++]);
@@ -309,6 +326,21 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                         skip_rows,
                         level_type_size,
                         false,
+                        false,
+                        error_code.data(),
+                        streams[s_idx++]);
+  }
+
+  // launch fixed width type decoder for lists
+  if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST) != 0) {
+printf("LIST PAGE\n");
+    DecodePageDataFixed(subpass.pages,
+                        pass.chunks,
+                        num_rows,
+                        skip_rows,
+                        level_type_size,
+                        true,
+                        true,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -321,6 +353,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                         skip_rows,
                         level_type_size,
                         true,
+                        false,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -333,6 +366,20 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                             skip_rows,
                             level_type_size,
                             false,
+                            false,
+                            error_code.data(),
+                            streams[s_idx++]);
+  }
+
+  // launch fixed width type decoder with dictionaries for lists
+  if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_DICT_LIST) != 0) {
+    DecodePageDataFixedDict(subpass.pages,
+                            pass.chunks,
+                            num_rows,
+                            skip_rows,
+                            level_type_size,
+                            true,
+                            true,
                             error_code.data(),
                             streams[s_idx++]);
   }
@@ -345,6 +392,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                             skip_rows,
                             level_type_size,
                             true,
+                            false,
                             error_code.data(),
                             streams[s_idx++]);
   }
