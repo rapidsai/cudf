@@ -61,3 +61,4 @@ build_example tpch
 build_example strings
 build_example nested_types
 build_example parquet_io
+build_example interop

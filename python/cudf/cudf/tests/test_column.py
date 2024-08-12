@@ -95,7 +95,7 @@ def test_column_offset_and_size(pandas_input, offset, size):
     else:
         assert col.size == (col.data.size / col.dtype.itemsize)
 
-    got = cudf.Series(col)
+    got = cudf.Series._from_column(col)
 
     if offset is None:
         offset = 0
@@ -112,8 +112,8 @@ def test_column_offset_and_size(pandas_input, offset, size):
 
 def column_slicing_test(col, offset, size, cast_to_float=False):
     col_slice = col.slice(offset, offset + size)
-    series = cudf.Series(col)
-    sliced_series = cudf.Series(col_slice)
+    series = cudf.Series._from_column(col)
+    sliced_series = cudf.Series._from_column(col_slice)
 
     if cast_to_float:
         pd_series = series.astype(float).to_pandas()
@@ -208,7 +208,9 @@ def test_as_column_scalar_with_nan(nan_as_null, scalar, size):
     )
 
     got = (
-        cudf.Series(as_column(scalar, length=size, nan_as_null=nan_as_null))
+        cudf.Series._from_column(
+            as_column(scalar, length=size, nan_as_null=nan_as_null)
+        )
         .dropna()
         .to_numpy()
     )
@@ -250,12 +252,18 @@ def test_column_chunked_array_creation():
     actual_column = cudf.core.column.as_column(chunked_array, dtype="float")
     expected_column = cudf.core.column.as_column(pyarrow_array, dtype="float")
 
-    assert_eq(cudf.Series(actual_column), cudf.Series(expected_column))
+    assert_eq(
+        cudf.Series._from_column(actual_column),
+        cudf.Series._from_column(expected_column),
+    )
 
     actual_column = cudf.core.column.as_column(chunked_array)
     expected_column = cudf.core.column.as_column(pyarrow_array)
 
-    assert_eq(cudf.Series(actual_column), cudf.Series(expected_column))
+    assert_eq(
+        cudf.Series._from_column(actual_column),
+        cudf.Series._from_column(expected_column),
+    )
 
 
 @pytest.mark.parametrize(
@@ -287,7 +295,7 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     gpu_data_view = gpu_data.view(to_dtype)
 
     expect = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
-    got = cudf.Series(gpu_data_view, dtype=gpu_data_view.dtype)
+    got = cudf.Series._from_column(gpu_data_view).astype(gpu_data_view.dtype)
 
     gpu_ptr = gpu_data.data.get_ptr(mode="read")
     assert gpu_ptr == got._column.data.get_ptr(mode="read")
@@ -327,7 +335,7 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
     ],
 )
 def test_column_view_valid_string_to_numeric(data, to_dtype):
-    expect = cudf.Series(cudf.Series(data)._column.view(to_dtype))
+    expect = cudf.Series._from_column(cudf.Series(data)._column.view(to_dtype))
     got = cudf.Series(str_host_view(data, to_dtype))
 
     assert_eq(expect, got)
@@ -342,7 +350,7 @@ def test_column_view_nulls_widths_even():
 
     sr = cudf.Series(data, dtype="int32")
     expect = cudf.Series(expect_data, dtype="float32")
-    got = cudf.Series(sr._column.view("float32"))
+    got = cudf.Series._from_column(sr._column.view("float32"))
 
     assert_eq(expect, got)
 
@@ -354,7 +362,7 @@ def test_column_view_nulls_widths_even():
 
     sr = cudf.Series(data, dtype="float64")
     expect = cudf.Series(expect_data, dtype="int64")
-    got = cudf.Series(sr._column.view("int64"))
+    got = cudf.Series._from_column(sr._column.view("int64"))
 
     assert_eq(expect, got)
 
@@ -365,7 +373,9 @@ def test_column_view_numeric_slice(slc):
     sr = cudf.Series(data)
 
     expect = cudf.Series(data[slc].view("int64"))
-    got = cudf.Series(sr._column.slice(slc.start, slc.stop).view("int64"))
+    got = cudf.Series._from_column(
+        sr._column.slice(slc.start, slc.stop).view("int64")
+    )
 
     assert_eq(expect, got)
 
@@ -376,7 +386,7 @@ def test_column_view_numeric_slice(slc):
 def test_column_view_string_slice(slc):
     data = ["a", "bcde", "cd", "efg", "h"]
 
-    expect = cudf.Series(
+    expect = cudf.Series._from_column(
         cudf.Series(data)._column.slice(slc.start, slc.stop).view("int8")
     )
     got = cudf.Series(str_host_view(data[slc], "int8"))
@@ -409,7 +419,10 @@ def test_as_column_buffer(data, expected):
     actual_column = cudf.core.column.as_column(
         cudf.core.buffer.as_buffer(data), dtype=data.dtype
     )
-    assert_eq(cudf.Series(actual_column), cudf.Series(expected))
+    assert_eq(
+        cudf.Series._from_column(actual_column),
+        cudf.Series._from_column(expected),
+    )
 
 
 @pytest.mark.parametrize(
@@ -436,7 +449,10 @@ def test_as_column_arrow_array(data, pyarrow_kwargs, cudf_kwargs):
     pyarrow_data = pa.array(data, **pyarrow_kwargs)
     cudf_from_pyarrow = as_column(pyarrow_data)
     expected = as_column(data, **cudf_kwargs)
-    assert_eq(cudf.Series(cudf_from_pyarrow), cudf.Series(expected))
+    assert_eq(
+        cudf.Series._from_column(cudf_from_pyarrow),
+        cudf.Series._from_column(expected),
+    )
 
 
 @pytest.mark.parametrize(
