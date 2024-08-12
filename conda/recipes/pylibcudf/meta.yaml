@@ -8,7 +8,7 @@
 {% set date_string = environ['RAPIDS_DATE_STRING'] %}
 
 package:
-  name: cudf
+  name: pylibcudf
   version: {{ version }}
 
 source:
@@ -29,8 +29,8 @@ build:
     - SCCACHE_BUCKET
     - SCCACHE_IDLE_TIMEOUT
     - SCCACHE_REGION
-    - SCCACHE_S3_KEY_PREFIX=cudf-aarch64 # [aarch64]
-    - SCCACHE_S3_KEY_PREFIX=cudf-linux64 # [linux64]
+    - SCCACHE_S3_KEY_PREFIX=pylibcudf-aarch64 # [aarch64]
+    - SCCACHE_S3_KEY_PREFIX=pylibcudf-linux64 # [linux64]
     - SCCACHE_S3_USE_SSL
     - SCCACHE_S3_NO_CREDENTIALS
   ignore_run_exports:
