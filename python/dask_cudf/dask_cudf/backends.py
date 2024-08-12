@@ -686,9 +686,9 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
         storage_options=None,
         **kwargs,
     ):
-        from fsspec.utils import stringify_path
         from dask_expr._collection import new_collection
         from dask_expr.io.csv import ReadCSV
+        from fsspec.utils import stringify_path
 
         if not isinstance(path, str):
             path = stringify_path(path)
