@@ -16,7 +16,7 @@ on:
 jobs:
   conda-cpp-checks:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@branch-24.10
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@drop-python-3.9
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
@@ -25,7 +25,7 @@ jobs:
       enable_check_symbols: true
   conda-cpp-tests:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@branch-24.10
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@drop-python-3.9
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
@@ -33,7 +33,7 @@ jobs:
       sha: ${{ inputs.sha }}
   conda-cpp-memcheck-tests:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.10
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@drop-python-3.9
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
@@ -45,7 +45,7 @@ jobs:
       run_script: "ci/test_cpp_memcheck.sh"
   static-configure:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.10
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@drop-python-3.9
     with:
       build_type: pull-request
       # Use the wheel container so we can skip conda solves and since our
@@ -54,7 +54,7 @@ jobs:
       run_script: "ci/configure_cpp_static.sh"
   conda-python-cudf-tests:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.10
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@drop-python-3.9
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
@@ -64,7 +64,7 @@ jobs:
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.10
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@drop-python-3.9
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
@@ -73,7 +73,7 @@ jobs:
       script: "ci/test_python_other.sh"
   conda-java-tests:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.10
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@drop-python-3.9
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
@@ -85,7 +85,7 @@ jobs:
       run_script: "ci/test_java.sh"
   conda-notebook-tests:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.10
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@drop-python-3.9
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
@@ -97,7 +97,7 @@ jobs:
       run_script: "ci/test_notebooks.sh"
   wheel-tests-cudf:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@drop-python-3.9
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
@@ -106,7 +106,7 @@ jobs:
       script: ci/test_wheel_cudf.sh
   wheel-tests-dask-cudf:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@drop-python-3.9
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -117,7 +117,7 @@ jobs:
       script: ci/test_wheel_dask_cudf.sh
   unit-tests-cudf-pandas:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@drop-python-3.9
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
