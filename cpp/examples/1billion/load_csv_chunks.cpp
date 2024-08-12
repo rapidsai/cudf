@@ -26,6 +26,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+
 #include <chrono>
 #include <filesystem>
 #include <iostream>
@@ -66,7 +68,8 @@ int main(int argc, char const** argv)
 
   auto const mr_name = std::string("pool");  // "cuda"
   auto resource      = create_memory_resource(mr_name);
-  rmm::mr::set_current_device_resource(resource.get());
+  auto smr = rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
+  rmm::mr::set_current_device_resource(&smr);
   auto stream = cudf::get_default_stream();
 
   std::filesystem::path p = input_file;
@@ -105,6 +108,7 @@ int main(int argc, char const** argv)
   elapsed_t elapsed = std::chrono::steady_clock::now() - start;
   std::cout << "number of keys = " << results->num_rows() << std::endl;
   std::cout << "process time: " << elapsed.count() << " seconds\n";
+  std::cout << "peak memory: " << (smr.get_bytes_counter().peak / 1048576.0) << " MB\n";
 
   return 0;
 }
