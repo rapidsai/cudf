@@ -143,6 +143,8 @@ std::unique_ptr<column> empty_like(column_view const& input)
 {
   CUDF_FUNC_RANGE();
 
+  if (!cudf::is_nested(input.type())) { return make_empty_column(input.type()); }
+
   std::vector<std::unique_ptr<column>> children;
   std::transform(input.child_begin(),
                  input.child_end(),
