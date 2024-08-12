@@ -33,6 +33,7 @@ files:
       - test_python_cudf
       - test_python_dask_cudf
       - depends_on_cupy
+      - depends_on_pylibcudf
   test_static_build:
     output: none
     includes:
