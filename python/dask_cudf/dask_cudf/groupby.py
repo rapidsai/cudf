@@ -196,7 +196,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     @_deprecate_shuffle_kwarg
     @_dask_cudf_performance_tracking
     def aggregate(
-        self, arg, split_every=None, split_out=1, shuffle_method=None, **kwargs
+        self, arg, split_every=None, split_out=1, shuffle_method=None
     ):
         if arg == "size":
             return self.size()
@@ -341,7 +341,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     @_deprecate_shuffle_kwarg
     @_dask_cudf_performance_tracking
     def aggregate(
-        self, arg, split_every=None, split_out=1, shuffle_method=None, **kwargs
+        self, arg, split_every=None, split_out=1, shuffle_method=None
     ):
         if arg == "size":
             return self.size()
