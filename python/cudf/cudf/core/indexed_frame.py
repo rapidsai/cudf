@@ -3593,10 +3593,34 @@ class IndexedFrame(Frame):
         if len(self) == 0:
             return self
 
+        try:
+            by_in_columns = self._get_columns_by_label(by)
+        except KeyError:
+            by_in_columns = None
+        if self.ndim == 1:
+            # For Series case, we're never selecting an index level.
+            by_in_index = None
+        else:
+            try:
+                by_in_index = self.index._get_columns_by_label(by)
+            except KeyError:
+                by_in_index = None
+
+        if by_in_columns is not None and by_in_index is not None:
+            raise ValueError(
+                f"{by=} appears in the {type(self).__name__} columns "
+                "and as an index level which is ambiguous."
+            )
+        elif by_in_columns is not None:
+            by_columns = by_in_columns
+        elif by_in_index is not None:
+            by_columns = by_in_index
+        else:
+            raise KeyError(by)
         # argsort the `by` column
         out = self._gather(
             GatherMap.from_column_unchecked(
-                self._get_columns_by_label(by)._get_sorted_inds(
+                by_columns._get_sorted_inds(
                     ascending=ascending, na_position=na_position
                 ),
                 len(self),

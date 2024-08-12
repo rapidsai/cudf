@@ -26,7 +26,7 @@
 #include <cudf/io/json.hpp>
 #include <cudf/io/types.hpp>
 
-#include <rmm/device_uvector.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
@@ -42,12 +42,11 @@ void run_test(std::string const& host_input, std::string const& expected_host_ou
     std::make_shared<rmm::mr::cuda_memory_resource>();
 
   auto stream_view  = cudf::test::get_default_stream();
-  auto device_input = cudf::detail::make_device_uvector_async(
-    host_input, stream_view, rmm::mr::get_current_device_resource());
+  auto device_input = rmm::device_buffer(
+    host_input.c_str(), host_input.size(), stream_view, rmm::mr::get_current_device_resource());
 
   // Preprocessing FST
-  cudf::io::datasource::owning_buffer<rmm::device_uvector<char>> device_data(
-    std::move(device_input));
+  cudf::io::datasource::owning_buffer<rmm::device_buffer> device_data(std::move(device_input));
   cudf::io::json::detail::normalize_single_quotes(device_data, stream_view, rsc.get());
 
   std::string preprocessed_host_output(device_data.size(), 0);
