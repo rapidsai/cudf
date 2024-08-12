@@ -678,6 +678,32 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
         )
 
     @staticmethod
+    def read_csv(
+        path,
+        *args,
+        header="infer",
+        dtype_backend=None,
+        storage_options=None,
+        **kwargs,
+    ):
+        from fsspec.utils import stringify_path
+        from dask_expr._collection import new_collection
+        from dask_expr.io.csv import ReadCSV
+
+        if not isinstance(path, str):
+            path = stringify_path(path)
+        return new_collection(
+            ReadCSV(
+                path,
+                dtype_backend=dtype_backend,
+                storage_options=storage_options,
+                kwargs=kwargs,
+                header=header,
+                dataframe_backend="cudf",
+            )
+        )
+
+    @staticmethod
     def read_json(*args, **kwargs):
         from dask_cudf.io.json import read_json as read_json_impl
 
