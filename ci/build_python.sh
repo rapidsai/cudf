@@ -31,6 +31,7 @@ RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry mambabuild \
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry mambabuild \
   --no-test \
   --channel "${CPP_CHANNEL}" \
+  --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
   conda/recipes/cudf
 
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry mambabuild \
