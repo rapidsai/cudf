@@ -1,5 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from datetime import datetime
+
 import pyarrow as pa
 import pytest
 from utils import assert_column_eq
@@ -40,7 +42,7 @@ def pa_timestamp_col():
 
 @pytest.fixture(scope="module")
 def pa_duration_col():
-    return pa.array(["17975 days 12:34:56"])
+    return pa.array(["05:20:25"])
 
 
 @pytest.fixture(scope="module")
@@ -66,10 +68,17 @@ def test_to_datetime(
     assert_column_eq(expect, got)
 
 
-@pytest.mark.parametrize("format", ["%D days %H:%M:%S"])
+@pytest.mark.parametrize("format", ["%H:%M:%S"])
 def test_to_duration(pa_duration_col, plc_duration_col, duration_type, format):
-    expect = pa.compute.strptime(pa_duration_col, format, duration_type.unit)
-    got = plc.strings.convert.convert_datetime.to_durations(
+    def to_timedelta(duration_str):
+        date = datetime.strptime(duration_str, format)
+        return date - datetime(1900, 1, 1)
+
+    expect = pa.array([to_timedelta(d.as_py()) for d in pa_duration_col]).cast(
+        duration_type
+    )
+
+    got = plc.strings.convert.convert_durations.to_durations(
         plc_duration_col,
         plc.interop.from_arrow(duration_type),
         format.encode(),
