@@ -514,7 +514,6 @@ constexpr unsigned int kDictHashBits = 16;
 constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
 
 struct EncPage;
-struct slot_type;
 
 // convert Encoding to a mask value
 constexpr uint32_t encoding_to_mask(Encoding encoding)
@@ -560,7 +559,7 @@ struct EncColumnChunk {
   uint8_t is_compressed;    //!< Nonzero if the chunk uses compression
   uint32_t dictionary_size;    //!< Size of dictionary page including header
   uint32_t ck_stat_size;       //!< Size of chunk-level statistics (included in 1st page header)
-  slot_type* dict_map_slots;   //!< Hash map storage for calculating dict encoding for this chunk
+  int32_t dict_map_idx;        //!< Hash map storage for calculating dict encoding for this chunk
   size_type dict_map_size;     //!< Size of dict_map_slots
   size_type num_dict_entries;  //!< Total number of entries in dictionary
   size_type
@@ -999,46 +998,6 @@ void CalculatePageFragments(device_span<PageFragment> frag,
  */
 void InitFragmentStatistics(device_span<statistics_group> groups,
                             device_span<PageFragment const> fragments,
-                            rmm::cuda_stream_view stream);
-
-/**
- * @brief Initialize per-chunk hash maps used for dictionary with sentinel values
- *
- * @param chunks Flat span of chunks to initialize hash maps for
- * @param stream CUDA stream to use
- */
-void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
-
-/**
- * @brief Insert chunk values into their respective hash maps
- *
- * @param frags Column fragments
- * @param stream CUDA stream to use
- */
-void populate_chunk_hash_maps(cudf::detail::device_2dspan<PageFragment const> frags,
-                              rmm::cuda_stream_view stream);
-
-/**
- * @brief Compact dictionary hash map entries into chunk.dict_data
- *
- * @param chunks Flat span of chunks to compact hash maps for
- * @param stream CUDA stream to use
- */
-void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
-
-/**
- * @brief Get the Dictionary Indices for each row
- *
- * For each row of a chunk, gets the indices into chunk.dict_data which contains the value otherwise
- * stored in input column [row]. Stores these indices into chunk.dict_index.
- *
- * Since dict_data itself contains indices into the original cudf column, this means that
- * col[row] == col[dict_data[dict_index[row - chunk.start_row]]]
- *
- * @param frags Column fragments
- * @param stream CUDA stream to use
- */
-void get_dictionary_indices(cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream);
 
 /**

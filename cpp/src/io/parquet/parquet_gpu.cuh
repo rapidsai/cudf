@@ -21,22 +21,80 @@
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/types.hpp>
 
+#include <cooperative_groups.h>
 #include <cuco/static_map.cuh>
+#include <cuco/static_map_ref.cuh>
+#include <cuco/storage.cuh>
+#include <thrust/device_vector.h>
+
+#include <limits>
 
 namespace cudf::io::parquet::detail {
 
-auto constexpr KEY_SENTINEL   = size_type{-1};
-auto constexpr VALUE_SENTINEL = size_type{-1};
+using key_type    = uint32_t;
+using mapped_type = uint32_t;
 
-using map_type = cuco::legacy::static_map<size_type, size_type>;
+auto constexpr cg_size     = 1;  ///< A CUDA Cooperative Group of 8 threads to handle each subset
+auto constexpr window_size = 1;  ///< Number of concurrent slots handled by each thread
+
+auto constexpr KEY_SENTINEL   = key_type{std::numeric_limits<uint32_t>::max()};
+auto constexpr VALUE_SENTINEL = mapped_type{std::numeric_limits<uint32_t>::max()};
+auto constexpr SCOPE          = cuda::thread_scope_device;
+
+using slot_type = cuco::pair<key_type, mapped_type>;
+
+using storage_type     = cuco::aow_storage<slot_type, window_size>;
+using storage_ref_type = typename storage_type::ref_type;
+
+template <typename T>
+struct my_hasher {
+  __device__ auto operator()(T index) const { return index; }
+};
+
+using probing_scheme_type = cuco::linear_probing<cg_size, my_hasher<key_type>>;
+
+using map_ref_type = cuco::static_map_ref<key_type,
+                                          mapped_type,
+                                          SCOPE,
+                                          thrust::equal_to<key_type>,
+                                          probing_scheme_type,
+                                          storage_ref_type>;  ///< Map ref type
 
 /**
- * @brief The alias of `map_type::pair_atomic_type` class.
+ * @brief Insert chunk values into their respective hash maps
  *
- * Declare this struct by trivial subclassing instead of type aliasing so we can have forward
- * declaration of this struct somewhere else.
+ * @param frags Column fragments
+ * @param stream CUDA stream to use
  */
-struct slot_type : public map_type::pair_atomic_type {};
+void populate_chunk_hash_maps(map_ref_type* map_refs,
+                              cudf::detail::device_2dspan<PageFragment const> frags,
+                              rmm::cuda_stream_view stream);
+
+/**
+ * @brief Compact dictionary hash map entries into chunk.dict_data
+ *
+ * @param chunks Flat span of chunks to compact hash maps for
+ * @param stream CUDA stream to use
+ */
+void collect_map_entries(map_ref_type* map_refs,
+                         device_span<EncColumnChunk> chunks,
+                         rmm::cuda_stream_view stream);
+
+/**
+ * @brief Get the Dictionary Indices for each row
+ *
+ * For each row of a chunk, gets the indices into chunk.dict_data which contains the value otherwise
+ * stored in input column [row]. Stores these indices into chunk.dict_index.
+ *
+ * Since dict_data itself contains indices into the original cudf column, this means that
+ * col[row] == col[dict_data[dict_index[row - chunk.start_row]]]
+ *
+ * @param frags Column fragments
+ * @param stream CUDA stream to use
+ */
+void get_dictionary_indices(map_ref_type* map_refs,
+                            cudf::detail::device_2dspan<PageFragment const> frags,
+                            rmm::cuda_stream_view stream);
 
 /**
  * @brief Return the byte length of parquet dtypes that are physically represented by INT32

@@ -26,28 +26,15 @@
 
 namespace cudf::io::parquet::detail {
 
+namespace cg = cooperative_groups;
+
 namespace {
 constexpr int DEFAULT_BLOCK_SIZE = 256;
 }
 
-template <int block_size>
-CUDF_KERNEL void __launch_bounds__(block_size)
-  initialize_chunk_hash_maps_kernel(device_span<EncColumnChunk> chunks)
-{
-  auto const chunk = chunks[blockIdx.x];
-  auto const t     = threadIdx.x;
-  // fut: Now that per-chunk dict is same size as ck.num_values, try to not use one block per chunk
-  for (thread_index_type i = 0; i < chunk.dict_map_size; i += block_size) {
-    if (t + i < chunk.dict_map_size) {
-      new (&chunk.dict_map_slots[t + i].first) map_type::atomic_key_type{KEY_SENTINEL};
-      new (&chunk.dict_map_slots[t + i].second) map_type::atomic_mapped_type{VALUE_SENTINEL};
-    }
-  }
-}
-
-template <typename T>
 struct equality_functor {
   column_device_view const& col;
+  template <typename T>
   __device__ bool operator()(size_type lhs_idx, size_type rhs_idx)
   {
     // We don't call this for nulls so this is fine
@@ -56,50 +43,23 @@ struct equality_functor {
   }
 };
 
-template <typename T>
 struct hash_functor {
   column_device_view const& col;
+  template <typename T>
   __device__ auto operator()(size_type idx) const
   {
-    return cudf::hashing::detail::MurmurHash3_x86_32<T>{}(col.element<T>(idx));
-  }
-};
-
-struct map_insert_fn {
-  map_type::device_mutable_view& map;
-
-  template <typename T>
-  __device__ bool operator()(column_device_view const& col, size_type i)
-  {
     if constexpr (column_device_view::has_element_accessor<T>()) {
-      auto hash_fn     = hash_functor<T>{col};
-      auto equality_fn = equality_functor<T>{col};
-      return map.insert(std::pair(i, i), hash_fn, equality_fn);
+      return cudf::hashing::detail::MurmurHash3_x86_32<T>{}(col.element<T>(idx));
     } else {
-      CUDF_UNREACHABLE("Unsupported type to insert in map");
-    }
-  }
-};
-
-struct map_find_fn {
-  map_type::device_view& map;
-
-  template <typename T>
-  __device__ map_type::device_view::iterator operator()(column_device_view const& col, size_type i)
-  {
-    if constexpr (column_device_view::has_element_accessor<T>()) {
-      auto hash_fn     = hash_functor<T>{col};
-      auto equality_fn = equality_functor<T>{col};
-      return map.find(i, hash_fn, equality_fn);
-    } else {
-      CUDF_UNREACHABLE("Unsupported type to find in map");
+      return static_cast<uint32_t>(KEY_SENTINEL);
     }
   }
 };
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  populate_chunk_hash_maps_kernel(cudf::detail::device_2dspan<PageFragment const> frags)
+  populate_chunk_hash_maps_kernel(map_ref_type* map_refs,
+                                  cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
@@ -123,10 +83,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   column_device_view const& data_col = *col->leaf_column;
 
   // Make a view of the hash map
-  auto hash_map_mutable = map_type::device_mutable_view(chunk->dict_map_slots,
-                                                        chunk->dict_map_size,
-                                                        cuco::empty_key{KEY_SENTINEL},
-                                                        cuco::empty_value{VALUE_SENTINEL});
+  auto hash_map_ref = *(map_refs + chunk->dict_map_idx);
 
   __shared__ size_type total_num_dict_entries;
   thread_index_type val_idx = s_start_value_idx + t;
@@ -138,8 +95,14 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     size_type is_unique      = 0;
     size_type uniq_elem_size = 0;
     if (is_valid) {
-      is_unique =
-        type_dispatcher(data_col.type(), map_insert_fn{hash_map_mutable}, data_col, val_idx);
+      auto const val = type_dispatcher(data_col.type(), hash_functor{data_col}, val_idx);
+      if (val != KEY_SENTINEL) {
+        auto map_insert_ref = hash_map_ref.with_operators(cuco::insert);
+        is_unique           = map_insert_ref.insert(cuco::pair{val, val_idx});
+      } else {
+        is_unique = false;
+      }
+      // if (!t) printf("inserted val = %u, val_idx = %ld\n", val, val_idx);
       uniq_elem_size = [&]() -> size_type {
         if (not is_unique) { return 0; }
         switch (col->physical_type) {
@@ -170,7 +133,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         }
       }();
     }
-
     auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
     __syncthreads();
     auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
@@ -190,24 +152,20 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  collect_map_entries_kernel(device_span<EncColumnChunk> chunks)
+  collect_map_entries_kernel(map_ref_type* map_refs, device_span<EncColumnChunk> chunks)
 {
   auto& chunk = chunks[blockIdx.x];
   if (not chunk.use_dictionary) { return; }
 
   auto t   = threadIdx.x;
-  auto map = map_type::device_view(chunk.dict_map_slots,
-                                   chunk.dict_map_size,
-                                   cuco::empty_key{KEY_SENTINEL},
-                                   cuco::empty_value{VALUE_SENTINEL});
-
+  auto map = *(map_refs + chunk.dict_map_idx);
   __shared__ cuda::atomic<size_type, cuda::thread_scope_block> counter;
   using cuda::std::memory_order_relaxed;
   if (t == 0) { new (&counter) cuda::atomic<size_type, cuda::thread_scope_block>{0}; }
   __syncthreads();
   for (size_type i = 0; i < chunk.dict_map_size; i += block_size) {
     if (t + i < chunk.dict_map_size) {
-      auto* slot = reinterpret_cast<map_type::value_type*>(map.begin_slot() + t + i);
+      auto* slot = reinterpret_cast<map_ref_type::value_type*>(&map + t + i);
       auto key   = slot->first;
       if (key != KEY_SENTINEL) {
         auto loc = counter.fetch_add(1, memory_order_relaxed);
@@ -224,7 +182,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  get_dictionary_indices_kernel(cudf::detail::device_2dspan<PageFragment const> frags)
+  get_dictionary_indices_kernel(map_ref_type* map_refs,
+                                cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
@@ -245,21 +204,22 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   column_device_view const& data_col = *col->leaf_column;
 
-  auto map = map_type::device_view(chunk->dict_map_slots,
-                                   chunk->dict_map_size,
-                                   cuco::empty_key{KEY_SENTINEL},
-                                   cuco::empty_value{VALUE_SENTINEL});
+  auto map = *(map_refs + chunk->dict_map_idx);
 
   thread_index_type val_idx = s_start_value_idx + t;
   while (val_idx < end_value_idx) {
     if (data_col.is_valid(val_idx)) {
-      auto found_slot = type_dispatcher(data_col.type(), map_find_fn{map}, data_col, val_idx);
-      cudf_assert(found_slot != map.end() &&
-                  "Unable to find value in map in dictionary index construction");
-      if (found_slot != map.end()) {
-        // No need for atomic as this is not going to be modified by any other thread
-        auto* val_ptr = reinterpret_cast<map_type::mapped_type*>(&found_slot->second);
-        chunk->dict_index[val_idx - s_ck_start_val_idx] = *val_ptr;
+      auto val = type_dispatcher(data_col.type(), hash_functor{data_col}, val_idx);
+      if (val != static_cast<uint32_t>(KEY_SENTINEL)) {
+        auto map_find_ref = map.with_operators(cuco::find);
+        auto found_slot   = map_find_ref.find(val);
+        cudf_assert(found_slot != map.end() &&
+                    "Unable to find value in map in dictionary index construction");
+        if (found_slot != map.end()) {
+          // No need for atomic as this is not going to be modified by any other thread
+          auto* val_ptr = reinterpret_cast<map_ref_type::mapped_type*>(&found_slot->second);
+          chunk->dict_index[val_idx - s_ck_start_val_idx] = *val_ptr;
+        }
       }
     }
 
@@ -267,32 +227,30 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
 }
 
-void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
-{
-  constexpr int block_size = 1024;
-  initialize_chunk_hash_maps_kernel<block_size>
-    <<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
-}
-
-void populate_chunk_hash_maps(cudf::detail::device_2dspan<PageFragment const> frags,
+void populate_chunk_hash_maps(map_ref_type* map_refs,
+                              cudf::detail::device_2dspan<PageFragment const> frags,
                               rmm::cuda_stream_view stream)
 {
   dim3 const dim_grid(frags.size().second, frags.size().first);
   populate_chunk_hash_maps_kernel<DEFAULT_BLOCK_SIZE>
-    <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(frags);
+    <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(map_refs, frags);
 }
 
-void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
+void collect_map_entries(map_ref_type* map_refs,
+                         device_span<EncColumnChunk> chunks,
+                         rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 1024;
-  collect_map_entries_kernel<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
+  collect_map_entries_kernel<block_size>
+    <<<chunks.size(), block_size, 0, stream.value()>>>(map_refs, chunks);
 }
 
-void get_dictionary_indices(cudf::detail::device_2dspan<PageFragment const> frags,
+void get_dictionary_indices(map_ref_type* map_refs,
+                            cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream)
 {
   dim3 const dim_grid(frags.size().second, frags.size().first);
   get_dictionary_indices_kernel<DEFAULT_BLOCK_SIZE>
-    <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(frags);
+    <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(map_refs, frags);
 }
 }  // namespace cudf::io::parquet::detail
