@@ -365,12 +365,13 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         try:
             columns_df = self._frame._get_columns_by_label(key[1])
         except KeyError:
-            if not self._frame.empty and isinstance(key[0], slice):
+            was_empty = self._frame.empty
+            if not was_empty and isinstance(key[0], slice):
                 pos_range = _get_label_range_or_mask(
                     self._frame.index, key[0].start, key[0].stop, key[0].step
                 )
                 idx = self._frame.index[pos_range]
-            elif self._frame.empty and isinstance(key[0], slice):
+            elif was_empty and isinstance(key[0], slice):
                 idx = None
             else:
                 if is_scalar(key[0]):
@@ -396,6 +397,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     idx if idx is not None else cudf.RangeIndex(len(new_col))
                 )
             self._frame._data.insert(key[1], new_col)
+            if was_empty:
+                # TODO: Create a cudf_to_pandas_dtype function to use here
+                self._frame._data.label_dtype = None
         else:
             if is_scalar(value):
                 for col in columns_df._column_names:
@@ -3308,7 +3312,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 dtype=dtype,
             )
 
+        was_empty = False
         if len(self) == 0:
+            was_empty = True
             if isinstance(value, (pd.Series, Series)):
                 if not ignore_index:
                     self.index = cudf.Index(value.index)
@@ -3338,6 +3344,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         value = column.as_column(value, nan_as_null=nan_as_null)
 
         self._data.insert(name, value, loc=loc)
+        if was_empty:
+            # TODO: Create a cudf_to_pandas_dtype function to use here
+            self._data.label_dtype = None
 
     @property  # type:ignore
     @_performance_tracking
