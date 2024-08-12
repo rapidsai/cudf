@@ -53,7 +53,7 @@ if(FIND_CUDF_CPP)
     include(../../cpp/cmake/thirdparty/get_arrow.cmake)
   endif()
 
-  # find_package(cudf "${RAPIDS_VERSION}" REQUIRED)
+  find_package(cudf "${RAPIDS_VERSION}" REQUIRED)
 
   # an installed version of libcudf doesn't provide the dlpack headers so we need to download dlpack
   # for the interop.pyx
