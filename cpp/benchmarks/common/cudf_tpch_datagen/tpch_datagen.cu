@@ -76,9 +76,22 @@ std::unique_ptr<cudf::table> generate_orders_independent(cudf::size_type const& 
   }();
 
   // Generate the `o_custkey` column
-  // NOTE: This column does not comply with the specs which
-  // specifies that every value % 3 != 0
-  auto o_custkey = gen_rand_num_col<cudf::size_type>(1, o_num_rows, o_num_rows, stream, mr);
+  auto o_custkey = [&]() {
+    auto const col =
+      gen_rand_num_col<cudf::size_type>(1, scale_factor * 49'000, o_num_rows, stream, mr);
+    auto const col_mul_3 = cudf::binary_operation(col->view(),
+                                                  cudf::numeric_scalar<cudf::size_type>(3),
+                                                  cudf::binary_operator::MUL,
+                                                  cudf::data_type{cudf::type_id::INT32},
+                                                  stream,
+                                                  mr);
+    return cudf::binary_operation(col_mul_3->view(),
+                                  cudf::numeric_scalar<cudf::size_type>(1),
+                                  cudf::binary_operator::ADD,
+                                  cudf::data_type{cudf::type_id::INT32},
+                                  stream,
+                                  mr);
+  }();
 
   // Generate the `o_orderdate` column
   auto o_orderdate_ts = [&]() {
@@ -108,7 +121,7 @@ std::unique_ptr<cudf::table> generate_orders_independent(cudf::size_type const& 
   auto o_clerk = [&]() {
     auto const clerk_repeat = gen_rep_str_col("Clerk#", o_num_rows, stream, mr);
     auto const random_c =
-      gen_rand_num_col<cudf::size_type>(1, 1'000 * scale_factor, o_num_rows, stream, mr);
+      gen_rand_num_col<cudf::size_type>(1, scale_factor * 1'000, o_num_rows, stream, mr);
     auto const random_c_str        = cudf::strings::from_integers(random_c->view(), stream, mr);
     auto const random_c_str_padded = cudf::strings::zfill(random_c_str->view(), 9, stream, mr);
     return cudf::strings::concatenate(
