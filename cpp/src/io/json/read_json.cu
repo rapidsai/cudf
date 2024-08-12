@@ -151,7 +151,7 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
       : std::min(total_source_size, chunk_size + num_subchunks_prealloced * size_per_subchunk) +
           num_extra_delimiters;
   rmm::device_buffer buffer(buffer_size, stream);
-  device_span<char> bufspan(reinterpret_cast<char*>(buffer.data()), buffer_size);
+  device_span<char> bufspan(reinterpret_cast<char*>(buffer.data()), buffer.size());
 
   // Offset within buffer indicating first read position
   std::int64_t buffer_offset = 0;
