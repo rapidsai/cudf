@@ -57,11 +57,11 @@ struct chunk_fn {
 
   void operator()()
   {
-    using namespace std::chrono_literals;
-    // std::cout << std::this_thread::get_id() << "=" << first_range << std::endl;
-    if (!first_range) {
-      std::this_thread::sleep_for(350ms);  // add some fixed delay
-    }
+    // using namespace std::chrono_literals;
+    //  std::cout << std::this_thread::get_id() << "=" << first_range << std::endl;
+    // if (!first_range) {
+    //   std::this_thread::sleep_for(350ms);  // add some fixed delay
+    // }
 
     // process each byte range assigned to this thread
     for (auto& br : byte_ranges) {
