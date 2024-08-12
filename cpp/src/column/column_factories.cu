@@ -67,17 +67,17 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
       cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr));
   }
 
-  auto& ss       = static_cast<scalar_type_t<cudf::string_view> const&>(value);
-  auto const sdv = cudf::get_scalar_device_view(const_cast<string_scalar&>(ss));
+  auto& ss         = static_cast<scalar_type_t<cudf::string_view> const&>(value);
+  auto const d_str = ss.value(stream);  // no actual data is copied
 
   // fill the column with the scalar
-  using sip_t = cudf::strings::detail::string_index_pair;
-  rmm::device_uvector<sip_t> indices(size, stream);
+  rmm::device_uvector<cudf::strings::detail::string_index_pair> indices(size, stream);
   thrust::generate(
-    rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), [sdv] __device__() {
-      auto const d_str = sdv.value();
+    rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), [d_str] __device__() {
       // special handling for empty string -- from an all-empty strings column
-      return d_str.empty() ? sip_t{"", 0} : sip_t{d_str.data(), d_str.size_bytes()};
+      return d_str.empty()
+               ? cudf::strings::detail::string_index_pair{"", 0}
+               : cudf::strings::detail::string_index_pair{d_str.data(), d_str.size_bytes()};
     });
   return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, mr);
 }
