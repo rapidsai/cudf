@@ -168,7 +168,7 @@ size_t estimate_size_per_subchunk(size_t chunk_size)
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @returns Data source owning buffer enclosing the bytes read
  */
-datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
+datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
   host_span<std::unique_ptr<datasource>> sources,
   json_reader_options const& reader_opts,
   rmm::cuda_stream_view stream)
@@ -200,8 +200,8 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
       ? total_source_size * estimated_compression_ratio + header_size
       : std::min(total_source_size, chunk_size + num_subchunks_prealloced * size_per_subchunk) +
           num_extra_delimiters;
-  rmm::device_uvector<char> buffer(buffer_size, stream);
-  device_span<char> bufspan(buffer);
+  rmm::device_buffer buffer(buffer_size, stream);
+  device_span<char> bufspan(reinterpret_cast<char*>(buffer.data()), buffer.size());
 
   // Offset within buffer indicating first read position
   std::int64_t buffer_offset = 0;
@@ -213,8 +213,8 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
     chunk_offset == 0 ? 0 : find_first_delimiter(readbufspan, '\n', stream);
   if (first_delim_pos == -1) {
     // return empty owning datasource buffer
-    auto empty_buf = rmm::device_uvector<char>(0, stream);
-    return datasource::owning_buffer<rmm::device_uvector<char>>(std::move(empty_buf));
+    auto empty_buf = rmm::device_buffer(0, stream);
+    return datasource::owning_buffer<rmm::device_buffer>(std::move(empty_buf));
   } else if (!should_load_all_sources) {
     // Find next delimiter
     std::int64_t next_delim_pos = -1;
@@ -232,12 +232,12 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
     }
     if (next_delim_pos < buffer_offset) next_delim_pos = buffer_offset + readbufspan.size();
 
-    return datasource::owning_buffer<rmm::device_uvector<char>>(
+    return datasource::owning_buffer<rmm::device_buffer>(
       std::move(buffer),
       reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
       next_delim_pos - first_delim_pos - shift_for_nonzero_offset);
   }
-  return datasource::owning_buffer<rmm::device_uvector<char>>(
+  return datasource::owning_buffer<rmm::device_buffer>(
     std::move(buffer),
     reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
     readbufspan.size() - first_delim_pos - shift_for_nonzero_offset);
@@ -249,7 +249,7 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  datasource::owning_buffer<rmm::device_uvector<char>> bufview =
+  datasource::owning_buffer<rmm::device_buffer> bufview =
     get_record_range_raw_input(sources, reader_opts, stream);
 
   // If input JSON buffer has single quotes and option to normalize single quotes is enabled,
