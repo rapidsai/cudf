@@ -247,7 +247,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<bool>(column_view in
                                                                   arrow::MemoryPool* ar_mr,
                                                                   rmm::cuda_stream_view stream)
 {
-  auto bitmask = bools_to_mask(input, stream, rmm::mr::get_current_device_resource());
+  auto bitmask = detail::bools_to_mask(input, stream, rmm::mr::get_current_device_resource());
 
   auto data_buffer = allocate_arrow_buffer(static_cast<int64_t>(bitmask.first->size()), ar_mr);
 
