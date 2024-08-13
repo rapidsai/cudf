@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "rand_utilities.cuh"
+#include "rand_utilities.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/ast/detail/operators.hpp>

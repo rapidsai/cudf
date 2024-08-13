@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
-#include "rand_utilities.cuh"
+#include "rand_utilities.hpp"
 #include "table_helpers.hpp"
+
+#include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>

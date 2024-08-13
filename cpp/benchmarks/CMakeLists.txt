@@ -35,7 +35,10 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
 )
 
-add_library(cudf_tpch_datagen STATIC common/cudf_tpch_datagen/tpch_datagen.cu)
+add_library(
+  cudf_tpch_datagen STATIC common/cudf_tpch_datagen/tpch_datagen.cu
+                           common/cudf_tpch_datagen/rand_utilities.cu
+)
 target_compile_features(cudf_tpch_datagen PUBLIC cxx_std_17 cuda_std_17)
 
 target_compile_options(

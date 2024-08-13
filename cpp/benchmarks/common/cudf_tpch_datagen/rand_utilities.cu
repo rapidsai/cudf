@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#pragma once
-
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/binaryop.hpp>
@@ -80,15 +78,6 @@ struct gen_rand_num {
   }
 };
 
-/**
- * @brief Generate a column of random strings
- *
- * @param lower The lower bound of the length of the strings
- * @param upper The upper bound of the length of the strings
- * @param num_rows The number of rows in the column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- */
 std::unique_ptr<cudf::column> gen_rand_str_col(cudf::size_type const& lower,
                                                cudf::size_type const& upper,
                                                cudf::size_type const& num_rows,
@@ -116,14 +105,6 @@ std::unique_ptr<cudf::column> gen_rand_str_col(cudf::size_type const& lower,
     num_rows, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
-/**
- * @brief Generate a column of random numbers
- * @param lower The lower bound of the random numbers
- * @param upper The upper bound of the random numbers
- * @param num_rows The number of rows in the column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- */
 template <typename T>
 std::unique_ptr<cudf::column> gen_rand_num_col(T const& lower,
                                                T const& upper,
@@ -144,14 +125,31 @@ std::unique_ptr<cudf::column> gen_rand_num_col(T const& lower,
   return col;
 }
 
-/**
- * @brief Generate a primary key column
- *
- * @param start The starting value of the primary key
- * @param num_rows The number of rows in the column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- */
+template std::unique_ptr<cudf::column> gen_rand_num_col<int8_t>(int8_t const& lower,
+                                                                int8_t const& upper,
+                                                                cudf::size_type const& num_rows,
+                                                                rmm::cuda_stream_view stream,
+                                                                rmm::device_async_resource_ref mr);
+
+template std::unique_ptr<cudf::column> gen_rand_num_col<int16_t>(int16_t const& lower,
+                                                                 int16_t const& upper,
+                                                                 cudf::size_type const& num_rows,
+                                                                 rmm::cuda_stream_view stream,
+                                                                 rmm::device_async_resource_ref mr);
+
+template std::unique_ptr<cudf::column> gen_rand_num_col<cudf::size_type>(
+  cudf::size_type const& lower,
+  cudf::size_type const& upper,
+  cudf::size_type const& num_rows,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+template std::unique_ptr<cudf::column> gen_rand_num_col<double>(double const& lower,
+                                                                double const& upper,
+                                                                cudf::size_type const& num_rows,
+                                                                rmm::cuda_stream_view stream,
+                                                                rmm::device_async_resource_ref mr);
+
 template <typename T>
 std::unique_ptr<cudf::column> gen_primary_key_col(T const& start,
                                                   cudf::size_type const& num_rows,
@@ -164,14 +162,24 @@ std::unique_ptr<cudf::column> gen_primary_key_col(T const& start,
   return cudf::sequence(num_rows, init, step, stream, mr);
 }
 
-/**
- * @brief Generate a column where all the rows have the same string value
- *
- * @param value The string value to fill the column with
- * @param num_rows The number of rows in the column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- */
+template std::unique_ptr<cudf::column> gen_primary_key_col<int8_t>(
+  int8_t const& start,
+  cudf::size_type const& num_rows,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+template std::unique_ptr<cudf::column> gen_primary_key_col<int16_t>(
+  int16_t const& start,
+  cudf::size_type const& num_rows,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+template std::unique_ptr<cudf::column> gen_primary_key_col<cudf::size_type>(
+  cudf::size_type const& start,
+  cudf::size_type const& num_rows,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
 std::unique_ptr<cudf::column> gen_rep_str_col(std::string const& value,
                                               cudf::size_type const& num_rows,
                                               rmm::cuda_stream_view stream,
@@ -182,14 +190,6 @@ std::unique_ptr<cudf::column> gen_rep_str_col(std::string const& value,
   return cudf::make_column_from_scalar(scalar, num_rows, stream, mr);
 }
 
-/**
- * @brief Generate a column by randomly choosing from set of strings
- *
- * @param set The set of strings to choose from
- * @param num_rows The number of rows in the column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- */
 std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string> set,
                                                         cudf::size_type const& num_rows,
                                                         rmm::cuda_stream_view stream,
@@ -211,14 +211,6 @@ std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string>
   return std::make_unique<cudf::column>(gathered_table->get_column(1));
 }
 
-/**
- * @brief Generate a column consisting of a repeating sequence of integers
- *
- * @param limit The upper limit of the repeating sequence
- * @param num_rows The number of rows in the column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- */
 template <typename T>
 std::unique_ptr<cudf::column> gen_rep_seq_col(T const& seq_length,
                                               bool zero_indexed,
@@ -242,3 +234,16 @@ std::unique_ptr<cudf::column> gen_rep_seq_col(T const& seq_length,
                                 stream,
                                 mr);
 }
+
+template std::unique_ptr<cudf::column> gen_rep_seq_col<int8_t>(int8_t const& seq_length,
+                                                               bool zero_indexed,
+                                                               cudf::size_type const& num_rows,
+                                                               rmm::cuda_stream_view stream,
+                                                               rmm::device_async_resource_ref mr);
+
+template std::unique_ptr<cudf::column> gen_rep_seq_col<cudf::size_type>(
+  cudf::size_type const& seq_length,
+  bool zero_indexed,
+  cudf::size_type const& num_rows,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
