@@ -36,47 +36,6 @@
 #include <string>
 #include <vector>
 
-std::vector<std::string> const nations = {
-  "ALGERIA", "ARGENTINA", "BRAZIL",         "CANADA",       "EGYPT", "ETHIOPIA", "FRANCE",
-  "GERMANY", "INDIA",     "INDONESIA",      "IRAN",         "IRAQ",  "JAPAN",    "JORDAN",
-  "KENYA",   "MOROCCO",   "MOZAMBIQUE",     "PERU",         "CHINA", "ROMANIA",  "SAUDI ARABIA",
-  "VIETNAM", "RUSSIA",    "UNITED KINGDOM", "UNITED STATES"};
-
-std::vector<std::string> const years  = {"1992", "1993", "1994", "1995", "1996", "1997", "1998"};
-std::vector<std::string> const months = {
-  "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"};
-std::vector<std::string> const days = {
-  "1",  "2",  "3",  "4",  "5",  "6",  "7",  "8",  "9",  "10", "11", "12", "13", "14", "15", "16",
-  "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31"};
-
-std::vector<std::string> const vocab_p_name = {
-  "almond",   "antique",   "aquamarine", "azure",      "beige",     "bisque",    "black",
-  "blanched", "blue",      "blush",      "brown",      "burlywood", "burnished", "chartreuse",
-  "chiffon",  "chocolate", "coral",      "cornflower", "cornsilk",  "cream",     "cyan",
-  "dark",     "deep",      "dim",        "dodger",     "drab",      "firebrick", "floral",
-  "forest",   "frosted",   "gainsboro",  "ghost",      "goldenrod", "green",     "grey",
-  "honeydew", "hot",       "indian",     "ivory",      "khaki",     "lace",      "lavender",
-  "lawn",     "lemon",     "light",      "lime",       "linen",     "magenta",   "maroon",
-  "medium",   "metallic",  "midnight",   "mint",       "misty",     "moccasin",  "navajo",
-  "navy",     "olive",     "orange",     "orchid",     "pale",      "papaya",    "peach",
-  "peru",     "pink",      "plum",       "powder",     "puff",      "purple",    "red",
-  "rose",     "rosy",      "royal",      "saddle",     "salmon",    "sandy",     "seashell",
-  "sienna",   "sky",       "slate",      "smoke",      "snow",      "spring",    "steel",
-  "tan",      "thistle",   "tomato",     "turquoise",  "violet",    "wheat",     "white",
-  "yellow"};
-
-std::vector<std::string> const vocab_modes = {
-  "REG AIR", "AIR", "RAIL", "SHIP", "TRUCK", "MAIL", "FOB"};
-
-std::vector<std::string> const vocab_instructions = {
-  "DELIVER IN PERSON", "COLLECT COD", "NONE", "TAKE BACK RETURN"};
-
-std::vector<std::string> const vocab_priorities = {
-  "1-URGENT", "2-HIGH", "3-MEDIUM", "4-NOT SPECIFIED", "5-LOW"};
-
-std::vector<std::string> const vocab_segments = {
-  "AUTOMOBILE", "BUILDING", "FURNITURE", "MACHINERY", "HOUSEHOLD"};
-
 std::vector<std::string> gen_vocab_types()
 {
   std::vector<std::string> syllable_a = {
