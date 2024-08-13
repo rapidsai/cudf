@@ -667,8 +667,8 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             constructor=constructor,
         )
 
-    @classmethod
-    def read_parquet(cls, *args, engine=None, **kwargs):
+    @staticmethod
+    def read_parquet(*args, engine=None, **kwargs):
         import dask_expr as dx
 
         from dask_cudf.io.parquet import CudfEngine
