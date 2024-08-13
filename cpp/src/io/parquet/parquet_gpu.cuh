@@ -37,9 +37,9 @@ using mapped_type = size_type;
 auto constexpr cg_size     = 1;  ///< A CUDA Cooperative Group of 8 threads to handle each subset
 auto constexpr window_size = 1;  ///< Number of concurrent slots handled by each thread
 
-auto constexpr KEY_SENTINEL   = key_type{std::numeric_limits<key_type>::max()};
-auto constexpr VALUE_SENTINEL = mapped_type{std::numeric_limits<mapped_type>::max()};
-auto constexpr SCOPE          = cuda::thread_scope_device;
+auto constexpr KEY_SENTINEL   = key_type{-1};
+auto constexpr VALUE_SENTINEL = mapped_type{-1};
+auto constexpr SCOPE          = cuda::thread_scope_block;
 
 using slot_type = cuco::pair<key_type, mapped_type>;
 

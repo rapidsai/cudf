@@ -250,8 +250,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   [[maybe_unused]] auto const tile = cg::tiled_partition<cg_size>(cg::this_thread_block());
   auto const t                     = cg::this_thread_block().thread_rank();
 
-  storage_ref_type const storage_ref{chunk.dict_map_size, map_storage + chunk.dict_map_offset};
-
   __shared__ cuda::atomic<size_type, cuda::thread_scope_block> counter;
   using cuda::std::memory_order_relaxed;
   if (t == 0) { new (&counter) cuda::atomic<size_type, cuda::thread_scope_block>{0}; }
@@ -259,17 +257,17 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   for (size_type i = 0; i < chunk.dict_map_size; i += block_size) {
     if (t + i < chunk.dict_map_size) {
-      auto* slot = reinterpret_cast<slot_type*>(storage_ref.data() + chunk.dict_map_offset + t + i);
-      auto key   = slot->first;
+      auto* slot     = map_storage + chunk.dict_map_offset + t + i;
+      auto const key = slot->data()->first;
       if (key != KEY_SENTINEL) {
         auto loc = counter.fetch_add(1, memory_order_relaxed);
         cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
-        printf("Writing %d at loc: %d\n", key, loc);
+        // printf("Writing %d at loc: %d\n", key, loc);
         chunk.dict_data[loc] = key;
         // If sorting dict page ever becomes a hard requirement, enable the following statement and
         // add a dict sorting step before storing into the slot's second field.
         // chunk.dict_data_idx[loc] = t + i;
-        slot->second = loc;
+        slot->data()->second = loc;
       }
     }
   }

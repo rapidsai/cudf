@@ -1301,8 +1301,10 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
       valid_chunk_sizes.emplace_back(static_cast<std::size_t>(0));
     } else {
       chunk.use_dictionary = true;
-      valid_chunk_sizes.emplace_back(static_cast<std::size_t>(
-        cuco::make_window_extent<cg_size, window_size>(static_cast<size_t>(chunk.num_values))));
+      valid_chunk_sizes.emplace_back(
+        static_cast<std::size_t>(cuco::make_window_extent<cg_size, window_size>(
+          // Multiplying by 1/0.7 = 1.43 to target a 70% occupancy factor.
+          static_cast<size_t>(chunk.num_values * 1.43))));
       chunk.dict_map_size = valid_chunk_sizes.back();
     }
   });
@@ -1320,11 +1322,17 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   map_storage.initialize(cuco::pair{KEY_SENTINEL, VALUE_SENTINEL},
                          cuda::stream_ref{stream.value()});
 
+  std::cout << "Offsets: " << h_chunks.size() << std::endl;
+
   std::for_each(thrust::make_counting_iterator(static_cast<std::size_t>(0)),
                 thrust::make_counting_iterator(h_chunks.size()),
                 [&](auto const idx) {
                   auto& chunk = h_chunks[idx];
-                  if (chunk.use_dictionary) { chunk.dict_map_offset = map_offsets[idx]; }
+                  if (chunk.use_dictionary) {
+                    chunk.dict_map_offset = map_offsets[idx];
+                    std::cout << "off: " << map_offsets[idx] << ", size: " << chunk.dict_map_size
+                              << std::endl;
+                  }
                 });
 
   chunks.host_to_device_async(stream);
