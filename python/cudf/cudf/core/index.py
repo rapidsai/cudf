@@ -5,6 +5,7 @@ from __future__ import annotations
 import operator
 import pickle
 import warnings
+from collections.abc import Hashable
 from functools import cache, cached_property
 from numbers import Number
 from typing import TYPE_CHECKING, Any, Literal, MutableMapping, cast
@@ -60,7 +61,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf, search_range
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Hashable, Iterable
+    from collections.abc import Generator, Iterable
     from datetime import tzinfo
 
 
@@ -449,6 +450,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
                 raise IndexError("Index out of bounds")
             return self.start + index * self.step
         return self._as_int_index()[index]
+
+    def _get_columns_by_label(self, labels) -> Index:
+        # used in .sort_values
+        if isinstance(labels, Hashable):
+            if labels == self.name:
+                return self._as_int_index()
+        elif is_list_like(labels):
+            if list(self.names) == list(labels):
+                return self._as_int_index()
+        raise KeyError(labels)
 
     @_performance_tracking
     def equals(self, other) -> bool:
@@ -2422,11 +2433,13 @@ class DatetimeIndex(Index):
         >>> datetime_index = cudf.date_range("2016-12-31", "2017-01-08", freq="D")
         >>> datetime_index
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
-                       '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07'],
+                       '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                       '2017-01-08'],
                       dtype='datetime64[ns]', freq='D')
         >>> datetime_index.day_name()
         Index(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-               'Friday', 'Saturday'], dtype='object')
+               'Friday', 'Saturday', 'Sunday'],
+              dtype='object')
         """
         day_names = self._column.get_day_names(locale)
         return Index._from_column(day_names, name=self.name)
