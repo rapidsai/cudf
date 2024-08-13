@@ -342,7 +342,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
 def sum_of_squares(x):
     x = x.astype("f8")._column
     outcol = libcudf.reduce.reduce("sum_of_squares", x)
-    return cudf.Series(outcol)
+    return cudf.Series._from_column(outcol)
 
 
 @_dask_cudf_performance_tracking
