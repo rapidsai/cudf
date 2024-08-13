@@ -1,6 +1,6 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
-from cpython cimport pycapsule
+from cpython.pycapsule cimport PyCapsule_GetPointer, PyCapsule_New
 from cython.operator cimport dereference
 from libc.stdlib cimport free
 from libcpp.memory cimport shared_ptr, unique_ptr
@@ -137,7 +137,7 @@ def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
         raise ValueError("data_type may not be passed for tables")
     stream = pyarrow_object.__arrow_c_stream__()
     cdef ArrowArrayStream* c_stream = (
-        <ArrowArrayStream*>pycapsule.PyCapsule_GetPointer(stream, "arrow_array_stream")
+        <ArrowArrayStream*>PyCapsule_GetPointer(stream, "arrow_array_stream")
     )
 
     cdef unique_ptr[table] c_result
@@ -208,10 +208,10 @@ def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
 
     schema, array = pyarrow_object.__arrow_c_array__()
     cdef ArrowSchema* c_schema = (
-        <ArrowSchema*>pycapsule.PyCapsule_GetPointer(schema, "arrow_schema")
+        <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
     )
     cdef ArrowArray* c_array = (
-        <ArrowArray*>pycapsule.PyCapsule_GetPointer(array, "arrow_array")
+        <ArrowArray*>PyCapsule_GetPointer(array, "arrow_array")
     )
 
     cdef unique_ptr[column] c_result
@@ -285,19 +285,9 @@ def _to_arrow_datatype(cudf_object, **kwargs):
             )
 
 
-cdef void _release_arrow_schema_py_capsule(object schema_capsule) noexcept:
-    """Release the ArrowSchema object stored in a PyCapsule.
-
-    This function is used as a callback for PyCapsule objects that store
-    ArrowSchema objects. It is used to ensure that the ArrowSchema object
-    is properly released when the PyCapsule is destroyed.
-
-    Parameters
-    ----------
-    schema_capsule : object
-        The PyCapsule object containing the ArrowSchema object.
-    """
-    cdef ArrowSchema* schema = <ArrowSchema*>pycapsule.PyCapsule_GetPointer(
+cdef void _release_schema(object schema_capsule) noexcept:
+    """Release the ArrowSchema object stored in a PyCapsule."""
+    cdef ArrowSchema* schema = <ArrowSchema*>PyCapsule_GetPointer(
         schema_capsule, 'arrow_schema'
     )
     if schema.release != NULL:
@@ -306,22 +296,10 @@ cdef void _release_arrow_schema_py_capsule(object schema_capsule) noexcept:
     free(schema)
 
 
-cdef void _release_arrow_array_py_capsule(object array_capsule) noexcept:
-    """Release the ArrowArray object stored in a PyCapsule.
-
-    This function is used as a callback for PyCapsule objects that store
-    ArrowArray objects. It is used to ensure that the ArrowArray
-    object is properly released when the PyCapsule is destroyed.
-
-    Parameters
-    ----------
-    device_array_capsule : object
-        The PyCapsule object containing the ArrowDeviceArray object.
-    """
-    cdef ArrowArray* array = (
-        <ArrowArray*>pycapsule.PyCapsule_GetPointer(
-            array_capsule, 'arrow_array'
-        )
+cdef void _release_array(object array_capsule) noexcept:
+    """Release the ArrowArray object stored in a PyCapsule."""
+    cdef ArrowArray* array = <ArrowArray*>PyCapsule_GetPointer(
+        array_capsule, 'arrow_array'
     )
     if array.release != NULL:
         array.release(array)
@@ -335,6 +313,7 @@ def _table_to_schema(Table tbl, metadata):
     metadata = [ColumnMetadata(m) if isinstance(m, str) else m for m in metadata]
 
     cdef vector[column_metadata] c_metadata
+    c_metadata.reserve(len(metadata))
     for meta in metadata:
         c_metadata.push_back(_metadata_to_libcudf(meta))
 
@@ -342,11 +321,7 @@ def _table_to_schema(Table tbl, metadata):
     with nogil:
         raw_schema_ptr = to_arrow_schema_raw(tbl.view(), c_metadata)
 
-    return pycapsule.PyCapsule_New(
-        <void*>raw_schema_ptr,
-        'arrow_schema',
-        _release_arrow_schema_py_capsule,
-    )
+    return PyCapsule_New(<void*>raw_schema_ptr, 'arrow_schema', _release_schema)
 
 
 def _table_to_host_array(Table tbl):
@@ -354,28 +329,26 @@ def _table_to_host_array(Table tbl):
     with nogil:
         raw_host_array_ptr = to_arrow_host_raw(tbl.view())
 
-    return pycapsule.PyCapsule_New(
-        <void*>raw_host_array_ptr,
-        "arrow_array",
-        _release_arrow_array_py_capsule,
-    )
+    return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
 
-class _TestTable:
+class _TableWithArrowMetadata:
     def __init__(self, tbl, metadata=None):
         self.tbl = tbl
         self.metadata = metadata
-
-    def __arrow_c_schema__(self):
-        return _table_to_schema(self.tbl, self.metadata)
 
     def __arrow_c_array__(self, requested_schema=None):
         return _table_to_schema(self.tbl, self.metadata), _table_to_host_array(self.tbl)
 
 
+# TODO: In the long run we should get rid of the `to_arrow` functions in favor of using
+# the protocols directly via `pa.table(cudf_object, schema=...)` directly. We can do the
+# same for columns. We cannot do this for scalars since there is no corresponding
+# protocol. Since this will require broader changes throughout the codebase, the current
+# approach is to leverage the protocol internally but to continue exposing `to_arrow`.
 @to_arrow.register(Table)
 def _to_arrow_table(cudf_object, metadata=None):
-    test_table = _TestTable(cudf_object, metadata)
+    test_table = _TableWithArrowMetadata(cudf_object, metadata)
     return pa.table(test_table)
 
 

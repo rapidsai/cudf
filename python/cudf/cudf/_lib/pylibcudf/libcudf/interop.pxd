@@ -72,7 +72,8 @@ cdef extern from *:
     # Rather than exporting the underlying functions directly to Cython, we expose
     # these wrappers that handle the release to avoid needing to teach Cython how
     # to handle unique_ptrs with custom deleters that aren't default constructible.
-    # This will go away once we introduce cudf::arrow_column, see
+    # This will go away once we introduce cudf::arrow_column (need a
+    # cudf::arrow_schema as well), see
     # https://github.com/rapidsai/cudf/issues/16104.
     """
     #include <nanoarrow/nanoarrow.h>
@@ -93,21 +94,9 @@ cdef extern from *:
       ArrowArrayMove(&device_arr->array, arr);
       return arr;
     }
-
-    ArrowArray* to_arrow_host_raw(
-      cudf::column_view const& col,
-      rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) {
-      // Assumes the sync event is null and the data is already on the host.
-      ArrowArray *arr = new ArrowArray();
-      auto device_arr = cudf::to_arrow_host(col, stream, mr);
-      ArrowArrayMove(&device_arr->array, arr);
-      return arr;
-    }
     """
     cdef ArrowSchema *to_arrow_schema_raw(
         const table_view& tbl,
         const vector[column_metadata]& metadata,
     ) except + nogil
     cdef ArrowArray* to_arrow_host_raw(const table_view& tbl) except + nogil
-    cdef ArrowArray* to_arrow_host_raw(const column_view& col) except + nogil
