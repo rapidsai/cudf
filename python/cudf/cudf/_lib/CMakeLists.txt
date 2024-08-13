@@ -64,7 +64,7 @@ rapids_cython_create_modules(
 
 target_link_libraries(strings_udf PUBLIC cudf_strings_udf)
 
-set(targets_using_arrow_headers interop avro csv orc json parquet)
+set(targets_using_arrow_headers avro csv orc json parquet)
 link_to_pyarrow_headers("${targets_using_arrow_headers}")
 
 include(${rapids-cmake-dir}/export/find_package_root.cmake)

@@ -5,7 +5,6 @@ from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-from pyarrow cimport lib as pa
 
 from dataclasses import dataclass, field
 from functools import singledispatch

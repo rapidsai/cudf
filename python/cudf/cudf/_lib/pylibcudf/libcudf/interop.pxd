@@ -3,7 +3,6 @@
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-from pyarrow.lib cimport CScalar, CTable
 
 from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
 
@@ -42,24 +41,11 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
     DLManagedTensor* to_dlpack(table_view input_table
                                ) except +
 
-    cdef unique_ptr[table] from_arrow(CTable input) except +
-    cdef unique_ptr[scalar] from_arrow(CScalar input) except +
-
     cdef cppclass column_metadata:
         column_metadata() except +
         column_metadata(string name_) except +
         string name
         vector[column_metadata] children_meta
-
-    cdef shared_ptr[CTable] to_arrow(
-        table_view input,
-        vector[column_metadata] metadata,
-    ) except +
-
-    cdef shared_ptr[CScalar] to_arrow(
-        const scalar& input,
-        column_metadata metadata,
-    ) except +
 
     cdef unique_ptr[table] from_arrow_stream(ArrowArrayStream* input) except +
     cdef unique_ptr[column] from_arrow_column(
@@ -77,6 +63,7 @@ cdef extern from *:
     # https://github.com/rapidsai/cudf/issues/16104.
     """
     #include <nanoarrow/nanoarrow.h>
+    #include <nanoarrow/nanoarrow_device.h>
 
     ArrowSchema* to_arrow_schema_raw(
       cudf::table_view const& input,
