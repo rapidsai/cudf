@@ -1285,6 +1285,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
 
         aggs_per_column: Iterable[AggType | Iterable[AggType]]
+        # TODO: Remove isinstance condition when the legacy dask_cudf API is removed.
+        # See https://github.com/rapidsai/cudf/pull/16528#discussion_r1715482302 for information.
         if aggs or isinstance(aggs, dict):
             if isinstance(aggs, dict):
                 column_names, aggs_per_column = aggs.keys(), aggs.values()
