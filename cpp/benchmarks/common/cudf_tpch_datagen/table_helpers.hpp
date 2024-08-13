@@ -21,7 +21,6 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <string>
 #include <vector>
 
 /**

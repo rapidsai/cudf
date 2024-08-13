@@ -33,6 +33,8 @@
 #include <string>
 #include <vector>
 
+namespace {
+
 // Functor for generating random strings
 struct gen_rand_str {
   char* chars;
@@ -79,6 +81,8 @@ struct gen_rand_num {
     }
   }
 };
+
+}  // namespace
 
 std::unique_ptr<cudf::column> gen_rand_str_col(cudf::size_type const& lower,
                                                cudf::size_type const& upper,

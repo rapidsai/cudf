@@ -36,6 +36,9 @@
 
 #include <cudf_benchmark/tpch_datagen.hpp>
 
+#include <string>
+#include <vector>
+
 namespace cudf {
 namespace datagen {
 
