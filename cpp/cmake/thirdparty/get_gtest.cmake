@@ -16,8 +16,8 @@
 function(find_and_configure_gtest)
   include(${rapids-cmake-dir}/cpm/gtest.cmake)
 
-  # Mark all the non explicit googletest symbols as hidden This ensures that libcudftestutil can be
-  # used by consumers with a different shared gtest
+  # Mark all the non explicit googletest symbols as hidden. This ensures that libcudftestutil can be
+  # used by consumers with a different shared gtest.
   set(gtest_hide_internal_symbols ON)
 
   # Find or install GoogleTest
