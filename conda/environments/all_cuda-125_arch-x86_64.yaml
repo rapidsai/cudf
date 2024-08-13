@@ -67,7 +67,6 @@ dependencies:
 - pre-commit
 - pyarrow==16.1.0.*
 - pydata-sphinx-theme!=0.14.2
-- pylibcudf==24.10.*,>=0.0.0a0
 - pynvjitlink>=0.0.0a0
 - pytest-benchmark
 - pytest-cases>=3.8.2

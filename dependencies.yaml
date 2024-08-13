@@ -5,7 +5,6 @@ files:
     matrix:
       cuda: ["11.8", "12.5"]
       arch: [x86_64]
-    # TODO: add pylibcudf here?
     includes:
       - build_base
       - build_all
@@ -33,7 +32,6 @@ files:
       - test_python_cudf
       - test_python_dask_cudf
       - depends_on_cupy
-      - depends_on_pylibcudf
   test_static_build:
     output: none
     includes:
@@ -144,16 +142,15 @@ files:
     includes:
       - run_pylibcudf
       - pyarrow_run
-  # TODO: finishme
-  # py_test_pylibcudf:
-  #   output: pyproject
-  #   pyproject_dir: python/pylibcudf
-  #   extras:
-  #     table: project.optional-dependencies
-  #     key: test
-  #   includes:
-  #     - test_python_common
-  #     - test_python_cudf
+  py_test_pylibcudf:
+    output: pyproject
+    pyproject_dir: python/pylibcudf
+    extras:
+      table: project.optional-dependencies
+      key: test
+    includes:
+      - test_python_common
+      - test_python_pylibcudf
   py_test_pandas_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -817,6 +814,14 @@ dependencies:
           - pytest<8
           - pytest-cov
           - pytest-xdist
+  test_python_pylibcudf:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - fastavro>=0.22.9
+          - hypothesis
+          - numpy
+          - pandas
   test_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
