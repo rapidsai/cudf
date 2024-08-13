@@ -143,3 +143,42 @@ def _interpolation(column: ColumnBase, index: BaseIndex) -> ColumnBase:
     first_nan_idx = valid_locs.values.argmax().item()
     result[:first_nan_idx] = np.nan
     return as_column(result)
+
+
+def unique(values):
+    """
+    Return unique values from array-like
+
+    Parameters
+    ----------
+    values : 1d array-like
+
+    Returns
+    -------
+    cudf.Series,
+
+        The return can be:
+
+        * Index : when the input is an Index
+        * Categorical : when the input is a Categorical dtype
+        * cudf.Series : when the input is a Series
+
+        Return numpy.ndarray or ExtensionArray.
+
+    See Also
+    --------
+    Index.unique : Return unique values from an Index.
+    Series.unique : Return unique values of Series object.
+
+    Examples
+    --------
+    >>> cudf.unique(cudf.Series([2, 1, 3, 3]))
+    Series([2, 1, 3])
+
+    >>> cudf.unique(pd.Series([2] + [1] * 5))
+    Series([2, 1])
+    """
+    try:
+        return values.unique()
+    except Exception:
+        raise TypeError(f"Cannot call unique on type {type(values)}")
