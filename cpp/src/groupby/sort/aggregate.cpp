@@ -25,7 +25,6 @@
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/detail/replace.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -205,11 +204,29 @@ void aggregate_result_functor::operator()<aggregation::MAX_BY>(aggregation const
 {
   if (cache.has_result(values, agg)) return;
 
+  auto argmax_result = detail::group_argmax(get_grouped_values().child(1),
+                                            helper.num_groups(stream),
+                                            helper.group_labels(stream),
+                                            helper.key_sort_order(stream),
+                                            stream,
+                                            mr);
+
+  auto sentinel = cudf::numeric_scalar<size_type>{cudf::detail::ARGMAX_SENTINEL};
+
+  auto null_removed_map = cudf::replace_nulls(
+    argmax_result->view(), sentinel, stream, mr);
+
+  auto gathered = cudf::detail::gather(table_view({values}),
+                                       *null_removed_map,
+                                       cudf::out_of_bounds_policy::NULLIFY,
+                                       cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                       stream,
+                                       mr);
+
   cache.add_result(
     values,
     agg,
-    detail::group_max_by(
-      get_grouped_values(), helper.group_labels(stream), helper.num_groups(stream), stream, mr));
+    std::move(gathered->release()[0]));
 }
 
 
@@ -225,21 +242,10 @@ void aggregate_result_functor::operator()<aggregation::MIN_BY>(aggregation const
                                             stream,
                                             mr);
 
-    // scalar value of ARGMIN_SENTINEL
   auto sentinel = cudf::numeric_scalar<size_type>{cudf::detail::ARGMIN_SENTINEL};
 
   auto null_removed_map = cudf::replace_nulls(
-    argmin_result->view(), 
-    sentinel, 
-    stream, 
-    mr);
-
-  // column_view const null_removed_map(
-  //     data_type(type_to_id<size_type>()),
-  //     argmin_result->size(),
-  //     static_cast<void const*>(argmin_result->view().template data<size_type>()),
-  //     nullptr,
-  //     0);
+    argmin_result->view(), sentinel, stream, mr);
   
   auto gathered = cudf::detail::gather(table_view({values}),
                                        *null_removed_map,

@@ -335,9 +335,7 @@ add_library(
   src/groupby/sort/group_histogram.cu
   src/groupby/sort/group_m2.cu
   src/groupby/sort/group_max.cu
-  src/groupby/sort/group_max_by.cu
   src/groupby/sort/group_min.cu
-  src/groupby/sort/group_min_by.cu
   src/groupby/sort/group_merge_lists.cu
   src/groupby/sort/group_merge_m2.cu
   src/groupby/sort/group_nth_element.cu
