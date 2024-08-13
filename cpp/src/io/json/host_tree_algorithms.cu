@@ -423,10 +423,6 @@ void make_device_json_column(device_span<SymbolT const> input,
                    });
   }
 
-  auto init_to_zero = [stream](auto& v) {
-    thrust::uninitialized_fill(rmm::exec_policy_nosync(stream), v.begin(), v.end(), 0);
-  };
-
   auto to_json_col_type = [](auto category) {
     switch (category) {
       case NC_STRUCT: return json_col_t::StructColumn;
@@ -443,11 +439,11 @@ void make_device_json_column(device_span<SymbolT const> input,
     } else if (column_category == NC_VAL || column_category == NC_STR) {
       col.string_offsets.resize(max_row_offsets[i] + 1, stream);
       col.string_lengths.resize(max_row_offsets[i] + 1, stream);
-      init_to_zero(col.string_offsets);
-      init_to_zero(col.string_lengths);
+      thrust::uninitialized_fill(rmm::exec_policy_nosync(stream), col.string_offsets.begin(), col.string_offsets.end(), 0);
+      thrust::uninitialized_fill(rmm::exec_policy_nosync(stream), col.string_lengths.begin(), col.string_lengths.end(), 0);
     } else if (column_category == NC_LIST) {
       col.child_offsets.resize(max_row_offsets[i] + 2, stream);
-      init_to_zero(col.child_offsets);
+      thrust::uninitialized_fill(rmm::exec_policy_nosync(stream), col.child_offsets.begin(), col.child_offsets.end(), 0);
     }
     col.num_rows = max_row_offsets[i] + 1;
     col.validity =
@@ -456,16 +452,16 @@ void make_device_json_column(device_span<SymbolT const> input,
   };
 
   std::vector<bool> is_pruned(num_columns, true);
-  std::queue<NodeIndexT> pcq;
+  std::queue<NodeIndexT> optq;
   if (options.is_enabled_prune_columns()) {
-    pcq.push(0);
-    while (!pcq.empty()) {
-      auto level_size = pcq.size();
+    optq.push(0);
+    while (!optq.empty()) {
+      auto level_size = optq.size();
       for (uint32_t n = 0; n < level_size; n++) {
-        auto node          = pcq.front();
+        auto node          = optq.front();
         auto col_id        = node_to_col_mapping[node];
         auto parent_col_id = node == 0 ? parent_node_sentinel : node_to_col_mapping[adj[node][0]];
-        pcq.pop();
+        optq.pop();
 
         std::string col_name = "";
         if (parent_col_id == parent_node_sentinel) col_name = "root";
@@ -478,17 +474,74 @@ void make_device_json_column(device_span<SymbolT const> input,
           col_name = column_names[col_id];
         else if (column_categories[parent_col_id] == NC_FN)
           col_name = column_names[parent_col_id];
+
         if (!col_name.empty()) {
           std::optional<schema_element> col_schema = child_schema_element(col_name, options);
           if (col_schema.has_value() || parent_col_id == parent_node_sentinel) {
             is_pruned[node] = false;
-            for (uint32_t v = adj[node][1]; v < adj[node].size(); v++)
-              pcq.push(v);
+            for (uint32_t v = 1; v < adj[node].size(); v++)
+              optq.push(adj[node][v]);
           }
         }
       }
     }
   }
+
+  std::vector<bool> is_mixed_type(num_columns, false);
+  std::vector<bool> ignore_vals(num_columns, false);
+  if(options.is_enabled_mixed_types_as_string()) {
+    optq.push(0);
+    while(!optq.empty()) {
+      auto level_size = optq.size();
+      for (uint32_t n = 0; n < level_size; n++) {
+        auto node          = optq.front();
+        auto col_id        = node_to_col_mapping[node];
+        auto parent_col_id = node == 0 ? parent_node_sentinel : node_to_col_mapping[adj[node][0]];
+        optq.pop();
+
+        if(column_categories[col_id] == NC_FN || column_categories[col_id] == NC_LIST) {
+          bool has_list_child = false;
+          bool has_struct_child = false;
+          for(uint32_t v = 1; v < adj[node].size(); v++) {
+            auto child_node_id = node_to_col_mapping[adj[node][v]];
+            if(column_categories[child_node_id] == NC_LIST) has_list_child = true;
+            else if(column_categories[child_node_id] == NC_STRUCT) has_struct_child = true;
+          }
+          if(has_list_child && has_struct_child) is_mixed_type[node] = true;
+        }
+        for(uint32_t v = 1; v < adj[node].size(); v++)
+          optq.push(adj[node][v]);
+      }
+    }
+  }
+  else {
+    optq.push(0);
+    while(!optq.empty()) {
+      auto level_size = optq.size();
+      for (uint32_t n = 0; n < level_size; n++) {
+        auto node          = optq.front();
+        auto col_id        = node_to_col_mapping[node];
+        auto parent_col_id = node == 0 ? parent_node_sentinel : node_to_col_mapping[adj[node][0]];
+        optq.pop();
+
+        if(column_categories[col_id] == NC_FN || column_categories[col_id] == NC_LIST) {
+          bool has_list_child = false;
+          bool has_struct_child = false;
+          NodeIndexT val_child_node = -1;
+          for(uint32_t v = 1; v < adj[node].size(); v++) {
+            auto child_node_id = node_to_col_mapping[adj[node][v]];
+            if(column_categories[child_node_id] == NC_LIST) has_list_child = true;
+            else if(column_categories[child_node_id] == NC_STRUCT) has_struct_child = true;
+            else if(column_categories[child_node_id] == NC_STR || column_categories[child_node_id] == NC_VAL) val_child_node = adj[node][v];
+          }
+          CUDF_EXPECTS(!(has_list_child && has_struct_child), "A mix of lists and structs within the same column is not supported");
+          if((has_list_child || has_struct_child) && val_child_node != -1) ignore_vals[val_child_node] = true;
+        }
+        for(uint32_t v = 1; v < adj[node].size(); v++)
+          optq.push(adj[node][v]);
+      }
+    }
+}
 
   std::queue<std::pair<NodeIndexT, std::reference_wrapper<device_json_column>>> bfsq;
   auto columns_data = cudf::detail::make_host_vector<json_column_data>(num_columns, stream);
@@ -516,21 +569,33 @@ void make_device_json_column(device_span<SymbolT const> input,
         else if (column_categories[parent_col_id] == NC_FN)
           col_name = column_names[parent_col_id];
 
-        if (column_categories[col_id] != NC_FN && column_categories[col_id] != NC_ERR) {
+        if (column_categories[col_id] != NC_FN && column_categories[col_id] != NC_ERR && !ignore_vals[node]) {
           device_json_column col(stream, mr);
-          initialize_json_columns(col_id, col, column_categories[col_id]);
+          if(!is_mixed_type[node]) initialize_json_columns(col_id, col, column_categories[col_id]);
+          else {
+            initialize_json_columns(col_id, col, NC_STR);
+            col.forced_as_string_column = true;
+          }
+          columns_data[col_id]        = json_column_data{col.string_offsets.data(),
+                                                  col.string_lengths.data(),
+                                                  col.child_offsets.data(),
+                                                  static_cast<bitmask_type*>(col.validity.data())};
+          auto inserted = parent_col.child_columns.try_emplace(col_name, std::move(col)).second;
+          CUDF_EXPECTS(inserted, "child column insertion failed, duplicate column name in the parent");
+          parent_col.column_order.push_back(col_name);
+          for (uint32_t v = adj[node][1]; v < adj[node].size(); v++)
+            bfsq.emplace(std::make_pair(v, std::ref(col)));
+        } else if (is_mixed_type[node]) { // this is for NC_FN
+          device_json_column col(stream, mr);
+          initialize_json_columns(col_id, col, NC_STR);
           col.forced_as_string_column = true;
           columns_data[col_id]        = json_column_data{col.string_offsets.data(),
                                                   col.string_lengths.data(),
                                                   col.child_offsets.data(),
                                                   static_cast<bitmask_type*>(col.validity.data())};
           auto inserted = parent_col.child_columns.try_emplace(col_name, std::move(col)).second;
-          CUDF_EXPECTS(inserted,
-                       "child column insertion failed, duplicate column name in the parent");
+          CUDF_EXPECTS(inserted, "child column insertion failed, duplicate column name in the parent");
           parent_col.column_order.push_back(col_name);
-          for (uint32_t v = adj[node][1]; v < adj[node].size(); v++)
-            bfsq.emplace(std::make_pair(v, std::ref(col)));
-        } else {
           for (uint32_t v = adj[node][1]; v < adj[node].size(); v++)
             bfsq.emplace(std::make_pair(v, std::ref(parent_col)));
         }
