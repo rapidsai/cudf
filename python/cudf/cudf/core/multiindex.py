@@ -811,8 +811,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # it into an Index and name the final index values according
             # to that column's name.
             *_, last_column = index._data.columns
-            out_index = cudf.Index(last_column)
-            out_index.name = index.names[-1]
+            out_index = cudf.Index._from_column(
+                last_column, name=index.names[-1]
+            )
             index = out_index
         elif out_index._num_columns > 1:
             # Otherwise pop the leftmost levels, names, and codes from the

@@ -92,6 +92,6 @@ class ColumnMethods(NotIterable):
                     index=self._parent.index if retain_index else None,
                 )
             elif isinstance(self._parent, cudf.BaseIndex):
-                return cudf.Index(new_col, name=self._parent.name)
+                return cudf.Index._from_column(new_col, name=self._parent.name)
             else:
                 return self._parent._mimic_inplace(new_col, inplace=False)

@@ -18,7 +18,6 @@ from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.types import size_type_dtype
@@ -1614,8 +1613,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 if isinstance(self, (DatetimeIndex, TimedeltaIndex))
                 else str(cudf.NA)
             )
-            return cudf.Index(
-                self._values.astype("str").fillna(fill_value),
+            return cudf.Index._from_column(
+                self._column.astype("str").fillna(fill_value),
                 name=self.name,
             )
 
@@ -2253,15 +2252,15 @@ class DatetimeIndex(Index):
         >>> datetime_index.microsecond
         Index([0, 1, 2], dtype='int32')
         """  # noqa: E501
-        return Index(
+        return Index._from_column(
             (
                 # Need to manually promote column to int32 because
                 # pandas-matching binop behaviour requires that this
                 # __mul__ returns an int16 column.
-                self._values.get_dt_field("millisecond").astype("int32")
+                self._column.get_dt_field("millisecond").astype("int32")
                 * cudf.Scalar(1000, dtype="int32")
             )
-            + self._values.get_dt_field("microsecond"),
+            + self._column.get_dt_field("microsecond"),
             name=self.name,
         )
 
@@ -2393,7 +2392,7 @@ class DatetimeIndex(Index):
         ndarray
         Booleans indicating if dates belong to a leap year.
         """
-        res = is_leap_year(self._values).fillna(False)
+        res = self._column.is_leap_year.fillna(False)
         return cupy.asarray(res)
 
     @property  # type: ignore
@@ -2419,8 +2418,7 @@ class DatetimeIndex(Index):
         >>> gIndex.quarter
         Index([2, 4], dtype='int8')
         """
-        res = extract_quarter(self._values)
-        return Index(res, dtype="int8")
+        return Index._from_column(self._column.quarter.astype("int8"))
 
     @_performance_tracking
     def day_name(self, locale: str | None = None) -> Index:
@@ -2500,14 +2498,14 @@ class DatetimeIndex(Index):
     @_performance_tracking
     def _get_dt_field(self, field: str) -> Index:
         """Return an Index of a numerical component of the DatetimeIndex."""
-        out_column = self._values.get_dt_field(field)
+        out_column = self._column.get_dt_field(field)
         out_column = NumericalColumn(
             data=out_column.base_data,
             dtype=out_column.dtype,
             mask=out_column.base_mask,
             offset=out_column.offset,
         )
-        return Index(out_column, name=self.name)
+        return Index._from_column(out_column, name=self.name)
 
     def _is_boolean(self):
         return False

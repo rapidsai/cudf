@@ -295,7 +295,7 @@ def to_datetime(
             elif is_scalar(arg):
                 return col.element_indexing(0)
             else:
-                return cudf.Index(col)
+                return cudf.Index._from_column(col)
     except Exception as e:
         if errors == "raise":
             raise e

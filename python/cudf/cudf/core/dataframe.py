@@ -1810,7 +1810,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if not isinstance(out.index, MultiIndex) and isinstance(
                 out.index.dtype, cudf.CategoricalDtype
             ):
-                out = out.set_index(cudf.Index(out.index._values))
+                out = out.set_index(out.index)
         for name, col in out._data.items():
             out._data[name] = col._with_type_metadata(
                 tables[0]._data[name].dtype

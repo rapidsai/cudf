@@ -403,8 +403,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         if len(group_keys) > 1:
             index = cudf.MultiIndex.from_arrays(group_keys)
         else:
-            (group_keys,) = group_keys
-            index = cudf.Index(group_keys)
+            index = cudf.Index._from_column(group_keys[0])
         return dict(
             zip(index.to_pandas(), cp.split(indices.values, offsets[1:-1]))
         )
@@ -2572,7 +2571,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # corresponding output rows in pandas, to do that here
             # expand the result by reindexing.
             ri = cudf.RangeIndex(0, len(self.obj))
-            result.index = cudf.Index(ordering)
+            result.index = cudf.Index._from_column(ordering)
             # This reorders and expands
             result = result.reindex(ri)
         else:
