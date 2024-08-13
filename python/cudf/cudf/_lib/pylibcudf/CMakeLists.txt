@@ -54,6 +54,10 @@ rapids_cython_create_modules(
 )
 link_to_pyarrow_headers(pylibcudf_interop)
 
+include(${rapids-cmake-dir}/export/find_package_root.cmake)
+include(../../../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)
+target_link_libraries(pylibcudf_interop PUBLIC nanoarrow)
+
 add_subdirectory(libcudf)
 add_subdirectory(strings)
 add_subdirectory(io)
