@@ -93,7 +93,7 @@ struct FromArrowTestDurationsTest : public cudf::test::BaseFixture {};
 std::optional<std::unique_ptr<cudf::table>> export_table(std::shared_ptr<arrow::Table> arrow_table)
 {
   ArrowSchema schema;
-  if (!ExportSchema(*arrow_table->schema(), &schema).ok()) { return std::nullopt; }
+  if (!arrow::ExportSchema(*arrow_table->schema(), &schema).ok()) { return std::nullopt; }
   auto batch = arrow_table->CombineChunksToBatch().ValueOrDie();
   ArrowArray arr;
   if (!arrow::ExportRecordBatch(*batch, &arr).ok()) { return std::nullopt; }
@@ -101,6 +101,32 @@ std::optional<std::unique_ptr<cudf::table>> export_table(std::shared_ptr<arrow::
   arr.release(&arr);
   schema.release(&schema);
   return {std::move(ret)};
+}
+
+std::optional<std::unique_ptr<cudf::scalar>> export_scalar(arrow::Scalar const& arrow_scalar)
+{
+  auto maybe_array = arrow::MakeArrayFromScalar(arrow_scalar, 1);
+  if (!maybe_array.ok()) { return std::nullopt; }
+  auto array = *maybe_array;
+
+  ArrowSchema schema;
+  if (!arrow::ExportType(*array->type(), &schema).ok()) { return std::nullopt; }
+
+  ArrowArray arr;
+  if (!arrow::ExportArray(*array, &arr).ok()) { return std::nullopt; }
+
+  auto col = cudf::from_arrow_column(&schema, &arr);
+  auto ret = cudf::get_element(col->view(), 0);
+
+  arr.release(&arr);
+  schema.release(&schema);
+  return {std::move(ret)};
+}
+
+std::optional<std::unique_ptr<cudf::scalar>> export_scalar(
+  std::shared_ptr<arrow::Scalar> const arrow_scalar)
+{
+  return export_scalar(*arrow_scalar);
 }
 
 TYPED_TEST_SUITE(FromArrowTestDurationsTest, cudf::test::DurationTypes);
@@ -541,9 +567,12 @@ TYPED_TEST(FromArrowNumericScalarTest, Basic)
 {
   TypeParam const value{42};
   auto const arrow_scalar = arrow::MakeScalar(value);
-  auto const cudf_scalar  = cudf::from_arrow(*arrow_scalar);
+
+  auto const cudf_scalar = export_scalar(arrow_scalar);
+  ASSERT_TRUE(cudf_scalar.has_value());
+
   auto const cudf_numeric_scalar =
-    dynamic_cast<cudf::numeric_scalar<TypeParam>*>(cudf_scalar.get());
+    dynamic_cast<cudf::numeric_scalar<TypeParam>*>(cudf_scalar.value().get());
   if (cudf_numeric_scalar == nullptr) { CUDF_FAIL("Attempted to test with a non-numeric type."); }
   EXPECT_EQ(cudf_numeric_scalar->type(), cudf::data_type(cudf::type_to_id<TypeParam>()));
   EXPECT_EQ(cudf_numeric_scalar->value(), value);
@@ -557,12 +586,13 @@ TEST_F(FromArrowDecimalScalarTest, Basic)
   auto const value{42};
   auto const precision{8};
   auto const scale{4};
-  auto arrow_scalar = arrow::Decimal128Scalar(value, arrow::decimal128(precision, -scale));
-  auto cudf_scalar  = cudf::from_arrow(arrow_scalar);
+  auto arrow_scalar      = arrow::Decimal128Scalar(value, arrow::decimal128(precision, -scale));
+  auto const cudf_scalar = export_scalar(arrow_scalar);
+  ASSERT_TRUE(cudf_scalar.has_value());
 
   // Arrow offers a minimum of 128 bits for the Decimal type.
   auto const cudf_decimal_scalar =
-    dynamic_cast<cudf::fixed_point_scalar<numeric::decimal128>*>(cudf_scalar.get());
+    dynamic_cast<cudf::fixed_point_scalar<numeric::decimal128>*>(cudf_scalar.value().get());
   EXPECT_EQ(cudf_decimal_scalar->type(),
             cudf::data_type(cudf::type_to_id<numeric::decimal128>(), scale));
   EXPECT_EQ(cudf_decimal_scalar->value(), value);
@@ -574,9 +604,10 @@ TEST_F(FromArrowStringScalarTest, Basic)
 {
   auto const value        = std::string("hello world");
   auto const arrow_scalar = arrow::StringScalar(value);
-  auto const cudf_scalar  = cudf::from_arrow(arrow_scalar);
+  auto const cudf_scalar  = export_scalar(arrow_scalar);
+  ASSERT_TRUE(cudf_scalar.has_value());
 
-  auto const cudf_string_scalar = dynamic_cast<cudf::string_scalar*>(cudf_scalar.get());
+  auto const cudf_string_scalar = dynamic_cast<cudf::string_scalar*>(cudf_scalar.value().get());
   EXPECT_EQ(cudf_string_scalar->type(), cudf::data_type(cudf::type_id::STRING));
   EXPECT_EQ(cudf_string_scalar->to_string(), value);
 }
@@ -594,9 +625,10 @@ TEST_F(FromArrowListScalarTest, Basic)
   auto const array       = *maybe_array;
 
   auto const arrow_scalar = arrow::ListScalar(array);
-  auto const cudf_scalar  = cudf::from_arrow(arrow_scalar);
+  auto const cudf_scalar  = export_scalar(arrow_scalar);
+  ASSERT_TRUE(cudf_scalar.has_value());
 
-  auto const cudf_list_scalar = dynamic_cast<cudf::list_scalar*>(cudf_scalar.get());
+  auto const cudf_list_scalar = dynamic_cast<cudf::list_scalar*>(cudf_scalar.value().get());
   EXPECT_EQ(cudf_list_scalar->type(), cudf::data_type(cudf::type_id::LIST));
 
   cudf::test::fixed_width_column_wrapper<int64_t> const lhs(
@@ -614,9 +646,10 @@ TEST_F(FromArrowStructScalarTest, Basic)
   auto const field        = arrow::field("", underlying_arrow_scalar->type);
   auto const arrow_type   = arrow::struct_({field});
   auto const arrow_scalar = arrow::StructScalar({underlying_arrow_scalar}, arrow_type);
-  auto const cudf_scalar  = cudf::from_arrow(arrow_scalar);
+  auto const cudf_scalar  = export_scalar(arrow_scalar);
+  ASSERT_TRUE(cudf_scalar.has_value());
 
-  auto const cudf_struct_scalar = dynamic_cast<cudf::struct_scalar*>(cudf_scalar.get());
+  auto const cudf_struct_scalar = dynamic_cast<cudf::struct_scalar*>(cudf_scalar.value().get());
   EXPECT_EQ(cudf_struct_scalar->type(), cudf::data_type(cudf::type_id::STRUCT));
 
   cudf::test::fixed_width_column_wrapper<int64_t> const col({value});
