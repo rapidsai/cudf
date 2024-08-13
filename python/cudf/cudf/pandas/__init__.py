@@ -5,8 +5,6 @@
 import os
 import warnings
 
-from cuda import cudart
-
 import rmm.mr
 
 from cudf._lib import pylibcudf
@@ -28,24 +26,6 @@ _SUPPORTED_PREFETCHES = {
 }
 
 
-def _managed_memory_is_supported():
-    # This checks the availability of UVM.
-    # Note that WSL in particular does not support managed memory.
-
-    # Ensure CUDA is initialized before checking cudaDevAttrConcurrentManagedAccess
-    cudart.cudaFree(0)
-
-    device_id = 0
-    err, supports_managed_access = cudart.cudaDeviceGetAttribute(
-        cudart.cudaDeviceAttr.cudaDevAttrConcurrentManagedAccess, device_id
-    )
-    if err != cudart.cudaError_t.cudaSuccess:
-        raise RuntimeError(
-            f"Failed to check cudaDevAttrConcurrentManagedAccess with error {err}"
-        )
-    return supports_managed_access != 0
-
-
 def _enable_managed_prefetching(rmm_mode, managed_memory_is_supported):
     if managed_memory_is_supported and "managed" in rmm_mode:
         for key in _SUPPORTED_PREFETCHES:
@@ -61,7 +41,9 @@ def install():
     LOADED = loader is not None
 
     # The default mode is "managed_pool" if UVM is supported, otherwise "pool"
-    managed_memory_is_supported = _managed_memory_is_supported()
+    managed_memory_is_supported = (
+        pylibcudf.utils._is_concurrent_managed_access_supported()
+    )
     default_rmm_mode = (
         "managed_pool" if managed_memory_is_supported else "pool"
     )
