@@ -363,19 +363,20 @@ def _table_to_host_array(Table tbl):
 
 
 class _TestTable:
-    def __init__(self, tbl):
+    def __init__(self, tbl, metadata=None):
         self.tbl = tbl
+        self.metadata = metadata
 
     def __arrow_c_schema__(self):
-        return _table_to_schema(self.tbl, None)
+        return _table_to_schema(self.tbl, self.metadata)
 
     def __arrow_c_array__(self, requested_schema=None):
-        return _table_to_schema(self.tbl, None), _table_to_host_array(self.tbl)
+        return _table_to_schema(self.tbl, self.metadata), _table_to_host_array(self.tbl)
 
 
 @to_arrow.register(Table)
 def _to_arrow_table(cudf_object, metadata=None):
-    test_table = _TestTable(cudf_object)
+    test_table = _TestTable(cudf_object, metadata)
     return pa.table(test_table)
     # if metadata is None:
     #     metadata = [ColumnMetadata() for _ in range(len(cudf_object.columns()))]
