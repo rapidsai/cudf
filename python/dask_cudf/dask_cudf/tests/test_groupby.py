@@ -778,14 +778,14 @@ def test_groupby_nested_dict(func):
     "func",
     [
         lambda df: df.groupby(["x", "y"]).min(),
-        # pytest.param(
-        #     lambda df: df.groupby(["x", "y"]).agg("min"),
-        #     marks=pytest.mark.skip(
-        #         reason="https://github.com/dask/dask/issues/9093"
-        #     ),
-        # ),
-        # lambda df: df.groupby(["x", "y"]).y.min(),
-        # lambda df: df.groupby(["x", "y"]).y.agg("min"),
+        pytest.param(
+            lambda df: df.groupby(["x", "y"]).agg("min"),
+            marks=pytest.mark.skip(
+                reason="https://github.com/dask/dask/issues/9093"
+            ),
+        ),
+        lambda df: df.groupby(["x", "y"]).y.min(),
+        lambda df: df.groupby(["x", "y"]).y.agg("min"),
     ],
 )
 def test_groupby_all_columns(func):
