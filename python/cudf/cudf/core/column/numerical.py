@@ -199,16 +199,53 @@ class NumericalColumn(NumericalBaseColumn):
             np.bool_: np.float32,
         }
 
+        out_dtype = None
         if op in {"__truediv__", "__rtruediv__"}:
             # Division with integer types results in a suitable float.
             if truediv_type := int_float_dtype_mapping.get(self.dtype.type):
                 return self.astype(truediv_type)._binaryop(other, op)
+        elif op in {
+            "__lt__",
+            "__gt__",
+            "__le__",
+            "__ge__",
+            "__eq__",
+            "__ne__",
+        }:
+            out_dtype = "bool"
+
+            # If `other` is a Python integer and it is out-of-bounds
+            # promotion could fail but we can trivially define the result
+            # in terms of `notnull` or `NULL_NOT_EQUALS`.
+            if type(other) is int and self.dtype.kind in "iu":  # noqa: E721
+                truthiness = None
+                iinfo = np.iinfo(self.dtype)
+                if iinfo.min > other:
+                    truthiness = op in {"__ne__", "__gt__", "__ge__"}
+                elif iinfo.max < other:
+                    truthiness = op in {"__ne__", "__lt__", "__le__"}
+
+                # Compare with minimum value so that the result is true/false
+                if truthiness is True:
+                    other = iinfo.min
+                    op = "__ge__"
+                elif truthiness is False:
+                    other = iinfo.min
+                    op = "__lt__"
+
+        elif op in {"NULL_EQUALS", "NULL_NOT_EQUALS"}:
+            out_dtype = "bool"
 
         reflect, op = self._check_reflected_op(op)
         if (other := self._wrap_binop_normalization(other)) is NotImplemented:
             return NotImplemented
-        out_dtype = self.dtype
-        if other is not None:
+
+        if out_dtype is not None:
+            pass  # out_dtype was already set to bool
+        if other is None:
+            # not a binary operator, so no need to promote
+            out_dtype = self.dtype
+        elif out_dtype is None:
             out_dtype = np.result_type(self.dtype, other.dtype)
             if op in {"__mod__", "__floordiv__"}:
                 tmp = self if reflect else other
@@ -225,17 +262,6 @@ class NumericalColumn(NumericalBaseColumn):
                             out_dtype = cudf.dtype("float64")
                     elif is_scalar(tmp) and tmp == 0:
                         out_dtype = cudf.dtype("float64")
-        if op in {
-            "__lt__",
-            "__gt__",
-            "__le__",
-            "__ge__",
-            "__eq__",
-            "__ne__",
-            "NULL_EQUALS",
-            "NULL_NOT_EQUALS",
-        }:
-            out_dtype = "bool"
 
         if op in {"__and__", "__or__", "__xor__"}:
             if self.dtype.kind == "f" or other.dtype.kind == "f":
@@ -247,7 +273,7 @@ class NumericalColumn(NumericalBaseColumn):
             if self.dtype.kind == "b" or other.dtype.kind == "b":
                 out_dtype = "bool"
 
-        if (
+        elif (
             op == "__pow__"
             and self.dtype.kind in "iu"
             and (is_integer(other) or other.dtype.kind in "iu")
@@ -313,8 +339,8 @@ class NumericalColumn(NumericalBaseColumn):
             return NotImplemented
 
     def int2ip(self) -> "cudf.core.column.StringColumn":
-        if self.dtype != cudf.dtype("int64"):
-            raise TypeError("Only int64 type can be converted to ip")
+        if self.dtype != cudf.dtype("uint32"):
+            raise TypeError("Only uint32 type can be converted to ip")
 
         return libcudf.string_casting.int2ip(self)
 
@@ -555,11 +581,8 @@ class NumericalColumn(NumericalBaseColumn):
 
                 if self.dtype.kind == "f":
                     # Exclude 'np.inf', '-np.inf'
-                    s = cudf.Series(self)
-                    # TODO: replace np.inf with cudf scalar when
-                    # https://github.com/rapidsai/cudf/pull/6297 merges
-                    non_infs = s[~((s == np.inf) | (s == -np.inf))]
-                    col = non_infs._column
+                    not_inf = (self != np.inf) & (self != -np.inf)
+                    col = self.apply_boolean_mask(not_inf)
                 else:
                     col = self
 
@@ -599,8 +622,7 @@ class NumericalColumn(NumericalBaseColumn):
             else:
                 filled = self.fillna(0)
                 return (
-                    cudf.Series(filled).astype(to_dtype).astype(filled.dtype)
-                    == cudf.Series(filled)
+                    filled.astype(to_dtype).astype(filled.dtype) == filled
                 ).all()
 
         # want to cast float to int:
@@ -615,7 +637,7 @@ class NumericalColumn(NumericalBaseColumn):
             # NOTE(seberg): it would make sense to limit to the mantissa range.
             if (float(self.min()) >= min_) and (float(self.max()) <= max_):
                 filled = self.fillna(0)
-                return (cudf.Series(filled) % 1 == 0).all()
+                return (filled % 1 == 0).all()
             else:
                 return False
 

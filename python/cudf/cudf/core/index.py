@@ -5,6 +5,7 @@ from __future__ import annotations
 import operator
 import pickle
 import warnings
+from collections.abc import Hashable
 from functools import cache, cached_property
 from numbers import Number
 from typing import TYPE_CHECKING, Any, Literal, MutableMapping, cast
@@ -449,6 +450,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
                 raise IndexError("Index out of bounds")
             return self.start + index * self.step
         return self._as_int_index()[index]
+
+    def _get_columns_by_label(self, labels) -> Index:
+        # used in .sort_values
+        if isinstance(labels, Hashable):
+            if labels == self.name:
+                return self._as_int_index()
+        elif is_list_like(labels):
+            if list(self.names) == list(labels):
+                return self._as_int_index()
+        raise KeyError(labels)
 
     @_performance_tracking
     def equals(self, other) -> bool:
@@ -1073,6 +1084,16 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @classmethod
     @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None
+    ) -> Self:
+        ca = cudf.core.column_accessor.ColumnAccessor(
+            {name: column}, verify=False
+        )
+        return _index_from_data(ca)
+
+    @classmethod
+    @_performance_tracking
     def _from_data(cls, data: MutableMapping, name: Any = no_default) -> Self:
         out = super()._from_data(data=data)
         if name is not no_default:
@@ -1092,8 +1113,30 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     @classmethod
     @_performance_tracking
     def from_arrow(cls, obj):
+        """Create from PyArrow Array/ChunkedArray.
+
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+            PyArrow Object which has to be converted.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        SingleColumnFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
+        Index(['a', 'b', <NA>], dtype='object')
+        """
         try:
-            return cls(ColumnBase.from_arrow(obj))
+            return cls._from_column(ColumnBase.from_arrow(obj))
         except TypeError:
             # Try interpreting object as a MultiIndex before failing.
             return cudf.MultiIndex.from_arrow(obj)
@@ -1297,22 +1340,22 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             return _return_get_indexer_result(result.values)
 
         scatter_map, indices = libcudf.join.join([lcol], [rcol], how="inner")
-        (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
-        result_series = cudf.Series(result)
+        result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
+        result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
             result_series = _get_indexer_basic(
                 index=self,
                 positions=result_series,
                 method=method,
-                target_col=cudf.Series(needle),
+                target_col=cudf.Series._from_column(needle),
                 tolerance=tolerance,
             )
         elif method == "nearest":
             result_series = _get_nearest_indexer(
                 index=self,
                 positions=result_series,
-                target_col=cudf.Series(needle),
+                target_col=cudf.Series._from_column(needle),
                 tolerance=tolerance,
             )
         elif method is not None:
@@ -2371,11 +2414,13 @@ class DatetimeIndex(Index):
         >>> datetime_index = cudf.date_range("2016-12-31", "2017-01-08", freq="D")
         >>> datetime_index
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
-                       '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07'],
+                       '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                       '2017-01-08'],
                       dtype='datetime64[ns]', freq='D')
         >>> datetime_index.day_name()
         Index(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-               'Friday', 'Saturday'], dtype='object')
+               'Friday', 'Saturday', 'Sunday'],
+              dtype='object')
         """
         day_names = self._column.get_day_names(locale)
         return Index._from_data({self.name: day_names})

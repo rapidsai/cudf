@@ -4264,34 +4264,36 @@ def test_empty_dataframe_describe():
 def test_as_column_types():
     col = column.as_column(cudf.Series([], dtype="float64"))
     assert_eq(col.dtype, np.dtype("float64"))
-    gds = cudf.Series(col)
+    gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="float64"))
 
     assert_eq(pds, gds)
 
     col = column.as_column(cudf.Series([], dtype="float64"), dtype="float32")
     assert_eq(col.dtype, np.dtype("float32"))
-    gds = cudf.Series(col)
+    gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="float32"))
 
     assert_eq(pds, gds)
 
     col = column.as_column(cudf.Series([], dtype="float64"), dtype="str")
     assert_eq(col.dtype, np.dtype("object"))
-    gds = cudf.Series(col)
+    gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="str"))
 
     assert_eq(pds, gds)
 
     col = column.as_column(cudf.Series([], dtype="float64"), dtype="object")
     assert_eq(col.dtype, np.dtype("object"))
-    gds = cudf.Series(col)
+    gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="object"))
 
     assert_eq(pds, gds)
 
     pds = pd.Series(np.array([1, 2, 3]), dtype="float32")
-    gds = cudf.Series(column.as_column(np.array([1, 2, 3]), dtype="float32"))
+    gds = cudf.Series._from_column(
+        column.as_column(np.array([1, 2, 3]), dtype="float32")
+    )
 
     assert_eq(pds, gds)
 
@@ -4301,23 +4303,25 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     pds = pd.Series([], dtype="float64")
-    gds = cudf.Series(column.as_column(pds))
+    gds = cudf.Series._from_column(column.as_column(pds))
     assert_eq(pds, gds)
 
     pds = pd.Series([1, 2, 4], dtype="int64")
-    gds = cudf.Series(column.as_column(cudf.Series([1, 2, 4]), dtype="int64"))
+    gds = cudf.Series._from_column(
+        column.as_column(cudf.Series([1, 2, 4]), dtype="int64")
+    )
 
     assert_eq(pds, gds)
 
     pds = pd.Series([1.2, 18.0, 9.0], dtype="float32")
-    gds = cudf.Series(
+    gds = cudf.Series._from_column(
         column.as_column(cudf.Series([1.2, 18.0, 9.0]), dtype="float32")
     )
 
     assert_eq(pds, gds)
 
     pds = pd.Series([1.2, 18.0, 9.0], dtype="str")
-    gds = cudf.Series(
+    gds = cudf.Series._from_column(
         column.as_column(cudf.Series([1.2, 18.0, 9.0]), dtype="str")
     )
 
@@ -6521,7 +6525,9 @@ def test_from_pandas_for_series_nan_as_null(nan_as_null):
     data = [np.nan, 2.0, 3.0]
     psr = pd.Series(data)
 
-    expected = cudf.Series(column.as_column(data, nan_as_null=nan_as_null))
+    expected = cudf.Series._from_column(
+        column.as_column(data, nan_as_null=nan_as_null)
+    )
     got = cudf.from_pandas(psr, nan_as_null=nan_as_null)
 
     assert_eq(expected, got)
