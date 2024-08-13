@@ -1310,19 +1310,26 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     }
   });
 
-  std::vector<std::size_t> map_offsets(valid_chunk_sizes.size() + 1, 0);
+  std::vector<std::size_t> map_offsets(valid_chunk_sizes.size(), 0);
   std::exclusive_scan(valid_chunk_sizes.begin(),
                       valid_chunk_sizes.end(),
                       map_offsets.begin(),
                       static_cast<size_t>(0));
-  map_offsets.back() = map_offsets[valid_chunk_sizes.size() - 1] + valid_chunk_sizes.back();
 
-  // Create a single bulk storage used by all subsets
-  auto map_storage = storage_type{map_offsets.back()};
-  // Initializes the storage with the given sentinel
+  // Compute total map_storage
+  auto const map_storage_size = map_offsets.back() + valid_chunk_sizes.back();
+
+  // No chunk needs to create a dictionary, exit early
+  if (map_storage_size == 0) { return {std::move(dict_data), std::move(dict_index)}; }
+
+  // Create a single bulk storage used by all sub-hashmaps
+  auto map_storage = storage_type{map_storage_size};
+
+  // Only initialize storage with the given sentinel if and only if non-zero size
   map_storage.initialize(cuco::pair{KEY_SENTINEL, VALUE_SENTINEL},
                          cuda::stream_ref{stream.value()});
 
+  // Populate chunk dictionary offsets
   std::for_each(
     thrust::make_zip_iterator(thrust::make_tuple(h_chunks.begin(), map_offsets.begin())),
     thrust::make_zip_iterator(thrust::make_tuple(h_chunks.end(), map_offsets.end())),
@@ -1331,10 +1338,11 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
       if (chunk.use_dictionary) { chunk.dict_map_offset = thrust::get<1>(elem); }
     });
 
+  // Synchronize
   chunks.host_to_device_async(stream);
-
+  // Populate the hash map for each chunk
   populate_chunk_hash_maps(map_storage.data(), frags, stream);
-
+  // Synchronize again
   chunks.device_to_host_sync(stream);
 
   // Make decision about which chunks have dictionary

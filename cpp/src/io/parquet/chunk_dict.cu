@@ -40,14 +40,8 @@ struct equality_functor {
   __device__ bool operator()(key_type const lhs_idx, key_type const rhs_idx) const
   {
     //  We don't call this for nulls so this is fine
-    auto const equal  = cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
-    auto const result = equal(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
-    /*printf("col_type_id:%d, equality idx1:%d, idx2:%d, eq:%d\n",
-           col.type().id(),
-           lhs_idx,
-           rhs_idx,
-           result);*/
-    return result;
+    auto const equal = cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
+    return equal(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
   }
 };
 
@@ -56,9 +50,7 @@ struct hash_functor {
   column_device_view const& col;
   __device__ auto operator()(key_type idx) const
   {
-    auto const hashed = cudf::hashing::detail::MurmurHash3_x86_32<T>{}(col.element<T>(idx));
-    // printf("hashing idx: %d = %d\n", idx, hashed);
-    return hashed;  // cudf::hashing::detail::MurmurHash3_x86_32<T>{}(col.element<T>(idx));
+    return cudf::hashing::detail::MurmurHash3_x86_32<T>{}(col.element<T>(idx));
   }
 };
 
@@ -91,12 +83,10 @@ struct map_insert_fn {
                      {},
                      storage_ref};
 
-      // Create another map with insert operator
-      auto map_insert_ref = hash_map_ref.with_operators(cuco::insert_and_find);
-      // Insert
-      auto [iter, found] = map_insert_ref.insert_and_find(cuco::pair{i, i});
-      // printf("Inserted k=%d, v=%d, unique=%d\n", iter->first, iter->second, found);
-      return found;
+      // Create another map ref with the insert operator
+      auto map_insert_ref = hash_map_ref.with_operators(cuco::insert);
+      // Insert into the hash map
+      return map_insert_ref.insert(cuco::pair{i, i});
     } else {
       CUDF_UNREACHABLE("Unsupported type to insert in map");
     }
@@ -143,7 +133,6 @@ struct map_find_fn {
                   "Unable to find value in map in dictionary index construction");
 
       // Return a pair of the found key and value.
-      // printf("Find=%d, Found slot: k=%d, v=%d\n", i, found_slot->first, found_slot->second);
       return {found_slot->first, found_slot->second};
     } else {
       CUDF_UNREACHABLE("Unsupported type to find in map");
@@ -262,12 +251,10 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       if (key != KEY_SENTINEL) {
         auto loc = counter.fetch_add(1, memory_order_relaxed);
         cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
-        // printf("Writing %d at loc: %d\n", key, loc);
         chunk.dict_data[loc] = key;
         // If sorting dict page ever becomes a hard requirement, enable the following statement and
         // add a dict sorting step before storing into the slot's second field.
         // chunk.dict_data_idx[loc] = t + i;
-        // printf("Replacing slot->data()->second: %d, %d\n", slot->data()->second, loc);
         slot->data()->second = loc;
       }
     }
