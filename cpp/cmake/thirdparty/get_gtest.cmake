@@ -23,8 +23,8 @@ function(find_and_configure_gtest)
   # Find or install GoogleTest
   rapids_cpm_gtest(BUILD_STATIC)
 
-  # Mark all the explicit googletest symbols as hidden This ensures that libcudftestutil can be used
-  # by consumers with a different shared gtest
+  # Mark all the explicit googletest symbols as hidden. This ensures that libcudftestutil can be used
+  # by consumers with a different shared gtest.
   if(TARGET gtest)
     target_compile_definitions(gtest PUBLIC "$<BUILD_LOCAL_INTERFACE:GTEST_API_=>")
   endif()
