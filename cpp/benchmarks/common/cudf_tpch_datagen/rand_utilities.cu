@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "rand_utilities.hpp"
+
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/binaryop.hpp>

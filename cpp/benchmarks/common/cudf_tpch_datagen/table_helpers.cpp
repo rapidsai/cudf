@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "table_helpers.hpp"
+
 #include "rand_utilities.hpp"
 
 #include <cudf/aggregation.hpp>
