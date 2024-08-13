@@ -17,7 +17,6 @@
 #include "groupby/sort/group_single_pass_reduction_util.cuh"
 
 #include <cudf/detail/gather.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -43,15 +42,21 @@ std::unique_ptr<column> group_argmin(column_view const& values,
                                  stream,
                                  mr);
 
+  // The functor returns the index of minimum in the sorted values.
+  // We need the index of minimum in the original unsorted values.
+  // So use indices to gather the sort order used to sort `values`.
+  // The values in data buffer of indices corresponding to null values was
+  // initialized to ARGMIN_SENTINEL. Using gather_if.
+  // This can't use gather because nulls in gathered column will not store ARGMIN_SENTINEL.
   auto indices_view = indices->mutable_view();
-
   thrust::gather_if(rmm::exec_policy(stream),
                     indices_view.begin<size_type>(),    // map first
                     indices_view.end<size_type>(),      // map last
                     indices_view.begin<size_type>(),    // stencil
                     key_sort_order.begin<size_type>(),  // input
                     indices_view.begin<size_type>(),    // result
-                    [] __device__(auto i) {return (i != cudf::detail::ARGMIN_SENTINEL); });
+                    [] __device__(auto i) { return (i != cudf::detail::ARGMIN_SENTINEL); });
+
   return indices;
 }
 

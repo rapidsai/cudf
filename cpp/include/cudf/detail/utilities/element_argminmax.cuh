@@ -48,6 +48,7 @@ struct element_argminmax_fn {
     };
     if (out_of_bound_or_null(lhs_idx)) { return rhs_idx; }
     if (out_of_bound_or_null(rhs_idx)) { return lhs_idx; }
+
     // Return `lhs_idx` iff:
     //   row(lhs_idx) <  row(rhs_idx) and finding ArgMin, or
     //   row(lhs_idx) >= row(rhs_idx) and finding ArgMax.
