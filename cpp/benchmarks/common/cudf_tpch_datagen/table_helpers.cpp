@@ -38,36 +38,6 @@
 #include <string>
 #include <vector>
 
-std::vector<std::string> gen_vocab_types()
-{
-  std::vector<std::string> syllable_a = {
-    "STANDARD", "SMALL", "MEDIUM", "LARGE", "ECONOMY", "PROMO"};
-  std::vector<std::string> syllable_b = {"ANODIZED", "BURNISHED", "PLATED", "POLISHED", "BRUSHED"};
-  std::vector<std::string> syllable_c = {"TIN", "NICKEL", "BRASS", "STEEL", "COPPER"};
-  std::vector<std::string> syllable_combinations;
-  for (auto const& s_a : syllable_a) {
-    for (auto const& s_b : syllable_b) {
-      for (auto const& s_c : syllable_c) {
-        syllable_combinations.push_back(s_a + " " + s_b + " " + s_c);
-      }
-    }
-  }
-  return syllable_combinations;
-}
-
-std::vector<std::string> gen_vocab_containers()
-{
-  std::vector<std::string> syllable_a = {"SM", "LG", "MED", "JUMBO", "WRAP"};
-  std::vector<std::string> syllable_b = {"CASE", "BOX", "BAG", "JAR", "PKG", "PACK", "CAN", "DRUM"};
-  std::vector<std::string> syllable_combinations;
-  for (auto const& s_a : syllable_a) {
-    for (auto const& s_b : syllable_b) {
-      syllable_combinations.push_back(s_a + " " + s_b);
-    }
-  }
-  return syllable_combinations;
-}
-
 /**
  * @brief Add a column of days to a column of timestamp_days
  *
