@@ -143,8 +143,9 @@ std::unique_ptr<column> empty_like(column_view const& input)
 {
   CUDF_FUNC_RANGE();
 
-  // looks like is_nested(data_type) != is_nested<T>() so the types are checked individually
-  if (input.type().id() != cudf::type_id::STRUCT && input.type().id() != cudf::type_id::LIST) {
+  // test_dataframe.py passes an EMPTY column type here;
+  // this causes is_nested to throw an error since it uses the type-dispatcher
+  if ((input.type().id() == type_id::EMPTY) || !cudf::is_nested(input.type())) {
     return make_empty_column(input.type());
   }
 
