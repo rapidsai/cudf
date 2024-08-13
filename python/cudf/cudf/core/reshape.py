@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import itertools
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
@@ -14,7 +14,7 @@ from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import ColumnBase, as_column, column_empty_like
-from cudf.core.column.categorical import CategoricalColumn
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils.dtypes import min_unsigned_type
 
 if TYPE_CHECKING:
@@ -101,7 +101,9 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
     return index
 
 
-def _normalize_series_and_dataframe(objs, axis):
+def _normalize_series_and_dataframe(
+    objs: list[cudf.Series | cudf.DataFrame], axis: Literal[0, 1]
+) -> None:
     """Convert any cudf.Series objects in objs to DataFrames in place."""
     # Default to naming series by a numerical id if they are not named.
     sr_name = 0
@@ -304,7 +306,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                     result = obj.to_frame()
                 else:
                     result = obj.copy(deep=True)
-                result.columns = pd.RangeIndex(len(result._data))
+                result.columns = cudf.RangeIndex(len(result._data))
             else:
                 result = type(obj)._from_data(
                     data=obj._data.copy(deep=True),
@@ -319,7 +321,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 result = obj.copy(deep=True)
             if keys is not None and isinstance(result, cudf.DataFrame):
                 k = keys[0]
-                result.columns = cudf.MultiIndex.from_tuples(
+                result.columns = pd.MultiIndex.from_tuples(
                     [
                         (k, *c) if isinstance(c, tuple) else (k, c)
                         for c in result._column_names
@@ -338,7 +340,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             raise TypeError(
                 "Can only concatenate Series and DataFrame objects when axis=1"
             )
-        df = cudf.DataFrame()
         _normalize_series_and_dataframe(objs, axis=axis)
 
         any_empty = any(obj.empty for obj in objs)
@@ -362,18 +363,23 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         objs = [obj for obj in objs if obj.shape != (0, 0)]
 
         if len(objs) == 0:
-            return df
+            # TODO: https://github.com/rapidsai/cudf/issues/16550
+            return cudf.DataFrame()
 
         # Don't need to align indices of all `objs` since we
         # would anyway return an empty dataframe below
         if not empty_inner:
             objs = _align_objs(objs, how=join, sort=sort)
-            df.index = objs[0].index
+            result_index = objs[0].index
+        else:
+            result_index = None
 
+        result_data = {}
+        result_columns = None
         if keys is None:
             for o in objs:
                 for name, col in o._data.items():
-                    if name in df._data:
+                    if name in result_data:
                         raise NotImplementedError(
                             f"A Column with duplicate name found: {name}, cuDF "
                             f"doesn't support having multiple columns with "
@@ -383,11 +389,11 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                         # if join is inner and it contains an empty df
                         # we return an empty df, hence creating an empty
                         # column with dtype metadata retained.
-                        df[name] = cudf.core.column.column_empty_like(
+                        result_data[name] = cudf.core.column.column_empty_like(
                             col, newsize=0
                         )
                     else:
-                        df[name] = col
+                        result_data[name] = col
 
             result_columns = (
                 objs[0]
@@ -420,21 +426,21 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                     else:
                         col_label = (k, name)
                     if empty_inner:
-                        df[col_label] = cudf.core.column.column_empty_like(
-                            col, newsize=0
+                        result_data[col_label] = (
+                            cudf.core.column.column_empty_like(col, newsize=0)
                         )
                     else:
-                        df[col_label] = col
+                        result_data[col_label] = col
 
-        if keys is None:
-            df.columns = result_columns.unique()
-            if ignore_index:
-                df.columns = cudf.RangeIndex(len(result_columns.unique()))
-        elif ignore_index:
-            # with ignore_index the column names change to numbers
-            df.columns = cudf.RangeIndex(len(result_columns))
+        df = cudf.DataFrame._from_data(
+            ColumnAccessor(result_data, verify=False), index=result_index
+        )
+        if ignore_index:
+            df.columns = cudf.RangeIndex(df._num_columns)
+        elif result_columns is not None:
+            df.columns = result_columns
         elif not only_series:
-            df.columns = cudf.MultiIndex.from_tuples(df._column_names)
+            df.columns = pd.MultiIndex.from_tuples(df._column_names)
 
         if empty_inner:
             # if join is inner and it contains an empty df
@@ -455,11 +461,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         if len(objs) == 0:
             # If objs is empty, that indicates all of
             # objs are empty dataframes.
+            # TODO: https://github.com/rapidsai/cudf/issues/16550
             return cudf.DataFrame()
         elif len(objs) == 1:
             obj = objs[0]
             result = cudf.DataFrame._from_data(
-                data=None if join == "inner" else obj._data.copy(deep=True),
+                data={} if join == "inner" else obj._data.copy(deep=True),
                 index=cudf.RangeIndex(len(obj))
                 if ignore_index
                 else obj.index.copy(deep=True),
@@ -488,7 +495,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, cudf.Index):
-        return cudf.core.index.Index._concat(objs)
+        return cudf.Index._concat(objs)
     else:
         raise TypeError(f"cannot concatenate object of type {typ}")
 
@@ -601,18 +608,19 @@ def melt(
         value_vars = [c for c in frame._column_names if c not in unique_id]
 
     # Error for unimplemented support for datatype
-    dtypes = [frame[col].dtype for col in id_vars + value_vars]
-    if any(isinstance(typ, cudf.CategoricalDtype) for typ in dtypes):
+    if any(
+        isinstance(frame[col].dtype, cudf.CategoricalDtype)
+        for col in id_vars + value_vars
+    ):
         raise NotImplementedError(
             "Categorical columns are not yet supported for function"
         )
 
     # Check dtype homogeneity in value_var
     # Because heterogeneous concat is unimplemented
-    dtypes = [frame[col].dtype for col in value_vars]
-    if len(dtypes) > 0:
-        dtype = dtypes[0]
-        if any(t != dtype for t in dtypes):
+    if len(value_vars) > 1:
+        dtype = frame[value_vars[0]].dtype
+        if any(frame[col].dtype != dtype for col in value_vars):
             raise ValueError("all cols in value_vars must have the same dtype")
 
     # overlap
@@ -933,37 +941,39 @@ def _pivot(df, index, columns):
     index_labels, index_idx = index._encode()
     column_labels = columns_labels.to_pandas().to_flat_index()
 
-    def as_tuple(x):
-        return x if isinstance(x, tuple) else (x,)
-
     result = {}
-    for v in df:
-        names = [as_tuple(v) + as_tuple(name) for name in column_labels]
+    if len(index_labels) != 0 and len(columns_labels) != 0:
+
+        def as_tuple(x):
+            return x if isinstance(x, tuple) else (x,)
+
         nrows = len(index_labels)
-        ncols = len(names)
-        num_elements = nrows * ncols
-        if num_elements > 0:
-            col = df._data[v]
+        for col_label, col in df._data.items():
+            names = [
+                as_tuple(col_label) + as_tuple(name) for name in column_labels
+            ]
+            new_size = nrows * len(names)
             scatter_map = (columns_idx * np.int32(nrows)) + index_idx
-            target = cudf.DataFrame._from_data(
-                {
-                    None: cudf.core.column.column_empty_like(
-                        col, masked=True, newsize=nrows * ncols
-                    )
-                }
+            target_col = cudf.core.column.column_empty_like(
+                col, masked=True, newsize=new_size
             )
-            target._data[None][scatter_map] = col
-            result_frames = target._split(range(nrows, nrows * ncols, nrows))
+            target_col[scatter_map] = col
+            target = cudf.Index._from_column(target_col)
             result.update(
                 {
-                    name: next(iter(f._columns))
-                    for name, f in zip(names, result_frames)
+                    name: idx._column
+                    for name, idx in zip(
+                        names, target._split(range(nrows, new_size, nrows))
+                    )
                 }
             )
 
     # the result of pivot always has a multicolumn
-    ca = cudf.core.column_accessor.ColumnAccessor(
-        result, multiindex=True, level_names=(None,) + columns._data.names
+    ca = ColumnAccessor(
+        result,
+        multiindex=True,
+        level_names=(None,) + columns._data.names,
+        verify=False,
     )
     return cudf.DataFrame._from_data(
         ca, index=cudf.Index(index_labels, name=index.name)
@@ -1034,19 +1044,20 @@ def pivot(data, columns=None, index=no_default, values=no_default):
     if index is no_default:
         index = df.index
     else:
-        index = cudf.core.index.Index(df.loc[:, index])
+        index = cudf.Index(df.loc[:, index])
     columns = cudf.Index(df.loc[:, columns])
 
     # Create a DataFrame composed of columns from both
     # columns and index
-    columns_index = {}
-    columns_index = {
-        i: col
-        for i, col in enumerate(
-            itertools.chain(index._data.columns, columns._data.columns)
-        )
-    }
-    columns_index = cudf.DataFrame(columns_index)
+    ca = ColumnAccessor(
+        dict(
+            enumerate(
+                itertools.chain(index._data.columns, columns._data.columns)
+            )
+        ),
+        verify=False,
+    )
+    columns_index = cudf.DataFrame._from_data(ca)
 
     # Check that each row is unique:
     if len(columns_index) != len(columns_index.drop_duplicates()):
@@ -1189,13 +1200,13 @@ def unstack(df, level, fill_value=None, sort: bool = True):
     return result
 
 
-def _get_unique(column, dummy_na):
+def _get_unique(column: ColumnBase, dummy_na: bool) -> ColumnBase:
     """
     Returns unique values in a column, if
     dummy_na is False, nan's are also dropped.
     """
-    if isinstance(column, cudf.core.column.CategoricalColumn):
-        unique = column.categories
+    if isinstance(column.dtype, cudf.CategoricalDtype):
+        unique = column.categories  # type: ignore[attr-defined]
     else:
         unique = column.unique().sort_values()
     if not dummy_na:
@@ -1215,11 +1226,11 @@ def _one_hot_encode_column(
     `prefix`, separated with category name with `prefix_sep`. The encoding
     columns maybe coerced into `dtype`.
     """
-    if isinstance(column, CategoricalColumn):
+    if isinstance(column.dtype, cudf.CategoricalDtype):
         if column.size == column.null_count:
             column = column_empty_like(categories, newsize=column.size)
         else:
-            column = column._get_decategorized_column()
+            column = column._get_decategorized_column()  # type: ignore[attr-defined]
 
     if column.size * categories.size >= np.iinfo(size_type_dtype).max:
         raise ValueError(
@@ -1500,7 +1511,7 @@ def pivot_table(
         table_columns = tuple(
             map(lambda column: column[1:], table._data.names)
         )
-        table.columns = cudf.MultiIndex.from_tuples(
+        table.columns = pd.MultiIndex.from_tuples(
             tuples=table_columns, names=column_names
         )
 

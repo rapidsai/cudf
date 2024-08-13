@@ -2655,8 +2655,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif isinstance(columns, (cudf.BaseIndex, ColumnBase, Series)):
             level_names = (getattr(columns, "name", None),)
             rangeindex = isinstance(columns, cudf.RangeIndex)
-            columns = as_column(columns)
-            if columns.distinct_count(dropna=False) != len(columns):
+            if rangeindex:
+                unique_count = len(columns)
+            else:
+                columns = as_column(columns)
+                unique_count = columns.distinct_count(dropna=False)
+            if unique_count != len(columns):
                 raise ValueError("Duplicate column names are not allowed")
             pd_columns = pd.Index(columns.to_pandas())
             label_dtype = pd_columns.dtype
