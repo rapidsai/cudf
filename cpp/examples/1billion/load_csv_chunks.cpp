@@ -38,7 +38,8 @@ using elapsed_t = std::chrono::duration<double>;
 
 std::unique_ptr<cudf::table> load_chunk(std::string const& input_file,
                                         std::size_t start,
-                                        std::size_t size)
+                                        std::size_t size,
+                                        rmm::cuda_stream_view stream)
 {
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{input_file})
@@ -82,7 +83,7 @@ int main(int argc, char const** argv)
   std::size_t start_pos      = 0;
   cudf::size_type total_rows = 0;
   do {
-    auto const input_table = load_chunk(input_file, start_pos, chunk_size);
+    auto const input_table = load_chunk(input_file, start_pos, chunk_size, stream);
     auto const read_rows   = input_table->num_rows();
     if (read_rows == 0) break;
 
@@ -94,16 +95,18 @@ int main(int argc, char const** argv)
     aggregations.emplace_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
     aggregations.emplace_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
     aggregations.emplace_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
-    auto result = compute_results(cities, temps, std::move(aggregations));
+    auto result = compute_results(cities, temps, std::move(aggregations), stream);
 
-    agg_data.emplace_back(cudf::sort_by_key(result->view(), result->view().select({0})));
+    agg_data.emplace_back(
+      cudf::sort_by_key(result->view(), result->view().select({0}), {}, {}, stream));
     start_pos += chunk_size;
     if (start_pos + chunk_size > file_size) { chunk_size = file_size - start_pos; }
     total_rows += read_rows;
   } while (start_pos < file_size && chunk_size > 0);
 
   // now aggregate the aggregate results
-  auto results = compute_final_aggregates(agg_data);
+  auto results = compute_final_aggregates(agg_data, stream);
+  stream.synchronize();
 
   elapsed_t elapsed = std::chrono::steady_clock::now() - start;
   std::cout << "number of keys = " << results->num_rows() << std::endl;

@@ -161,7 +161,8 @@ int main(int argc, char const** argv)
   }
 
   // now aggregate the aggregate results
-  auto results = compute_final_aggregates(agg_data);
+  auto results = compute_final_aggregates(agg_data, stream);
+  stream.synchronize();
 
   elapsed_t elapsed = std::chrono::steady_clock::now() - start;
   std::cout << "number of keys: " << results->num_rows() << std::endl;

@@ -58,7 +58,7 @@ int main(int argc, char const** argv)
   auto const source = cudf::io::text::make_source_from_file(input_file);
   cudf::io::text::parse_options options;
   options.strip_delimiters = false;
-  auto raw_data_column     = cudf::io::text::multibyte_split(*source, "\n", options);
+  auto raw_data_column     = cudf::io::text::multibyte_split(*source, "\n", options, stream);
 
   elapsed_t elapsed = std::chrono::steady_clock::now() - start;
   std::cout << "file load time: " << elapsed.count() << " seconds" << std::endl;
@@ -66,12 +66,13 @@ int main(int argc, char const** argv)
 
   auto sv        = cudf::strings_column_view(raw_data_column->view());
   auto delimiter = cudf::string_scalar{";"};
-  auto splits    = cudf::strings::split(sv, delimiter, 1);
+  auto splits    = cudf::strings::split(sv, delimiter, 1, stream);
 
   raw_data_column->release();  // no longer needed
 
   auto temps  = cudf::strings::to_floats(cudf::strings_column_view(splits->view().column(1)),
-                                        cudf::data_type{cudf::type_id::FLOAT32});
+                                        cudf::data_type{cudf::type_id::FLOAT32},
+                                        stream);
   auto cities = std::move(splits->release().front());
 
   std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
@@ -79,7 +80,9 @@ int main(int argc, char const** argv)
   aggregations.emplace_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
   aggregations.emplace_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
 
-  auto result = compute_results(cities->view(), temps->view(), std::move(aggregations));
+  auto result = compute_results(cities->view(), temps->view(), std::move(aggregations), stream);
+  // result      = cudf::sort_by_key(result->view(), result->view().select({0}), {}, {}, stream);
+  stream.synchronize();
 
   elapsed = std::chrono::steady_clock::now() - start;
   std::cout << "number of keys: " << result->num_rows() << std::endl;

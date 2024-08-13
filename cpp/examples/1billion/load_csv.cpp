@@ -52,7 +52,7 @@ int main(int argc, char const** argv)
 
   auto start = std::chrono::steady_clock::now();
 
-  auto const csv_result = [input_file] {
+  auto const csv_result = [input_file, stream] {
     cudf::io::csv_reader_options in_opts =
       cudf::io::csv_reader_options::builder(cudf::io::source_info{input_file})
         .header(-1)
@@ -61,7 +61,7 @@ int main(int argc, char const** argv)
         .dtypes(std::vector<cudf::data_type>{cudf::data_type{cudf::type_id::STRING},
                                              cudf::data_type{cudf::type_id::FLOAT32}})
         .na_filter(false);
-    return cudf::io::read_csv(in_opts).tbl;
+    return cudf::io::read_csv(in_opts, stream).tbl;
   }();
   elapsed_t elapsed = std::chrono::steady_clock::now() - start;
   std::cout << "file load time: " << elapsed.count() << " seconds\n";
@@ -76,7 +76,9 @@ int main(int argc, char const** argv)
   aggregations.emplace_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
   aggregations.emplace_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
 
-  auto result = compute_results(cities, temps, std::move(aggregations));
+  auto result = compute_results(cities, temps, std::move(aggregations), stream);
+  // result      = cudf::sort_by_key(result->view(), result->view().select({0}), {}, {}, stream);
+  stream.synchronize();
 
   elapsed = std::chrono::steady_clock::now() - start;
   std::cout << "number of keys: " << result->num_rows() << std::endl;

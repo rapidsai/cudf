@@ -69,14 +69,15 @@ int main(int argc, char const** argv)
   for (auto& br : byte_ranges) {
     auto splits = [&] {
       cudf::io::text::parse_options options{br, false};
-      auto raw_data_column = cudf::io::text::multibyte_split(*source, "\n", options);
+      auto raw_data_column = cudf::io::text::multibyte_split(*source, "\n", options, stream);
       auto const sv        = cudf::strings_column_view(raw_data_column->view());
       auto const delimiter = cudf::string_scalar{";"};
-      return cudf::strings::split(sv, delimiter, 1);
+      return cudf::strings::split(sv, delimiter, 1, stream);
     }();
 
     auto temps  = cudf::strings::to_floats(cudf::strings_column_view(splits->view().column(1)),
-                                          cudf::data_type{cudf::type_id::FLOAT32});
+                                          cudf::data_type{cudf::type_id::FLOAT32},
+                                          stream);
     auto cities = std::move(splits->release().front());
 
     std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
@@ -85,12 +86,14 @@ int main(int argc, char const** argv)
     aggregations.emplace_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
     aggregations.emplace_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
 
-    auto result = compute_results(cities->view(), temps->view(), std::move(aggregations));
-    agg_data.emplace_back(cudf::sort_by_key(result->view(), result->view().select({0})));
+    auto result = compute_results(cities->view(), temps->view(), std::move(aggregations), stream);
+    agg_data.emplace_back(
+      cudf::sort_by_key(result->view(), result->view().select({0}), {}, {}, stream));
   }
 
   // now aggregate the aggregate results
-  auto results = compute_final_aggregates(agg_data);
+  auto results = compute_final_aggregates(agg_data, stream);
+  stream.synchronize();
 
   elapsed_t elapsed = std::chrono::steady_clock::now() - start;
   std::cout << "number of keys: " << results->num_rows() << std::endl;
