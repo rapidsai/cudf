@@ -123,7 +123,7 @@ class CategoricalAccessor(ColumnMethods):
         return self._column.dtype.categories
 
     @property
-    def codes(self) -> "cudf.Series":
+    def codes(self) -> cudf.Series:
         """
         Return Series of codes as well as the index.
         """
@@ -132,7 +132,7 @@ class CategoricalAccessor(ColumnMethods):
             if isinstance(self._parent, cudf.Series)
             else None
         )
-        return cudf.Series(self._column.codes, index=index)
+        return cudf.Series._from_column(self._column.codes, index=index)
 
     @property
     def ordered(self) -> bool:
@@ -918,7 +918,7 @@ class CategoricalColumn(column.ColumnBase):
             )
             cur_categories = replaced.categories
             new_categories = cur_categories.apply_boolean_mask(
-                ~cudf.Series(cur_categories.isin(drop_values))
+                cur_categories.isin(drop_values).unary_operator("not")
             )
             replaced = replaced._set_categories(new_categories)
             df = df.dropna(subset=["new"])
@@ -943,7 +943,7 @@ class CategoricalColumn(column.ColumnBase):
         # If a category is being replaced by an existing one, we
         # want to map it to None. If it's totally new, we want to
         # map it to the new label it is to be replaced by
-        dtype_replace = cudf.Series._from_data({None: replacement_col})
+        dtype_replace = cudf.Series._from_column(replacement_col)
         dtype_replace[dtype_replace.isin(cats_col)] = None
         new_cats_col = cats_col.find_and_replace(
             to_replace_col, dtype_replace._column
@@ -1273,12 +1273,8 @@ class CategoricalColumn(column.ColumnBase):
             return False
         # if order doesn't matter, sort before the equals call below
         if not ordered:
-            cur_categories = cudf.Series(cur_categories).sort_values(
-                ignore_index=True
-            )
-            new_categories = cudf.Series(new_categories).sort_values(
-                ignore_index=True
-            )
+            cur_categories = cur_categories.sort_values()
+            new_categories = new_categories.sort_values()
         return cur_categories.equals(new_categories)
 
     def _set_categories(
