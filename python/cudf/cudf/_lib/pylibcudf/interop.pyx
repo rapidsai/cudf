@@ -1,9 +1,8 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from cpython.pycapsule cimport PyCapsule_GetPointer, PyCapsule_New
-from cython.operator cimport dereference
 from libc.stdlib cimport free
-from libcpp.memory cimport shared_ptr, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from pyarrow cimport lib as pa
@@ -19,24 +18,14 @@ from cudf._lib.pylibcudf.libcudf.interop cimport (
     ArrowArrayStream,
     ArrowSchema,
     column_metadata,
-    from_arrow as cpp_from_arrow,
     from_arrow_column as cpp_from_arrow_column,
     from_arrow_stream as cpp_from_arrow_stream,
     to_arrow_host_raw,
     to_arrow_schema_raw,
 )
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport (
-    fixed_point_scalar,
-    scalar,
-)
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
-from cudf._lib.pylibcudf.libcudf.wrappers.decimals cimport (
-    decimal32,
-    decimal64,
-    decimal128,
-    scale_type,
-)
 
+from . cimport copying
 from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
@@ -150,54 +139,10 @@ def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
 
 @from_arrow.register(pa.Scalar)
 def _from_arrow_scalar(pyarrow_object, *, DataType data_type=None):
-    cdef shared_ptr[pa.CScalar] arrow_scalar = pa.pyarrow_unwrap_scalar(pyarrow_object)
-
-    cdef unique_ptr[scalar] c_result
-    with nogil:
-        c_result = move(cpp_from_arrow(dereference(arrow_scalar)))
-
-    cdef Scalar result = Scalar.from_libcudf(move(c_result))
-
-    if result.type().id() != type_id.DECIMAL128:
-        if data_type is not None:
-            raise ValueError(
-                "dtype may not be passed for non-decimal types"
-            )
-        return result
-
-    if data_type is None:
-        raise ValueError(
-            "Decimal scalars must be constructed with a dtype"
-        )
-
-    cdef type_id tid = data_type.id()
-
-    if tid == type_id.DECIMAL32:
-        result.c_obj.reset(
-            new fixed_point_scalar[decimal32](
-                (
-                    <fixed_point_scalar[decimal128]*> result.c_obj.get()
-                ).value(),
-                scale_type(-pyarrow_object.type.scale),
-                result.c_obj.get().is_valid()
-            )
-        )
-    elif tid == type_id.DECIMAL64:
-        result.c_obj.reset(
-            new fixed_point_scalar[decimal64](
-                (
-                    <fixed_point_scalar[decimal128]*> result.c_obj.get()
-                ).value(),
-                scale_type(-pyarrow_object.type.scale),
-                result.c_obj.get().is_valid()
-            )
-        )
-    elif tid != type_id.DECIMAL128:
-        raise ValueError(
-            "Decimal scalars may only be cast to decimals"
-        )
-
-    return result
+    return copying.get_element(
+        from_arrow(pa.array([pyarrow_object]), data_type=data_type),
+        0,
+    )
 
 
 @from_arrow.register(pa.Array)
