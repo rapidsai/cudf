@@ -695,18 +695,6 @@ set_source_files_properties(
   src/transform/transform.cpp
   PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
-# We need to hide symbols in the logger TU by default because those symbols include spdlog symbols
-# that are compiled in because we use it as a header-only library. This is problematic because other
-# libraries that also do the same thing will have their own copies, and they will all be weak
-# symbols so which one is used is undefined. Marking these symbols as hidden makes them local and
-# ensures that internal calls to spdlog functions correctly use the local copy.
-#
-# Note that it is unusual to use spdlog as a header-only library, but we do so in order to keep RMM
-# as a header-only library.
-set_source_files_properties(
-  src/utilities/logger.cpp PROPERTIES COMPILE_OPTIONS
-                                      "-fvisibility=hidden;-fvisibility-inlines-hidden"
-)
 
 set_property(
   SOURCE src/io/parquet/writer_impl.cu
