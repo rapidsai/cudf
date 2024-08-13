@@ -71,6 +71,10 @@ struct token_reader_fn {
     auto const token_offset = d_token_offsets[idx];
     auto const token_count  = d_token_offsets[idx + 1] - token_offset;
     auto const d_result     = d_tokens + token_offset;  // store tokens here
+    if (nchars == 0) {
+      d_result[0] = string_index_pair{"", 0};
+      return;
+    }
 
     int64_t token_idx = 0;
     auto itr          = d_str.begin();
