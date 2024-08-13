@@ -7433,13 +7433,14 @@ public class TableTest extends CudfTestBase {
         new BasicType(true, DType.INT64));
     try (Table t1 = new Table.TestBuilder()
         .column(inputType, new StructData(6, 1L), new StructData(5, 2L), new StructData(4, 3L),
-            new StructData(3, 4L), new StructData(2, 5L), new StructData(1, 6L))
-        .column(1, 2, 3, 1, 2, 3).build();
+            new StructData(3, 4L), new StructData(2, 5L), new StructData(1, 6L),
+            new StructData(1, null), new StructData(2, null), new StructData(3, null))
+        .column(1, 2, 3, 1, 2, 3, 4, 4, 4).build();
          Table other = t1.groupBy(1).aggregate(GroupByAggregation.maxBy().onColumn(0));
          Table ordered = other.orderBy(OrderByArg.asc(0));
          Table expected = new Table.TestBuilder()
-             .column(1, 2, 3)
-             .column(inputType, new StructData(3, 4L), new StructData(2, 5L), new StructData(1, 6L))
+             .column(1, 2, 3, 4)
+             .column(inputType, new StructData(3, 4L), new StructData(2, 5L), new StructData(1, 6L), null)
              .build()) {
       assertTablesAreEqual(expected, ordered);
     }
@@ -7452,13 +7453,14 @@ public class TableTest extends CudfTestBase {
         new BasicType(true, DType.INT64));
     try (Table t1 = new Table.TestBuilder()
         .column(inputType, new StructData(6, 1L), new StructData(5, 2L), new StructData(4, 3L),
-            new StructData(3, 4L), new StructData(2, 5L), new StructData(1, 6L))
-        .column(1, 2, 3, 1, 2, 3).build();
+            new StructData(3, 4L), new StructData(2, 5L), new StructData(1, 6L),
+            new StructData(1, null), new StructData(2, null), new StructData(3, null))
+        .column(1, 2, 3, 1, 2, 3, 4, 4, 4).build();
          Table other = t1.groupBy(1).aggregate(GroupByAggregation.minBy().onColumn(0));
          Table ordered = other.orderBy(OrderByArg.asc(0));
          Table expected = new Table.TestBuilder()
-             .column(1, 2, 3)
-             .column(inputType, new StructData(6, 1L), new StructData(5, 2L), new StructData(4, 3L))
+             .column(1, 2, 3, 4)
+             .column(inputType, new StructData(6, 1L), new StructData(5, 2L), new StructData(4, 3L), null)
              .build()) {
       assertTablesAreEqual(expected, ordered);
     }

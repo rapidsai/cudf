@@ -683,8 +683,9 @@ std::unique_ptr<Base> make_max_by_aggregation()
 {
   return std::make_unique<detail::max_by_aggregation>();
 }
-template std::unique_ptr<aggregation> make_max_by_aggregation<aggregation>();
-template std::unique_ptr<groupby_aggregation> make_max_by_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<aggregation> make_max_by_aggregation<aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation> 
+make_max_by_aggregation<groupby_aggregation>();
 
 /// Factory to create a MIN_BY aggregation
 template <typename Base>
@@ -692,8 +693,9 @@ std::unique_ptr<Base> make_min_by_aggregation()
 {
   return std::make_unique<detail::min_by_aggregation>();
 }
-template std::unique_ptr<aggregation> make_min_by_aggregation<aggregation>();
-template std::unique_ptr<groupby_aggregation> make_min_by_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<aggregation> make_min_by_aggregation<aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation> 
+make_min_by_aggregation<groupby_aggregation>();
 
 /// Factory to create an NUNIQUE aggregation
 template <typename Base>
