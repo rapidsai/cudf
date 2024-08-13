@@ -374,7 +374,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                              cudf::io::json_reader_options const& options,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr);
-}
+}  // namespace experimental
 
 /**
  * @brief Parses the given JSON string and generates table from the given input.
