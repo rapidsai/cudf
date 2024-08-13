@@ -43,8 +43,8 @@ TYPED_TEST(groupby_max_by_test, basic)
   cudf::test::structs_column_wrapper vals{values, orders};
 
   cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
-  cudf::test::fixed_width_column_wrapper<K> expect_values{7, 8, 9};
-  cudf::test::fixed_width_column_wrapper<V> expect_orders{8, 9, 10};
+  cudf::test::fixed_width_column_wrapper<K> expect_values{6, 9, 8};
+  cudf::test::fixed_width_column_wrapper<V> expect_orders{7, 10, 9};
   cudf::test::structs_column_wrapper expect_vals{expect_values, expect_orders};
 
   auto agg = cudf::make_max_by_aggregation<cudf::groupby_aggregation>();
