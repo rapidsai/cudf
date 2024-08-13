@@ -1285,7 +1285,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
 
         aggs_per_column: Iterable[AggType | Iterable[AggType]]
-        if aggs:
+        if aggs or isinstance(aggs, dict):
             if isinstance(aggs, dict):
                 column_names, aggs_per_column = aggs.keys(), aggs.values()
                 columns = tuple(self.obj._data[col] for col in column_names)
