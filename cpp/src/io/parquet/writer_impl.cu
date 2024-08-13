@@ -1320,38 +1320,16 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   map_storage.initialize(cuco::pair{KEY_SENTINEL, VALUE_SENTINEL},
                          cuda::stream_ref{stream.value()});
 
-  std::vector<map_ref_type> h_map_refs;
-  h_map_refs.reserve(h_chunks.size());
-
-  std::for_each(
-    thrust::make_counting_iterator(static_cast<std::size_t>(0)),
-    thrust::make_counting_iterator(h_chunks.size()),
-    [&](auto const idx) {
-      auto& chunk = h_chunks[idx];
-      if (chunk.use_dictionary) {
-        storage_ref_type storage_ref{valid_chunk_sizes[idx], map_storage.data() + map_offsets[idx]};
-
-        h_map_refs.emplace_back(map_ref_type{cuco::empty_key<key_type>{KEY_SENTINEL},
-                                             cuco::empty_value<mapped_type>{VALUE_SENTINEL},
-                                             {},
-                                             {},
-                                             {},
-                                             storage_ref});
-
-        chunk.dict_map_idx = h_map_refs.size() - 1;
-      }
-    });
-
-  rmm::device_uvector<map_ref_type> d_map_refs(h_map_refs.size(), stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(d_map_refs.data(),
-                                h_map_refs.data(),
-                                sizeof(map_ref_type) * h_map_refs.size(),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  std::for_each(thrust::make_counting_iterator(static_cast<std::size_t>(0)),
+                thrust::make_counting_iterator(h_chunks.size()),
+                [&](auto const idx) {
+                  auto& chunk = h_chunks[idx];
+                  if (chunk.use_dictionary) { chunk.dict_map_offset = map_offsets[idx]; }
+                });
 
   chunks.host_to_device_async(stream);
 
-  populate_chunk_hash_maps(d_map_refs.data(), frags, stream);
+  populate_chunk_hash_maps(map_storage.data(), frags, stream);
 
   chunks.device_to_host_sync(stream);
 
@@ -1412,8 +1390,8 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     chunk.dict_index          = inserted_dict_index.data();
   }
   chunks.host_to_device_async(stream);
-  collect_map_entries(d_map_refs.data(), chunks.device_view().flat_view(), stream);
-  get_dictionary_indices(d_map_refs.data(), frags, stream);
+  collect_map_entries(map_storage.data(), chunks.device_view().flat_view(), stream);
+  get_dictionary_indices(map_storage.data(), frags, stream);
 
   return std::pair(std::move(dict_data), std::move(dict_index));
 }

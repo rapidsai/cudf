@@ -559,7 +559,7 @@ struct EncColumnChunk {
   uint8_t is_compressed;    //!< Nonzero if the chunk uses compression
   uint32_t dictionary_size;    //!< Size of dictionary page including header
   uint32_t ck_stat_size;       //!< Size of chunk-level statistics (included in 1st page header)
-  int32_t dict_map_idx;        //!< Hash map storage for calculating dict encoding for this chunk
+  uint32_t dict_map_offset;    //!< Hash map storage for calculating dict encoding for this chunk
   size_type dict_map_size;     //!< Size of dict_map_slots
   size_type num_dict_entries;  //!< Total number of entries in dictionary
   size_type

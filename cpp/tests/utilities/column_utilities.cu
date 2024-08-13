@@ -460,6 +460,7 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
                                          debug_output_level verbosity,
                                          int depth)
 {
+  verbosity = debug_output_level::ALL_ERRORS;
   CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
   std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
   // move the differences to the host.

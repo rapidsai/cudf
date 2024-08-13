@@ -31,14 +31,14 @@
 
 namespace cudf::io::parquet::detail {
 
-using key_type    = uint32_t;
-using mapped_type = uint32_t;
+using key_type    = size_type;
+using mapped_type = size_type;
 
 auto constexpr cg_size     = 1;  ///< A CUDA Cooperative Group of 8 threads to handle each subset
 auto constexpr window_size = 1;  ///< Number of concurrent slots handled by each thread
 
-auto constexpr KEY_SENTINEL   = key_type{std::numeric_limits<uint32_t>::max()};
-auto constexpr VALUE_SENTINEL = mapped_type{std::numeric_limits<uint32_t>::max()};
+auto constexpr KEY_SENTINEL   = key_type{std::numeric_limits<key_type>::max()};
+auto constexpr VALUE_SENTINEL = mapped_type{std::numeric_limits<mapped_type>::max()};
 auto constexpr SCOPE          = cuda::thread_scope_device;
 
 using slot_type = cuco::pair<key_type, mapped_type>;
@@ -46,27 +46,13 @@ using slot_type = cuco::pair<key_type, mapped_type>;
 using storage_type     = cuco::aow_storage<slot_type, window_size>;
 using storage_ref_type = typename storage_type::ref_type;
 
-template <typename T>
-struct my_hasher {
-  __device__ auto operator()(T index) const { return index; }
-};
-
-using probing_scheme_type = cuco::linear_probing<cg_size, my_hasher<key_type>>;
-
-using map_ref_type = cuco::static_map_ref<key_type,
-                                          mapped_type,
-                                          SCOPE,
-                                          thrust::equal_to<key_type>,
-                                          probing_scheme_type,
-                                          storage_ref_type>;  ///< Map ref type
-
 /**
  * @brief Insert chunk values into their respective hash maps
  *
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void populate_chunk_hash_maps(map_ref_type* map_refs,
+void populate_chunk_hash_maps(storage_type::window_type* map_storage,
                               cudf::detail::device_2dspan<PageFragment const> frags,
                               rmm::cuda_stream_view stream);
 
@@ -76,7 +62,7 @@ void populate_chunk_hash_maps(map_ref_type* map_refs,
  * @param chunks Flat span of chunks to compact hash maps for
  * @param stream CUDA stream to use
  */
-void collect_map_entries(map_ref_type* map_refs,
+void collect_map_entries(storage_type::window_type* map_storage,
                          device_span<EncColumnChunk> chunks,
                          rmm::cuda_stream_view stream);
 
@@ -92,7 +78,7 @@ void collect_map_entries(map_ref_type* map_refs,
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void get_dictionary_indices(map_ref_type* map_refs,
+void get_dictionary_indices(storage_type::window_type* map_storage,
                             cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream);
 
