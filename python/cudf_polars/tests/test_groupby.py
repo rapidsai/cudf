@@ -59,15 +59,7 @@ def exprs(request):
 
 
 @pytest.fixture(
-    params=[
-        False,
-        pytest.param(
-            True,
-            marks=pytest.mark.xfail(
-                reason="Maintaining order in groupby not implemented"
-            ),
-        ),
-    ],
+    params=[False, True],
     ids=["no_maintain_order", "maintain_order"],
 )
 def maintain_order(request):

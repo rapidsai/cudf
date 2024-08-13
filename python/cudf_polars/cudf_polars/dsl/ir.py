@@ -568,8 +568,8 @@ class GroupBy(IR):
 
     def __post_init__(self) -> None:
         """Check whether all the aggregations are implemented."""
-        if self.options.rolling is None and self.maintain_order:
-            raise NotImplementedError("Maintaining order in groupby")
+        # if self.options.rolling is None and self.maintain_order:
+        #     raise NotImplementedError("Maintaining order in groupby")
         if self.options.rolling:
             raise NotImplementedError(
                 "rolling window/groupby"
@@ -621,6 +621,34 @@ class GroupBy(IR):
         results = [
             req.evaluate(result_subs, mapping=mapping) for req in self.agg_requests
         ]
+        # Handle order preservation of groups
+        # like cudf classic does
+        # https://github.com/rapidsai/cudf/blob/5780c4d8fb5afac2e04988a2ff5531f94c22d3a3/python/cudf/cudf/core/groupby/groupby.py#L723-L743
+        if self.maintain_order:
+            left = plc.stream_compaction.stable_distinct(
+                plc.Table([k.obj for k in keys]),
+                list(range(group_keys.num_columns())),
+                plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+                # TODO: verify nullequality and nanequality correct?
+                plc.types.NullEquality.EQUAL,
+                plc.types.NanEquality.ALL_EQUAL,
+            )
+            right = plc.Table(
+                [key.obj for key in result_keys],
+            )
+            _, indices = plc.join.left_join(left, right, plc.types.NullEquality.EQUAL)
+            ordered_tbl = plc.copying.gather(
+                plc.Table([col.obj for col in result_keys + results]),
+                indices,
+                plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+            )
+            result_keys = ordered_tbl.columns()[: len(keys)]
+            results = ordered_tbl.columns()[len(keys) :]
+            result_keys = [NamedColumn(gk, k.name) for gk, k in zip(result_keys, keys)]
+            results = [
+                NamedColumn(res, req.name)
+                for res, req in zip(results, self.agg_requests)
+            ]
         return DataFrame(broadcast(*result_keys, *results)).slice(self.options.slice)
 
 
