@@ -378,19 +378,6 @@ class _TestTable:
 def _to_arrow_table(cudf_object, metadata=None):
     test_table = _TestTable(cudf_object, metadata)
     return pa.table(test_table)
-    # if metadata is None:
-    #     metadata = [ColumnMetadata() for _ in range(len(cudf_object.columns()))]
-    # metadata = [ColumnMetadata(m) if isinstance(m, str) else m for m in metadata]
-    # cdef vector[column_metadata] c_table_metadata
-    # cdef shared_ptr[pa.CTable] c_table_result
-    # for meta in metadata:
-    #     c_table_metadata.push_back(_metadata_to_libcudf(meta))
-    # with nogil:
-    #     c_table_result = move(
-    #         cpp_to_arrow((<Table> cudf_object).view(), c_table_metadata)
-    #     )
-    #
-    # return pa.pyarrow_wrap_table(c_table_result)
 
 
 @to_arrow.register(Scalar)
