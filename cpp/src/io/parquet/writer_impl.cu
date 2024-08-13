@@ -1303,7 +1303,8 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
       chunk.use_dictionary = true;
       valid_chunk_sizes.emplace_back(
         static_cast<std::size_t>(cuco::make_window_extent<cg_size, window_size>(
-          // Multiplying by 1/0.7 = 1.43 to target a 70% occupancy factor.
+          // cuCollections suggests using a hash map of size N * (1/0.7) = 1.43 to target a 70%
+          // occupancy factor.
           static_cast<size_t>(chunk.num_values * 1.43))));
       chunk.dict_map_size = valid_chunk_sizes.back();
     }
@@ -1395,7 +1396,6 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   chunks.host_to_device_async(stream);
   collect_map_entries(map_storage.data(), chunks.device_view().flat_view(), stream);
   get_dictionary_indices(map_storage.data(), frags, stream);
-  chunks.device_to_host_async(stream);
 
   return std::pair(std::move(dict_data), std::move(dict_index));
 }

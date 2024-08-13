@@ -21,13 +21,8 @@
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/types.hpp>
 
-#include <cooperative_groups.h>
-#include <cuco/static_map.cuh>
-#include <cuco/static_map_ref.cuh>
+#include <cuco/pair.cuh>
 #include <cuco/storage.cuh>
-#include <thrust/device_vector.h>
-
-#include <limits>
 
 namespace cudf::io::parquet::detail {
 

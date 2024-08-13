@@ -23,6 +23,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
+#include <cuco/static_map_ref.cuh>
 #include <cuda/atomic>
 
 namespace cudf::io::parquet::detail {
