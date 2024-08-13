@@ -91,6 +91,26 @@ TYPED_TEST(groupby_argmin_test, zero_valid_values)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
+TYPED_TEST(groupby_argmin_test, zero_valid_values_xx)
+{
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, cudf::aggregation::ARGMIN>;
+
+  if (std::is_same_v<V, bool>) return;
+
+  cudf::test::fixed_width_column_wrapper<K> keys{1};
+  cudf::test::fixed_width_column_wrapper<V> vals({3}, all_nulls());
+
+  cudf::test::fixed_width_column_wrapper<K> expect_keys{1};
+  cudf::test::fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
+
+  auto agg = cudf::make_argmin_aggregation<cudf::groupby_aggregation>();
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+  auto agg2 = cudf::make_argmin_aggregation<cudf::groupby_aggregation>();
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
+}
+
 TYPED_TEST(groupby_argmin_test, null_keys_and_values)
 {
   using V = TypeParam;

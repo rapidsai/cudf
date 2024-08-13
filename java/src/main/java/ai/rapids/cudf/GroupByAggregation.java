@@ -119,7 +119,6 @@ public final class GroupByAggregation {
    * MinBy Aggregation
    */
   public static GroupByAggregation minBy() {
-    System.out.println("minBy 3");
     return new GroupByAggregation(Aggregation.minBy());
   }
 
@@ -134,7 +133,6 @@ public final class GroupByAggregation {
    * MaxBy Aggregation
    */
   public static GroupByAggregation maxBy() {
-    System.out.println("maxBy 3");
     return new GroupByAggregation(Aggregation.maxBy());
   }
 
