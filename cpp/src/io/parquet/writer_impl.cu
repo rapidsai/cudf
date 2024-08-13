@@ -1322,18 +1322,13 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   map_storage.initialize(cuco::pair{KEY_SENTINEL, VALUE_SENTINEL},
                          cuda::stream_ref{stream.value()});
 
-  std::cout << "Offsets: " << h_chunks.size() << std::endl;
-
-  std::for_each(thrust::make_counting_iterator(static_cast<std::size_t>(0)),
-                thrust::make_counting_iterator(h_chunks.size()),
-                [&](auto const idx) {
-                  auto& chunk = h_chunks[idx];
-                  if (chunk.use_dictionary) {
-                    chunk.dict_map_offset = map_offsets[idx];
-                    std::cout << "off: " << map_offsets[idx] << ", size: " << chunk.dict_map_size
-                              << std::endl;
-                  }
-                });
+  std::for_each(
+    thrust::make_zip_iterator(thrust::make_tuple(h_chunks.begin(), map_offsets.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(h_chunks.end(), map_offsets.end())),
+    [&](auto elem) -> void {
+      auto& chunk = thrust::get<0>(elem);
+      if (chunk.use_dictionary) { chunk.dict_map_offset = thrust::get<1>(elem); }
+    });
 
   chunks.host_to_device_async(stream);
 
@@ -1400,6 +1395,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   chunks.host_to_device_async(stream);
   collect_map_entries(map_storage.data(), chunks.device_view().flat_view(), stream);
   get_dictionary_indices(map_storage.data(), frags, stream);
+  chunks.device_to_host_async(stream);
 
   return std::pair(std::move(dict_data), std::move(dict_index));
 }

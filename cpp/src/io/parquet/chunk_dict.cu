@@ -41,11 +41,11 @@ struct equality_functor {
     //  We don't call this for nulls so this is fine
     auto const equal  = cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
     auto const result = equal(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
-    printf("col_type_id:%d, equality idx1:%d, idx2:%d, eq:%d\n",
+    /*printf("col_type_id:%d, equality idx1:%d, idx2:%d, eq:%d\n",
            col.type().id(),
            lhs_idx,
            rhs_idx,
-           result);
+           result);*/
     return result;
   }
 };
@@ -56,7 +56,7 @@ struct hash_functor {
   __device__ auto operator()(key_type idx) const
   {
     auto const hashed = cudf::hashing::detail::MurmurHash3_x86_32<T>{}(col.element<T>(idx));
-    printf("hashing idx: %d = %d\n", idx, hashed);
+    // printf("hashing idx: %d = %d\n", idx, hashed);
     return hashed;  // cudf::hashing::detail::MurmurHash3_x86_32<T>{}(col.element<T>(idx));
   }
 };
@@ -94,7 +94,7 @@ struct map_insert_fn {
       auto map_insert_ref = hash_map_ref.with_operators(cuco::insert_and_find);
       // Insert
       auto [iter, found] = map_insert_ref.insert_and_find(cuco::pair{i, i});
-      printf("Inserted k=%d, v=%d, unique=%d\n", iter->first, iter->second, found);
+      // printf("Inserted k=%d, v=%d, unique=%d\n", iter->first, iter->second, found);
       return found;
     } else {
       CUDF_UNREACHABLE("Unsupported type to insert in map");
@@ -142,7 +142,7 @@ struct map_find_fn {
                   "Unable to find value in map in dictionary index construction");
 
       // Return a pair of the found key and value.
-      printf("Find=%d, Found slot: k=%d, v=%d\n", i, found_slot->first, found_slot->second);
+      // printf("Find=%d, Found slot: k=%d, v=%d\n", i, found_slot->first, found_slot->second);
       return {found_slot->first, found_slot->second};
     } else {
       CUDF_UNREACHABLE("Unsupported type to find in map");
@@ -190,8 +190,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     size_type is_unique      = 0;
     size_type uniq_elem_size = 0;
     if (is_valid) {
-      auto const is_unique =
-        type_dispatcher(data_col.type(), map_insert_fn{storage_ref}, data_col, val_idx);
+      is_unique = type_dispatcher(data_col.type(), map_insert_fn{storage_ref}, data_col, val_idx);
       uniq_elem_size = [&]() -> size_type {
         if (not is_unique) { return 0; }
         switch (col->physical_type) {
@@ -250,9 +249,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   [[maybe_unused]] auto const tile = cg::tiled_partition<cg_size>(cg::this_thread_block());
   auto const t                     = cg::this_thread_block().thread_rank();
 
-  __shared__ cuda::atomic<size_type, cuda::thread_scope_block> counter;
+  __shared__ cuda::atomic<size_type, SCOPE> counter;
   using cuda::std::memory_order_relaxed;
-  if (t == 0) { new (&counter) cuda::atomic<size_type, cuda::thread_scope_block>{0}; }
+  if (t == 0) { new (&counter) cuda::atomic<size_type, SCOPE>{0}; }
   __syncthreads();
 
   for (size_type i = 0; i < chunk.dict_map_size; i += block_size) {
@@ -267,6 +266,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         // If sorting dict page ever becomes a hard requirement, enable the following statement and
         // add a dict sorting step before storing into the slot's second field.
         // chunk.dict_data_idx[loc] = t + i;
+        // printf("Replacing slot->data()->second: %d, %d\n", slot->data()->second, loc);
         slot->data()->second = loc;
       }
     }
