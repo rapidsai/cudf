@@ -22,7 +22,6 @@ from cudf._lib.pylibcudf.libcudf.interop cimport (
     from_arrow as cpp_from_arrow,
     from_arrow_column as cpp_from_arrow_column,
     from_arrow_stream as cpp_from_arrow_stream,
-    to_arrow as cpp_to_arrow,
     to_arrow_host_raw,
     to_arrow_schema_raw,
 )
@@ -380,29 +379,16 @@ def _to_arrow_table(cudf_object, metadata=None):
     return pa.table(test_table)
 
 
+@to_arrow.register(Column)
+def _to_arrow_array(cudf_object, metadata=None):
+    """Create a PyArrow array from a pylibcudf column."""
+    if metadata is not None:
+        metadata = [metadata]
+    return to_arrow(Table([cudf_object]), metadata)[0]
+
+
 @to_arrow.register(Scalar)
 def _to_arrow_scalar(cudf_object, metadata=None):
     # Note that metadata for scalars is primarily important for preserving
     # information on nested types since names are otherwise irrelevant.
-    if metadata is None:
-        metadata = ColumnMetadata()
-    metadata = ColumnMetadata(metadata) if isinstance(metadata, str) else metadata
-    cdef column_metadata c_scalar_metadata = _metadata_to_libcudf(metadata)
-    cdef shared_ptr[pa.CScalar] c_scalar_result
-    with nogil:
-        c_scalar_result = move(
-            cpp_to_arrow(
-                dereference((<Scalar> cudf_object).c_obj), c_scalar_metadata
-            )
-        )
-
-    return pa.pyarrow_wrap_scalar(c_scalar_result)
-
-
-@to_arrow.register(Column)
-def _to_arrow_array(cudf_object, metadata=None):
-    """Create a PyArrow array from a pylibcudf column."""
-    if metadata is None:
-        metadata = ColumnMetadata()
-    metadata = ColumnMetadata(metadata) if isinstance(metadata, str) else metadata
-    return to_arrow(Table([cudf_object]), [metadata])[0]
+    return to_arrow(Column.from_scalar(cudf_object, 1), metadata=metadata)[0]
