@@ -2007,7 +2007,7 @@ TEST_F(ParquetWriterTest, WriteFixedLenByteArray)
   srand(31337);
   using cudf::io::parquet::detail::Encoding;
   constexpr int fixed_width          = 16;
-  constexpr cudf::size_type num_rows = 10;
+  constexpr cudf::size_type num_rows = 200;
   std::vector<uint8_t> data(num_rows * fixed_width);
   std::vector<cudf::size_type> offsets(num_rows + 1);
 
@@ -2025,26 +2025,25 @@ TEST_F(ParquetWriterTest, WriteFixedLenByteArray)
   auto off_child  = cudf::test::fixed_width_column_wrapper<int32_t>(offsets.begin(), offsets.end());
   auto col = cudf::make_lists_column(num_rows, off_child.release(), data_child.release(), 0, {});
 
-  auto expected = table_view{{/**col, *col, *col,*/ *col}};
+  auto expected = table_view{{*col, *col, *col, *col}};
   cudf::io::table_input_metadata expected_metadata(expected);
 
-  /*
-    expected_metadata.column_metadata[0]
-      .set_name("flba_plain")
-      .set_type_length(fixed_width)
-      .set_encoding(cudf::io::column_encoding::PLAIN)
-      .set_output_as_binary(true);
-    expected_metadata.column_metadata[1]
-      .set_name("flba_split")
-      .set_type_length(fixed_width)
-      .set_encoding(cudf::io::column_encoding::BYTE_STREAM_SPLIT)
-      .set_output_as_binary(true);
-    expected_metadata.column_metadata[2]
-      .set_name("flba_delta")
-      .set_type_length(fixed_width)
-      .set_encoding(cudf::io::column_encoding::DELTA_BYTE_ARRAY)
-      .set_output_as_binary(true);*/
   expected_metadata.column_metadata[0]
+    .set_name("flba_plain")
+    .set_type_length(fixed_width)
+    .set_encoding(cudf::io::column_encoding::PLAIN)
+    .set_output_as_binary(true);
+  expected_metadata.column_metadata[1]
+    .set_name("flba_split")
+    .set_type_length(fixed_width)
+    .set_encoding(cudf::io::column_encoding::BYTE_STREAM_SPLIT)
+    .set_output_as_binary(true);
+  expected_metadata.column_metadata[2]
+    .set_name("flba_delta")
+    .set_type_length(fixed_width)
+    .set_encoding(cudf::io::column_encoding::DELTA_BYTE_ARRAY)
+    .set_output_as_binary(true);
+  expected_metadata.column_metadata[3]
     .set_name("flba_dict")
     .set_type_length(fixed_width)
     .set_encoding(cudf::io::column_encoding::DICTIONARY)
@@ -2068,7 +2067,7 @@ TEST_F(ParquetWriterTest, WriteFixedLenByteArray)
   read_footer(source, &fmd);
 
   // check that the schema retains the FIXED_LEN_BYTE_ARRAY type
-  for (int i = 1; i <= 1; i++) {
+  for (int i = 1; i <= 4; i++) {
     EXPECT_EQ(fmd.schema[i].type, cudf::io::parquet::detail::Type::FIXED_LEN_BYTE_ARRAY);
     EXPECT_EQ(fmd.schema[i].type_length, fixed_width);
   }
@@ -2079,14 +2078,14 @@ TEST_F(ParquetWriterTest, WriteFixedLenByteArray)
   };
 
   // requested plain
-  /*  expect_enc(0, Encoding::PLAIN);
-    // requested byte_stream_split
-    expect_enc(1, Encoding::BYTE_STREAM_SPLIT);
-    // requested delta_byte_array
-    expect_enc(2, Encoding::DELTA_BYTE_ARRAY);
-    // requested dictionary, but should fall back to plain
-    // TODO: update if we get FLBA working with dictionary encoding*/
   expect_enc(0, Encoding::PLAIN);
+  // requested byte_stream_split
+  expect_enc(1, Encoding::BYTE_STREAM_SPLIT);
+  // requested delta_byte_array
+  expect_enc(2, Encoding::DELTA_BYTE_ARRAY);
+  // requested dictionary, but should fall back to plain
+  // TODO: update if we get FLBA working with dictionary encoding
+  expect_enc(3, Encoding::PLAIN);
 }
 
 /////////////////////////////////////////////////////////////
