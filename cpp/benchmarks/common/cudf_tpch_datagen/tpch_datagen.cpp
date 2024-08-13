@@ -21,7 +21,9 @@
 
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/binaryop.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/round.hpp>
 #include <cudf/sorting.hpp>
