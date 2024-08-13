@@ -3143,7 +3143,9 @@ class _Grouping(Serializable):
                 dict(zip(range(nkeys), self._key_columns))
             )._set_names(self.names)
         else:
-            return cudf.Index(self._key_columns[0], name=self.names[0])
+            return cudf.Index._from_column(
+                self._key_columns[0], name=self.names[0]
+            )
 
     @property
     def values(self) -> cudf.core.frame.Frame:

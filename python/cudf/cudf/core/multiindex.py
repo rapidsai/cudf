@@ -1061,7 +1061,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 raise KeyError(f"Level not found: '{level}'")
         else:
             level_idx = colnames.index(level)
-        level_values = cudf.Index(
+        level_values = cudf.Index._from_column(
             self._data[level], name=self.names[level_idx]
         )
         return level_values

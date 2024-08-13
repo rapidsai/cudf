@@ -2926,37 +2926,45 @@ class TimedeltaIndex(Index):
 
     @property  # type: ignore
     @_performance_tracking
-    def days(self):
+    def days(self) -> cudf.Index:
         """
         Number of days for each element.
         """
         # Need to specifically return `int64` to avoid overflow.
-        return Index(self._values.days, name=self.name, dtype="int64")
+        return Index._from_column(
+            self._column.days.astype("int64"), name=self.name
+        )
 
     @property  # type: ignore
     @_performance_tracking
-    def seconds(self):
+    def seconds(self) -> cudf.Index:
         """
         Number of seconds (>= 0 and less than 1 day) for each element.
         """
-        return Index(self._values.seconds, name=self.name, dtype="int32")
+        return Index._from_column(
+            self._column.seconds.astype("int32"), name=self.name
+        )
 
     @property  # type: ignore
     @_performance_tracking
-    def microseconds(self):
+    def microseconds(self) -> cudf.Index:
         """
         Number of microseconds (>= 0 and less than 1 second) for each element.
         """
-        return Index(self._values.microseconds, name=self.name, dtype="int32")
+        return Index._from_column(
+            self._column.microseconds.astype("int32"), name=self.name
+        )
 
     @property  # type: ignore
     @_performance_tracking
-    def nanoseconds(self):
+    def nanoseconds(self) -> cudf.Index:
         """
         Number of nanoseconds (>= 0 and less than 1 microsecond) for each
         element.
         """
-        return Index(self._values.nanoseconds, name=self.name, dtype="int32")
+        return Index._from_column(
+            self._column.nanoseconds.astype("int32"), name=self.name
+        )
 
     @property  # type: ignore
     @_performance_tracking
