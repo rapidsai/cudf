@@ -40,24 +40,26 @@ using slot_type = cuco::pair<key_type, mapped_type>;
 
 using storage_type     = cuco::aow_storage<slot_type, window_size>;
 using storage_ref_type = typename storage_type::ref_type;
-
+using window_type      = storage_type::window_type;
 /**
  * @brief Insert chunk values into their respective hash maps
  *
+ * @param map_storage Pointer to the bulk hashmap storage
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void populate_chunk_hash_maps(storage_type::window_type* map_storage,
+void populate_chunk_hash_maps(window_type* map_storage,
                               cudf::detail::device_2dspan<PageFragment const> frags,
                               rmm::cuda_stream_view stream);
 
 /**
  * @brief Compact dictionary hash map entries into chunk.dict_data
  *
+ * @param map_storage Pointer to the bulk hashmap storage
  * @param chunks Flat span of chunks to compact hash maps for
  * @param stream CUDA stream to use
  */
-void collect_map_entries(storage_type::window_type* map_storage,
+void collect_map_entries(window_type* map_storage,
                          device_span<EncColumnChunk> chunks,
                          rmm::cuda_stream_view stream);
 
@@ -70,10 +72,11 @@ void collect_map_entries(storage_type::window_type* map_storage,
  * Since dict_data itself contains indices into the original cudf column, this means that
  * col[row] == col[dict_data[dict_index[row - chunk.start_row]]]
  *
+ * @param map_storage Pointer to the bulk hashmap storage
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void get_dictionary_indices(storage_type::window_type* map_storage,
+void get_dictionary_indices(window_type* map_storage,
                             cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream);
 

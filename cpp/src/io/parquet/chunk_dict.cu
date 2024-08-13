@@ -39,7 +39,7 @@ struct equality_functor {
   column_device_view const& col;
   __device__ bool operator()(key_type const lhs_idx, key_type const rhs_idx) const
   {
-    //  We don't call this for nulls so this is fine
+    // We don't call this for nulls so this is fine
     auto const equal = cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
     return equal(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
   }
@@ -142,7 +142,7 @@ struct map_find_fn {
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  populate_chunk_hash_maps_kernel(storage_type::window_type* map_storage,
+  populate_chunk_hash_maps_kernel(window_type* map_storage,
                                   cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto const col_idx = blockIdx.y;
@@ -230,8 +230,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  collect_map_entries_kernel(storage_type::window_type* map_storage,
-                             device_span<EncColumnChunk> chunks)
+  collect_map_entries_kernel(window_type* map_storage, device_span<EncColumnChunk> chunks)
 {
   auto& chunk = chunks[blockIdx.x];
   if (not chunk.use_dictionary) { return; }
@@ -263,7 +262,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  get_dictionary_indices_kernel(storage_type::window_type* map_storage,
+  get_dictionary_indices_kernel(window_type* map_storage,
                                 cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto const col_idx = blockIdx.y;
@@ -301,7 +300,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
 }
 
-void populate_chunk_hash_maps(storage_type::window_type* map_storage,
+void populate_chunk_hash_maps(window_type* map_storage,
                               cudf::detail::device_2dspan<PageFragment const> frags,
                               rmm::cuda_stream_view stream)
 {
@@ -310,7 +309,7 @@ void populate_chunk_hash_maps(storage_type::window_type* map_storage,
     <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(map_storage, frags);
 }
 
-void collect_map_entries(storage_type::window_type* map_storage,
+void collect_map_entries(window_type* map_storage,
                          device_span<EncColumnChunk> chunks,
                          rmm::cuda_stream_view stream)
 {
@@ -319,7 +318,7 @@ void collect_map_entries(storage_type::window_type* map_storage,
     <<<chunks.size(), block_size, 0, stream.value()>>>(map_storage, chunks);
 }
 
-void get_dictionary_indices(storage_type::window_type* map_storage,
+void get_dictionary_indices(window_type* map_storage,
                             cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream)
 {

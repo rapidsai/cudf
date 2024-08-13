@@ -1285,9 +1285,11 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     return std::pair(std::move(dict_data), std::move(dict_index));
   }
 
+  // Create a vector to store valid chunk sizes using cuco::make_window_extent
   std::vector<size_t> valid_chunk_sizes;
   valid_chunk_sizes.reserve(h_chunks.size());
 
+  // Populate valid_chunk_sizes for chunks that need to build a dictionary.
   std::for_each(h_chunks.begin(), h_chunks.end(), [&](auto& chunk) {
     auto const& chunk_col_desc = col_desc[chunk.col_desc_id];
     auto const is_requested_non_dict =
@@ -1298,6 +1300,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
 
     if (is_type_non_dict || is_requested_non_dict) {
       chunk.use_dictionary = false;
+      // Emplace a zero for 1-1 mapping between h_chunks and valid_chunk_sizes
       valid_chunk_sizes.emplace_back(static_cast<std::size_t>(0));
     } else {
       chunk.use_dictionary = true;
@@ -1310,22 +1313,21 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     }
   });
 
+  // Create a vector to map offsets from chunk sizes
   std::vector<std::size_t> map_offsets(valid_chunk_sizes.size(), 0);
   std::exclusive_scan(valid_chunk_sizes.begin(),
                       valid_chunk_sizes.end(),
                       map_offsets.begin(),
                       static_cast<size_t>(0));
 
-  // Compute total map_storage
-  auto const map_storage_size = map_offsets.back() + valid_chunk_sizes.back();
-
+  // Compute total map storage
+  auto const total_map_storage_size = map_offsets.back() + valid_chunk_sizes.back();
   // No chunk needs to create a dictionary, exit early
-  if (map_storage_size == 0) { return {std::move(dict_data), std::move(dict_index)}; }
+  if (total_map_storage_size == 0) { return {std::move(dict_data), std::move(dict_index)}; }
 
-  // Create a single bulk storage used by all sub-hashmaps
-  auto map_storage = storage_type{map_storage_size};
-
-  // Only initialize storage with the given sentinel if and only if non-zero size
+  // Create a single bulk storage used by all sub-dictionaries
+  auto map_storage = storage_type{total_map_storage_size};
+  // Initialize storage with the given sentinel iff non-zero size
   map_storage.initialize(cuco::pair{KEY_SENTINEL, VALUE_SENTINEL},
                          cuda::stream_ref{stream.value()});
 
