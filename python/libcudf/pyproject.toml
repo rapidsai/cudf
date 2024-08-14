@@ -50,7 +50,8 @@ libcudf = "libcudf"
 [tool.scikit-build]
 build-dir = "build/{wheel_tag}"
 cmake.build-type = "Release"
-cmake.minimum-version = "3.26.4"
+cmake.version = "CMakeLists.txt"
+minimum-version = "build-system.requires"
 ninja.make-fallback = true
 sdist.reproducible = true
 wheel.packages = ["libcudf"]

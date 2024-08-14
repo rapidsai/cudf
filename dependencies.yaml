@@ -418,10 +418,14 @@ dependencies:
     specific:
       - output_types: [pyproject]
         matrices:
-          - matrix: {cuda: "12.*"}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
             packages:
               - libcudf-cu12==24.10.*,>=0.0.0a0
-          - matrix: {cuda: "11.*"}
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
             packages:
               - libcudf-cu11==24.10.*,>=0.0.0a0
           - {matrix: null, packages: [*libcudf_conda] }
