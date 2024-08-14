@@ -56,20 +56,14 @@ struct hash_functor {
 
 struct map_insert_fn {
   storage_ref_type const& storage_ref;
-
+  column_device_view const& col;
   template <typename T>
-  __device__ bool operator()(column_device_view const& col,
-                             cg::thread_block_tile<map_cg_size> const& tile,
-                             key_type i)
+  __device__ bool operator()(cg::thread_block_tile<map_cg_size> const& tile, key_type i)
   {
     if constexpr (column_device_view::has_element_accessor<T>()) {
       using equality_fn_type    = equality_functor<T>;
       using hash_fn_type        = hash_functor<T>;
       using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_fn_type>;
-
-      // Instantiate hash and equality functors.
-      auto hash_fn  = hash_fn_type{col};
-      auto equal_fn = equality_fn_type{col};
 
       // Make a view of the hash map.
       cuco::static_map_ref<key_type,
@@ -77,18 +71,17 @@ struct map_insert_fn {
                            SCOPE,
                            equality_fn_type,
                            probing_scheme_type,
-                           storage_ref_type>
+                           storage_ref_type,
+                           cuco::op::insert_tag>
         hash_map_ref{cuco::empty_key{KEY_SENTINEL},
                      cuco::empty_value{VALUE_SENTINEL},
-                     {equal_fn},
-                     {hash_fn},
+                     equality_fn_type{col},
+                     hash_fn_type{col},
                      {},
                      storage_ref};
 
-      // Create another map ref with the insert operator.
-      auto map_insert_ref = hash_map_ref.with_operators(cuco::insert);
       // Insert into the hash map using the provided thread tile.
-      return map_insert_ref.insert(tile, cuco::pair{i, i});
+      return hash_map_ref.insert(tile, cuco::pair{i, i});
     } else {
       CUDF_UNREACHABLE("Unsupported type to insert in map");
     }
@@ -97,19 +90,15 @@ struct map_insert_fn {
 
 struct map_find_fn {
   storage_ref_type const& storage_ref;
-
+  column_device_view const& col;
   template <typename T>
   __device__ cuco::pair<key_type, mapped_type> operator()(
-    column_device_view const& col, cg::thread_block_tile<map_cg_size> const& tile, key_type i)
+    cg::thread_block_tile<map_cg_size> const& tile, key_type i)
   {
     if constexpr (column_device_view::has_element_accessor<T>()) {
       using equality_fn_type    = equality_functor<T>;
       using hash_fn_type        = hash_functor<T>;
       using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_fn_type>;
-
-      // Instantiate hash and equality functors.
-      auto hash_fn  = hash_fn_type{col};
-      auto equal_fn = equality_fn_type{col};
 
       // Make a view of the hash map
       cuco::static_map_ref<key_type,
@@ -117,19 +106,17 @@ struct map_find_fn {
                            SCOPE,
                            equality_fn_type,
                            probing_scheme_type,
-                           storage_ref_type>
+                           storage_ref_type,
+                           cuco::op::find_tag>
         hash_map_ref{cuco::empty_key{KEY_SENTINEL},
                      cuco::empty_value{VALUE_SENTINEL},
-                     {equal_fn},
-                     {hash_fn},
+                     equality_fn_type{col},
+                     hash_fn_type{col},
                      {},
                      storage_ref};
 
-      // Create another map with find operator.
-      auto map_find_ref = hash_map_ref.with_operators(cuco::find);
-
       // Find the key = i using the provided thread tile.
-      auto found_slot = map_find_ref.find(tile, i);
+      auto found_slot = hash_map_ref.find(tile, i);
 
       // Check if didn't find the previously inserted key.
       if (tile.thread_rank() == 0) {
@@ -198,7 +185,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       if (is_valid) {
         // Insert the element to the map using the entire tile.
         auto const tile_is_unique = type_dispatcher(
-          data_col.type(), map_insert_fn{storage_ref}, data_col, tile, tile_val_idx);
+          data_col.type(), map_insert_fn{storage_ref, data_col}, tile, tile_val_idx);
 
         // tile_offset'th thread in the tile updates its number and size of unique element.
         if (tile.thread_rank() == tile_offset) {
@@ -319,7 +306,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
        val_idx += ntiles) {
     if (data_col.is_valid(val_idx)) {
       auto [found_key, found_value] =
-        type_dispatcher(data_col.type(), map_find_fn{storage_ref}, data_col, tile, val_idx);
+        type_dispatcher(data_col.type(), map_find_fn{storage_ref, data_col}, tile, val_idx);
       // First thread in the tile updates the dict_index
       if (tile.thread_rank() == 0) {
         // No need for atomic as this is not going to be modified by any other thread
