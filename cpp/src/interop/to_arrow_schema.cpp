@@ -170,8 +170,9 @@ int dispatch_to_arrow_type::operator()<cudf::list_view>(column_view input,
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(out, NANOARROW_TYPE_LIST));
   auto child = input.child(cudf::lists_column_view::child_column_index);
   ArrowSchemaInit(out->children[0]);
-  auto child_meta =
-    metadata.children_meta.empty() ? column_metadata{"element"} : metadata.children_meta[1];
+  auto child_meta = metadata.children_meta.empty()
+                      ? column_metadata{"element"}
+                      : metadata.children_meta[cudf::lists_column_view::child_column_index];
 
   out->flags = input.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetName(out->children[0], child_meta.name.c_str()));
