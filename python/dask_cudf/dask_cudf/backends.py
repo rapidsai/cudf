@@ -668,6 +668,41 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
         )
 
     @staticmethod
+    def read_parquet(*args, engine=None, **kwargs):
+        import dask_expr as dx
+
+        from dask_cudf.io.parquet import CudfEngine
+
+        return _default_backend(
+            dx.read_parquet, *args, engine=CudfEngine, **kwargs
+        )
+
+    @staticmethod
+    def read_csv(
+        path,
+        *args,
+        header="infer",
+        dtype_backend=None,
+        storage_options=None,
+        **kwargs,
+    ):
+        import dask_expr as dx
+        from fsspec.utils import stringify_path
+
+        if not isinstance(path, str):
+            path = stringify_path(path)
+        return dx.new_collection(
+            dx.io.csv.ReadCSV(
+                path,
+                dtype_backend=dtype_backend,
+                storage_options=storage_options,
+                kwargs=kwargs,
+                header=header,
+                dataframe_backend="cudf",
+            )
+        )
+
+    @staticmethod
     def read_json(*args, **kwargs):
         from dask_cudf.io.json import read_json as read_json_impl
 
