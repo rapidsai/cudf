@@ -6,7 +6,6 @@ from contextlib import contextmanager
 from io import BytesIO
 
 import pandas as pd
-import pyarrow.fs as pa_fs
 import pytest
 
 from dask.dataframe import assert_eq
@@ -133,37 +132,6 @@ def test_read_csv_warns(s3_base, s3so):
                 use_python_file_object=True,
             )
             assert df.a.sum().compute() == 4
-
-
-@pytest.mark.parametrize(
-    "open_file_options",
-    [
-        {"precache_options": {"method": None}},
-        {"precache_options": {"method": "parquet"}},
-        {"open_file_func": None},
-    ],
-)
-def test_read_parquet_open_file_options(s3_base, s3so, open_file_options, pdf):
-    buffer = BytesIO()
-    pdf.to_parquet(path=buffer)
-    buffer.seek(0)
-    with s3_context(
-        s3_base=s3_base, bucket="daskparquet", files={"file.parq": buffer}
-    ):
-        if "open_file_func" in open_file_options:
-            fs = pa_fs.S3FileSystem(
-                endpoint_override=s3so["client_kwargs"]["endpoint_url"],
-            )
-            open_file_options["open_file_func"] = fs.open_input_file
-        df = dask_cudf.read_parquet(
-            "s3://daskparquet/*.parq",
-            storage_options=s3so,
-            open_file_options=open_file_options,
-        )
-        with pytest.warns(FutureWarning):
-            assert df.a.sum().compute() == 10
-        with pytest.warns(FutureWarning):
-            assert df.b.sum().compute() == 9
 
 
 def test_read_parquet(s3_base, s3so, pdf):

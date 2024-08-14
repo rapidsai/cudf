@@ -100,7 +100,7 @@ class CudfEngine(ArrowDatasetEngine):
             paths_or_fobs = _prefetch_remote_buffers(
                 paths,
                 fs,
-                prefetcher="parquet",
+                prefetcher=kwargs.pop("prefetcher", "parquet"),
                 prefetcher_options={
                     "columns": columns,
                     # All paths must have the same row-group selection
