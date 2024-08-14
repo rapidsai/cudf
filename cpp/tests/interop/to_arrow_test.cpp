@@ -615,13 +615,23 @@ auto id_to_arrow_type(cudf::column_view const& col)
   }
 }
 
-std::optional<std::shared_ptr<arrow::Scalar>> cudf_scalar_to_arrow(cudf::scalar const& scalar)
+std::optional<std::shared_ptr<arrow::Scalar>> cudf_scalar_to_arrow(
+  cudf::scalar const& scalar, std::optional<cudf::column_metadata> metadata = std::nullopt)
 {
   auto const cudf_column   = cudf::make_column_from_scalar(scalar, 1);
   auto const c_arrow_array = cudf::to_arrow_host(*cudf_column);
-  auto const arrow_type    = id_to_arrow_type(cudf_column->view());
-  auto const arrow_array   = arrow::ImportArray(&c_arrow_array->array, arrow_type).ValueOrDie();
-  auto const maybe_scalar  = arrow_array->GetScalar(0);
+  auto const arrow_array   = [&]() {
+    if (metadata.has_value()) {
+      auto const table = cudf::table_view({cudf_column->view()});
+      std::vector<cudf::column_metadata> const table_metadata = {metadata.value()};
+      auto const arrow_schema = cudf::to_arrow_schema(table, table_metadata);
+      return arrow::ImportArray(&c_arrow_array->array, arrow_schema->children[0]).ValueOrDie();
+    } else {
+      auto const arrow_type = id_to_arrow_type(cudf_column->view());
+      return arrow::ImportArray(&c_arrow_array->array, arrow_type).ValueOrDie();
+    }
+  }();
+  auto const maybe_scalar = arrow_array->GetScalar(0);
   if (!maybe_scalar.ok()) { return std::nullopt; }
   return maybe_scalar.ValueOrDie();
 }
@@ -717,7 +727,10 @@ TEST_F(ToArrowStructScalarTest, Basic)
 
   cudf::column_metadata metadata{""};
   metadata.children_meta.emplace_back(field_name);
-  auto const arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
+
+  auto const maybe_scalar = cudf_scalar_to_arrow(*cudf_scalar, metadata);
+  ASSERT_TRUE(maybe_scalar.has_value());
+  auto const arrow_scalar = *maybe_scalar;
 
   auto const underlying_arrow_scalar = arrow::MakeScalar(value);
   auto const field            = arrow::field(field_name, underlying_arrow_scalar->type, false);
