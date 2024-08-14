@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import cupy as cp
 import numpy as np
 
+import cudf
 from cudf.core.column import as_column
 from cudf.core.index import RangeIndex, ensure_index
 from cudf.core.scalar import Scalar
@@ -160,10 +161,10 @@ def unique(values):
         The return can be:
 
         * Index : when the input is an Index
-        * Categorical : when the input is a Categorical dtype
         * cudf.Series : when the input is a Series
+        * cupy.ndarray : when the input is a cupy.ndarray
 
-        Return numpy.ndarray or ExtensionArray.
+        Return cudf.Series, cudf.Index, or cupy.ndarray.
 
     See Also
     --------
@@ -173,12 +174,91 @@ def unique(values):
     Examples
     --------
     >>> cudf.unique(cudf.Series([2, 1, 3, 3]))
-    Series([2, 1, 3])
+    0    2
+    1    1
+    2    3
+    dtype: int64
 
-    >>> cudf.unique(pd.Series([2] + [1] * 5))
-    Series([2, 1])
+    >>> cudf.unique(cudf.Series([2] + [1] * 5))
+    0    2
+    1    1
+    dtype: int64
+
+    >>> cudf.unique(cudf.Series([pd.Timestamp("20160101"), pd.Timestamp("20160101")]))
+    0   2016-01-01
+    dtype: datetime64[ns]
+
+    >>> cudf.unique(
+    ...     cudf.Series(
+    ...         [
+    ...             pd.Timestamp("20160101", tz="US/Eastern"),
+    ...             pd.Timestamp("20160101", tz="US/Eastern"),
+    ...             pd.Timestamp("20160103", tz="US/Eastern"),
+    ...         ]
+    ...     )
+    ... )
+    0   2016-01-01 00:00:00-05:00
+    1   2016-01-03 00:00:00-05:00
+    dtype: datetime64[ns, US/Eastern]
+
+    >>> cudf.unique(
+    ...     cudf.Index(
+    ...         [
+    ...             pd.Timestamp("20160101", tz="US/Eastern"),
+    ...             pd.Timestamp("20160101", tz="US/Eastern"),
+    ...             pd.Timestamp("20160103", tz="US/Eastern"),
+    ...         ]
+    ...     )
+    ... )
+    DatetimeIndex(['2016-01-01 00:00:00-05:00', '2016-01-03 00:00:00-05:00'],dtype='datetime64[ns, US/Eastern]')
+
+    An unordered Categorical will return categories in the
+    order of appearance.
+
+    >>> cudf.unique(cudf.Series(pd.Categorical(list("baabc"))))
+    0    b
+    1    a
+    2    c
+    dtype: category
+    Categories (3, object): ['a', 'b', 'c']
+
+    >>> cudf.unique(cudf.Series(pd.Categorical(list("baabc"), categories=list("abc"))))
+    0    b
+    1    a
+    2    c
+    dtype: category
+    Categories (3, object): ['a', 'b', 'c']
+
+    An ordered Categorical preserves the category ordering.
+
+    >>> pd.unique(
+    ...     pd.Series(
+    ...         pd.Categorical(list("baabc"), categories=list("abc"), ordered=True)
+    ...     )
+    ... )
+    0    b
+    1    a
+    2    c
+    dtype: category
+    Categories (3, object): ['a' < 'b' < 'c']
+
+    An array of tuples
+
+    >>> pd.unique(pd.Series([("a", "b"), ("b", "a"), ("a", "c"), ("b", "a")]).values)
+    array([('a', 'b'), ('b', 'a'), ('a', 'c')], dtype=object)
     """
-    try:
-        return values.unique()
-    except Exception:
-        raise TypeError(f"Cannot call unique on type {type(values)}")
+    if not isinstance(values, (cudf.Series, cudf.Index, cp.ndarray)):
+        raise TypeError(
+            "Must pass cudf.Series, cudf.Index, or cupy.ndarray object"
+        )
+    if isinstance(values, cp.ndarray):
+        return cp.unique(values)
+    if isinstance(values, (cudf.Series)):
+        if get_option("mode.pandas_compatible"):
+            if isinstance(values.dtype, cudf.CategoricalDtype):
+                raise NotImplementedError(
+                    "cudf.Categorical is not implemented"
+                )
+            else:
+                return cp.asarray(values)
+    return values.unique()
