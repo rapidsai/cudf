@@ -31,6 +31,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -591,13 +592,48 @@ using NumericTypesNotBool =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 TYPED_TEST_SUITE(ToArrowNumericScalarTest, NumericTypesNotBool);
 
+auto id_to_arrow_type(cudf::column_view const& col)
+{
+  switch (col.type().id()) {
+    case cudf::type_id::BOOL8: return arrow::boolean();
+    case cudf::type_id::INT8: return arrow::int8();
+    case cudf::type_id::INT16: return arrow::int16();
+    case cudf::type_id::INT32: return arrow::int32();
+    case cudf::type_id::INT64: return arrow::int64();
+    case cudf::type_id::UINT8: return arrow::uint8();
+    case cudf::type_id::UINT16: return arrow::uint16();
+    case cudf::type_id::UINT32: return arrow::uint32();
+    case cudf::type_id::UINT64: return arrow::uint64();
+    case cudf::type_id::FLOAT32: return arrow::float32();
+    case cudf::type_id::FLOAT64: return arrow::float64();
+    case cudf::type_id::TIMESTAMP_DAYS: return arrow::date32();
+    case cudf::type_id::STRING: return arrow::utf8();
+    case cudf::type_id::LIST:
+      return arrow::list(id_to_arrow_type(col.child(cudf::lists_column_view::child_column_index)));
+    case cudf::type_id::DECIMAL128: return arrow::decimal(38, -col.type().scale());
+    default: CUDF_FAIL("Unsupported type_id conversion to arrow type", cudf::data_type_error);
+  }
+}
+
+std::optional<std::shared_ptr<arrow::Scalar>> cudf_scalar_to_arrow(cudf::scalar const& scalar)
+{
+  auto const cudf_column   = cudf::make_column_from_scalar(scalar, 1);
+  auto const c_arrow_array = cudf::to_arrow_host(*cudf_column);
+  auto const arrow_type    = id_to_arrow_type(cudf_column->view());
+  auto const arrow_array   = arrow::ImportArray(&c_arrow_array->array, arrow_type).ValueOrDie();
+  auto const maybe_scalar  = arrow_array->GetScalar(0);
+  if (!maybe_scalar.ok()) { return std::nullopt; }
+  return maybe_scalar.ValueOrDie();
+}
+
 TYPED_TEST(ToArrowNumericScalarTest, Basic)
 {
   TypeParam const value{42};
   auto const cudf_scalar = cudf::make_fixed_width_scalar<TypeParam>(value);
 
-  cudf::column_metadata const metadata{""};
-  auto const arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
+  auto const maybe_scalar = cudf_scalar_to_arrow(*cudf_scalar);
+  ASSERT_TRUE(maybe_scalar.has_value());
+  auto const arrow_scalar = *maybe_scalar;
 
   auto const ref_arrow_scalar = arrow::MakeScalar(value);
   EXPECT_TRUE(arrow_scalar->Equals(*ref_arrow_scalar));
@@ -617,8 +653,9 @@ TEST_F(ToArrowDecimalScalarTest, Basic)
   auto const cudf_scalar =
     cudf::make_fixed_point_scalar<numeric::decimal128>(value, numeric::scale_type{scale});
 
-  cudf::column_metadata const metadata{""};
-  auto const arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
+  auto const maybe_scalar = cudf_scalar_to_arrow(*cudf_scalar);
+  ASSERT_TRUE(maybe_scalar.has_value());
+  auto const arrow_scalar = *maybe_scalar;
 
   auto const maybe_ref_arrow_scalar =
     arrow::MakeScalar(arrow::decimal128(precision, -scale), value);
@@ -632,9 +669,10 @@ struct ToArrowStringScalarTest : public cudf::test::BaseFixture {};
 TEST_F(ToArrowStringScalarTest, Basic)
 {
   std::string const value{"hello world"};
-  auto const cudf_scalar = cudf::make_string_scalar(value);
-  cudf::column_metadata const metadata{""};
-  auto const arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
+  auto const cudf_scalar  = cudf::make_string_scalar(value);
+  auto const maybe_scalar = cudf_scalar_to_arrow(*cudf_scalar);
+  ASSERT_TRUE(maybe_scalar.has_value());
+  auto const arrow_scalar = *maybe_scalar;
 
   auto const ref_arrow_scalar = arrow::MakeScalar(value);
   EXPECT_TRUE(arrow_scalar->Equals(*ref_arrow_scalar));
@@ -652,8 +690,9 @@ TEST_F(ToArrowListScalarTest, Basic)
 
   auto const cudf_scalar = cudf::make_list_scalar(col);
 
-  cudf::column_metadata const metadata{""};
-  auto const arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
+  auto const maybe_scalar = cudf_scalar_to_arrow(*cudf_scalar);
+  ASSERT_TRUE(maybe_scalar.has_value());
+  auto const arrow_scalar = *maybe_scalar;
 
   arrow::Int64Builder builder;
   auto const status      = builder.AppendValues(host_values, host_validity);
