@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 """Common utilities for fixture creation and benchmarking."""
 
@@ -26,7 +26,8 @@ def make_gather_map(len_gather_map: Real, len_column: Real, how: str):
     len_gather_map = round(len_gather_map)
     len_column = round(len_column)
 
-    rstate = cupy.random.RandomState(seed=0)
+    # TODO: The uint32() exists only to support CuPy 13.2+NumPy 2
+    rstate = cupy.random.RandomState(seed=cupy.uint32(0))
     if how == "sequence":
         return cudf.Series(cupy.arange(0, len_gather_map))
     elif how == "reverse":
@@ -38,7 +39,8 @@ def make_gather_map(len_gather_map: Real, len_column: Real, how: str):
 
 
 def make_boolean_mask_column(size):
-    rstate = cupy.random.RandomState(seed=0)
+    # TODO: The uint32() exists only to support CuPy 13.2+NumPy 2
+    rstate = cupy.random.RandomState(seed=cupy.uint32(0))
     return cudf.core.column.as_column(rstate.randint(0, 2, size).astype(bool))
 
 
@@ -250,7 +252,8 @@ def collapse_fixtures(fixtures, pattern, repl, globals_, idfunc=None):
 
 
 # A dictionary of callables that create a column of a specified length
-random_state = cupy.random.RandomState(42)
+# TODO: The uint32() exists only to support CuPy 13.2+NumPy 2
+random_state = cupy.random.RandomState(cupy.uint32(42))
 column_generators = {
     "int": (lambda nr: random_state.randint(low=0, high=100, size=nr)),
     "float": (lambda nr: random_state.rand(nr)),
