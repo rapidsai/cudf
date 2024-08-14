@@ -1507,6 +1507,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   device_span<SymbolOffsetT const> token_indices,
   rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   // Instantiate FST for post-processing the token stream to remove all tokens that belong to an
   // invalid JSON line
   token_filter::UnwrapTokenFromSymbolOp sgid_op{};

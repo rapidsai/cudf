@@ -781,6 +781,8 @@ void make_device_json_column(device_span<SymbolT const> input,
     // move into parent
     device_json_column col(stream, mr);
     initialize_json_columns(this_col_id, col, this_column_category);
+    if (is_mixed_type_column[this_col_id])
+      col.forced_as_string_column = true;
     auto inserted = parent_col.child_columns.try_emplace(name, std::move(col)).second;
     CUDF_EXPECTS(inserted, "child column insertion failed, duplicate column name in the parent");
     if (not replaced) parent_col.column_order.push_back(name);
