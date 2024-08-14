@@ -29,7 +29,7 @@ namespace cudf::io::parquet::detail {
 using key_type    = size_type;
 using mapped_type = size_type;
 
-auto constexpr cg_size     = 1;  ///< A CUDA Cooperative Group of 8 threads to handle each subset
+auto constexpr map_cg_size = 1;  ///< A CUDA Cooperative Group of 1 thread to handle each subset
 auto constexpr window_size = 1;  ///< Number of concurrent slots handled by each thread
 
 auto constexpr KEY_SENTINEL   = key_type{-1};
@@ -40,7 +40,7 @@ using slot_type = cuco::pair<key_type, mapped_type>;
 
 using storage_type     = cuco::aow_storage<slot_type, window_size>;
 using storage_ref_type = typename storage_type::ref_type;
-using window_type      = storage_type::window_type;
+using window_type      = typename storage_type::window_type;
 /**
  * @brief Insert chunk values into their respective hash maps
  *

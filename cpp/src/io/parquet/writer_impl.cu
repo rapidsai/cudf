@@ -1305,7 +1305,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     } else {
       chunk.use_dictionary = true;
       valid_chunk_sizes.emplace_back(
-        static_cast<std::size_t>(cuco::make_window_extent<cg_size, window_size>(
+        static_cast<std::size_t>(cuco::make_window_extent<map_cg_size, window_size>(
           // cuCollections suggests using a hash map of size N * (1/0.7) = 1.43 to target a 70%
           // occupancy factor.
           static_cast<size_t>(chunk.num_values * 1.43))));

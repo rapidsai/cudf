@@ -58,12 +58,14 @@ struct map_insert_fn {
   storage_ref_type const& storage_ref;
 
   template <typename T>
-  __device__ bool operator()(column_device_view const& col, key_type i)
+  __device__ bool operator()(column_device_view const& col,
+                             cg::thread_block_tile<map_cg_size> const& tile,
+                             key_type i)
   {
     if constexpr (column_device_view::has_element_accessor<T>()) {
       using equality_fn_type    = equality_functor<T>;
       using hash_fn_type        = hash_functor<T>;
-      using probing_scheme_type = cuco::linear_probing<cg_size, hash_fn_type>;
+      using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_fn_type>;
 
       // Instantiate hash and equality functors.
       auto hash_fn  = hash_fn_type{col};
@@ -85,8 +87,8 @@ struct map_insert_fn {
 
       // Create another map ref with the insert operator
       auto map_insert_ref = hash_map_ref.with_operators(cuco::insert);
-      // Insert into the hash map
-      return map_insert_ref.insert(cuco::pair{i, i});
+      // Insert into the hash map using the provided thread tile
+      return map_insert_ref.insert(tile, cuco::pair{i, i});
     } else {
       CUDF_UNREACHABLE("Unsupported type to insert in map");
     }
@@ -97,12 +99,13 @@ struct map_find_fn {
   storage_ref_type const& storage_ref;
 
   template <typename T>
-  __device__ cuco::pair<key_type, mapped_type> operator()(column_device_view const& col, key_type i)
+  __device__ cuco::pair<key_type, mapped_type> operator()(
+    column_device_view const& col, cg::thread_block_tile<map_cg_size> const& tile, key_type i)
   {
     if constexpr (column_device_view::has_element_accessor<T>()) {
       using equality_fn_type    = equality_functor<T>;
       using hash_fn_type        = hash_functor<T>;
-      using probing_scheme_type = cuco::linear_probing<cg_size, hash_fn_type>;
+      using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_fn_type>;
 
       // Instantiate hash and equality functors.
       auto hash_fn  = hash_fn_type{col};
@@ -125,8 +128,8 @@ struct map_find_fn {
       // Create another map with find operator
       auto map_find_ref = hash_map_ref.with_operators(cuco::find);
 
-      // Find the key = i
-      auto found_slot = map_find_ref.find(i);
+      // Find the key = i using the provided thread tile
+      auto found_slot = map_find_ref.find(tile, i);
 
       // Check if we found the previously inserted key.
       cudf_assert(found_slot != map_find_ref.end() &&
@@ -156,8 +159,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   using block_reduce = cub::BlockReduce<size_type, block_size>;
   __shared__ typename block_reduce::TempStorage reduce_storage;
 
-  [[maybe_unused]] auto const tile = cg::tiled_partition<cg_size>(cg::this_thread_block());
-  auto const t                     = cg::this_thread_block().thread_rank();
+  auto const block                 = cg::this_thread_block();
+  [[maybe_unused]] auto const tile = cg::tiled_partition<map_cg_size>(block);
+  auto const t                     = block.thread_rank();
 
   size_type start_row = frag.start_row;
   size_type end_row   = frag.start_row + frag.num_rows;
@@ -180,7 +184,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     size_type is_unique      = 0;
     size_type uniq_elem_size = 0;
     if (is_valid) {
-      is_unique = type_dispatcher(data_col.type(), map_insert_fn{storage_ref}, data_col, val_idx);
+      is_unique =
+        type_dispatcher(data_col.type(), map_insert_fn{storage_ref}, data_col, tile, val_idx);
       uniq_elem_size = [&]() -> size_type {
         if (not is_unique) { return 0; }
         switch (col->physical_type) {
@@ -212,14 +217,14 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       }();
     }
     auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
-    __syncthreads();
+    block.sync();
     auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
     if (t == 0) {
       total_num_dict_entries = atomicAdd(&chunk->num_dict_entries, num_unique);
       total_num_dict_entries += num_unique;
       atomicAdd(&chunk->uniq_data_size, uniq_data_size);
     }
-    __syncthreads();
+    block.sync();
 
     // Check if the num unique values in chunk has already exceeded max dict size and early exit
     if (total_num_dict_entries > MAX_DICT_SIZE) { return; }
@@ -235,8 +240,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto& chunk = chunks[blockIdx.x];
   if (not chunk.use_dictionary) { return; }
 
-  [[maybe_unused]] auto const tile = cg::tiled_partition<cg_size>(cg::this_thread_block());
-  auto const t                     = cg::this_thread_block().thread_rank();
+  auto const t = threadIdx.x;
 
   __shared__ cuda::atomic<size_type, SCOPE> counter;
   using cuda::std::memory_order_relaxed;
@@ -273,8 +277,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   if (not chunk->use_dictionary) { return; }
 
-  [[maybe_unused]] auto const tile = cg::tiled_partition<cg_size>(cg::this_thread_block());
-  auto const t                     = cg::this_thread_block().thread_rank();
+  auto const block  = cg::this_thread_block();
+  auto const tile   = cg::tiled_partition<map_cg_size>(block);
+  auto const ntiles = tile.meta_group_size();
 
   size_type start_row = frag.start_row;
   size_type end_row   = frag.start_row + frag.num_rows;
@@ -287,16 +292,16 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   column_device_view const& data_col = *col->leaf_column;
   storage_ref_type const storage_ref{chunk->dict_map_size, map_storage + chunk->dict_map_offset};
 
-  thread_index_type val_idx = s_start_value_idx + t;
+  thread_index_type val_idx = s_start_value_idx + tile.meta_group_rank();
   while (val_idx < end_value_idx) {
     if (data_col.is_valid(val_idx)) {
       auto [found_key, found_value] =
-        type_dispatcher(data_col.type(), map_find_fn{storage_ref}, data_col, val_idx);
+        type_dispatcher(data_col.type(), map_find_fn{storage_ref}, data_col, tile, val_idx);
       // No need for atomic as this is not going to be modified by any other thread
       chunk->dict_index[val_idx - s_ck_start_val_idx] = found_value;
     }
 
-    val_idx += block_size;
+    val_idx += ntiles;
   }
 }
 
