@@ -18,7 +18,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/io/datasource.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/sorting.hpp>
@@ -41,7 +40,8 @@ using elapsed_t = std::chrono::duration<double>;
 int main(int argc, char const** argv)
 {
   if (argc < 2) {
-    std::cout << "required parameter: csv-file-path\n";
+    std::cout << "required parameter: input-file-path\n";
+    std::cout << "optional parameter: chunk-count\n";
     return 1;
   }
 
@@ -71,7 +71,7 @@ int main(int argc, char const** argv)
       cudf::io::text::parse_options options{br, false};
       auto raw_data_column = cudf::io::text::multibyte_split(*source, "\n", options, stream);
       auto const sv        = cudf::strings_column_view(raw_data_column->view());
-      auto const delimiter = cudf::string_scalar{";"};
+      auto const delimiter = cudf::string_scalar{";", true, stream};
       return cudf::strings::split(sv, delimiter, 1, stream);
     }();
 

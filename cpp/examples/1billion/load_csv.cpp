@@ -21,7 +21,6 @@
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
@@ -37,7 +36,7 @@ using elapsed_t = std::chrono::duration<double>;
 int main(int argc, char const** argv)
 {
   if (argc < 2) {
-    std::cout << "required parameter: csv-file-path\n";
+    std::cout << "required parameter: input-file-path\n";
     return 1;
   }
 

@@ -16,13 +16,11 @@
 #include "common.hpp"
 #include "groupby_results.hpp"
 
-#include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
@@ -57,7 +55,8 @@ std::unique_ptr<cudf::table> load_chunk(std::string const& input_file,
 int main(int argc, char const** argv)
 {
   if (argc < 2) {
-    std::cout << "required parameter: csv-file-path\n";
+    std::cout << "required parameter: input-file-path\n";
+    std::cout << "optional parameter: chunk-count\n";
     return 1;
   }
 

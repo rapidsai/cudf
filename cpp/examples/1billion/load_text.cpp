@@ -18,7 +18,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/io/datasource.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -40,7 +39,7 @@ using elapsed_t = std::chrono::duration<double>;
 int main(int argc, char const** argv)
 {
   if (argc < 2) {
-    std::cout << "required parameter: csv-file-path\n";
+    std::cout << "required parameter: input-file-path\n";
     return 1;
   }
 
