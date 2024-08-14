@@ -787,7 +787,7 @@ def date_range(
     tz=None,
     normalize: bool = False,
     name=None,
-    closed: Literal["left", "right", "both", "neither"] = "both",
+    inclusive: Literal["left", "right", "both", "neither"] = "both",
     *,
     unit: str | None = None,
 ):
@@ -825,7 +825,7 @@ def date_range(
     name : str, default None
         Name of the resulting DatetimeIndex
 
-    closed : {"left", "right", "both", "neither"}, default "both"
+    inclusive : {"left", "right", "both", "neither"}, default "both"
         Whether to set each bound as closed or open.
         Currently only "both" is supported
 
@@ -841,7 +841,7 @@ def date_range(
     -----
     Of the four parameters `start`, `end`, `periods`, and `freq`, exactly three
     must be specified. If `freq` is omitted, the resulting DatetimeIndex will
-    have periods linearly spaced elements between start and end (closed on both
+    have periods linearly spaced elements between start and end (inclusive on both
     sides).
 
     cudf supports `freq` specified with either fixed-frequency offset
@@ -868,8 +868,8 @@ def date_range(
                 '2026-04-23 08:00:00'],
                 dtype='datetime64[ns]')
     """
-    if closed != "both":
-        raise NotImplementedError(f"{closed=} is currently unsupported.")
+    if inclusive != "both":
+        raise NotImplementedError(f"{inclusive=} is currently unsupported.")
     if unit is not None:
         raise NotImplementedError(f"{unit=} is currently unsupported.")
     if normalize is not False:
@@ -961,7 +961,7 @@ def date_range(
             periods = 0
         else:
             # If end == start, periods == 0 and we return exactly 1 timestamp (start).
-            # Otherwise, since closed="both", we ensure the end point is included.
+            # Otherwise, since inclusive="both", we ensure the end point is included.
             periods += 1
 
     # We compute `end_estim` (the estimated upper bound of the date
