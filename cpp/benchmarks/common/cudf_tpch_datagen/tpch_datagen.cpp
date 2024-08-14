@@ -130,11 +130,6 @@ std::unique_ptr<cudf::table> generate_orders_independent(cudf::size_type const& 
   CUDF_FUNC_RANGE();
   cudf::size_type const o_num_rows = scale_factor * 1'500'000;
 
-  // Generate a primary key column for the `orders` table
-  // required for internal operations, but will not be
-  // written into the parquet file
-  auto o_pkey = gen_primary_key_col<cudf::size_type>(0, o_num_rows, stream, mr);
-
   // Generate the `o_orderkey` column
   auto o_orderkey = [&]() {
     auto const o_orderkey_candidates =
@@ -227,7 +222,6 @@ std::unique_ptr<cudf::table> generate_orders_independent(cudf::size_type const& 
 
   // Generate the `orders_indenpendent` table
   std::vector<std::unique_ptr<cudf::column>> columns;
-  columns.push_back(std::move(o_pkey));
   columns.push_back(std::move(o_orderkey));
   columns.push_back(std::move(o_custkey));
   columns.push_back(std::move(o_orderdate_ts));
@@ -259,37 +253,22 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
   // For each `o_orderkey`, generate a random number (between 1 and 7),
   // which will be the number of rows in the `lineitem` table that will
   // have the same `l_orderkey`
-  auto const o_orderkey_repeat_freqs = gen_rand_num_col<int8_t>(1, 7, o_num_rows, stream, mr);
+  auto const o_rep_freqs = gen_rand_num_col<int8_t>(1, 7, o_num_rows, stream, mr);
 
-  // Sum up the `o_orderkey_repeat_freqs` to get the number of rows in the
+  // Sum up the `o_rep_freqs` to get the number of rows in the
   // `lineitem` table. This is required to generate the independent columns
   // in the `lineitem` table
-  auto const l_num_rows = calc_l_cardinality(o_orderkey_repeat_freqs->view(), stream, mr);
+  auto const l_num_rows = calc_l_cardinality(o_rep_freqs->view(), stream, mr);
 
-  // We create a column, `l_pkey` which will contain the repeated primary keys,
-  // `o_pkey` of the `orders` table as per the frequencies in `o_orderkey_repeat_freqs`
-  auto const o_pkey = orders_independent.column(0);
-  auto const l_pkey =
-    cudf::repeat(cudf::table_view({o_pkey}), o_orderkey_repeat_freqs->view(), stream, mr);
-
-  // To generate the base `lineitem` table, we would need to perform a left join
-  // between table(o_pkey, o_orderkey, o_orderdate) and table(l_pkey).
-  // The column at index 2 in the `l_base` table will comprise the `l_orderkey` column.
-  auto const o_orderkey     = orders_independent.column(1);
-  auto const o_orderdate_ts = orders_independent.column(3);
-
-  auto const left_table      = cudf::table_view({l_pkey->view()});
-  auto const right_table     = cudf::table_view({o_pkey, o_orderkey, o_orderdate_ts});
-  auto const l_base_unsorted = perform_left_join(left_table, right_table, {0}, {0}, stream, mr);
-  auto const l_base          = cudf::sort_by_key(l_base_unsorted->view(),
-                                        cudf::table_view({l_base_unsorted->get_column(2).view()}),
-                                                 {},
-                                                 {},
-                                        stream,
-                                        mr);
+  // We create a table out of `o_orderkey` and `o_orderdate_ts` by repeating
+  // the rows of `orders` according to the frequencies in `o_rep_freqs`
+  auto const o_orderkey     = orders_independent.column(0);
+  auto const o_orderdate_ts = orders_independent.column(2);
+  auto const l_base =
+    cudf::repeat(cudf::table_view({o_orderkey, o_orderdate_ts}), o_rep_freqs->view(), stream, mr);
 
   // Generate the `l_orderkey` column
-  auto l_orderkey = std::make_unique<cudf::column>(l_base->get_column(2));
+  auto l_orderkey = std::make_unique<cudf::column>(l_base->get_column(0));
 
   // Generate the `l_partkey` column
   auto l_partkey =
@@ -316,8 +295,8 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
     return cudf::round(col->view(), 2);
   }();
 
-  // Get the `l_orderdate` column from the `l_base` table
-  auto const ol_orderdate_ts = l_base->get_column(3);
+  // Get the orderdate column from the `l_base` table
+  auto const ol_orderdate_ts = l_base->get_column(1);
 
   // Generate the `l_shipdate` column
   auto l_shipdate_ts = [&]() {
@@ -710,8 +689,7 @@ generate_orders_lineitem_part(cudf::size_type const& scale_factor,
   auto orders_dependent = generate_orders_dependent(lineitem_temp->view(), stream, mr);
 
   auto orders_independent_columns = orders_independent->release();
-  orders_independent_columns.erase(orders_independent_columns.begin());
-  auto orders_dependent_columns = orders_dependent->release();
+  auto orders_dependent_columns   = orders_dependent->release();
   orders_independent_columns.insert(orders_independent_columns.end(),
                                     std::make_move_iterator(orders_dependent_columns.begin()),
                                     std::make_move_iterator(orders_dependent_columns.end()));

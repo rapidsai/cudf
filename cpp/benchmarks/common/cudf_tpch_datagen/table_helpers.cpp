@@ -284,18 +284,18 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
 /**
  * @brief Calculate the cardinality of the `lineitem` table
  *
- * @param o_orderkey_repeat_freqs The frequency of each `o_orderkey` value in the `lineitem` table
+ * @param o_rep_freqs The frequency of each `o_orderkey` value in the `lineitem` table
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] cudf::size_type calc_l_cardinality(cudf::column_view const& o_orderkey_repeat_freqs,
+[[nodiscard]] cudf::size_type calc_l_cardinality(cudf::column_view const& o_rep_freqs,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto const sum_agg           = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
-  auto const l_num_rows_scalar = cudf::reduce(
-    o_orderkey_repeat_freqs, *sum_agg, cudf::data_type{cudf::type_id::INT32}, stream, mr);
+  auto const sum_agg = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
+  auto const l_num_rows_scalar =
+    cudf::reduce(o_rep_freqs, *sum_agg, cudf::data_type{cudf::type_id::INT32}, stream, mr);
   return reinterpret_cast<cudf::numeric_scalar<cudf::size_type>*>(l_num_rows_scalar.get())->value();
 }
 

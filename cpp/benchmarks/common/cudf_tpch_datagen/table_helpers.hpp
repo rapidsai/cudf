@@ -102,12 +102,12 @@ std::unique_ptr<cudf::table> perform_left_join(
 /**
  * @brief Calculate the cardinality of the `lineitem` table
  *
- * @param o_orderkey_repeat_freqs The frequency of each `o_orderkey` value in the `lineitem` table
+ * @param o_rep_freqs The frequency of each `o_orderkey` value in the `lineitem` table
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 [[nodiscard]] cudf::size_type calc_l_cardinality(
-  cudf::column_view const& o_orderkey_repeat_freqs,
+  cudf::column_view const& o_rep_freqs,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 /**
