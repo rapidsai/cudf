@@ -27,6 +27,9 @@ python -m pip install ./local-cudf-dep/cudf*.whl
 rapids-logger "Install cudf_polars"
 python -m pip install $(echo ./dist/cudf_polars*.whl)[test]
 
+# Force update NumPy, to run full tests with NumPy 2 on CI
+python -m pip install -U numpy
+
 rapids-logger "Run cudf_polars tests"
 
 function set_exitcode()

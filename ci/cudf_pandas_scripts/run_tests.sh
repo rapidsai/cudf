@@ -40,6 +40,9 @@ else
     python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,cudf-pandas-tests]
 fi
 
+# Force update NumPy, to run full tests with NumPy 2 on CI
+python -m pip install -U numpy
+
 python -m pytest -p cudf.pandas \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \

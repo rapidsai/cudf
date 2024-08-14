@@ -38,3 +38,6 @@ rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
   cudf libcudf
+
+# Force update NumPy, to run full tests with NumPy 2 on CI
+python -m pip install -U numpy
