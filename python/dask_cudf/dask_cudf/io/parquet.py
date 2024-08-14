@@ -96,8 +96,7 @@ class CudfEngine(ArrowDatasetEngine):
         # Non-local filesystem handling
         paths_or_fobs = paths
         if not _is_local_filesystem(fs):
-            # Use fsspec to collect all byte ranges for all
-            # files ahead of time
+            # Use fsspec to transfer byte ranges ahead of time
             paths_or_fobs = _prefetch_remote_buffers(
                 paths,
                 fs,
@@ -106,7 +105,6 @@ class CudfEngine(ArrowDatasetEngine):
                     "columns": columns,
                     # All paths must have the same row-group selection
                     "row_groups": row_groups[0] if row_groups else None,
-                    "use_dask": True,
                 },
             )
 

@@ -1642,17 +1642,9 @@ def _set_context(obj, stack):
     return stack.enter_context(obj)
 
 
-def _get_remote_bytes_all(
-    remote_paths,
-    fs,
-    *,
-    bytes_per_thread=None,
-    use_dask=False,
-):
-    if isinstance(remote_paths, str):
-        remote_paths = [remote_paths]
-
+def _get_remote_bytes_all(remote_paths, fs, *, bytes_per_thread=None):
     # TODO: Avoid calling fs.sizes on many files
+    # (Might as well just parallelize over files)
     sizes = fs.sizes(remote_paths)
     remote_starts = [0] * len(remote_paths)
     remote_ends = sizes
@@ -1667,19 +1659,7 @@ def _get_remote_bytes_all(
             ends.append(min(j + blocksize, remote_ends[i]))
 
     # Collect the byte ranges
-    if use_dask and len(paths) > 1:
-        from dask.base import tokenize
-        from dask.threaded import get
-
-        token = tokenize(fs, paths, starts, ends)
-        name = f"cat-range-{token}"
-        dsk = {
-            (name, i): (fs.cat_file, path, start, end)
-            for i, (path, start, end) in enumerate(zip(paths, starts, ends))
-        }
-        chunks = get(dsk, list(dsk.keys()))
-    else:
-        chunks = fs.cat_ranges(paths, starts, ends)
+    chunks = fs.cat_ranges(paths, starts, ends)
 
     # Construct local byte buffers
     buffers = []
@@ -1699,7 +1679,6 @@ def _get_remote_bytes_parquet(
     columns=None,
     row_groups=None,
     bytes_per_thread=None,
-    use_dask=False,
 ):
     if fsspec_parquet is None or (columns is None and row_groups is None):
         return _get_remote_bytes_all(
@@ -1707,38 +1686,13 @@ def _get_remote_bytes_parquet(
         )
 
     sizes = fs.sizes(remote_paths)
-    if use_dask and len(remote_paths) > 1:
-        from toolz.dicttoolz import merge
-
-        from dask.base import tokenize
-        from dask.threaded import get
-        from dask.utils import apply
-
-        token = tokenize(fs, remote_paths, columns, row_groups)
-        name = f"pq-file-ranges-{token}"
-        kwargs = {
-            "columns": columns,
-            "row_groups": row_groups,
-            "max_block": bytes_per_thread or _BYTES_PER_THREAD_DEFAULT,
-        }
-        dsk = {
-            (name, i): (
-                apply,
-                fsspec_parquet._get_parquet_byte_ranges,
-                [path],
-                kwargs,
-            )
-            for i, path in enumerate(remote_paths)
-        }
-        data = merge(get(dsk, list(dsk.keys())))
-    else:
-        data = fsspec_parquet._get_parquet_byte_ranges(
-            remote_paths,
-            fs,
-            columns=columns,
-            row_groups=row_groups,
-            max_block=bytes_per_thread or _BYTES_PER_THREAD_DEFAULT,
-        )
+    data = fsspec_parquet._get_parquet_byte_ranges(
+        remote_paths,
+        fs,
+        columns=columns,
+        row_groups=row_groups,
+        max_block=bytes_per_thread or _BYTES_PER_THREAD_DEFAULT,
+    )
 
     buffers = []
     for size, path in zip(sizes, remote_paths):
