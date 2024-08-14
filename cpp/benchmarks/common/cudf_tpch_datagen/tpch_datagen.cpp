@@ -672,12 +672,13 @@ generate_orders_lineitem_part(cudf::size_type const& scale_factor,
     auto const l_quantity_fp =
       cudf::cast(l_quantity.view(), cudf::data_type{cudf::type_id::FLOAT64});
     auto const p_retailprice = joined_table->get_column(3);
-    return cudf::binary_operation(l_quantity_fp->view(),
-                                  p_retailprice.view(),
-                                  cudf::binary_operator::MUL,
-                                  cudf::data_type{cudf::type_id::FLOAT64},
-                                  stream,
-                                  mr);
+    auto const col           = cudf::binary_operation(l_quantity_fp->view(),
+                                            p_retailprice.view(),
+                                            cudf::binary_operator::MUL,
+                                            cudf::data_type{cudf::type_id::FLOAT64},
+                                            stream,
+                                            mr);
+    return cudf::round(col->view(), 2);
   }();
 
   auto lineitem_partial_columns = lineitem_partial->release();

@@ -133,7 +133,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
   auto expr_d = cudf::ast::operation(cudf::ast::ast_operator::MUL, expr_c, literal_100);
   auto expr_e = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_b, expr_d);
   auto expr_f = cudf::ast::operation(cudf::ast::ast_operator::ADD, expr_e, literal_90000);
-  auto final_expr = cudf::ast::operation(cudf::ast::ast_operator::DIV, expr_f, literal_100);
+  auto final_expr = cudf::ast::operation(cudf::ast::ast_operator::TRUE_DIV, expr_f, literal_100);
 
   // Execute the AST expression
   return cudf::compute_column(table, final_expr, stream, mr);
