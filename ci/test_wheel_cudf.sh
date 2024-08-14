@@ -5,13 +5,11 @@ set -eou pipefail
 
 # Download the pylibcudf built in the previous step
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
-RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-pylibcudf-dep
-python -m pip install ./local-pylibcudf-dep/pylibcudf*.whl
+rapids-download-wheels-from-s3 ./local-pylibcudf-dep "pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}"
+rapids-download-wheels-from-s3 ./dist "cudf_${RAPIDS_PY_CUDA_SUFFIX}"
 
-# Install cudf
-RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./dist
-# echo to expand wildcard before adding `[extra]` requires for pip
-python -m pip install $(echo ./dist/cudf*.whl)[test]
+# Install both pylibcudf and cudf
+python -m pip install ./local-pylibcudf-dep/pylibcudf*.whl $(echo ./dist/cudf*.whl)[test]
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/

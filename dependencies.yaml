@@ -679,21 +679,11 @@ dependencies:
             packages:
               - rmm-cu12==24.10.*,>=0.0.0a0
           - matrix:
-              cuda: "12.*"
-              cuda_suffixed: "false"
-            packages:
-              - *rmm_unsuffixed
-          - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
               - rmm-cu11==24.10.*,>=0.0.0a0
-          - matrix:
-              cuda: "11.*"
-              cuda_suffixed: "false"
-            packages: &run_pylibcudf_cu11_unsuffixed
-              - *rmm_unsuffixed
-          - {matrix: null, packages: *run_pylibcudf_cu11_unsuffixed}
+          - {matrix: null, packages: [*rmm_unsuffixed]}
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]

@@ -15,10 +15,10 @@
   ],
   "hostRequirements": {"gpu": "optional"},
   "features": {
-    "ghcr.io/lithomas1/devcontainers/features/rapids-build-utils:24.10": {}
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:24.10": {}
   },
   "overrideFeatureInstallOrder": [
-    "ghcr.io/lithomas1/devcontainers/features/rapids-build-utils"
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
   ],
   "initializeCommand": ["/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config/pip,local/share/${localWorkspaceFolderBasename}-cuda12.5-venvs}"],
   "postAttachCommand": ["/bin/bash", "-c", "if [ ${CODESPACES:-false} = 'true' ]; then . devcontainer-utils-post-attach-command; . rapids-post-attach-command; fi"],
