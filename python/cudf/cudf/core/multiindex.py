@@ -1995,7 +1995,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             return true_inds
 
         # Not sorted and not unique. Return a boolean mask
-        mask = cp.full(len(self), False)
+        mask = cp.zeros(len(self), dtype=bool)
         mask[true_inds] = True
         return mask
 

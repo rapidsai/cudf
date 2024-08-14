@@ -1396,7 +1396,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             return slice(lower_bound, upper_bound)
 
         # Not sorted and not unique. Return a boolean mask
-        mask = cupy.full(len(self), False)
+        mask = cupy.zeros(len(self), dtype=bool)
         true_inds = sort_inds.slice(lower_bound, upper_bound).values  # type: ignore[union-attr]
         mask[true_inds] = True
         return mask

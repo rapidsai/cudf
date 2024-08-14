@@ -72,9 +72,14 @@ def random_state_tuple_axis_1(request):
 @pytest.fixture(
     params=[
         (None, None, shape_checker),
-        (42, 42, shape_checker),
+        # The np.uint32() here is a temporary workaround for CuPy 1.13.2+NumPy 2 support
+        (42, np.uint32(42), shape_checker),
         (np.random.RandomState(42), np.random.RandomState(42), exact_checker),
-        (np.random.RandomState(42), cp.random.RandomState(42), shape_checker),
+        (
+            np.random.RandomState(42),
+            cp.random.RandomState(np.uint32(42)),
+            shape_checker,
+        ),
     ],
     ids=["None", "IntSeed", "NumpyRandomState", "CupyRandomState"],
 )

@@ -1030,13 +1030,19 @@ def test_parquet_reader_list_large_multi_rowgroup(tmpdir):
     num_categories = 1_000
     row_group_size = 1000
 
-    cupy.random.seed(0)
+    # TODO: The uint32() here is only needed for CuPy 13.2+NumPy 2
+    cupy.random.seed(np.uint32(0))
 
     # generate a random pairing of doc: category
     documents = cudf.DataFrame(
         {
-            "document_id": cupy.random.randint(num_docs, size=num_rows),
-            "category_id": cupy.random.randint(num_categories, size=num_rows),
+            # TODO: The uint32() here is only needed for CuPy 13.2+NumPy 2
+            "document_id": cupy.random.randint(
+                np.uint32(num_docs), size=num_rows
+            ),
+            "category_id": cupy.random.randint(
+                np.uint32(num_categories), size=num_rows
+            ),
         }
     )
 
