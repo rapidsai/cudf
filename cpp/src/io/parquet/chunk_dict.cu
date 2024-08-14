@@ -39,7 +39,7 @@ struct equality_functor {
   column_device_view const& col;
   __device__ bool operator()(key_type const lhs_idx, key_type const rhs_idx) const
   {
-    // We don't call this for nulls so this is fine
+    // We don't call this for nulls so this is fine.
     auto const equal = cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
     return equal(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
   }
@@ -71,7 +71,7 @@ struct map_insert_fn {
       auto hash_fn  = hash_fn_type{col};
       auto equal_fn = equality_fn_type{col};
 
-      // Make a view of the hash map
+      // Make a view of the hash map.
       cuco::static_map_ref<key_type,
                            mapped_type,
                            SCOPE,
@@ -85,9 +85,9 @@ struct map_insert_fn {
                      {},
                      storage_ref};
 
-      // Create another map ref with the insert operator
+      // Create another map ref with the insert operator.
       auto map_insert_ref = hash_map_ref.with_operators(cuco::insert);
-      // Insert into the hash map using the provided thread tile
+      // Insert into the hash map using the provided thread tile.
       return map_insert_ref.insert(tile, cuco::pair{i, i});
     } else {
       CUDF_UNREACHABLE("Unsupported type to insert in map");
@@ -125,10 +125,10 @@ struct map_find_fn {
                      {},
                      storage_ref};
 
-      // Create another map with find operator
+      // Create another map with find operator.
       auto map_find_ref = hash_map_ref.with_operators(cuco::find);
 
-      // Find the key = i using the provided thread tile
+      // Find the key = i using the provided thread tile.
       auto found_slot = map_find_ref.find(tile, i);
 
       // Check if didn't find the previously inserted key.
@@ -167,7 +167,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   size_type start_row = frag.start_row;
   size_type end_row   = frag.start_row + frag.num_rows;
 
-  // Find the bounds of values in leaf column to be inserted into the map for current chunk
+  // Find the bounds of values in leaf column to be inserted into the map for current chunk.
   size_type const s_start_value_idx = row_to_value_idx(start_row, *col);
   size_type const end_value_idx     = row_to_value_idx(end_row, *col);
 
@@ -175,60 +175,70 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   storage_ref_type const storage_ref{chunk->dict_map_size, map_storage + chunk->dict_map_offset};
 
   __shared__ size_type total_num_dict_entries;
-  thread_index_type val_idx = s_start_value_idx + tile.meta_group_rank();
 
-  while (val_idx - ntiles < end_value_idx) {
-    auto const is_valid =
-      val_idx < end_value_idx and val_idx < data_col.size() and data_col.is_valid(val_idx);
+  for (thread_index_type val_idx = s_start_value_idx + block.thread_rank();
+       val_idx - block_size < end_value_idx;
+       val_idx += block_size) {
+    // Compute the index to the start of the tile.
+    auto const tile_val_idx =
+      val_idx - block.thread_rank() + (tile.meta_group_rank() * tile.num_threads());
 
-    // insert element at val_idx to hash map and count successful insertions
     size_type is_unique      = 0;
     size_type uniq_elem_size = 0;
-    if (is_valid) {
-      // Insert the element to the map
-      is_unique =
-        type_dispatcher(data_col.type(), map_insert_fn{storage_ref}, data_col, tile, val_idx);
-      // First thread in the tile compute the size of the element if unique
-      if (tile.thread_rank() == 0) {
-        uniq_elem_size = [&]() -> size_type {
-          if (not is_unique) { return 0; }
-          switch (col->physical_type) {
-            case Type::INT32: return 4;
-            case Type::INT64: return 8;
-            case Type::INT96: return 12;
-            case Type::FLOAT: return 4;
-            case Type::DOUBLE: return 8;
-            case Type::BYTE_ARRAY: {
-              auto const col_type = data_col.type().id();
-              if (col_type == type_id::STRING) {
-                // Strings are stored as 4 byte length + string bytes
-                return 4 + data_col.element<string_view>(val_idx).size_bytes();
-              } else if (col_type == type_id::LIST) {
-                // Binary is stored as 4 byte length + bytes
-                return 4 + get_element<statistics::byte_array_view>(data_col, val_idx).size_bytes();
+
+    // Insert all elements within each tile.
+    for (auto tile_offset = 0; tile_offset < tile.num_threads(); tile_offset++) {
+      // Compute the index to the element being inserted within the tile.
+      auto const tile_val_idx_plus_offset = tile_val_idx + tile_offset;
+      // Insert element at val_idx to hash map and count successful insertions.
+      auto const is_valid = tile_val_idx_plus_offset < end_value_idx and
+                            tile_val_idx_plus_offset < data_col.size() and
+                            data_col.is_valid(tile_val_idx_plus_offset);
+      if (is_valid) {
+        // Insert the element to the map using the entire tile.
+        auto const tile_is_unique = type_dispatcher(
+          data_col.type(), map_insert_fn{storage_ref}, data_col, tile, tile_val_idx_plus_offset);
+        // Only the tile_offset thread rank computes the size of the element if unique.
+        if (tile.thread_rank() == tile_offset) {
+          is_unique      = tile_is_unique;
+          uniq_elem_size = [&]() -> size_type {
+            if (not is_unique) { return 0; }
+            switch (col->physical_type) {
+              case Type::INT32: return 4;
+              case Type::INT64: return 8;
+              case Type::INT96: return 12;
+              case Type::FLOAT: return 4;
+              case Type::DOUBLE: return 8;
+              case Type::BYTE_ARRAY: {
+                auto const col_type = data_col.type().id();
+                if (col_type == type_id::STRING) {
+                  // Strings are stored as 4 byte length + string bytes
+                  return 4 + data_col.element<string_view>(val_idx).size_bytes();
+                } else if (col_type == type_id::LIST) {
+                  // Binary is stored as 4 byte length + bytes
+                  return 4 +
+                         get_element<statistics::byte_array_view>(data_col, val_idx).size_bytes();
+                }
+                CUDF_UNREACHABLE(
+                  "Byte array only supports string and list<byte> column types for dictionary "
+                  "encoding!");
               }
-              CUDF_UNREACHABLE(
-                "Byte array only supports string and list<byte> column types for dictionary "
-                "encoding!");
+              case Type::FIXED_LEN_BYTE_ARRAY:
+                if (data_col.type().id() == type_id::DECIMAL128) { return sizeof(__int128_t); }
+                CUDF_UNREACHABLE(
+                  "Fixed length byte array only supports decimal 128 column types for dictionary "
+                  "encoding!");
+              default: CUDF_UNREACHABLE("Unsupported type for dictionary encoding");
             }
-            case Type::FIXED_LEN_BYTE_ARRAY:
-              if (data_col.type().id() == type_id::DECIMAL128) { return sizeof(__int128_t); }
-              CUDF_UNREACHABLE(
-                "Fixed length byte array only supports decimal 128 column types for dictionary "
-                "encoding!");
-            default: CUDF_UNREACHABLE("Unsupported type for dictionary encoding");
-          }
-        }();
-      } else {
-        // All threads except the first thread in the tile must reset is_unique to zero
-        is_unique = 0;
+          }();
+        }
       }
     }
+    // All elements in all tiles inserted, reduce num_unique and uniq_data_size across the block.
     auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
     block.sync();
     auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
-    // The first thread in the block atomically updates total num dict entries and unique elements
-    // data size
+    // The first thread in the block atomically updates total num_unique and uniq_data_size
     if (block.thread_rank() == 0) {
       total_num_dict_entries = atomicAdd(&chunk->num_dict_entries, num_unique);
       total_num_dict_entries += num_unique;
@@ -238,9 +248,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
     // Check if the num unique values in chunk has already exceeded max dict size and early exit
     if (total_num_dict_entries > MAX_DICT_SIZE) { return; }
-
-    val_idx += ntiles;
-  }  // while
+  }  // for loop
 }
 
 template <int block_size>
@@ -302,8 +310,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   column_device_view const& data_col = *col->leaf_column;
   storage_ref_type const storage_ref{chunk->dict_map_size, map_storage + chunk->dict_map_offset};
 
-  thread_index_type val_idx = s_start_value_idx + tile.meta_group_rank();
-  while (val_idx < end_value_idx) {
+  for (thread_index_type val_idx = s_start_value_idx + tile.meta_group_rank();
+       val_idx < end_value_idx;
+       val_idx += ntiles) {
     if (data_col.is_valid(val_idx)) {
       auto [found_key, found_value] =
         type_dispatcher(data_col.type(), map_find_fn{storage_ref}, data_col, tile, val_idx);
@@ -313,8 +322,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         chunk->dict_index[val_idx - s_ck_start_val_idx] = found_value;
       }
     }
-
-    val_idx += ntiles;
   }
 }
 

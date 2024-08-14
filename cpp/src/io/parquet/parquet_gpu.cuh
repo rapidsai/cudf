@@ -29,7 +29,7 @@ namespace cudf::io::parquet::detail {
 using key_type    = size_type;
 using mapped_type = size_type;
 
-auto constexpr map_cg_size = 2;  ///< A CUDA Cooperative Group of 1 thread to handle each subset
+auto constexpr map_cg_size = 2;  ///< A CUDA Cooperative Group of 4 thread to handle each subset
 auto constexpr window_size = 1;  ///< Number of concurrent slots handled by each thread
 
 auto constexpr KEY_SENTINEL   = key_type{-1};
@@ -41,44 +41,6 @@ using slot_type = cuco::pair<key_type, mapped_type>;
 using storage_type     = cuco::aow_storage<slot_type, window_size>;
 using storage_ref_type = typename storage_type::ref_type;
 using window_type      = typename storage_type::window_type;
-/**
- * @brief Insert chunk values into their respective hash maps
- *
- * @param map_storage Pointer to the bulk hashmap storage
- * @param frags Column fragments
- * @param stream CUDA stream to use
- */
-void populate_chunk_hash_maps(window_type* map_storage,
-                              cudf::detail::device_2dspan<PageFragment const> frags,
-                              rmm::cuda_stream_view stream);
-
-/**
- * @brief Compact dictionary hash map entries into chunk.dict_data
- *
- * @param map_storage Pointer to the bulk hashmap storage
- * @param chunks Flat span of chunks to compact hash maps for
- * @param stream CUDA stream to use
- */
-void collect_map_entries(window_type* map_storage,
-                         device_span<EncColumnChunk> chunks,
-                         rmm::cuda_stream_view stream);
-
-/**
- * @brief Get the Dictionary Indices for each row
- *
- * For each row of a chunk, gets the indices into chunk.dict_data which contains the value otherwise
- * stored in input column [row]. Stores these indices into chunk.dict_index.
- *
- * Since dict_data itself contains indices into the original cudf column, this means that
- * col[row] == col[dict_data[dict_index[row - chunk.start_row]]]
- *
- * @param map_storage Pointer to the bulk hashmap storage
- * @param frags Column fragments
- * @param stream CUDA stream to use
- */
-void get_dictionary_indices(window_type* map_storage,
-                            cudf::detail::device_2dspan<PageFragment const> frags,
-                            rmm::cuda_stream_view stream);
 
 /**
  * @brief Return the byte length of parquet dtypes that are physically represented by INT32
@@ -122,5 +84,44 @@ inline size_type __device__ row_to_value_idx(size_type idx,
   }
   return idx;
 }
+
+/**
+ * @brief Insert chunk values into their respective hash maps
+ *
+ * @param map_storage Pointer to the bulk hashmap storage
+ * @param frags Column fragments
+ * @param stream CUDA stream to use
+ */
+void populate_chunk_hash_maps(window_type* map_storage,
+                              cudf::detail::device_2dspan<PageFragment const> frags,
+                              rmm::cuda_stream_view stream);
+
+/**
+ * @brief Compact dictionary hash map entries into chunk.dict_data
+ *
+ * @param map_storage Pointer to the bulk hashmap storage
+ * @param chunks Flat span of chunks to compact hash maps for
+ * @param stream CUDA stream to use
+ */
+void collect_map_entries(window_type* map_storage,
+                         device_span<EncColumnChunk> chunks,
+                         rmm::cuda_stream_view stream);
+
+/**
+ * @brief Get the Dictionary Indices for each row
+ *
+ * For each row of a chunk, gets the indices into chunk.dict_data which contains the value otherwise
+ * stored in input column [row]. Stores these indices into chunk.dict_index.
+ *
+ * Since dict_data itself contains indices into the original cudf column, this means that
+ * col[row] == col[dict_data[dict_index[row - chunk.start_row]]]
+ *
+ * @param map_storage Pointer to the bulk hashmap storage
+ * @param frags Column fragments
+ * @param stream CUDA stream to use
+ */
+void get_dictionary_indices(window_type* map_storage,
+                            cudf::detail::device_2dspan<PageFragment const> frags,
+                            rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::parquet::detail
