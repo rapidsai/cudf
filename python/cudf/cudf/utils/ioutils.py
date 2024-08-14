@@ -1642,6 +1642,145 @@ def _set_context(obj, stack):
     return stack.enter_context(obj)
 
 
+def _get_remote_bytes_all(
+    remote_paths,
+    fs,
+    *,
+    bytes_per_thread=None,
+    use_dask=False,
+):
+    if isinstance(remote_paths, str):
+        remote_paths = [remote_paths]
+
+    # TODO: Avoid calling fs.sizes on many files
+    sizes = fs.sizes(remote_paths)
+    remote_starts = [0] * len(remote_paths)
+    remote_ends = sizes
+
+    # Construct list of paths, starts, and stops
+    paths, starts, ends = [], [], []
+    blocksize = bytes_per_thread or _BYTES_PER_THREAD_DEFAULT
+    for i, remote_path in enumerate(remote_paths):
+        for j in range(remote_starts[i], remote_ends[i], blocksize):
+            paths.append(remote_path)
+            starts.append(j)
+            ends.append(min(j + blocksize, remote_ends[i]))
+
+    # Collect the byte ranges
+    if use_dask and len(paths) > 1:
+        from dask.base import tokenize
+        from dask.threaded import get
+
+        token = tokenize(fs, paths, starts, ends)
+        name = f"cat-range-{token}"
+        dsk = {
+            (name, i): (fs.cat_file, path, start, end)
+            for i, (path, start, end) in enumerate(zip(paths, starts, ends))
+        }
+        chunks = get(dsk, list(dsk.keys()))
+    else:
+        chunks = fs.cat_ranges(paths, starts, ends)
+
+    # Construct local byte buffers
+    buffers = []
+    path_counts = np.unique(paths, return_counts=True)[1]
+    for i, remote_path in enumerate(remote_paths):
+        bytes_arr = bytearray()
+        for j in range(path_counts[i]):
+            bytes_arr.extend(chunks.pop(0))
+        buffers.append(bytes(bytes_arr))
+    return buffers
+
+
+def _get_remote_bytes_parquet(
+    remote_paths,
+    fs,
+    *,
+    columns=None,
+    row_groups=None,
+    bytes_per_thread=None,
+    use_dask=False,
+):
+    if fsspec_parquet is None or (columns is None and row_groups is None):
+        return _get_remote_bytes_all(
+            remote_paths, fs, bytes_per_thread=bytes_per_thread
+        )
+
+    sizes = fs.sizes(remote_paths)
+    if use_dask and len(remote_paths) > 1:
+        from toolz.dicttoolz import merge
+
+        from dask.base import tokenize
+        from dask.threaded import get
+        from dask.utils import apply
+
+        token = tokenize(fs, remote_paths, columns, row_groups)
+        name = f"pq-file-ranges-{token}"
+        kwargs = {
+            "columns": columns,
+            "row_groups": row_groups,
+            "max_block": bytes_per_thread or _BYTES_PER_THREAD_DEFAULT,
+        }
+        dsk = {
+            (name, i): (
+                apply,
+                fsspec_parquet._get_parquet_byte_ranges,
+                [path],
+                kwargs,
+            )
+            for i, path in enumerate(remote_paths)
+        }
+        data = merge(get(dsk, list(dsk.keys())))
+    else:
+        data = fsspec_parquet._get_parquet_byte_ranges(
+            remote_paths,
+            fs,
+            columns=columns,
+            row_groups=row_groups,
+            max_block=bytes_per_thread or _BYTES_PER_THREAD_DEFAULT,
+        )
+
+    buffers = []
+    for size, path in zip(sizes, remote_paths):
+        path_data = data.pop(path)
+        buf = np.zeros(size, dtype="b")
+        for range_offset in list(path_data.keys()):
+            chunk = path_data.pop(range_offset)
+            buf[range_offset[0] : range_offset[1]] = np.frombuffer(
+                chunk, dtype="b"
+            )
+        buffers.append(buf.tobytes())
+    return buffers
+
+
+def _prefetch_remote_buffers(
+    paths,
+    fs,
+    *,
+    bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
+    prefetcher=None,
+    prefetcher_options=None,
+):
+    # Gather bytes ahead of time for remote filesystems
+    if fs and paths and not _is_local_filesystem(fs):
+        prefetchers = {
+            "parquet": _get_remote_bytes_parquet,
+            "all": _get_remote_bytes_all,
+        }
+        if prefetcher not in prefetchers:
+            raise NotImplementedError(
+                f"{prefetcher} is not a supported remote-data prefetcher"
+            )
+        return prefetchers.get(prefetcher)(
+            paths,
+            fs,
+            bytes_per_thread=bytes_per_thread,
+            **(prefetcher_options or {}),
+        )
+    else:
+        return paths
+
+
 def _open_remote_files(
     paths,
     fs,
