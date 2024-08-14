@@ -417,7 +417,7 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
   // We calculate the `charge` column, which is a function of `l_extendedprice`,
   // `l_tax`, and `l_discount` and then group by `l_orderkey` and sum the `charge`
   auto const l_charge = calc_charge(l_extendedprice, l_tax, l_discount, stream, mr);
-  auto sum_l_charge   = [&]() {
+  auto o_totalprice   = [&]() {
     auto const keys = cudf::table_view({l_orderkey});
     cudf::groupby::groupby gb(keys);
     std::vector<cudf::groupby::aggregation_request> requests;
@@ -427,7 +427,7 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
     auto agg_result    = gb.aggregate(requests);
     return std::move(agg_result.second[0].results[0]);
   }();
-  orders_dependent_columns.push_back(std::move(sum_l_charge));
+  orders_dependent_columns.push_back(std::move(o_totalprice));
 
   // Generate the `o_orderstatus` column
   auto o_orderstatus = [&]() {
