@@ -1285,11 +1285,9 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     return std::pair(std::move(dict_data), std::move(dict_index));
   }
 
-  // Create a vector to store valid chunk sizes using cuco::make_window_extent
-  std::vector<size_t> valid_chunk_sizes;
-  valid_chunk_sizes.reserve(h_chunks.size());
-
-  // Populate valid_chunk_sizes for chunks that need to build a dictionary.
+  // Variable to keep track of the current offset
+  uint32_t curr_offset = 0;
+  // Populate dict offsets and sizes for each chunk that need to build a dictionary.
   std::for_each(h_chunks.begin(), h_chunks.end(), [&](auto& chunk) {
     auto const& chunk_col_desc = col_desc[chunk.col_desc_id];
     auto const is_requested_non_dict =
@@ -1300,28 +1298,21 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
 
     if (is_type_non_dict || is_requested_non_dict) {
       chunk.use_dictionary = false;
-      // Emplace a zero for 1-1 mapping between h_chunks and valid_chunk_sizes
-      valid_chunk_sizes.emplace_back(static_cast<std::size_t>(0));
     } else {
       chunk.use_dictionary = true;
-      valid_chunk_sizes.emplace_back(
-        static_cast<std::size_t>(cuco::make_window_extent<map_cg_size, window_size>(
-          // cuCollections suggests using a hash map of size N * (1/0.7) = 1.43 to target a 70%
-          // occupancy factor.
-          static_cast<size_t>(chunk.num_values * 1.43))));
-      chunk.dict_map_size = valid_chunk_sizes.back();
+      // cuCollections suggests using a hash map of size N * (1/0.7) = 1.43 to target a 70%
+      // occupancy factor.
+      chunk.dict_map_size =
+        static_cast<cudf::size_type>(cuco::make_window_extent<map_cg_size, window_size>(
+          static_cast<cudf::size_type>(1.43 * chunk.num_values)));
+      chunk.dict_map_offset = curr_offset;
+      curr_offset += chunk.dict_map_size;
     }
   });
 
-  // Create a vector to map offsets from chunk sizes
-  std::vector<std::size_t> map_offsets(valid_chunk_sizes.size(), 0);
-  std::exclusive_scan(valid_chunk_sizes.begin(),
-                      valid_chunk_sizes.end(),
-                      map_offsets.begin(),
-                      static_cast<size_t>(0));
-
   // Compute total map storage
-  auto const total_map_storage_size = map_offsets.back() + valid_chunk_sizes.back();
+  auto const total_map_storage_size = static_cast<std::size_t>(curr_offset);
+
   // No chunk needs to create a dictionary, exit early
   if (total_map_storage_size == 0) { return {std::move(dict_data), std::move(dict_index)}; }
 
@@ -1332,15 +1323,6 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
                          cuda::stream_ref{stream.value()});
   // Create a span of non-const map_storage as map_storage_ref takes in a non-const pointer.
   device_span<window_type> const map_storage_data{map_storage.data(), total_map_storage_size};
-
-  // Populate chunk dictionary offsets
-  std::for_each(
-    thrust::make_zip_iterator(thrust::make_tuple(h_chunks.begin(), map_offsets.begin())),
-    thrust::make_zip_iterator(thrust::make_tuple(h_chunks.end(), map_offsets.end())),
-    [&](auto elem) -> void {
-      auto& chunk = thrust::get<0>(elem);
-      if (chunk.use_dictionary) { chunk.dict_map_offset = thrust::get<1>(elem); }
-    });
 
   // Synchronize
   chunks.host_to_device_async(stream);
