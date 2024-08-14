@@ -39,9 +39,10 @@ cdef vector[reference_wrapper[const scalar]] _as_vector(list source):
 
 
 def _is_concurrent_managed_access_supported():
-    """Check the availability of concurrent managed access (UVM)."""
-    # This checks the availability of UVM.
-    # Note that WSL does not support managed memory.
+    """Check the availability of concurrent managed access (UVM).
+    
+    Note that WSL2 does not support managed memory.
+    """
 
     # Ensure CUDA is initialized before checking cudaDevAttrConcurrentManagedAccess
     cudart.cudaFree(0)

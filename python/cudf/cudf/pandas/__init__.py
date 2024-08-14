@@ -51,7 +51,7 @@ def install():
 
     if "managed" in rmm_mode and not managed_memory_is_supported:
         raise ValueError(
-            f"Managed memory is unsupported on this system, so the requested {rmm_mode=} is not allowed."
+            f"Managed memory is not supported on this system, so the requested {rmm_mode=} is invalid."
         )
 
     # Check if a non-default memory resource is set
