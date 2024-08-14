@@ -176,11 +176,12 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   __shared__ size_type total_num_dict_entries;
 
+  // Insert all column chunk elements to the hash map to build the dict.
   for (thread_index_type val_idx = s_start_value_idx + block.thread_rank();
        val_idx - block_size < end_value_idx;
        val_idx += block_size) {
     // Compute the index to the start of the tile.
-    auto const tile_val_idx =
+    auto const val_idx_base =
       val_idx - block.thread_rank() + (tile.meta_group_rank() * tile.num_threads());
 
     size_type is_unique      = 0;
@@ -189,16 +190,19 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     // Insert all elements within each tile.
     for (auto tile_offset = 0; tile_offset < tile.num_threads(); tile_offset++) {
       // Compute the index to the element being inserted within the tile.
-      auto const tile_val_idx_plus_offset = tile_val_idx + tile_offset;
-      // Insert element at val_idx to hash map and count successful insertions.
-      auto const is_valid = tile_val_idx_plus_offset < end_value_idx and
-                            tile_val_idx_plus_offset < data_col.size() and
-                            data_col.is_valid(tile_val_idx_plus_offset);
+      auto const tile_val_idx = val_idx_base + tile_offset;
+
+      // Check if this index is valid.
+      auto const is_valid = tile_val_idx < end_value_idx and tile_val_idx < data_col.size() and
+                            data_col.is_valid(tile_val_idx);
+
+      // Insert tile_val_idx to hash map and count successful insertions.
       if (is_valid) {
         // Insert the element to the map using the entire tile.
         auto const tile_is_unique = type_dispatcher(
-          data_col.type(), map_insert_fn{storage_ref}, data_col, tile, tile_val_idx_plus_offset);
-        // Only the tile_offset thread rank computes the size of the element if unique.
+          data_col.type(), map_insert_fn{storage_ref}, data_col, tile, tile_val_idx);
+
+        // tile_offset'th thread updates its number and size of unique element.
         if (tile.thread_rank() == tile_offset) {
           is_unique      = tile_is_unique;
           uniq_elem_size = [&]() -> size_type {
@@ -213,11 +217,11 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                 auto const col_type = data_col.type().id();
                 if (col_type == type_id::STRING) {
                   // Strings are stored as 4 byte length + string bytes
-                  return 4 + data_col.element<string_view>(val_idx).size_bytes();
+                  return 4 + data_col.element<string_view>(tile_val_idx).size_bytes();
                 } else if (col_type == type_id::LIST) {
                   // Binary is stored as 4 byte length + bytes
-                  return 4 +
-                         get_element<statistics::byte_array_view>(data_col, val_idx).size_bytes();
+                  return 4 + get_element<statistics::byte_array_view>(data_col, tile_val_idx)
+                               .size_bytes();
                 }
                 CUDF_UNREACHABLE(
                   "Byte array only supports string and list<byte> column types for dictionary "
