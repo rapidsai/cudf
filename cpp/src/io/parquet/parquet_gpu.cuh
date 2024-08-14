@@ -29,7 +29,7 @@ namespace cudf::io::parquet::detail {
 using key_type    = size_type;
 using mapped_type = size_type;
 
-auto constexpr map_cg_size = 1;  ///< A CUDA Cooperative Group of 1 thread to handle each subset
+auto constexpr map_cg_size = 2;  ///< A CUDA Cooperative Group of 1 thread to handle each subset
 auto constexpr window_size = 1;  ///< Number of concurrent slots handled by each thread
 
 auto constexpr KEY_SENTINEL   = key_type{-1};
