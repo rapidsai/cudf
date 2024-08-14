@@ -276,19 +276,22 @@ struct flatten_functor {
                   size_type cur_branch_depth,
                   thrust::optional<int>)
   {
+    // out.push_back(col);
+    // info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
+    // auto const keys = dictionary_column_view(col).keys();
+    // cudf::type_dispatcher(keys.type(),
+    //                       flatten_functor{},
+    //                       keys,
+    //                       out,
+    //                       info,
+    //                       h_info,
+    //                       stream,
+    //                       cur_depth + 1,
+    //                       cur_branch_depth,
+    //                       out.size() - 1);
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
-    auto const keys = dictionary_column_view(col).keys();
-    cudf::type_dispatcher(keys.type(),
-                          flatten_functor{},
-                          keys,
-                          out,
-                          info,
-                          h_info,
-                          stream,
-                          cur_depth + 1,
-                          cur_branch_depth,
-                          out.size() - 1);
+    h_info.complex_type_count++;
   }
 
   // everything else

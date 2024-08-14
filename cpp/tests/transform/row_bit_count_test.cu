@@ -766,3 +766,17 @@ TEST_F(RowBitCount, EmptyTable)
     EXPECT_TRUE(result != nullptr && result->size() == 0);
   }
 }
+
+TEST_F(RowBitCount, DictionaryColumn)
+{
+  cudf::test::dictionary_column_wrapper<std::string> input1(
+    {"hello", "hello", "goodbye", "goodbye"});
+  cudf::test::strings_column_wrapper input2({"hello", "hello", "goodbye", "goodbye"});
+  cudf::test::fixed_width_column_wrapper<int32_t> input3({1, 2, 3, 4});
+
+  cudf::table_view tv({input1, input2, input3});
+
+  auto result   = cudf::row_bit_count(tv);
+  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>({104, 104, 120, 120});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
