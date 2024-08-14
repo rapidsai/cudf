@@ -262,11 +262,12 @@ TEST_F(ToArrowTest, NestedList)
   auto list_arr = get_arrow_list_array<int64_t>({6, 7, 8, 9}, {0, 1, 4}, {1, 0, 1, 1});
   std::vector<int32_t> offset{0, 0, 2};
   auto mask_buffer     = arrow::internal::BytesToBits({0, 1}).ValueOrDie();
-  auto nested_list_arr = std::make_shared<arrow::ListArray>(arrow::list(list(arrow::int64())),
-                                                            offset.size() - 1,
-                                                            arrow::Buffer::Wrap(offset),
-                                                            list_arr,
-                                                            mask_buffer);
+  auto nested_list_arr = std::make_shared<arrow::ListArray>(
+    arrow::list(arrow::field("a", arrow::list(arrow::int64()), false)),
+    offset.size() - 1,
+    arrow::Buffer::Wrap(offset),
+    list_arr,
+    mask_buffer);
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector(
     {arrow::field("a", nested_list_arr->type())});
@@ -330,7 +331,10 @@ TEST_F(ToArrowTest, StructColumn)
   auto list_arr = get_arrow_list_array<int64_t>({1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 2, 4, 5, 6, 7, 9});
   std::vector<int32_t> offset{0, 3, 4, 6};
   auto nested_list_arr = std::make_shared<arrow::ListArray>(
-    arrow::list(list(arrow::int64())), offset.size() - 1, arrow::Buffer::Wrap(offset), list_arr);
+    arrow::list(arrow::field("a", arrow::list(arrow::field("a", arrow::int64(), false)), false)),
+    offset.size() - 1,
+    arrow::Buffer::Wrap(offset),
+    list_arr);
 
   std::vector<std::shared_ptr<arrow::Array>> child_arrays2({str2_array, int2_array});
   auto fields2 = std::vector<std::shared_ptr<arrow::Field>>{
@@ -592,7 +596,7 @@ using NumericTypesNotBool =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 TYPED_TEST_SUITE(ToArrowNumericScalarTest, NumericTypesNotBool);
 
-auto id_to_arrow_type(cudf::column_view const& col)
+auto col_to_arrow_type(cudf::column_view const& col)
 {
   switch (col.type().id()) {
     case cudf::type_id::BOOL8: return arrow::boolean();
@@ -609,7 +613,7 @@ auto id_to_arrow_type(cudf::column_view const& col)
     case cudf::type_id::TIMESTAMP_DAYS: return arrow::date32();
     case cudf::type_id::STRING: return arrow::utf8();
     case cudf::type_id::LIST:
-      return arrow::list(id_to_arrow_type(col.child(cudf::lists_column_view::child_column_index)));
+      return arrow::list(col_to_arrow_type(col.child(cudf::lists_column_view::child_column_index)));
     case cudf::type_id::DECIMAL128: return arrow::decimal(38, -col.type().scale());
     default: CUDF_FAIL("Unsupported type_id conversion to arrow type", cudf::data_type_error);
   }
@@ -627,7 +631,7 @@ std::optional<std::shared_ptr<arrow::Scalar>> cudf_scalar_to_arrow(
       auto const arrow_schema = cudf::to_arrow_schema(table, table_metadata);
       return arrow::ImportArray(&c_arrow_array->array, arrow_schema->children[0]).ValueOrDie();
     } else {
-      auto const arrow_type = id_to_arrow_type(cudf_column->view());
+      auto const arrow_type = col_to_arrow_type(cudf_column->view());
       return arrow::ImportArray(&c_arrow_array->array, arrow_type).ValueOrDie();
     }
   }();
