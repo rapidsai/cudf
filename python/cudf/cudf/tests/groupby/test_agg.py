@@ -1,9 +1,9 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 import numpy as np
-import pandas as pd
 import pytest
 
 import cudf
+from cudf.testing import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -38,21 +38,21 @@ def test_dataframe_agg(attr, func):
     agg = getattr(df.groupby("a"), attr)(func)
     pd_agg = getattr(pdf.groupby(["a"]), attr)(func)
 
-    pd.testing.assert_frame_equal(agg.to_pandas(), pd_agg)
+    assert_eq(agg, pd_agg)
 
     agg = getattr(df.groupby("a"), attr)({"b": func})
     pd_agg = getattr(pdf.groupby(["a"]), attr)({"b": func})
 
-    pd.testing.assert_frame_equal(agg.to_pandas(), pd_agg)
+    assert_eq(agg, pd_agg)
 
     agg = getattr(df.groupby("a"), attr)([func])
     pd_agg = getattr(pdf.groupby(["a"]), attr)([func])
 
-    pd.testing.assert_frame_equal(agg.to_pandas(), pd_agg)
+    assert_eq(agg, pd_agg)
 
     agg = getattr(df.groupby("a"), attr)(foo=("b", func), bar=("a", func))
     pd_agg = getattr(pdf.groupby(["a"]), attr)(
         foo=("b", func), bar=("a", func)
     )
 
-    pd.testing.assert_frame_equal(agg.to_pandas(), pd_agg)
+    assert_eq(agg, pd_agg)

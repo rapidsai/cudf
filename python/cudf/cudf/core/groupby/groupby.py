@@ -1298,7 +1298,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 aggs_per_column = (aggs,) * len(columns)
         elif not aggs and kwargs:
             column_names, aggs_per_column = kwargs.keys(), kwargs.values()
-            columns = tuple(self.obj._data[x[1][0]] for x in kwargs.items())
+            columns = tuple(self.obj._data[x[0]] for x in kwargs.values())
             aggs_per_column = tuple(x[1] for x in kwargs.values())
         else:
             raise TypeError("Must provide at least one aggregation function.")

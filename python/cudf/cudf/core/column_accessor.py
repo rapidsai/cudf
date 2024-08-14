@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import itertools
 import sys
-import warnings
 from collections import abc
 from functools import cached_property, reduce
 from typing import TYPE_CHECKING, Any, Callable, Mapping
@@ -654,12 +653,6 @@ class ColumnAccessor(abc.MutableMapping):
                 return x
 
             if level is None:
-                warnings.warn(
-                    "Renaming columns with MultiIndex assuming level=0. "
-                    "Specify the level keyword argument to rename using "
-                    "a different level eg. df.rename(..., level=1)",
-                    UserWarning,
-                )
                 level = 0
             new_col_names = (rename_column(k) for k in self.keys())
 
