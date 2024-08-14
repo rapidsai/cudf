@@ -138,8 +138,15 @@ def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
 
 @from_arrow.register(pa.Scalar)
 def _from_arrow_scalar(pyarrow_object, *, DataType data_type=None):
+    if isinstance(pyarrow_object.type, pa.ListType) and pyarrow_object.as_py() is None:
+        # pyarrow doesn't correctly handle None values for list types, so
+        # we have to create this one manually.
+        # https://github.com/apache/arrow/issues/40319
+        pa_array = pa.array([None], type=pyarrow_object.type)
+    else:
+        pa_array = pa.array([pyarrow_object])
     return copying.get_element(
-        from_arrow(pa.array([pyarrow_object]), data_type=data_type),
+        from_arrow(pa_array, data_type=data_type),
         0,
     )
 
