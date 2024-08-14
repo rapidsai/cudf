@@ -45,9 +45,12 @@ enables oversubscribing GPU memory. This allows cudf.pandas to process
 data larger than GPU memory in many cases, without CPU (Pandas) fallback.
 
 ```{note}
-CUDA Unified Memory is not supported on Windows Subsystem for Linux (WSL2), so
-`cudf.pandas` uses a non-managed pool allocator. In WSL2, `cudf.pandas` is
-limited to the memory size of the GPU it is running on.
+CUDA Managed Memory on Windows, and more specifically Windows Subsystem for
+Linux (WSL2), [does not support oversubscription](
+https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#system-requirements-for-unified-memory),
+only unified addressing. Furthermore, managed memory on WSL2 has undesirable
+performance characteristics. Therefore, `cudf.pandas` uses a non-managed pool
+allocator on WSL2, so `cudf.pandas` is limited to the physical size of GPU memory.
 ```
 
 Other memory allocators can be used by changing the environment
