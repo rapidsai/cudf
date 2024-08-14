@@ -568,8 +568,6 @@ class GroupBy(IR):
 
     def __post_init__(self) -> None:
         """Check whether all the aggregations are implemented."""
-        # if self.options.rolling is None and self.maintain_order:
-        #     raise NotImplementedError("Maintaining order in groupby")
         if self.options.rolling:
             raise NotImplementedError(
                 "rolling window/groupby"
@@ -629,7 +627,6 @@ class GroupBy(IR):
                 plc.Table([k.obj for k in keys]),
                 list(range(group_keys.num_columns())),
                 plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-                # TODO: verify nullequality and nanequality correct?
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
             )
