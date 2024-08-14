@@ -40,7 +40,7 @@ cdef vector[reference_wrapper[const scalar]] _as_vector(list source):
 
 def _is_concurrent_managed_access_supported():
     """Check the availability of concurrent managed access (UVM).
-    
+
     Note that WSL2 does not support managed memory.
     """
 
