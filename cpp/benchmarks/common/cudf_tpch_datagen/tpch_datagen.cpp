@@ -425,7 +425,7 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
     requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
     requests[0].values = l_charge->view();
     auto agg_result    = gb.aggregate(requests);
-    return std::move(agg_result.second[0].results[0]);
+    return cudf::round(agg_result.second[0].results[0]->view(), 2);
   }();
   orders_dependent_columns.push_back(std::move(o_totalprice));
 
