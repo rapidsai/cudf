@@ -14,13 +14,6 @@
  * limitations under the License.
  */
 
-// These interop functions are deprecated. We keep the code in this
-// test and will migrate the tests to export via the arrow C data
-// interface with to_arrow_host which arrow can consume. For now, the
-// test is commented out.
-
-#if 0
-
 #include <tests/interop/arrow_utils.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -44,6 +37,8 @@
 #include <cudf/types.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+
+#include <arrow/c/bridge.h>
 
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 
@@ -130,7 +125,7 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   auto keys       = cudf::test::to_host<int64_t>(view.keys()).first;
   auto indices    = cudf::test::to_host<uint32_t>(view.indices()).first;
   auto dict_array = get_arrow_dict_array(std::vector<int64_t>(keys.begin(), keys.end()),
-                                         std::vector<int32_t>(indices.begin(), indices.end()),
+                                         std::vector<uint32_t>(indices.begin(), indices.end()),
                                          validity);
   auto boolarray  = get_arrow_array<bool>(bool_data, bool_validity);
   auto list_array = get_arrow_list_array<int64_t>(
@@ -168,6 +163,21 @@ struct ToArrowTest : public cudf::test::BaseFixture {};
 template <typename T>
 struct ToArrowTestDurationsTest : public cudf::test::BaseFixture {};
 
+auto is_equal(cudf::table_view const& table,
+              cudf::host_span<cudf::column_metadata const> metadata,
+              std::shared_ptr<arrow::Table> expected_arrow_table)
+{
+  auto got_arrow_schema = cudf::to_arrow_schema(table, metadata);
+  auto got_arrow_table  = cudf::to_arrow_host(table);
+
+  for (auto i = 0; i < got_arrow_schema->n_children; ++i) {
+    auto arr = arrow::ImportArray(got_arrow_table->array.children[i], got_arrow_schema->children[i])
+                 .ValueOrDie();
+    if (!expected_arrow_table->column(i)->Equals(arrow::ChunkedArray(arr))) { return false; }
+  }
+  return true;
+}
+
 TYPED_TEST_SUITE(ToArrowTestDurationsTest, cudf::test::DurationTypes);
 
 TEST_F(ToArrowTest, EmptyTable)
@@ -179,10 +189,9 @@ TEST_F(ToArrowTest, EmptyTable)
   auto struct_meta          = cudf::column_metadata{"f"};
   struct_meta.children_meta = {{"integral"}, {"string"}};
 
-  auto got_arrow_table =
-    cudf::to_arrow(cudf_table_view, {{"a"}, {"b"}, {"c"}, {"d"}, {"e"}, struct_meta});
-
-  ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
+  std::vector<cudf::column_metadata> const metadata = {
+    {"a"}, {"b"}, {"c"}, {"d"}, {"e"}, struct_meta};
+  ASSERT_TRUE(is_equal(cudf_table_view, metadata, expected_arrow_table));
 }
 
 TEST_F(ToArrowTest, DateTimeTable)
@@ -203,12 +212,10 @@ TEST_F(ToArrowTest, DateTimeTable)
   std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
 
-
   auto expected_arrow_table = arrow::Table::Make(schema, {arr});
 
-  auto got_arrow_table = cudf::to_arrow(input_view, {{"a"}});
-
-  ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
+  std::vector<cudf::column_metadata> const metadata = {{"a"}};
+  ASSERT_TRUE(is_equal(input_view, metadata, expected_arrow_table));
 }
 
 TYPED_TEST(ToArrowTestDurationsTest, DurationTable)
@@ -239,9 +246,8 @@ TYPED_TEST(ToArrowTestDurationsTest, DurationTable)
 
   auto expected_arrow_table = arrow::Table::Make(schema, {arr});
 
-  auto got_arrow_table = cudf::to_arrow(input_view, {{"a"}});
-
-  ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
+  std::vector<cudf::column_metadata> const metadata = {{"a"}};
+  ASSERT_TRUE(is_equal(input_view, metadata, expected_arrow_table));
 }
 
 TEST_F(ToArrowTest, NestedList)
@@ -265,10 +271,9 @@ TEST_F(ToArrowTest, NestedList)
     {arrow::field("a", nested_list_arr->type())});
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
 
-  auto expected_arrow_table = arrow::Table::Make(schema, {nested_list_arr});
-  auto got_arrow_table      = cudf::to_arrow(input_view, {{"a"}});
-
-  ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+  auto expected_arrow_table                         = arrow::Table::Make(schema, {nested_list_arr});
+  std::vector<cudf::column_metadata> const metadata = {{"a"}};
+  ASSERT_TRUE(is_equal(input_view, metadata, expected_arrow_table));
 }
 
 TEST_F(ToArrowTest, StructColumn)
@@ -356,9 +361,8 @@ TEST_F(ToArrowTest, StructColumn)
 
   auto expected_arrow_table = arrow::Table::Make(schema, {struct_array});
 
-  auto got_arrow_table = cudf::to_arrow(input_view, {metadata});
-
-  ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+  std::vector<cudf::column_metadata> const meta = {metadata};
+  ASSERT_TRUE(is_equal(input_view, meta, expected_arrow_table));
 }
 
 template <typename T>
@@ -380,9 +384,8 @@ TEST_F(ToArrowTest, FixedPoint64Table)
     auto const schema               = std::make_shared<arrow::Schema>(schema_vector);
     auto const expected_arrow_table = arrow::Table::Make(schema, {arr});
 
-    auto got_arrow_table = cudf::to_arrow(input, {{"a"}});
-
-    ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+    std::vector<cudf::column_metadata> const metadata = {{"a"}};
+    ASSERT_TRUE(is_equal(input, metadata, expected_arrow_table));
   }
 }
 
@@ -402,9 +405,8 @@ TEST_F(ToArrowTest, FixedPoint128Table)
     auto const schema               = std::make_shared<arrow::Schema>(schema_vector);
     auto const expected_arrow_table = arrow::Table::Make(schema, {arr});
 
-    auto got_arrow_table = cudf::to_arrow(input, {{"a"}});
-
-    ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+    std::vector<cudf::column_metadata> const metadata = {{"a"}};
+    ASSERT_TRUE(is_equal(input, metadata, expected_arrow_table));
   }
 }
 
@@ -431,9 +433,8 @@ TEST_F(ToArrowTest, FixedPoint64TableLarge)
     auto const schema               = std::make_shared<arrow::Schema>(schema_vector);
     auto const expected_arrow_table = arrow::Table::Make(schema, {arr});
 
-    auto got_arrow_table = cudf::to_arrow(input, {{"a"}});
-
-    ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+    std::vector<cudf::column_metadata> const metadata = {{"a"}};
+    ASSERT_TRUE(is_equal(input, metadata, expected_arrow_table));
   }
 }
 
@@ -455,9 +456,8 @@ TEST_F(ToArrowTest, FixedPoint128TableLarge)
     auto const schema               = std::make_shared<arrow::Schema>(schema_vector);
     auto const expected_arrow_table = arrow::Table::Make(schema, {arr});
 
-    auto got_arrow_table = cudf::to_arrow(input, {{"a"}});
-
-    ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+    std::vector<cudf::column_metadata> const metadata = {{"a"}};
+    ASSERT_TRUE(is_equal(input, metadata, expected_arrow_table));
   }
 }
 
@@ -479,9 +479,8 @@ TEST_F(ToArrowTest, FixedPoint64TableNullsSimple)
     auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
     auto const arrow_table   = arrow::Table::Make(schema, {arr});
 
-    auto got_arrow_table = cudf::to_arrow(input, {{"a"}});
-
-    ASSERT_TRUE(arrow_table->Equals(*got_arrow_table, true));
+    std::vector<cudf::column_metadata> const metadata = {{"a"}};
+    ASSERT_TRUE(is_equal(input, metadata, arrow_table));
   }
 }
 
@@ -503,9 +502,8 @@ TEST_F(ToArrowTest, FixedPoint128TableNullsSimple)
     auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
     auto const arrow_table   = arrow::Table::Make(schema, {arr});
 
-    auto got_arrow_table = cudf::to_arrow(input, {{"a"}});
-
-    ASSERT_TRUE(arrow_table->Equals(*got_arrow_table, true));
+    std::vector<cudf::column_metadata> const metadata = {{"a"}};
+    ASSERT_TRUE(is_equal(input, metadata, arrow_table));
   }
 }
 
@@ -529,9 +527,8 @@ TEST_F(ToArrowTest, FixedPoint64TableNulls)
     auto const schema               = std::make_shared<arrow::Schema>(schema_vector);
     auto const expected_arrow_table = arrow::Table::Make(schema, {arr});
 
-    auto got_arrow_table = cudf::to_arrow(input, {{"a"}});
-
-    ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+    std::vector<cudf::column_metadata> const metadata = {{"a"}};
+    ASSERT_TRUE(is_equal(input, metadata, expected_arrow_table));
   }
 }
 
@@ -554,9 +551,8 @@ TEST_F(ToArrowTest, FixedPoint128TableNulls)
     auto const schema               = std::make_shared<arrow::Schema>(schema_vector);
     auto const expected_arrow_table = arrow::Table::Make(schema, {arr});
 
-    auto const got_arrow_table = cudf::to_arrow(input, {{"a"}});
-
-    ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+    std::vector<cudf::column_metadata> const metadata = {{"a"}};
+    ASSERT_TRUE(is_equal(input, metadata, expected_arrow_table));
   }
 }
 
@@ -575,10 +571,10 @@ TEST_P(ToArrowTestSlice, SliceTest)
   auto expected_arrow_table = arrow_table->Slice(start, end - start);
   auto struct_meta          = cudf::column_metadata{"f"};
   struct_meta.children_meta = {{"integral"}, {"string"}};
-  auto got_arrow_table =
-    cudf::to_arrow(sliced_cudf_table, {{"a"}, {"b"}, {"c"}, {"d"}, {"e"}, struct_meta});
 
-  ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
+  std::vector<cudf::column_metadata> const metadata = {
+    {"a"}, {"b"}, {"c"}, {"d"}, {"e"}, struct_meta};
+  ASSERT_TRUE(is_equal(sliced_cudf_table, metadata, expected_arrow_table));
 }
 
 INSTANTIATE_TEST_CASE_P(ToArrowTest,
@@ -693,5 +689,3 @@ TEST_F(ToArrowStructScalarTest, Basic)
 }
 
 CUDF_TEST_PROGRAM_MAIN()
-
-#endif
