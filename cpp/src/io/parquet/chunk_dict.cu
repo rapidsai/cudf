@@ -146,7 +146,7 @@ struct map_find_fn {
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  populate_chunk_hash_maps_kernel(window_type* const map_storage,
+  populate_chunk_hash_maps_kernel(device_span<window_type> const map_storage,
                                   cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto const col_idx = blockIdx.y;
@@ -171,7 +171,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   size_type const end_value_idx     = row_to_value_idx(end_row, *col);
 
   column_device_view const& data_col = *col->leaf_column;
-  storage_ref_type const storage_ref{chunk->dict_map_size, map_storage + chunk->dict_map_offset};
+  storage_ref_type const storage_ref{chunk->dict_map_size,
+                                     map_storage.data() + chunk->dict_map_offset};
 
   __shared__ size_type total_num_dict_entries;
 
@@ -254,7 +255,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  collect_map_entries_kernel(window_type* const map_storage, device_span<EncColumnChunk> chunks)
+  collect_map_entries_kernel(device_span<window_type> const map_storage,
+                             device_span<EncColumnChunk> chunks)
 {
   auto& chunk = chunks[blockIdx.x];
   if (not chunk.use_dictionary) { return; }
@@ -268,7 +270,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   for (size_type i = 0; i < chunk.dict_map_size; i += block_size) {
     if (t + i < chunk.dict_map_size) {
-      auto* slot     = map_storage + chunk.dict_map_offset + t + i;
+      auto* slot     = map_storage.data() + chunk.dict_map_offset + t + i;
       auto const key = slot->data()->first;
       if (key != KEY_SENTINEL) {
         auto loc = counter.fetch_add(1, memory_order_relaxed);
@@ -285,7 +287,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  get_dictionary_indices_kernel(window_type* const map_storage,
+  get_dictionary_indices_kernel(device_span<window_type> const map_storage,
                                 cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto const col_idx = blockIdx.y;
@@ -309,7 +311,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto const end_value_idx      = row_to_value_idx(end_row, *col);
 
   column_device_view const& data_col = *col->leaf_column;
-  storage_ref_type const storage_ref{chunk->dict_map_size, map_storage + chunk->dict_map_offset};
+  storage_ref_type const storage_ref{chunk->dict_map_size,
+                                     map_storage.data() + chunk->dict_map_offset};
 
   for (thread_index_type val_idx = s_start_value_idx + tile.meta_group_rank();
        val_idx < end_value_idx;
@@ -326,7 +329,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
 }
 
-void populate_chunk_hash_maps(window_type* const map_storage,
+void populate_chunk_hash_maps(device_span<window_type> const map_storage,
                               cudf::detail::device_2dspan<PageFragment const> frags,
                               rmm::cuda_stream_view stream)
 {
@@ -335,7 +338,7 @@ void populate_chunk_hash_maps(window_type* const map_storage,
     <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(map_storage, frags);
 }
 
-void collect_map_entries(window_type* const map_storage,
+void collect_map_entries(device_span<window_type> const map_storage,
                          device_span<EncColumnChunk> chunks,
                          rmm::cuda_stream_view stream)
 {
@@ -344,7 +347,7 @@ void collect_map_entries(window_type* const map_storage,
     <<<chunks.size(), block_size, 0, stream.value()>>>(map_storage, chunks);
 }
 
-void get_dictionary_indices(window_type* const map_storage,
+void get_dictionary_indices(device_span<window_type> const map_storage,
                             cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream)
 {

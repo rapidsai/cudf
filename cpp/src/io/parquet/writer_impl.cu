@@ -1330,6 +1330,8 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   // Initialize storage with the given sentinel iff non-zero size
   map_storage.initialize(cuco::pair{KEY_SENTINEL, VALUE_SENTINEL},
                          cuda::stream_ref{stream.value()});
+  // Create a span of non-const map_storage as map_storage_ref takes in a non-const pointer.
+  device_span<window_type> const map_storage_data{map_storage.data(), total_map_storage_size};
 
   // Populate chunk dictionary offsets
   std::for_each(
@@ -1343,7 +1345,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   // Synchronize
   chunks.host_to_device_async(stream);
   // Populate the hash map for each chunk
-  populate_chunk_hash_maps(map_storage.data(), frags, stream);
+  populate_chunk_hash_maps(map_storage_data, frags, stream);
   // Synchronize again
   chunks.device_to_host_sync(stream);
 
@@ -1404,8 +1406,8 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     chunk.dict_index          = inserted_dict_index.data();
   }
   chunks.host_to_device_async(stream);
-  collect_map_entries(map_storage.data(), chunks.device_view().flat_view(), stream);
-  get_dictionary_indices(map_storage.data(), frags, stream);
+  collect_map_entries(map_storage_data, chunks.device_view().flat_view(), stream);
+  get_dictionary_indices(map_storage_data, frags, stream);
 
   return std::pair(std::move(dict_data), std::move(dict_index));
 }

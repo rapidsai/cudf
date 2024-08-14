@@ -30,7 +30,7 @@ using key_type    = size_type;
 using mapped_type = size_type;
 using slot_type   = cuco::pair<key_type, mapped_type>;
 
-auto constexpr map_cg_size = 2;  ///< A CUDA Cooperative Group of 4 thread to handle each subset
+auto constexpr map_cg_size = 2;  ///< A CUDA Cooperative Group of 2 threads to handle each subset
 auto constexpr window_size = 1;  ///< Number of concurrent slots handled by each thread
 
 auto constexpr KEY_SENTINEL   = key_type{-1};
@@ -87,22 +87,22 @@ inline size_type __device__ row_to_value_idx(size_type idx,
 /**
  * @brief Insert chunk values into their respective hash maps
  *
- * @param map_storage Pointer to the bulk hashmap storage
+ * @param map_storage Bulk hashmap storage
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void populate_chunk_hash_maps(window_type* map_storage,
+void populate_chunk_hash_maps(device_span<window_type> const map_storage,
                               cudf::detail::device_2dspan<PageFragment const> frags,
                               rmm::cuda_stream_view stream);
 
 /**
  * @brief Compact dictionary hash map entries into chunk.dict_data
  *
- * @param map_storage Pointer to the bulk hashmap storage
+ * @param map_storage Bulk hashmap storage
  * @param chunks Flat span of chunks to compact hash maps for
  * @param stream CUDA stream to use
  */
-void collect_map_entries(window_type* map_storage,
+void collect_map_entries(device_span<window_type> const map_storage,
                          device_span<EncColumnChunk> chunks,
                          rmm::cuda_stream_view stream);
 
@@ -115,11 +115,11 @@ void collect_map_entries(window_type* map_storage,
  * Since dict_data itself contains indices into the original cudf column, this means that
  * col[row] == col[dict_data[dict_index[row - chunk.start_row]]]
  *
- * @param map_storage Pointer to the bulk hashmap storage
+ * @param map_storage Bulk hashmap storage
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void get_dictionary_indices(window_type* map_storage,
+void get_dictionary_indices(device_span<window_type> const map_storage,
                             cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream);
 
