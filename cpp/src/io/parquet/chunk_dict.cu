@@ -160,9 +160,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   using block_reduce = cub::BlockReduce<size_type, block_size>;
   __shared__ typename block_reduce::TempStorage reduce_storage;
 
-  auto const block  = cg::this_thread_block();
-  auto const tile   = cg::tiled_partition<map_cg_size>(block);
-  auto const ntiles = tile.meta_group_size();
+  auto const block = cg::this_thread_block();
+  auto const tile  = cg::tiled_partition<map_cg_size>(block);
 
   size_type start_row = frag.start_row;
   size_type end_row   = frag.start_row + frag.num_rows;
@@ -177,20 +176,18 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   __shared__ size_type total_num_dict_entries;
 
   // Insert all column chunk elements to the hash map to build the dict.
-  for (thread_index_type val_idx = s_start_value_idx + block.thread_rank();
-       val_idx - block_size < end_value_idx;
+  for (thread_index_type val_idx = s_start_value_idx;
+       val_idx + block.thread_rank() - block_size < end_value_idx;
        val_idx += block_size) {
     // Compute the index to the start of the tile.
-    auto const val_idx_base =
-      val_idx - block.thread_rank() + (tile.meta_group_rank() * tile.num_threads());
-
     size_type is_unique      = 0;
     size_type uniq_elem_size = 0;
 
     // Insert all elements within each tile.
     for (auto tile_offset = 0; tile_offset < tile.num_threads(); tile_offset++) {
       // Compute the index to the element being inserted within the tile.
-      auto const tile_val_idx = val_idx_base + tile_offset;
+      auto const tile_val_idx =
+        val_idx + tile_offset + (tile.meta_group_rank() * tile.num_threads());
 
       // Check if this index is valid.
       auto const is_valid = tile_val_idx < end_value_idx and tile_val_idx < data_col.size() and
@@ -202,7 +199,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         auto const tile_is_unique = type_dispatcher(
           data_col.type(), map_insert_fn{storage_ref}, data_col, tile, tile_val_idx);
 
-        // tile_offset'th thread updates its number and size of unique element.
+        // tile_offset'th thread in the tile updates its number and size of unique element.
         if (tile.thread_rank() == tile_offset) {
           is_unique      = tile_is_unique;
           uniq_elem_size = [&]() -> size_type {
