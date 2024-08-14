@@ -4741,6 +4741,13 @@ class IndexedFrame(Frame):
             # and numpy is used to sample columns. This is because row data
             # is stored on device, and the column objects are stored on host.
             lib = cp if axis == 0 else np
+            if (
+                type(random_state) is int  # noqa: E721
+                and lib is cp
+                and cp.__version__ == "13.2.0"
+            ):
+                # TODO: Remove, only exists for CuPy 13.2 + NumPy 2
+                random_state = cp.uint32(random_state)
             random_state = lib.random.RandomState(seed=random_state)
 
         # Normalize `weights` array.
