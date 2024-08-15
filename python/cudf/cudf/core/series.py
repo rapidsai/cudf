@@ -3589,6 +3589,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             raise NotImplementedError("level is currently not supported.")
         if errors != "ignore":
             raise NotImplementedError("errors is currently not supported.")
+        if not is_scalar(index):
+            raise NotImplementedError(
+                ".rename does not currently support relabeling the index."
+            )
         out_data = self._data.copy(deep=copy)
         return Series._from_data(out_data, self.index, name=index)
 
