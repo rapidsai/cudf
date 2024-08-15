@@ -3350,14 +3350,14 @@ def interval_range(
     if len(right_col) == 0 or len(left_col) == 0:
         dtype = IntervalDtype("int64", closed)
         data = column.column_empty_like_same_mask(left_col, dtype)
-        return IntervalIndex(data, closed=closed)
+        return IntervalIndex(data, closed=closed, name=name)
 
     interval_col = IntervalColumn(
         dtype=IntervalDtype(left_col.dtype, closed),
         size=len(left_col),
         children=(left_col, right_col),
     )
-    return IntervalIndex(interval_col, closed=closed)
+    return IntervalIndex(interval_col, closed=closed, name=name)
 
 
 class IntervalIndex(Index):
