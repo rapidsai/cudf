@@ -16,6 +16,7 @@ from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
+from cudf.utils.performance_tracking import _performance_tracking
 
 
 def generate_arg_type_tuple(args, kwargs):
@@ -31,11 +32,10 @@ def generate_arg_type_tuple(args, kwargs):
     return tuple(result)
 
 
-# Note that the metaclass below can easily be generalized for use with
-# other classes, if needed in the future. Simply replace the arguments
-# of the `__call__` method with `*args` and `**kwargs`. This will
-# result in additional overhead when constructing the cache key, as
-# unpacking *args and **kwargs is not cheap. See the discussion in
+# The cache key is generated from args and kwargs so that the cache can support
+# objects that inherit from Scalar. This will result in additional overhead
+# when constructing the cache key, as unpacking *args and **kwargs is not cheap.
+# For now, we'll track the performance of __call__. See the discussion in
 # https://github.com/rapidsai/cudf/pull/11246#discussion_r955843532
 # for details.
 class CachedScalarInstanceMeta(type):
@@ -55,6 +55,7 @@ class CachedScalarInstanceMeta(type):
         self.__maxsize = maxsize
         self.__instances = OrderedDict()
 
+    @_performance_tracking
     def __call__(self, *args, **kwargs):
         # the cache key is constructed from the arguments, and also
         # the _types_ of the arguments, since objects of different
