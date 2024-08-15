@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "tpch_datagen.hpp"
+
 #include "rand_utilities.hpp"
 #include "table_helpers.hpp"
 
@@ -33,8 +35,6 @@
 #include <cudf/strings/padding.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
-
-#include <cudf_benchmark/tpch_datagen.hpp>
 
 #include <string>
 #include <vector>
