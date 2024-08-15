@@ -1300,11 +1300,9 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
       chunk.use_dictionary = false;
     } else {
       chunk.use_dictionary = true;
-      // cuCollections suggests using a hash map of size N * (1/0.7) = 1.43 to target a 70%
-      // occupancy factor.
       chunk.dict_map_size =
         static_cast<cudf::size_type>(cuco::make_window_extent<map_cg_size, window_size>(
-          static_cast<cudf::size_type>(1.43 * chunk.num_values)));
+          static_cast<cudf::size_type>(occupancy_factor * chunk.num_values)));
       chunk.dict_map_offset = curr_offset;
       curr_offset += chunk.dict_map_size;
     }
@@ -1318,14 +1316,13 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
 
   // Create a single bulk storage used by all sub-dictionaries
   auto map_storage = storage_type{total_map_storage_size};
-  // Initialize storage with the given sentinel iff non-zero size
-  map_storage.initialize(cuco::pair{KEY_SENTINEL, VALUE_SENTINEL},
-                         cuda::stream_ref{stream.value()});
   // Create a span of non-const map_storage as map_storage_ref takes in a non-const pointer.
   device_span<window_type> const map_storage_data{map_storage.data(), total_map_storage_size};
 
   // Synchronize
   chunks.host_to_device_async(stream);
+  // Initialize storage with the given sentinel
+  map_storage.initialize({KEY_SENTINEL, VALUE_SENTINEL}, {stream.value()});
   // Populate the hash map for each chunk
   populate_chunk_hash_maps(map_storage_data, frags, stream);
   // Synchronize again

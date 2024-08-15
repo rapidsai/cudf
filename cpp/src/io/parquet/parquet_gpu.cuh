@@ -30,8 +30,10 @@ using key_type    = size_type;
 using mapped_type = size_type;
 using slot_type   = cuco::pair<key_type, mapped_type>;
 
-auto constexpr map_cg_size = 2;  ///< A CUDA Cooperative Group of 2 threads to handle each subset
-auto constexpr window_size = 2;  ///< Number of concurrent slots handled by each thread
+auto constexpr map_cg_size = 1;  ///< A CUDA Cooperative Group of 1 thread(s) to handle each subset
+auto constexpr window_size = 1;  ///< Number of concurrent slots handled by each thread
+auto constexpr occupancy_factor = 1.43f;  ///< cuCollections suggests using a hash map of size N *
+                                          ///< (1/0.7) = 1.43 to target a 70% occupancy factor.
 
 auto constexpr KEY_SENTINEL   = key_type{-1};
 auto constexpr VALUE_SENTINEL = mapped_type{-1};
