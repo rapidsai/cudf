@@ -244,16 +244,18 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   __syncthreads();
 
   for (size_type idx = threadIdx.x; idx < chunk.dict_map_size; idx += block_size) {
-    auto* slot     = map_storage.data() + chunk.dict_map_offset + idx;
-    auto const key = slot->data()->first;
-    if (key != KEY_SENTINEL) {
-      auto loc = counter.fetch_add(1, memory_order_relaxed);
-      cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
-      chunk.dict_data[loc] = key;
-      // If sorting dict page ever becomes a hard requirement, enable the following statement and
-      // add a dict sorting step before storing into the slot's second field.
-      // chunk.dict_data_idx[loc] = idx;
-      slot->data()->second = loc;
+    auto* window = map_storage.data() + chunk.dict_map_offset + idx;
+    for (auto& slot : *window) {
+      auto const key = slot.first;
+      if (key != KEY_SENTINEL) {
+        auto loc = counter.fetch_add(1, memory_order_relaxed);
+        cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
+        chunk.dict_data[loc] = key;
+        // If sorting dict page ever becomes a hard requirement, enable the following statement and
+        // add a dict sorting step before storing into the slot's second field.
+        // chunk.dict_data_idx[loc] = idx;
+        slot.second = loc;
+      }
     }
   }
 }
