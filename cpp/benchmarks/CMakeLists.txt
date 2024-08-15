@@ -59,12 +59,6 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
 )
 
-install(
-  TARGETS cudf_tpch_datagen
-  DESTINATION ${lib_dir}
-  EXPORT cudf-exports
-)
-
 # ##################################################################################################
 # * compiler function -----------------------------------------------------------------------------
 
