@@ -101,13 +101,15 @@ def test_category_dtype_unique(data):
     assert_eq(actual, pd.Series(expected))
 
 
-def test_unique_fails(df):
+def test_unique_fails_value_error(df):
     with pytest.raises(
         ValueError,
         match="Must pass cudf.Series, cudf.Index, or cupy.ndarray object",
     ):
         cudf.unique(df)
 
+
+def test_unique_fails_not_implemented_error(df):
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(
             NotImplementedError, match="cudf.Categorical is not implemented"
