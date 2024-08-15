@@ -120,7 +120,17 @@ def _normalize_series_and_dataframe(
             objs[idx] = obj.to_frame(name=name)
 
 
-def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
+def concat(
+    objs,
+    axis=0,
+    join="outer",
+    ignore_index=False,
+    keys=None,
+    levels=None,
+    names=None,
+    verify_integrity=False,
+    sort=None,
+):
     """Concatenate DataFrames, Series, or Indices row-wise.
 
     Parameters
@@ -134,6 +144,21 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     ignore_index : bool, default False
         Set True to ignore the index of the *objs* and provide a
         default range index instead.
+    keys : sequence, default None
+        If multiple levels passed, should contain tuples. Construct
+        hierarchical index using the passed keys as the outermost level.
+        Currently not supported.
+    levels : list of sequences, default None
+        Specific levels (unique values) to use for constructing a
+        MultiIndex. Otherwise they will be inferred from the keys.
+        Currently not supported.
+    names : list, default None
+        Names for the levels in the resulting hierarchical index.
+        Currently not supported.
+    verify_integrity : bool, default False
+        Check whether the new concatenated axis contains duplicates. This can
+        be very expensive relative to the actual data concatenation.
+        Currently not supported.
     sort : bool, default False
         Sort non-concatenation axis if it is not already aligned.
 
@@ -245,6 +270,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     0      a       1       c       3
     1      b       2       d       4
     """
+    if keys is not None:
+        raise NotImplementedError("keys is currently not supported")
+    if levels is not None:
+        raise NotImplementedError("levels is currently not supported")
+    if names is not None:
+        raise NotImplementedError("names is currently not supported")
     # TODO: Do we really need to have different error messages for an empty
     # list and a list of None?
     if not objs:
@@ -262,7 +293,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 f"Can only concatenate dictionary input along axis=1, not {axis}"
             )
         objs = {k: obj for k, obj in objs.items() if obj is not None}
-        keys = list(objs)
+        keys_objs = list(objs)
         objs = list(objs.values())
         if any(isinstance(o, cudf.BaseIndex) for o in objs):
             raise TypeError(
@@ -270,7 +301,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             )
     else:
         objs = [obj for obj in objs if obj is not None]
-        keys = None
+        keys_objs = None
 
     if not objs:
         raise ValueError("All objects passed were None")
@@ -319,8 +350,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 result = obj.to_frame()
             else:
                 result = obj.copy(deep=True)
-            if keys is not None and isinstance(result, cudf.DataFrame):
-                k = keys[0]
+            if keys_objs is not None and isinstance(result, cudf.DataFrame):
+                k = keys_objs[0]
                 result.columns = pd.MultiIndex.from_tuples(
                     [
                         (k, *c) if isinstance(c, tuple) else (k, c)
@@ -376,7 +407,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         result_data = {}
         result_columns = None
-        if keys is None:
+        if keys_objs is None:
             for o in objs:
                 for name, col in o._data.items():
                     if name in result_data:
@@ -414,9 +445,9 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                     "label types in cuDF at this time. You must convert "
                     "the labels to the same type."
                 )
-            for k, o in zip(keys, objs):
+            for k, o in zip(keys_objs, objs):
                 for name, col in o._data.items():
-                    # if only series, then only keep keys as column labels
+                    # if only series, then only keep keys_objs as column labels
                     # if the existing column is multiindex, prepend it
                     # to handle cases where dfs and srs are concatenated
                     if only_series:
@@ -674,7 +705,7 @@ def melt(
 
 
 def get_dummies(
-    df,
+    data,
     prefix=None,
     prefix_sep="_",
     dummy_na=False,
@@ -689,7 +720,7 @@ def get_dummies(
 
     Parameters
     ----------
-    df : array-like, Series, or DataFrame
+    data : array-like, Series, or DataFrame
         Data of which to get dummy indicators.
     prefix : str, dict, or sequence, optional
         Prefix to append. Either a str (to apply a constant prefix), dict
@@ -767,17 +798,22 @@ def get_dummies(
 
     if cats is None:
         cats = {}
+    else:
+        warnings.warn(
+            "cats is deprecated and will be removed in a future version.",
+            FutureWarning,
+        )
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 
     if drop_first:
         raise NotImplementedError("drop_first is not supported yet")
 
-    if isinstance(df, cudf.DataFrame):
+    if isinstance(data, cudf.DataFrame):
         encode_fallback_dtypes = ["object", "category"]
 
         if columns is None or len(columns) == 0:
-            columns = df.select_dtypes(
+            columns = data.select_dtypes(
                 include=encode_fallback_dtypes
             )._column_names
 
@@ -804,33 +840,33 @@ def get_dummies(
         # If we have no columns to encode, we need to drop
         # fallback columns(if any)
         if len(columns) == 0:
-            return df.select_dtypes(exclude=encode_fallback_dtypes)
+            return data.select_dtypes(exclude=encode_fallback_dtypes)
         else:
             result_data = {
                 col_name: col
-                for col_name, col in df._data.items()
+                for col_name, col in data._data.items()
                 if col_name not in columns
             }
 
             for name in columns:
                 if name not in cats:
                     unique = _get_unique(
-                        column=df._data[name], dummy_na=dummy_na
+                        column=data._data[name], dummy_na=dummy_na
                     )
                 else:
                     unique = as_column(cats[name])
 
                 col_enc_data = _one_hot_encode_column(
-                    column=df._data[name],
+                    column=data._data[name],
                     categories=unique,
                     prefix=prefix_map.get(name, prefix),
                     prefix_sep=prefix_sep_map.get(name, prefix_sep),
                     dtype=dtype,
                 )
                 result_data.update(col_enc_data)
-            return cudf.DataFrame._from_data(result_data, index=df.index)
+            return cudf.DataFrame._from_data(result_data, index=data.index)
     else:
-        ser = cudf.Series(df)
+        ser = cudf.Series(data)
         unique = _get_unique(column=ser._column, dummy_na=dummy_na)
         data = _one_hot_encode_column(
             column=ser._column,
