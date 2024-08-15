@@ -526,6 +526,11 @@ def to_cudf_dispatch_from_pandas(data, nan_as_null=None, **kwargs):
     return cudf.from_pandas(data, nan_as_null=nan_as_null)
 
 
+@to_cudf_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+def to_cudf_dispatch_from_cudf(data, **kwargs):
+    return data
+
+
 # Define "cudf" backend engine to be registered with Dask
 class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
     """Backend-entrypoint class for Dask-DataFrame
