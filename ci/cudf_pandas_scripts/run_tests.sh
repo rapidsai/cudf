@@ -36,8 +36,10 @@ if [ "$no_cudf" = true ]; then
     echo "Skipping cudf install"
 else
     RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
-    RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
-    python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,cudf-pandas-tests]
+    RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./dist
+    # echo to expand wildcard before adding `[extra]` requires for pip
+    python -m pip install \
+        "$(echo ./dist/cudf*.whl)[test,cudf-pandas-tests]"
 fi
 
 python -m pytest -p cudf.pandas \
