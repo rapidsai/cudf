@@ -22,7 +22,22 @@ cpdef Column capitalize(
     # TODO: default scalar values
     # https://github.com/rapidsai/cudf/issues/15505
 ):
+    """Returns a column of capitalized strings.
 
+    For details, see :cpp:func:`cudf::strings::capitalize`.
+
+    Parameters
+    ----------
+    input : Column
+        String column
+    delimiters : Scalar, default None
+        Characters for identifying words to capitalize
+
+    Returns
+    -------
+    pylibcudf.Column
+        Column of strings capitalized from the input column
+    """
     cdef unique_ptr[column] c_result
 
     if delimiters is None:
@@ -47,6 +62,23 @@ cpdef Column title(
     Column input,
     string_character_types sequence_type=string_character_types.ALPHA
 ):
+    """Modifies first character of each word to upper-case and lower-cases
+    the rest.
+
+    For details, see :cpp:func:`cudf::strings::title`.
+
+    Parameters
+    ----------
+    input : Column
+        String column
+    sequence_type : string_character_types, default string_character_types.ALPHA
+        The character type that is used when identifying words
+
+    Returns
+    -------
+    pylibcudf.Column
+        Column of titled strings
+    """
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = cpp_capitalize.title(input.view(), sequence_type)
@@ -55,6 +87,20 @@ cpdef Column title(
 
 
 cpdef Column is_title(Column input):
+    """Checks if the strings in the input column are title formatted.
+
+    For details, see :cpp:func:`cudf::strings::is_title`.
+
+    Parameters
+    ----------
+    input : Column
+        String column
+
+    Returns
+    -------
+    pylibcudf.Column
+        Column of type BOOL8
+    """
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = cpp_capitalize.is_title(input.view())

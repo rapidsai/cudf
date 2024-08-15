@@ -97,10 +97,11 @@ std::unique_ptr<column> transform(column_view const& input,
                                   std::string const& unary_udf,
                                   data_type output_type,
                                   bool is_ptx,
+                                  rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::transform(input, unary_udf, output_type, is_ptx, cudf::get_default_stream(), mr);
+  return detail::transform(input, unary_udf, output_type, is_ptx, stream, mr);
 }
 
 }  // namespace cudf
