@@ -310,7 +310,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 {
   CUDF_FUNC_RANGE();
 
-  if (byte_range.empty()) { return make_empty_column(type_id::STRING); }
+  if (byte_range.is_empty()) { return make_empty_column(type_id::STRING); }
 
   auto device_delim = cudf::string_scalar(delimiter, true, stream, mr);
 
