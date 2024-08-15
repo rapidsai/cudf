@@ -25,8 +25,8 @@ from cudf.io.parquet import _apply_post_filters, _normalize_filters
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
 from cudf.utils.ioutils import (
     _ROW_GROUP_SIZE_BYTES_DEFAULT,
+    _fsspec_data_transfer,
     _is_local_filesystem,
-    _prefetch_remote_buffers,
 )
 
 
@@ -96,25 +96,9 @@ class CudfEngine(ArrowDatasetEngine):
         # Non-local filesystem handling
         paths_or_fobs = paths
         if not _is_local_filesystem(fs):
-            # Use fsspec to transfer byte ranges ahead of time
-            prefetcher = kwargs.pop("prefetcher", "parquet")
-            prefetcher_options = (
-                {
-                    "columns": columns,
-                    # All paths must have the same row-group selection
-                    "row_groups": row_groups[0] if row_groups else None,
-                }
-                if prefetcher == "parquet"
-                else {}
-            )
-            paths_or_fobs = _prefetch_remote_buffers(
-                paths,
-                fs,
-                prefetcher=prefetcher,
-                prefetcher_options=prefetcher_options.update(
-                    kwargs.pop("prefetcher_options", {})
-                ),
-            )
+            paths_or_fobs = [
+                _fsspec_data_transfer(fpath, fs=fs) for fpath in paths
+            ]
 
         # Use cudf to read in data
         try:
