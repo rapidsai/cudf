@@ -24,8 +24,20 @@ RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE
 RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
 python -m pip install ./local-cudf-dep/cudf*.whl
 
-rapids-logger "Install cudf_polars"
-python -m pip install $(echo ./dist/cudf_polars*.whl)[test]
+rapids-logger "Install cudf_polars and test requirements"
+PIP_PACKAGE=$(echo ./dist/cudf_polars*.whl | head -n1)
+# Use `package[test]` to install latest test dependencies or explicitly install oldest.
+if [[ $RAPIDS_DEPENDENCIES != "oldest" ]]; then
+    python -m pip install ${PIP_PACKAGE}[test]
+else
+    rapids-dependency-file-generator \
+        --output requirements \
+        --file-key py_test_cudf_polars \
+        --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
+      | tee oldest-dependencies.txt
+
+    python -m pip install ${PIP_PACKAGE} -r oldest-dependencies.txt
+fi
 
 rapids-logger "Run cudf_polars tests"
 

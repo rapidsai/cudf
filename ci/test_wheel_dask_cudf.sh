@@ -10,8 +10,20 @@ RAPIDS_PY_WHEEL_NAME="dask_cudf_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="
 RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
 python -m pip install ./local-cudf-dep/cudf*.whl
 
-# echo to expand wildcard before adding `[extra]` requires for pip
-python -m pip install $(echo ./dist/dask_cudf*.whl)[test]
+rapids-logger "Install dask_cudf and test requirements"
+PIP_PACKAGE=$(echo ./dist/dask_cudf*.whl | head -n1)
+# Use `package[test]` to install latest test dependencies or explicitly install oldest.
+if [[ $RAPIDS_DEPENDENCIES != "oldest" ]]; then
+    python -m pip install -v ${PIP_PACKAGE}[test]
+else
+    rapids-dependency-file-generator \
+        --output requirements \
+        --file-key py_test_dask_cudf \
+        --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
+      | tee oldest-dependencies.txt
+
+    python -m pip install -v ${PIP_PACKAGE} -r oldest-dependencies.txt
+fi
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
