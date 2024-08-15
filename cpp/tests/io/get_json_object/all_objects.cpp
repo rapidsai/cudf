@@ -1,3 +1,5 @@
+// Copyright (c) 2024, NVIDIA CORPORATION.
+// clang-format off
 get_json_object(columnA, "$.EIFGPHGLOPELFBN");
 // get_json_object(columnB, "$[0].GHPKNICLNDAGCNDBMFGEK[0].KIKNFPPAPGDO.KLFALIBALPPK.HGABIFNPHAHHGP");
 
@@ -63,9 +65,9 @@ get_json_object(columnC, "$.AENBHHGIABBBDDGOEI.BFAJJIOLJBEOMFKLE.CGEGPD[0].GMFDD
 get_json_object(columnC, "$.AENBHHGIABBBDDGOEI.DOONHL.CGEGPD[0].GMFDD");
 get_json_object(columnC, "$.OCIKAF");
 get_json_object(columnC, "$.IBMBCGNOCGCPCEN[*].GLNLBEA");
- 
+
 get_json_object(columnD, "$.KPIGLEDEOCFELKLJLAFE");
- 
+
 get_json_object(columnE, "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].GPGACKDIBMPAKJMDMJ");
 get_json_object(columnE, "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].NOIIFOJOPJP");
 get_json_object(columnE, "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].CEJOOHNF");
@@ -81,3 +83,4 @@ get_json_object(columnE, "$.JJKPNPFMNICGLC.GGLF.JKKJDAKAB");
 get_json_object(columnE, "$.KPIGLEDEOCFELKLJLAFE");
 get_json_object(columnE, "$.PACKGGMDGCLEHD.IAFMNJMMNJPDAAHND");
 get_json_object(columnE, "$.PACKGGMDGCLEHD.MNIMBEMMOJFHILDMDBML");
+// clang-format on

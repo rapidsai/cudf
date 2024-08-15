@@ -16,8 +16,9 @@
 
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/io/new_json_object.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+
 #include <rmm/resource_ref.hpp>
 
 #include <memory>
@@ -65,8 +66,8 @@ std::vector<std::unique_ptr<cudf::column>> get_json_object_multiple_paths(
   cudf::strings_column_view const& input,
   std::vector<std::vector<std::tuple<path_instruction_type, std::string, int32_t>>> const&
     json_paths,
-  int64_t memory_budget_bytes = -1,
-  int32_t parallel_override = -1,
+  int64_t memory_budget_bytes       = -1,
+  int32_t parallel_override         = -1,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 

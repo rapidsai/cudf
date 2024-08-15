@@ -16,16 +16,15 @@
 
 #include "cudf/column/column.hpp"
 #include "cudf/column/column_view.hpp"
+#include "cudf/io/json.hpp"
 #include "cudf/io/types.hpp"
 #include "cudf/lists/extract.hpp"
 #include "cudf/scalar/scalar.hpp"
-#include "thrust/fill.h"
-#include "thrust/find.h"
 #include "rmm/device_buffer.hpp"
 #include "rmm/device_uvector.hpp"
 #include "rmm/exec_policy.hpp"
-#include "cudf/io/json.hpp"
-#include <cudf/io/new_json_object.hpp>
+#include "thrust/fill.h"
+#include "thrust/find.h"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/binaryop.hpp>
@@ -35,6 +34,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/detail/tokenize_json.hpp>
+#include <cudf/io/new_json_object.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/attributes.hpp>
@@ -60,11 +60,13 @@
 namespace cudf {
 namespace spark_rapids_jni {
 
-void print_schema(cudf::io::schema_element const& sch) {
-  // std::cout << (sch.type.id()==type_id::LIST ? "LIST." : sch.type.id()==type_id::STRUCT ? "STRUCT." : sch.type.id()==type_id::STRING ? "STRING." : "OTHER.");
-  std::cout<< (sch.type.id()==cudf::type_id::STRING ? "STRING." : "");
-  for(auto ch : sch.child_types) {
-    std::cout<<ch.first<<">";
+void print_schema(cudf::io::schema_element const& sch)
+{
+  // std::cout << (sch.type.id()==type_id::LIST ? "LIST." : sch.type.id()==type_id::STRUCT ?
+  // "STRUCT." : sch.type.id()==type_id::STRING ? "STRING." : "OTHER.");
+  std::cout << (sch.type.id() == cudf::type_id::STRING ? "STRING." : "");
+  for (auto ch : sch.child_types) {
+    std::cout << ch.first << ">";
     print_schema(ch.second);
   }
 }
@@ -275,10 +277,10 @@ rmm::device_buffer just_concat(cudf::column_view const& input,
   }
 
   auto first_char = *thrust::device_pointer_cast(input_scv.chars_begin(stream));
-  auto all_done = cudf::strings::join_strings(
+  auto all_done   = cudf::strings::join_strings(
     input_scv,
     cudf::string_scalar(std::string(1, first_non_existing_char), true, stream, mr),
-    cudf::string_scalar(first_char == '[' ? "[]": "{}", true, stream, mr),
+    cudf::string_scalar(first_char == '[' ? "[]" : "{}", true, stream, mr),
     stream,
     mr);
   return extract_character_buffer(std::move(all_done), stream, mr);
@@ -327,21 +329,21 @@ std::vector<std::unique_ptr<cudf::column>> extract_result_columns(
   // vector of columns. inside it could be struct or lists.
   CUDF_FUNC_RANGE();
 
-  auto num_rows = result.tbl->num_rows();
-  auto root = cudf::make_structs_column(num_rows, (result.tbl)->release(), 0, {});
-  auto& metadata   = result.metadata.schema_info;
+  auto num_rows  = result.tbl->num_rows();
+  auto root      = cudf::make_structs_column(num_rows, (result.tbl)->release(), 0, {});
+  auto& metadata = result.metadata.schema_info;
   std::vector<std::unique_ptr<cudf::column>> output;
   output.reserve(json_paths.size());
   for (auto path : json_paths) {
     auto* this_meta = &metadata;
-    auto this_col  = root->view();
+    auto this_col   = root->view();
     std::unique_ptr<cudf::column> holder;
-    bool notfound    = false;
-    bool is_root = true;
+    bool notfound = false;
+    bool is_root  = true;
     for (auto [path_type, name, index] : path) {
       // std::cout<<name<<","<<index<<".";
-      bool is_list_root = is_root && path_type==path_instruction_type::INDEX;
-      if(is_list_root or (path_type == path_instruction_type::NAMED)) {
+      bool is_list_root = is_root && path_type == path_instruction_type::INDEX;
+      if (is_list_root or (path_type == path_instruction_type::NAMED)) {
         auto col_name = is_list_root ? std::to_string(index) : name;
         auto it = std::find_if(this_meta->begin(), this_meta->end(), [col_name](auto col_info) {
           return col_info.name == col_name;
@@ -349,44 +351,52 @@ std::vector<std::unique_ptr<cudf::column>> extract_result_columns(
         if (it == this_meta->end()) {
           // NOT FOUND, null column or nullptr?
           // output.push_back(nullptr);
-          std::cout<<"struct "<< col_name<< " not found\n";
-          std::cout<<"struct:\n";
-          std::for_each(this_meta->begin(), this_meta->end(), [](auto c) { std::cout<<c.name<<","; }); std::cout<<"\n";
-          notfound=true;
+          std::cout << "struct " << col_name << " not found\n";
+          std::cout << "struct:\n";
+          std::for_each(
+            this_meta->begin(), this_meta->end(), [](auto c) { std::cout << c.name << ","; });
+          std::cout << "\n";
+          notfound = true;
           break;
         } else {
           // next.
           // if (it->children.empty()) {
-          //   // output.push_back(std::make_unique<cudf::column>(this_col.child(it - this_meta->begin()))); 
-          //   break;
+          //   // output.push_back(std::make_unique<cudf::column>(this_col.child(it -
+          //   this_meta->begin()))); break;
           // }
           this_col  = this_col.child(it - this_meta->begin());
           this_meta = &(it->children);
         }
       } else if (path_type == path_instruction_type::WILDCARD) {
         // std::cout<<"list:";
-        // std::for_each(this_meta->begin(), this_meta->end(), [](auto c) { std::cout<<c.name<<","; }); std::cout<<"\n";
-        if(this_meta->empty()) { 
-          std::cout<<"list * not found\n";
-          notfound=true; break; }
+        // std::for_each(this_meta->begin(), this_meta->end(), [](auto c) { std::cout<<c.name<<",";
+        // }); std::cout<<"\n";
+        if (this_meta->empty()) {
+          std::cout << "list * not found\n";
+          notfound = true;
+          break;
+        }
         this_meta = &((*this_meta)[1].children);
         this_col  = this_col.child(1);
       } else if (path_type == path_instruction_type::INDEX) {
         // std::cout<<"list:";
-        // std::for_each(this_meta->begin(), this_meta->end(), [](auto c) { std::cout<<c.name<<","; }); std::cout<<"\n";
-        if(this_meta->empty()) {
-          std::cout<<"list "<<index<< " not found\n";
-          notfound=true; break; }
+        // std::for_each(this_meta->begin(), this_meta->end(), [](auto c) { std::cout<<c.name<<",";
+        // }); std::cout<<"\n";
+        if (this_meta->empty()) {
+          std::cout << "list " << index << " not found\n";
+          notfound = true;
+          break;
+        }
         this_meta = &((*this_meta)[1].children);
-        holder  = cudf::lists::extract_list_element(this_col, index, stream, mr);
-        this_col = holder->view();
+        holder    = cudf::lists::extract_list_element(this_col, index, stream, mr);
+        this_col  = holder->view();
       } else {
         CUDF_FAIL("Invalid path instruction type");
       }
       is_root = false;
     }
     // std::cout<<"\n";
-    if(notfound)
+    if (notfound)
       output.push_back(make_strings_column(
         num_rows,
         make_column_from_scalar(cudf::numeric_scalar<cudf::size_type>(0), num_rows + 1, stream, mr),
@@ -399,40 +409,44 @@ std::vector<std::unique_ptr<cudf::column>> extract_result_columns(
   return output;
 }
 
-//std::map<std::string, cudf::io::schema_element>
+// std::map<std::string, cudf::io::schema_element>
 auto json_path_to_schema(
-  std::vector<std::vector<std::tuple<path_instruction_type, std::string, int32_t>>> const& json_paths) {
-    cudf::io::schema_element root;
-    for (auto const& instructions : json_paths) {
-      cudf::io::schema_element* this_schema = &root;
-      bool is_root = true;
-      for (auto const& [type, name, index] : instructions) {
-        if (type == path_instruction_type::INDEX or type == path_instruction_type::WILDCARD) {
-          // std::cout << "[";
-          this_schema->type = cudf::data_type{cudf::type_id::LIST};
-          if (is_root and type == path_instruction_type::INDEX) {
-            this_schema = &(this_schema->child_types[std::to_string(index)]); //JSON parser implementation specific
-            // std::cout<<index;
-          } else {
-            this_schema = &(this_schema->child_types["element"]); //TODO consider using index here
-            // std::cout<<"*";
-          }
-          // std::cout<<"]";
-          this_schema->type = cudf::data_type{cudf::type_id::STRING};
-        } else if (type == path_instruction_type::NAMED) {
-          // std::cout<<"."<<name;
-          this_schema->type = cudf::data_type{cudf::type_id::STRUCT};
-          this_schema = &(this_schema->child_types[name]);
-          this_schema->type = cudf::data_type{cudf::type_id::STRING};
+  std::vector<std::vector<std::tuple<path_instruction_type, std::string, int32_t>>> const&
+    json_paths)
+{
+  cudf::io::schema_element root;
+  for (auto const& instructions : json_paths) {
+    cudf::io::schema_element* this_schema = &root;
+    bool is_root                          = true;
+    for (auto const& [type, name, index] : instructions) {
+      if (type == path_instruction_type::INDEX or type == path_instruction_type::WILDCARD) {
+        // std::cout << "[";
+        this_schema->type = cudf::data_type{cudf::type_id::LIST};
+        if (is_root and type == path_instruction_type::INDEX) {
+          this_schema =
+            &(this_schema
+                ->child_types[std::to_string(index)]);  // JSON parser implementation specific
+          // std::cout<<index;
         } else {
-          CUDF_FAIL("Invalid path instruction type");
+          this_schema = &(this_schema->child_types["element"]);  // TODO consider using index here
+          // std::cout<<"*";
         }
-        is_root = false;
+        // std::cout<<"]";
+        this_schema->type = cudf::data_type{cudf::type_id::STRING};
+      } else if (type == path_instruction_type::NAMED) {
+        // std::cout<<"."<<name;
+        this_schema->type = cudf::data_type{cudf::type_id::STRUCT};
+        this_schema       = &(this_schema->child_types[name]);
+        this_schema->type = cudf::data_type{cudf::type_id::STRING};
+      } else {
+        CUDF_FAIL("Invalid path instruction type");
       }
+      is_root = false;
     }
-    return root;
-    // return std::move(root.child_types);
   }
+  return root;
+  // return std::move(root.child_types);
+}
 
 std::vector<std::unique_ptr<cudf::column>> get_json_object_multiple_paths2(
   cudf::column_view const& input,
@@ -487,34 +501,36 @@ std::vector<std::unique_ptr<cudf::column>> get_json_object_multiple_paths2(
   // return .tbl->release();
 }
 
-std::vector<json_path_t> pathstrs_to_json_paths(std::vector<std::string> const& paths) {
+std::vector<json_path_t> pathstrs_to_json_paths(std::vector<std::string> const& paths)
+{
   std::vector<json_path_t> json_paths;
   const std::string delims = ".[";
   json_paths.reserve(paths.size());
-  for(std::string_view strpath : paths) {
+  for (std::string_view strpath : paths) {
     size_t start = 0;
     json_path_t jpath;
     while (start < strpath.size()) {
-          size_t end = strpath.find_first_of(delims, start);
-          std::string_view this_path;
-          if (end == std::string_view::npos) {
-            this_path = strpath.substr(start);
-          } else {
-            this_path = strpath.substr(start, end - start);
-            start = end + 1;
-          }
-          if (this_path == "$") continue;
-          else if (this_path == "*]") {
-            jpath.emplace_back(path_instruction_type::WILDCARD, "", -1);
-          } else if (this_path.back()==']') {
-            auto index = std::stoi(std::string(this_path.substr(0, this_path.size()-1)));
-            jpath.emplace_back(path_instruction_type::INDEX, "", index);
-          } else {
-            jpath.emplace_back(path_instruction_type::NAMED, this_path, -1);
-          }
-          if (end == std::string_view::npos) break;
+      size_t end = strpath.find_first_of(delims, start);
+      std::string_view this_path;
+      if (end == std::string_view::npos) {
+        this_path = strpath.substr(start);
+      } else {
+        this_path = strpath.substr(start, end - start);
+        start     = end + 1;
       }
-      json_paths.push_back(jpath);
+      if (this_path == "$")
+        continue;
+      else if (this_path == "*]") {
+        jpath.emplace_back(path_instruction_type::WILDCARD, "", -1);
+      } else if (this_path.back() == ']') {
+        auto index = std::stoi(std::string(this_path.substr(0, this_path.size() - 1)));
+        jpath.emplace_back(path_instruction_type::INDEX, "", index);
+      } else {
+        jpath.emplace_back(path_instruction_type::NAMED, this_path, -1);
+      }
+      if (end == std::string_view::npos) break;
+    }
+    json_paths.push_back(jpath);
   }
   return json_paths;
 }

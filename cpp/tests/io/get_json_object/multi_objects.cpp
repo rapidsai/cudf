@@ -1,3 +1,5 @@
+// Copyright (c) 2024, NVIDIA CORPORATION.
+// clang-format off
 get_json_object_multiple(columnA, {"$.EIFGPHGLOPELFBN",});
 get_json_object_multiple(columnB, {"$[0].GHPKNICLNDAGCNDBMFGEK[0].KIKNFPPAPGDO.KLFALIBALPPK.HGABIFNPHAHHGP",});
 
@@ -65,9 +67,9 @@ get_json_object_multiple(columnC, {
 "$.OCIKAF",
 "$.IBMBCGNOCGCPCEN[*].GLNLBEA",
 });
- 
+
 get_json_object_multiple(columnD, {"$.KPIGLEDEOCFELKLJLAFE",});
- 
+
 get_json_object_multiple(columnE, {
 "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].GPGACKDIBMPAKJMDMJ",
 "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].NOIIFOJOPJP",
@@ -85,3 +87,4 @@ get_json_object_multiple(columnE, {
 "$.PACKGGMDGCLEHD.IAFMNJMMNJPDAAHND",
 "$.PACKGGMDGCLEHD.MNIMBEMMOJFHILDMDBML",
 });
+// clang-format on
