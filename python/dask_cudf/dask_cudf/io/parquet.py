@@ -97,15 +97,23 @@ class CudfEngine(ArrowDatasetEngine):
         paths_or_fobs = paths
         if not _is_local_filesystem(fs):
             # Use fsspec to transfer byte ranges ahead of time
-            paths_or_fobs = _prefetch_remote_buffers(
-                paths,
-                fs,
-                prefetcher=kwargs.pop("prefetcher", "parquet"),
-                prefetcher_options={
+            prefetcher = kwargs.pop("prefetcher", "parquet")
+            prefetcher_options = (
+                {
                     "columns": columns,
                     # All paths must have the same row-group selection
                     "row_groups": row_groups[0] if row_groups else None,
-                },
+                }
+                if prefetcher == "parquet"
+                else {}
+            )
+            paths_or_fobs = _prefetch_remote_buffers(
+                paths,
+                fs,
+                prefetcher=prefetcher,
+                prefetcher_options=prefetcher_options.update(
+                    kwargs.pop("prefetcher_options", {})
+                ),
             )
 
         # Use cudf to read in data

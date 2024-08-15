@@ -1642,7 +1642,9 @@ def _set_context(obj, stack):
     return stack.enter_context(obj)
 
 
-def _get_remote_bytes_all(remote_paths, fs, *, bytes_per_thread=None):
+def _get_remote_bytes_all(
+    remote_paths, fs, *, blocksize=_BYTES_PER_THREAD_DEFAULT
+):
     # TODO: Avoid calling fs.sizes on many files
     # (Might as well just parallelize over files)
     sizes = fs.sizes(remote_paths)
@@ -1651,7 +1653,6 @@ def _get_remote_bytes_all(remote_paths, fs, *, bytes_per_thread=None):
 
     # Construct list of paths, starts, and stops
     paths, starts, ends = [], [], []
-    blocksize = bytes_per_thread or _BYTES_PER_THREAD_DEFAULT
     for i, remote_path in enumerate(remote_paths):
         for j in range(remote_starts[i], remote_ends[i], blocksize):
             paths.append(remote_path)
@@ -1678,12 +1679,10 @@ def _get_remote_bytes_parquet(
     *,
     columns=None,
     row_groups=None,
-    bytes_per_thread=None,
+    blocksize=_BYTES_PER_THREAD_DEFAULT,
 ):
     if fsspec_parquet is None or (columns is None and row_groups is None):
-        return _get_remote_bytes_all(
-            remote_paths, fs, bytes_per_thread=bytes_per_thread
-        )
+        return _get_remote_bytes_all(remote_paths, fs, blocksize=blocksize)
 
     sizes = fs.sizes(remote_paths)
     data = fsspec_parquet._get_parquet_byte_ranges(
@@ -1691,7 +1690,7 @@ def _get_remote_bytes_parquet(
         fs,
         columns=columns,
         row_groups=row_groups,
-        max_block=bytes_per_thread or _BYTES_PER_THREAD_DEFAULT,
+        max_block=blocksize,
     )
 
     buffers = []
@@ -1711,8 +1710,7 @@ def _prefetch_remote_buffers(
     paths,
     fs,
     *,
-    bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
-    prefetcher=None,
+    prefetcher="all",
     prefetcher_options=None,
 ):
     # Gather bytes ahead of time for remote filesystems
@@ -1728,7 +1726,6 @@ def _prefetch_remote_buffers(
         return prefetchers.get(prefetcher)(
             paths,
             fs,
-            bytes_per_thread=bytes_per_thread,
             **(prefetcher_options or {}),
         )
     else:
