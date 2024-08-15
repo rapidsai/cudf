@@ -811,8 +811,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # it into an Index and name the final index values according
             # to that column's name.
             *_, last_column = index._data.columns
-            out_index = cudf.Index(last_column)
-            out_index.name = index.names[-1]
+            out_index = cudf.Index._from_column(
+                last_column, name=index.names[-1]
+            )
             index = out_index
         elif out_index._num_columns > 1:
             # Otherwise pop the leftmost levels, names, and codes from the
@@ -1061,7 +1062,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 raise KeyError(f"Level not found: '{level}'")
         else:
             level_idx = colnames.index(level)
-        level_values = cudf.Index(
+        level_values = cudf.Index._from_column(
             self._data[level], name=self.names[level_idx]
         )
         return level_values
@@ -1394,12 +1395,16 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             raise TypeError(error_msg)
         codes = []
         levels = []
+        names_from_arrays = []
         for array in arrays:
             if not (is_list_like(array) or is_column_like(array)):
                 raise TypeError(error_msg)
             code, level = factorize(array, sort=True)
             codes.append(code)
             levels.append(level)
+            names_from_arrays.append(getattr(array, "name", None))
+        if names is None:
+            names = names_from_arrays
         return cls(
             codes=codes, levels=levels, sortorder=sortorder, names=names
         )
