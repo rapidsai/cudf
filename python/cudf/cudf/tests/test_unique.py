@@ -103,7 +103,7 @@ def test_category_dtype_unique(data):
 
 def test_unique_fails(df):
     with pytest.raises(
-        TypeError,
+        ValueError,
         match="Must pass cudf.Series, cudf.Index, or cupy.ndarray object",
     ):
         cudf.unique(df)

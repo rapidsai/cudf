@@ -248,17 +248,20 @@ def unique(values):
     array([('a', 'b'), ('b', 'a'), ('a', 'c')], dtype=object)
     """
     if not isinstance(values, (cudf.Series, cudf.Index, cp.ndarray)):
-        raise TypeError(
+        raise ValueError(
             "Must pass cudf.Series, cudf.Index, or cupy.ndarray object"
         )
     if isinstance(values, cp.ndarray):
-        return cp.unique(values)
-    if isinstance(values, (cudf.Series)):
+        # pandas.unique will not sort the values in the result
+        # while cupy.unique documents it will, so we pass cupy.ndarray
+        # through cudf.Index to maintain the original order.
+        return cp.asarray(cudf.Index(values).unique())
+    if isinstance(values, cudf.Series):
         if get_option("mode.pandas_compatible"):
             if isinstance(values.dtype, cudf.CategoricalDtype):
                 raise NotImplementedError(
                     "cudf.Categorical is not implemented"
                 )
             else:
-                return cp.asarray(values)
+                return cp.unique(cp.asarray(values))
     return values.unique()
