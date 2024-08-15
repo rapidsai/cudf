@@ -601,11 +601,13 @@ class CategoricalColumn(column.ColumnBase):
             to_add_categories = 0
         else:
             if cudf.api.types.is_scalar(value):
-                arr = [value]
+                arr = column.as_column(value, length=1, nan_as_null=False)
             else:
-                arr = value
+                arr = column.as_column(value, nan_as_null=False)
             to_add_categories = len(
-                cudf.Index(arr, nan_as_null=False).difference(self.categories)
+                cudf.Index._from_column(arr).difference(
+                    cudf.Index._from_column(self.categories)
+                )
             )
 
         if to_add_categories > 0:
