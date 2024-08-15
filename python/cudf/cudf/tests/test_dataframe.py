@@ -9409,7 +9409,6 @@ def test_rename_for_level_RangeIndex_dataframe():
     assert_eq(expect, got)
 
 
-@pytest_xfail(reason="level=None not implemented yet")
 def test_rename_for_level_is_None_MC():
     gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
     gdf.columns = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1)])
