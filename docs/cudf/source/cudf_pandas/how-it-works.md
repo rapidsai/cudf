@@ -44,11 +44,20 @@ allocation may be a bottleneck depending on the workload. Managed memory
 enables oversubscribing GPU memory. This allows cudf.pandas to process
 data larger than GPU memory in many cases, without CPU (Pandas) fallback.
 
-Other memory allocators can be used by changing the environment
-variable `CUDF_PANDAS_RMM_MODE` to one of the following.
+```{note}
+CUDA Managed Memory on Windows, and more specifically Windows Subsystem for
+Linux (WSL2), [does not support oversubscription](
+https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#system-requirements-for-unified-memory),
+only unified addressing. Furthermore, managed memory on WSL2 has undesirable
+performance characteristics. Therefore, `cudf.pandas` uses a non-managed pool
+allocator on WSL2, so `cudf.pandas` is limited to the physical size of GPU memory.
+```
 
-1. "managed_pool" (default): CUDA Unified Memory (managed memory) with RMM's asynchronous pool allocator.
-2. "managed": CUDA Unified Memory, (managed memory) with no pool allocator.
-3. "async": CUDA's built-in pool asynchronous pool allocator with normal CUDA device memory.
-4. "pool": RMM's asynchronous pool allocator with normal CUDA device memory.
-5. "cuda": normal CUDA device memory with no pool allocator.
+Other memory allocators can be used by changing the environment
+variable `CUDF_PANDAS_RMM_MODE` to one of the following:
+
+1. `"managed_pool"` (default, if supported): CUDA Unified Memory (managed memory) with RMM's asynchronous pool allocator.
+2. `"managed"`: CUDA Unified Memory, (managed memory) with no pool allocator.
+3. `"async"`: CUDA's built-in pool asynchronous pool allocator with normal CUDA device memory.
+4. `"pool"` (default if `"managed_pool"` is not supported): RMM's asynchronous pool allocator with normal CUDA device memory.
+5. `"cuda"`: normal CUDA device memory with no pool allocator.

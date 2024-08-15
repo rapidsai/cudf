@@ -8,7 +8,7 @@ import cupy as cp
 import numpy as np
 
 from cudf.core.column import as_column
-from cudf.core.index import RangeIndex, ensure_index
+from cudf.core.index import Index, RangeIndex
 from cudf.core.scalar import Scalar
 from cudf.options import get_option
 from cudf.utils.dtypes import can_convert_to_column
@@ -112,7 +112,9 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
         dtype="int64" if get_option("mode.pandas_compatible") else None,
     ).values
 
-    return labels, cats.values if return_cupy_array else ensure_index(cats)
+    return labels, cats.values if return_cupy_array else Index._from_column(
+        cats
+    )
 
 
 def _interpolation(column: ColumnBase, index: BaseIndex) -> ColumnBase:
