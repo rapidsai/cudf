@@ -34,33 +34,8 @@
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
 
 #include <ctime>
-
-/**
- * @brief Log the peak memory usage of the GPU
- */
-class memory_stats_logger {
- public:
-  memory_stats_logger()
-    : existing_mr(rmm::mr::get_current_device_resource()),
-      statistics_mr(rmm::mr::make_statistics_adaptor(existing_mr))
-  {
-    rmm::mr::set_current_device_resource(&statistics_mr);
-  }
-
-  ~memory_stats_logger() { rmm::mr::set_current_device_resource(existing_mr); }
-
-  [[nodiscard]] size_t peak_memory_usage() const noexcept
-  {
-    return statistics_mr.get_bytes_counter().peak;
-  }
-
- private:
-  rmm::mr::device_memory_resource* existing_mr;
-  rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> statistics_mr;
-};
 
 // RMM memory resource creation utilities
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
