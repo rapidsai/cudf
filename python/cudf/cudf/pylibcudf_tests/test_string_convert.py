@@ -72,7 +72,7 @@ def test_to_datetime(
 def test_to_duration(pa_duration_col, plc_duration_col, duration_type, format):
     def to_timedelta(duration_str):
         date = datetime.strptime(duration_str, format)
-        return date - datetime(1900, 1, 1)
+        return date - datetime(1900, 1, 1)  # "%H:%M:%S" zero date
 
     expect = pa.array([to_timedelta(d.as_py()) for d in pa_duration_col]).cast(
         duration_type
