@@ -1005,5 +1005,5 @@ def test_to_backend_simplify():
     with dask.config.set({"dataframe.backend": "pandas"}):
         df = dd.from_dict({"x": [1, 2, 3], "y": [4, 5, 6]}, npartitions=2)
         df2 = df.to_backend("cudf")[["y"]].simplify()
-        df3 = df[["y"]].to_backend("cudf").simplify()
+        df3 = df[["y"]].to_backend("cudf").to_backend("cudf").simplify()
         assert df2._name == df3._name
