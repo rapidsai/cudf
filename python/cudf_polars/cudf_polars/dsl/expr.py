@@ -837,11 +837,15 @@ class StringFunction(Expr):
             column = self.children[0].evaluate(df, context=context, mapping=mapping)
             expr_chars = self.children[1]
             assert isinstance(expr_chars, Literal)
-            # Polars api for chars:
-            # If set to None (default), all leading and trailing whitespace is removed
-            # libcudf api for chars:
-            # If to_strip is the empty string, whitespace characters are removed
-            if expr_chars.value == pa.scalar(None):
+
+            if expr_chars.value == pa.scalar(""):
+                # No-op in python, polars, but libcudf removes whitespace so return early
+                return column
+            elif expr_chars.value == pa.scalar(None):
+                # Polars api for chars:
+                # If set to None (default), all leading and trailing whitespace is removed
+                # libcudf api for chars:
+                # If to_strip is the empty string, whitespace characters are removed
                 chars = plc.interop.from_arrow(pa.scalar("", type=pa.string()))
             else:
                 chars = plc.interop.from_arrow(expr_chars.value)
