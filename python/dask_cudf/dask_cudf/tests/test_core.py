@@ -15,7 +15,11 @@ from dask.utils import M
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr, xfail_dask_expr
+from dask_cudf.tests.utils import (
+    require_dask_expr,
+    skip_dask_expr,
+    xfail_dask_expr,
+)
 
 
 def test_from_dict_backend_dispatch():
@@ -993,3 +997,13 @@ def test_series_isin_error():
         ser.isin([1, 5, "a"])
     with pytest.raises(TypeError):
         ddf.isin([1, 5, "a"]).compute()
+
+
+@require_dask_expr()
+def test_to_backend_simplify():
+    # Check that column projection is not blocked by to_backend
+    with dask.config.set({"dataframe.backend": "pandas"}):
+        df = dd.from_dict({"x": [1, 2, 3], "y": [4, 5, 6]}, npartitions=2)
+        df2 = df.to_backend("cudf")[["y"]].simplify()
+        df3 = df[["y"]].to_backend("cudf").simplify()
+        assert df2._name == df3._name

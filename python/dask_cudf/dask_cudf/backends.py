@@ -631,20 +631,20 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
     Examples
     --------
     >>> import dask
-    >>> import dask_expr
+    >>> import dask_expr as dx
     >>> with dask.config.set({"dataframe.backend": "cudf"}):
     ...     ddf = dx.from_dict({"a": range(10)})
     >>> type(ddf._meta)
     <class 'cudf.core.dataframe.DataFrame'>
     """
 
-    @classmethod
-    def to_backend_dispatch(cls):
-        return CudfBackendEntrypoint.to_backend_dispatch()
+    @staticmethod
+    def to_backend(data, **kwargs):
+        import dask_expr as dx
 
-    @classmethod
-    def to_backend(cls, *args, **kwargs):
-        return CudfBackendEntrypoint.to_backend(*args, **kwargs)
+        from dask_cudf.expr._expr import ToCudfBackend
+
+        return dx.new_collection(ToCudfBackend(data, kwargs))
 
     @staticmethod
     def from_dict(
