@@ -199,6 +199,13 @@ using stats_list = nvbench::enum_type_list<cudf::io::STATISTICS_NONE,
                                            cudf::io::STATISTICS_PAGE>;
 
 NVBENCH_BENCH_TYPES(BM_parq_write_encode, NVBENCH_TYPE_AXES(d_type_list))
+  .set_name("parquet_write_dict_encode")
+  .set_type_axes_names({"data_type"})
+  .set_min_samples(4)
+  .add_int64_axis("cardinality", {1,10,100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000})
+  .add_int64_axis("run_length", {32});
+
+NVBENCH_BENCH_TYPES(BM_parq_write_encode, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("parquet_write_encode")
   .set_type_axes_names({"data_type"})
   .set_min_samples(4)
