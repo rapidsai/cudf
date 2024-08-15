@@ -5,6 +5,7 @@ import socket
 from contextlib import contextmanager
 from io import BytesIO
 
+import fsspec
 import pandas as pd
 import pytest
 
@@ -132,6 +133,55 @@ def test_read_csv_warns(s3_base, s3so):
                 use_python_file_object=True,
             )
             assert df.a.sum().compute() == 4
+
+
+def test_read_parquet_open_file_options_raises():
+    with pytest.raises(ValueError):
+        dask_cudf.read_parquet(
+            "s3://my/path",
+            open_file_options={"precache_options": {"method": "parquet"}},
+        )
+
+
+def test_read_parquet_filesystem(s3_base, s3so, pdf):
+    fname = "test_parquet_filesystem.parquet"
+    bucket = "parquet"
+    buffer = BytesIO()
+    pdf.to_parquet(path=buffer)
+    buffer.seek(0)
+    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
+        path = f"s3://{bucket}/{fname}"
+
+        # Cannot pass filesystem="arrow"
+        with pytest.raises(ValueError):
+            dask_cudf.read_parquet(
+                path,
+                storage_options=s3so,
+                filesystem="arrow",
+            )
+
+        # Can pass filesystem="fsspec"
+        df = dask_cudf.read_parquet(
+            path,
+            storage_options=s3so,
+            filesystem="fsspec",
+        )
+        assert df.b.sum().compute() == 9
+
+
+def test_read_parquet_filesystem_explicit(s3_base, s3so, pdf):
+    fname = "test_parquet_filesystem_explicit.parquet"
+    bucket = "parquet"
+    buffer = BytesIO()
+    pdf.to_parquet(path=buffer)
+    buffer.seek(0)
+    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
+        path = f"s3://{bucket}/{fname}"
+        fs = fsspec.core.get_fs_token_paths(
+            path, mode="rb", storage_options=s3so
+        )[0]
+        df = dask_cudf.read_parquet(path, filesystem=fs)
+        assert df.b.sum().compute() == 9
 
 
 def test_read_parquet(s3_base, s3so, pdf):
