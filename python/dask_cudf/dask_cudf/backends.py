@@ -520,6 +520,7 @@ def to_cudf_dispatch_from_pandas(data, nan_as_null=None, **kwargs):
 
 @to_cudf_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
 def to_cudf_dispatch_from_cudf(data, **kwargs):
+    _unsupported_kwargs("cudf", "cudf", kwargs)
     return data
 
 
