@@ -326,7 +326,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                                 range(len(tmp_arg[0]))
                             )
                         },
-                        index=cudf.Index(tmp_arg[0]),
+                        index=cudf.Index._from_column(tmp_arg[0]),
                     )
                     columns_df[cantor_name] = column.as_column(
                         range(len(columns_df))
@@ -1758,7 +1758,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         for cols in columns:
             table_index = None
             if 1 == first_data_column_position:
-                table_index = cudf.Index(cols[0])
+                table_index = cudf.Index._from_column(cols[0])
             elif first_data_column_position > 1:
                 table_index = cudf.MultiIndex._from_data(
                     data=dict(
@@ -1810,7 +1810,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if not isinstance(out.index, MultiIndex) and isinstance(
                 out.index.dtype, cudf.CategoricalDtype
             ):
-                out = out.set_index(cudf.Index(out.index._values))
+                out = out.set_index(out.index)
         for name, col in out._data.items():
             out._data[name] = col._with_type_metadata(
                 tables[0]._data[name].dtype
@@ -3007,7 +3007,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             and not isinstance(keys[0], (cudf.MultiIndex, pd.MultiIndex))
         ):
             # Don't turn single level MultiIndex into an Index
-            idx = cudf.Index(data_to_add[0], name=names[0])
+            idx = cudf.Index._from_column(data_to_add[0], name=names[0])
         else:
             idx = MultiIndex._from_data(dict(enumerate(data_to_add)))
             idx.names = names
