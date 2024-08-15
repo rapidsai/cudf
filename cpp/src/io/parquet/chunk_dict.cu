@@ -86,7 +86,7 @@ struct map_insert_fn {
       CUDF_UNREACHABLE("Unsupported type to insert in map");
     }
   }
-};  // namespace cudf::io::parquet::detail
+};
 
 struct map_find_fn {
   storage_ref_type const& storage_ref;
@@ -116,13 +116,12 @@ struct map_find_fn {
                      storage_ref};
 
       // Find the key = i using the provided thread tile.
-      auto found_slot = hash_map_ref.find(tile, i);
+      auto const found_slot = hash_map_ref.find(tile, i);
 
       // Check if didn't find the previously inserted key.
-      if (tile.thread_rank() == 0) {
-        cudf_assert(found_slot != map_find_ref.end() &&
-                    "Unable to find value in map in dictionary index construction");
-      }
+      cudf_assert(found_slot != hash_map_ref.end() &&
+                  "Unable to find value in map in dictionary index construction");
+
       // Return a pair of the found key and value.
       return {found_slot->first, found_slot->second};
     } else {
