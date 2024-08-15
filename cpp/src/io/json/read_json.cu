@@ -31,6 +31,7 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <thrust/distance.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/scatter.h>
 
@@ -38,11 +39,14 @@
 
 namespace cudf::io::json::detail {
 
-size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
-                    size_t range_offset,
-                    size_t range_size)
+namespace {
+
+// Return total size of sources enclosing the passed range
+std::size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
+                         std::size_t range_offset,
+                         std::size_t range_size)
 {
-  return std::accumulate(sources.begin(), sources.end(), 0ul, [=](size_t sum, auto& source) {
+  return std::accumulate(sources.begin(), sources.end(), 0ul, [=](std::size_t sum, auto& source) {
     auto const size = source->size();
     // TODO take care of 0, 0, or *, 0 case.
     return sum +
@@ -50,25 +54,181 @@ size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
   });
 }
 
+// Return estimated size of subchunk using a heuristic involving the byte range size and the minimum
+// subchunk size
+std::size_t estimate_size_per_subchunk(std::size_t chunk_size)
+{
+  auto geometric_mean = [](double a, double b) { return std::sqrt(a * b); };
+  // NOTE: heuristic for choosing subchunk size: geometric mean of minimum subchunk size (set to
+  // 10kb) and the byte range size
+  return geometric_mean(std::ceil(static_cast<double>(chunk_size) / num_subchunks),
+                        min_subchunk_size);
+}
+
 /**
- * @brief Read from array of data sources into RMM buffer. The size of the returned device span
-          can be larger than the number of bytes requested from the list of sources when
-          the range to be read spans across multiple sources. This is due to the delimiter
-          characters inserted after the end of each accessed source.
+ * @brief Return the upper bound on the batch size for the JSON reader.
  *
- * @param buffer Device span buffer to which data is read
- * @param sources Array of data sources
- * @param compression Compression format of source
- * @param range_offset Number of bytes to skip from source start
- * @param range_size Number of bytes to read from source
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @returns A subspan of the input device span containing data read
+ * The datasources passed to the JSON reader are split into batches demarcated by byte range
+ * offsets and read iteratively. The batch size is capped at INT_MAX bytes, which is the
+ * default value returned by the function. This value can be overridden at runtime using the
+ * environment variable LIBCUDF_JSON_BATCH_SIZE
+ *
+ * @return size in bytes
  */
+std::size_t get_batch_size_upper_bound()
+{
+  auto const batch_size_str         = std::getenv("LIBCUDF_JSON_BATCH_SIZE");
+  int64_t const batch_size          = batch_size_str != nullptr ? std::atol(batch_size_str) : 0L;
+  auto const batch_limit            = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
+  auto const batch_size_upper_bound = static_cast<std::size_t>(
+    (batch_size > 0 && batch_size < batch_limit) ? batch_size : batch_limit);
+  return batch_size_upper_bound;
+}
+
+/**
+ * @brief Extract the first delimiter character position in the string
+ *
+ * @param d_data Device span in which to search for delimiter character
+ * @param delimiter Delimiter character to search for
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return Position of first delimiter character in device array
+ */
+size_type find_first_delimiter(device_span<char const> d_data,
+                               char const delimiter,
+                               rmm::cuda_stream_view stream)
+{
+  auto const first_delimiter_position =
+    thrust::find(rmm::exec_policy(stream), d_data.begin(), d_data.end(), delimiter);
+  return first_delimiter_position != d_data.end()
+           ? static_cast<size_type>(thrust::distance(d_data.begin(), first_delimiter_position))
+           : -1;
+}
+
+/**
+ * @brief Get the byte range between record starts and ends starting from the given range.
+ *
+ * if get_byte_range_offset == 0, then we can skip the first delimiter search
+ * if get_byte_range_offset != 0, then we need to search for the first delimiter in given range.
+ * if not found, skip this chunk, if found, then search for first delimiter in next range until we
+ * find a delimiter. Use this as actual range for parsing.
+ *
+ * @param sources Data sources to read from
+ * @param reader_opts JSON reader options with range offset and range size
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @returns Data source owning buffer enclosing the bytes read
+ */
+datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
+  host_span<std::unique_ptr<datasource>> sources,
+  json_reader_options const& reader_opts,
+  rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+
+  std::size_t const total_source_size       = sources_size(sources, 0, 0);
+  auto constexpr num_delimiter_chars        = 1;
+  auto const num_extra_delimiters           = num_delimiter_chars * (sources.size() - 1);
+  compression_type const reader_compression = reader_opts.get_compression();
+  std::size_t const chunk_offset            = reader_opts.get_byte_range_offset();
+  std::size_t chunk_size                    = reader_opts.get_byte_range_size();
+
+  CUDF_EXPECTS(total_source_size ? chunk_offset < total_source_size : !chunk_offset,
+               "Invalid offsetting",
+               std::invalid_argument);
+  auto should_load_all_sources = !chunk_size || chunk_size >= total_source_size - chunk_offset;
+  chunk_size = should_load_all_sources ? total_source_size - chunk_offset : chunk_size;
+
+  int const num_subchunks_prealloced  = should_load_all_sources ? 0 : max_subchunks_prealloced;
+  std::size_t const size_per_subchunk = estimate_size_per_subchunk(chunk_size);
+
+  // The allocation for single source compressed input is estimated by assuming a ~4:1
+  // compression ratio. For uncompressed inputs, we can getter a better estimate using the idea
+  // of subchunks.
+  auto constexpr header_size = 4096;
+  std::size_t const buffer_size =
+    reader_compression != compression_type::NONE
+      ? total_source_size * estimated_compression_ratio + header_size
+      : std::min(total_source_size, chunk_size + num_subchunks_prealloced * size_per_subchunk) +
+          num_extra_delimiters;
+  rmm::device_buffer buffer(buffer_size, stream);
+  device_span<char> bufspan(reinterpret_cast<char*>(buffer.data()), buffer.size());
+
+  // Offset within buffer indicating first read position
+  std::int64_t buffer_offset = 0;
+  auto readbufspan =
+    ingest_raw_input(bufspan, sources, reader_compression, chunk_offset, chunk_size, stream);
+
+  auto const shift_for_nonzero_offset = std::min<std::int64_t>(chunk_offset, 1);
+  auto const first_delim_pos =
+    chunk_offset == 0 ? 0 : find_first_delimiter(readbufspan, '\n', stream);
+  if (first_delim_pos == -1) {
+    // return empty owning datasource buffer
+    auto empty_buf = rmm::device_buffer(0, stream);
+    return datasource::owning_buffer<rmm::device_buffer>(std::move(empty_buf));
+  } else if (!should_load_all_sources) {
+    // Find next delimiter
+    std::int64_t next_delim_pos     = -1;
+    std::size_t next_subchunk_start = chunk_offset + chunk_size;
+    while (next_subchunk_start < total_source_size && next_delim_pos < buffer_offset) {
+      buffer_offset += readbufspan.size();
+      readbufspan    = ingest_raw_input(bufspan.last(buffer_size - buffer_offset),
+                                     sources,
+                                     reader_compression,
+                                     next_subchunk_start,
+                                     size_per_subchunk,
+                                     stream);
+      next_delim_pos = find_first_delimiter(readbufspan, '\n', stream) + buffer_offset;
+      if (next_delim_pos < buffer_offset) { next_subchunk_start += size_per_subchunk; }
+    }
+    if (next_delim_pos < buffer_offset) next_delim_pos = buffer_offset + readbufspan.size();
+
+    return datasource::owning_buffer<rmm::device_buffer>(
+      std::move(buffer),
+      reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
+      next_delim_pos - first_delim_pos - shift_for_nonzero_offset);
+  }
+  return datasource::owning_buffer<rmm::device_buffer>(
+    std::move(buffer),
+    reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
+    readbufspan.size() - first_delim_pos - shift_for_nonzero_offset);
+}
+
+// Helper function to read the current batch using byte range offsets and size
+// passed
+table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
+                               json_reader_options const& reader_opts,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  datasource::owning_buffer<rmm::device_buffer> bufview =
+    get_record_range_raw_input(sources, reader_opts, stream);
+
+  // If input JSON buffer has single quotes and option to normalize single quotes is enabled,
+  // invoke pre-processing FST
+  if (reader_opts.is_enabled_normalize_single_quotes()) {
+    normalize_single_quotes(bufview, stream, rmm::mr::get_current_device_resource());
+  }
+
+  // If input JSON buffer has unquoted spaces and tabs and option to normalize whitespaces is
+  // enabled, invoke pre-processing FST
+  if (reader_opts.is_enabled_normalize_whitespace()) {
+    normalize_whitespace(bufview, stream, rmm::mr::get_current_device_resource());
+  }
+
+  auto buffer =
+    cudf::device_span<char const>(reinterpret_cast<char const*>(bufview.data()), bufview.size());
+  stream.synchronize();
+  return device_parse_nested_json(buffer, reader_opts, stream, mr);
+}
+
+}  // anonymous namespace
+
 device_span<char> ingest_raw_input(device_span<char> buffer,
                                    host_span<std::unique_ptr<datasource>> sources,
                                    compression_type compression,
-                                   size_t range_offset,
-                                   size_t range_size,
+                                   std::size_t range_offset,
+                                   std::size_t range_size,
                                    rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -78,23 +238,24 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   auto constexpr num_delimiter_chars = 1;
 
   if (compression == compression_type::NONE) {
-    auto delimiter_map = cudf::detail::make_empty_host_vector<size_t>(sources.size(), stream);
-    std::vector<size_t> prefsum_source_sizes(sources.size());
+    auto delimiter_map = cudf::detail::make_empty_host_vector<std::size_t>(sources.size(), stream);
+    std::vector<std::size_t> prefsum_source_sizes(sources.size());
     std::vector<std::unique_ptr<datasource::buffer>> h_buffers;
-    size_t bytes_read = 0;
+    std::size_t bytes_read = 0;
     std::transform_inclusive_scan(sources.begin(),
                                   sources.end(),
                                   prefsum_source_sizes.begin(),
-                                  std::plus<size_t>{},
+                                  std::plus<std::size_t>{},
                                   [](std::unique_ptr<datasource> const& s) { return s->size(); });
     auto upper =
       std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
-    size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
+    std::size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
 
     auto const total_bytes_to_read =
       std::min(range_size, prefsum_source_sizes.back() - range_offset);
     range_offset -= start_source ? prefsum_source_sizes[start_source - 1] : 0;
-    for (size_t i = start_source; i < sources.size() && bytes_read < total_bytes_to_read; i++) {
+    for (std::size_t i = start_source; i < sources.size() && bytes_read < total_bytes_to_read;
+         i++) {
       if (sources[i]->is_empty()) continue;
       auto data_size =
         std::min(sources[i]->size() - range_offset, total_bytes_to_read - bytes_read);
@@ -147,129 +308,6 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   return buffer.first(uncomp_data.size());
 }
 
-size_t estimate_size_per_subchunk(size_t chunk_size)
-{
-  auto geometric_mean = [](double a, double b) { return std::sqrt(a * b); };
-  // NOTE: heuristic for choosing subchunk size: geometric mean of minimum subchunk size (set to
-  // 10kb) and the byte range size
-  return geometric_mean(std::ceil((double)chunk_size / num_subchunks), min_subchunk_size);
-}
-
-/**
- * @brief Get the byte range between record starts and ends starting from the given range.
- *
- * if get_byte_range_offset == 0, then we can skip the first delimiter search
- * if get_byte_range_offset != 0, then we need to search for the first delimiter in given range.
- * if not found, skip this chunk, if found, then search for first delimiter in next range until we
- * find a delimiter. Use this as actual range for parsing.
- *
- * @param sources Data sources to read from
- * @param reader_opts JSON reader options with range offset and range size
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @returns Data source owning buffer enclosing the bytes read
- */
-datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
-  host_span<std::unique_ptr<datasource>> sources,
-  json_reader_options const& reader_opts,
-  rmm::cuda_stream_view stream)
-{
-  CUDF_FUNC_RANGE();
-
-  size_t const total_source_size            = sources_size(sources, 0, 0);
-  auto constexpr num_delimiter_chars        = 1;
-  auto const num_extra_delimiters           = num_delimiter_chars * (sources.size() - 1);
-  compression_type const reader_compression = reader_opts.get_compression();
-  size_t const chunk_offset                 = reader_opts.get_byte_range_offset();
-  size_t chunk_size                         = reader_opts.get_byte_range_size();
-
-  CUDF_EXPECTS(total_source_size ? chunk_offset < total_source_size : !chunk_offset,
-               "Invalid offsetting",
-               std::invalid_argument);
-  auto should_load_all_sources = !chunk_size || chunk_size >= total_source_size - chunk_offset;
-  chunk_size = should_load_all_sources ? total_source_size - chunk_offset : chunk_size;
-
-  int const num_subchunks_prealloced = should_load_all_sources ? 0 : max_subchunks_prealloced;
-  size_t const size_per_subchunk     = estimate_size_per_subchunk(chunk_size);
-
-  // The allocation for single source compressed input is estimated by assuming a ~4:1
-  // compression ratio. For uncompressed inputs, we can getter a better estimate using the idea
-  // of subchunks.
-  auto constexpr header_size = 4096;
-  size_t const buffer_size =
-    reader_compression != compression_type::NONE
-      ? total_source_size * estimated_compression_ratio + header_size
-      : std::min(total_source_size, chunk_size + num_subchunks_prealloced * size_per_subchunk) +
-          num_extra_delimiters;
-  rmm::device_buffer buffer(buffer_size, stream);
-  device_span<char> bufspan(reinterpret_cast<char*>(buffer.data()), buffer.size());
-
-  // Offset within buffer indicating first read position
-  std::int64_t buffer_offset = 0;
-  auto readbufspan =
-    ingest_raw_input(bufspan, sources, reader_compression, chunk_offset, chunk_size, stream);
-
-  auto const shift_for_nonzero_offset = std::min<std::int64_t>(chunk_offset, 1);
-  auto const first_delim_pos =
-    chunk_offset == 0 ? 0 : find_first_delimiter(readbufspan, '\n', stream);
-  if (first_delim_pos == -1) {
-    // return empty owning datasource buffer
-    auto empty_buf = rmm::device_buffer(0, stream);
-    return datasource::owning_buffer<rmm::device_buffer>(std::move(empty_buf));
-  } else if (!should_load_all_sources) {
-    // Find next delimiter
-    std::int64_t next_delim_pos = -1;
-    size_t next_subchunk_start  = chunk_offset + chunk_size;
-    while (next_subchunk_start < total_source_size && next_delim_pos < buffer_offset) {
-      buffer_offset += readbufspan.size();
-      readbufspan    = ingest_raw_input(bufspan.last(buffer_size - buffer_offset),
-                                     sources,
-                                     reader_compression,
-                                     next_subchunk_start,
-                                     size_per_subchunk,
-                                     stream);
-      next_delim_pos = find_first_delimiter(readbufspan, '\n', stream) + buffer_offset;
-      if (next_delim_pos < buffer_offset) { next_subchunk_start += size_per_subchunk; }
-    }
-    if (next_delim_pos < buffer_offset) next_delim_pos = buffer_offset + readbufspan.size();
-
-    return datasource::owning_buffer<rmm::device_buffer>(
-      std::move(buffer),
-      reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
-      next_delim_pos - first_delim_pos - shift_for_nonzero_offset);
-  }
-  return datasource::owning_buffer<rmm::device_buffer>(
-    std::move(buffer),
-    reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
-    readbufspan.size() - first_delim_pos - shift_for_nonzero_offset);
-}
-
-table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
-                               json_reader_options const& reader_opts,
-                               rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  datasource::owning_buffer<rmm::device_buffer> bufview =
-    get_record_range_raw_input(sources, reader_opts, stream);
-
-  // If input JSON buffer has single quotes and option to normalize single quotes is enabled,
-  // invoke pre-processing FST
-  if (reader_opts.is_enabled_normalize_single_quotes()) {
-    normalize_single_quotes(bufview, stream, rmm::mr::get_current_device_resource());
-  }
-
-  // If input JSON buffer has unquoted spaces and tabs and option to normalize whitespaces is
-  // enabled, invoke pre-processing FST
-  if (reader_opts.is_enabled_normalize_whitespace()) {
-    normalize_whitespace(bufview, stream, rmm::mr::get_current_device_resource());
-  }
-
-  auto buffer =
-    cudf::device_span<char const>(reinterpret_cast<char const*>(bufview.data()), bufview.size());
-  stream.synchronize();
-  return device_parse_nested_json(buffer, reader_opts, stream, mr);
-}
-
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& reader_opts,
                               rmm::cuda_stream_view stream,
@@ -296,15 +334,16 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
    * Note that the batched reader does not work for compressed inputs or for regular
    * JSON inputs.
    */
-  size_t const total_source_size = sources_size(sources, 0, 0);
-  size_t chunk_offset            = reader_opts.get_byte_range_offset();
-  size_t chunk_size              = reader_opts.get_byte_range_size();
-  chunk_size                     = !chunk_size ? total_source_size - chunk_offset
-                                               : std::min(chunk_size, total_source_size - chunk_offset);
+  std::size_t const total_source_size = sources_size(sources, 0, 0);
+  std::size_t chunk_offset            = reader_opts.get_byte_range_offset();
+  std::size_t chunk_size              = reader_opts.get_byte_range_size();
+  chunk_size                          = !chunk_size ? total_source_size - chunk_offset
+                                                    : std::min(chunk_size, total_source_size - chunk_offset);
 
-  size_t const size_per_subchunk = estimate_size_per_subchunk(chunk_size);
-  size_t const batch_size_ub =
-    std::numeric_limits<int>::max() - (max_subchunks_prealloced * size_per_subchunk);
+  std::size_t const size_per_subchunk      = estimate_size_per_subchunk(chunk_size);
+  std::size_t const batch_size_upper_bound = get_batch_size_upper_bound();
+  std::size_t const batch_size =
+    batch_size_upper_bound - (max_subchunks_prealloced * size_per_subchunk);
 
   /*
    * Identify the position (zero-indexed) of starting source file from which to begin
@@ -314,10 +353,10 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
    */
 
   // Prefix sum of source file sizes
-  size_t pref_source_size = 0;
+  std::size_t pref_source_size = 0;
   // Starting source file from which to being batching evaluated using byte range offset
-  size_t const start_source = [chunk_offset, &sources, &pref_source_size]() {
-    for (size_t src_idx = 0; src_idx < sources.size(); ++src_idx) {
+  std::size_t const start_source = [chunk_offset, &sources, &pref_source_size]() {
+    for (std::size_t src_idx = 0; src_idx < sources.size(); ++src_idx) {
       if (pref_source_size + sources[src_idx]->size() > chunk_offset) { return src_idx; }
       pref_source_size += sources[src_idx]->size();
     }
@@ -329,16 +368,16 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
    * batch begins, and `end_bytes_size` gives the terminal bytes position after which reading
    * stops.
    */
-  size_t pref_bytes_size = chunk_offset;
-  size_t end_bytes_size  = chunk_offset + chunk_size;
-  std::vector<size_t> batch_offsets{pref_bytes_size};
-  for (size_t i = start_source; i < sources.size() && pref_bytes_size < end_bytes_size;) {
+  std::size_t pref_bytes_size = chunk_offset;
+  std::size_t end_bytes_size  = chunk_offset + chunk_size;
+  std::vector<std::size_t> batch_offsets{pref_bytes_size};
+  for (std::size_t i = start_source; i < sources.size() && pref_bytes_size < end_bytes_size;) {
     pref_source_size += sources[i]->size();
     // If the current source file can subsume multiple batches, we split the file until the
     // boundary of the last batch exceeds the end of the file (indexed by `pref_source_size`)
     while (pref_bytes_size < end_bytes_size &&
-           pref_source_size >= std::min(pref_bytes_size + batch_size_ub, end_bytes_size)) {
-      auto next_batch_size = std::min(batch_size_ub, end_bytes_size - pref_bytes_size);
+           pref_source_size >= std::min(pref_bytes_size + batch_size, end_bytes_size)) {
+      auto next_batch_size = std::min(batch_size, end_bytes_size - pref_bytes_size);
       batch_offsets.push_back(batch_offsets.back() + next_batch_size);
       pref_bytes_size += next_batch_size;
     }
@@ -356,7 +395,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   // Dispatch individual batches to read_batch and push the resulting table into
   // partial_tables array. Note that the reader options need to be updated for each
   // batch to adjust byte range offset and byte range size.
-  for (size_t i = 0; i < batch_offsets.size() - 1; i++) {
+  for (std::size_t i = 0; i < batch_offsets.size() - 1; i++) {
     batched_reader_opts.set_byte_range_offset(batch_offsets[i]);
     batched_reader_opts.set_byte_range_size(batch_offsets[i + 1] - batch_offsets[i]);
     partial_tables.emplace_back(
