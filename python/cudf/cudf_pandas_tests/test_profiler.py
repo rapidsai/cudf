@@ -37,12 +37,14 @@ def test_profiler():
         "DataFrame.sum",
         "Series.__getitem__",
         "Timedelta",
-        "Timestamp.__add__",
+        "_Timestamp.__add__",
     }
+    # TODO: Swap _Timestamp.__add__ for Timestamp.__add__
+    # when cudf.Timedelta support is added
     for name, func in per_function_stats.items():
         assert (
             len(func["cpu"]) == 0
-            if "Timedelta" not in name
+            if "Timedelta" not in name or "_Time" not in name
             else len(func["gpu"]) == 0
         )
 
