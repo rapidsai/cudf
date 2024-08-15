@@ -3245,8 +3245,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             interval_col = IntervalColumn.from_struct_column(
                 res.index._column._get_decategorized_column()
             )
-            res.index = cudf.IntervalIndex._from_data(
-                {res.index.name: interval_col}
+            res.index = cudf.IntervalIndex._from_column(
+                interval_col, name=res.index.name
             )
         res.name = result_name
         return res

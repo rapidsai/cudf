@@ -18,7 +18,6 @@ from cudf._lib.strings.convert.convert_integers import (
 )
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
-from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.index import ensure_index
 
 # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
@@ -288,8 +287,7 @@ def to_datetime(
                 utc=utc,
             )
             if isinstance(arg, (cudf.BaseIndex, pd.Index)):
-                ca = ColumnAccessor({arg.name: col}, verify=False)
-                return cudf.DatetimeIndex._from_data(ca)
+                return cudf.DatetimeIndex._from_column(col, name=arg.name)
             elif isinstance(arg, (cudf.Series, pd.Series)):
                 return cudf.Series._from_column(
                     col, name=arg.name, index=ensure_index(arg.index)
@@ -297,7 +295,7 @@ def to_datetime(
             elif is_scalar(arg):
                 return col.element_indexing(0)
             else:
-                return cudf.Index(col)
+                return cudf.Index._from_column(col)
     except Exception as e:
         if errors == "raise":
             raise e
@@ -900,7 +898,9 @@ def date_range(
         end = cudf.Scalar(end, dtype=dtype).value.astype("int64")
         arr = np.linspace(start=start, stop=end, num=periods)
         result = cudf.core.column.as_column(arr).astype("datetime64[ns]")
-        return cudf.DatetimeIndex._from_data({name: result}).tz_localize(tz)
+        return cudf.DatetimeIndex._from_column(result, name=name).tz_localize(
+            tz
+        )
 
     # The code logic below assumes `freq` is defined. It is first normalized
     # into `DateOffset` for further computation with timestamps.
@@ -1001,9 +1001,9 @@ def date_range(
             "datetime64[ns]"
         )
 
-    return cudf.DatetimeIndex._from_data({name: res}, freq=freq).tz_localize(
-        tz
-    )
+    return cudf.DatetimeIndex._from_column(
+        res, name=name, freq=freq
+    ).tz_localize(tz)
 
 
 def _has_fixed_frequency(freq: DateOffset) -> bool:
