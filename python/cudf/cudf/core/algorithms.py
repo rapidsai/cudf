@@ -263,5 +263,5 @@ def unique(values):
                     "cudf.Categorical is not implemented"
                 )
             else:
-                return cp.unique(cp.asarray(values))
+                return cp.asarray(values.unique())
     return values.unique()
