@@ -18,6 +18,19 @@ from cudf.utils.dtypes import (
 )
 
 
+def generate_arg_type_tuple(args, kwargs):
+    result = []
+    if args != ():
+        for arg in args:
+            result.extend([arg, type(arg)])
+
+    if kwargs != {}:
+        for kwarg, value in kwargs.items():
+            result.extend([value, type(value)])
+
+    return tuple(result)
+
+
 # Note that the metaclass below can easily be generalized for use with
 # other classes, if needed in the future. Simply replace the arguments
 # of the `__call__` method with `*args` and `**kwargs`. This will
@@ -46,7 +59,7 @@ class CachedScalarInstanceMeta(type):
         # the cache key is constructed from the arguments, and also
         # the _types_ of the arguments, since objects of different
         # types can compare equal
-        cache_key = (args, kwargs)
+        cache_key = generate_arg_type_tuple(args, kwargs)
         try:
             # try retrieving an instance from the cache:
             self.__instances.move_to_end(cache_key)
