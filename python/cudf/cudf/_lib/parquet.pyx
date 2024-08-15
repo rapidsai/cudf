@@ -222,7 +222,7 @@ cdef object _process_metadata(object df,
                 if len(filtered_idx) > 0:
                     idx = cudf.concat(filtered_idx)
                 else:
-                    idx = cudf.Index(cudf.core.column.column_empty(0))
+                    idx = cudf.Index._from_column(cudf.core.column.column_empty(0))
             else:
                 start = range_index_meta["start"] + skip_rows
                 stop = range_index_meta["stop"]
@@ -240,7 +240,7 @@ cdef object _process_metadata(object df,
             index_data = df[index_col]
             actual_index_names = list(index_col_names.values())
             if len(index_data._data) == 1:
-                idx = cudf.Index(
+                idx = cudf.Index._from_column(
                     index_data._data.columns[0],
                     name=actual_index_names[0]
                 )

@@ -102,6 +102,7 @@ def _nest_list_data(data, leaf_type):
 
 @_dask_cudf_performance_tracking
 def _get_non_empty_data(s):
+    """Return a non empty column as metadata."""
     if isinstance(s, cudf.core.column.CategoricalColumn):
         categories = (
             s.categories if len(s.categories) else [UNKNOWN_CATEGORIES]
@@ -128,7 +129,7 @@ def _get_non_empty_data(s):
         data = [{key: None for key in struct_dtype.fields.keys()}] * 2
         data = cudf.core.column.as_column(data, dtype=s.dtype)
     elif is_string_dtype(s.dtype):
-        data = pa.array(["cat", "dog"])
+        data = cudf.core.column.as_column(pa.array(["cat", "dog"]))
     elif isinstance(s.dtype, pd.DatetimeTZDtype):
         from cudf.utils.dtypes import get_time_unit
 
@@ -153,7 +154,7 @@ def _nonempty_series(s, idx=None):
         idx = _nonempty_index(s.index)
     data = _get_non_empty_data(s._column)
 
-    return cudf.Series(data, name=s.name, index=idx)
+    return cudf.Series._from_column(data, name=s.name, index=idx)
 
 
 @meta_nonempty.register(cudf.DataFrame)
@@ -424,7 +425,7 @@ def hash_object_cudf_index(ind, index=None):
         return ind.to_frame(index=False).hash_values()
 
     col = cudf.core.column.as_column(ind)
-    return cudf.Series(col).hash_values()
+    return cudf.Series._from_column(col).hash_values()
 
 
 @group_split_dispatch.register((cudf.Series, cudf.DataFrame))
@@ -664,6 +665,41 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             dtype=dtype,
             columns=columns,
             constructor=constructor,
+        )
+
+    @staticmethod
+    def read_parquet(*args, engine=None, **kwargs):
+        import dask_expr as dx
+
+        from dask_cudf.io.parquet import CudfEngine
+
+        return _default_backend(
+            dx.read_parquet, *args, engine=CudfEngine, **kwargs
+        )
+
+    @staticmethod
+    def read_csv(
+        path,
+        *args,
+        header="infer",
+        dtype_backend=None,
+        storage_options=None,
+        **kwargs,
+    ):
+        import dask_expr as dx
+        from fsspec.utils import stringify_path
+
+        if not isinstance(path, str):
+            path = stringify_path(path)
+        return dx.new_collection(
+            dx.io.csv.ReadCSV(
+                path,
+                dtype_backend=dtype_backend,
+                storage_options=storage_options,
+                kwargs=kwargs,
+                header=header,
+                dataframe_backend="cudf",
+            )
         )
 
     @staticmethod
