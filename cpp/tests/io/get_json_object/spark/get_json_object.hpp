@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/strings/strings_column_view.hpp>
-
+#include <cudf/io/new_json_object.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <memory>
@@ -33,7 +33,8 @@ constexpr int MAX_JSON_PATH_DEPTH = 16;
 /**
  * @brief Type of instruction in a JSON path.
  */
-enum class path_instruction_type : int8_t { WILDCARD, INDEX, NAMED };
+// enum class path_instruction_type : int8_t { WILDCARD, INDEX, NAMED };
+using cudf::spark_rapids_jni::path_instruction_type;
 
 /**
  * @brief Extract JSON object from a JSON string based on the specified JSON path.

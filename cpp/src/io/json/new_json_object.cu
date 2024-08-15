@@ -25,7 +25,7 @@
 #include "rmm/device_uvector.hpp"
 #include "rmm/exec_policy.hpp"
 #include "cudf/io/json.hpp"
-#include "new_json_object.hpp"
+#include <cudf/io/new_json_object.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/binaryop.hpp>
@@ -59,7 +59,6 @@
 
 namespace cudf {
 namespace spark_rapids_jni {
-using ::spark_rapids_jni::path_instruction_type;
 
 void print_schema(cudf::io::schema_element const& sch) {
   // std::cout << (sch.type.id()==type_id::LIST ? "LIST." : sch.type.id()==type_id::STRUCT ? "STRUCT." : sch.type.id()==type_id::STRING ? "STRING." : "OTHER.");
@@ -437,7 +436,7 @@ auto json_path_to_schema(
 
 std::vector<std::unique_ptr<cudf::column>> get_json_object_multiple_paths2(
   cudf::column_view const& input,
-  std::vector<std::vector<std::tuple<path_instruction_type, std::string, int32_t>>> const& json_paths,
+  std::vector<json_path_t> const& json_paths,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {

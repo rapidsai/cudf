@@ -318,7 +318,7 @@ ConfigureTest(
   GPUS 1
   PERCENT 30
 )
-ConfigureTest(GET_JSON_TEST io/get_json_object/new_json_object.cu io/get_json_object/get_json_test.cpp  io/get_json_object/spark/get_json_object.cu)
+ConfigureTest(GET_JSON_TEST io/get_json_object/get_json_test.cpp  io/get_json_object/spark/get_json_object.cu)
 
 ConfigureTest(JSON_WRITER_TEST io/json/json_writer.cpp)
 ConfigureTest(JSON_TYPE_CAST_TEST io/json/json_type_cast_test.cu)

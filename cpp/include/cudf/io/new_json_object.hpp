@@ -18,18 +18,21 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include "spark/get_json_object.hpp"
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace spark_rapids_jni {
 
+/**
+ * @brief Type of instruction in a JSON path.
+ */
+enum class path_instruction_type : int8_t { WILDCARD, INDEX, NAMED };
 /// path instruction type
 // enum class path_instruction_type : int8_t { WILDCARD, INDEX, NAMED };
-using json_path_t = std::vector<std::tuple<::spark_rapids_jni::path_instruction_type, std::string, int32_t>>;
+using json_path_t = std::vector<std::tuple<path_instruction_type, std::string, int32_t>>;
 
 std::vector<std::unique_ptr<cudf::column>> get_json_object_multiple_paths2(
   cudf::column_view const& input,
@@ -38,4 +41,4 @@ std::vector<std::unique_ptr<cudf::column>> get_json_object_multiple_paths2(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 }  // namespace spark_rapids_jni
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

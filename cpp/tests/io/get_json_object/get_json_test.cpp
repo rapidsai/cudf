@@ -1,4 +1,6 @@
 
+#include "spark/get_json_object.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -8,7 +10,7 @@
 #include "cudf/copying.hpp"
 #include "cudf/types.hpp"
 #include "cudf_test/debug_utilities.hpp"
-#include "new_json_object.hpp"
+#include <cudf/io/new_json_object.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -31,7 +33,7 @@ using cudf::data_type;
 using cudf::type_id;
 using cudf::type_to_id;
 using cudf::spark_rapids_jni::json_path_t;
-using spark_rapids_jni::path_instruction_type;
+using cudf::spark_rapids_jni::path_instruction_type;
 
 void print_json_path(json_path_t const& paths) {
    for (const auto& component : paths) {
