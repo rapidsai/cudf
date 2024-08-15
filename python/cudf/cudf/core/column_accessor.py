@@ -610,7 +610,7 @@ class ColumnAccessor(abc.MutableMapping):
         return key + (pad_value,) * (self.nlevels - len(key))
 
     def rename_levels(
-        self, mapper: Mapping[Any, Any] | Callable, level: int | None
+        self, mapper: Mapping[Any, Any] | Callable, level: int | None = None
     ) -> ColumnAccessor:
         """
         Rename the specified levels of the given ColumnAccessor
@@ -653,10 +653,7 @@ class ColumnAccessor(abc.MutableMapping):
                 return x
 
             if level is None:
-                raise NotImplementedError(
-                    "Renaming columns with a MultiIndex and level=None is"
-                    "not supported"
-                )
+                level = 0
             new_col_names = (rename_column(k) for k in self.keys())
 
         else:

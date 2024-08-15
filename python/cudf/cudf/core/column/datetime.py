@@ -251,6 +251,10 @@ class DatetimeColumn(column.ColumnBase):
         return np.datetime_data(self.dtype)[0]
 
     @property
+    def quarter(self) -> ColumnBase:
+        return libcudf.datetime.extract_quarter(self)
+
+    @property
     def year(self) -> ColumnBase:
         return self.get_dt_field("year")
 
@@ -308,13 +312,17 @@ class DatetimeColumn(column.ColumnBase):
     @property
     def is_year_end(self) -> ColumnBase:
         day_of_year = self.day_of_year
-        leap_dates = libcudf.datetime.is_leap_year(self)
+        leap_dates = self.is_leap_year
 
         leap = day_of_year == cudf.Scalar(366)
         non_leap = day_of_year == cudf.Scalar(365)
         return libcudf.copying.copy_if_else(leap, non_leap, leap_dates).fillna(
             False
         )
+
+    @property
+    def is_leap_year(self) -> ColumnBase:
+        return libcudf.datetime.is_leap_year(self)
 
     @property
     def is_year_start(self) -> ColumnBase:
