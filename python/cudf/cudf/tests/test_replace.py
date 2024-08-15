@@ -1378,3 +1378,9 @@ def test_fillna_nan_and_null():
     result = ser.fillna(2.2)
     expected = cudf.Series([2.2, 2.2, 1.1])
     assert_eq(result, expected)
+
+
+def test_replace_with_index_objects():
+    result = cudf.Series([1, 2]).replace(cudf.Index([1]), cudf.Index([2]))
+    expected = pd.Series([1, 2]).replace(pd.Index([1]), pd.Index([2]))
+    assert_eq(result, expected)
