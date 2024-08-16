@@ -654,6 +654,7 @@ class NumericalColumn(NumericalBaseColumn):
                 categories=dtype.categories._values,
                 codes=cudf.core.column.NumericalColumn(
                     self.base_data,  # type: ignore[arg-type]
+                    self.size,
                     dtype=self.dtype,
                 ),
                 mask=self.base_mask,
