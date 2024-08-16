@@ -2501,6 +2501,7 @@ class DatetimeIndex(Index):
         out_column = self._column.get_dt_field(field)
         out_column = NumericalColumn(
             data=out_column.base_data,
+            size=out_column.size,
             dtype=out_column.dtype,
             mask=out_column.base_mask,
             offset=out_column.offset,
