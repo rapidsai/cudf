@@ -23,8 +23,8 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
         "arcsinh",
         "arccosh",
         "arctanh",
-        "exp",
-        "log",
+        # "exp", Missing rust side impl
+        # "log", Missing rust side impl
         "sqrt",
         "cbrt",
         "ceil",
