@@ -34,7 +34,7 @@ from cudf.api.extensions import (
     register_series_accessor,
 )
 from cudf.api.types import dtype
-from cudf.core.algorithms import factorize
+from cudf.core.algorithms import factorize, unique
 from cudf.core.cut import cut
 from cudf.core.dataframe import DataFrame, from_dataframe, from_pandas, merge
 from cudf.core.dtypes import (
