@@ -5,8 +5,8 @@ set -eou pipefail
 
 # Download the pylibcudf built in the previous step
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
-rapids-download-wheels-from-s3 ./local-pylibcudf-dep "pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}"
-rapids-download-wheels-from-s3 ./dist "cudf_${RAPIDS_PY_CUDA_SUFFIX}"
+RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-pylibcudf-dep
+RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./dist
 
 # Install both pylibcudf and cudf
 python -m pip install \
