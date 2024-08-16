@@ -249,6 +249,7 @@ strip_chars = [
     "__",
     " \t\n",
     "abc123",
+    None,
 ]
 
 
