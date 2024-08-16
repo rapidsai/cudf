@@ -4,7 +4,7 @@ from libcpp cimport bool
 
 from cudf._lib.utils cimport columns_from_pylibcudf_table
 
-from cudf._lib import pylibcudf
+import pylibcudf
 
 
 def merge_sorted(
