@@ -5,8 +5,8 @@ import socket
 from contextlib import contextmanager
 from io import BytesIO
 
+import fsspec
 import pandas as pd
-import pyarrow.fs as pa_fs
 import pytest
 
 from dask.dataframe import assert_eq
@@ -135,35 +135,53 @@ def test_read_csv_warns(s3_base, s3so):
             assert df.a.sum().compute() == 4
 
 
-@pytest.mark.parametrize(
-    "open_file_options",
-    [
-        {"precache_options": {"method": None}},
-        {"precache_options": {"method": "parquet"}},
-        {"open_file_func": None},
-    ],
-)
-def test_read_parquet_open_file_options(s3_base, s3so, open_file_options, pdf):
+def test_read_parquet_open_file_options_raises():
+    with pytest.raises(ValueError):
+        dask_cudf.read_parquet(
+            "s3://my/path",
+            open_file_options={"precache_options": {"method": "parquet"}},
+        )
+
+
+def test_read_parquet_filesystem(s3_base, s3so, pdf):
+    fname = "test_parquet_filesystem.parquet"
+    bucket = "parquet"
     buffer = BytesIO()
     pdf.to_parquet(path=buffer)
     buffer.seek(0)
-    with s3_context(
-        s3_base=s3_base, bucket="daskparquet", files={"file.parq": buffer}
-    ):
-        if "open_file_func" in open_file_options:
-            fs = pa_fs.S3FileSystem(
-                endpoint_override=s3so["client_kwargs"]["endpoint_url"],
+    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
+        path = f"s3://{bucket}/{fname}"
+
+        # Cannot pass filesystem="arrow"
+        with pytest.raises(ValueError):
+            dask_cudf.read_parquet(
+                path,
+                storage_options=s3so,
+                filesystem="arrow",
             )
-            open_file_options["open_file_func"] = fs.open_input_file
+
+        # Can pass filesystem="fsspec"
         df = dask_cudf.read_parquet(
-            "s3://daskparquet/*.parq",
+            path,
             storage_options=s3so,
-            open_file_options=open_file_options,
+            filesystem="fsspec",
         )
-        with pytest.warns(FutureWarning):
-            assert df.a.sum().compute() == 10
-        with pytest.warns(FutureWarning):
-            assert df.b.sum().compute() == 9
+        assert df.b.sum().compute() == 9
+
+
+def test_read_parquet_filesystem_explicit(s3_base, s3so, pdf):
+    fname = "test_parquet_filesystem_explicit.parquet"
+    bucket = "parquet"
+    buffer = BytesIO()
+    pdf.to_parquet(path=buffer)
+    buffer.seek(0)
+    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
+        path = f"s3://{bucket}/{fname}"
+        fs = fsspec.core.get_fs_token_paths(
+            path, mode="rb", storage_options=s3so
+        )[0]
+        df = dask_cudf.read_parquet(path, filesystem=fs)
+        assert df.b.sum().compute() == 9
 
 
 def test_read_parquet(s3_base, s3so, pdf):
