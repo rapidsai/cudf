@@ -121,8 +121,8 @@ class aggregation {
     MERGE_TDIGEST,   ///< create a tdigest by merging multiple tdigests together
     HISTOGRAM,       ///< compute frequency of each element
     MERGE_HISTOGRAM, ///< merge partial values of HISTOGRAM aggregation,
-    MAX_BY,          ///< max reduction by another column
-    MIN_BY           ///< min reduction by another column
+    MAX_BY,          ///< retrieve values based on max of another column
+    MIN_BY           ///< retrieve values based on min of another column
   };
 
   aggregation() = delete;
@@ -387,8 +387,8 @@ std::unique_ptr<Base> make_argmin_aggregation();
 /**
  * @brief Factory to create a MAX_BY aggregation
  *
- * `MAX_BY` returns the value of the element in the group that is the minimum
- * according to the order_by column.
+ * `MAX_BY` returns value of the element in the group that is the maximum according to
+ * the first child column of a struct column.
  *
  * @return A MAX_BY aggregation object
  */
@@ -398,8 +398,8 @@ std::unique_ptr<Base> make_max_by_aggregation();
 /**
  * @brief Factory to create a MIN_BY aggregation
  *
- * `MIN_BY` returns the value of the element in the group that is the minimum
- * according to the order_by column.
+ * `MIN_BY` returns value of the element in the group that is the minimum according to
+ * the first child column of a struct column.
  *
  * @return A MIN_BY aggregation object
  */

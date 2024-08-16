@@ -204,7 +204,9 @@ void aggregate_result_functor::operator()<aggregation::MAX_BY>(aggregation const
 {
   if (cache.has_result(values, agg)) return;
 
-  auto argmax_result = detail::group_argmax(get_grouped_values().child(1),
+  CUDF_EXPECTS(values.num_children() >= 2, "Input column must have at least 2 children.");
+
+  auto argmax_result = detail::group_argmax(get_grouped_values().child(0),
                                             helper.num_groups(stream),
                                             helper.group_labels(stream),
                                             helper.key_sort_order(stream),
@@ -235,7 +237,9 @@ void aggregate_result_functor::operator()<aggregation::MIN_BY>(aggregation const
 {
   if (cache.has_result(values, agg)) return;
 
-  auto argmin_result = detail::group_argmin(get_grouped_values().child(1),
+  CUDF_EXPECTS(values.num_children() >= 2, "Input column must have at least 2 children.");
+
+  auto argmin_result = detail::group_argmin(get_grouped_values().child(0),
                                             helper.num_groups(stream),
                                             helper.group_labels(stream),
                                             helper.key_sort_order(stream),
