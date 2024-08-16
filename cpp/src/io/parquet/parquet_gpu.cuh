@@ -18,6 +18,7 @@
 
 #include "parquet_gpu.hpp"
 
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/types.hpp>
 
@@ -39,7 +40,10 @@ auto constexpr KEY_SENTINEL   = key_type{-1};
 auto constexpr VALUE_SENTINEL = mapped_type{-1};
 auto constexpr SCOPE          = cuda::thread_scope_block;
 
-using storage_type     = cuco::aow_storage<slot_type, window_size>;
+using storage_type     = cuco::aow_storage<slot_type,
+                                       window_size,
+                                       cuco::extent<std::size_t>,
+                                       cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 using window_type      = typename storage_type::window_type;
 

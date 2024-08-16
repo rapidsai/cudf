@@ -1315,14 +1315,16 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   if (total_map_storage_size == 0) { return {std::move(dict_data), std::move(dict_index)}; }
 
   // Create a single bulk storage used by all sub-dictionaries
-  auto map_storage = storage_type{total_map_storage_size};
+  auto map_storage = storage_type{
+    total_map_storage_size,
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
   // Create a span of non-const map_storage as map_storage_ref takes in a non-const pointer.
   device_span<window_type> const map_storage_data{map_storage.data(), total_map_storage_size};
 
   // Synchronize
   chunks.host_to_device_async(stream);
   // Initialize storage with the given sentinel
-  map_storage.initialize({KEY_SENTINEL, VALUE_SENTINEL}, {stream.value()});
+  map_storage.initialize_async({KEY_SENTINEL, VALUE_SENTINEL}, {stream.value()});
   // Populate the hash map for each chunk
   populate_chunk_hash_maps(map_storage_data, frags, stream);
   // Synchronize again
