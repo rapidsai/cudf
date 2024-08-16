@@ -7429,18 +7429,18 @@ public class TableTest extends CudfTestBase {
   @Test
   void testGroupByMaxBy() {
     StructType inputType = new StructType(false,
-        new BasicType(true, DType.INT32),
-        new BasicType(true, DType.INT64));
+        new BasicType(true, DType.INT64),
+        new BasicType(true, DType.INT32));
     try (Table t1 = new Table.TestBuilder()
-        .column(inputType, new StructData(6, 1L), new StructData(5, 2L), new StructData(4, 3L),
-            new StructData(3, 4L), new StructData(2, 5L), new StructData(1, 6L),
-            new StructData(1, null), new StructData(2, null), new StructData(3, null))
+        .column(inputType, new StructData(1L, 6), new StructData(2L, 5), new StructData(3L, 4),
+            new StructData(4L, 3), new StructData(5L, 2), new StructData(6L, 1),
+            new StructData(null, 1), new StructData(null, 2), new StructData(null, 3))
         .column(1, 2, 3, 1, 2, 3, 4, 4, 4).build();
          Table other = t1.groupBy(1).aggregate(GroupByAggregation.maxBy().onColumn(0));
          Table ordered = other.orderBy(OrderByArg.asc(0));
          Table expected = new Table.TestBuilder()
              .column(1, 2, 3, 4)
-             .column(inputType, new StructData(3, 4L), new StructData(2, 5L), new StructData(1, 6L), null)
+             .column(inputType, new StructData(4L, 3), new StructData(5L, 2), new StructData(6L, 1), null)
              .build()) {
       assertTablesAreEqual(expected, ordered);
     }
@@ -7449,18 +7449,18 @@ public class TableTest extends CudfTestBase {
   @Test
   void testGroupByMinBy() {
     StructType inputType = new StructType(false,
-        new BasicType(true, DType.INT32),
-        new BasicType(true, DType.INT64));
+        new BasicType(true, DType.INT64),
+        new BasicType(true, DType.INT32));
     try (Table t1 = new Table.TestBuilder()
-        .column(inputType, new StructData(6, 1L), new StructData(5, 2L), new StructData(4, 3L),
-            new StructData(3, 4L), new StructData(2, 5L), new StructData(1, 6L),
-            new StructData(1, null), new StructData(2, null), new StructData(3, null))
+        .column(inputType, new StructData(1L, 6), new StructData(2L, 5), new StructData(3L, 4),
+            new StructData(4L, 3), new StructData(5L, 2), new StructData(6L, 1),
+            new StructData(null, 1), new StructData(null, 2), new StructData(null, 3))
         .column(1, 2, 3, 1, 2, 3, 4, 4, 4).build();
          Table other = t1.groupBy(1).aggregate(GroupByAggregation.minBy().onColumn(0));
          Table ordered = other.orderBy(OrderByArg.asc(0));
          Table expected = new Table.TestBuilder()
              .column(1, 2, 3, 4)
-             .column(inputType, new StructData(6, 1L), new StructData(5, 2L), new StructData(4, 3L), null)
+             .column(inputType, new StructData(1L, 6), new StructData(2L, 5), new StructData(3L, 4), null)
              .build()) {
       assertTablesAreEqual(expected, ordered);
     }

@@ -38,14 +38,14 @@ TYPED_TEST(groupby_min_by_test, basic)
   if (std::is_same_v<V, bool>) return;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-  cudf::test::fixed_width_column_wrapper<K> values{4, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   cudf::test::fixed_width_column_wrapper<V> orders{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  cudf::test::structs_column_wrapper vals{values, orders};
+  cudf::test::fixed_width_column_wrapper<K> values{4, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  cudf::test::structs_column_wrapper vals{orders, values};
 
   cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
-  cudf::test::fixed_width_column_wrapper<K> expect_values{4, 1, 2};
   cudf::test::fixed_width_column_wrapper<V> expect_orders{1, 2, 3};
-  cudf::test::structs_column_wrapper expect_vals{expect_values, expect_orders};
+  cudf::test::fixed_width_column_wrapper<K> expect_values{4, 1, 2};
+  cudf::test::structs_column_wrapper expect_vals{expect_orders, expect_values};
 
   auto agg = cudf::make_min_by_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -59,15 +59,15 @@ struct groupby_min_by_string_test : public cudf::test::BaseFixture {};
 TEST_F(groupby_min_by_string_test, basic)
 {
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-  cudf::test::fixed_width_column_wrapper<K> values{4, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   cudf::test::strings_column_wrapper orders{
     "año", "bit", "₹1", "aaa", "zit", "bat", "aab", "$1", "€1", "wut"};
-  cudf::test::structs_column_wrapper vals{values, orders};
+  cudf::test::fixed_width_column_wrapper<K> values{4, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  cudf::test::structs_column_wrapper vals{orders, values};
 
   cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
-  cudf::test::fixed_width_column_wrapper<K> expect_values{3, 5, 7};
   cudf::test::strings_column_wrapper expect_orders{"aaa", "bat", "$1"};
-  cudf::test::structs_column_wrapper expect_vals{expect_values, expect_orders};
+  cudf::test::fixed_width_column_wrapper<K> expect_values{3, 5, 7};
+  cudf::test::structs_column_wrapper expect_vals{expect_orders, expect_values};
 
   auto agg = cudf::make_min_by_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
