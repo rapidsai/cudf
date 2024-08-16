@@ -44,6 +44,7 @@ namespace detail {
  *
  * @param type The intended data type to populate
  * @param size The number of elements to be represented by the mask
+ * @param memset_data Defines whether data should be memset to 0
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned device_buffer
  *
@@ -51,15 +52,23 @@ namespace detail {
  */
 inline rmm::device_buffer create_data(data_type type,
                                       size_type size,
+                                      bool memset_data,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
   std::size_t data_size = size_of(type) * size;
 
   rmm::device_buffer data(data_size, stream, mr);
-  CUDF_CUDA_TRY(cudaMemsetAsync(data.data(), 0, data_size, stream.value()));
-
+  if (memset_data) { CUDF_CUDA_TRY(cudaMemsetAsync(data.data(), 0, data_size, stream.value())); }
   return data;
+}
+
+inline rmm::device_buffer create_data(data_type type,
+                                      size_type size,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
+{
+  return create_data(type, size, true, stream, mr);
 }
 
 using string_index_pair = thrust::pair<char const*, size_type>;
@@ -113,12 +122,18 @@ class column_buffer_base {
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for
   // preprocessing steps such as in the Parquet reader
+  void create(size_type _size,
+              bool memset_data,
+              rmm::cuda_stream_view stream,
+              rmm::device_async_resource_ref mr);
+
   void create(size_type _size, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
   // like create(), but also takes a `cudf::mask_state` to allow initializing the null mask as
   // something other than `ALL_NULL`
   void create_with_mask(size_type _size,
                         cudf::mask_state null_mask_state,
+                        bool memset_data,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr);
 
@@ -192,7 +207,7 @@ class gather_column_buffer : public column_buffer_base<gather_column_buffer> {
     create(_size, stream, mr);
   }
 
-  void allocate_strings_data(rmm::cuda_stream_view stream);
+  void allocate_strings_data(bool memset_data, rmm::cuda_stream_view stream);
 
   [[nodiscard]] void* data_impl() { return _strings ? _strings->data() : _data.data(); }
   [[nodiscard]] void const* data_impl() const { return _strings ? _strings->data() : _data.data(); }
@@ -226,7 +241,7 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
     create(_size, stream, mr);
   }
 
-  void allocate_strings_data(rmm::cuda_stream_view stream);
+  void allocate_strings_data(bool memset_data, rmm::cuda_stream_view stream);
 
   void* data_impl() { return _data.data(); }
   [[nodiscard]] void const* data_impl() const { return _data.data(); }

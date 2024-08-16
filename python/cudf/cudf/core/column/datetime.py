@@ -24,6 +24,7 @@ from cudf.core._internals.timezones import (
     get_compatible_timezone,
     get_tz_data,
 )
+from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
@@ -34,10 +35,8 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         DatetimeLikeScalar,
         Dtype,
-        DtypeObj,
         ScalarLike,
     )
-    from cudf.core.buffer import Buffer
     from cudf.core.column.numerical import NumericalColumn
 
 if PANDAS_GE_220:
@@ -207,29 +206,38 @@ class DatetimeColumn(column.ColumnBase):
     def __init__(
         self,
         data: Buffer,
-        dtype: DtypeObj,
+        size: int | None,
+        dtype: np.dtype | pd.DatetimeTZDtype,
         mask: Buffer | None = None,
-        size: int | None = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int | None = None,
+        children: tuple = (),
     ):
-        dtype = cudf.dtype(dtype)
-        if dtype.kind != "M":
-            raise TypeError(f"{self.dtype} is not a supported datetime type")
-
+        if not isinstance(data, Buffer):
+            raise ValueError("data must be a Buffer.")
+        dtype = self._validate_dtype_instance(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = data.size // dtype.itemsize
             size = size - offset
+        if len(children) != 0:
+            raise ValueError(f"{type(self).__name__} must have no children.")
         super().__init__(
-            data,
+            data=data,
             size=size,
             dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
+
+    @staticmethod
+    def _validate_dtype_instance(dtype: np.dtype) -> np.dtype:
+        if not (isinstance(dtype, np.dtype) and dtype.kind == "M"):
+            raise ValueError("dtype must be a datetime, numpy dtype")
+        return dtype
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
@@ -249,6 +257,10 @@ class DatetimeColumn(column.ColumnBase):
     @functools.cached_property
     def time_unit(self) -> str:
         return np.datetime_data(self.dtype)[0]
+
+    @property
+    def quarter(self) -> ColumnBase:
+        return libcudf.datetime.extract_quarter(self)
 
     @property
     def year(self) -> ColumnBase:
@@ -308,13 +320,17 @@ class DatetimeColumn(column.ColumnBase):
     @property
     def is_year_end(self) -> ColumnBase:
         day_of_year = self.day_of_year
-        leap_dates = libcudf.datetime.is_leap_year(self)
+        leap_dates = self.is_leap_year
 
         leap = day_of_year == cudf.Scalar(366)
         non_leap = day_of_year == cudf.Scalar(365)
         return libcudf.copying.copy_if_else(leap, non_leap, leap_dates).fillna(
             False
         )
+
+    @property
+    def is_leap_year(self) -> ColumnBase:
+        return libcudf.datetime.is_leap_year(self)
 
     @property
     def is_year_start(self) -> ColumnBase:
@@ -473,15 +489,15 @@ class DatetimeColumn(column.ColumnBase):
 
     def as_numerical_column(
         self, dtype: Dtype
-    ) -> "cudf.core.column.NumericalColumn":
-        col = column.build_column(
-            data=self.base_data,
-            dtype=np.int64,
+    ) -> cudf.core.column.NumericalColumn:
+        col = cudf.core.column.NumericalColumn(
+            data=self.base_data,  # type: ignore[arg-type]
+            dtype=np.dtype(np.int64),
             mask=self.base_mask,
             offset=self.offset,
             size=self.size,
         )
-        return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
+        return cast(cudf.core.column.NumericalColumn, col.astype(dtype))
 
     def strftime(self, format: str) -> cudf.core.column.StringColumn:
         if len(self) == 0:
@@ -850,21 +866,30 @@ class DatetimeTZColumn(DatetimeColumn):
     def __init__(
         self,
         data: Buffer,
+        size: int | None,
         dtype: pd.DatetimeTZDtype,
         mask: Buffer | None = None,
-        size: int | None = None,
         offset: int = 0,
         null_count: int | None = None,
+        children: tuple = (),
     ):
         super().__init__(
             data=data,
-            dtype=_get_base_dtype(dtype),
-            mask=mask,
             size=size,
+            dtype=dtype,
+            mask=mask,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
-        self._dtype = get_compatible_timezone(dtype)
+
+    @staticmethod
+    def _validate_dtype_instance(
+        dtype: pd.DatetimeTZDtype,
+    ) -> pd.DatetimeTZDtype:
+        if not isinstance(dtype, pd.DatetimeTZDtype):
+            raise ValueError("dtype must be a pandas.DatetimeTZDtype")
+        return get_compatible_timezone(dtype)
 
     def to_pandas(
         self,
