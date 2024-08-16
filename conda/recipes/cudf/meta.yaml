@@ -68,6 +68,7 @@ requirements:
     - numpy 1.23
     - pyarrow ==16.1.0.*
     - libcudf ={{ version }}
+    - pylibcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
     - cudatoolkit
@@ -87,6 +88,7 @@ requirements:
     - numpy >=1.23,<2.0a0
     - {{ pin_compatible('pyarrow', max_pin='x.x') }}
     - libcudf ={{ version }}
+    - pylibcudf ={{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0
     {% if cuda_major == "11" %}

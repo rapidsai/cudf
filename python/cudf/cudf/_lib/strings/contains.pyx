@@ -9,21 +9,22 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
-from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
-from cudf._lib.pylibcudf.libcudf.strings.contains cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from pylibcudf.libcudf.strings.contains cimport (
     count_re as cpp_count_re,
     like as cpp_like,
     matches_re as cpp_matches_re,
 )
-from cudf._lib.pylibcudf.libcudf.strings.regex_flags cimport regex_flags
-from cudf._lib.pylibcudf.libcudf.strings.regex_program cimport regex_program
+from pylibcudf.libcudf.strings.regex_flags cimport regex_flags
+from pylibcudf.libcudf.strings.regex_program cimport regex_program
+
+from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 
-from cudf._lib.pylibcudf.strings import contains
-from cudf._lib.pylibcudf.strings.regex_program import RegexProgram
+from pylibcudf.strings import contains
+from pylibcudf.strings.regex_program import RegexProgram
 
 
 @acquire_spill_lock()

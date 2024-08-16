@@ -31,40 +31,43 @@ from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-cimport cudf._lib.pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
-cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
-from cudf._lib.column cimport Column
-from cudf._lib.io.utils cimport (
-    add_df_col_struct_names,
-    make_sinks_info,
-    make_source_info,
-)
-from cudf._lib.pylibcudf.expressions cimport Expression
-from cudf._lib.pylibcudf.io.datasource cimport NativeFileDatasource
-from cudf._lib.pylibcudf.io.parquet cimport ChunkedParquetReader
-from cudf._lib.pylibcudf.libcudf.io.parquet cimport (
+cimport pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
+cimport pylibcudf.libcudf.io.types as cudf_io_types
+from pylibcudf.expressions cimport Expression
+from pylibcudf.io.datasource cimport NativeFileDatasource
+from pylibcudf.io.parquet cimport ChunkedParquetReader
+from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_writer_options,
     merge_row_group_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     parquet_writer_options,
     write_parquet as parquet_writer,
 )
-from cudf._lib.pylibcudf.libcudf.io.parquet_metadata cimport (
+from pylibcudf.libcudf.io.parquet_metadata cimport (
     parquet_metadata,
     read_parquet_metadata as parquet_metadata_reader,
 )
-from cudf._lib.pylibcudf.libcudf.io.types cimport (
+from pylibcudf.libcudf.io.types cimport (
     column_in_metadata,
     table_input_metadata,
 )
-from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.types cimport size_type
+
+from cudf._lib.column cimport Column
+from cudf._lib.io.utils cimport (
+    add_df_col_struct_names,
+    make_sinks_info,
+    make_source_info,
+)
 from cudf._lib.utils cimport table_view_from_table
 
 from pyarrow.lib import NativeFile
 
-import cudf._lib.pylibcudf as plc
-from cudf._lib.pylibcudf cimport Table
+import pylibcudf as plc
+
+from pylibcudf cimport Table
+
 from cudf.utils.ioutils import _ROW_GROUP_SIZE_BYTES_DEFAULT
 
 

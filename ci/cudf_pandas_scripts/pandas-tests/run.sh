@@ -11,7 +11,9 @@ rapids-logger "Running Pandas tests using $PANDAS_TESTS_BRANCH branch and rapids
 rapids-logger "PR number: ${RAPIDS_REF_NAME:-"unknown"}"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
+RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-pylibcudf-dep
 RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
+python -m pip install $(ls ./local-pylibcudf-dep/pylibcudf*.whl)
 python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,pandas-tests]
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
