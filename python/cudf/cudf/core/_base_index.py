@@ -1979,7 +1979,7 @@ class BaseIndex(Serializable):
                 name=index.name,
             )
         else:
-            return cudf.Index(
+            return cudf.Index._from_column(
                 column.as_column(index, nan_as_null=nan_as_null),
                 name=index.name,
             )
