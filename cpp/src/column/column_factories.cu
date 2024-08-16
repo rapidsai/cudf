@@ -72,13 +72,11 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
 
   // fill the column with the scalar
   rmm::device_uvector<cudf::strings::detail::string_index_pair> indices(size, stream);
-  thrust::generate(
-    rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), [d_str] __device__() {
-      // special handling for empty string -- from an all-empty strings column
-      return d_str.empty()
-               ? cudf::strings::detail::string_index_pair{"", 0}
-               : cudf::strings::detail::string_index_pair{d_str.data(), d_str.size_bytes()};
-    });
+  auto const row_value =
+    d_str.empty() ? cudf::strings::detail::string_index_pair{"", 0}
+                  : cudf::strings::detail::string_index_pair{d_str.data(), d_str.size_bytes()};
+  thrust::uninitialized_fill(
+    rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), row_value);
   return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, mr);
 }
 
