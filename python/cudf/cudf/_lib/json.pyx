@@ -7,8 +7,9 @@ from collections import abc
 import cudf
 from cudf.core.buffer import acquire_spill_lock
 
-cimport pylibcudf.libcudf.io.types as cudf_io_types
 from libcpp cimport bool
+
+cimport pylibcudf.libcudf.io.types as cudf_io_types
 from pylibcudf.io.types cimport compression_type
 from pylibcudf.libcudf.io.json cimport json_recovery_mode_t
 from pylibcudf.libcudf.io.types cimport compression_type

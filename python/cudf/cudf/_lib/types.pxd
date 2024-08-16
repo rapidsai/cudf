@@ -1,8 +1,9 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-cimport pylibcudf.libcudf.types as libcudf_types
 from libc.stdint cimport int32_t
 from libcpp cimport bool
+
+cimport pylibcudf.libcudf.types as libcudf_types
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 

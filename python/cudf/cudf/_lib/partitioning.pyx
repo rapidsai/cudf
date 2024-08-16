@@ -6,6 +6,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.partitioning cimport partition as cpp_partition
 from pylibcudf.libcudf.table.table cimport table

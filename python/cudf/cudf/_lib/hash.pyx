@@ -2,11 +2,12 @@
 
 from cudf.core.buffer import acquire_spill_lock
 
-cimport pylibcudf.libcudf.types as libcudf_types
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
+cimport pylibcudf.libcudf.types as libcudf_types
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.hash cimport (
     md5,

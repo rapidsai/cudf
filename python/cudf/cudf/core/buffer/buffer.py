@@ -9,9 +9,9 @@ from types import SimpleNamespace
 from typing import Any, Literal, Mapping
 
 import numpy
-import pylibcudf
 from typing_extensions import Self
 
+import pylibcudf
 import rmm
 
 import cudf

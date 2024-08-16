@@ -4,6 +4,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.types cimport dtype_to_pylibcudf_type
 
 import numpy as np
+
 import pylibcudf
 
 from cudf.api.types import is_decimal_dtype

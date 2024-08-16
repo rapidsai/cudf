@@ -3,6 +3,7 @@
 from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
+
 from pylibcudf.libcudf.types cimport null_order, size_type
 
 from cudf._lib.column cimport Column

@@ -1,6 +1,7 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t, uint16_t, uintptr_t
+
 from pylibcudf.libcudf.strings_udf cimport (
     get_character_cases_table as cpp_get_character_cases_table,
     get_character_flags_table as cpp_get_character_flags_table,
@@ -22,7 +23,6 @@ from pylibcudf.libcudf.strings_udf cimport (
     to_string_view_array as cpp_to_string_view_array,
     udf_string,
 )
-
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf._lib.column cimport Column

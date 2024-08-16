@@ -1,8 +1,9 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import pandas as pd
-import pylibcudf
 from numba.np import numpy_support
+
+import pylibcudf
 
 import cudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES

@@ -25,8 +25,9 @@ from cudf._lib.utils cimport table_view_from_table
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
 
-cimport pylibcudf.libcudf.contiguous_split as cpp_contiguous_split
 from libcpp.memory cimport make_unique
+
+cimport pylibcudf.libcudf.contiguous_split as cpp_contiguous_split
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.lists.gather cimport (
