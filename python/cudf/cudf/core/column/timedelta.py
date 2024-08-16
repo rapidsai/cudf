@@ -75,28 +75,33 @@ class TimeDeltaColumn(ColumnBase):
     def __init__(
         self,
         data: Buffer,
-        dtype: Dtype,
-        size: int | None = None,  # TODO: make non-optional
+        size: int | None,
+        dtype: np.dtype,
         mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
+        children: tuple = (),
     ):
-        dtype = cudf.dtype(dtype)
-        if dtype.kind != "m":
-            raise TypeError(f"{self.dtype} is not a supported duration type")
+        if not isinstance(data, Buffer):
+            raise ValueError("data must be a Buffer.")
+        if not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
+            raise ValueError("dtype must be a timedelta numpy dtype.")
 
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = data.size // dtype.itemsize
             size = size - offset
+        if len(children) != 0:
+            raise ValueError("TimedeltaColumn must have no children.")
         super().__init__(
-            data,
+            data=data,
             size=size,
             dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
 
     def __contains__(self, item: DatetimeLikeScalar) -> bool:
@@ -251,12 +256,24 @@ class TimeDeltaColumn(ColumnBase):
     def time_unit(self) -> str:
         return np.datetime_data(self.dtype)[0]
 
+    def total_seconds(self) -> ColumnBase:
+        raise NotImplementedError("total_seconds is currently not implemented")
+
+    def ceil(self, freq: str) -> ColumnBase:
+        raise NotImplementedError("ceil is currently not implemented")
+
+    def floor(self, freq: str) -> ColumnBase:
+        raise NotImplementedError("floor is currently not implemented")
+
+    def round(self, freq: str) -> ColumnBase:
+        raise NotImplementedError("round is currently not implemented")
+
     def as_numerical_column(
         self, dtype: Dtype
-    ) -> "cudf.core.column.NumericalColumn":
-        col = column.build_column(
-            data=self.base_data,
-            dtype=np.int64,
+    ) -> cudf.core.column.NumericalColumn:
+        col = cudf.core.column.NumericalColumn(
+            data=self.base_data,  # type: ignore[arg-type]
+            dtype=np.dtype(np.int64),
             mask=self.base_mask,
             offset=self.offset,
             size=self.size,

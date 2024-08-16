@@ -6,6 +6,8 @@ from libc.stdint cimport uintptr_t
 from libcpp.functional cimport reference_wrapper
 from libcpp.vector cimport vector
 
+from cuda import cudart
+
 from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 from cudf._lib.pylibcudf.libcudf.types cimport bitmask_type
 
@@ -34,3 +36,23 @@ cdef vector[reference_wrapper[const scalar]] _as_vector(list source):
         c_scalars.push_back(
             reference_wrapper[constscalar](dereference((<Scalar?>slr).c_obj)))
     return c_scalars
+
+
+def _is_concurrent_managed_access_supported():
+    """Check the availability of concurrent managed access (UVM).
+
+    Note that WSL2 does not support managed memory.
+    """
+
+    # Ensure CUDA is initialized before checking cudaDevAttrConcurrentManagedAccess
+    cudart.cudaFree(0)
+
+    device_id = 0
+    err, supports_managed_access = cudart.cudaDeviceGetAttribute(
+        cudart.cudaDeviceAttr.cudaDevAttrConcurrentManagedAccess, device_id
+    )
+    if err != cudart.cudaError_t.cudaSuccess:
+        raise RuntimeError(
+            f"Failed to check cudaDevAttrConcurrentManagedAccess with error {err}"
+        )
+    return supports_managed_access != 0
