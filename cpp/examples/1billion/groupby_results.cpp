@@ -54,7 +54,7 @@ std::unique_ptr<cudf::table> compute_results(
 std::unique_ptr<cudf::table> compute_final_aggregates(
   std::vector<std::unique_ptr<cudf::table>>& agg_data, rmm::cuda_stream_view stream)
 {
-  // first combine all the results into tables (vectors of columns)
+  // first combine all the results into a vectors of columns
   std::vector<cudf::column_view> min_cols, max_cols, sum_cols, count_cols;
   for (auto& tbl : agg_data) {
     auto const tv = tbl->view();
@@ -67,21 +67,30 @@ std::unique_ptr<cudf::table> compute_final_aggregates(
   // Create single columns out of the aggregate table results.
   // This relies on every key appearing in every chunk segment.
   // All the values for each key become contiguous within the output column.
+  // For example, for N=min_cols.size() (number of unique cities):
+  //   All of the mins for city[i] are in row[i] of each column of vector min_cols.
+  //   The interleave_columns API transposes these into a single column where
+  //     the first N rows are values for city[0],
+  //     the next N rows are values for city[1],
+  //     ...
+  //     the last N rows are values for city[N-1]
+  // The final result for each city is computed using segmented_reduce.
   auto mins   = cudf::interleave_columns(cudf::table_view{min_cols});
   auto maxes  = cudf::interleave_columns(cudf::table_view{max_cols});
   auto sums   = cudf::interleave_columns(cudf::table_view{sum_cols});
   auto counts = cudf::interleave_columns(cudf::table_view{count_cols});
 
-  // build the offsets for segmented reduce
+  // Build the offsets needed for segmented reduce.
+  // These are increasing integer values spaced evenly as per the number of cities (keys).
   auto const num_keys = agg_data.front()->num_rows();
   auto seg_offsets =
-    cudf::sequence(static_cast<cudf::size_type>(num_keys) + 1,
-                   cudf::numeric_scalar<cudf::size_type>(0, true, stream),
-                   cudf::numeric_scalar<cudf::size_type>(agg_data.size(), true, stream),
+    cudf::sequence(static_cast<cudf::size_type>(num_keys) + 1,                            // size
+                   cudf::numeric_scalar<cudf::size_type>(0, true, stream),                // start
+                   cudf::numeric_scalar<cudf::size_type>(agg_data.size(), true, stream),  // step
                    stream);
   auto offsets_span = cudf::device_span<cudf::size_type const>(seg_offsets->view());
 
-  // compute the min/max for each key by doing a segmented reduce
+  // compute the min/max for each key by using segmented reduce
   auto min_agg = cudf::make_min_aggregation<cudf::segmented_reduce_aggregation>();
   mins         = cudf::segmented_reduce(
     mins->view(), offsets_span, *min_agg, mins->type(), cudf::null_policy::EXCLUDE, stream);

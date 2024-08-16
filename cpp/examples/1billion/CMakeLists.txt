@@ -37,18 +37,3 @@ target_link_libraries(
 )
 install(TARGETS load_csv_pipeline DESTINATION bin/examples/libcudf)
 
-add_executable(load_text load_text.cpp)
-target_link_libraries(load_text PRIVATE cudf::cudf nvToolsExt $<TARGET_OBJECTS:groupby_results>)
-install(TARGETS load_text DESTINATION bin/examples/libcudf)
-
-add_executable(load_text_chunks load_text_chunks.cpp)
-target_link_libraries(
-  load_text_chunks PRIVATE cudf::cudf nvToolsExt $<TARGET_OBJECTS:groupby_results>
-)
-install(TARGETS load_text_chunks DESTINATION bin/examples/libcudf)
-
-add_executable(load_text_pipeline load_text_pipeline.cpp)
-target_link_libraries(
-  load_text_pipeline PRIVATE cudf::cudf nvToolsExt $<TARGET_OBJECTS:groupby_results>
-)
-install(TARGETS load_text_pipeline DESTINATION bin/examples/libcudf)
