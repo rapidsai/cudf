@@ -1578,19 +1578,14 @@ def build_column(
         return col
 
     if isinstance(dtype, CategoricalDtype):
-        if not len(children) == 1:
-            raise ValueError(
-                "Must specify exactly one child column for CategoricalColumn"
-            )
-        if not isinstance(children[0], ColumnBase):
-            raise TypeError("children must be a tuple of Columns")
         return cudf.core.column.CategoricalColumn(
+            data=data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             size=size,
             offset=offset,
             null_count=null_count,
-            children=children,
+            children=children,  # type: ignore[arg-type]
         )
     elif dtype.type is np.datetime64:
         return cudf.core.column.DatetimeColumn(
