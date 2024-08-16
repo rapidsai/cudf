@@ -18,6 +18,10 @@ from dask_cudf.tests.utils import _make_random_frame
     ],
 )
 @pytest.mark.parametrize("has_na", [True, False])
+@pytest.mark.xfail(
+    version.parse(pd.__version__) < version.parse("2.1"),
+    reason="DataFrame.map requires pandas>=2.1.0",
+)
 def test_applymap_basic(func, has_na):
     size = 2000
     pdf, dgdf = _make_random_frame(size, include_na=False)
