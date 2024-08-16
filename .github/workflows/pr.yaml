@@ -187,6 +187,7 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
     with:
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: ci/cudf_pandas_scripts/run_tests.sh
@@ -196,7 +197,8 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
     with:
-      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.9" and (.CUDA_VER | startswith("12.5.")) ))
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
       # Hide test failures because they exceed the GITHUB_STEP_SUMMARY output limit.
