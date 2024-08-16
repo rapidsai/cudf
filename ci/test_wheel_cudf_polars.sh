@@ -25,19 +25,20 @@ RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from
 python -m pip install ./local-cudf-dep/cudf*.whl
 
 rapids-logger "Install cudf_polars and test requirements"
-PIP_PACKAGE=$(echo ./dist/cudf_polars*.whl | head -n1)
-# Use `package[test]` to install latest test dependencies or explicitly install oldest.
-if [[ $RAPIDS_DEPENDENCIES != "oldest" ]]; then
-    python -m pip install ${PIP_PACKAGE}[test]
-else
+# Constraint to minimum dependency versions if job is set up as "oldest"
+echo "" > ./constraints.txt
+if [[ $RAPIDS_DEPENDENCIES == "oldest" ]]; then
     rapids-dependency-file-generator \
         --output requirements \
         --file-key py_test_cudf_polars \
         --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
-      | tee oldest-dependencies.txt
-
-    python -m pip install ${PIP_PACKAGE} -r oldest-dependencies.txt
+      | tee ./constraints.txt
 fi
+
+python -m pip install \
+    -v \
+    --constraints ./constraints.txt \
+    $(echo ./dist/cudf_polars*.whl)[test]
 
 rapids-logger "Run cudf_polars tests"
 

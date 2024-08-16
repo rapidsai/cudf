@@ -7,20 +7,22 @@ RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./dist
 
 rapids-logger "Install cudf and test requirements"
-PIP_PACKAGE=$(echo ./dist/cudf*.whl | head -n1)
-# Use `package[test]` to install latest test dependencies or explicitly install oldest.
-if [[ $RAPIDS_DEPENDENCIES != "oldest" ]]; then
-    python -m pip install -v ${PIP_PACKAGE}[test]
-else
+
+# Constraint to minimum dependency versions if job is set up as "oldest"
+echo "" > ./constraints.txt
+if [[ $RAPIDS_DEPENDENCIES == "oldest" ]]; then
     rapids-dependency-file-generator \
         --output requirements \
         --file-key py_test_cudf \
         --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
-      | tee oldest-dependencies.txt
-
-    python -m pip install -v ${PIP_PACKAGE} -r oldest-dependencies.txt
+      | tee ./constraints.txt
 fi
 
+# echo to expand wildcard before adding `[extra]` requires for pip
+python -m pip install \
+    -v \
+    --constraint ./constraints.txt \
+    $(echo ./dist/cudf*.whl)[test]
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
