@@ -403,8 +403,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         if len(group_keys) > 1:
             index = cudf.MultiIndex.from_arrays(group_keys)
         else:
-            (group_keys,) = group_keys
-            index = cudf.Index(group_keys)
+            index = cudf.Index._from_column(group_keys[0])
         return dict(
             zip(index.to_pandas(), cp.split(indices.values, offsets[1:-1]))
         )
@@ -548,7 +547,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
 
     @_performance_tracking
-    def agg(self, func, *args, engine=None, engine_kwargs=None, **kwargs):
+    def agg(self, func=None, *args, engine=None, engine_kwargs=None, **kwargs):
         """
         Apply aggregation(s) to the groups.
 
@@ -648,11 +647,10 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise NotImplementedError(
                 "Passing args to func is currently not supported."
             )
-        if kwargs:
-            raise NotImplementedError(
-                "Passing kwargs to func is currently not supported."
-            )
-        column_names, columns, normalized_aggs = self._normalize_aggs(func)
+
+        column_names, columns, normalized_aggs = self._normalize_aggs(
+            func, **kwargs
+        )
         orig_dtypes = tuple(c.dtype for c in columns)
 
         # Note: When there are no key columns, the below produces
@@ -1266,11 +1264,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         return (group_names, offsets, grouped_keys, grouped_values)
 
     def _normalize_aggs(
-        self, aggs: MultiColumnAggType
+        self, aggs: MultiColumnAggType, **kwargs
     ) -> tuple[Iterable[Any], tuple[ColumnBase, ...], list[list[AggType]]]:
         """
         Normalize aggs to a list of list of aggregations, where `out[i]`
-        is a list of aggregations for column `self.obj[i]`. We support three
+        is a list of aggregations for column `self.obj[i]`. We support four
         different form of `aggs` input here:
         - A single agg, such as "sum". This agg is applied to all value
         columns.
@@ -1279,18 +1277,30 @@ class GroupBy(Serializable, Reducible, Scannable):
         - A mapping of column name to aggs, such as
         {"a": ["sum"], "b": ["mean"]}, the aggs are applied to specified
         column.
+        - Pairs of column name and agg tuples passed as kwargs
+        eg. col1=("a", "sum"), col2=("b", "prod"). The output column names are
+        the keys. The aggs are applied to the corresponding column in the tuple.
         Each agg can be string or lambda functions.
         """
 
         aggs_per_column: Iterable[AggType | Iterable[AggType]]
-        if isinstance(aggs, dict):
-            column_names, aggs_per_column = aggs.keys(), aggs.values()
-            columns = tuple(self.obj._data[col] for col in column_names)
+        # TODO: Remove isinstance condition when the legacy dask_cudf API is removed.
+        # See https://github.com/rapidsai/cudf/pull/16528#discussion_r1715482302 for information.
+        if aggs or isinstance(aggs, dict):
+            if isinstance(aggs, dict):
+                column_names, aggs_per_column = aggs.keys(), aggs.values()
+                columns = tuple(self.obj._data[col] for col in column_names)
+            else:
+                values = self.grouping.values
+                column_names = values._column_names
+                columns = values._columns
+                aggs_per_column = (aggs,) * len(columns)
+        elif not aggs and kwargs:
+            column_names, aggs_per_column = kwargs.keys(), kwargs.values()
+            columns = tuple(self.obj._data[x[0]] for x in kwargs.values())
+            aggs_per_column = tuple(x[1] for x in kwargs.values())
         else:
-            values = self.grouping.values
-            column_names = values._column_names
-            columns = values._columns
-            aggs_per_column = (aggs,) * len(columns)
+            raise TypeError("Must provide at least one aggregation function.")
 
         # is_list_like performs type narrowing but type-checkers don't
         # know it. One could add a TypeGuard annotation to
@@ -2572,7 +2582,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # corresponding output rows in pandas, to do that here
             # expand the result by reindexing.
             ri = cudf.RangeIndex(0, len(self.obj))
-            result.index = cudf.Index(ordering)
+            result.index = cudf.Index._from_column(ordering)
             # This reorders and expands
             result = result.reindex(ri)
         else:
@@ -3143,7 +3153,9 @@ class _Grouping(Serializable):
                 dict(zip(range(nkeys), self._key_columns))
             )._set_names(self.names)
         else:
-            return cudf.Index(self._key_columns[0], name=self.names[0])
+            return cudf.Index._from_column(
+                self._key_columns[0], name=self.names[0]
+            )
 
     @property
     def values(self) -> cudf.core.frame.Frame:
