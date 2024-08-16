@@ -918,6 +918,30 @@ class UnaryFunction(Expr):
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
+    _MAPPING: ClassVar[dict[str, plc.unary.UnaryOperator]] = {
+        "sin": plc.unary.UnaryOperator.SIN,
+        "cos": plc.unary.UnaryOperator.COS,
+        "tan": plc.unary.UnaryOperator.TAN,
+        "arcsin": plc.unary.UnaryOperator.ARCSIN,
+        "arccos": plc.unary.UnaryOperator.ARCCOS,
+        "arctan": plc.unary.UnaryOperator.ARCTAN,
+        "sinh": plc.unary.UnaryOperator.SINH,
+        "cosh": plc.unary.UnaryOperator.COSH,
+        "tanh": plc.unary.UnaryOperator.TANH,
+        "arcsinh": plc.unary.UnaryOperator.ARCSINH,
+        "arccosh": plc.unary.UnaryOperator.ARCCOSH,
+        "arctanh": plc.unary.UnaryOperator.ARCTANH,
+        "exp": plc.unary.UnaryOperator.EXP,
+        "log": plc.unary.UnaryOperator.LOG,
+        "sqrt": plc.unary.UnaryOperator.SQRT,
+        "cbrt": plc.unary.UnaryOperator.CBRT,
+        "ceil": plc.unary.UnaryOperator.CEIL,
+        "floor": plc.unary.UnaryOperator.FLOOR,
+        "abs": plc.unary.UnaryOperator.ABS,
+        "bit_invert": plc.unary.UnaryOperator.BIT_INVERT,
+        "not": plc.unary.UnaryOperator.NOT,
+    }
+
     def __init__(
         self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
     ) -> None:
@@ -932,6 +956,28 @@ class UnaryFunction(Expr):
             "unique",
             "drop_nulls",
             "fill_null",
+            "pow",
+            "sin",
+            "cos",
+            "tan",
+            "arcsin",
+            "arccos",
+            "arctan",
+            "sinh",
+            "cosh",
+            "tanh",
+            "arcsinh",
+            "arccosh",
+            "arctanh",
+            "exp",
+            "log",
+            "sqrt",
+            "cbrt",
+            "ceil",
+            "floor",
+            "abs",
+            "bit_invert",
+            "not",
         ):
             raise NotImplementedError(f"Unary function {name=}")
 
@@ -1038,6 +1084,24 @@ class UnaryFunction(Expr):
                 )
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
             return Column(plc.replace.replace_nulls(column.obj, arg))
+        elif self.name == "pow":
+            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            if isinstance(self.children[1], Literal):
+                arg = plc.interop.from_arrow(self.children[1].value)
+            else:
+                evaluated = self.children[1].evaluate(
+                    df, context=context, mapping=mapping
+                )
+                arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
+            return Column(
+                plc.binaryop.binary_operation(
+                    column.obj, arg, plc.binaryop.BinaryOperator.POW, self.dtype
+                )
+            )
+        elif self.name in self._MAPPING:
+            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            casted = plc.unary.cast(column.obj, self.dtype)
+            return Column(plc.unary.unary_operation(casted, self._MAPPING[self.name]))
 
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
