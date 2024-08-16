@@ -36,4 +36,3 @@ target_link_libraries(
   load_csv_pipeline PRIVATE cudf::cudf nvToolsExt $<TARGET_OBJECTS:groupby_results>
 )
 install(TARGETS load_csv_pipeline DESTINATION bin/examples/libcudf)
-

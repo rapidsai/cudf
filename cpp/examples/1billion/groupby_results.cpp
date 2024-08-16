@@ -70,10 +70,10 @@ std::unique_ptr<cudf::table> compute_final_aggregates(
   // For example, for N=min_cols.size() (number of unique cities):
   //   All of the mins for city[i] are in row[i] of each column of vector min_cols.
   //   The interleave_columns API transposes these into a single column where
-  //     the first N rows are values for city[0],
-  //     the next N rows are values for city[1],
-  //     ...
-  //     the last N rows are values for city[N-1]
+  //   the first N rows are values for city[0],
+  //   the next N rows are values for city[1],
+  //   ...
+  //   the last N rows are values for city[N-1]
   // The final result for each city is computed using segmented_reduce.
   auto mins   = cudf::interleave_columns(cudf::table_view{min_cols});
   auto maxes  = cudf::interleave_columns(cudf::table_view{max_cols});

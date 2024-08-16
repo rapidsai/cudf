@@ -76,9 +76,12 @@ int main(int argc, char const** argv)
   aggregations.emplace_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
 
   auto result = compute_results(cities, temps, std::move(aggregations), stream);
+
   // The other 2 examples employ sorting for the sub-aggregates so enabling
   // the following line may be more comparable in performance with them.
+  //
   // result      = cudf::sort_by_key(result->view(), result->view().select({0}), {}, {}, stream);
+
   stream.synchronize();
 
   elapsed = std::chrono::steady_clock::now() - start;
