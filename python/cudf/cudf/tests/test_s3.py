@@ -324,14 +324,14 @@ def test_read_parquet_filesystem(s3_base, s3so, pdf):
     buffer = BytesIO()
     pdf.to_parquet(path=buffer)
     buffer.seek(0)
-    # Check glob support
-    path = f"s3://{bucket}/{fname + '*.parquet'}"
-    fs = get_fs_token_paths(path, mode="rb", storage_options=s3so)[0]
+    fs = get_fs_token_paths("s3://", mode="rb", storage_options=s3so)[0]
     with s3_context(
         s3_base=s3_base,
         bucket=bucket,
-        files={fname + ".parquet": buffer},
+        files={f"{fname}.parquet": buffer},
     ):
+        # Check glob support
+        path = f"s3://{bucket}/{fname}{'*.parquet'}"
         got = cudf.read_parquet(path, filesystem=fs)
     assert_eq(pdf, got)
 
