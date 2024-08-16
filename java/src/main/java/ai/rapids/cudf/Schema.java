@@ -120,7 +120,7 @@ public class Schema {
 
   private int flattenedLength(int startingLength) {
     if (childSchemas != null) {
-      for (Schema child: childSchemas) {
+      for (Schema child : childSchemas) {
         startingLength++;
         startingLength = child.flattenedLength(startingLength);
       }
@@ -173,7 +173,7 @@ public class Schema {
    */
   public boolean hasNestedChildren() {
     if (childSchemas != null) {
-      for (Schema child: childSchemas) {
+      for (Schema child : childSchemas) {
         if (child.isNested()) {
           return true;
         }
@@ -182,7 +182,7 @@ public class Schema {
     return false;
   }
 
-  int[] getFlattenedTypeIds() {
+  public int[] getFlattenedTypeIds() {
     flattenIfNeeded();
     if (flattenedTypes == null) {
       return null;
@@ -194,7 +194,7 @@ public class Schema {
     return ret;
   }
 
-  int[] getFlattenedTypeScales() {
+  public int[] getFlattenedTypeScales() {
     flattenIfNeeded();
     if (flattenedTypes == null) {
       return null;
@@ -206,7 +206,7 @@ public class Schema {
     return ret;
   }
 
-  DType[] getFlattenedTypes() {
+  public DType[] getFlattenedTypes() {
     flattenIfNeeded();
     return flattenedTypes;
   }
@@ -229,7 +229,7 @@ public class Schema {
     return childSchemas.size();
   }
 
-  int[] getFlattenedNumChildren() {
+  public int[] getFlattenedNumChildren() {
     flattenIfNeeded();
     return flattenedCounts;
   }
@@ -253,7 +253,7 @@ public class Schema {
 
   public HostColumnVector.DataType asHostDataType() {
     if (topLevelType == DType.LIST) {
-      assert(childSchemas != null && childSchemas.size() == 1);
+      assert (childSchemas != null && childSchemas.size() == 1);
       HostColumnVector.DataType element = childSchemas.get(0).asHostDataType();
       return new HostColumnVector.ListType(true, element);
     } else if (topLevelType == DType.STRUCT) {
@@ -261,7 +261,7 @@ public class Schema {
         return new HostColumnVector.StructType(true);
       } else {
         List<HostColumnVector.DataType> childTypes =
-                childSchemas.stream().map(Schema::asHostDataType).collect(Collectors.toList());
+            childSchemas.stream().map(Schema::asHostDataType).collect(Collectors.toList());
         return new HostColumnVector.StructType(true, childTypes);
       }
     } else {
@@ -269,7 +269,7 @@ public class Schema {
     }
   }
 
-    public static class Builder {
+  public static class Builder {
     private final DType topLevelType;
     private final List<String> names;
     private final List<Builder> types;
@@ -326,7 +326,7 @@ public class Schema {
       List<Schema> children = null;
       if (types != null) {
         children = new ArrayList<>(types.size());
-        for (Builder b: types) {
+        for (Builder b : types) {
           children.add(b.build());
         }
       }
