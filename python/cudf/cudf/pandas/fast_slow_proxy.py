@@ -19,6 +19,7 @@ import numpy as np
 from ..options import _env_get_bool
 from ..testing import assert_eq
 from .annotation import nvtx
+from .proxy_base import ProxyNDarrayBase
 
 
 def call_operator(fn, args, kwargs):
@@ -564,7 +565,11 @@ class _FinalProxy(_FastSlowProxy):
         _FinalProxy subclasses can override this classmethod if they
         need particular behaviour when wrapped up.
         """
-        proxy = object.__new__(cls)
+        base_class = _get_proxy_base_class(cls)
+        if base_class is object:
+            proxy = base_class.__new__(cls)
+        else:
+            proxy = base_class.__new__(cls, value)
         proxy._fsproxy_wrapped = value
         return proxy
 
@@ -930,13 +935,17 @@ def _fast_slow_function_call(
                             "Pandas debugging mode failed. "
                             f"The exception was {e}."
                         )
-    except Exception:
+    except Exception as err:
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
             domain="cudf_pandas",
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+            if _env_get_bool("LOG_FAST_FALLBACK", False):
+                from ._logger import log_fallback
+
+                log_fallback(slow_args, slow_kwargs, err)
             with disable_module_accelerator():
                 result = func(*slow_args, **slow_kwargs)
     return _maybe_wrap_result(result, func, *args, **kwargs), fast
@@ -1187,6 +1196,19 @@ def is_proxy_object(obj: Any) -> bool:
     if _FastSlowProxyMeta in type(type(obj)).__mro__:
         return True
     return False
+
+
+def _get_proxy_base_class(cls):
+    """Returns the proxy base class if one exists"""
+    for proxy_class in PROXY_BASE_CLASSES:
+        if proxy_class in cls.__mro__:
+            return proxy_class
+    return object
+
+
+PROXY_BASE_CLASSES: set[type] = {
+    ProxyNDarrayBase,
+}
 
 
 NUMPY_TYPES: set[str] = set(np.sctypeDict.values())
