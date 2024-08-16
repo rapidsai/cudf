@@ -10,7 +10,7 @@ RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from
 
 # Install both pylibcudf and cudf
 python -m pip install \
-    "$(echo ./local-pylibcudf-dep/pylibcudf*.whl" \
+    "$(echo ./local-pylibcudf-dep/pylibcudf*.whl)[test]" \
     "$(echo ./dist/cudf*.whl)[test]"
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
