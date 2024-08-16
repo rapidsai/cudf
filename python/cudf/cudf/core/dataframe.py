@@ -46,7 +46,6 @@ from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
-    NumericalColumn,
     StructColumn,
     as_column,
     build_categorical_column,
@@ -702,7 +701,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ):
         if copy is not None:
             raise NotImplementedError("copy is not currently implemented.")
-        super().__init__()
+        super().__init__({}, index=cudf.Index([]))
         if nan_as_null is no_default:
             nan_as_null = not cudf.get_option("mode.pandas_compatible")
 
@@ -2659,8 +2658,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif isinstance(columns, (cudf.BaseIndex, ColumnBase, Series)):
             level_names = (getattr(columns, "name", None),)
             rangeindex = isinstance(columns, cudf.RangeIndex)
-            columns = as_column(columns)
-            if columns.distinct_count(dropna=False) != len(columns):
+            if rangeindex:
+                unique_count = len(columns)
+            else:
+                columns = as_column(columns)
+                unique_count = columns.distinct_count(dropna=False)
+            if unique_count != len(columns):
                 raise ValueError("Duplicate column names are not allowed")
             pd_columns = pd.Index(columns.to_pandas())
             label_dtype = pd_columns.dtype
@@ -8515,9 +8518,7 @@ def _reassign_categories(categories, cols, col_idxs):
         if idx in categories:
             cols[name] = build_categorical_column(
                 categories=categories[idx],
-                codes=NumericalColumn(
-                    cols[name].base_data, dtype=cols[name].dtype
-                ),
+                codes=cols[name],
                 mask=cols[name].base_mask,
                 offset=cols[name].offset,
                 size=cols[name].size,
