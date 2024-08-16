@@ -27,8 +27,8 @@ rapids-logger "Install cudf_polars and its dependencies"
 
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install \
-    "$(echo ./dist/cudf*.whl)" \
-    "$(echo ./dist/cudf_polars*.whl)[test]"
+    "$(echo ./dist/cudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \
+    "$(echo ./dist/cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test]"
 
 rapids-logger "Run cudf_polars tests"
 

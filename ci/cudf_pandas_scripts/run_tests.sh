@@ -39,7 +39,7 @@ else
     RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./dist
     # echo to expand wildcard before adding `[extra]` requires for pip
     python -m pip install \
-        "$(echo ./dist/cudf*.whl)[test,cudf-pandas-tests]"
+        "$(echo ./dist/cudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test,cudf-pandas-tests]"
 fi
 
 python -m pytest -p cudf.pandas \

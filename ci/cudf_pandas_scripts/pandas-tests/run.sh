@@ -15,7 +15,7 @@ RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from
 
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install \
-  "$(echo ./dist/cudf*.whl)[test,pandas-tests]"
+  "$(echo ./dist/cudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test,pandas-tests]"
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
