@@ -1640,7 +1640,7 @@ def _get_filesystem_and_paths(path_or_data, storage_options, filesystem=None):
         else:
             if not isinstance(filesystem, fsspec.AbstractFileSystem):
                 raise ValueError(
-                    f"Expected fsspec.AbstractFileSystem. Got {fs}"
+                    f"Expected fsspec.AbstractFileSystem. Got {filesystem}"
                 )
 
             if storage_options:
