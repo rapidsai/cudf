@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,14 @@
 
 #pragma once
 
-namespace cudf {
-namespace io {
-namespace detail {
+#include <cudf/utilities/export.hpp>
+
+namespace CUDF_EXPORT cudf {
+namespace io::detail {
 /**
  * @brief Whether writer writes in chunks or all at once
  */
 enum class single_write_mode : bool { YES, NO };
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+
+}  // namespace io::detail
+}  // namespace CUDF_EXPORT cudf

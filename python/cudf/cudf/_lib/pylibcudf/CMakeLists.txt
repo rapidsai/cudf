@@ -20,6 +20,8 @@ set(cython_sources
     concatenate.pyx
     copying.pyx
     datetime.pyx
+    experimental.pyx
+    expressions.pyx
     filling.pyx
     gpumemoryview.pyx
     groupby.pyx
@@ -40,6 +42,7 @@ set(cython_sources
     sorting.pyx
     table.pyx
     traits.pyx
+    transform.pyx
     types.pyx
     unary.pyx
     utils.pyx

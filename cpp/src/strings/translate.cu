@@ -97,7 +97,7 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
 
   size_type table_size = static_cast<size_type>(chars_table.size());
   // convert input table
-  thrust::host_vector<translate_table> htable(table_size);
+  auto htable = cudf::detail::make_host_vector<translate_table>(table_size, stream);
   std::transform(chars_table.begin(), chars_table.end(), htable.begin(), [](auto entry) {
     return translate_table{entry.first, entry.second};
   });

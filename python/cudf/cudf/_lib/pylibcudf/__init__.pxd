@@ -8,6 +8,8 @@ from . cimport (
     concatenate,
     copying,
     datetime,
+    experimental,
+    expressions,
     filling,
     groupby,
     join,
@@ -25,6 +27,7 @@ from . cimport (
     stream_compaction,
     strings,
     traits,
+    transform,
     types,
     unary,
 )
@@ -47,6 +50,8 @@ __all__ = [
     "concatenate",
     "copying",
     "datetime",
+    "experimental",
+    "expressions",
     "filling",
     "gpumemoryview",
     "groupby",
@@ -65,6 +70,7 @@ __all__ = [
     "strings",
     "sorting",
     "traits",
+    "transform",
     "types",
     "unary",
 ]

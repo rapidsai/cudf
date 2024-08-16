@@ -15,7 +15,7 @@ from cudf import _lib as libcudf
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
-from cudf.api.types import is_integer_dtype, is_scalar
+from cudf.api.types import is_scalar
 from cudf.core.buffer import as_buffer
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import (
@@ -62,9 +62,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return self
         return libcudf.unary.cast(self, dtype)
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
+    def as_string_column(self) -> cudf.core.column.StringColumn:
         if len(self) > 0:
             return cpp_from_decimal(self)
         else:
@@ -152,7 +150,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def normalize_binop_value(self, other):
         if isinstance(other, ColumnBase):
             if isinstance(other, cudf.core.column.NumericalColumn):
-                if not is_integer_dtype(other.dtype):
+                if other.dtype.kind not in "iu":
                     raise TypeError(
                         "Decimal columns only support binary operations with "
                         "integer numerical columns."

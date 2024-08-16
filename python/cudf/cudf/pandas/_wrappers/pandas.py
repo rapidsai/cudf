@@ -26,6 +26,7 @@ from pandas.tseries.holiday import (
 )
 
 import cudf
+import cudf.core._compat
 
 from ..annotation import nvtx
 from ..fast_slow_proxy import (
@@ -260,6 +261,19 @@ def Index__new__(cls, *args, **kwargs):
     return self
 
 
+def Index__setattr__(self, name, value):
+    if name.startswith("_"):
+        object.__setattr__(self, name, value)
+        return
+    if name == "name":
+        setattr(self._fsproxy_wrapped, "name", value)
+    if name == "names":
+        setattr(self._fsproxy_wrapped, "names", value)
+    return _FastSlowAttribute("__setattr__").__get__(self, type(self))(
+        name, value
+    )
+
+
 Index = make_final_proxy_type(
     "Index",
     cudf.Index,
@@ -277,11 +291,13 @@ Index = make_final_proxy_type(
         "__iter__": custom_iter,
         "__init__": _DELETE,
         "__new__": Index__new__,
+        "__setattr__": Index__setattr__,
         "_constructor": _FastSlowAttribute("_constructor"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_accessors": set(),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -292,7 +308,11 @@ RangeIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "__setattr__": Index__setattr__,
+        "name": _FastSlowAttribute("name"),
+    },
 )
 
 SparseDtype = make_final_proxy_type(
@@ -319,7 +339,11 @@ CategoricalIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "__setattr__": Index__setattr__,
+        "name": _FastSlowAttribute("name"),
+    },
 )
 
 Categorical = make_final_proxy_type(
@@ -348,8 +372,10 @@ DatetimeIndex = make_final_proxy_type(
     bases=(Index,),
     additional_attributes={
         "__init__": _DELETE,
+        "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -383,8 +409,10 @@ TimedeltaIndex = make_final_proxy_type(
     bases=(Index,),
     additional_attributes={
         "__init__": _DELETE,
+        "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -439,8 +467,10 @@ PeriodIndex = make_final_proxy_type(
     bases=(Index,),
     additional_attributes={
         "__init__": _DELETE,
+        "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -474,6 +504,7 @@ Period = make_final_proxy_type(
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
+
 MultiIndex = make_final_proxy_type(
     "MultiIndex",
     cudf.MultiIndex,
@@ -481,7 +512,11 @@ MultiIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "__setattr__": Index__setattr__,
+        "names": _FastSlowAttribute("names"),
+    },
 )
 
 TimeGrouper = make_intermediate_proxy_type(
@@ -522,13 +557,14 @@ StringArray = make_final_proxy_type(
     },
 )
 
-ArrowStringArrayNumpySemantics = make_final_proxy_type(
-    "ArrowStringArrayNumpySemantics",
-    _Unusable,
-    pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-)
+if cudf.core._compat.PANDAS_GE_210:
+    ArrowStringArrayNumpySemantics = make_final_proxy_type(
+        "ArrowStringArrayNumpySemantics",
+        _Unusable,
+        pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+    )
 
 ArrowStringArray = make_final_proxy_type(
     "ArrowStringArray",
@@ -667,8 +703,10 @@ IntervalIndex = make_final_proxy_type(
     bases=(Index,),
     additional_attributes={
         "__init__": _DELETE,
+        "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "name": _FastSlowAttribute("name"),
     },
 )
 
@@ -773,6 +811,18 @@ _DataFrameLocIndexer = make_intermediate_proxy_type(
     "_DataFrameLocIndexer",
     cudf.core.dataframe._DataFrameLocIndexer,
     pd.core.indexing._LocIndexer,
+)
+
+_AtIndexer = make_intermediate_proxy_type(
+    "_AtIndexer",
+    cudf.core.dataframe._DataFrameAtIndexer,
+    pd.core.indexing._AtIndexer,
+)
+
+_iAtIndexer = make_intermediate_proxy_type(
+    "_iAtIndexer",
+    cudf.core.dataframe._DataFrameiAtIndexer,
+    pd.core.indexing._iAtIndexer,
 )
 
 FixedForwardWindowIndexer = make_final_proxy_type(
@@ -906,6 +956,12 @@ except ImportError:
     pass
 
 _eval_func = _FunctionProxy(_Unusable(), pd.eval)
+
+register_proxy_func(pd.read_pickle)(
+    _FunctionProxy(_Unusable(), pd.read_pickle)
+)
+
+register_proxy_func(pd.to_pickle)(_FunctionProxy(_Unusable(), pd.to_pickle))
 
 
 def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):

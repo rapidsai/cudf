@@ -257,10 +257,8 @@ dremel_data get_encoding(column_view h_col,
     },
     stream);
 
-  thrust::host_vector<size_type> column_offsets =
-    cudf::detail::make_host_vector_async(d_column_offsets, stream);
-  thrust::host_vector<size_type> column_ends =
-    cudf::detail::make_host_vector_async(d_column_ends, stream);
+  auto column_offsets = cudf::detail::make_host_vector_async(d_column_offsets, stream);
+  auto column_ends    = cudf::detail::make_host_vector_async(d_column_ends, stream);
   stream.synchronize();
 
   size_t max_vals_size = 0;

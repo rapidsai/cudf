@@ -16,12 +16,12 @@
 
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/utilities/block_utils.cuh"
-#include "io/utilities/config_utils.hpp"
 #include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -1417,8 +1417,8 @@ void decimal_sizes_to_offsets(device_2dspan<rowgroup_rows const> rg_bounds,
   if (rg_bounds.count() == 0) return;
 
   // Convert map to a vector of views of the `elem_sizes` device buffers
-  std::vector<decimal_column_element_sizes> h_sizes;
-  h_sizes.reserve(elem_sizes.size());
+  auto h_sizes =
+    cudf::detail::make_empty_host_vector<decimal_column_element_sizes>(elem_sizes.size(), stream);
   std::transform(elem_sizes.begin(), elem_sizes.end(), std::back_inserter(h_sizes), [](auto& p) {
     return decimal_column_element_sizes{p.first, p.second};
   });
