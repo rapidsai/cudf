@@ -14,7 +14,6 @@ import numpy as np
 import pandas as pd
 from fsspec.core import get_fs_token_paths
 from pyarrow import PythonFile as ArrowPythonFile
-from pyarrow.lib import NativeFile
 
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_LT_300
@@ -1744,7 +1743,7 @@ def get_reader_filepath_or_buffer(
     compression,
     mode="rb",
     fs=None,
-    iotypes=(BytesIO, NativeFile),
+    iotypes=(BytesIO,),
     # no_default aliases to False
     use_python_file_object=no_default,
     open_file_options=None,
