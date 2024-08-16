@@ -2,5 +2,5 @@
 join
 ====
 
-.. automodule:: cudf._lib.pylibcudf.join
+.. automodule:: pylibcudf.join
    :members:
