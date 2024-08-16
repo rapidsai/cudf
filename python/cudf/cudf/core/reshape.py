@@ -490,7 +490,7 @@ def concat(
         elif len(objs) == 1:
             obj = objs[0]
             result = cudf.DataFrame._from_data(
-                data=None if join == "inner" else obj._data.copy(deep=True),
+                data={} if join == "inner" else obj._data.copy(deep=True),
                 index=cudf.RangeIndex(len(obj))
                 if ignore_index
                 else obj.index.copy(deep=True),
