@@ -6371,6 +6371,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         source = self
 
         if axis is None:
+            assert PANDAS_LT_300, "Replace if/else with just axis=2"
             # TODO(pandas3.0): Remove if/else for just axis = 2
             if op in {"sum", "product", "std", "var"}:
                 # pandas only raises FutureWarning for these ops
