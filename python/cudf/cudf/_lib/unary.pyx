@@ -5,7 +5,8 @@ from cudf._lib.types cimport dtype_to_pylibcudf_type
 
 import numpy as np
 
-from cudf._lib import pylibcudf
+import pylibcudf
+
 from cudf.api.types import is_decimal_dtype
 from cudf.core.buffer import acquire_spill_lock
 

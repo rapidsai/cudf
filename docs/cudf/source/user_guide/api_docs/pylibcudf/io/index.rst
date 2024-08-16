@@ -5,7 +5,7 @@ I/O
 I/O Utility Classes
 ===================
 
-.. automodule:: cudf._lib.pylibcudf.io.types
+.. automodule:: pylibcudf.io.types
    :members:
 
 
