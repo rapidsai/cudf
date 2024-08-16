@@ -21,11 +21,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import pyarrow as pa
+import pylibcudf as plc
 from typing_extensions import assert_never
 
 import polars as pl
-
-import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import DataFrame, NamedColumn
