@@ -9,7 +9,9 @@ rapids-download-wheels-from-s3 ./local-pylibcudf-dep "pylibcudf_${RAPIDS_PY_CUDA
 rapids-download-wheels-from-s3 ./dist "cudf_${RAPIDS_PY_CUDA_SUFFIX}"
 
 # Install both pylibcudf and cudf
-python -m pip install ./local-pylibcudf-dep/pylibcudf*.whl $(echo ./dist/cudf*.whl)[test]
+python -m pip install \
+    "$(echo ./local-pylibcudf-dep/pylibcudf*.whl" \
+    "$(echo ./dist/cudf*.whl)[test]"
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/

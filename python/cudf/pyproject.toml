@@ -89,6 +89,7 @@ known_dask = [
 ]
 known_rapids = [
     "rmm",
+    "pylibcudf"
 ]
 known_first_party = [
     "cudf",

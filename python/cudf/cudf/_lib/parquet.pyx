@@ -22,8 +22,6 @@ from cudf._lib.utils cimport _data_from_columns, data_from_pylibcudf_io
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
-cimport pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
-cimport pylibcudf.libcudf.io.types as cudf_io_types
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
@@ -32,6 +30,9 @@ from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
+cimport pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
+cimport pylibcudf.libcudf.io.types as cudf_io_types
 from pylibcudf.expressions cimport Expression
 from pylibcudf.io.datasource cimport NativeFileDatasource
 from pylibcudf.io.parquet cimport ChunkedParquetReader
@@ -61,8 +62,9 @@ from cudf._lib.io.utils cimport (
 )
 from cudf._lib.utils cimport table_view_from_table
 
-import pylibcudf as plc
 from pyarrow.lib import NativeFile
+
+import pylibcudf as plc
 
 from pylibcudf cimport Table
 
@@ -223,7 +225,7 @@ cdef object _process_metadata(object df,
                 if len(filtered_idx) > 0:
                     idx = cudf.concat(filtered_idx)
                 else:
-                    idx = cudf.Index(cudf.core.column.column_empty(0))
+                    idx = cudf.Index._from_column(cudf.core.column.column_empty(0))
             else:
                 start = range_index_meta["start"] + skip_rows
                 stop = range_index_meta["stop"]
@@ -241,7 +243,7 @@ cdef object _process_metadata(object df,
             index_data = df[index_col]
             actual_index_names = list(index_col_names.values())
             if len(index_data._data) == 1:
-                idx = cudf.Index(
+                idx = cudf.Index._from_column(
                     index_data._data.columns[0],
                     name=actual_index_names[0]
                 )

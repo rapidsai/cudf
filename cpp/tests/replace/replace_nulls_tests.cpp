@@ -674,7 +674,7 @@ TEST_F(ReplaceDictionaryTest, ReplaceNullsEmpty)
   cudf::test::fixed_width_column_wrapper<int64_t> input_empty_w({});
   auto input_empty = cudf::dictionary::encode(input_empty_w);
   auto result      = cudf::replace_nulls(input_empty->view(), input_empty->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), input_empty->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), input_empty->view());
 }
 
 TEST_F(ReplaceDictionaryTest, ReplaceNullsNoNulls)

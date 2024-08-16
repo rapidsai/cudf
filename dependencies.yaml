@@ -31,6 +31,7 @@ files:
       - test_python_common
       - test_python_cudf
       - test_python_dask_cudf
+      - test_python_pylibcudf
       - depends_on_cupy
   test_static_build:
     output: none
