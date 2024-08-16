@@ -7,7 +7,6 @@ from io import BytesIO, StringIO
 
 import numpy as np
 import pandas as pd
-import pyarrow.fs as pa_fs
 import pytest
 from fsspec.core import get_fs_token_paths
 
@@ -156,22 +155,6 @@ def test_read_csv(s3_base, s3so, pdf, bytes_per_thread):
                 storage_options=s3so,
                 use_python_file_object=True,
             )
-    assert_eq(pdf, got)
-
-
-def test_read_csv_arrow_nativefile(s3_base, s3so, pdf):
-    # Write to buffer
-    fname = "test_csv_reader_arrow_nativefile.csv"
-    bucket = "csv"
-    buffer = pdf.to_csv(index=False)
-    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        fs = pa_fs.S3FileSystem(
-            endpoint_override=s3so["client_kwargs"]["endpoint_url"],
-        )
-        with pytest.warns(FutureWarning):
-            with fs.open_input_file(f"{bucket}/{fname}") as fil:
-                got = cudf.read_csv(fil)
-
     assert_eq(pdf, got)
 
 
@@ -350,26 +333,6 @@ def test_read_parquet_multi_file(s3_base, s3so, pdf):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("columns", [None, ["Float", "String"]])
-def test_read_parquet_arrow_nativefile(s3_base, s3so, pdf, columns):
-    # Write to buffer
-    fname = "test_parquet_reader_arrow_nativefile.parquet"
-    bucket = "parquet"
-    buffer = BytesIO()
-    pdf.to_parquet(path=buffer)
-    buffer.seek(0)
-    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        with pytest.warns(FutureWarning):
-            fs = pa_fs.S3FileSystem(
-                endpoint_override=s3so["client_kwargs"]["endpoint_url"],
-            )
-            with fs.open_input_file(f"{bucket}/{fname}") as fil:
-                got = cudf.read_parquet(fil, columns=columns)
-
-    expect = pdf[columns] if columns else pdf
-    assert_eq(expect, got)
-
-
 @pytest.mark.parametrize("precache", [None, "parquet"])
 def test_read_parquet_filters(s3_base, s3so, pdf_ext, precache):
     fname = "test_parquet_reader_filters.parquet"
@@ -464,29 +427,6 @@ def test_read_orc(s3_base, s3so, datadir, use_python_file_object, columns):
                 storage_options=s3so,
                 use_python_file_object=use_python_file_object,
             )
-
-    if columns:
-        expect = expect[columns]
-    assert_eq(expect, got)
-
-
-@pytest.mark.parametrize("columns", [None, ["string1"]])
-def test_read_orc_arrow_nativefile(s3_base, s3so, datadir, columns):
-    source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
-    fname = "test_orc_reader.orc"
-    bucket = "orc"
-    expect = pd.read_orc(source_file)
-
-    with open(source_file, "rb") as f:
-        buffer = f.read()
-
-    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        fs = pa_fs.S3FileSystem(
-            endpoint_override=s3so["client_kwargs"]["endpoint_url"],
-        )
-        with pytest.warns(FutureWarning):
-            with fs.open_input_file(f"{bucket}/{fname}") as fil:
-                got = cudf.read_orc(fil, columns=columns)
 
     if columns:
         expect = expect[columns]

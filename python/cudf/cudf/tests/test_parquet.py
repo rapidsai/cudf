@@ -19,7 +19,7 @@ import pyarrow as pa
 import pytest
 from fsspec.core import get_fs_token_paths
 from packaging import version
-from pyarrow import fs as pa_fs, parquet as pq
+from pyarrow import parquet as pq
 
 import cudf
 from cudf._lib.parquet import read_parquet_chunked
@@ -701,18 +701,6 @@ def test_parquet_reader_local_filepath():
 def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
     expect = pd.read_parquet(parquet_path_or_buf("filepath"))
     got = cudf.read_parquet(parquet_path_or_buf(src))
-
-    assert_eq(expect, got)
-
-
-def test_parquet_reader_arrow_nativefile(parquet_path_or_buf):
-    # Check that we can read a file opened with the
-    # Arrow FileSystem interface
-    expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
-    fs, path = pa_fs.FileSystem.from_uri(parquet_path_or_buf("filepath"))
-    with fs.open_input_file(path) as fil:
-        with pytest.warns(FutureWarning):
-            got = cudf.read_parquet(fil)
 
     assert_eq(expect, got)
 
