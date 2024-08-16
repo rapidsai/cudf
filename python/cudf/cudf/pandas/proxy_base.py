@@ -21,7 +21,3 @@ class ProxyNDarrayBase(np.ndarray):
 
     def __array_finalize__(self, obj):
         self._fsproxy_wrapped = getattr(obj, "_fsproxy_wrapped", None)
-
-    def __array_ufunc__(self, *args, **kwargs):
-        args = (args[0], args[1], np.asarray(args[2]), np.asarray(args[3]))
-        return super().__array_ufunc__(*args, **kwargs)

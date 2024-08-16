@@ -565,13 +565,12 @@ class _FinalProxy(_FastSlowProxy):
         _FinalProxy subclasses can override this classmethod if they
         need particular behaviour when wrapped up.
         """
-        # TODO: Use _has_proxy_base_class to perform the check
-        if np.ndarray in cls.__mro__:
-            proxy = ProxyNDarrayBase.__new__(cls, value)
-            proxy._fsproxy_wrapped = value
+        base_class = _get_proxy_base_class(cls)
+        if base_class is object:
+            proxy = base_class.__new__(cls)
         else:
-            proxy = object.__new__(cls)
-            proxy._fsproxy_wrapped = value
+            proxy = base_class.__new__(cls, value)
+        proxy._fsproxy_wrapped = value
         return proxy
 
     def __reduce__(self):
@@ -1199,16 +1198,12 @@ def is_proxy_object(obj: Any) -> bool:
     return False
 
 
-def _has_proxy_base_class(cls):
-    """Determine if an object is proxy object
-
-    Parameters
-    ----------
-    cls : type
-        The type to check.
-
-    """
-    return any(base in cls.__mro__ for base in PROXY_BASE_CLASSES)
+def _get_proxy_base_class(cls):
+    """Returns the proxy base class if one exists"""
+    for proxy_class in PROXY_BASE_CLASSES:
+        if proxy_class in cls.__mro__:
+            return proxy_class
+    return object
 
 
 PROXY_BASE_CLASSES: set[type] = {
