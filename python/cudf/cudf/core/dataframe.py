@@ -46,7 +46,6 @@ from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
-    NumericalColumn,
     StructColumn,
     as_column,
     build_categorical_column,
@@ -8541,9 +8540,7 @@ def _reassign_categories(categories, cols, col_idxs):
         if idx in categories:
             cols[name] = build_categorical_column(
                 categories=categories[idx],
-                codes=NumericalColumn(
-                    cols[name].base_data, dtype=cols[name].dtype
-                ),
+                codes=cols[name],
                 mask=cols[name].base_mask,
                 offset=cols[name].offset,
                 size=cols[name].size,

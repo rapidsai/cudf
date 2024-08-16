@@ -1513,6 +1513,7 @@ def column_empty(
                         * cudf.dtype(libcudf.types.size_type_dtype).itemsize
                     )
                 ),
+                size=None,
                 dtype=libcudf.types.size_type_dtype,
             ),
         )
