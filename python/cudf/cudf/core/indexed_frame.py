@@ -24,6 +24,8 @@ import numpy as np
 import pandas as pd
 from typing_extensions import Self
 
+import pylibcudf
+
 import cudf
 import cudf._lib as libcudf
 import cudf.core
@@ -265,7 +267,6 @@ class IndexedFrame(Frame):
     # mypy can't handle bound type variables as class members
     _loc_indexer_type: type[_LocIndexerClass]  # type: ignore
     _iloc_indexer_type: type[_IlocIndexerClass]  # type: ignore
-    _index: cudf.core.index.BaseIndex
     _groupby = GroupBy
     _resampler = _Resampler
 
@@ -284,18 +285,21 @@ class IndexedFrame(Frame):
         "cummax": {"op_name": "cumulative max"},
     }
 
-    def __init__(self, data=None, index=None):
+    def __init__(
+        self,
+        data: ColumnAccessor | MutableMapping[Any, ColumnBase],
+        index: BaseIndex,
+    ):
         super().__init__(data=data)
-        # TODO: Right now it is possible to initialize an IndexedFrame without
-        # an index. The code's correctness relies on the subclass constructors
-        # assigning the attribute after the fact. We should restructure those
-        # to ensure that this constructor is always invoked with an index.
+        if not isinstance(index, cudf.core._base_index.BaseIndex):
+            raise ValueError(
+                f"index must be a cudf index not {type(index).__name__}"
+            )
         self._index = index
 
     @property
     def _num_rows(self) -> int:
         # Important to use the index because the data may be empty.
-        # TODO: Remove once DataFrame.__init__ is cleaned up
         return len(self.index)
 
     @property
@@ -6309,7 +6313,7 @@ class IndexedFrame(Frame):
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
 
-        method_enum = libcudf.pylibcudf.aggregation.RankMethod[method.upper()]
+        method_enum = pylibcudf.aggregation.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
             raise ValueError(
                 "na_option must be one of 'keep', 'top', or 'bottom'"
