@@ -5,6 +5,8 @@ from pandas import NA
 
 from dask import dataframe as dd
 
+from cudf.core._compat import PANDAS_GE_210
+
 from dask_cudf.tests.utils import _make_random_frame
 
 
@@ -19,7 +21,7 @@ from dask_cudf.tests.utils import _make_random_frame
 )
 @pytest.mark.parametrize("has_na", [True, False])
 @pytest.mark.xfail(
-    version.parse(pd.__version__) < version.parse("2.1"),
+    not PANDAS_GE_210,
     reason="DataFrame.map requires pandas>=2.1.0",
 )
 def test_applymap_basic(func, has_na):

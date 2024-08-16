@@ -14,7 +14,11 @@ import pytest
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
+    PANDAS_VERSION,
+)
 from cudf.core.index import DatetimeIndex
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
@@ -1642,7 +1646,16 @@ def test_date_range_raise_overflow():
         "B",
     ],
 )
-def test_date_range_raise_unsupported(freqstr_unsupported):
+def test_date_range_raise_unsupported(request, freqstr_unsupported):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                not PANDAS_GE_220 and freqstr_unsupported.endswith("E")
+            ),
+            reason="YE, etc. support was added in pandas 2.2",
+        )
+    )
+
     s, e = "2001-01-01", "2008-01-31"
     pd.date_range(start=s, end=e, freq=freqstr_unsupported)
     with pytest.raises(ValueError, match="does not yet support"):
@@ -1654,7 +1667,7 @@ def test_date_range_raise_unsupported(freqstr_unsupported):
     if freqstr_unsupported != "3MS":
         freqstr_unsupported = freqstr_unsupported.lower()
         with pytest.raises(ValueError, match="does not yet support"):
-            with pytest.warns(FutureWarning):
+            with expect_warning_if(PANDAS_GE_220):
                 cudf.date_range(start=s, end=e, freq=freqstr_unsupported)
 
 
