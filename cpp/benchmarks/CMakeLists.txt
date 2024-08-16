@@ -207,7 +207,6 @@ ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher.cu)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
-#   ConfigureBench( REDUCTION_BENCH )
 ConfigureNVBench(
   REDUCTION_NVBENCH
   reduction/anyall.cpp
