@@ -287,6 +287,7 @@ dependencies:
       - output_types: conda
         packages:
           - fmt>=10.1.1,<11
+          - flatbuffers==24.3.25
           - librmm==24.8.*,>=0.0.0a0
           - libkvikio==24.8.*,>=0.0.0a0
           - librdkafka>=1.9.0,<1.10.0a0
@@ -323,12 +324,13 @@ dependencies:
         packages:
           # Hard pin the patch version used during the build.
           # Sync with conda build constraint & wheel run constraint.
+          # TODO: Change to `2.0.*` for NumPy 2
           - numpy==1.23.*
   build_python_cudf:
     common:
       - output_types: conda
         packages:
-          - &rmm_conda rmm==24.8.*,>=0.0.0a0
+          - &rmm_unsuffixed rmm==24.8.*,>=0.0.0a0
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
@@ -342,13 +344,17 @@ dependencies:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.*"}
-            packages: &build_python_packages_cu12
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
               - rmm-cu12==24.8.*,>=0.0.0a0
-          - matrix: {cuda: "11.*"}
-            packages: &build_python_packages_cu11
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
               - rmm-cu11==24.8.*,>=0.0.0a0
-          - {matrix: null, packages: [*rmm_conda] }
+          - {matrix: null, packages: [*rmm_unsuffixed]}
   libarrow_build:
     common:
       - output_types: conda
@@ -551,6 +557,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
+          # TODO: Update `numpy` in `build_python_common` when dropping `<2.0a0`
           - numpy>=1.23,<2.0a0
           - pandas>=2.0,<2.2.3dev0
   run_cudf:
@@ -565,7 +572,7 @@ dependencies:
           - typing_extensions>=4.0.0
       - output_types: conda
         packages:
-          - *rmm_conda
+          - *rmm_unsuffixed
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -586,28 +593,45 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - pynvjitlink>=0.0.0a0
+              - &pynvjitlink_unsuffixed pynvjitlink>=0.0.0a0
           - matrix: {cuda: "11.*"}
             packages:
-              - cubinlinker
-              - ptxcompiler
+              - &cubinlinker_unsuffixed cubinlinker
+              - &ptxcompiler_unsuffixed ptxcompiler
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.*"}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
             packages:
               - rmm-cu12==24.8.*,>=0.0.0a0
               - pynvjitlink-cu12>=0.0.0a0
-          - matrix: {cuda: "11.*"}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "false"
+            packages:
+              - *rmm_unsuffixed
+              - *pynvjitlink_unsuffixed
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
             packages:
               - rmm-cu11==24.8.*,>=0.0.0a0
               - cubinlinker-cu11
               - ptxcompiler-cu11
-          - {matrix: null, packages: [cubinlinker, ptxcompiler, *rmm_conda]}
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "false"
+            packages: &run_cudf_cu11_unsuffixed
+              - *cubinlinker_unsuffixed
+              - *ptxcompiler_unsuffixed
+              - *rmm_unsuffixed
+          - {matrix: null, packages: *run_cudf_cu11_unsuffixed}
   run_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.0
+          - polars>=1.0,<1.3
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -704,7 +728,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &cudf_conda cudf==24.8.*,>=0.0.0a0
+          - &cudf_unsuffixed cudf==24.8.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -714,18 +738,22 @@ dependencies:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.*"}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
             packages:
               - cudf-cu12==24.8.*,>=0.0.0a0
-          - matrix: {cuda: "11.*"}
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
             packages:
               - cudf-cu11==24.8.*,>=0.0.0a0
-          - {matrix: null, packages: [*cudf_conda]}
+          - {matrix: null, packages: [*cudf_unsuffixed]}
   depends_on_cudf_kafka:
     common:
       - output_types: conda
         packages:
-          - &cudf_kafka_conda cudf_kafka==24.8.*,>=0.0.0a0
+          - &cudf_kafka_unsuffixed cudf_kafka==24.8.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -735,13 +763,17 @@ dependencies:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.*"}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
             packages:
               - cudf_kafka-cu12==24.8.*,>=0.0.0a0
-          - matrix: {cuda: "11.*"}
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
             packages:
               - cudf_kafka-cu11==24.8.*,>=0.0.0a0
-          - {matrix: null, packages: [*cudf_kafka_conda]}
+          - {matrix: null, packages: [*cudf_kafka_unsuffixed]}
   depends_on_cupy:
     common:
       - output_types: conda
