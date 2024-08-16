@@ -24,8 +24,8 @@
 
 #include <rmm/resource_ref.hpp>
 
-#include <thrust/generate.h>
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/uninitialized_fill.h>
 
 namespace cudf {
 
