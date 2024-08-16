@@ -531,6 +531,7 @@ def read_parquet(
     engine="cudf",
     columns=None,
     storage_options=None,
+    filesystem=None,
     filters=None,
     row_groups=None,
     use_pandas_metadata=True,
@@ -583,7 +584,9 @@ def read_parquet(
     # Start by trying construct a filesystem object, so we
     # can apply filters on remote file-systems
     fs, paths = ioutils._get_filesystem_and_paths(
-        path_or_data=filepath_or_buffer, storage_options=storage_options
+        path_or_data=filepath_or_buffer,
+        storage_options=storage_options,
+        filesystem=filesystem,
     )
 
     # Normalize and validate filters
