@@ -518,7 +518,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @classmethod
     @_performance_tracking
-    def from_arrow(cls, array: pa.Array):
+    def from_arrow(cls, array: pa.Array) -> Self:
         """Create from PyArrow Array/ChunkedArray.
 
         Parameters
