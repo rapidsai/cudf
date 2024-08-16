@@ -8,9 +8,8 @@ RAPIDS_PY_WHEEL_NAME="dask_cudf_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="
 
 # Download the cudf built in the previous step
 RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
-python -m pip install ./local-cudf-dep/cudf*.whl
 
-rapids-logger "Install dask_cudf and test requirements"
+rapids-logger "Install dask and dask_cudf and test requirements"
 # Constraint to minimum dependency versions if job is set up as "oldest"
 echo "" > ./constraints.txt
 if [[ $RAPIDS_DEPENDENCIES == "oldest" ]]; then
@@ -24,7 +23,8 @@ fi
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install \
     -v \
-    --constraints ./constraints.txt \
+    --constraint ./constraints.txt \
+    ./local-cudf-dep/cudf*.whl \
     $(echo ./dist/dask_cudf*.whl)[test]
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}

@@ -22,7 +22,6 @@ RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE
 
 # Download the cudf built in the previous step
 RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
-python -m pip install ./local-cudf-dep/cudf*.whl
 
 rapids-logger "Install cudf_polars and test requirements"
 # Constraint to minimum dependency versions if job is set up as "oldest"
@@ -35,9 +34,11 @@ if [[ $RAPIDS_DEPENDENCIES == "oldest" ]]; then
       | tee ./constraints.txt
 fi
 
+# echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install \
     -v \
-    --constraints ./constraints.txt \
+    --constraint ./constraints.txt \
+    ./local-cudf-dep/cudf*.whl \
     $(echo ./dist/cudf_polars*.whl)[test]
 
 rapids-logger "Run cudf_polars tests"
