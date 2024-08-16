@@ -393,6 +393,7 @@ ConfigureTest(
   utilities_tests/pinned_memory_tests.cpp
   utilities_tests/type_check_tests.cpp
   utilities_tests/type_list_tests.cpp
+  utilities_tests/batched_memset_tests.cu
 )
 
 # ##################################################################################################
@@ -735,6 +736,7 @@ ConfigureTest(
   STREAM_MODE
   testing
 )
+ConfigureTest(STREAM_TRANSFORM_TEST streams/transform_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_UNARY_TEST streams/unary_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
