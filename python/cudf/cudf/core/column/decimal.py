@@ -31,13 +31,37 @@ from .numerical_base import NumericalBaseColumn
 
 if TYPE_CHECKING:
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
+    from cudf.core.buffer import Buffer
 
 
 class DecimalBaseColumn(NumericalBaseColumn):
     """Base column for decimal32, decimal64 or decimal128 columns"""
 
-    dtype: DecimalDtype
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
+
+    def __init__(
+        self,
+        data: Buffer,
+        size: int,
+        dtype: DecimalDtype,
+        mask: Buffer | None = None,
+        offset: int = 0,
+        null_count: int | None = None,
+        children: tuple = (),
+    ):
+        if not isinstance(size, int):
+            raise ValueError("Must specify an integer size")
+        if not isinstance(dtype, DecimalDtype):
+            raise ValueError(f"{dtype=} must be a DecimalDtype instance")
+        super().__init__(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
+        )
 
     @property
     def __cuda_array_interface__(self):
@@ -205,7 +229,27 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
 
 class Decimal32Column(DecimalBaseColumn):
-    dtype: Decimal32Dtype
+    def __init__(
+        self,
+        data: Buffer,
+        size: int,
+        dtype: Decimal32Dtype,
+        mask: Buffer | None = None,
+        offset: int = 0,
+        null_count: int | None = None,
+        children: tuple = (),
+    ):
+        if not isinstance(dtype, Decimal32Dtype):
+            raise ValueError(f"{dtype=} must be a Decimal32Dtype instance")
+        super().__init__(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
+        )
 
     @classmethod
     def from_arrow(cls, data: pa.Array):
@@ -266,7 +310,27 @@ class Decimal32Column(DecimalBaseColumn):
 
 
 class Decimal128Column(DecimalBaseColumn):
-    dtype: Decimal128Dtype
+    def __init__(
+        self,
+        data: Buffer,
+        size: int,
+        dtype: Decimal128Dtype,
+        mask: Buffer | None = None,
+        offset: int = 0,
+        null_count: int | None = None,
+        children: tuple = (),
+    ):
+        if not isinstance(dtype, Decimal128Dtype):
+            raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
+        super().__init__(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
+        )
 
     @classmethod
     def from_arrow(cls, data: pa.Array):
@@ -287,7 +351,27 @@ class Decimal128Column(DecimalBaseColumn):
 
 
 class Decimal64Column(DecimalBaseColumn):
-    dtype: Decimal64Dtype
+    def __init__(
+        self,
+        data: Buffer,
+        size: int,
+        dtype: Decimal64Dtype,
+        mask: Buffer | None = None,
+        offset: int = 0,
+        null_count: int | None = None,
+        children: tuple = (),
+    ):
+        if not isinstance(dtype, Decimal64Dtype):
+            raise ValueError(f"{dtype=} must be a Decimal64Dtype instance")
+        super().__init__(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
+        )
 
     def __setitem__(self, key, value):
         if isinstance(value, np.integer):
