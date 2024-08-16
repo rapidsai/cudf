@@ -9,9 +9,10 @@ import numpy as np
 import pandas as pd
 from typing_extensions import Self
 
+import pylibcudf
+
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib import pylibcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.dtypes import CategoricalDtype
