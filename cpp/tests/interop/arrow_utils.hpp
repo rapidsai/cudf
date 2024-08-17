@@ -30,6 +30,7 @@
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
+#include <arrow/api.h>
 #include <arrow/util/bitmap_builders.h>
 
 #include <algorithm>
