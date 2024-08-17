@@ -389,7 +389,7 @@ class ColumnAccessor(abc.MutableMapping):
         if isinstance(key, slice):
             return self._select_by_label_slice(key)
         elif pd.api.types.is_list_like(key) and not isinstance(key, tuple):
-            return self._select_by_label_list_like(key)
+            return self._select_by_label_list_like(tuple(key))
         else:
             if isinstance(key, tuple):
                 if any(isinstance(k, slice) for k in key):
@@ -517,9 +517,7 @@ class ColumnAccessor(abc.MutableMapping):
         new_ncols = len(self._data)
         self._clear_cache(old_ncols, new_ncols)
 
-    def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
-        # Might be a generator
-        key = tuple(key)
+    def _select_by_label_list_like(self, key: tuple) -> ColumnAccessor:
         # Special-casing for boolean mask
         if (bn := len(key)) > 0 and all(map(is_bool, key)):
             if bn != (n := len(self.names)):
@@ -543,6 +541,7 @@ class ColumnAccessor(abc.MutableMapping):
             data,
             multiindex=self.multiindex,
             level_names=self.level_names,
+            verify=False,
         )
 
     def _select_by_label_grouped(self, key: Any) -> ColumnAccessor:
@@ -563,6 +562,7 @@ class ColumnAccessor(abc.MutableMapping):
                 result,
                 multiindex=self.nlevels - len(key) > 1,
                 level_names=self.level_names[len(key) :],
+                verify=False,
             )
 
     def _select_by_label_slice(self, key: slice) -> ColumnAccessor:
@@ -592,7 +592,7 @@ class ColumnAccessor(abc.MutableMapping):
             verify=False,
         )
 
-    def _select_by_label_with_wildcard(self, key: Any) -> ColumnAccessor:
+    def _select_by_label_with_wildcard(self, key: tuple) -> ColumnAccessor:
         key = self._pad_key(key, slice(None))
         return self.__class__(
             {k: self._data[k] for k in self._data if _keys_equal(k, key)},
