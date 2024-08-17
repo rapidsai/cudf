@@ -36,6 +36,75 @@
 
 #pragma once
 
+// Creating arrow as per given type_id and buffer arguments
+template <typename... Ts>
+std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
+{
+  switch (id) {
+    case cudf::type_id::BOOL8:
+      return std::make_shared<arrow::BooleanArray>(std::forward<Ts>(args)...);
+    case cudf::type_id::INT8: return std::make_shared<arrow::Int8Array>(std::forward<Ts>(args)...);
+    case cudf::type_id::INT16:
+      return std::make_shared<arrow::Int16Array>(std::forward<Ts>(args)...);
+    case cudf::type_id::INT32:
+      return std::make_shared<arrow::Int32Array>(std::forward<Ts>(args)...);
+    case cudf::type_id::INT64:
+      return std::make_shared<arrow::Int64Array>(std::forward<Ts>(args)...);
+    case cudf::type_id::UINT8:
+      return std::make_shared<arrow::UInt8Array>(std::forward<Ts>(args)...);
+    case cudf::type_id::UINT16:
+      return std::make_shared<arrow::UInt16Array>(std::forward<Ts>(args)...);
+    case cudf::type_id::UINT32:
+      return std::make_shared<arrow::UInt32Array>(std::forward<Ts>(args)...);
+    case cudf::type_id::UINT64:
+      return std::make_shared<arrow::UInt64Array>(std::forward<Ts>(args)...);
+    case cudf::type_id::FLOAT32:
+      return std::make_shared<arrow::FloatArray>(std::forward<Ts>(args)...);
+    case cudf::type_id::FLOAT64:
+      return std::make_shared<arrow::DoubleArray>(std::forward<Ts>(args)...);
+    case cudf::type_id::TIMESTAMP_DAYS:
+      return std::make_shared<arrow::Date32Array>(std::make_shared<arrow::Date32Type>(),
+                                                  std::forward<Ts>(args)...);
+    case cudf::type_id::TIMESTAMP_SECONDS:
+      return std::make_shared<arrow::TimestampArray>(arrow::timestamp(arrow::TimeUnit::SECOND),
+                                                     std::forward<Ts>(args)...);
+    case cudf::type_id::TIMESTAMP_MILLISECONDS:
+      return std::make_shared<arrow::TimestampArray>(arrow::timestamp(arrow::TimeUnit::MILLI),
+                                                     std::forward<Ts>(args)...);
+    case cudf::type_id::TIMESTAMP_MICROSECONDS:
+      return std::make_shared<arrow::TimestampArray>(arrow::timestamp(arrow::TimeUnit::MICRO),
+                                                     std::forward<Ts>(args)...);
+    case cudf::type_id::TIMESTAMP_NANOSECONDS:
+      return std::make_shared<arrow::TimestampArray>(arrow::timestamp(arrow::TimeUnit::NANO),
+                                                     std::forward<Ts>(args)...);
+    case cudf::type_id::DURATION_SECONDS:
+      return std::make_shared<arrow::DurationArray>(arrow::duration(arrow::TimeUnit::SECOND),
+                                                    std::forward<Ts>(args)...);
+    case cudf::type_id::DURATION_MILLISECONDS:
+      return std::make_shared<arrow::DurationArray>(arrow::duration(arrow::TimeUnit::MILLI),
+                                                    std::forward<Ts>(args)...);
+    case cudf::type_id::DURATION_MICROSECONDS:
+      return std::make_shared<arrow::DurationArray>(arrow::duration(arrow::TimeUnit::MICRO),
+                                                    std::forward<Ts>(args)...);
+    case cudf::type_id::DURATION_NANOSECONDS:
+      return std::make_shared<arrow::DurationArray>(arrow::duration(arrow::TimeUnit::NANO),
+                                                    std::forward<Ts>(args)...);
+    default: CUDF_FAIL("Unsupported type_id conversion to arrow");
+  }
+}
+
+/**
+ * @brief Return a maximum precision for a given type.
+ *
+ * @tparam T the type to get the maximum precision for
+ */
+template <typename T>
+constexpr std::size_t max_precision()
+{
+  auto constexpr num_bits = sizeof(T) * 8;
+  return std::floor(num_bits * std::log(2) / std::log(10));
+}
+
 template <typename T>
 std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>,
                  std::shared_ptr<arrow::Array>>
@@ -50,7 +119,7 @@ get_arrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {
   std::shared_ptr<arrow::Buffer> mask_buffer =
     mask.empty() ? nullptr : arrow::internal::BytesToBits(mask).ValueOrDie();
 
-  return cudf::detail::to_arrow_array(cudf::type_to_id<T>(), data.size(), data_buffer, mask_buffer);
+  return to_arrow_array(cudf::type_to_id<T>(), data.size(), data_buffer, mask_buffer);
 }
 
 template <typename T>
