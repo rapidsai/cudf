@@ -22,13 +22,10 @@
 
 #include <rmm/exec_policy.hpp>
 
-#include <cooperative_groups.h>
 #include <cuco/static_map_ref.cuh>
 #include <cuda/atomic>
 
 namespace cudf::io::parquet::detail {
-
-namespace cg = cooperative_groups;
 
 namespace {
 constexpr int DEFAULT_BLOCK_SIZE = 256;
@@ -40,7 +37,8 @@ struct equality_functor {
   __device__ bool operator()(key_type const lhs_idx, key_type const rhs_idx) const
   {
     // We don't call this for nulls so this is fine.
-    auto const equal = cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
+    auto constexpr equal =
+      cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
     return equal(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
   }
 };
@@ -48,7 +46,7 @@ struct equality_functor {
 template <typename T>
 struct hash_functor {
   column_device_view const& col;
-  uint32_t seed = 0;
+  uint32_t const seed = 0;
   __device__ auto operator()(key_type idx) const
   {
     return cudf::hashing::detail::MurmurHash3_x86_32<T>{seed}(col.element<T>(idx));
@@ -69,10 +67,11 @@ struct map_insert_fn {
 
       auto const col                     = chunk->col_desc;
       column_device_view const& data_col = *col->leaf_column;
+      __shared__ size_type total_num_dict_entries;
 
       using equality_fn_type    = equality_functor<T>;
       using hash_fn_type        = hash_functor<T>;
-      using probing_scheme_type = cuco::double_hashing<map_cg_size, hash_fn_type>;
+      using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_fn_type>;
 
       // Make a view of the hash map.
       cuco::static_map_ref<key_type,
@@ -80,93 +79,76 @@ struct map_insert_fn {
                            SCOPE,
                            equality_fn_type,
                            probing_scheme_type,
-                           storage_ref_type,
-                           cuco::op::insert_tag>
+                           storage_ref_type>
         hash_map_ref{cuco::empty_key{KEY_SENTINEL},
                      cuco::empty_value{VALUE_SENTINEL},
                      {data_col},
-                     {{data_col}, {data_col, 1}},
+                     hash_fn_type{data_col},
                      {},
                      storage_ref};
 
-      __shared__ size_type total_num_dict_entries;
+      // Create a map ref with `cuco::insert` operator
+      auto map_insert_ref = hash_map_ref.with_operators(cuco::insert);
+      auto const t        = threadIdx.x;
 
-      auto const block = cg::this_thread_block();
-      auto const tile  = cg::tiled_partition<map_cg_size>(block);
-
-      // Insert all column chunk elements to the hash map to build the dict.
-      for (thread_index_type val_idx = s_start_value_idx;
-           val_idx + block.thread_rank() - block_size < end_value_idx;
+      // Note: Adjust the following loop to use `cg::tile<map_cg_size>` if needed in the future.
+      for (thread_index_type val_idx = s_start_value_idx + t; val_idx - block_size < end_value_idx;
            val_idx += block_size) {
         size_type is_unique      = 0;
         size_type uniq_elem_size = 0;
 
-        // Each tile inserts a portion of the elements to the hash map.
-        for (auto tile_offset = 0; tile_offset < tile.num_threads(); tile_offset++) {
-          // Compute the index of the value currently being inserted by this tile.
-          auto const tile_val_idx =
-            val_idx + tile_offset + (tile.meta_group_rank() * tile.num_threads());
-          // Check if this index is valid.
-          auto const is_valid = tile_val_idx < end_value_idx and tile_val_idx < data_col.size() and
-                                data_col.is_valid(tile_val_idx);
+        // Check if this index is valid.
+        auto const is_valid =
+          val_idx < end_value_idx and val_idx < data_col.size() and data_col.is_valid(val_idx);
 
-          // Insert tile_val_idx to hash map and count successful insertions.
-          if (is_valid) {
-            // Insert the element to the map using the entire tile.
-            auto const tile_is_unique =
-              // Insert into the hash map using the provided thread tile.
-              hash_map_ref.insert(tile, cuco::pair{tile_val_idx, tile_val_idx});
-            // tile_offset'th thread in the tile updates its number and size of unique element.
-            if (tile.thread_rank() == tile_offset) {
-              is_unique      = tile_is_unique;
-              uniq_elem_size = [&]() -> size_type {
-                if (not is_unique) { return 0; }
-                switch (col->physical_type) {
-                  case Type::INT32: return 4;
-                  case Type::INT64: return 8;
-                  case Type::INT96: return 12;
-                  case Type::FLOAT: return 4;
-                  case Type::DOUBLE: return 8;
-                  case Type::BYTE_ARRAY: {
-                    auto const col_type = data_col.type().id();
-                    if (col_type == type_id::STRING) {
-                      // Strings are stored as 4 byte length + string bytes
-                      return 4 + data_col.element<string_view>(tile_val_idx).size_bytes();
-                    } else if (col_type == type_id::LIST) {
-                      // Binary is stored as 4 byte length + bytes
-                      return 4 + get_element<statistics::byte_array_view>(data_col, tile_val_idx)
-                                   .size_bytes();
-                    }
-                    CUDF_UNREACHABLE(
-                      "Byte array only supports string and list<byte> column types for dictionary "
-                      "encoding!");
-                  }
-                  case Type::FIXED_LEN_BYTE_ARRAY:
-                    if (data_col.type().id() == type_id::DECIMAL128) { return sizeof(__int128_t); }
-                    CUDF_UNREACHABLE(
-                      "Fixed length byte array only supports decimal 128 column types for "
-                      "dictionary "
-                      "encoding!");
-                  default: CUDF_UNREACHABLE("Unsupported type for dictionary encoding");
+        // Insert tile_val_idx to hash map and count successful insertions.
+        if (is_valid) {
+          // Insert the keys using a single thread for best performance for now.
+          is_unique      = map_insert_ref.insert(cuco::pair{val_idx, val_idx});
+          uniq_elem_size = [&]() -> size_type {
+            if (not is_unique) { return 0; }
+            switch (col->physical_type) {
+              case Type::INT32: return 4;
+              case Type::INT64: return 8;
+              case Type::INT96: return 12;
+              case Type::FLOAT: return 4;
+              case Type::DOUBLE: return 8;
+              case Type::BYTE_ARRAY: {
+                auto const col_type = data_col.type().id();
+                if (col_type == type_id::STRING) {
+                  // Strings are stored as 4 byte length + string bytes
+                  return 4 + data_col.element<string_view>(val_idx).size_bytes();
+                } else if (col_type == type_id::LIST) {
+                  // Binary is stored as 4 byte length + bytes
+                  return 4 +
+                         get_element<statistics::byte_array_view>(data_col, val_idx).size_bytes();
                 }
-              }();
+                CUDF_UNREACHABLE(
+                  "Byte array only supports string and list<byte> column types for dictionary "
+                  "encoding!");
+              }
+              case Type::FIXED_LEN_BYTE_ARRAY:
+                if (data_col.type().id() == type_id::DECIMAL128) { return sizeof(__int128_t); }
+                CUDF_UNREACHABLE(
+                  "Fixed length byte array only supports decimal 128 column types for dictionary "
+                  "encoding!");
+              default: CUDF_UNREACHABLE("Unsupported type for dictionary encoding");
             }
-          }
+          }();
         }
         // Reduce num_unique and uniq_data_size from all tiles.
         auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
-        block.sync();
+        __syncthreads();
         auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
         // The first thread in the block atomically updates total num_unique and uniq_data_size
-        if (block.thread_rank() == 0) {
+        if (t == 0) {
           total_num_dict_entries = atomicAdd(&chunk->num_dict_entries, num_unique);
           total_num_dict_entries += num_unique;
           atomicAdd(&chunk->uniq_data_size, uniq_data_size);
         }
-        block.sync();
+        __syncthreads();
 
-        // Check if the num unique values in chunk has already exceeded max dict size and early
-        // exit
+        // Check if the num unique values in chunk has already exceeded max dict size and early exit
         if (total_num_dict_entries > MAX_DICT_SIZE) { return; }
       }  // for loop
     } else {
@@ -175,6 +157,7 @@ struct map_insert_fn {
   }
 };
 
+template <int block_size>
 struct map_find_fn {
   storage_ref_type const& storage_ref;
   EncColumnChunk* const& chunk;
@@ -189,7 +172,7 @@ struct map_find_fn {
 
       using equality_fn_type    = equality_functor<T>;
       using hash_fn_type        = hash_functor<T>;
-      using probing_scheme_type = cuco::double_hashing<map_cg_size, hash_fn_type>;
+      using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_fn_type>;
 
       // Make a view of the hash map.
       cuco::static_map_ref<key_type,
@@ -197,36 +180,34 @@ struct map_find_fn {
                            SCOPE,
                            equality_fn_type,
                            probing_scheme_type,
-                           storage_ref_type,
-                           cuco::op::find_tag>
+                           storage_ref_type>
         hash_map_ref{cuco::empty_key{KEY_SENTINEL},
                      cuco::empty_value{VALUE_SENTINEL},
                      {data_col},
-                     {{data_col}, {data_col, 1}},
+                     hash_fn_type{data_col},
                      {},
                      storage_ref};
 
-      // Find the key = i using the provided thread tile.
-      auto const tile   = cg::tiled_partition<map_cg_size>(cg::this_thread_block());
-      auto const ntiles = tile.meta_group_size();
+      // Create a map ref with `cuco::find` operator
+      auto const map_find_ref = hash_map_ref.with_operators(cuco::find);
+      auto const t            = threadIdx.x;
 
-      for (thread_index_type val_idx = s_start_value_idx + tile.meta_group_rank();
-           val_idx < end_value_idx;
-           val_idx += tile.meta_group_size()) {
+      // Note: Adjust the following loop to use `cg::tiles<map_cg_size>` if needed in the future.
+      for (thread_index_type val_idx = s_start_value_idx + t; val_idx < end_value_idx;
+           val_idx += block_size) {
+        // Find the key using a single thread for best performance for now.
         if (data_col.is_valid(val_idx)) {
-          // No need for atomic as this is not going to be modified by any other thread
-          auto const value = [&]() {
-            auto const found_slot = hash_map_ref.find(tile, val_idx);
+          // No need for atomic as this is not going to be modified by any other thread.
+          chunk->dict_index[val_idx - s_ck_start_val_idx] = [&]() {
+            auto const found_slot = map_find_ref.find(val_idx);
 
-            // Check if didn't find the previously inserted key.
-            cudf_assert(found_slot != hash_map_ref.end() &&
+            // Fail if we didn't find the previously inserted key.
+            cudf_assert(found_slot != map_find_ref.end() &&
                         "Unable to find value in map in dictionary index construction");
 
-            // Return a pair of the found key and value.
+            // Return the found value.
             return found_slot->second;
           }();
-          // First thread in the tile updates the dict_index
-          if (tile.thread_rank() == 0) { chunk->dict_index[val_idx - s_ck_start_val_idx] = value; }
         }
       }
     } else {
@@ -272,17 +253,18 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto& chunk = chunks[blockIdx.x];
   if (not chunk.use_dictionary) { return; }
 
+  auto t = threadIdx.x;
   __shared__ cuda::atomic<size_type, SCOPE> counter;
   using cuda::std::memory_order_relaxed;
-  if (threadIdx.x == 0) { new (&counter) cuda::atomic<size_type, SCOPE>{0}; }
+  if (t == 0) { new (&counter) cuda::atomic<size_type, SCOPE>{0}; }
   __syncthreads();
 
-  for (size_type idx = threadIdx.x; idx < chunk.dict_map_size; idx += block_size) {
-    auto* window = map_storage.data() + chunk.dict_map_offset + idx;
+  for (; t < chunk.dict_map_size; t += block_size) {
+    auto* window = map_storage.data() + chunk.dict_map_offset + t;
     for (auto& slot : *window) {
       auto const key = slot.first;
       if (key != KEY_SENTINEL) {
-        auto loc = counter.fetch_add(1, memory_order_relaxed);
+        auto const loc = counter.fetch_add(1, memory_order_relaxed);
         cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
         chunk.dict_data[loc] = key;
         // If sorting dict page ever becomes a hard requirement, enable the following statement
@@ -320,7 +302,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                                      map_storage.data() + chunk->dict_map_offset};
 
   type_dispatcher(data_col.type(),
-                  map_find_fn{storage_ref, chunk},
+                  map_find_fn<block_size>{storage_ref, chunk},
                   s_start_value_idx,
                   end_value_idx,
                   s_ck_start_val_idx);
