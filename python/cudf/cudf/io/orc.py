@@ -280,7 +280,6 @@ def read_orc(
     num_rows=None,
     use_index=True,
     timestamp_type=None,
-    use_python_file_object=None,
     storage_options=None,
     bytes_per_thread=None,
 ):
@@ -335,7 +334,6 @@ def read_orc(
         tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
             compression=None,
-            use_python_file_object=use_python_file_object,
             storage_options=storage_options,
             bytes_per_thread=bytes_per_thread,
         )

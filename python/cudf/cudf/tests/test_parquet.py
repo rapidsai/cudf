@@ -705,28 +705,17 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("use_python_file_object", [True, False])
-def test_parquet_reader_use_python_file_object(
-    parquet_path_or_buf, use_python_file_object
-):
-    # Check that the non-default `use_python_file_object=True`
-    # option works as expected
+def test_parquet_reader_file_types(parquet_path_or_buf):
     expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
     fs, _, paths = get_fs_token_paths(parquet_path_or_buf("filepath"))
 
     # Pass open fsspec file
-    with pytest.warns(FutureWarning):
-        with fs.open(paths[0], mode="rb") as fil:
-            got1 = cudf.read_parquet(
-                fil, use_python_file_object=use_python_file_object
-            )
+    with fs.open(paths[0], mode="rb") as fil:
+        got1 = cudf.read_parquet(fil)
     assert_eq(expect, got1)
 
     # Pass path only
-    with pytest.warns(FutureWarning):
-        got2 = cudf.read_parquet(
-            paths[0], use_python_file_object=use_python_file_object
-        )
+    got2 = cudf.read_parquet(paths[0])
     assert_eq(expect, got2)
 
 

@@ -49,7 +49,6 @@ def read_csv(
     comment=None,
     delim_whitespace=False,
     byte_range=None,
-    use_python_file_object=None,
     storage_options=None,
     bytes_per_thread=None,
 ):
@@ -60,12 +59,6 @@ def read_csv(
             "The 'delim_whitespace' keyword in pd.read_csv is deprecated and "
             "will be removed in a future version. Use ``sep='\\s+'`` instead",
             FutureWarning,
-        )
-
-    if use_python_file_object and bytes_per_thread is not None:
-        raise ValueError(
-            "bytes_per_thread is only supported when "
-            "`use_python_file_object=False`"
         )
 
     if bytes_per_thread is None:
@@ -84,7 +77,6 @@ def read_csv(
         path_or_data=filepath_or_buffer,
         compression=compression,
         iotypes=(BytesIO, StringIO),
-        use_python_file_object=use_python_file_object,
         storage_options=storage_options,
         bytes_per_thread=bytes_per_thread,
     )

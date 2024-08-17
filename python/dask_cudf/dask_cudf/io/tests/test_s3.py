@@ -130,17 +130,8 @@ def test_read_csv_warns(s3_base, s3so):
                 "s3://daskcsv_warns/*.csv",
                 blocksize="50 B",
                 storage_options=s3so,
-                use_python_file_object=True,
             )
             assert df.a.sum().compute() == 4
-
-
-def test_read_parquet_open_file_options_raises():
-    with pytest.raises(ValueError):
-        dask_cudf.read_parquet(
-            "s3://my/path",
-            open_file_options={"precache_options": {"method": "parquet"}},
-        )
 
 
 def test_read_parquet_filesystem(s3_base, s3so, pdf):
@@ -198,22 +189,6 @@ def test_read_parquet(s3_base, s3so, pdf):
         assert_eq(pdf, got)
 
 
-def test_read_parquet_use_python_file_object(s3_base, s3so, pdf):
-    fname = "test_parquet_use_python_file_object.parquet"
-    bucket = "parquet"
-    buffer = BytesIO()
-    pdf.to_parquet(path=buffer)
-    buffer.seek(0)
-    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        with pytest.warns(FutureWarning):
-            got = dask_cudf.read_parquet(
-                f"s3://{bucket}/{fname}",
-                storage_options=s3so,
-                read={"use_python_file_object": True},
-            ).head()
-            assert_eq(pdf, got)
-
-
 def test_read_orc(s3_base, s3so, pdf):
     fname = "test_orc_reader_dask.orc"
     bucket = "orc"
@@ -226,19 +201,3 @@ def test_read_orc(s3_base, s3so, pdf):
             storage_options=s3so,
         )
         assert_eq(pdf, got)
-
-
-def test_read_orc_use_python_file_object(s3_base, s3so, pdf):
-    fname = "test_orc_use_python_file_object.orc"
-    bucket = "orc"
-    buffer = BytesIO()
-    pdf.to_orc(path=buffer)
-    buffer.seek(0)
-    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        with pytest.warns(FutureWarning):
-            got = dask_cudf.read_orc(
-                f"s3://{bucket}/{fname}",
-                storage_options=s3so,
-                use_python_file_object=True,
-            ).head()
-            assert_eq(pdf, got)

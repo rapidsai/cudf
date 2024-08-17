@@ -143,26 +143,12 @@ def test_read_csv(s3_base, s3so, pdf, bytes_per_thread):
                 f"s3://{bucket}/{fname}",
                 storage_options=s3so,
                 bytes_per_thread=bytes_per_thread,
-                use_python_file_object=False,
-            )
-    assert_eq(pdf, got)
-
-    # Use Arrow PythonFile object
-    with pytest.warns(FutureWarning):
-        with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-            got = cudf.read_csv(
-                f"s3://{bucket}/{fname}",
-                storage_options=s3so,
-                use_python_file_object=True,
             )
     assert_eq(pdf, got)
 
 
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
-@pytest.mark.parametrize("use_python_file_object", [True, False])
-def test_read_csv_byte_range(
-    s3_base, s3so, pdf, bytes_per_thread, use_python_file_object
-):
+def test_read_csv_byte_range(s3_base, s3so, pdf, bytes_per_thread):
     # Write to buffer
     fname = "test_csv_reader_byte_range.csv"
     bucket = "csv"
@@ -175,12 +161,9 @@ def test_read_csv_byte_range(
                 f"s3://{bucket}/{fname}",
                 storage_options=s3so,
                 byte_range=(74, 73),
-                bytes_per_thread=bytes_per_thread
-                if not use_python_file_object
-                else None,
+                bytes_per_thread=bytes_per_thread,
                 header=None,
                 names=["Integer", "Float", "Integer2", "String", "Boolean"],
-                use_python_file_object=use_python_file_object,
             )
 
     assert_eq(pdf.iloc[-2:].reset_index(drop=True), got)
@@ -210,7 +193,6 @@ def test_write_csv(s3_base, s3so, pdf, chunksize):
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
 @pytest.mark.parametrize("columns", [None, ["Float", "String"]])
 @pytest.mark.parametrize("precache", [None, "parquet"])
-@pytest.mark.parametrize("use_python_file_object", [True, False])
 def test_read_parquet(
     s3_base,
     s3so,
@@ -218,7 +200,6 @@ def test_read_parquet(
     bytes_per_thread,
     columns,
     precache,
-    use_python_file_object,
 ):
     fname = "test_parquet_reader.parquet"
     bucket = "parquet"
@@ -231,15 +212,9 @@ def test_read_parquet(
         with pytest.warns(FutureWarning):
             got1 = cudf.read_parquet(
                 f"s3://{bucket}/{fname}",
-                open_file_options=(
-                    {"precache_options": {"method": precache}}
-                    if use_python_file_object
-                    else None
-                ),
                 storage_options=s3so,
                 bytes_per_thread=bytes_per_thread,
                 columns=columns,
-                use_python_file_object=use_python_file_object,
             )
     expect = pdf[columns] if columns else pdf
     assert_eq(expect, got1)
@@ -256,7 +231,6 @@ def test_read_parquet(
                     f,
                     bytes_per_thread=bytes_per_thread,
                     columns=columns,
-                    use_python_file_object=use_python_file_object,
                 )
     assert_eq(expect, got2)
 
@@ -333,8 +307,7 @@ def test_read_parquet_multi_file(s3_base, s3so, pdf):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("precache", [None, "parquet"])
-def test_read_parquet_filters(s3_base, s3so, pdf_ext, precache):
+def test_read_parquet_filters(s3_base, s3so, pdf_ext):
     fname = "test_parquet_reader_filters.parquet"
     bucket = "parquet"
     buffer = BytesIO()
@@ -347,7 +320,6 @@ def test_read_parquet_filters(s3_base, s3so, pdf_ext, precache):
                 f"s3://{bucket}/{fname}",
                 storage_options=s3so,
                 filters=filters,
-                open_file_options={"precache_options": {"method": precache}},
             )
 
     # All row-groups should be filtered out
@@ -408,9 +380,8 @@ def test_read_json(s3_base, s3so):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("use_python_file_object", [False, True])
 @pytest.mark.parametrize("columns", [None, ["string1"]])
-def test_read_orc(s3_base, s3so, datadir, use_python_file_object, columns):
+def test_read_orc(s3_base, s3so, datadir, columns):
     source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
     fname = "test_orc_reader.orc"
     bucket = "orc"
@@ -425,7 +396,6 @@ def test_read_orc(s3_base, s3so, datadir, use_python_file_object, columns):
                 f"s3://{bucket}/{fname}",
                 columns=columns,
                 storage_options=s3so,
-                use_python_file_object=use_python_file_object,
             )
 
     if columns:

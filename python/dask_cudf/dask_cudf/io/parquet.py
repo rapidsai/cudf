@@ -69,7 +69,6 @@ class CudfEngine(ArrowDatasetEngine):
         partitions=None,
         partitioning=None,
         partition_keys=None,
-        open_file_options=None,
         dataset_kwargs=None,
         **kwargs,
     ):
@@ -197,7 +196,6 @@ class CudfEngine(ArrowDatasetEngine):
         filters=None,
         partitioning=None,
         schema=None,
-        open_file_options=None,
         **kwargs,
     ):
         if columns is not None:
@@ -222,7 +220,6 @@ class CudfEngine(ArrowDatasetEngine):
 
         # Extract supported kwargs from `kwargs`
         read_kwargs = kwargs.get("read", {})
-        read_kwargs.update(open_file_options or {})
         check_file_size = read_kwargs.pop("check_file_size", None)
 
         # Wrap reading logic in a `try` block so that we can

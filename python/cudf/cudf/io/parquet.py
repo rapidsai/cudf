@@ -350,8 +350,6 @@ def read_parquet_metadata(filepath_or_buffer):
             path_or_data=source,
             compression=None,
             fs=fs,
-            use_python_file_object=None,
-            open_file_options=None,
             storage_options=None,
             bytes_per_thread=None,
         )
@@ -532,9 +530,7 @@ def read_parquet(
     filters=None,
     row_groups=None,
     use_pandas_metadata=True,
-    use_python_file_object=None,
     categorical_partitions=True,
-    open_file_options=None,
     bytes_per_thread=None,
     dataset_kwargs=None,
     nrows=None,
@@ -547,16 +543,6 @@ def read_parquet(
         raise ValueError(
             f"Only supported engines are {{'cudf', 'pyarrow'}}, got {engine=}"
         )
-    # Do not allow the user to set file-opening options
-    # when `use_python_file_object=False` is specified
-    if use_python_file_object is False:
-        if open_file_options:
-            raise ValueError(
-                "open_file_options is not currently supported when "
-                "use_python_file_object is set to False."
-            )
-        open_file_options = {}
-
     if bytes_per_thread is None:
         bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
 
@@ -610,20 +596,11 @@ def read_parquet(
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
     filepaths_or_buffers = []
-    if use_python_file_object:
-        open_file_options = _default_open_file_options(
-            open_file_options=open_file_options,
-            columns=columns,
-            row_groups=row_groups,
-            fs=fs,
-        )
     for source in filepath_or_buffer:
         tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
             compression=None,
             fs=fs,
-            use_python_file_object=use_python_file_object,
-            open_file_options=open_file_options,
             storage_options=storage_options,
             bytes_per_thread=bytes_per_thread,
         )
@@ -1555,44 +1532,6 @@ class ParquetDatasetWriter:
 
     def __exit__(self, *args):
         self.close()
-
-
-def _default_open_file_options(
-    open_file_options, columns, row_groups, fs=None
-):
-    """
-    Set default fields in open_file_options.
-
-    Copies and updates `open_file_options` to
-    include column and row-group information
-    under the "precache_options" key. By default,
-    we set "method" to "parquet", but precaching
-    will be disabled if the user chooses `method=None`
-
-    Parameters
-    ----------
-    open_file_options : dict or None
-    columns : list
-    row_groups : list
-    fs : fsspec.AbstractFileSystem, Optional
-    """
-    if fs and ioutils._is_local_filesystem(fs):
-        # Quick return for local fs
-        return open_file_options or {}
-    # Assume remote storage if `fs` was not specified
-    open_file_options = (open_file_options or {}).copy()
-    precache_options = open_file_options.pop("precache_options", {}).copy()
-    if precache_options.get("method", "parquet") == "parquet":
-        precache_options.update(
-            {
-                "method": "parquet",
-                "engine": precache_options.get("engine", "pyarrow"),
-                "columns": columns,
-                "row_groups": row_groups,
-            }
-        )
-    open_file_options["precache_options"] = precache_options
-    return open_file_options
 
 
 def _hive_dirname(name, val):

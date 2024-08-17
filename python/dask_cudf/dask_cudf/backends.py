@@ -498,16 +498,8 @@ def _unsupported_kwargs(old, new, kwargs):
         )
 
 
-def _raise_unsupported_parquet_kwargs(
-    open_file_options=None, filesystem=None, **kwargs
-):
+def _raise_unsupported_parquet_kwargs(filesystem=None, **kwargs):
     import fsspec
-
-    if open_file_options is not None:
-        raise ValueError(
-            "The open_file_options argument is no longer supported "
-            "by the 'cudf' backend."
-        )
 
     if filesystem not in ("fsspec", None) and not isinstance(
         filesystem, fsspec.AbstractFileSystem
