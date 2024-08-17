@@ -250,7 +250,7 @@ class ColumnAccessor(abc.MutableMapping):
         else:
             return self._data
 
-    def _clear_cache(self, old_ncols: int, new_ncols: int):
+    def _clear_cache(self, old_ncols: int, new_ncols: int) -> None:
         """
         Clear cached attributes.
 
@@ -310,16 +310,14 @@ class ColumnAccessor(abc.MutableMapping):
             )
         return result
 
-    def insert(
-        self, name: Any, value: Any, loc: int = -1, validate: bool = True
-    ):
+    def insert(self, name: Any, value: ColumnBase, loc: int = -1) -> None:
         """
         Insert column into the ColumnAccessor at the specified location.
 
         Parameters
         ----------
         name : Name corresponding to the new column
-        value : column-like
+        value : ColumnBase
         loc : int, optional
             The location to insert the new value at.
             Must be (0 <= loc <= ncols). By default, the column is added
@@ -330,33 +328,35 @@ class ColumnAccessor(abc.MutableMapping):
         None, this function operates in-place.
         """
         name = self._pad_key(name)
+        if name in self._data:
+            raise ValueError(f"Cannot insert '{name}', already exists")
 
         old_ncols = len(self._data)
         if loc == -1:
             loc = old_ncols
-        if not (0 <= loc <= old_ncols):
+        elif not (0 <= loc <= old_ncols):
             raise ValueError(
                 f"insert: loc out of bounds: must be  0 <= loc <= {old_ncols}"
             )
+
+        if not isinstance(value, column.ColumnBase):
+            raise ValueError("value must be a Column")
+        elif old_ncols > 0 and len(value) != self.nrows:
+            raise ValueError("All columns must be of equal length")
+
         # TODO: we should move all insert logic here
-        if name in self._data:
-            raise ValueError(f"Cannot insert '{name}', already exists")
         if loc == old_ncols:
-            if validate:
-                value = column.as_column(value)
-                if old_ncols > 0 and len(value) != self.nrows:
-                    raise ValueError("All columns must be of equal length")
             self._data[name] = value
         else:
             new_keys = self.names[:loc] + (name,) + self.names[loc:]
             new_values = self.columns[:loc] + (value,) + self.columns[loc:]
-            self._data = self._data.__class__(zip(new_keys, new_values))
+            self._data = dict(zip(new_keys, new_values))
         self._clear_cache(old_ncols, old_ncols + 1)
         if old_ncols == 0:
             # The type(name) may no longer match the prior label_dtype
             self.label_dtype = None
 
-    def copy(self, deep=False) -> ColumnAccessor:
+    def copy(self, deep: bool = False) -> ColumnAccessor:
         """
         Make a copy of this ColumnAccessor.
         """
