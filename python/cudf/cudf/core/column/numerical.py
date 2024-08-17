@@ -9,9 +9,10 @@ import numpy as np
 import pandas as pd
 from typing_extensions import Self
 
+import pylibcudf
+
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib import pylibcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.dtypes import CategoricalDtype
@@ -61,25 +62,30 @@ class NumericalColumn(NumericalBaseColumn):
     def __init__(
         self,
         data: Buffer,
-        dtype: DtypeObj,
+        size: int | None,
+        dtype: np.dtype,
         mask: Buffer | None = None,
-        size: int | None = None,  # TODO: make this non-optional
         offset: int = 0,
         null_count: int | None = None,
+        children: tuple = (),
     ):
-        dtype = cudf.dtype(dtype)
+        if not (isinstance(dtype, np.dtype) and dtype.kind in "iufb"):
+            raise ValueError(
+                "dtype must be a floating, integer or boolean numpy dtype."
+            )
 
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = (data.size // dtype.itemsize) - offset
         super().__init__(
-            data,
+            data=data,
             size=size,
             dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
 
     def _clear_cache(self):
@@ -649,6 +655,7 @@ class NumericalColumn(NumericalBaseColumn):
                 categories=dtype.categories._values,
                 codes=cudf.core.column.NumericalColumn(
                     self.base_data,  # type: ignore[arg-type]
+                    self.size,
                     dtype=self.dtype,
                 ),
                 mask=self.base_mask,
