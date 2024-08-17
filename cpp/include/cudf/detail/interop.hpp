@@ -24,8 +24,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-#include <string>
-
 namespace CUDF_EXPORT cudf {
 namespace detail {
 

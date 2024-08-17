@@ -33,8 +33,6 @@
 #include <arrow/api.h>
 #include <arrow/util/bitmap_builders.h>
 
-#include <algorithm>
-
 #pragma once
 
 // Creating arrow as per given type_id and buffer arguments
