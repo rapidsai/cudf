@@ -69,8 +69,10 @@ struct map_insert_fn {
       column_device_view const& data_col = *col->leaf_column;
       __shared__ size_type total_num_dict_entries;
 
-      using equality_fn_type    = equality_functor<T>;
-      using hash_fn_type        = hash_functor<T>;
+      using equality_fn_type = equality_functor<T>;
+      using hash_fn_type     = hash_functor<T>;
+      // Choosing `linear_probing` over `double_hashing` for slighhhtly better performance seen in
+      // benchmarks.
       using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_fn_type>;
 
       // Make a view of the hash map.
@@ -170,8 +172,10 @@ struct map_find_fn {
       auto const col                     = chunk->col_desc;
       column_device_view const& data_col = *col->leaf_column;
 
-      using equality_fn_type    = equality_functor<T>;
-      using hash_fn_type        = hash_functor<T>;
+      using equality_fn_type = equality_functor<T>;
+      using hash_fn_type     = hash_functor<T>;
+      // Choosing `linear_probing` over `double_hashing` for slighhhtly better performance seen in
+      // benchmarks.
       using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_fn_type>;
 
       // Make a view of the hash map.
