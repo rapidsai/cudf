@@ -61,9 +61,8 @@ std::unique_ptr<cudf::column> gen_rand_num_col(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-template <typename T>
 std::unique_ptr<cudf::column> gen_primary_key_col(
-  T const& start,
+  cudf::scalar const& start,
   cudf::size_type const& num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());

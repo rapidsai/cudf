@@ -156,35 +156,14 @@ template std::unique_ptr<cudf::column> gen_rand_num_col<double>(double const& lo
                                                                 rmm::cuda_stream_view stream,
                                                                 rmm::device_async_resource_ref mr);
 
-template <typename T>
-std::unique_ptr<cudf::column> gen_primary_key_col(T const& start,
+std::unique_ptr<cudf::column> gen_primary_key_col(cudf::scalar const& start,
                                                   cudf::size_type const& num_rows,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto const init = cudf::numeric_scalar<T>(start);
-  auto const step = cudf::numeric_scalar<T>(1);
-  return cudf::sequence(num_rows, init, step, stream, mr);
+  return cudf::sequence(num_rows, start, stream, mr);
 }
-
-template std::unique_ptr<cudf::column> gen_primary_key_col<int8_t>(
-  int8_t const& start,
-  cudf::size_type const& num_rows,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
-
-template std::unique_ptr<cudf::column> gen_primary_key_col<int16_t>(
-  int16_t const& start,
-  cudf::size_type const& num_rows,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
-
-template std::unique_ptr<cudf::column> gen_primary_key_col<cudf::size_type>(
-  cudf::size_type const& start,
-  cudf::size_type const& num_rows,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
 
 std::unique_ptr<cudf::column> gen_rep_str_col(std::string const& value,
                                               cudf::size_type const& num_rows,
@@ -204,8 +183,8 @@ std::unique_ptr<cudf::column> gen_rand_str_col_from_set(std::vector<std::string>
   CUDF_FUNC_RANGE();
   // Build a gather map of random strings to choose from
   // The size of the string sets always fits within 16-bit integers
-  auto const keys       = gen_primary_key_col<int16_t>(0, set.size(), stream, mr);
-  auto const values     = cudf::test::strings_column_wrapper(set.begin(), set.end()).release();
+  auto const keys   = gen_primary_key_col(cudf::numeric_scalar<int16_t>(0), set.size(), stream, mr);
+  auto const values = cudf::test::strings_column_wrapper(set.begin(), set.end()).release();
   auto const gather_map = cudf::table_view({keys->view(), values->view()});
 
   // Build a column of random keys to gather from the set
@@ -225,7 +204,7 @@ std::unique_ptr<cudf::column> gen_rep_seq_col(T const& seq_length,
                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto pkey                    = gen_primary_key_col<cudf::size_type>(0, num_rows, stream, mr);
+  auto pkey = gen_primary_key_col(cudf::numeric_scalar<cudf::size_type>(0), num_rows, stream, mr);
   auto repeat_seq_zero_indexed = cudf::binary_operation(pkey->view(),
                                                         cudf::numeric_scalar<T>(seq_length),
                                                         cudf::binary_operator::MOD,

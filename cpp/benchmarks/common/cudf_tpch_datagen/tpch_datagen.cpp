@@ -133,7 +133,7 @@ std::unique_ptr<cudf::table> generate_orders_independent(cudf::size_type const& 
   // Generate the `o_orderkey` column
   auto o_orderkey = [&]() {
     auto const o_orderkey_candidates =
-      gen_primary_key_col<cudf::size_type>(1, 4 * o_num_rows, stream, mr);
+      gen_primary_key_col(cudf::numeric_scalar<cudf::size_type>(1), 4 * o_num_rows, stream, mr);
     auto const o_orderkey_unsorted = cudf::sample(cudf::table_view({o_orderkey_candidates->view()}),
                                                   o_num_rows,
                                                   cudf::sample_with_replacement::FALSE,
@@ -506,7 +506,8 @@ std::unique_ptr<cudf::table> generate_partsupp(cudf::size_type const& scale_fact
 
   // Generate the `ps_partkey` column
   auto ps_partkey = [&]() {
-    auto const p_partkey = gen_primary_key_col<cudf::size_type>(1, p_num_rows, stream, mr);
+    auto const p_partkey =
+      gen_primary_key_col(cudf::numeric_scalar<cudf::size_type>(1), p_num_rows, stream, mr);
     auto const rep_table = cudf::repeat(cudf::table_view({p_partkey->view()}), 4, stream, mr);
     return std::make_unique<cudf::column>(rep_table->get_column(0));
   }();
@@ -554,7 +555,8 @@ std::unique_ptr<cudf::table> generate_part(cudf::size_type const& scale_factor,
   cudf::size_type const num_rows = scale_factor * 200'000;
 
   // Generate the `p_partkey` column
-  auto p_partkey = gen_primary_key_col<cudf::size_type>(1, num_rows, stream, mr);
+  auto p_partkey =
+    gen_primary_key_col(cudf::numeric_scalar<cudf::size_type>(1), num_rows, stream, mr);
 
   // Generate the `p_name` column
   auto p_name = [&]() {
@@ -724,7 +726,8 @@ std::unique_ptr<cudf::table> generate_supplier(cudf::size_type const& scale_fact
   cudf::size_type const num_rows = scale_factor * 10'000;
 
   // Generate the `s_suppkey` column
-  auto s_suppkey = gen_primary_key_col<cudf::size_type>(1, num_rows, stream, mr);
+  auto s_suppkey =
+    gen_primary_key_col(cudf::numeric_scalar<cudf::size_type>(1), num_rows, stream, mr);
 
   // Generate the `s_name` column
   auto s_name = [&]() {
@@ -789,7 +792,8 @@ std::unique_ptr<cudf::table> generate_customer(cudf::size_type const& scale_fact
   cudf::size_type const num_rows = scale_factor * 150'000;
 
   // Generate the `c_custkey` column
-  auto c_custkey = gen_primary_key_col<cudf::size_type>(1, num_rows, stream, mr);
+  auto c_custkey =
+    gen_primary_key_col(cudf::numeric_scalar<cudf::size_type>(1), num_rows, stream, mr);
 
   // Generate the `c_name` column
   auto c_name = [&]() {
@@ -856,7 +860,7 @@ std::unique_ptr<cudf::table> generate_nation(rmm::cuda_stream_view stream,
   constexpr cudf::size_type num_rows = 25;
 
   // Generate the `n_nationkey` column
-  auto n_nationkey = gen_primary_key_col<int8_t>(0, num_rows, stream, mr);
+  auto n_nationkey = gen_primary_key_col(cudf::numeric_scalar<int8_t>(0), num_rows, stream, mr);
 
   // Generate the `n_name` column
   auto n_name = cudf::test::strings_column_wrapper(nations.begin(), nations.end()).release();
@@ -897,7 +901,7 @@ std::unique_ptr<cudf::table> generate_region(rmm::cuda_stream_view stream,
   constexpr cudf::size_type num_rows = 5;
 
   // Generate the `r_regionkey` column
-  auto r_regionkey = gen_primary_key_col<int8_t>(0, num_rows, stream, mr);
+  auto r_regionkey = gen_primary_key_col(cudf::numeric_scalar<int8_t>(0), num_rows, stream, mr);
 
   // Generate the `r_name` column
   auto r_name =
