@@ -2536,3 +2536,9 @@ def test_dti_methods(method, kwargs):
     result = getattr(cudf_dti, method)(**kwargs)
     expected = getattr(pd_dti, method)(**kwargs)
     assert_eq(result, expected)
+
+
+def test_date_range_start_end_divisible_by_freq():
+    result = cudf.date_range("2011-01-01", "2011-01-02", freq="h")
+    expected = pd.date_range("2011-01-01", "2011-01-02", freq="h")
+    assert_eq(result, expected)

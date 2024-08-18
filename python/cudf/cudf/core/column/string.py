@@ -4693,7 +4693,7 @@ class StringMethods(ColumnMethods):
                 result_col, name=self._parent.name, index=index
             )
         elif isinstance(self._parent, cudf.BaseIndex):
-            return cudf.Index(result_col, name=self._parent.name)
+            return cudf.Index._from_column(result_col, name=self._parent.name)
         else:
             return result_col
 

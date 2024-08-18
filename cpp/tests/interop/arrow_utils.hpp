@@ -32,6 +32,8 @@
 
 #include <arrow/util/bitmap_builders.h>
 
+#include <algorithm>
+
 #pragma once
 
 template <typename T>
@@ -154,8 +156,9 @@ std::shared_ptr<arrow::Array> get_arrow_list_array(std::vector<T> data,
                "Failed to append values to buffer builder");
   CUDF_EXPECTS(buff_builder.Finish(&offset_buffer).ok(), "Failed to allocate buffer");
 
+  auto nullable = std::accumulate(list_validity.begin(), list_validity.end(), 0) > 0;
   return std::make_shared<arrow::ListArray>(
-    arrow::list(data_array->type()),
+    arrow::list(arrow::field("", data_array->type(), nullable)),
     offsets.size() - 1,
     offset_buffer,
     data_array,
