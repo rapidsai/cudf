@@ -2,5 +2,5 @@
 find
 ====
 
-.. automodule:: cudf._lib.pylibcudf.strings.find
+.. automodule:: pylibcudf.strings.find
    :members:

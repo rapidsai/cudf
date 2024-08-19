@@ -79,7 +79,7 @@ if(NOT cudf_FOUND)
   # require access to libcudf, we place the library and all its dependent artifacts in the cudf
   # directory as a single source of truth and modify the other rpaths appropriately.
   set(cython_lib_dir cudf)
-  include(cmake/Modules/WheelHelpers.cmake)
+  include(../pylibcudf/cmake/Modules/WheelHelpers.cmake)
   # TODO: This install is currently overzealous. We should only install the libraries that are
   # downloaded by CPM during the build, not libraries that were found on the system.  However, in
   # practice right this would only be a problem is if libcudf was not found but some of the
@@ -92,7 +92,7 @@ endif()
 
 rapids_cython_init()
 
-include(cmake/Modules/LinkPyarrowHeaders.cmake)
+include(../pylibcudf/cmake/Modules/LinkPyarrowHeaders.cmake)
 add_subdirectory(cudf/_lib)
 add_subdirectory(udf_cpp)
 

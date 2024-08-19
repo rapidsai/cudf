@@ -6,8 +6,8 @@ import functools
 
 import pyarrow as pa
 
-import cudf._lib.pylibcudf as plc
-from cudf._lib.pylibcudf.expressions import (
+import pylibcudf as plc
+from pylibcudf.expressions import (
     ASTOperator,
     ColumnReference,
     Expression,
