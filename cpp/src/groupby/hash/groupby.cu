@@ -505,7 +505,7 @@ void compute_single_pass_aggs(table_view const& keys,
 
 /**
  * @brief Computes and returns a device vector containing all populated keys in
- * `map`.
+ * `key_set`.
  */
 template <typename SetType>
 rmm::device_uvector<size_type> extract_populated_keys(SetType const& key_set,
