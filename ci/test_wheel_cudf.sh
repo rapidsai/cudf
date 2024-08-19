@@ -3,6 +3,12 @@
 
 set -eou pipefail
 
+# Store the first argument in a variable
+PANDAS_VERSION=$1
+
+# Print the argument to verify
+echo "The pandas version passed is: $PANDAS_VERSION"
+
 # Download the pylibcudf built in the previous step
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-pylibcudf-dep
