@@ -151,7 +151,7 @@ public class Schema {
   }
 
   /**
-   * Get names of the columns flattened from all levels in schema.
+   * Get names of the columns flattened from all levels in schema by depth-first traversal.
    * @return An array containing names of all columns in schema.
    */
   public String[] getFlattenedColumnNames() {
@@ -195,7 +195,7 @@ public class Schema {
   }
 
   /**
-   * Get type ids of the columns flattened from all levels in schema.
+   * Get type ids of the columns flattened from all levels in schema by depth-first traversal.
    * @return An array containing type ids of all columns in schema.
    */
   public int[] getFlattenedTypeIds() {
@@ -211,7 +211,7 @@ public class Schema {
   }
 
   /**
-   * Get scales of the columns' types flattened from all levels in schema.
+   * Get scales of the columns' types flattened from all levels in schema by depth-first traversal.
    * @return An array containing type scales of all columns in schema.
    */
   public int[] getFlattenedTypeScales() {
@@ -227,7 +227,7 @@ public class Schema {
   }
 
   /**
-   * Get the types of the columns in schema flattened from all levels.
+   * Get the types of the columns in schema flattened from all levels by depth-first traversal.
    * @return An array containing types of all columns in schema.
    */
   public DType[] getFlattenedTypes() {
@@ -263,7 +263,7 @@ public class Schema {
 
   /**
    * Get numbers of child columns for each level in schema.
-   * @return Numbers of child columns for all levels flattened into one array.
+   * @return Numbers of child columns for all levels flattened by depth-first traversal.
    */
   public int[] getFlattenedNumChildren() {
     flattenIfNeeded();
