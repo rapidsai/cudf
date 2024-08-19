@@ -41,6 +41,17 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.10
     with:
       enable_check_generated_files: false
+  wheel-tests-cudf1:
+    secrets: inherit
+    strategy:
+      matrix:
+        pandas-version: [2.0, 2.1, 2.2, 2.3, 2.4, 2.5] # Add more versions as needed
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
+    with:
+      build_type: pull-request
+      script: ci/test_wheel_cudf.sh
+    env:
+      PANDAS_VERSION: ${{ matrix.pandas-version }}
   test-pandas:
     runs-on: ubuntu-latest
     strategy:
