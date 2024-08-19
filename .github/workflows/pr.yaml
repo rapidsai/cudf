@@ -62,8 +62,8 @@ jobs:
         run: |
           versions=$(python fetch_pandas_versions.py)
           echo "::set-output name=versions::${versions}"
-  wheel-tests-cudf1:
-    needs: fetch-pandas-versions
+  cross-pandas-version-tests:
+    needs: [fetch-pandas-versions, wheel-build-cudf]
     secrets: inherit
     strategy:
       matrix:
@@ -72,30 +72,6 @@ jobs:
     with:
       build_type: pull-request
       script: ci/test_wheel_cudf.sh ${{ matrix.pandas-version }}
-    # env:
-    #   PANDAS_VERSION: ${{ matrix.pandas-version }}
-  # test-pandas:
-  #   runs-on: ubuntu-latest
-  #   strategy:
-  #     matrix:
-  #       pandas-version: [2.0, 2.1, 2.2, 2.3, 2.4, 2.5] # Add more versions as needed
-  #   steps:
-  #   - name: Checkout code
-  #     uses: actions/checkout@v2
-
-  #   - name: Set up Python
-  #     uses: actions/setup-python@v2
-  #     with:
-  #       python-version: '3.11' # Specify the Python version you want to use
-
-  #   - name: Install dependencies
-  #     run: |
-  #       python -m pip install --upgrade pip
-  #       pip install pandas==${{ matrix.pandas-version }} cudf
-
-  #   - name: Run tests
-  #     run: |
-  #       pytest # or any other command to run your tests
   conda-cpp-build:
     needs: checks
     secrets: inherit
