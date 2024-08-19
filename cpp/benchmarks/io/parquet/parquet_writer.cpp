@@ -48,8 +48,7 @@ void BM_parq_write_encode(nvbench::state& state, nvbench::type_list<nvbench::enu
   auto const data_types             = get_type_or_group(static_cast<int32_t>(DataType));
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
-  auto compression                  = cudf::io::compression_type::NONE;
-  if (state.get_int64("compression")) { compression = cudf::io::compression_type::SNAPPY; }
+  auto const compression                  = cudf::io::compression_type::SNAPPY;
   auto const sink_type = io_type::VOID;
 
   auto const tbl =
@@ -200,20 +199,11 @@ using stats_list = nvbench::enum_type_list<cudf::io::STATISTICS_NONE,
                                            cudf::io::STATISTICS_PAGE>;
 
 NVBENCH_BENCH_TYPES(BM_parq_write_encode, NVBENCH_TYPE_AXES(d_type_list))
-  .set_name("parquet_write_dict_encode")
-  .set_type_axes_names({"data_type"})
-  .set_min_samples(4)
-  .add_int64_axis("cardinality", {1, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000})
-  .add_int64_axis("compression", {0})
-  .add_int64_axis("run_length", {1, 32, 64});
-
-NVBENCH_BENCH_TYPES(BM_parq_write_encode, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("parquet_write_encode")
   .set_type_axes_names({"data_type"})
   .set_min_samples(4)
-  .add_int64_axis("cardinality", {0, 1000})
-  .add_int64_axis("compression", {1})
-  .add_int64_axis("run_length", {1, 32});
+  .add_int64_axis("cardinality", {1, 1000, 10'000, 100'000, 1'000'000})
+  .add_int64_axis("run_length", {1, 32, 64});
 
 NVBENCH_BENCH_TYPES(BM_parq_write_io_compression, NVBENCH_TYPE_AXES(io_list, compression_list))
   .set_name("parquet_write_io_compression")
