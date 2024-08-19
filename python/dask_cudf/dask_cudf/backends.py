@@ -42,6 +42,7 @@ from dask.sizeof import sizeof as sizeof_dispatch
 from dask.utils import Dispatch, is_arraylike
 
 import cudf
+import cudf.core.column
 from cudf.api.types import is_string_dtype
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
@@ -64,8 +65,11 @@ def _nonempty_index(idx):
         values = cudf.core.column.as_column(data)
         return cudf.DatetimeIndex(values, name=idx.name)
     elif isinstance(idx, cudf.CategoricalIndex):
-        values = cudf.core.column.build_categorical_column(
-            categories=idx.categories, codes=[0, 0], ordered=idx.ordered
+        values = cudf.core.column.CategoricalColumn(
+            data=None,
+            size=None,
+            dtype=idx.dtype,
+            codes=(cudf.core.column.as_column([0, 0]),),
         )
         return cudf.CategoricalIndex(values, name=idx.name)
     elif isinstance(idx, cudf.MultiIndex):
@@ -108,9 +112,13 @@ def _get_non_empty_data(
             dtype=cudf._lib.types.size_type_dtype,
             length=2,
         )
-        ordered = s.ordered  # type: ignore[attr-defined]
-        return cudf.core.column.build_categorical_column(
-            categories=categories, codes=codes, ordered=ordered
+        return cudf.core.column.CategoricalColumn(
+            data=None,
+            size=codes.size,
+            dtype=cudf.CategoricalDtype(
+                categories=categories, ordered=s.dtype.ordered
+            ),
+            children=(codes,),
         )
     elif isinstance(s.dtype, cudf.ListDtype):
         leaf_type = s.dtype.leaf_type

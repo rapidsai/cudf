@@ -13,7 +13,12 @@ import rmm
 
 import cudf
 from cudf.core.buffer import Buffer, as_buffer
-from cudf.core.column import as_column, build_categorical_column, build_column
+from cudf.core.column import (
+    CategoricalColumn,
+    NumericalColumn,
+    as_column,
+    build_column,
+)
 
 # Implementation of interchange protocol classes
 # ----------------------------------------------
@@ -831,17 +836,18 @@ def _protocol_to_cudf_column_categorical(
     codes_buffer, codes_dtype = buffers["data"]
     codes_buffer = _ensure_gpu_buffer(codes_buffer, codes_dtype, allow_copy)
     cdtype = protocol_dtype_to_cupy_dtype(codes_dtype)
-    codes = build_column(
-        codes_buffer._buf,
-        cdtype,
+    codes = NumericalColumn(
+        data=codes_buffer._buf,
+        size=None,
+        dtype=cdtype,
     )
-
-    cudfcol = build_categorical_column(
-        categories=categories,
-        codes=codes,
-        mask=codes.base_mask,
+    cudfcol = CategoricalColumn(
+        data=None,
         size=codes.size,
-        ordered=ordered,
+        dtype=cudf.CategoricalDtype(categories=categories, ordered=ordered),
+        mask=codes.base_mask,
+        offset=codes.offset,
+        children=(codes,),
     )
 
     return _set_missing_values(col, cudfcol, allow_copy), buffers

@@ -12,6 +12,7 @@ from typing_extensions import Self
 import pylibcudf
 
 import cudf
+import cudf.core.column
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core.column import ColumnBase, as_column, column, string
@@ -649,22 +650,17 @@ class NumericalColumn(NumericalBaseColumn):
 
         return False
 
-    def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
+    def _with_type_metadata(self: Self, dtype: Dtype) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
-            return column.build_categorical_column(
-                categories=dtype.categories._values,
-                codes=cudf.core.column.NumericalColumn(
-                    self.base_data,  # type: ignore[arg-type]
-                    self.size,
-                    dtype=self.dtype,
-                ),
-                mask=self.base_mask,
-                ordered=dtype.ordered,
+            return cudf.core.column.CategoricalColumn(
+                data=None,
                 size=self.size,
+                dtype=dtype,
+                mask=self.base_mask,
                 offset=self.offset,
                 null_count=self.null_count,
+                children=(self,),
             )
-
         return self
 
     def to_pandas(

@@ -21,6 +21,8 @@ from typing_extensions import Self
 import rmm
 
 import cudf
+import cudf.core.column
+import cudf.core.column.categorical
 from cudf import _lib as libcudf
 from cudf._lib.column import Column
 from cudf._lib.null_mask import (
@@ -353,12 +355,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             codes = libcudf.interop.from_arrow(indices_table)[0]
             categories = libcudf.interop.from_arrow(dictionaries_table)[0]
 
-            return build_categorical_column(
-                categories=categories,
-                codes=codes,
-                mask=codes.base_mask,
+            return cudf.core.column.CategoricalColumn(
+                data=None,
                 size=codes.size,
-                ordered=array.type.ordered,
+                dtype=CategoricalDtype(
+                    categories=categories, ordered=array.type.ordered
+                ),
+                mask=codes.base_mask,
+                children=(codes,),
             )
 
         result = libcudf.interop.from_arrow(data)[0]
@@ -947,10 +951,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         )
 
     def sort_values(
-        self: ColumnBase,
+        self: Self,
         ascending: bool = True,
         na_position: str = "last",
-    ) -> ColumnBase:
+    ) -> Self:
         if (not ascending and self.is_monotonic_decreasing) or (
             ascending and self.is_monotonic_increasing
         ):
@@ -1039,11 +1043,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         ):
             cat_col = dtype._categories
             labels = self._label_encoding(cats=cat_col)
-            return build_categorical_column(
-                categories=cat_col,
-                codes=labels,
+            return cudf.core.column.categorical.CategoricalColumn(
+                data=None,
+                size=None,
+                dtype=dtype,
                 mask=self.mask,
-                ordered=dtype.ordered,
+                children=(labels,),
             )
 
         # Categories must be unique and sorted in ascending order.
@@ -1059,11 +1064,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             if cudf.dtype(min_type).itemsize < labels.dtype.itemsize:
                 labels = labels.astype(min_type)
 
-        return build_categorical_column(
-            categories=cats,
-            codes=labels,
+        return cudf.core.column.categorical.CategoricalColumn(
+            data=None,
+            size=None,
+            dtype=CategoricalDtype(categories=cats, ordered=ordered),
             mask=self.mask,
-            ordered=ordered,
+            children=(labels,),
         )
 
     def as_numerical_column(
@@ -1178,7 +1184,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             na_position=na_position,
         )
 
-    def unique(self) -> ColumnBase:
+    def unique(self) -> Self:
         """
         Get unique values in the data
         """
@@ -1685,51 +1691,6 @@ def build_column(
         )
     else:
         raise TypeError(f"Unrecognized dtype: {dtype}")
-
-
-def build_categorical_column(
-    categories: ColumnBase,
-    codes: ColumnBase,
-    mask: Buffer | None = None,
-    size: int | None = None,
-    offset: int = 0,
-    null_count: int | None = None,
-    ordered: bool = False,
-) -> "cudf.core.column.CategoricalColumn":
-    """
-    Build a CategoricalColumn
-
-    Parameters
-    ----------
-    categories : Column
-        Column of categories
-    codes : Column
-        Column of codes, the size of the resulting Column will be
-        the size of `codes`
-    mask : Buffer
-        Null mask
-    size : int, optional
-    offset : int, optional
-    ordered : bool, default False
-        Indicates whether the categories are ordered
-    """
-    codes_dtype = min_unsigned_type(len(categories))
-    codes = as_column(codes)
-    if codes.dtype != codes_dtype:
-        codes = codes.astype(codes_dtype)
-
-    dtype = CategoricalDtype(categories=categories, ordered=ordered)
-
-    result = build_column(
-        data=None,
-        dtype=dtype,
-        mask=mask,
-        size=size,
-        offset=offset,
-        null_count=null_count,
-        children=(codes,),
-    )
-    return cast("cudf.core.column.CategoricalColumn", result)
 
 
 def check_invalid_array(shape: tuple, dtype):

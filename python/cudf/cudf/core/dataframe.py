@@ -48,7 +48,6 @@ from cudf.core.column import (
     ColumnBase,
     StructColumn,
     as_column,
-    build_categorical_column,
     column_empty,
     concat_columns,
 )
@@ -3062,7 +3061,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
-            _make_categorical_like,
         )
 
         # First process the condition.
@@ -3114,7 +3112,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         out = []
         for (name, col), other_col in zip(self._data.items(), other_cols):
-            col, other_col = _check_and_cast_columns_with_other(
+            source_col, other_col = _check_and_cast_columns_with_other(
                 source_col=col,
                 other=other_col,
                 inplace=inplace,
@@ -3122,16 +3120,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             if cond_col := cond._data.get(name):
                 result = cudf._lib.copying.copy_if_else(
-                    col, other_col, cond_col
+                    source_col, other_col, cond_col
                 )
 
-                out.append(_make_categorical_like(result, self._data[name]))
+                out.append(result._with_type_metadata(col.dtype))
             else:
                 out_mask = cudf._lib.null_mask.create_null_mask(
-                    len(col),
+                    len(source_col),
                     state=cudf._lib.null_mask.MaskState.ALL_NULL,
                 )
-                out.append(col.set_mask(out_mask))
+                out.append(source_col.set_mask(out_mask))
 
         return self._mimic_inplace(
             self._from_data_like_self(self._data._from_columns_like_self(out)),
@@ -3294,9 +3292,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # least require a deprecation cycle because we currently support
         # inserting a pd.Categorical.
         if isinstance(value, pd.Categorical):
-            value = cudf.core.column.categorical.pandas_categorical_as_column(
-                value
-            )
+            value = as_column(value)
 
         if _is_scalar_or_zero_d_array(value):
             dtype = None
@@ -8508,12 +8504,15 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
 def _reassign_categories(categories, cols, col_idxs):
     for name, idx in zip(cols, col_idxs):
         if idx in categories:
-            cols[name] = build_categorical_column(
-                categories=categories[idx],
-                codes=cols[name],
+            cols[name] = CategoricalColumn(
+                data=None,
+                size=cols[name].size,
+                dtype=cudf.CategoricalDtype(
+                    categories=categories[idx], ordered=False
+                ),
                 mask=cols[name].base_mask,
                 offset=cols[name].offset,
-                size=cols[name].size,
+                children=(cols[name],),
             )
 
 
