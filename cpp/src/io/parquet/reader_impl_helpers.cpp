@@ -386,9 +386,9 @@ std::vector<std::unordered_map<int32_t, int32_t>> aggregate_reader_metadata::ini
   // Only initialize if more than 1 data sources and has select columns from mismatched data sources
   if (has_cols_from_mismatched_srcs and per_file_metadata.size() > 1) {
     return std::vector<std::unordered_map<int32_t, int32_t>>{per_file_metadata.size() - 1};
-  } else {
-    return {};
   }
+
+  return {};
 }
 
 int64_t aggregate_reader_metadata::calc_num_rows() const
@@ -648,7 +648,7 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
       if (field->type_type() == flatbuf::Type::Type_Duration) {
         auto type_data = field->type_as_Duration();
         if (type_data != nullptr) {
-          auto name = (field->name()) ? field->name()->str() : "";
+          auto name = field->name() ? field->name()->str() : "";
           // set the schema_elem type to duration type
           schema_elem.type = duration_from_flatbuffer(type_data);
           arrow_type_col_seen |= (schema_elem.type.id() != type_id::EMPTY);
@@ -886,10 +886,11 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
 {
   // schema_idx_maps will only have > 0 size when we are reading matching column projection from
   // mismatched Parquet sources.
-  if (src_idx and schema_idx_maps.size()) {
+  if (src_idx and not schema_idx_maps.empty()) {
     auto const& schema_idx_map = schema_idx_maps[src_idx - 1];
     CUDF_EXPECTS(schema_idx_map.find(schema_idx) != schema_idx_map.end(),
-                 "Found no metadata for the mapped schema index");
+                 "Unmapped schema index encountered in the specified source tree",
+                 std::range_error);
     schema_idx = schema_idx_map.at(schema_idx);
   }
 
@@ -898,7 +899,8 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
                  per_file_metadata[src_idx].row_groups[row_group_index].columns.end(),
                  [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
   CUDF_EXPECTS(col != std::end(per_file_metadata[src_idx].row_groups[row_group_index].columns),
-               "Found no metadata for schema index");
+               "Found no metadata for schema index",
+               std::range_error);
   return col->meta_data;
 }
 
@@ -1100,7 +1102,7 @@ aggregate_reader_metadata::select_columns(
       if (schema_elem.is_stub()) {
         // is this legit?
         CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
-        auto const child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
+        auto const child_col_name_info = col_name_info ? &col_name_info->children[0] : nullptr;
         return build_column(
           child_col_name_info, schema_elem.children_idx[0], out_col_array, has_list_parent);
       }
@@ -1190,7 +1192,7 @@ aggregate_reader_metadata::select_columns(
 
   // Maps a projected column's schema_idx in the zeroth per_file_metadata (source) to the
   // corresponding schema_idx in pfm_idx'th per_file_metadata (destination). The projected
-  // column's path must match across sources, else a runtime error is thrown.
+  // column's path must match across sources, else an appropriate exception is thrown.
   std::function<void(column_name_info const*, int const, int const, int const)> map_column =
     [&](column_name_info const* col_name_info,
         int const src_schema_idx,
@@ -1200,18 +1202,22 @@ aggregate_reader_metadata::select_columns(
       auto const& dst_schema_elem = get_schema(dst_schema_idx, pfm_idx);
 
       // Check the schema elements to be equal except their number of children as we only care about
-      // the specific column paths in the schema trees.
+      // the specific column paths in the schema trees. Raise an invalid_argument error if the
+      // schema elements don't match.
       CUDF_EXPECTS(equal_to_except_num_children(src_schema_elem, dst_schema_elem),
-                   "Encountered mismatching SchemaElement properties encountered for a column in "
-                   "the selected path");
+                   "Encountered mismatching SchemaElement properties for a column in "
+                   "the selected path",
+                   std::invalid_argument);
 
-      // It src_schema_elem is a stub, it does not exist in the column_name_info and column_buffer
+      // If src_schema_elem is a stub, it does not exist in the column_name_info and column_buffer
       // hierarchy. So continue on with mapping.
       if (src_schema_elem.is_stub()) {
         // Check if dst_schema_elem is also a stub i.e. has num_children == 1 that we didn't
-        // previously checked
-        CUDF_EXPECTS(dst_schema_elem.is_stub(), "Encountered mismatching schemas for stub.");
-        auto const child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
+        // previously check. Raise an invalid_argument error if dst_schema_elem is not a stub.
+        CUDF_EXPECTS(dst_schema_elem.is_stub(),
+                     "Encountered mismatching schemas for stub.",
+                     std::invalid_argument);
+        auto const child_col_name_info = col_name_info ? &col_name_info->children[0] : nullptr;
         return map_column(child_col_name_info,
                           src_schema_elem.children_idx[0],
                           dst_schema_elem.children_idx[0],
@@ -1221,10 +1227,12 @@ aggregate_reader_metadata::select_columns(
       // The path ends here. If this is a list/struct col (has children), then map all its children
       // which must be identical.
       if (col_name_info == nullptr or col_name_info->children.empty()) {
-        // Check the number of children to be equal here.
+        // Check the number of children to be equal to be mapped. An out_of_range error if the
+        // number of children isn't equal.
         CUDF_EXPECTS(src_schema_elem.num_children == dst_schema_elem.num_children,
-                     "Encountered mismatching number of children encountered for a "
-                     "column in the selected path");
+                     "Encountered mismatching number of children for a "
+                     "column in the selected path",
+                     std::out_of_range);
 
         std::for_each(thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(src_schema_elem.num_children),
@@ -1242,10 +1250,12 @@ aggregate_reader_metadata::select_columns(
           col_name_info->children.cbegin(),
           col_name_info->children.cend(),
           [&](auto const& child_col_name_info) {
-            // Ensure that each named child column exists in the destination schema tree
+            // Ensure that each named child column exists in the destination schema tree for the
+            // paths to align up. An out_of_range error otherwise.
             CUDF_EXPECTS(
               find_schema_child(dst_schema_elem, child_col_name_info.name, pfm_idx) != -1,
-              "Encountered mismatching schema tree depths across data sources");
+              "Encountered mismatching schema tree depths across data sources",
+              std::out_of_range);
             map_column(&child_col_name_info,
                        find_schema_child(src_schema_elem, child_col_name_info.name),
                        find_schema_child(dst_schema_elem, child_col_name_info.name, pfm_idx),
@@ -1400,16 +1410,17 @@ aggregate_reader_metadata::select_columns(
         output_column_schemas.push_back(top_level_col_schema_idx);
 
         // Map the column's schema_idx across the rest of the data sources if required.
-        if (per_file_metadata.size() > 1 and schema_idx_maps.size()) {
-          std::for_each(thrust::make_counting_iterator(1ul),
+        if (per_file_metadata.size() > 1 and not schema_idx_maps.empty()) {
+          std::for_each(thrust::make_counting_iterator(static_cast<size_t>(1)),
                         thrust::make_counting_iterator(per_file_metadata.size()),
                         [&](auto const pfm_idx) {
                           auto const& dst_root = get_schema(0, pfm_idx);
                           // Ensure that each top level column exists in the destination schema
-                          // tree
+                          // tree. An out_of_range error is thrown otherwise.
                           CUDF_EXPECTS(
                             find_schema_child(dst_root, col.name, pfm_idx) != -1,
-                            "Encountered mismatching schema tree depths across data sources");
+                            "Encountered mismatching schema tree depths across data sources",
+                            std::out_of_range);
                           map_column(&col,
                                      top_level_col_schema_idx,
                                      find_schema_child(dst_root, col.name, pfm_idx),

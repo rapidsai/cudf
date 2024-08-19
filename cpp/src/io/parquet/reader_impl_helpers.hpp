@@ -202,6 +202,23 @@ class aggregate_reader_metadata {
 
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
 
+  /**
+   * @brief Extracts the schema_idx'th column chunk metadata from row_group_index'th row group of
+   * the src_idx'th file.
+   *
+   * Extracts the schema_idx'th column chunk metadata from the specified row group index of the
+   * src_idx'th file. Note that the schema_idx is actually the index in the zeroth file which may
+   * not be the same in all files, in which case, the schema_idx is mapped to the corresponding
+   * index in the src_idx'th file and returned. A range_error error is thrown if schema_idx
+   * doesn't exist or isn't mapped to the src_idx file.
+   *
+   * @param row_group_index The row group index in the file to extract column chunk metadata from.
+   * @param src_idx The per_file_metadata index to extract extract column chunk metadata from.
+   * @param schema_idx The schema_idx of the column chunk to be extracted
+   *
+   * @return The requested column chunk metadata or a range_error error if the schema index isn't
+   * valid.
+   */
   [[nodiscard]] ColumnChunkMetaData const& get_column_metadata(size_type row_group_index,
                                                                size_type src_idx,
                                                                int schema_idx) const;
@@ -217,11 +234,21 @@ class aggregate_reader_metadata {
 
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
 
+  /**
+   * @brief Extracts the schema_idx'th SchemaElement from the pfm_idx'th file
+   *
+   * @param schema_idx The index of the SchemaElement to be extracted.
+   * @param pfm_idx The index of the per_file_metadata to extract SchemaElement from, default = 0 if
+   * not specified.
+   *
+   * @return The requested SchemaElement or an error if invalid schema_idx or pfm_idx.
+   */
   [[nodiscard]] auto const& get_schema(int schema_idx, int pfm_idx = 0) const
   {
     CUDF_EXPECTS(
       schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
-      "Parquet reader encountered an invalid schema_idx or pfm_idx");
+      "Parquet reader encountered an invalid schema_idx or pfm_idx",
+      std::invalid_argument);
     return per_file_metadata[pfm_idx].schema[schema_idx];
   }
 

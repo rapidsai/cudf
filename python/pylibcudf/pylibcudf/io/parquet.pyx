@@ -24,9 +24,9 @@ cdef parquet_reader_options _setup_parquet_reader_options(
     Expression filters = None,
     bool convert_strings_to_categories = False,
     bool use_pandas_metadata = True,
-    bool allow_mismatched_pq_schemas=False,
     int64_t skip_rows = 0,
     size_type nrows = -1,
+    bool allow_mismatched_pq_schemas=False,
     # ReaderColumnSchema reader_column_schema = None,
     # DataType timestamp_type = DataType(type_id.EMPTY)
 ):
@@ -72,9 +72,6 @@ cdef class ChunkedParquetReader:
         the per-file user metadata of the ``TableWithMetadata``
     convert_strings_to_categories : bool, default False
         Whether to convert string columns to the category type
-    allow_mismatched_pq_schemas : bool, default False
-        Whether to read (matching) columns specified in `columns` from
-        the input files with otherwise mismatched schemas.
     skip_rows : int64_t, default 0
         The number of rows to skip from the start of the file.
     nrows : size_type, default -1
@@ -85,6 +82,9 @@ cdef class ChunkedParquetReader:
     pass_read_limit : size_t, default 1024000000
         Limit on the amount of memory used for reading and decompressing data
         or 0 if there is no limit.
+    allow_mismatched_pq_schemas : bool, default False
+        Whether to read (matching) columns specified in `columns` from
+        the input files with otherwise mismatched schemas.
     """
     def __init__(
         self,
@@ -93,11 +93,11 @@ cdef class ChunkedParquetReader:
         list row_groups=None,
         bool use_pandas_metadata=True,
         bool convert_strings_to_categories=False,
-        bool allow_mismatched_pq_schemas=False,
         int64_t skip_rows = 0,
         size_type nrows = -1,
         size_t chunk_read_limit=0,
-        size_t pass_read_limit=1024000000
+        size_t pass_read_limit=1024000000,
+        bool allow_mismatched_pq_schemas=False
     ):
 
         cdef parquet_reader_options opts = _setup_parquet_reader_options(
@@ -107,9 +107,9 @@ cdef class ChunkedParquetReader:
             filters=None,
             convert_strings_to_categories=convert_strings_to_categories,
             use_pandas_metadata=use_pandas_metadata,
-            allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
             skip_rows=skip_rows,
             nrows=nrows,
+            allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
         )
 
         with nogil:
@@ -157,9 +157,9 @@ cpdef read_parquet(
     Expression filters = None,
     bool convert_strings_to_categories = False,
     bool use_pandas_metadata = True,
-    bool allow_mismatched_pq_schemas = False,
     int64_t skip_rows = 0,
     size_type nrows = -1,
+    bool allow_mismatched_pq_schemas = False,
     # Disabled, these aren't used by cudf-python
     # we should only add them back in if there's user demand
     # ReaderColumnSchema reader_column_schema = None,
@@ -183,13 +183,13 @@ cpdef read_parquet(
     use_pandas_metadata : bool, default True
         If True, return metadata about the index column in
         the per-file user metadata of the ``TableWithMetadata``
-    allow_mismatched_pq_schemas : bool, default False
-        If True, enable reading (matching) columns specified in `columns`
-        from the input files with otherwise mismatched schemas.
     skip_rows : int64_t, default 0
         The number of rows to skip from the start of the file.
     nrows : size_type, default -1
         The number of rows to read. By default, read the entire file.
+    allow_mismatched_pq_schemas : bool, default False
+        If True, enable reading (matching) columns specified in `columns`
+        from the input files with otherwise mismatched schemas.
 
     Returns
     -------
@@ -204,9 +204,9 @@ cpdef read_parquet(
         filters,
         convert_strings_to_categories,
         use_pandas_metadata,
-        allow_mismatched_pq_schemas,
         skip_rows,
         nrows,
+        allow_mismatched_pq_schemas,
     )
 
     with nogil:

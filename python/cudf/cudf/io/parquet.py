@@ -685,12 +685,12 @@ def read_parquet(
             columns=columns,
             row_groups=row_groups,
             use_pandas_metadata=use_pandas_metadata,
-            allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
             partition_keys=partition_keys,
             partition_categories=partition_categories,
             dataset_kwargs=dataset_kwargs,
             nrows=nrows,
             skip_rows=skip_rows,
+            allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
             **kwargs,
         )
     # Apply filters row-wise (if any are defined), and return
