@@ -453,8 +453,6 @@ class ColumnAccessor(abc.MutableMapping):
             data,
             multiindex=self.multiindex,
             level_names=self.level_names,
-            # TODO: rangeindex can be True if selected labels are contiguous
-            rangeindex=len(data) == len(self),
             label_dtype=self.label_dtype,
             verify=False,
         )
@@ -609,13 +607,11 @@ class ColumnAccessor(abc.MutableMapping):
 
     def _select_by_label_with_wildcard(self, key: tuple) -> Self:
         key = self._pad_key(key, slice(None))
-        data = ({k: self._data[k] for k in self.names if _keys_equal(k, key)},)
+        data = {k: self._data[k] for k in self.names if _keys_equal(k, key)}
         return type(self)(
-            {k: self._data[k] for k in self._data if _keys_equal(k, key)},
+            data,
             multiindex=self.multiindex,
             level_names=self.level_names,
-            # TODO: rangeindex can be True if selected labels are contiguous
-            rangeindex=len(data) == len(self),
             label_dtype=self.label_dtype,
             verify=False,
         )
