@@ -7,14 +7,13 @@ from __future__ import annotations
 import cupy
 import cupy._core.flags
 import numpy
-import numpy.core.multiarray
+from packaging import version
 
 from ..fast_slow_proxy import (
     _FastSlowAttribute,
     make_final_proxy_type,
     make_intermediate_proxy_type,
 )
-from ..proxy_base import ProxyNDarrayBase
 from .common import (
     array_interface,
     array_method,
@@ -112,14 +111,12 @@ ndarray = make_final_proxy_type(
     numpy.ndarray,
     fast_to_slow=cupy.ndarray.get,
     slow_to_fast=cupy.asarray,
-    bases=(ProxyNDarrayBase,),
     additional_attributes={
         "__array__": array_method,
         # So that pa.array(wrapped-numpy-array) works
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
         "__array_interface__": array_interface,
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         # ndarrays are unhashable
         "__hash__": None,
         # iter(cupy-array) produces an iterable of zero-dim device
@@ -144,10 +141,15 @@ flatiter = make_final_proxy_type(
     },
 )
 
+if version.parse(numpy.__version__) >= version.parse("2.0"):
+    # NumPy 2 introduced `_core` and gives warnings for access to `core`.
+    from numpy._core.multiarray import flagsobj as _numpy_flagsobj
+else:
+    from numpy.core.multiarray import flagsobj as _numpy_flagsobj
 
 # Mapping flags between slow and fast types
 _ndarray_flags = make_intermediate_proxy_type(
     "_ndarray_flags",
     cupy._core.flags.Flags,
-    numpy.core.multiarray.flagsobj,
+    _numpy_flagsobj,
 )
