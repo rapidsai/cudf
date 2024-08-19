@@ -102,7 +102,7 @@ class ColumnAccessor(abc.MutableMapping):
         rangeindex: bool = False,
         label_dtype: Dtype | None = None,
         verify: bool = True,
-    ):
+    ) -> None:
         if isinstance(data, ColumnAccessor):
             self._data = data._data
             self._level_names = data.level_names
@@ -147,10 +147,10 @@ class ColumnAccessor(abc.MutableMapping):
     def __getitem__(self, key: Any) -> ColumnBase:
         return self._data[key]
 
-    def __setitem__(self, key: Any, value: Any):
+    def __setitem__(self, key: Any, value: ColumnBase) -> None:
         self.set_by_label(key, value)
 
-    def __delitem__(self, key: Any):
+    def __delitem__(self, key: Any) -> None:
         old_ncols = len(self._data)
         del self._data[key]
         new_ncols = len(self._data)
@@ -174,7 +174,7 @@ class ColumnAccessor(abc.MutableMapping):
 
     def _from_columns_like_self(
         self, columns: abc.Iterable[ColumnBase], verify: bool = True
-    ):
+    ) -> Self:
         """
         Return a new ColumnAccessor with columns and the properties of self.
 
@@ -356,7 +356,7 @@ class ColumnAccessor(abc.MutableMapping):
             # The type(name) may no longer match the prior label_dtype
             self.label_dtype = None
 
-    def copy(self, deep: bool = False) -> ColumnAccessor:
+    def copy(self, deep: bool = False) -> Self:
         """
         Make a copy of this ColumnAccessor.
         """
@@ -373,7 +373,7 @@ class ColumnAccessor(abc.MutableMapping):
             verify=False,
         )
 
-    def select_by_label(self, key: Any) -> ColumnAccessor:
+    def select_by_label(self, key: Any) -> Self:
         """
         Return a subset of this column accessor,
         composed of the keys specified by `key`.
@@ -427,9 +427,13 @@ class ColumnAccessor(abc.MutableMapping):
             # TODO: Doesn't handle on-device columns
             return tuple(n for n, keep in zip(self.names, index) if keep)
         else:
+            if len(set(index)) != len(index):
+                raise NotImplementedError(
+                    "Selecting duplicate column labels is not supported."
+                )
             return tuple(self.names[i] for i in index)
 
-    def select_by_index(self, index: Any) -> ColumnAccessor:
+    def select_by_index(self, index: Any) -> Self:
         """
         Return a ColumnAccessor composed of the columns
         specified by index.
@@ -445,13 +449,17 @@ class ColumnAccessor(abc.MutableMapping):
         """
         keys = self.get_labels_by_index(index)
         data = {k: self._data[k] for k in keys}
-        return self.__class__(
+        return type(self)(
             data,
             multiindex=self.multiindex,
             level_names=self.level_names,
+            # TODO: rangeindex can be True if selected labels are contiguous
+            rangeindex=len(data) == len(self),
+            label_dtype=self.label_dtype,
+            verify=False,
         )
 
-    def swaplevel(self, i=-2, j=-1):
+    def swaplevel(self, i=-2, j=-1) -> Self:
         """
         Swap level i with level j.
         Calling this method does not change the ordering of the values.
@@ -467,6 +475,10 @@ class ColumnAccessor(abc.MutableMapping):
         -------
         ColumnAccessor
         """
+        if not self.multiindex:
+            raise ValueError(
+                "swaplevel is only valid for self.multiindex=True"
+            )
 
         i = _get_level(i, self.nlevels, self.level_names)
         j = _get_level(j, self.nlevels, self.level_names)
@@ -486,13 +498,16 @@ class ColumnAccessor(abc.MutableMapping):
         new_names = list(self.level_names)
         new_names[i], new_names[j] = new_names[j], new_names[i]
 
-        return self.__class__(
+        return type(self)(
             new_data,
-            multiindex=True,
+            multiindex=self.multiindex,
             level_names=new_names,
+            rangeindex=self.rangeindex,
+            label_dtype=self.label_dtype,
+            verify=False,
         )
 
-    def set_by_label(self, key: Any, value: Any, validate: bool = True):
+    def set_by_label(self, key: Any, value: ColumnBase) -> None:
         """
         Add (or modify) column by name.
 
@@ -500,24 +515,21 @@ class ColumnAccessor(abc.MutableMapping):
         ----------
         key
             name of the column
-        value : column-like
+        value : Column
             The value to insert into the column.
-        validate : bool
-            If True, the provided value will be coerced to a column and
-            validated before setting (Default value = True).
         """
         key = self._pad_key(key)
-        if validate:
-            value = column.as_column(value)
-            if len(self._data) > 0 and len(value) != self.nrows:
-                raise ValueError("All columns must be of equal length")
+        if not isinstance(value, column.ColumnBase):
+            raise ValueError("value must be a Column")
+        if len(self) > 0 and len(value) != self.nrows:
+            raise ValueError("All columns must be of equal length")
 
         old_ncols = len(self._data)
         self._data[key] = value
         new_ncols = len(self._data)
         self._clear_cache(old_ncols, new_ncols)
 
-    def _select_by_label_list_like(self, key: tuple) -> ColumnAccessor:
+    def _select_by_label_list_like(self, key: tuple) -> Self:
         # Special-casing for boolean mask
         if (bn := len(key)) > 0 and all(map(is_bool, key)):
             if bn != (n := len(self.names)):
@@ -537,20 +549,22 @@ class ColumnAccessor(abc.MutableMapping):
                 )
         if self.multiindex:
             data = dict(_to_flat_dict_inner(data))
-        return self.__class__(
+        return type(self)(
             data,
             multiindex=self.multiindex,
             level_names=self.level_names,
+            label_dtype=self.label_dtype,
             verify=False,
         )
 
-    def _select_by_label_grouped(self, key: Any) -> ColumnAccessor:
+    def _select_by_label_grouped(self, key: Any) -> Self:
         result = self._grouped_data[key]
         if isinstance(result, column.ColumnBase):
             # self._grouped_data[key] = self._data[key] so skip validation
-            return self.__class__(
+            return type(self)(
                 data={key: result},
                 multiindex=self.multiindex,
+                label_dtype=self.label_dtype,
                 verify=False,
             )
         else:
@@ -565,7 +579,7 @@ class ColumnAccessor(abc.MutableMapping):
                 verify=False,
             )
 
-    def _select_by_label_slice(self, key: slice) -> ColumnAccessor:
+    def _select_by_label_slice(self, key: slice) -> Self:
         start, stop = key.start, key.stop
         if key.step is not None:
             raise TypeError("Label slicing with step is not supported")
@@ -585,19 +599,24 @@ class ColumnAccessor(abc.MutableMapping):
                 stop_idx = len(self.names) - idx
                 break
         keys = self.names[start_idx:stop_idx]
-        return self.__class__(
+        return type(self)(
             {k: self._data[k] for k in keys},
             multiindex=self.multiindex,
             level_names=self.level_names,
+            label_dtype=self.label_dtype,
             verify=False,
         )
 
-    def _select_by_label_with_wildcard(self, key: tuple) -> ColumnAccessor:
+    def _select_by_label_with_wildcard(self, key: tuple) -> Self:
         key = self._pad_key(key, slice(None))
-        return self.__class__(
+        data = ({k: self._data[k] for k in self.names if _keys_equal(k, key)},)
+        return type(self)(
             {k: self._data[k] for k in self._data if _keys_equal(k, key)},
             multiindex=self.multiindex,
             level_names=self.level_names,
+            # TODO: rangeindex can be True if selected labels are contiguous
+            rangeindex=len(data) == len(self),
+            label_dtype=self.label_dtype,
             verify=False,
         )
 
@@ -614,7 +633,7 @@ class ColumnAccessor(abc.MutableMapping):
 
     def rename_levels(
         self, mapper: Mapping[Any, Any] | Callable, level: int | None = None
-    ) -> ColumnAccessor:
+    ) -> Self:
         """
         Rename the specified levels of the given ColumnAccessor
 
@@ -686,7 +705,7 @@ class ColumnAccessor(abc.MutableMapping):
             verify=False,
         )
 
-    def droplevel(self, level):
+    def droplevel(self, level) -> None:
         # drop the nth level
         if level < 0:
             level += self.nlevels
@@ -701,9 +720,8 @@ class ColumnAccessor(abc.MutableMapping):
             self._level_names[:level] + self._level_names[level + 1 :]
         )
 
-        if (
-            len(self._level_names) == 1
-        ):  # can't use nlevels, as it depends on multiindex
+        if len(self._level_names) == 1:
+            # can't use nlevels, as it depends on multiindex
             self.multiindex = False
         self._clear_cache(old_ncols, new_ncols)
 

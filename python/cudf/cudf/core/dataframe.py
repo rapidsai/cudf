@@ -981,6 +981,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self._data.rangeindex = isinstance(
                 columns, (range, cudf.RangeIndex, pd.RangeIndex)
             )
+            self._data.label_dtype = pd.Index(columns).dtype
         else:
             self._data.rangeindex = True
 

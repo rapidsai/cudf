@@ -1698,7 +1698,7 @@ class BaseIndex(Serializable):
         # in case of MultiIndex
         if isinstance(lhs, cudf.MultiIndex):
             on = (
-                lhs._data.select_by_index(level).names[0]
+                lhs._data.get_labels_by_index(level)[0]
                 if isinstance(level, int)
                 else level
             )
