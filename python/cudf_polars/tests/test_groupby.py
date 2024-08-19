@@ -119,18 +119,17 @@ def test_groupby_unsupported(df, expr):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_groupby_null_keys(maintain_order, request):
-    df = pl.LazyFrame({"key": [1, 2, None, 2, None], "value": [-1, 1, 2, 3, 4]})
+def test_groupby_null_keys(maintain_order):
+    df = pl.LazyFrame(
+        {
+            "key": pl.Series([1, float("nan"), 2, None, 2, None], dtype=pl.Float64()),
+            "value": [-1, 2, 1, 2, 3, 4],
+        }
+    )
 
-    q = df.group_by("key").agg(pl.col("value").min())
+    q = df.group_by("key", maintain_order=maintain_order).agg(pl.col("value").min())
     if not maintain_order:
         q = q.sort("key")
-    else:
-        request.applymarker(
-            pytest.mark.xfail(
-                reason="polars doesn't maintain order when group key has nulls correctly"
-            )
-        )
 
     assert_gpu_result_equal(q)
 

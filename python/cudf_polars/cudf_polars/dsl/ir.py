@@ -619,6 +619,9 @@ class GroupBy(IR):
         results = [
             req.evaluate(result_subs, mapping=mapping) for req in self.agg_requests
         ]
+        broadcasted = broadcast(*result_keys, *results)
+        result_keys = broadcasted[: len(result_keys)]
+        results = broadcasted[len(result_keys) :]
         # Handle order preservation of groups
         # like cudf classic does
         # https://github.com/rapidsai/cudf/blob/5780c4d8fb5afac2e04988a2ff5531f94c22d3a3/python/cudf/cudf/core/groupby/groupby.py#L723-L743
@@ -646,7 +649,7 @@ class GroupBy(IR):
                 NamedColumn(res, req.name)
                 for res, req in zip(results, self.agg_requests)
             ]
-        return DataFrame(broadcast(*result_keys, *results)).slice(self.options.slice)
+        return DataFrame(result_keys + results).slice(self.options.slice)
 
 
 @dataclasses.dataclass
