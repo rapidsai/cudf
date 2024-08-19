@@ -23,6 +23,9 @@ export PIP_CONSTRAINT="/tmp/constraints.txt"
 python -m auditwheel repair \
     --exclude libcudf.so \
     --exclude libarrow.so.1601 \
+    --exclude libnvcomp.so \
+    --exclude libnvcomp_bitcomp.so \
+    --exclude libnvcomp_gdeflate.so \
     -w ${package_dir}/final_dist \
     ${package_dir}/dist/*
 
