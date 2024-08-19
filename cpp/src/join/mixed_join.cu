@@ -178,9 +178,6 @@ mixed_join(
     join_size            = output_size_data->first;
     matches_per_row_span = output_size_data->second;
   } else {
-    // Allocate storage for the counter used to get the size of the join output
-    rmm::device_scalar<std::size_t> size(0, stream, mr);
-
     matches_per_row =
       rmm::device_uvector<size_type>{static_cast<std::size_t>(outer_num_rows), stream, mr};
     // Note that the view goes out of scope after this else statement, but the
@@ -190,37 +187,38 @@ mixed_join(
     matches_per_row_span = cudf::device_span<size_type const>{
       matches_per_row->begin(), static_cast<std::size_t>(outer_num_rows)};
     if (has_nulls) {
-      compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
-        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_conditional_view,
-          *right_conditional_view,
-          *probe_view,
-          *build_view,
-          hash_probe,
-          equality_probe,
-          kernel_join_type,
-          hash_table_view,
-          parser.device_expression_data,
-          swap_tables,
-          size.data(),
-          mutable_matches_per_row_span);
+      join_size = launch_compute_mixed_join_output_size<true>(*left_conditional_view,
+                                                              *right_conditional_view,
+                                                              *probe_view,
+                                                              *build_view,
+                                                              hash_probe,
+                                                              equality_probe,
+                                                              kernel_join_type,
+                                                              hash_table_view,
+                                                              parser.device_expression_data,
+                                                              swap_tables,
+                                                              mutable_matches_per_row_span,
+                                                              config,
+                                                              shmem_size_per_block,
+                                                              stream,
+                                                              mr);
     } else {
-      compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
-        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_conditional_view,
-          *right_conditional_view,
-          *probe_view,
-          *build_view,
-          hash_probe,
-          equality_probe,
-          kernel_join_type,
-          hash_table_view,
-          parser.device_expression_data,
-          swap_tables,
-          size.data(),
-          mutable_matches_per_row_span);
+      join_size = launch_compute_mixed_join_output_size<false>(*left_conditional_view,
+                                                               *right_conditional_view,
+                                                               *probe_view,
+                                                               *build_view,
+                                                               hash_probe,
+                                                               equality_probe,
+                                                               kernel_join_type,
+                                                               hash_table_view,
+                                                               parser.device_expression_data,
+                                                               swap_tables,
+                                                               mutable_matches_per_row_span,
+                                                               config,
+                                                               shmem_size_per_block,
+                                                               stream,
+                                                               mr);
     }
-    join_size = size.value(stream);
   }
 
   // The initial early exit clauses guarantee that we will not reach this point
@@ -423,9 +421,6 @@ compute_mixed_join_output_size(table_view const& left_equality,
   detail::grid_1d const config(outer_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
-  // Allocate storage for the counter used to get the size of the join output
-  rmm::device_scalar<std::size_t> size(0, stream, mr);
-
   auto const preprocessed_probe =
     experimental::row::equality::preprocessed_table::create(probe, stream);
   auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
@@ -436,39 +431,42 @@ compute_mixed_join_output_size(table_view const& left_equality,
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
+  std::size_t size = 0;
   if (has_nulls) {
-    compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_conditional_view,
-        *right_conditional_view,
-        *probe_view,
-        *build_view,
-        hash_probe,
-        equality_probe,
-        join_type,
-        hash_table_view,
-        parser.device_expression_data,
-        swap_tables,
-        size.data(),
-        matches_per_row_span);
+    size = launch_compute_mixed_join_output_size<true>(*left_conditional_view,
+                                                       *right_conditional_view,
+                                                       *probe_view,
+                                                       *build_view,
+                                                       hash_probe,
+                                                       equality_probe,
+                                                       join_type,
+                                                       hash_table_view,
+                                                       parser.device_expression_data,
+                                                       swap_tables,
+                                                       matches_per_row_span,
+                                                       config,
+                                                       shmem_size_per_block,
+                                                       stream,
+                                                       mr);
   } else {
-    compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_conditional_view,
-        *right_conditional_view,
-        *probe_view,
-        *build_view,
-        hash_probe,
-        equality_probe,
-        join_type,
-        hash_table_view,
-        parser.device_expression_data,
-        swap_tables,
-        size.data(),
-        matches_per_row_span);
+    size = launch_compute_mixed_join_output_size<false>(*left_conditional_view,
+                                                        *right_conditional_view,
+                                                        *probe_view,
+                                                        *build_view,
+                                                        hash_probe,
+                                                        equality_probe,
+                                                        join_type,
+                                                        hash_table_view,
+                                                        parser.device_expression_data,
+                                                        swap_tables,
+                                                        matches_per_row_span,
+                                                        config,
+                                                        shmem_size_per_block,
+                                                        stream,
+                                                        mr);
   }
 
-  return {size.value(stream), std::move(matches_per_row)};
+  return {size, std::move(matches_per_row)};
 }
 
 }  // namespace detail
