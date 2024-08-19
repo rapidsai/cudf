@@ -57,12 +57,14 @@ dependencies:
 - ninja
 - notebook
 - numba>=0.57
+- numpy
 - numpy>=1.23,<2.0a0
 - numpydoc
 - nvcc_linux-64=11.8
 - nvcomp==3.0.6
 - nvtx>=0.2.1
 - packaging
+- pandas
 - pandas>=2.0,<2.2.3dev0
 - pandoc
 - pip

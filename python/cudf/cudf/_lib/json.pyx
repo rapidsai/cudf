@@ -9,18 +9,19 @@ from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
 
-cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
+cimport pylibcudf.libcudf.io.types as cudf_io_types
+from pylibcudf.io.types cimport compression_type
+from pylibcudf.libcudf.io.json cimport json_recovery_mode_t
+from pylibcudf.libcudf.io.types cimport compression_type
+from pylibcudf.libcudf.types cimport data_type, type_id
+from pylibcudf.types cimport DataType
+
 from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport add_df_col_struct_names
-from cudf._lib.pylibcudf.io.types cimport compression_type
-from cudf._lib.pylibcudf.libcudf.io.json cimport json_recovery_mode_t
-from cudf._lib.pylibcudf.libcudf.io.types cimport compression_type
-from cudf._lib.pylibcudf.libcudf.types cimport data_type, type_id
-from cudf._lib.pylibcudf.types cimport DataType
 from cudf._lib.types cimport dtype_to_data_type
 from cudf._lib.utils cimport _data_from_columns, data_from_pylibcudf_io
 
-import cudf._lib.pylibcudf as plc
+import pylibcudf as plc
 
 
 cdef json_recovery_mode_t _get_json_recovery_mode(object on_bad_lines):
