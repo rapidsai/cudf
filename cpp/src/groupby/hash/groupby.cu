@@ -570,7 +570,7 @@ std::unique_ptr<table> groupby(table_view const& keys,
   auto const comparator_helper = [&](auto const d_key_equal) {
     auto const set = cuco::static_set{
       num_keys,
-      0.5,  // desired load factor
+      cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% occupancy
       cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
       d_key_equal,
       probing_scheme_type{d_row_hash},
