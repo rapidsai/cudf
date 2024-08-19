@@ -26,8 +26,8 @@ python -m pip install \
     -v \
     --constraint ./constraints.txt \
     "$(echo ./local-pylibcudf-dep/pylibcudf*.whl)" \
-    ./local-cudf-dep/cudf*.whl \
-    $(echo ./dist/dask_cudf*.whl)[test]
+    "$(echo ./local-cudf-dep/cudf*.whl)" \
+    "$(echo ./dist/dask_cudf*.whl)[test]"
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
