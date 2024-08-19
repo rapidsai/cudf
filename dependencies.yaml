@@ -449,6 +449,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
+          - *libcudf_unsuffixed
           - *rmm_unsuffixed
           - pip
           - pip:
@@ -467,16 +468,19 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
+              - *libcudf_cu12
               - &pylibcudf_cu12 pylibcudf-cu12==24.10.*,>=0.0.0a0
               - *rmm_cu12
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
+              - *libcudf_cu11
               - &pylibcudf_cu11 pylibcudf-cu11==24.10.*,>=0.0.0a0
               - *rmm_cu11
           - matrix:
             packages:
+              - *libcudf_unsuffixed
               - &pylibcudf_unsuffixed pylibcudf==24.10.*,>=0.0.0a0
               - *rmm_unsuffixed
   libarrow_build:
