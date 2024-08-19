@@ -7,7 +7,6 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 cimport pylibcudf.libcudf.types as libcudf_types
-from pylibcudf.io.datasource cimport Datasource, NativeFileDatasource
 
 from cudf._lib.types cimport dtype_to_pylibcudf_type
 
@@ -34,8 +33,6 @@ from pylibcudf.libcudf.table.table_view cimport table_view
 
 from cudf._lib.io.utils cimport make_sink_info
 from cudf._lib.utils cimport data_from_pylibcudf_io, table_view_from_table
-
-from pyarrow.lib import NativeFile
 
 import pylibcudf as plc
 
@@ -127,9 +124,7 @@ def read_csv(
     cudf.read_csv
     """
 
-    if not isinstance(datasource, (BytesIO, StringIO, bytes,
-                                   Datasource,
-                                   NativeFile)):
+    if not isinstance(datasource, (BytesIO, StringIO, bytes)):
         if not os.path.isfile(datasource):
             raise FileNotFoundError(
                 errno.ENOENT, os.strerror(errno.ENOENT), datasource
@@ -139,8 +134,6 @@ def read_csv(
         datasource = datasource.read().encode()
     elif isinstance(datasource, str) and not os.path.isfile(datasource):
         datasource = datasource.encode()
-    elif isinstance(datasource, NativeFile):
-        datasource = NativeFileDatasource(datasource)
 
     validate_args(delimiter, sep, delim_whitespace, decimal, thousands,
                   nrows, skipfooter, byte_range, skiprows)
