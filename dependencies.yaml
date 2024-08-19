@@ -642,8 +642,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          # TODO: Update `numpy` in `build_python_common` when dropping `<2.0a0`
-          - numpy>=1.23,<2.0a0
+          - numpy>=1.23,<3
           - pandas>=2.0,<2.2.3dev0
   run_pylibcudf:
     common:

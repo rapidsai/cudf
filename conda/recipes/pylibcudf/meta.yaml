@@ -81,8 +81,7 @@ requirements:
     - python
     - typing_extensions >=4.0.0
     - pandas >=2.0,<2.2.3dev0
-    # TODO: Update `numpy` in `host` when dropping `<2.0a0`
-    - numpy >=1.23,<2.0a0
+    - numpy >=1.23,<3
     - {{ pin_compatible('pyarrow', max_pin='x.x') }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0

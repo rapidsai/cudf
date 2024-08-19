@@ -84,8 +84,7 @@ requirements:
     - pandas >=2.0,<2.2.3dev0
     - cupy >=12.0.0
     - numba >=0.57
-    # TODO: Update `numpy` in `host` when dropping `<2.0a0`
-    - numpy >=1.23,<2.0a0
+    - numpy >=1.23,<3
     - {{ pin_compatible('pyarrow', max_pin='x.x') }}
     - libcudf ={{ version }}
     - pylibcudf ={{ version }}

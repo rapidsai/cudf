@@ -57,7 +57,7 @@ dependencies:
 - notebook
 - numba>=0.57
 - numpy
-- numpy>=1.23,<2.0a0
+- numpy>=1.23,<3
 - numpydoc
 - nvcc_linux-64=11.8
 - nvcomp==3.0.6
