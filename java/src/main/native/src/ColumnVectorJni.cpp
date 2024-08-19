@@ -38,6 +38,7 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <arrow/api.h>
+#include <arrow/c/bridge.h>
 
 #include <algorithm>
 
@@ -205,7 +206,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv* env,
     std::shared_ptr<arrow::Schema> schema             = std::make_shared<arrow::Schema>(fields);
     auto arrow_table =
       arrow::Table::Make(schema, std::vector<std::shared_ptr<arrow::Array>>{arrow_array});
-    auto retCols = cudf::from_arrow(*(arrow_table))->release();
+
+    ArrowSchema sch;
+    if (!arrow::ExportSchema(*arrow_table->schema(), &sch).ok()) {
+      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowSchema", 0)
+    }
+    auto batch = arrow_table->CombineChunksToBatch().ValueOrDie();
+    ArrowArray arr;
+    if (!arrow::ExportRecordBatch(*batch, &arr).ok()) {
+      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowArray", 0)
+    }
+    auto retCols = cudf::from_arrow(&sch, &arr)->release();
+    arr.release(&arr);
+    sch.release(&sch);
+
     if (retCols.size() != 1) {
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Must result in one column", 0);
     }

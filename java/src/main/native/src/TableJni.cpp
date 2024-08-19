@@ -54,6 +54,8 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
+#include <arrow/api.h>
+#include <arrow/c/bridge.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
 
@@ -2635,7 +2637,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv
     // The pointer to the shared_ptr<> is returned as a jlong.
     using result_t = std::shared_ptr<arrow::Table>;
 
-    auto result = cudf::to_arrow(*tview, state->get_column_metadata(*tview));
+    auto got_arrow_schema = cudf::to_arrow_schema(*tview, state->get_column_metadata(*tview));
+    auto got_arrow_array  = cudf::to_arrow_host(*tview);
+    auto batch =
+      arrow::ImportRecordBatch(&got_arrow_array->array, got_arrow_schema.get()).ValueOrDie();
+    auto result = arrow::Table::FromRecordBatches({batch}).ValueOrDie();
+
     return ptr_as_jlong(new result_t{result});
   }
   CATCH_STD(env, 0)
@@ -2746,7 +2753,21 @@ Java_ai_rapids_cudf_Table_convertArrowTableToCudf(JNIEnv* env, jclass, jlong arr
 
   try {
     cudf::jni::auto_set_device(env);
-    return convert_table_for_return(env, cudf::from_arrow(*(handle->get())));
+
+    ArrowSchema sch;
+    if (!arrow::ExportSchema(*handle->get()->schema(), &sch).ok()) {
+      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowSchema", 0)
+    }
+    auto batch = handle->get()->CombineChunksToBatch().ValueOrDie();
+    ArrowArray arr;
+    if (!arrow::ExportRecordBatch(*batch, &arr).ok()) {
+      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowArray", 0)
+    }
+    auto ret = cudf::from_arrow(&sch, &arr);
+    arr.release(&arr);
+    sch.release(&sch);
+
+    return convert_table_for_return(env, ret);
   }
   CATCH_STD(env, 0)
 }
