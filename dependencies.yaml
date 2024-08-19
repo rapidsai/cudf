@@ -110,7 +110,6 @@ files:
       - build_base
       - build_python_common
       - build_python_cudf
-      - run_libcudf
   py_run_libcudf:
     output: pyproject
     pyproject_dir: python/libcudf
@@ -118,7 +117,6 @@ files:
       table: project
     includes:
       - pyarrow_run
-      - pylibcudf_build_dep
   py_run_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -408,13 +406,13 @@ dependencies:
               cuda_suffixed: "true"
             packages:
               - &libcudf_cu12 libcudf-cu12==24.10.*,>=0.0.0a0
-              - rmm-cu12==24.10.*,>=0.0.0a0
+              - &rmm_cu12 rmm-cu12==24.10.*,>=0.0.0a0
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
               - &libcudf_cu11 libcudf-cu11==24.10.*,>=0.0.0a0
-              - rmm-cu11==24.10.*,>=0.0.0a0
+              - &rmm_cu11 rmm-cu11==24.10.*,>=0.0.0a0
           - {matrix: null, packages: [*libcudf_unsuffixed, *rmm_unsuffixed]}
   build_python_cudf:
     common:
@@ -438,34 +436,18 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - rmm-cu12==24.10.*,>=0.0.0a0
-              - pylibcudf-cu12==24.10.*,>=0.0.0a0
+              - &pylibcudf_cu12 pylibcudf-cu12==24.10.*,>=0.0.0a0
+              - *rmm_cu12
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
-              - rmm-cu11==24.10.*,>=0.0.0a0
-              - pylibcudf-cu11==24.10.*,>=0.0.0a0
-          - {matrix: null, packages: [*rmm_unsuffixed]}
-  pylibcudf_build_dep:
-    common:
-      - output_types: conda
-        packages:
-          - &pylibcudf_unsuffixed pylibcudf==24.10.*,>=0.0.0a0
-    specific:
-      - output_types: [pyproject]
-        matrices:
+              - &pylibcudf_cu11 pylibcudf-cu11==24.10.*,>=0.0.0a0
+              - *rmm_cu11
           - matrix:
-              cuda: "12.*"
-              cuda_suffixed: "true"
             packages:
-              - pylibcudf-cu12==24.10.*,>=0.0.0a0
-          - matrix:
-              cuda: "11.*"
-              cuda_suffixed: "true"
-            packages:
-              - pylibcudf-cu11==24.10.*,>=0.0.0a0
-          - {matrix: null, packages: [*pylibcudf_unsuffixed]}
+              - &pylibcudf_unsuffixed pylibcudf==24.10.*,>=0.0.0a0
+              - *rmm_unsuffixed
   libarrow_build:
     common:
       - output_types: conda
@@ -724,13 +706,13 @@ dependencies:
               cuda_suffixed: "true"
             packages:
               - *libcudf_cu12
-              - rmm-cu12==24.10.*,>=0.0.0a0
+              - *rmm_cu12
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
               - *libcudf_cu11
-              - rmm-cu11==24.10.*,>=0.0.0a0
+              - *rmm_cu11
           - {matrix: null, packages: [*libcudf_unsuffixed, *rmm_unsuffixed]}
   run_cudf:
     common:
@@ -776,7 +758,7 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - rmm-cu12==24.10.*,>=0.0.0a0
+              - *rmm_cu12
               - pynvjitlink-cu12>=0.0.0a0
           - matrix:
               cuda: "12.*"
@@ -788,7 +770,7 @@ dependencies:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
-              - rmm-cu11==24.10.*,>=0.0.0a0
+              - *rmm_cu11
               - cubinlinker-cu11
               - ptxcompiler-cu11
           - matrix:
@@ -922,12 +904,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - pylibcudf-cu12==24.10.*,>=0.0.0a0
+              - *pylibcudf_cu12
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
-              - pylibcudf-cu11==24.10.*,>=0.0.0a0
+              - *pylibcudf_cu11
           - {matrix: null, packages: [*pylibcudf_unsuffixed]}
   depends_on_cudf:
     common:
