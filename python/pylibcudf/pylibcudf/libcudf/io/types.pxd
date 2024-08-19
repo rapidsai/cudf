@@ -56,16 +56,16 @@ cdef extern from "cudf/io/types.hpp" \
         ALWAYS,
 
     cpdef enum class column_encoding(int32_t):
-        USE_DEFAULT = -1
-        DICTIONARY = 0
-        PLAIN = 1
-        DELTA_BINARY_PACKED = 2
-        DELTA_LENGTH_BYTE_ARRAY =3
-        DELTA_BYTE_ARRAY = 4
-        BYTE_STREAM_SPLIT = 5
-        DIRECT = 6
-        DIRECT_V2 = 7
-        DICTIONARY_V2 = 8
+        USE_DEFAULT
+        DICTIONARY
+        PLAIN
+        DELTA_BINARY_PACKED
+        DELTA_LENGTH_BYTE_ARRAY
+        DELTA_BYTE_ARRAY
+        BYTE_STREAM_SPLIT
+        DIRECT
+        DIRECT_V2
+        DICTIONARY_V2
 
     cdef cppclass column_name_info:
         string name
