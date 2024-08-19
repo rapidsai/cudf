@@ -205,7 +205,7 @@ NVBENCH_BENCH_TYPES(BM_parq_write_encode, NVBENCH_TYPE_AXES(d_type_list))
   .set_min_samples(4)
   .add_int64_axis("cardinality", {1, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000})
   .add_int64_axis("compression", {0})
-  .add_int64_axis("run_length", {0, 32, 64});
+  .add_int64_axis("run_length", {1, 32, 64});
 
 NVBENCH_BENCH_TYPES(BM_parq_write_encode, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("parquet_write_encode")
