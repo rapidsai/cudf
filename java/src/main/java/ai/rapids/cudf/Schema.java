@@ -150,11 +150,19 @@ public class Schema {
     return new Builder(DType.STRUCT);
   }
 
+  /**
+   * Get names of the columns flattened from all levels in schema.
+   * @return An array containing names of all columns in schema.
+   */
   public String[] getFlattenedColumnNames() {
     flattenIfNeeded();
     return flattenedNames;
   }
 
+  /**
+   * Get names of the top level child columns in schema.
+   * @return An array containing names of top level child columns.
+   */
   public String[] getColumnNames() {
     if (childNames == null) {
       return null;
@@ -162,6 +170,10 @@ public class Schema {
     return childNames.toArray(new String[childNames.size()]);
   }
 
+  /**
+   * Check if the schema is nested (i.e., top level type is LIST or STRUCT).
+   * @return true if the schema is nested, false otherwise.
+   */
   public boolean isNested() {
     return childSchemas != null && childSchemas.size() > 0;
   }
@@ -182,6 +194,10 @@ public class Schema {
     return false;
   }
 
+  /**
+   * Get type ids of the columns flattened from all levels in schema.
+   * @return An array containing type ids of all columns in schema.
+   */
   public int[] getFlattenedTypeIds() {
     flattenIfNeeded();
     if (flattenedTypes == null) {
@@ -194,6 +210,10 @@ public class Schema {
     return ret;
   }
 
+  /**
+   * Get scales of the columns' types flattened from all levels in schema.
+   * @return An array containing type scales of all columns in schema.
+   */
   public int[] getFlattenedTypeScales() {
     flattenIfNeeded();
     if (flattenedTypes == null) {
@@ -206,11 +226,19 @@ public class Schema {
     return ret;
   }
 
+  /**
+   * Get the types of the columns in schema flattened from all levels.
+   * @return An array containing types of all columns in schema.
+   */
   public DType[] getFlattenedTypes() {
     flattenIfNeeded();
     return flattenedTypes;
   }
 
+  /**
+   * Get types of the top level child columns in schema.
+   * @return An array containing types of top level child columns.
+   */
   public DType[] getChildTypes() {
     if (childSchemas == null) {
       return null;
@@ -222,6 +250,10 @@ public class Schema {
     return ret;
   }
 
+  /**
+   * Get number of top level child columns in schema.
+   * @return Number of child columns.
+   */
   public int getNumChildren() {
     if (childSchemas == null) {
       return 0;
@@ -229,6 +261,10 @@ public class Schema {
     return childSchemas.size();
   }
 
+  /**
+   * Get numbers of child columns for each level in schema.
+   * @return Numbers of child columns for all levels flattened into one array.
+   */
   public int[] getFlattenedNumChildren() {
     flattenIfNeeded();
     return flattenedCounts;
