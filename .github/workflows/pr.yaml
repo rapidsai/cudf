@@ -32,6 +32,7 @@ jobs:
       - wheel-tests-dask-cudf
       - devcontainer
       - unit-tests-cudf-pandas
+      - fetch-pandas-versions
       - cross-pandas-version-tests
       - pandas-tests
       - pandas-tests-diff
