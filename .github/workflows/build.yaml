@@ -76,7 +76,7 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       script: ci/build_wheel_libcudf.sh
-  wheel-publish-pylibcudf:
+  wheel-publish-libcudf:
     needs: wheel-build-libcudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@branch-24.10

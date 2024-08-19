@@ -42,19 +42,3 @@ add_subdirectory(udf_cpp)
 if(DEFINED cython_lib_dir)
   rapids_cython_add_rpath_entries(TARGET cudf PATHS "${cython_lib_dir}")
 endif()
-
-# libcudf targets are excluded by default above via EXCLUDE_FROM_ALL to remove extraneous components
-# like headers from libcudacxx, but we do need the libraries. However, we want to control where they
-# are installed to. Since there are multiple subpackages of cudf._lib that require access to
-# libcudf, we place the library and all its dependent artifacts in the cudf directory as a single
-# source of truth.
-include(../pylibcudf/cmake/Modules/WheelHelpers.cmake)
-
-# TODO: This install is currently overzealous. We should only install the libraries that are
-# downloaded by CPM during the build, not libraries that were found on the system.  However, in
-# practice this would only be a problem if libcudf was not found but some of the dependencies were,
-# and we have no real use cases where that happens.
-install_aliased_imported_targets(
-  TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp
-  DESTINATION ${cython_lib_dir}
-)

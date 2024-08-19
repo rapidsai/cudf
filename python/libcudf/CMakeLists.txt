@@ -47,3 +47,13 @@ set(CUDA_STATIC_RUNTIME ON)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
 add_subdirectory(../../cpp cudf-cpp)
+
+# Ensure other libraries needed by libcudf.so get installed alongside it.
+#
+# TODO: This install is currently overzealous. We should only install the libraries that are
+# downloaded by CPM during the build, not libraries that were found on the system.
+include(cmake/Modules/WheelHelpers.cmake)
+install_aliased_imported_targets(
+  TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp
+  DESTINATION ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+)
