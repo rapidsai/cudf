@@ -498,6 +498,25 @@ def _unsupported_kwargs(old, new, kwargs):
         )
 
 
+def _raise_unsupported_parquet_kwargs(
+    open_file_options=None, filesystem=None, **kwargs
+):
+    import fsspec
+
+    if open_file_options is not None:
+        raise ValueError(
+            "The open_file_options argument is no longer supported "
+            "by the 'cudf' backend."
+        )
+
+    if filesystem not in ("fsspec", None) and not isinstance(
+        filesystem, fsspec.AbstractFileSystem
+    ):
+        raise ValueError(
+            f"filesystem={filesystem} is not supported by the 'cudf' backend."
+        )
+
+
 # Register cudf->pandas
 to_pandas_dispatch = PandasBackendEntrypoint.to_backend_dispatch()
 
@@ -579,6 +598,7 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
     def read_parquet(*args, engine=None, **kwargs):
         from dask_cudf.io.parquet import CudfEngine
 
+        _raise_unsupported_parquet_kwargs(**kwargs)
         return _default_backend(
             dd.read_parquet,
             *args,
@@ -671,6 +691,7 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
 
         from dask_cudf.io.parquet import CudfEngine
 
+        _raise_unsupported_parquet_kwargs(**kwargs)
         return _default_backend(
             dx.read_parquet, *args, engine=CudfEngine, **kwargs
         )
