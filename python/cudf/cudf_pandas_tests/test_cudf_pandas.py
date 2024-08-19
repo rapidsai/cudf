@@ -1632,3 +1632,11 @@ def test_change_index_name(index):
 
         assert s.index.name == name
         assert df.index.name == name
+
+
+def test_numpy_ndarray_isinstancecheck(series):
+    s1, s2 = series
+    arr1 = s1.values
+    arr2 = s2.values
+    assert isinstance(arr1, np.ndarray)
+    assert isinstance(arr2, np.ndarray)

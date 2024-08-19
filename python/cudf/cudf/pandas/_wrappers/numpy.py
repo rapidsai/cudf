@@ -14,6 +14,7 @@ from ..fast_slow_proxy import (
     make_final_proxy_type,
     make_intermediate_proxy_type,
 )
+from ..proxy_base import ProxyNDarrayBase
 from .common import (
     array_interface,
     array_method,
@@ -111,12 +112,14 @@ ndarray = make_final_proxy_type(
     numpy.ndarray,
     fast_to_slow=cupy.ndarray.get,
     slow_to_fast=cupy.asarray,
+    bases=(ProxyNDarrayBase,),
     additional_attributes={
         "__array__": array_method,
         # So that pa.array(wrapped-numpy-array) works
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
         "__array_interface__": array_interface,
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         # ndarrays are unhashable
         "__hash__": None,
         # iter(cupy-array) produces an iterable of zero-dim device
