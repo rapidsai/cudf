@@ -289,7 +289,7 @@ def read_csv(
     # Set index if the index_col parameter is passed
     if index_col is not None and index_col is not False:
         if isinstance(index_col, int):
-            index_col_name = df._data.get_labels_by_index(index_col).names[0]
+            index_col_name = df._data.get_labels_by_index(index_col)[0]
             df = df.set_index(index_col_name)
             if isinstance(index_col_name, str) and \
                     names is None and orig_header == "infer":
