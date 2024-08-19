@@ -6,12 +6,10 @@ cimport pylibcudf.libcudf.table.table_view as cudf_table_view
 from libc.stdint cimport int32_t, uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
-from libcpp.memory cimport shared_ptr, unique_ptr
-from libcpp.pair cimport pair
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.vector cimport vector
-from pyarrow.includes.libarrow cimport CRandomAccessFile
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
 
@@ -42,32 +40,32 @@ cdef extern from "cudf/io/types.hpp" \
     cpdef enum class io_type(int32_t):
         FILEPATH
         HOST_BUFFER
+        DEVICE_BUFFER
         VOID
         USER_IMPLEMENTED
 
     cpdef enum class statistics_freq(int32_t):
-        STATISTICS_NONE = 0,
-        STATISTICS_ROWGROUP = 1,
-        STATISTICS_PAGE = 2,
-        STATISTICS_COLUMN = 3,
+        STATISTICS_NONE,
+        STATISTICS_ROWGROUP,
+        STATISTICS_PAGE,
+        STATISTICS_COLUMN,
 
     cpdef enum class dictionary_policy(int32_t):
-        NEVER = 0,
-        ADAPTIVE = 1,
-        ALWAYS = 2,
+        NEVER,
+        ADAPTIVE,
+        ALWAYS,
 
-    cdef extern from "cudf/io/types.hpp" namespace "cudf::io" nogil:
-        cpdef enum class column_encoding(int32_t):
-            USE_DEFAULT = -1
-            DICTIONARY = 0
-            PLAIN = 1
-            DELTA_BINARY_PACKED = 2
-            DELTA_LENGTH_BYTE_ARRAY =3
-            DELTA_BYTE_ARRAY = 4
-            BYTE_STREAM_SPLIT = 5
-            DIRECT = 6
-            DIRECT_V2 = 7
-            DICTIONARY_V2 = 8
+    cpdef enum class column_encoding(int32_t):
+        USE_DEFAULT = -1
+        DICTIONARY = 0
+        PLAIN = 1
+        DELTA_BINARY_PACKED = 2
+        DELTA_LENGTH_BYTE_ARRAY =3
+        DELTA_BYTE_ARRAY = 4
+        BYTE_STREAM_SPLIT = 5
+        DIRECT = 6
+        DIRECT_V2 = 7
+        DICTIONARY_V2 = 8
 
     cdef cppclass column_name_info:
         string name
@@ -76,7 +74,6 @@ cdef extern from "cudf/io/types.hpp" \
     cdef cppclass table_metadata:
         table_metadata() except +
 
-        vector[string] column_names
         map[string, string] user_data
         vector[unordered_map[string, string]] per_file_user_data
         vector[column_name_info] schema_info
@@ -120,10 +117,7 @@ cdef extern from "cudf/io/types.hpp" \
         host_buffer(const char* data, size_t size)
 
     cdef cppclass source_info:
-        io_type type
         const vector[string]& filepaths() except +
-        const vector[host_buffer]& buffers() except +
-        vector[shared_ptr[CRandomAccessFile]] files
 
         source_info() except +
         source_info(const vector[string] &filepaths) except +
@@ -132,9 +126,7 @@ cdef extern from "cudf/io/types.hpp" \
         source_info(const vector[cudf_io_datasource.datasource*] &datasources) except +
 
     cdef cppclass sink_info:
-        io_type type
         const vector[string]& filepaths()
-        const vector[vector[char] *]& buffers()
         const vector[cudf_io_data_sink.data_sink *]& user_sinks()
 
         sink_info() except +
