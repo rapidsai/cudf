@@ -218,15 +218,18 @@ cudf::size_type distinct_count(column_view const& input,
 
 cudf::size_type distinct_count(column_view const& input,
                                null_policy null_handling,
-                               nan_policy nan_handling)
+                               nan_policy nan_handling,
+                               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct_count(input, null_handling, nan_handling, cudf::get_default_stream());
+  return detail::distinct_count(input, null_handling, nan_handling, stream);
 }
 
-cudf::size_type distinct_count(table_view const& input, null_equality nulls_equal)
+cudf::size_type distinct_count(table_view const& input,
+                               null_equality nulls_equal,
+                               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct_count(input, nulls_equal, cudf::get_default_stream());
+  return detail::distinct_count(input, nulls_equal, stream);
 }
 }  // namespace cudf

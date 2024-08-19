@@ -55,11 +55,13 @@ dependencies:
 - ninja
 - notebook
 - numba>=0.57
+- numpy
 - numpy>=1.23,<2.0a0
 - numpydoc
 - nvcomp==3.0.6
 - nvtx>=0.2.1
 - packaging
+- pandas
 - pandas>=2.0,<2.2.3dev0
 - pandoc
 - pip
@@ -80,7 +82,7 @@ dependencies:
 - rich
 - rmm==24.10.*,>=0.0.0a0
 - s3fs>=2022.3.0
-- scikit-build-core>=0.7.0
+- scikit-build-core>=0.10.0
 - scipy
 - spdlog>=1.12.0,<1.13
 - sphinx

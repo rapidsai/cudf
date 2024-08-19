@@ -978,6 +978,22 @@ def test_string_split_re(data, pat, n, expand):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("pat", [None, "\\s+"])
+@pytest.mark.parametrize("regex", [False, True])
+@pytest.mark.parametrize("expand", [False, True])
+def test_string_split_all_empty(pat, regex, expand):
+    ps = pd.Series(["", "", "", ""], dtype="str")
+    gs = cudf.Series(["", "", "", ""], dtype="str")
+
+    expect = ps.str.split(pat=pat, expand=expand, regex=regex)
+    got = gs.str.split(pat=pat, expand=expand, regex=regex)
+
+    if isinstance(got, cudf.DataFrame):
+        assert_eq(expect, got, check_column_type=False)
+    else:
+        assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
 )
@@ -1076,7 +1092,7 @@ def test_string_index():
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = cudf.Index(
+    stringIndex = cudf.Index._from_column(
         cudf.core.column.as_column(["a", "b", "c", "d", "e"]), name="name"
     )
     pdf.index = stringIndex.to_pandas()
@@ -2672,12 +2688,14 @@ def test_string_ip4_to_int():
 
 
 def test_string_int_to_ipv4():
-    gsr = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449])
+    gsr = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449]).astype(
+        "uint32"
+    )
     expected = cudf.Series(
         ["0.0.0.0", None, "0.0.0.0", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
     )
 
-    got = cudf.Series(gsr._column.int2ip())
+    got = cudf.Series._from_column(gsr._column.int2ip())
 
     assert_eq(expected, got)
 
@@ -2718,7 +2736,7 @@ def test_string_isipv4():
 
 
 @pytest.mark.parametrize(
-    "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"int64", "uint64"}))
+    "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"uint32"}))
 )
 def test_string_int_to_ipv4_dtype_fail(dtype):
     gsr = cudf.Series([1, 2, 3, 4, 5]).astype(dtype)

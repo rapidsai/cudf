@@ -24,6 +24,8 @@ import numpy as np
 import pandas as pd
 from typing_extensions import Self
 
+import pylibcudf
+
 import cudf
 import cudf._lib as libcudf
 import cudf.core
@@ -35,6 +37,7 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
+from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column
@@ -67,7 +70,6 @@ if TYPE_CHECKING:
         Dtype,
         NotImplementedType,
     )
-    from cudf.core._base_index import BaseIndex
 
 
 doc_reset_index_template = """
@@ -182,11 +184,16 @@ def _indices_from_labels(obj, labels):
             )
         else:
             labels = labels.astype(obj.index.dtype)
+        idx_labels = cudf.Index._from_column(labels)
+    else:
+        idx_labels = labels
 
     # join is not guaranteed to maintain the index ordering
     # so we will sort it with its initial ordering which is stored
     # in column "__"
-    lhs = cudf.DataFrame({"__": as_column(range(len(labels)))}, index=labels)
+    lhs = cudf.DataFrame(
+        {"__": as_column(range(len(idx_labels)))}, index=idx_labels
+    )
     rhs = cudf.DataFrame({"_": as_column(range(len(obj)))}, index=obj.index)
     return lhs.join(rhs).sort_values(by=["__", "_"])["_"]
 
@@ -260,7 +267,6 @@ class IndexedFrame(Frame):
     # mypy can't handle bound type variables as class members
     _loc_indexer_type: type[_LocIndexerClass]  # type: ignore
     _iloc_indexer_type: type[_IlocIndexerClass]  # type: ignore
-    _index: cudf.core.index.BaseIndex
     _groupby = GroupBy
     _resampler = _Resampler
 
@@ -279,18 +285,21 @@ class IndexedFrame(Frame):
         "cummax": {"op_name": "cumulative max"},
     }
 
-    def __init__(self, data=None, index=None):
+    def __init__(
+        self,
+        data: ColumnAccessor | MutableMapping[Any, ColumnBase],
+        index: BaseIndex,
+    ):
         super().__init__(data=data)
-        # TODO: Right now it is possible to initialize an IndexedFrame without
-        # an index. The code's correctness relies on the subclass constructors
-        # assigning the attribute after the fact. We should restructure those
-        # to ensure that this constructor is always invoked with an index.
+        if not isinstance(index, cudf.core._base_index.BaseIndex):
+            raise ValueError(
+                f"index must be a cudf index not {type(index).__name__}"
+            )
         self._index = index
 
     @property
     def _num_rows(self) -> int:
         # Important to use the index because the data may be empty.
-        # TODO: Remove once DataFrame.__init__ is cleaned up
         return len(self.index)
 
     @property
@@ -304,6 +313,10 @@ class IndexedFrame(Frame):
         index: BaseIndex | None = None,
     ):
         out = super()._from_data(data)
+        if not (index is None or isinstance(index, BaseIndex)):
+            raise ValueError(
+                f"index must be None or a cudf.Index not {type(index).__name__}"
+            )
         out._index = RangeIndex(out._data.nrows) if index is None else index
         return out
 
@@ -1373,11 +1386,6 @@ class IndexedFrame(Frame):
         a    10
         b    34
         dtype: int64
-
-        .. pandas-compat::
-           :meth:`pandas.DataFrame.sum`, :meth:`pandas.Series.sum`
-
-            Parameters currently not supported are `level`, `numeric_only`.
         """
         return self._reduce(
             "sum",
@@ -1434,11 +1442,6 @@ class IndexedFrame(Frame):
         a      24
         b    5040
         dtype: int64
-
-        .. pandas-compat::
-            :meth:`pandas.DataFrame.product`, :meth:`pandas.Series.product`
-
-            Parameters currently not supported are level`, `numeric_only`.
         """
 
         return self._reduce(
@@ -1495,7 +1498,9 @@ class IndexedFrame(Frame):
             **kwargs,
         )
 
-    def median(self, axis=None, skipna=True, numeric_only=None, **kwargs):
+    def median(
+        self, axis=no_default, skipna=True, numeric_only=None, **kwargs
+    ):
         """
         Return the median of the values for the requested axis.
 
@@ -1529,11 +1534,6 @@ class IndexedFrame(Frame):
         dtype: int64
         >>> ser.median()
         17.0
-
-        .. pandas-compat::
-            :meth:`pandas.DataFrame.median`, :meth:`pandas.Series.median`
-
-            Parameters currently not supported are `level` and `numeric_only`.
         """
         return self._reduce(
             "median",
@@ -1585,12 +1585,6 @@ class IndexedFrame(Frame):
         a    1.290994
         b    1.290994
         dtype: float64
-
-        .. pandas-compat::
-            :meth:`pandas.DataFrame.std`, :meth:`pandas.Series.std`
-
-            Parameters currently not supported are `level` and
-            `numeric_only`
         """
 
         return self._reduce(
@@ -1644,12 +1638,6 @@ class IndexedFrame(Frame):
         a    1.666667
         b    1.666667
         dtype: float64
-
-        .. pandas-compat::
-            :meth:`pandas.DataFrame.var`, :meth:`pandas.Series.var`
-
-            Parameters currently not supported are `level` and
-            `numeric_only`
         """
         return self._reduce(
             "var",
@@ -1700,11 +1688,6 @@ class IndexedFrame(Frame):
         a   -1.2
         b   -1.2
         dtype: float64
-
-        .. pandas-compat::
-            :meth:`pandas.DataFrame.kurtosis`
-
-            Parameters currently not supported are `level` and `numeric_only`
         """
         if axis not in (0, "index", None, no_default):
             raise NotImplementedError("Only axis=0 is currently supported.")
@@ -2934,8 +2917,8 @@ class IndexedFrame(Frame):
         # Note that both Series and DataFrame return Series objects from this
         # calculation, necessitating the unfortunate circular reference to the
         # child class here.
-        return cudf.Series._from_data(
-            {None: libcudf.hash.hash([*self._columns], method, seed)},
+        return cudf.Series._from_column(
+            libcudf.hash.hash([*self._columns], method, seed),
             index=self.index,
         )
 
@@ -3219,13 +3202,13 @@ class IndexedFrame(Frame):
         distinct = libcudf.stream_compaction.distinct_indices(
             columns, keep=keep
         )
-        (result,) = libcudf.copying.scatter(
+        result = libcudf.copying.scatter(
             [cudf.Scalar(False, dtype=bool)],
             distinct,
             [as_column(True, length=len(self), dtype=bool)],
             bounds_check=False,
-        )
-        return cudf.Series(result, index=self.index)
+        )[0]
+        return cudf.Series._from_column(result, index=self.index)
 
     @_performance_tracking
     def _empty_like(self, keep_index=True) -> Self:
@@ -3506,7 +3489,7 @@ class IndexedFrame(Frame):
         col = _post_process_output_col(ans_col, retty)
 
         col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
-        result = cudf.Series._from_data({None: col}, self.index)
+        result = cudf.Series._from_column(col, index=self.index)
 
         return result
 
@@ -3588,10 +3571,34 @@ class IndexedFrame(Frame):
         if len(self) == 0:
             return self
 
+        try:
+            by_in_columns = self._get_columns_by_label(by)
+        except KeyError:
+            by_in_columns = None
+        if self.ndim == 1:
+            # For Series case, we're never selecting an index level.
+            by_in_index = None
+        else:
+            try:
+                by_in_index = self.index._get_columns_by_label(by)
+            except KeyError:
+                by_in_index = None
+
+        if by_in_columns is not None and by_in_index is not None:
+            raise ValueError(
+                f"{by=} appears in the {type(self).__name__} columns "
+                "and as an index level which is ambiguous."
+            )
+        elif by_in_columns is not None:
+            by_columns = by_in_columns
+        elif by_in_index is not None:
+            by_columns = by_in_index
+        else:
+            raise KeyError(by)
         # argsort the `by` column
         out = self._gather(
             GatherMap.from_column_unchecked(
-                self._get_columns_by_label(by)._get_sorted_inds(
+                by_columns._get_sorted_inds(
                     ascending=ascending, na_position=na_position
                 ),
                 len(self),
@@ -6276,7 +6283,7 @@ class IndexedFrame(Frame):
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
 
-        method_enum = libcudf.pylibcudf.aggregation.RankMethod[method.upper()]
+        method_enum = pylibcudf.aggregation.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
             raise ValueError(
                 "na_option must be one of 'keep', 'top', or 'bottom'"
@@ -6436,7 +6443,7 @@ def _get_replacement_values_for_columns(
         to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
         values_columns = {col: [value] for col in columns_dtype_map}
     elif cudf.api.types.is_list_like(to_replace) or isinstance(
-        to_replace, ColumnBase
+        to_replace, (ColumnBase, BaseIndex)
     ):
         if is_scalar(value):
             to_replace_columns = {col: to_replace for col in columns_dtype_map}
@@ -6450,7 +6457,9 @@ def _get_replacement_values_for_columns(
                 )
                 for col in columns_dtype_map
             }
-        elif cudf.api.types.is_list_like(value):
+        elif cudf.api.types.is_list_like(
+            value
+        ) or cudf.utils.dtypes.is_column_like(value):
             if len(to_replace) != len(value):
                 raise ValueError(
                     f"Replacement lists must be "
@@ -6462,9 +6471,6 @@ def _get_replacement_values_for_columns(
                     col: to_replace for col in columns_dtype_map
                 }
                 values_columns = {col: value for col in columns_dtype_map}
-        elif cudf.utils.dtypes.is_column_like(value):
-            to_replace_columns = {col: to_replace for col in columns_dtype_map}
-            values_columns = {col: value for col in columns_dtype_map}
         else:
             raise TypeError(
                 "value argument must be scalar, list-like or Series"
@@ -6559,12 +6565,13 @@ def _get_replacement_values_for_columns(
     return all_na_columns, to_replace_columns, values_columns
 
 
-def _is_series(obj):
+def _is_series(obj: Any) -> bool:
     """
     Checks if the `obj` is of type `cudf.Series`
     instead of checking for isinstance(obj, cudf.Series)
+    to avoid circular imports.
     """
-    return isinstance(obj, Frame) and obj.ndim == 1 and obj.index is not None
+    return isinstance(obj, IndexedFrame) and obj.ndim == 1
 
 
 @_performance_tracking
@@ -6614,7 +6621,11 @@ def _drop_rows_by_labels(
         # 3. Use "leftanti" join to drop
         # TODO: use internal API with "leftanti" and specify left and right
         # join keys to bypass logic check
-        to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
+        if isinstance(labels, ColumnBase):
+            join_index = cudf.Index._from_column(labels, name=level)
+        else:
+            join_index = cudf.Index(labels, name=level)
+        to_join = cudf.DataFrame(index=join_index)
         join_res = working_df.join(to_join, how="leftanti")
 
         # 4. Reconstruct original layout, and rename
@@ -6641,12 +6652,11 @@ def _drop_rows_by_labels(
         if errors == "raise" and not labels.isin(obj.index).all():
             raise KeyError("One or more values not found in axis")
 
-        key_df = cudf.DataFrame._from_data(
-            data={},
-            index=cudf.Index(
-                labels, name=getattr(labels, "name", obj.index.name)
-            ),
-        )
+        if isinstance(labels, ColumnBase):
+            idx = cudf.Index._from_column(labels, name=obj.index.name)
+        else:
+            idx = cudf.Index(labels, name=labels.name)
+        key_df = cudf.DataFrame._from_data(data={}, index=idx)
         if isinstance(obj, cudf.DataFrame):
             res = obj.join(key_df, how="leftanti")
         else:

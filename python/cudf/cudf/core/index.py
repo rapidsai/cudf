@@ -5,6 +5,7 @@ from __future__ import annotations
 import operator
 import pickle
 import warnings
+from collections.abc import Hashable
 from functools import cache, cached_property
 from numbers import Number
 from typing import TYPE_CHECKING, Any, Literal, MutableMapping, cast
@@ -17,7 +18,6 @@ from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.types import size_type_dtype
@@ -450,6 +450,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
             return self.start + index * self.step
         return self._as_int_index()[index]
 
+    def _get_columns_by_label(self, labels) -> Index:
+        # used in .sort_values
+        if isinstance(labels, Hashable):
+            if labels == self.name:
+                return self._as_int_index()
+        elif is_list_like(labels):
+            if list(self.names) == list(labels):
+                return self._as_int_index()
+        raise KeyError(labels)
+
     @_performance_tracking
     def equals(self, other) -> bool:
         if isinstance(other, RangeIndex):
@@ -808,22 +818,23 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         gather_map = cudf.core.column.as_column(gather_map)
-        return cudf.Index._from_data(
-            {self.name: self._values.take(gather_map, nullify, check_bounds)}
+        return cudf.Index._from_column(
+            self._column.take(gather_map, nullify, check_bounds),
+            name=self.name,
         )
 
     @_performance_tracking
     def _apply_boolean_mask(self, boolean_mask):
-        return cudf.Index._from_data(
-            {self.name: self._values.apply_boolean_mask(boolean_mask)}
+        return cudf.Index._from_column(
+            self._column.apply_boolean_mask(boolean_mask), name=self.name
         )
 
     def repeat(self, repeats, axis=None):
         return self._as_int_index().repeat(repeats, axis)
 
     def _split(self, splits):
-        return cudf.Index._from_data(
-            {self.name: self._as_int_index()._split(splits)}
+        return cudf.Index._from_column(
+            self._as_int_index()._split(splits), name=self.name
         )
 
     def _binaryop(self, other, op: str):
@@ -1073,6 +1084,19 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @classmethod
     @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None
+    ) -> Self:
+        if cls is Index:
+            ca = cudf.core.column_accessor.ColumnAccessor(
+                {name: column}, verify=False
+            )
+            return _index_from_data(ca)
+        else:
+            return super()._from_column(column, name=name)
+
+    @classmethod
+    @_performance_tracking
     def _from_data(cls, data: MutableMapping, name: Any = no_default) -> Self:
         out = super()._from_data(data=data)
         if name is not no_default:
@@ -1092,8 +1116,30 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     @classmethod
     @_performance_tracking
     def from_arrow(cls, obj):
+        """Create from PyArrow Array/ChunkedArray.
+
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+            PyArrow Object which has to be converted.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        SingleColumnFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
+        Index(['a', 'b', <NA>], dtype='object')
+        """
         try:
-            return cls(ColumnBase.from_arrow(obj))
+            return cls._from_column(ColumnBase.from_arrow(obj))
         except TypeError:
             # Try interpreting object as a MultiIndex before failing.
             return cudf.MultiIndex.from_arrow(obj)
@@ -1180,8 +1226,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         if all(isinstance(obj, RangeIndex) for obj in non_empties):
             result = _concat_range_index(non_empties)
         else:
-            data = concat_columns([o._values for o in non_empties])
-            result = Index(data)
+            data = concat_columns([o._column for o in non_empties])
+            result = Index._from_column(data)
 
         names = {obj.name for obj in objs}
         if len(names) == 1:
@@ -1297,22 +1343,22 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             return _return_get_indexer_result(result.values)
 
         scatter_map, indices = libcudf.join.join([lcol], [rcol], how="inner")
-        (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
-        result_series = cudf.Series(result)
+        result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
+        result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
             result_series = _get_indexer_basic(
                 index=self,
                 positions=result_series,
                 method=method,
-                target_col=cudf.Series(needle),
+                target_col=cudf.Series._from_column(needle),
                 tolerance=tolerance,
             )
         elif method == "nearest":
             result_series = _get_nearest_indexer(
                 index=self,
                 positions=result_series,
-                target_col=cudf.Series(needle),
+                target_col=cudf.Series._from_column(needle),
                 tolerance=tolerance,
             )
         elif method is not None:
@@ -1448,7 +1494,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def __getitem__(self, index):
         res = self._get_elements_from_column(index)
         if isinstance(res, ColumnBase):
-            res = Index(res, name=self.name)
+            res = Index._from_column(res, name=self.name)
         return res
 
     @property  # type: ignore
@@ -1567,8 +1613,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 if isinstance(self, (DatetimeIndex, TimedeltaIndex))
                 else str(cudf.NA)
             )
-            return cudf.Index(
-                self._values.astype("str").fillna(fill_value),
+            return cudf.Index._from_column(
+                self._column.astype("str").fillna(fill_value),
                 name=self.name,
             )
 
@@ -1823,6 +1869,17 @@ class DatetimeIndex(Index):
         result._freq = _validate_freq(freq)
         return result
 
+    @classmethod
+    @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None, freq: Any = None
+    ) -> Self:
+        if column.dtype.kind != "M":
+            raise ValueError("column must have a datetime type.")
+        result = super()._from_column(column, name=name)
+        result._freq = _validate_freq(freq)
+        return result
+
     def __getitem__(self, index):
         value = super().__getitem__(index)
         if cudf.get_option("mode.pandas_compatible") and isinstance(
@@ -1880,8 +1937,8 @@ class DatetimeIndex(Index):
         date_format : str
             Date format string (e.g. "%Y-%m-%d").
         """
-        return Index._from_data(
-            {self.name: self._column.strftime(date_format)}
+        return Index._from_column(
+            self._column.strftime(date_format), name=self.name
         )
 
     @property
@@ -1946,7 +2003,9 @@ class DatetimeIndex(Index):
         return self.to_pandas().to_pydatetime()
 
     def to_julian_date(self) -> Index:
-        return Index._from_data({self.name: self._column.to_julian_date()})
+        return Index._from_column(
+            self._column.to_julian_date(), name=self.name
+        )
 
     def to_period(self, freq) -> pd.PeriodIndex:
         return self.to_pandas().to_period(freq=freq)
@@ -1957,7 +2016,9 @@ class DatetimeIndex(Index):
 
         Currently not implemented.
         """
-        return type(self)._from_data({self.name: self._column.normalize()})
+        return type(self)._from_column(
+            self._column.normalize(), name=self.name
+        )
 
     @property
     def time(self) -> np.ndarray:
@@ -2041,7 +2102,7 @@ class DatetimeIndex(Index):
         """
         Get the total number of days in the month that the date falls on.
         """
-        return Index._from_data({self.name: self._column.days_in_month})
+        return Index._from_column(self._column.days_in_month, name=self.name)
 
     daysinmonth = days_in_month
 
@@ -2050,7 +2111,7 @@ class DatetimeIndex(Index):
         """
         Get the day of week that the date falls on.
         """
-        return Index._from_data({self.name: self._column.day_of_week})
+        return Index._from_column(self._column.day_of_week, name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -2191,15 +2252,15 @@ class DatetimeIndex(Index):
         >>> datetime_index.microsecond
         Index([0, 1, 2], dtype='int32')
         """  # noqa: E501
-        return Index(
+        return Index._from_column(
             (
                 # Need to manually promote column to int32 because
                 # pandas-matching binop behaviour requires that this
                 # __mul__ returns an int16 column.
-                self._values.get_dt_field("millisecond").astype("int32")
+                self._column.get_dt_field("millisecond").astype("int32")
                 * cudf.Scalar(1000, dtype="int32")
             )
-            + self._values.get_dt_field("microsecond"),
+            + self._column.get_dt_field("microsecond"),
             name=self.name,
         )
 
@@ -2331,7 +2392,7 @@ class DatetimeIndex(Index):
         ndarray
         Booleans indicating if dates belong to a leap year.
         """
-        res = is_leap_year(self._values).fillna(False)
+        res = self._column.is_leap_year.fillna(False)
         return cupy.asarray(res)
 
     @property  # type: ignore
@@ -2357,8 +2418,7 @@ class DatetimeIndex(Index):
         >>> gIndex.quarter
         Index([2, 4], dtype='int8')
         """
-        res = extract_quarter(self._values)
-        return Index(res, dtype="int8")
+        return Index._from_column(self._column.quarter.astype("int8"))
 
     @_performance_tracking
     def day_name(self, locale: str | None = None) -> Index:
@@ -2371,14 +2431,16 @@ class DatetimeIndex(Index):
         >>> datetime_index = cudf.date_range("2016-12-31", "2017-01-08", freq="D")
         >>> datetime_index
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
-                       '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07'],
+                       '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                       '2017-01-08'],
                       dtype='datetime64[ns]', freq='D')
         >>> datetime_index.day_name()
         Index(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-               'Friday', 'Saturday'], dtype='object')
+               'Friday', 'Saturday', 'Sunday'],
+              dtype='object')
         """
         day_names = self._column.get_day_names(locale)
-        return Index._from_data({self.name: day_names})
+        return Index._from_column(day_names, name=self.name)
 
     @_performance_tracking
     def month_name(self, locale: str | None = None) -> Index:
@@ -2397,7 +2459,7 @@ class DatetimeIndex(Index):
         Index(['December', 'January', 'January', 'January', 'January', 'February'], dtype='object')
         """
         month_names = self._column.get_month_names(locale)
-        return Index._from_data({self.name: month_names})
+        return Index._from_column(month_names, name=self.name)
 
     @_performance_tracking
     def isocalendar(self) -> cudf.DataFrame:
@@ -2436,14 +2498,15 @@ class DatetimeIndex(Index):
     @_performance_tracking
     def _get_dt_field(self, field: str) -> Index:
         """Return an Index of a numerical component of the DatetimeIndex."""
-        out_column = self._values.get_dt_field(field)
+        out_column = self._column.get_dt_field(field)
         out_column = NumericalColumn(
             data=out_column.base_data,
+            size=out_column.size,
             dtype=out_column.dtype,
             mask=out_column.base_mask,
             offset=out_column.offset,
         )
-        return Index(out_column, name=self.name)
+        return Index._from_column(out_column, name=self.name)
 
     def _is_boolean(self):
         return False
@@ -2477,9 +2540,7 @@ class DatetimeIndex(Index):
         >>> gIndex.ceil("T")
         DatetimeIndex(['2020-05-31 08:06:00', '1999-12-31 18:41:00'], dtype='datetime64[ns]')
         """  # noqa: E501
-        out_column = self._values.ceil(freq)
-
-        return self.__class__._from_data({self.name: out_column})
+        return type(self)._from_column(self._column.ceil(freq), name=self.name)
 
     @_performance_tracking
     def floor(self, freq):
@@ -2510,9 +2571,9 @@ class DatetimeIndex(Index):
         >>> gIndex.floor("T")
         DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'], dtype='datetime64[ns]')
         """  # noqa: E501
-        out_column = self._values.floor(freq)
-
-        return self.__class__._from_data({self.name: out_column})
+        return type(self)._from_column(
+            self._column.floor(freq), name=self.name
+        )
 
     @_performance_tracking
     def round(self, freq):
@@ -2550,9 +2611,9 @@ class DatetimeIndex(Index):
         >>> dt_idx.round('T')
         DatetimeIndex(['2001-01-01 00:05:00', '2001-01-01 00:05:00', '2001-01-01 00:05:00'], dtype='datetime64[ns]')
         """  # noqa: E501
-        out_column = self._values.round(freq)
-
-        return self.__class__._from_data({self.name: out_column})
+        return type(self)._from_column(
+            self._column.round(freq), name=self.name
+        )
 
     def tz_localize(
         self,
@@ -2602,8 +2663,8 @@ class DatetimeIndex(Index):
         to 'NaT'.
         """  # noqa: E501
         result_col = self._column.tz_localize(tz, ambiguous, nonexistent)
-        return DatetimeIndex._from_data(
-            {self.name: result_col}, freq=self._freq
+        return DatetimeIndex._from_column(
+            result_col, name=self.name, freq=self._freq
         )
 
     def tz_convert(self, tz: str | None):
@@ -2639,7 +2700,7 @@ class DatetimeIndex(Index):
                       dtype='datetime64[ns, Europe/London]')
         """  # noqa: E501
         result_col = self._column.tz_convert(tz)
-        return DatetimeIndex._from_data({self.name: result_col})
+        return DatetimeIndex._from_column(result_col, name=self.name)
 
     def repeat(self, repeats, axis=None):
         res = super().repeat(repeats, axis=axis)
@@ -2749,6 +2810,15 @@ class TimedeltaIndex(Index):
 
         super().__init__(data, name=name)
 
+    @classmethod
+    @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None, freq: Any = None
+    ) -> Self:
+        if column.dtype.kind != "m":
+            raise ValueError("column must have a timedelta type.")
+        return super()._from_column(column, name=name)
+
     def __getitem__(self, index):
         value = super().__getitem__(index)
         if cudf.get_option("mode.pandas_compatible") and isinstance(
@@ -2831,7 +2901,7 @@ class TimedeltaIndex(Index):
 
         This method is currently not implemented.
         """
-        return type(self)._from_data({self.name: self._column.ceil(freq)})
+        return type(self)._from_column(self._column.ceil(freq), name=self.name)
 
     def floor(self, freq: str) -> Self:
         """
@@ -2839,7 +2909,9 @@ class TimedeltaIndex(Index):
 
         This method is currently not implemented.
         """
-        return type(self)._from_data({self.name: self._column.floor(freq)})
+        return type(self)._from_column(
+            self._column.floor(freq), name=self.name
+        )
 
     def round(self, freq: str) -> Self:
         """
@@ -2847,41 +2919,51 @@ class TimedeltaIndex(Index):
 
         This method is currently not implemented.
         """
-        return type(self)._from_data({self.name: self._column.round(freq)})
+        return type(self)._from_column(
+            self._column.round(freq), name=self.name
+        )
 
     @property  # type: ignore
     @_performance_tracking
-    def days(self):
+    def days(self) -> cudf.Index:
         """
         Number of days for each element.
         """
         # Need to specifically return `int64` to avoid overflow.
-        return Index(self._values.days, name=self.name, dtype="int64")
+        return Index._from_column(
+            self._column.days.astype("int64"), name=self.name
+        )
 
     @property  # type: ignore
     @_performance_tracking
-    def seconds(self):
+    def seconds(self) -> cudf.Index:
         """
         Number of seconds (>= 0 and less than 1 day) for each element.
         """
-        return Index(self._values.seconds, name=self.name, dtype="int32")
+        return Index._from_column(
+            self._column.seconds.astype("int32"), name=self.name
+        )
 
     @property  # type: ignore
     @_performance_tracking
-    def microseconds(self):
+    def microseconds(self) -> cudf.Index:
         """
         Number of microseconds (>= 0 and less than 1 second) for each element.
         """
-        return Index(self._values.microseconds, name=self.name, dtype="int32")
+        return Index._from_column(
+            self._column.microseconds.astype("int32"), name=self.name
+        )
 
     @property  # type: ignore
     @_performance_tracking
-    def nanoseconds(self):
+    def nanoseconds(self) -> cudf.Index:
         """
         Number of nanoseconds (>= 0 and less than 1 microsecond) for each
         element.
         """
-        return Index(self._values.nanoseconds, name=self.name, dtype="int32")
+        return Index._from_column(
+            self._column.nanoseconds.astype("int32"), name=self.name
+        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -3016,17 +3098,26 @@ class CategoricalIndex(Index):
             data = data.as_ordered(ordered=False)
         super().__init__(data, name=name)
 
+    @classmethod
+    @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None, freq: Any = None
+    ) -> Self:
+        if not isinstance(column.dtype, cudf.CategoricalDtype):
+            raise ValueError("column must have a categorial type.")
+        return super()._from_column(column, name=name)
+
     @property
     def ordered(self) -> bool:
         return self._column.ordered
 
     @property  # type: ignore
     @_performance_tracking
-    def codes(self):
+    def codes(self) -> cudf.Index:
         """
         The category codes of this categorical.
         """
-        return Index(self._values.codes)
+        return Index._from_column(self._column.codes)
 
     @property  # type: ignore
     @_performance_tracking
@@ -3049,24 +3140,24 @@ class CategoricalIndex(Index):
         `new_categories` will be included at the last/highest place in the
         categories and will be unused directly after this call.
         """
-        return type(self)._from_data(
-            {self.name: self._column.add_categories(new_categories)}
+        return type(self)._from_column(
+            self._column.add_categories(new_categories), name=self.name
         )
 
     def as_ordered(self) -> Self:
         """
         Set the Categorical to be ordered.
         """
-        return type(self)._from_data(
-            {self.name: self._column.as_ordered(ordered=True)}
+        return type(self)._from_column(
+            self._column.as_ordered(ordered=True), name=self.name
         )
 
     def as_unordered(self) -> Self:
         """
         Set the Categorical to be unordered.
         """
-        return type(self)._from_data(
-            {self.name: self._column.as_ordered(ordered=False)}
+        return type(self)._from_column(
+            self._column.as_ordered(ordered=False), name=self.name
         )
 
     def remove_categories(self, removals) -> Self:
@@ -3080,8 +3171,8 @@ class CategoricalIndex(Index):
         removals : category or list of categories
            The categories which should be removed.
         """
-        return type(self)._from_data(
-            {self.name: self._column.remove_categories(removals)}
+        return type(self)._from_column(
+            self._column.remove_categories(removals), name=self.name
         )
 
     def remove_unused_categories(self) -> Self:
@@ -3090,8 +3181,8 @@ class CategoricalIndex(Index):
 
         This method is currently not supported.
         """
-        return type(self)._from_data(
-            {self.name: self._column.remove_unused_categories()}
+        return type(self)._from_column(
+            self._column.remove_unused_categories(), name=self.name
         )
 
     def rename_categories(self, new_categories) -> Self:
@@ -3100,8 +3191,8 @@ class CategoricalIndex(Index):
 
         This method is currently not supported.
         """
-        return type(self)._from_data(
-            {self.name: self._column.rename_categories(new_categories)}
+        return type(self)._from_column(
+            self._column.rename_categories(new_categories), name=self.name
         )
 
     def reorder_categories(self, new_categories, ordered=None) -> Self:
@@ -3119,12 +3210,9 @@ class CategoricalIndex(Index):
            Whether or not the categorical is treated as a ordered categorical.
            If not given, do not change the ordered information.
         """
-        return type(self)._from_data(
-            {
-                self.name: self._column.reorder_categories(
-                    new_categories, ordered=ordered
-                )
-            }
+        return type(self)._from_column(
+            self._column.reorder_categories(new_categories, ordered=ordered),
+            name=self.name,
         )
 
     def set_categories(
@@ -3146,12 +3234,11 @@ class CategoricalIndex(Index):
             considered as a rename of the old categories
             or as reordered categories.
         """
-        return type(self)._from_data(
-            {
-                self.name: self._column.set_categories(
-                    new_categories, ordered=ordered, rename=rename
-                )
-            }
+        return type(self)._from_column(
+            self._column.set_categories(
+                new_categories, ordered=ordered, rename=rename
+            ),
+            name=self.name,
         )
 
 
@@ -3264,14 +3351,14 @@ def interval_range(
     if len(right_col) == 0 or len(left_col) == 0:
         dtype = IntervalDtype("int64", closed)
         data = column.column_empty_like_same_mask(left_col, dtype)
-        return IntervalIndex(data, closed=closed)
+        return IntervalIndex(data, closed=closed, name=name)
 
     interval_col = IntervalColumn(
         dtype=IntervalDtype(left_col.dtype, closed),
         size=len(left_col),
         children=(left_col, right_col),
     )
-    return IntervalIndex(interval_col, closed=closed)
+    return IntervalIndex(interval_col, closed=closed, name=name)
 
 
 class IntervalIndex(Index):
@@ -3365,6 +3452,15 @@ class IntervalIndex(Index):
     @property
     def closed(self):
         return self.dtype.closed
+
+    @classmethod
+    @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None, freq: Any = None
+    ) -> Self:
+        if not isinstance(column.dtype, cudf.IntervalDtype):
+            raise ValueError("column must have a interval type.")
+        return super()._from_column(column, name=name)
 
     @classmethod
     @_performance_tracking
@@ -3548,8 +3644,8 @@ class IntervalIndex(Index):
             Whether the intervals are closed on the left-side, right-side, both
             or neither.
         """
-        return type(self)._from_data(
-            {self.name: self._column.set_closed(closed)}
+        return type(self)._from_column(
+            self._column.set_closed(closed), name=self.name
         )
 
     def to_tuples(self, na_tuple: bool = True) -> pd.Index:
@@ -3635,15 +3731,7 @@ def as_index(
     elif isinstance(arbitrary, BaseIndex):
         idx = arbitrary.copy(deep=copy).rename(name)
     elif isinstance(arbitrary, ColumnBase):
-        idx = _index_from_data({name: arbitrary})
-    elif isinstance(arbitrary, cudf.Series):
-        return as_index(
-            arbitrary._column,
-            nan_as_null=nan_as_null,
-            copy=copy,
-            name=name,
-            dtype=dtype,
-        )
+        raise ValueError("Use cudf.Index._from_column instead.")
     elif isinstance(arbitrary, (pd.RangeIndex, range)):
         idx = RangeIndex(
             start=arbitrary.start,
@@ -3663,11 +3751,9 @@ def as_index(
     elif isinstance(arbitrary, cudf.DataFrame) or is_scalar(arbitrary):
         raise ValueError("Index data must be 1-dimensional and list-like")
     else:
-        return as_index(
+        return Index._from_column(
             column.as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null),
-            copy=copy,
             name=name,
-            dtype=dtype,
         )
     if dtype is not None:
         idx = idx.astype(dtype)
@@ -3704,7 +3790,9 @@ def _concat_range_index(indexes: list[RangeIndex]) -> BaseIndex:
         elif step is None:
             # First non-empty index had only one element
             if obj.start == start:
-                result = Index(concat_columns([x._values for x in indexes]))
+                result = Index._from_column(
+                    concat_columns([x._column for x in indexes])
+                )
                 return result
             step = obj.start - start
 
@@ -3712,7 +3800,9 @@ def _concat_range_index(indexes: list[RangeIndex]) -> BaseIndex:
             next_ is not None and obj.start != next_
         )
         if non_consecutive:
-            result = Index(concat_columns([x._values for x in indexes]))
+            result = Index._from_column(
+                concat_columns([x._column for x in indexes])
+            )
             return result
         if step is not None:
             next_ = obj[-1] + step
