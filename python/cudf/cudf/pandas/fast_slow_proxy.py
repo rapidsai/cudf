@@ -19,7 +19,6 @@ import numpy as np
 from ..options import _env_get_bool
 from ..testing import assert_eq
 from .annotation import nvtx
-from .proxy_base import ProxyNDarrayBase
 
 
 def call_operator(fn, args, kwargs):
@@ -565,11 +564,7 @@ class _FinalProxy(_FastSlowProxy):
         _FinalProxy subclasses can override this classmethod if they
         need particular behaviour when wrapped up.
         """
-        base_class = _get_proxy_base_class(cls)
-        if base_class is object:
-            proxy = base_class.__new__(cls)
-        else:
-            proxy = base_class.__new__(cls, value)
+        proxy = object.__new__(cls)
         proxy._fsproxy_wrapped = value
         return proxy
 
@@ -1196,19 +1191,6 @@ def is_proxy_object(obj: Any) -> bool:
     if _FastSlowProxyMeta in type(type(obj)).__mro__:
         return True
     return False
-
-
-def _get_proxy_base_class(cls):
-    """Returns the proxy base class if one exists"""
-    for proxy_class in PROXY_BASE_CLASSES:
-        if proxy_class in cls.__mro__:
-            return proxy_class
-    return object
-
-
-PROXY_BASE_CLASSES: set[type] = {
-    ProxyNDarrayBase,
-}
 
 
 NUMPY_TYPES: set[str] = set(np.sctypeDict.values())
