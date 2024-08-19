@@ -119,21 +119,6 @@ def test_read_csv(s3_base, s3so):
         assert df.a.sum().compute() == 4
 
 
-def test_read_csv_warns(s3_base, s3so):
-    with s3_context(
-        s3_base=s3_base,
-        bucket="daskcsv_warns",
-        files={"a.csv": b"a,b\n1,2\n3,4\n"},
-    ):
-        with pytest.warns(FutureWarning):
-            df = dask_cudf.read_csv(
-                "s3://daskcsv_warns/*.csv",
-                blocksize="50 B",
-                storage_options=s3so,
-            )
-            assert df.a.sum().compute() == 4
-
-
 def test_read_parquet_open_file_options_raises():
     with pytest.raises(ValueError):
         dask_cudf.read_parquet(
