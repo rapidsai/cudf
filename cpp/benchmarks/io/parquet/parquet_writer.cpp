@@ -212,7 +212,7 @@ NVBENCH_BENCH_TYPES(BM_parq_write_encode, NVBENCH_TYPE_AXES(d_type_list))
   .set_type_axes_names({"data_type"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
-  .add_int64_axis("compression", {0})
+  .add_int64_axis("compression", {1})
   .add_int64_axis("run_length", {1, 32});
 
 NVBENCH_BENCH_TYPES(BM_parq_write_io_compression, NVBENCH_TYPE_AXES(io_list, compression_list))
