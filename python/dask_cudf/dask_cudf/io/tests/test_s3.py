@@ -134,6 +134,14 @@ def test_read_csv_warns(s3_base, s3so):
             assert df.a.sum().compute() == 4
 
 
+def test_read_parquet_open_file_options_raises():
+    with pytest.raises(ValueError):
+        dask_cudf.read_parquet(
+            "s3://my/path",
+            open_file_options={"precache_options": {"method": "parquet"}},
+        )
+
+
 def test_read_parquet_filesystem(s3_base, s3so, pdf):
     fname = "test_parquet_filesystem.parquet"
     bucket = "parquet"
