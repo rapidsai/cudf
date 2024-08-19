@@ -94,7 +94,7 @@ jobs:
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
-      script: ci/build_wheel_cpp.sh
+      script: ci/build_wheel_libcudf.sh
   wheel-publish-pylibcudf:
     needs: wheel-build-libcudf
     secrets: inherit

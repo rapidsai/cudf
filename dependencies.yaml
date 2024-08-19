@@ -140,14 +140,14 @@ files:
     includes:
       - test_python_common
       - test_python_cudf
-  py_rapids_build_pylibcudf:
+  py_build_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
     extras:
       table: build-system
     includes:
       - rapids_build_skbuild
-  py_build_pylibcudf:
+  py_rapids_build_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
     extras:
@@ -392,6 +392,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
+          - &libcudf_unsuffixed libcudf==24.10.*,>=0.0.0a0
           - &rmm_unsuffixed rmm==24.10.*,>=0.0.0a0
       - output_types: requirements
         packages:
@@ -406,13 +407,15 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
+              - &libcudf_cu12 libcudf-cu12==24.10.*,>=0.0.0a0
               - rmm-cu12==24.10.*,>=0.0.0a0
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
+              - &libcudf_cu11 libcudf-cu11==24.10.*,>=0.0.0a0
               - rmm-cu11==24.10.*,>=0.0.0a0
-          - {matrix: null, packages: [*rmm_unsuffixed]}
+          - {matrix: null, packages: [*libcudf_unsuffixed, *rmm_unsuffixed]}
   build_python_cudf:
     common:
       - output_types: conda
@@ -492,7 +495,7 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - &libcudf_unsuffixed libcudf==24.10.*,>=0.0.0a0
+          - *libcudf_unsuffixed
     specific:
       - output_types: [pyproject]
         matrices:
@@ -696,6 +699,7 @@ dependencies:
           - typing_extensions>=4.0.0
       - output_types: conda
         packages:
+          - *libcudf_unsuffixed
           - *rmm_unsuffixed
       - output_types: requirements
         packages:
@@ -719,13 +723,15 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
+              - *libcudf_cu12
               - rmm-cu12==24.10.*,>=0.0.0a0
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
+              - *libcudf_cu11
               - rmm-cu11==24.10.*,>=0.0.0a0
-          - {matrix: null, packages: [*rmm_unsuffixed]}
+          - {matrix: null, packages: [*libcudf_unsuffixed, *rmm_unsuffixed]}
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]

@@ -48,7 +48,7 @@ endif()
 # are installed to. Since there are multiple subpackages of cudf._lib that require access to
 # libcudf, we place the library and all its dependent artifacts in the cudf directory as a single
 # source of truth.
-include(cmake/Modules/WheelHelpers.cmake)
+include(../pylibcudf/cmake/Modules/WheelHelpers.cmake)
 
 # TODO: This install is currently overzealous. We should only install the libraries that are
 # downloaded by CPM during the build, not libraries that were found on the system.  However, in

@@ -31,10 +31,11 @@ def load_library():
     except OSError:
         # If neither of these directories contain the library, we assume we are in an
         # environment where the C++ library is already installed somewhere else and the
-        # CMake build of the libcudf Python package was a no-op. Note that this approach
-        # won't work for real editable installs of the libcudf package, but that's not a
-        # use case I think we need to support. scikit-build-core has limited support for
-        # importlib.resources so there isn't a clean way to support that case yet.
+        # CMake build of the libcudf Python package was a no-op.
+        #
+        # Note that this approach won't work for real editable installs of the libcudf package.
+        # scikit-build-core has limited support for importlib.resources so there isn't a clean
+        # way to support that case yet.
         for lib_dir in ("lib", "lib64"):
             if os.path.isfile(
                 lib := os.path.join(
