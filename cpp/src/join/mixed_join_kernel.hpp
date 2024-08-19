@@ -23,7 +23,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/span.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -77,4 +77,4 @@ void launch_mixed_join(table_device_view left_table,
 
 }  // namespace detail
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

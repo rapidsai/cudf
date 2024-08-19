@@ -29,7 +29,7 @@
 #include <cub/cub.cuh>
 #include <thrust/iterator/discard_iterator.h>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -82,4 +82,4 @@ std::size_t launch_compute_mixed_join_output_size(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -19,6 +19,7 @@
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 #include "mixed_join_common_utils.cuh"
+#include "mixed_join_kernel.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
