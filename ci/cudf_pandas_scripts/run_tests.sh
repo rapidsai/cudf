@@ -11,11 +11,12 @@ mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 
 # Function to display script usage
 function display_usage {
-    echo "Usage: $0 [--no-cudf]"
+    echo "Usage: $0 [--no-cudf] [pandas-version]"
 }
 
 # Default value for the --no-cudf option
 no_cudf=false
+PANDAS_VERSION=""
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -25,9 +26,14 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         *)
-            echo "Error: Unknown option $1"
-            display_usage
-            exit 1
+            if [[ -z "$PANDAS_VERSION" ]]; then
+                PANDAS_VERSION=$1
+                shift
+            else
+                echo "Error: Unknown option $1"
+                display_usage
+                exit 1
+            fi
             ;;
     esac
 done
@@ -40,6 +46,14 @@ else
     RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
     python -m pip install $(ls ./local-pylibcudf-dep/pylibcudf*.whl)
     python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,cudf-pandas-tests]
+fi
+
+# Conditionally install the specified version of pandas
+if [ -n "$PANDAS_VERSION" ]; then
+    echo "Installing pandas version: $PANDAS_VERSION"
+    python -m pip install pandas==$PANDAS_VERSION
+else
+    echo "No pandas version specified, using existing pandas installation"
 fi
 
 python -m pytest -p cudf.pandas \
