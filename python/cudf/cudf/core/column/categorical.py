@@ -642,7 +642,6 @@ class CategoricalColumn(column.ColumnBase):
             size=codes.size,
             dtype=self.dtype,
             mask=codes.base_mask,
-            offset=codes.offset,
             children=(codes,),
         )
         self._mimic_inplace(out, inplace=True)
