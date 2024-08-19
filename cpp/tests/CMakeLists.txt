@@ -333,9 +333,6 @@ target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
 ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
-if(CUDF_ENABLE_ARROW_S3)
-  target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
-endif()
 
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
