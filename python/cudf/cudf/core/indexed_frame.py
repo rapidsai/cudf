@@ -1386,11 +1386,6 @@ class IndexedFrame(Frame):
         a    10
         b    34
         dtype: int64
-
-        .. pandas-compat::
-           :meth:`pandas.DataFrame.sum`, :meth:`pandas.Series.sum`
-
-            Parameters currently not supported are `level`, `numeric_only`.
         """
         return self._reduce(
             "sum",
@@ -1447,11 +1442,6 @@ class IndexedFrame(Frame):
         a      24
         b    5040
         dtype: int64
-
-        .. pandas-compat::
-            :meth:`pandas.DataFrame.product`, :meth:`pandas.Series.product`
-
-            Parameters currently not supported are level`, `numeric_only`.
         """
 
         return self._reduce(
@@ -1508,7 +1498,9 @@ class IndexedFrame(Frame):
             **kwargs,
         )
 
-    def median(self, axis=None, skipna=True, numeric_only=None, **kwargs):
+    def median(
+        self, axis=no_default, skipna=True, numeric_only=None, **kwargs
+    ):
         """
         Return the median of the values for the requested axis.
 
@@ -1542,11 +1534,6 @@ class IndexedFrame(Frame):
         dtype: int64
         >>> ser.median()
         17.0
-
-        .. pandas-compat::
-            :meth:`pandas.DataFrame.median`, :meth:`pandas.Series.median`
-
-            Parameters currently not supported are `level` and `numeric_only`.
         """
         return self._reduce(
             "median",
@@ -1598,12 +1585,6 @@ class IndexedFrame(Frame):
         a    1.290994
         b    1.290994
         dtype: float64
-
-        .. pandas-compat::
-            :meth:`pandas.DataFrame.std`, :meth:`pandas.Series.std`
-
-            Parameters currently not supported are `level` and
-            `numeric_only`
         """
 
         return self._reduce(
@@ -1657,12 +1638,6 @@ class IndexedFrame(Frame):
         a    1.666667
         b    1.666667
         dtype: float64
-
-        .. pandas-compat::
-            :meth:`pandas.DataFrame.var`, :meth:`pandas.Series.var`
-
-            Parameters currently not supported are `level` and
-            `numeric_only`
         """
         return self._reduce(
             "var",
@@ -1713,11 +1688,6 @@ class IndexedFrame(Frame):
         a   -1.2
         b   -1.2
         dtype: float64
-
-        .. pandas-compat::
-            :meth:`pandas.DataFrame.kurtosis`
-
-            Parameters currently not supported are `level` and `numeric_only`
         """
         if axis not in (0, "index", None, no_default):
             raise NotImplementedError("Only axis=0 is currently supported.")
