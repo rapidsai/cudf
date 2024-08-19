@@ -46,6 +46,8 @@ set(CUDA_STATIC_RUNTIME ON)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
+include(../pylibcudf/cmake/Modules/LinkPyarrowHeaders.cmake)
+
 add_subdirectory(../../cpp cudf-cpp)
 
 # Ensure other libraries needed by libcudf.so get installed alongside it.
