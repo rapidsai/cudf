@@ -137,24 +137,22 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/build_wheel_pylibcudf.sh"
-  wheel-build-python:
+  wheel-build-cudf:
     needs: [checks, wheel-build-cpp]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.10
     with:
       build_type: pull-request
       script: "ci/build_wheel_python.sh"
-  wheel-tests-python:
-    needs: wheel-build-python
+  wheel-tests-cudf:
+    needs: wheel-build-cudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
     with:
       build_type: pull-request
       script: ci/test_wheel_cudf.sh
   wheel-build-cudf-polars:
-    needs:
-      - wheel-build-pylibcudf
-      - wheel-build-cudf
+    needs: [wheel-build-pylibcudf, wheel-build-cudf]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.10
     with:
@@ -174,7 +172,7 @@ jobs:
       # pylibcudf or cudf_polars
       script: "ci/test_wheel_cudf_polars.sh"
   wheel-build-dask-cudf:
-    needs: wheel-build-python
+    needs: wheel-build-cudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.10
     with:
@@ -202,7 +200,7 @@ jobs:
         build-all -DBUILD_BENCHMARKS=ON --verbose;
         sccache -s;
   unit-tests-cudf-pandas:
-    needs: wheel-build-python
+    needs: wheel-build-cudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
     with:
@@ -212,7 +210,7 @@ jobs:
       script: ci/cudf_pandas_scripts/run_tests.sh
   pandas-tests:
     # run the Pandas unit tests using PR branch
-    needs: wheel-build-python
+    needs: wheel-build-cudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
     with:

@@ -506,7 +506,7 @@ dependencies:
               cuda_suffixed: "true"
             packages:
               - libcudf-cu11==24.10.*,>=0.0.0a0
-          - {matrix: null, packages: [*libcudf_unsuffixed] }
+          - {matrix: null, packages: [*libcudf_unsuffixed]}
   cuda_version:
     specific:
       - output_types: conda
