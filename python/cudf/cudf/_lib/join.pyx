@@ -4,7 +4,7 @@ from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
 
-from cudf._lib import pylibcudf
+import pylibcudf
 
 # The functions below return the *gathermaps* that represent
 # the join result when joining on the keys `lhs` and `rhs`.

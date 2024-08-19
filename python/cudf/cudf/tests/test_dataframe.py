@@ -9409,7 +9409,6 @@ def test_rename_for_level_RangeIndex_dataframe():
     assert_eq(expect, got)
 
 
-@pytest_xfail(reason="level=None not implemented yet")
 def test_rename_for_level_is_None_MC():
     gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
     gdf.columns = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1)])
@@ -11115,3 +11114,9 @@ def test_bool_raises():
         lfunc_args_and_kwargs=[[cudf.DataFrame()]],
         rfunc_args_and_kwargs=[[pd.DataFrame()]],
     )
+
+
+def test_from_pandas_preserve_column_dtype():
+    df = pd.DataFrame([[1, 2]], columns=pd.Index([1, 2], dtype="int8"))
+    result = cudf.DataFrame.from_pandas(df)
+    pd.testing.assert_index_equal(result.columns, df.columns, exact=True)

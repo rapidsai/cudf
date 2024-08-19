@@ -401,3 +401,9 @@ def test_from_tuples():
     result = cudf.IntervalIndex.from_tuples(data, closed="left", name="a")
     expected = pd.IntervalIndex.from_tuples(data, closed="left", name="a")
     assert_eq(result, expected)
+
+
+def test_interval_range_name():
+    expected = pd.interval_range(start=0, periods=5, freq=2, name="foo")
+    result = cudf.interval_range(start=0, periods=5, freq=2, name="foo")
+    assert_eq(result, expected)

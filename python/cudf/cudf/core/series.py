@@ -518,7 +518,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @classmethod
     @_performance_tracking
-    def from_arrow(cls, array: pa.Array):
+    def from_arrow(cls, array: pa.Array) -> Self:
         """Create from PyArrow Array/ChunkedArray.
 
         Parameters
@@ -3245,8 +3245,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             interval_col = IntervalColumn.from_struct_column(
                 res.index._column._get_decategorized_column()
             )
-            res.index = cudf.IntervalIndex._from_data(
-                {res.index.name: interval_col}
+            res.index = cudf.IntervalIndex._from_column(
+                interval_col, name=res.index.name
             )
         res.name = result_name
         return res
@@ -3589,6 +3589,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             raise NotImplementedError("level is currently not supported.")
         if errors != "ignore":
             raise NotImplementedError("errors is currently not supported.")
+        if not is_scalar(index):
+            raise NotImplementedError(
+                ".rename does not currently support relabeling the index."
+            )
         out_data = self._data.copy(deep=copy)
         return Series._from_data(out_data, self.index, name=index)
 

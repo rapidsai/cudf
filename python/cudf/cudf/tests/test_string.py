@@ -978,6 +978,22 @@ def test_string_split_re(data, pat, n, expand):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("pat", [None, "\\s+"])
+@pytest.mark.parametrize("regex", [False, True])
+@pytest.mark.parametrize("expand", [False, True])
+def test_string_split_all_empty(pat, regex, expand):
+    ps = pd.Series(["", "", "", ""], dtype="str")
+    gs = cudf.Series(["", "", "", ""], dtype="str")
+
+    expect = ps.str.split(pat=pat, expand=expand, regex=regex)
+    got = gs.str.split(pat=pat, expand=expand, regex=regex)
+
+    if isinstance(got, cudf.DataFrame):
+        assert_eq(expect, got, check_column_type=False)
+    else:
+        assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
 )
@@ -1076,7 +1092,7 @@ def test_string_index():
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = cudf.Index(
+    stringIndex = cudf.Index._from_column(
         cudf.core.column.as_column(["a", "b", "c", "d", "e"]), name="name"
     )
     pdf.index = stringIndex.to_pandas()
