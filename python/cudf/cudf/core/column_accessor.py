@@ -352,6 +352,9 @@ class ColumnAccessor(abc.MutableMapping):
             new_values = self.columns[:loc] + (value,) + self.columns[loc:]
             self._data = self._data.__class__(zip(new_keys, new_values))
         self._clear_cache(old_ncols, old_ncols + 1)
+        if old_ncols == 0:
+            # The type(name) may no longer match the prior label_dtype
+            self.label_dtype = None
 
     def copy(self, deep=False) -> ColumnAccessor:
         """
@@ -610,7 +613,7 @@ class ColumnAccessor(abc.MutableMapping):
         return key + (pad_value,) * (self.nlevels - len(key))
 
     def rename_levels(
-        self, mapper: Mapping[Any, Any] | Callable, level: int | None
+        self, mapper: Mapping[Any, Any] | Callable, level: int | None = None
     ) -> ColumnAccessor:
         """
         Rename the specified levels of the given ColumnAccessor
@@ -653,10 +656,7 @@ class ColumnAccessor(abc.MutableMapping):
                 return x
 
             if level is None:
-                raise NotImplementedError(
-                    "Renaming columns with a MultiIndex and level=None is"
-                    "not supported"
-                )
+                level = 0
             new_col_names = (rename_column(k) for k in self.keys())
 
         else:

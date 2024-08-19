@@ -2,5 +2,5 @@
 slice
 =====
 
-.. automodule:: cudf._lib.pylibcudf.strings.slice
+.. automodule:: pylibcudf.strings.slice
    :members:
