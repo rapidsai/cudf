@@ -16,7 +16,8 @@
 
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
-#include "mixed_join_kernels.cuh"
+#include "mixed_join_kernel.hpp"
+#include "mixed_join_size_kernel.hpp"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -247,37 +248,39 @@ mixed_join(
   auto const& join_output_r = right_indices->data();
 
   if (has_nulls) {
-    mixed_join<DEFAULT_JOIN_BLOCK_SIZE, true>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_conditional_view,
-        *right_conditional_view,
-        *probe_view,
-        *build_view,
-        hash_probe,
-        equality_probe,
-        kernel_join_type,
-        hash_table_view,
-        join_output_l,
-        join_output_r,
-        parser.device_expression_data,
-        join_result_offsets.data(),
-        swap_tables);
+    launch_mixed_join<true>(*left_conditional_view,
+                            *right_conditional_view,
+                            *probe_view,
+                            *build_view,
+                            hash_probe,
+                            equality_probe,
+                            kernel_join_type,
+                            hash_table_view,
+                            join_output_l,
+                            join_output_r,
+                            parser.device_expression_data,
+                            join_result_offsets.data(),
+                            swap_tables,
+                            config,
+                            shmem_size_per_block,
+                            stream);
   } else {
-    mixed_join<DEFAULT_JOIN_BLOCK_SIZE, false>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_conditional_view,
-        *right_conditional_view,
-        *probe_view,
-        *build_view,
-        hash_probe,
-        equality_probe,
-        kernel_join_type,
-        hash_table_view,
-        join_output_l,
-        join_output_r,
-        parser.device_expression_data,
-        join_result_offsets.data(),
-        swap_tables);
+    launch_mixed_join<false>(*left_conditional_view,
+                             *right_conditional_view,
+                             *probe_view,
+                             *build_view,
+                             hash_probe,
+                             equality_probe,
+                             kernel_join_type,
+                             hash_table_view,
+                             join_output_l,
+                             join_output_r,
+                             parser.device_expression_data,
+                             join_result_offsets.data(),
+                             swap_tables,
+                             config,
+                             shmem_size_per_block,
+                             stream);
   }
 
   auto join_indices = std::pair(std::move(left_indices), std::move(right_indices));

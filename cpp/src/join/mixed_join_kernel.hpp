@@ -18,7 +18,6 @@
 
 #include "join/join_common_utils.hpp"
 #include "join/mixed_join_common_utils.cuh"
-#include "join/mixed_join_size_kernel.hpp"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -58,20 +57,23 @@ namespace detail {
  * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  */
-template <cudf::size_type block_size, bool has_nulls>
-__global__ void mixed_join(table_device_view left_table,
-                           table_device_view right_table,
-                           table_device_view probe,
-                           table_device_view build,
-                           row_hash const hash_probe,
-                           row_equality const equality_probe,
-                           join_kind const join_type,
-                           cudf::detail::mixed_multimap_type::device_view hash_table_view,
-                           size_type* join_output_l,
-                           size_type* join_output_r,
-                           cudf::ast::detail::expression_device_view device_expression_data,
-                           cudf::size_type const* join_result_offsets,
-                           bool const swap_tables);
+template <bool has_nulls>
+void launch_mixed_join(table_device_view left_table,
+                       table_device_view right_table,
+                       table_device_view probe,
+                       table_device_view build,
+                       row_hash const hash_probe,
+                       row_equality const equality_probe,
+                       join_kind const join_type,
+                       cudf::detail::mixed_multimap_type::device_view hash_table_view,
+                       size_type* join_output_l,
+                       size_type* join_output_r,
+                       cudf::ast::detail::expression_device_view device_expression_data,
+                       cudf::size_type const* join_result_offsets,
+                       bool const swap_tables,
+                       detail::grid_1d const config,
+                       int64_t shmem_size_per_block,
+                       rmm::cuda_stream_view stream);
 
 }  // namespace detail
 
