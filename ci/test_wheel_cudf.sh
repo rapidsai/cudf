@@ -19,6 +19,7 @@ RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
+
 rapids-logger "pytest pylibcudf"
 pushd python/pylibcudf/pylibcudf/tests
 python -m pytest \

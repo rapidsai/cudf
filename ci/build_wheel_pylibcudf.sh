@@ -5,8 +5,6 @@ set -euo pipefail
 
 package_dir="python/pylibcudf"
 
-export SKBUILD_CMAKE_ARGS="-DUSE_LIBARROW_FROM_PYARROW=ON"
-
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 
 # Downloads libcudf wheel from this current build,
@@ -22,6 +20,7 @@ export PIP_CONSTRAINT="/tmp/constraints.txt"
 
 python -m auditwheel repair \
     --exclude libcudf.so \
+    --exclude libarrow.so.1601 \
     -w ${package_dir}/final_dist \
     ${package_dir}/dist/*
 

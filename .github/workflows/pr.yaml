@@ -131,14 +131,14 @@ jobs:
       build_type: pull-request
       script: "ci/build_wheel_libcudf.sh"
   wheel-build-pylibcudf:
-    needs: checks
+    needs: [checks, wheel-build-libcudf]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.10
     with:
       build_type: pull-request
       script: "ci/build_wheel_pylibcudf.sh"
   wheel-build-cudf:
-    needs: [checks, wheel-build-libcudf]
+    needs: [checks, wheel-build-libcudf, wheel-build-pylibcudf]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.10
     with:
