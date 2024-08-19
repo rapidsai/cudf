@@ -263,8 +263,10 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   if (t == 0) { new (&counter) cuda::atomic<size_type, SCOPE>{0}; }
   __syncthreads();
 
+  // Iterate over all windows in the map.
   for (; t < chunk.dict_map_size; t += block_size) {
-    auto* window = map_storage.data() + chunk.dict_map_offset + t;
+    auto window = map_storage.data() + chunk.dict_map_offset + t;
+    // Collect all slots from each window.
     for (auto& slot : *window) {
       auto const key = slot.first;
       if (key != KEY_SENTINEL) {
