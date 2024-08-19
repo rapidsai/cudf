@@ -13,16 +13,9 @@ import fsspec.implementations.local
 import numpy as np
 import pandas as pd
 from fsspec.core import get_fs_token_paths
-from pyarrow import PythonFile as ArrowPythonFile
 
 from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
-
-try:
-    import fsspec.parquet as fsspec_parquet
-
-except ImportError:
-    fsspec_parquet = None
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
 _ROW_GROUP_SIZE_BYTES_DEFAULT = 128 * 1024 * 1024
@@ -1576,110 +1569,6 @@ def _get_filesystem_and_paths(path_or_data, storage_options):
                 raise e
 
     return fs, return_paths
-
-
-def _set_context(obj, stack):
-    # Helper function to place open file on context stack
-    if stack is None:
-        return obj
-    return stack.enter_context(obj)
-
-
-# TODO: May be able to delete this now.
-def _open_remote_files(
-    paths,
-    fs,
-    context_stack=None,
-    open_file_func=None,
-    precache_options=None,
-    **kwargs,
-):
-    """Return a list of open file-like objects given
-    a list of remote file paths.
-
-    Parameters
-    ----------
-    paths : list(str)
-        List of file-path strings.
-    fs : fsspec.AbstractFileSystem
-        Fsspec file-system object.
-    context_stack : contextlib.ExitStack, Optional
-        Context manager to use for open files.
-    open_file_func : Callable, Optional
-        Call-back function to use for opening. If this argument
-        is specified, all other arguments will be ignored.
-    precache_options : dict, optional
-        Dictionary of key-word arguments to pass to use for
-        precaching. Unless the input contains ``{"method": None}``,
-        ``fsspec.parquet.open_parquet_file`` will be used for remote
-        storage.
-    **kwargs :
-        Key-word arguments to be passed to format-specific
-        open functions.
-    """
-
-    # Just use call-back function if one was specified
-    if open_file_func is not None:
-        return [
-            _set_context(open_file_func(path, **kwargs), context_stack)
-            for path in paths
-        ]
-
-    # Check if the "precache" option is supported.
-    # In the future, fsspec should do this check for us
-    precache_options = (precache_options or {}).copy()
-    precache = precache_options.pop("method", None)
-    if precache not in ("parquet", None):
-        raise ValueError(f"{precache} not a supported `precache` option.")
-
-    # Check that "parts" caching (used for all format-aware file handling)
-    # is supported by the installed fsspec/s3fs version
-    if precache == "parquet" and not fsspec_parquet:
-        warnings.warn(
-            f"This version of fsspec ({fsspec.__version__}) does "
-            f"not support parquet-optimized precaching. Please upgrade "
-            f"to the latest fsspec version for better performance."
-        )
-        precache = None
-
-    if precache == "parquet":
-        # Use fsspec.parquet module.
-        # TODO: Use `cat_ranges` to collect "known"
-        # parts for all files at once.
-        row_groups = precache_options.pop("row_groups", None) or (
-            [None] * len(paths)
-        )
-        return [
-            ArrowPythonFile(
-                _set_context(
-                    fsspec_parquet.open_parquet_file(
-                        path,
-                        fs=fs,
-                        row_groups=rgs,
-                        **precache_options,
-                        **kwargs,
-                    ),
-                    context_stack,
-                )
-            )
-            for path, rgs in zip(paths, row_groups)
-        ]
-
-    # Avoid top-level pyarrow.fs import.
-    # Importing pyarrow.fs initializes a S3 SDK with a finalizer
-    # that runs atexit. In some circumstances it appears this
-    # runs a call into a logging system that is already shutdown.
-    # To avoid this, we only import this subsystem if it is
-    # really needed.
-    # See https://github.com/aws/aws-sdk-cpp/issues/2681
-    from pyarrow.fs import FSSpecHandler, PyFileSystem
-
-    # Default open - Use pyarrow filesystem API
-    pa_fs = PyFileSystem(FSSpecHandler(fs))
-    return [
-        _set_context(pa_fs.open_input_file(fpath), context_stack)
-        for fpath in paths
-    ]
 
 
 @doc_get_reader_filepath_or_buffer()
