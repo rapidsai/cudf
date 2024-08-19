@@ -6,13 +6,14 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.nvtext.normalize cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.nvtext.normalize cimport (
     normalize_characters as cpp_normalize_characters,
     normalize_spaces as cpp_normalize_spaces,
 )
+
+from cudf._lib.column cimport Column
 
 
 @acquire_spill_lock()
