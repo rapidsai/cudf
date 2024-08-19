@@ -34,7 +34,6 @@ from libcpp.vector cimport vector
 cimport pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 from pylibcudf.expressions cimport Expression
-from pylibcudf.io.datasource cimport NativeFileDatasource
 from pylibcudf.io.parquet cimport ChunkedParquetReader
 from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_writer_options,
@@ -61,8 +60,6 @@ from cudf._lib.io.utils cimport (
     make_source_info,
 )
 from cudf._lib.utils cimport table_view_from_table
-
-from pyarrow.lib import NativeFile
 
 import pylibcudf as plc
 
@@ -133,7 +130,6 @@ cdef object _process_metadata(object df,
                               list per_file_user_data,
                               object row_groups,
                               object filepaths_or_buffers,
-                              list pa_buffers,
                               bool allow_range_index,
                               bool use_pandas_metadata,
                               size_type nrows=-1,
@@ -199,9 +195,7 @@ cdef object _process_metadata(object df,
                     pa.parquet.read_metadata(
                         # Pyarrow cannot read directly from bytes
                         io.BytesIO(s) if isinstance(s, bytes) else s
-                    ) for s in (
-                        pa_buffers or filepaths_or_buffers
-                    )
+                    ) for s in filepaths_or_buffers
                 ]
 
                 filtered_idx = []
@@ -275,29 +269,15 @@ def read_parquet_chunked(
     int64_t skip_rows=0,
     allow_mismatched_pq_schemas=False
 ):
-    # Convert NativeFile buffers to NativeFileDatasource,
-    # but save original buffers in case we need to use
-    # pyarrow for metadata processing
-    # (See: https://github.com/rapidsai/cudf/issues/9599)
-
-    pa_buffers = []
-
-    new_bufs = []
-    for i, datasource in enumerate(filepaths_or_buffers):
-        if isinstance(datasource, NativeFile):
-            new_bufs.append(NativeFileDatasource(datasource))
-        else:
-            new_bufs.append(datasource)
-
     # Note: If this function ever takes accepts filters
     # allow_range_index needs to be False when a filter is passed
     # (see read_parquet)
     allow_range_index = columns is not None and len(columns) != 0
 
     reader = ChunkedParquetReader(
-        source_info=plc.io.SourceInfo(new_bufs),
-        columns=columns,
-        row_groups=row_groups,
+        plc.io.SourceInfo(filepaths_or_buffers),
+        columns,
+        row_groups,
         use_pandas_metadata=use_pandas_metadata,
         chunk_read_limit=chunk_read_limit,
         pass_read_limit=pass_read_limit,
@@ -335,7 +315,7 @@ def read_parquet_chunked(
     )
     df = _process_metadata(df, column_names, child_names,
                            per_file_user_data, row_groups,
-                           filepaths_or_buffers, pa_buffers,
+                           filepaths_or_buffers,
                            allow_range_index, use_pandas_metadata,
                            nrows=nrows, skip_rows=skip_rows)
     return df
@@ -358,16 +338,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cudf.io.parquet.read_parquet
     cudf.io.parquet.to_parquet
     """
-
-    # Convert NativeFile buffers to NativeFileDatasource,
-    # but save original buffers in case we need to use
-    # pyarrow for metadata processing
-    # (See: https://github.com/rapidsai/cudf/issues/9599)
-    pa_buffers = []
-    for i, datasource in enumerate(filepaths_or_buffers):
-        if isinstance(datasource, NativeFile):
-            pa_buffers.append(datasource)
-            filepaths_or_buffers[i] = NativeFileDatasource(datasource)
 
     allow_range_index = True
     if columns is not None and len(columns) == 0 or filters:
@@ -393,7 +363,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     df = _process_metadata(df, tbl_w_meta.column_names(include_children=False),
                            tbl_w_meta.child_names, tbl_w_meta.per_file_user_data,
-                           row_groups, filepaths_or_buffers, pa_buffers,
+                           row_groups, filepaths_or_buffers,
                            allow_range_index, use_pandas_metadata,
                            nrows=nrows, skip_rows=skip_rows)
     return df
@@ -407,11 +377,6 @@ cpdef read_parquet_metadata(filepaths_or_buffers):
     cudf.io.parquet.read_parquet
     cudf.io.parquet.to_parquet
     """
-    # Convert NativeFile buffers to NativeFileDatasource
-    for i, datasource in enumerate(filepaths_or_buffers):
-        if isinstance(datasource, NativeFile):
-            filepaths_or_buffers[i] = NativeFileDatasource(datasource)
-
     cdef cudf_io_types.source_info source = make_source_info(filepaths_or_buffers)
 
     args = move(source)

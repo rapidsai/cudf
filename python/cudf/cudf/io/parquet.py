@@ -15,7 +15,6 @@ from uuid import uuid4
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 from pyarrow import dataset as ds
 
 import cudf
@@ -24,7 +23,6 @@ from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import maybe_filter_deprecation
 
 BYTE_SIZES = {
     "kb": 1000,
@@ -352,8 +350,6 @@ def read_parquet_metadata(filepath_or_buffer):
             path_or_data=source,
             compression=None,
             fs=fs,
-            use_python_file_object=None,
-            open_file_options=None,
             storage_options=None,
             bytes_per_thread=None,
         )
@@ -534,9 +530,7 @@ def read_parquet(
     filters=None,
     row_groups=None,
     use_pandas_metadata=True,
-    use_python_file_object=None,
     categorical_partitions=True,
-    open_file_options=None,
     bytes_per_thread=None,
     dataset_kwargs=None,
     nrows=None,
@@ -550,16 +544,6 @@ def read_parquet(
         raise ValueError(
             f"Only supported engines are {{'cudf', 'pyarrow'}}, got {engine=}"
         )
-    # Do not allow the user to set file-opening options
-    # when `use_python_file_object=False` is specified
-    if use_python_file_object is False:
-        if open_file_options:
-            raise ValueError(
-                "open_file_options is not currently supported when "
-                "use_python_file_object is set to False."
-            )
-        open_file_options = {}
-
     if bytes_per_thread is None:
         bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
 
@@ -613,23 +597,11 @@ def read_parquet(
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
     filepaths_or_buffers = []
-    if use_python_file_object:
-        open_file_options = _default_open_file_options(
-            open_file_options=open_file_options,
-            columns=columns,
-            row_groups=row_groups,
-            fs=fs,
-        )
-    have_nativefile = any(
-        isinstance(source, pa.NativeFile) for source in filepath_or_buffer
-    )
     for source in filepath_or_buffer:
         tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
             compression=None,
             fs=fs,
-            use_python_file_object=use_python_file_object,
-            open_file_options=open_file_options,
             storage_options=storage_options,
             bytes_per_thread=bytes_per_thread,
         )
@@ -670,29 +642,21 @@ def read_parquet(
         )
 
     # Convert parquet data to a cudf.DataFrame
-
-    # Don't want to warn if use_python_file_object causes us to get
-    # a NativeFile (there is a separate deprecation warning for that)
-    with maybe_filter_deprecation(
-        not have_nativefile,
-        message="Support for reading pyarrow's NativeFile is deprecated",
-        category=FutureWarning,
-    ):
-        df = _parquet_to_frame(
-            filepaths_or_buffers,
-            engine,
-            *args,
-            columns=columns,
-            row_groups=row_groups,
-            use_pandas_metadata=use_pandas_metadata,
-            partition_keys=partition_keys,
-            partition_categories=partition_categories,
-            dataset_kwargs=dataset_kwargs,
-            nrows=nrows,
-            skip_rows=skip_rows,
-            allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
-            **kwargs,
-        )
+    df = _parquet_to_frame(
+        filepaths_or_buffers,
+        engine,
+        *args,
+        columns=columns,
+        row_groups=row_groups,
+        use_pandas_metadata=use_pandas_metadata,
+        partition_keys=partition_keys,
+        partition_categories=partition_categories,
+        dataset_kwargs=dataset_kwargs,
+        nrows=nrows,
+        skip_rows=skip_rows,
+        allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
+        **kwargs,
+    )
     # Apply filters row-wise (if any are defined), and return
     df = _apply_post_filters(df, filters)
     if projected_columns:
@@ -1573,44 +1537,6 @@ class ParquetDatasetWriter:
 
     def __exit__(self, *args):
         self.close()
-
-
-def _default_open_file_options(
-    open_file_options, columns, row_groups, fs=None
-):
-    """
-    Set default fields in open_file_options.
-
-    Copies and updates `open_file_options` to
-    include column and row-group information
-    under the "precache_options" key. By default,
-    we set "method" to "parquet", but precaching
-    will be disabled if the user chooses `method=None`
-
-    Parameters
-    ----------
-    open_file_options : dict or None
-    columns : list
-    row_groups : list
-    fs : fsspec.AbstractFileSystem, Optional
-    """
-    if fs and ioutils._is_local_filesystem(fs):
-        # Quick return for local fs
-        return open_file_options or {}
-    # Assume remote storage if `fs` was not specified
-    open_file_options = (open_file_options or {}).copy()
-    precache_options = open_file_options.pop("precache_options", {}).copy()
-    if precache_options.get("method", "parquet") == "parquet":
-        precache_options.update(
-            {
-                "method": "parquet",
-                "engine": precache_options.get("engine", "pyarrow"),
-                "columns": columns,
-                "row_groups": row_groups,
-            }
-        )
-    open_file_options["precache_options"] = precache_options
-    return open_file_options
 
 
 def _hive_dirname(name, val):

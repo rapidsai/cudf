@@ -13,18 +13,9 @@ import fsspec.implementations.local
 import numpy as np
 import pandas as pd
 from fsspec.core import get_fs_token_paths
-from pyarrow import PythonFile as ArrowPythonFile
-from pyarrow.lib import NativeFile
 
-from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
-
-try:
-    import fsspec.parquet as fsspec_parquet
-
-except ImportError:
-    fsspec_parquet = None
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
 _ROW_GROUP_SIZE_BYTES_DEFAULT = 128 * 1024 * 1024
@@ -173,32 +164,12 @@ categorical_partitions : boolean, default True
 use_pandas_metadata : boolean, default True
     If True and dataset has custom PANDAS schema metadata, ensure that index
     columns are also loaded.
-use_python_file_object : boolean, default True
-    If True, Arrow-backed PythonFile objects will be used in place of fsspec
-    AbstractBufferedFile objects at IO time.
-
-    .. deprecated:: 24.08
-        `use_python_file_object` is deprecated and will be removed in a future
-        version of cudf, as PyArrow NativeFiles will no longer be accepted as
-        input/output in cudf readers/writers in the future.
-open_file_options : dict, optional
-    Dictionary of key-value pairs to pass to the function used to open remote
-    files. By default, this will be `fsspec.parquet.open_parquet_file`. To
-    deactivate optimized precaching, set the "method" to `None` under the
-    "precache_options" key. Note that the `open_file_func` key can also be
-    used to specify a custom file-open function.
-
-    .. deprecated:: 24.08
-        `open_file_options` is deprecated as it was intended for
-        pyarrow file inputs, which will no longer be accepted as
-        input/output cudf readers/writers in the future.
 bytes_per_thread : int, default None
     Determines the number of bytes to be allocated per thread to read the
     files in parallel. When there is a file of large size, we get slightly
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a python thread pool). Default allocation is
     {bytes_per_thread} bytes.
-    This parameter is functional only when `use_python_file_object=False`.
 skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
 
@@ -488,14 +459,6 @@ num_rows : int, default None
     This parameter is deprecated.
 use_index : bool, default True
     If True, use row index if available for faster seeking.
-use_python_file_object : boolean, default True
-    If True, Arrow-backed PythonFile objects will be used in place of fsspec
-    AbstractBufferedFile objects at IO time.
-
-    .. deprecated:: 24.08
-        `use_python_file_object` is deprecated and will be removed in a future
-        version of cudf, as PyArrow NativeFiles will no longer be accepted as
-        input/output in cudf readers/writers in the future.
 storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
@@ -509,7 +472,6 @@ bytes_per_thread : int, default None
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a python thread pool). Default allocation is
     {bytes_per_thread} bytes.
-    This parameter is functional only when `use_python_file_object=False`.
 
 Returns
 -------
@@ -1212,14 +1174,6 @@ byte_range : list or tuple, default None
     size to zero to read all data after the offset location. Reads the row
     that starts before or at the end of the range, even if it ends after
     the end of the range.
-use_python_file_object : boolean, default True
-    If True, Arrow-backed PythonFile objects will be used in place of fsspec
-    AbstractBufferedFile objects at IO time.
-
-    .. deprecated:: 24.08
-        `use_python_file_object` is deprecated and will be removed in a future
-        version of cudf, as PyArrow NativeFiles will no longer be accepted as
-        input/output in cudf readers/writers in the future.
 storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
@@ -1233,7 +1187,6 @@ bytes_per_thread : int, default None
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a python thread pool). Default allocation is
     {bytes_per_thread} bytes.
-    This parameter is functional only when `use_python_file_object=False`.
 Returns
 -------
 GPU ``DataFrame`` object.
@@ -1457,22 +1410,6 @@ mode : str
     Mode in which file is opened
 iotypes : (), default (BytesIO)
     Object type to exclude from file-like check
-use_python_file_object : boolean, default False
-    If True, Arrow-backed PythonFile objects will be used in place
-    of fsspec AbstractBufferedFile objects.
-
-    .. deprecated:: 24.08
-        `use_python_file_object` is deprecated and will be removed in a future
-        version of cudf, as PyArrow NativeFiles will no longer be accepted as
-        input/output in cudf readers/writers.
-open_file_options : dict, optional
-    Optional dictionary of keyword arguments to pass to
-    `_open_remote_files` (used for remote storage only).
-
-    .. deprecated:: 24.08
-        `open_file_options` is deprecated as it was intended for
-        pyarrow file inputs, which will no longer be accepted as
-        input/output cudf readers/writers in the future.
 allow_raw_text_input : boolean, default False
     If True, this indicates the input `path_or_data` could be a raw text
     input and will not check for its existence in the filesystem. If False,
@@ -1493,7 +1430,6 @@ bytes_per_thread : int, default None
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a Python thread pool). Default allocation is
     {bytes_per_thread} bytes.
-    This parameter is functional only when `use_python_file_object=False`.
 
 Returns
 -------
@@ -1638,119 +1574,13 @@ def _get_filesystem_and_paths(path_or_data, storage_options):
     return fs, return_paths
 
 
-def _set_context(obj, stack):
-    # Helper function to place open file on context stack
-    if stack is None:
-        return obj
-    return stack.enter_context(obj)
-
-
-def _open_remote_files(
-    paths,
-    fs,
-    context_stack=None,
-    open_file_func=None,
-    precache_options=None,
-    **kwargs,
-):
-    """Return a list of open file-like objects given
-    a list of remote file paths.
-
-    Parameters
-    ----------
-    paths : list(str)
-        List of file-path strings.
-    fs : fsspec.AbstractFileSystem
-        Fsspec file-system object.
-    context_stack : contextlib.ExitStack, Optional
-        Context manager to use for open files.
-    open_file_func : Callable, Optional
-        Call-back function to use for opening. If this argument
-        is specified, all other arguments will be ignored.
-    precache_options : dict, optional
-        Dictionary of key-word arguments to pass to use for
-        precaching. Unless the input contains ``{"method": None}``,
-        ``fsspec.parquet.open_parquet_file`` will be used for remote
-        storage.
-    **kwargs :
-        Key-word arguments to be passed to format-specific
-        open functions.
-    """
-
-    # Just use call-back function if one was specified
-    if open_file_func is not None:
-        return [
-            _set_context(open_file_func(path, **kwargs), context_stack)
-            for path in paths
-        ]
-
-    # Check if the "precache" option is supported.
-    # In the future, fsspec should do this check for us
-    precache_options = (precache_options or {}).copy()
-    precache = precache_options.pop("method", None)
-    if precache not in ("parquet", None):
-        raise ValueError(f"{precache} not a supported `precache` option.")
-
-    # Check that "parts" caching (used for all format-aware file handling)
-    # is supported by the installed fsspec/s3fs version
-    if precache == "parquet" and not fsspec_parquet:
-        warnings.warn(
-            f"This version of fsspec ({fsspec.__version__}) does "
-            f"not support parquet-optimized precaching. Please upgrade "
-            f"to the latest fsspec version for better performance."
-        )
-        precache = None
-
-    if precache == "parquet":
-        # Use fsspec.parquet module.
-        # TODO: Use `cat_ranges` to collect "known"
-        # parts for all files at once.
-        row_groups = precache_options.pop("row_groups", None) or (
-            [None] * len(paths)
-        )
-        return [
-            ArrowPythonFile(
-                _set_context(
-                    fsspec_parquet.open_parquet_file(
-                        path,
-                        fs=fs,
-                        row_groups=rgs,
-                        **precache_options,
-                        **kwargs,
-                    ),
-                    context_stack,
-                )
-            )
-            for path, rgs in zip(paths, row_groups)
-        ]
-
-    # Avoid top-level pyarrow.fs import.
-    # Importing pyarrow.fs initializes a S3 SDK with a finalizer
-    # that runs atexit. In some circumstances it appears this
-    # runs a call into a logging system that is already shutdown.
-    # To avoid this, we only import this subsystem if it is
-    # really needed.
-    # See https://github.com/aws/aws-sdk-cpp/issues/2681
-    from pyarrow.fs import FSSpecHandler, PyFileSystem
-
-    # Default open - Use pyarrow filesystem API
-    pa_fs = PyFileSystem(FSSpecHandler(fs))
-    return [
-        _set_context(pa_fs.open_input_file(fpath), context_stack)
-        for fpath in paths
-    ]
-
-
 @doc_get_reader_filepath_or_buffer()
 def get_reader_filepath_or_buffer(
     path_or_data,
     compression,
     mode="rb",
     fs=None,
-    iotypes=(BytesIO, NativeFile),
-    # no_default aliases to False
-    use_python_file_object=no_default,
-    open_file_options=None,
+    iotypes=(BytesIO,),
     allow_raw_text_input=False,
     storage_options=None,
     bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
@@ -1760,30 +1590,6 @@ def get_reader_filepath_or_buffer(
     """{docstring}"""
 
     path_or_data = stringify_pathlike(path_or_data)
-
-    if use_python_file_object is no_default:
-        use_python_file_object = False
-    elif use_python_file_object is not None:
-        warnings.warn(
-            "The 'use_python_file_object' keyword is deprecated and "
-            "will be removed in a future version.",
-            FutureWarning,
-        )
-    else:
-        # Preserve the readers (e.g. read_csv) default of True
-        # if no use_python_file_object option is specified by the user
-        # for now (note: this is different from the default for this
-        # function of False)
-        # TODO: when non-pyarrow file reading perf is good enough
-        # we can default this to False
-        use_python_file_object = True
-
-    if open_file_options is not None:
-        warnings.warn(
-            "The 'open_file_options' keyword is deprecated and "
-            "will be removed in a future version.",
-            FutureWarning,
-        )
 
     if isinstance(path_or_data, str):
         # Get a filesystem object if one isn't already available
@@ -1869,38 +1675,28 @@ def get_reader_filepath_or_buffer(
                 raise FileNotFoundError(
                     f"{path_or_data} could not be resolved to any files"
                 )
-            if use_python_file_object:
-                path_or_data = _open_remote_files(
-                    paths,
-                    fs,
-                    **(open_file_options or {}),
-                )
-            else:
-                path_or_data = [
-                    BytesIO(
-                        _fsspec_data_transfer(
-                            fpath,
-                            fs=fs,
-                            mode=mode,
-                            bytes_per_thread=bytes_per_thread,
-                        )
+            path_or_data = [
+                BytesIO(
+                    _fsspec_data_transfer(
+                        fpath,
+                        fs=fs,
+                        mode=mode,
+                        bytes_per_thread=bytes_per_thread,
                     )
-                    for fpath in paths
-                ]
+                )
+                for fpath in paths
+            ]
             if len(path_or_data) == 1:
                 path_or_data = path_or_data[0]
 
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
         if isinstance(path_or_data, TextIOWrapper):
             path_or_data = path_or_data.buffer
-        if use_python_file_object:
-            path_or_data = ArrowPythonFile(path_or_data)
-        else:
-            path_or_data = BytesIO(
-                _fsspec_data_transfer(
-                    path_or_data, mode=mode, bytes_per_thread=bytes_per_thread
-                )
+        path_or_data = BytesIO(
+            _fsspec_data_transfer(
+                path_or_data, mode=mode, bytes_per_thread=bytes_per_thread
             )
+        )
 
     return path_or_data, compression
 
