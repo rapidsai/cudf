@@ -20,13 +20,7 @@ def dtype(request):
     return request.param
 
 
-@pytest.fixture(
-    params=[
-        False,
-        pytest.param(True, marks=pytest.mark.xfail(reason="No handler for set_sorted")),
-    ],
-    ids=["unsorted", "sorted"],
-)
+@pytest.fixture(params=[False, True], ids=["unsorted", "sorted"])
 def is_sorted(request):
     return request.param
 
@@ -52,21 +46,32 @@ def test_agg(df, agg):
 
     # https://github.com/rapidsai/cudf/issues/15852
     check_dtypes = agg not in {"n_unique", "median"}
-    if not check_dtypes and q.schema["a"] != pl.Float64:
+    if not check_dtypes and q.collect_schema()["a"] != pl.Float64:
         with pytest.raises(AssertionError):
             assert_gpu_result_equal(q)
     assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
 
 
 @pytest.mark.parametrize(
-    "propagate_nans",
-    [pytest.param(False, marks=pytest.mark.xfail(reason="Need to mask nans")), True],
-    ids=["mask_nans", "propagate_nans"],
+    "op", [pl.Expr.min, pl.Expr.nan_min, pl.Expr.max, pl.Expr.nan_max]
 )
-@pytest.mark.parametrize("op", ["min", "max"])
-def test_agg_float_with_nans(propagate_nans, op):
-    df = pl.LazyFrame({"a": [1, 2, float("nan")]})
-    op = getattr(pl.Expr, f"nan_{op}" if propagate_nans else op)
+def test_agg_float_with_nans(op):
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series([1, 2, float("nan")], dtype=pl.Float64()),
+            "b": pl.Series([1, 2, None], dtype=pl.Int8()),
+        }
+    )
+    q = df.select(op(pl.col("a")), op(pl.col("b")))
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.xfail(reason="https://github.com/pola-rs/polars/issues/17513")
+@pytest.mark.parametrize("op", [pl.Expr.max, pl.Expr.min])
+def test_agg_singleton(op):
+    df = pl.LazyFrame({"a": pl.Series([float("nan")])})
+
     q = df.select(op(pl.col("a")))
 
     assert_gpu_result_equal(q)

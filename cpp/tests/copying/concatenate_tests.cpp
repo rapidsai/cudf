@@ -29,7 +29,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/filling.hpp>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/utilities.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -189,7 +189,7 @@ TEST_F(StringColumnTest, ConcatenateManyColumns)
 
 TEST_F(StringColumnTest, ConcatenateTooLarge)
 {
-  if (cudf::strings::detail::is_large_strings_enabled()) { return; }
+  if (cudf::strings::is_large_strings_enabled()) { return; }
 
   std::string big_str(1000000, 'a');  // 1 million bytes x 5 = 5 million bytes
   cudf::test::strings_column_wrapper input{big_str, big_str, big_str, big_str, big_str};
@@ -379,7 +379,7 @@ TEST_F(OverflowTest, OverflowTest)
   }
 
   // string column, overflow on chars
-  if (!cudf::strings::detail::is_large_strings_enabled()) {
+  if (!cudf::strings::is_large_strings_enabled()) {
     constexpr auto size = static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // try and concatenate 6 string columns of with 1 billion chars in each
@@ -502,7 +502,7 @@ TEST_F(OverflowTest, Presliced)
   }
 
   // strings, overflow on chars
-  if (!cudf::strings::detail::is_large_strings_enabled()) {
+  if (!cudf::strings::is_large_strings_enabled()) {
     constexpr cudf::size_type total_chars_size = 1024 * 1024 * 1024;
     constexpr cudf::size_type string_size      = 64;
     constexpr cudf::size_type num_rows         = total_chars_size / string_size;
@@ -1666,4 +1666,64 @@ TEST_F(DictionaryConcatTest, ErrorsTest)
   EXPECT_THROW(cudf::concatenate(views), cudf::data_type_error);
   std::vector<cudf::column_view> empty;
   EXPECT_THROW(cudf::concatenate(empty), cudf::logic_error);
+}
+
+struct EmptyColumnTest : public cudf::test::BaseFixture {};
+
+TEST_F(EmptyColumnTest, SimpleTest)
+{
+  std::vector<cudf::column> columns;
+  constexpr auto num_copies = 10;
+  constexpr auto num_rows   = 10;
+  for (auto i = 0; i < num_copies; ++i) {
+    columns.emplace_back(cudf::data_type(cudf::type_id::EMPTY),
+                         num_rows,
+                         rmm::device_buffer{},
+                         rmm::device_buffer{},
+                         0);
+  }
+
+  // Create views from columns
+  std::vector<cudf::column_view> views;
+  for (auto& col : columns) {
+    views.push_back(col.view());
+  }
+  auto result = cudf::concatenate(views);
+
+  ASSERT_EQ(result->size(), num_copies * num_rows);
+  ASSERT_EQ(result->type().id(), cudf::type_id::EMPTY);
+}
+
+struct TableOfEmptyColumnsTest : public cudf::test::BaseFixture {};
+
+TEST_F(TableOfEmptyColumnsTest, SimpleTest)
+{
+  std::vector<cudf::table> tables;
+  constexpr auto num_copies  = 10;
+  constexpr auto num_rows    = 10;
+  constexpr auto num_columns = 10;
+  for (auto i = 0; i < num_copies; ++i) {
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    for (auto j = 0; j < num_columns; ++j) {
+      columns.push_back(std::make_unique<cudf::column>(cudf::data_type(cudf::type_id::EMPTY),
+                                                       num_rows,
+                                                       rmm::device_buffer{},
+                                                       rmm::device_buffer{},
+                                                       0));
+    }
+    tables.emplace_back(std::move(columns));
+  }
+
+  // Create views from columns
+  std::vector<cudf::table_view> views;
+  for (auto& tbl : tables) {
+    views.push_back(tbl.view());
+  }
+  auto result = cudf::concatenate(views);
+
+  ASSERT_EQ(result->num_rows(), num_copies * num_rows);
+  ASSERT_EQ(result->num_columns(), num_columns);
+  for (auto i = 0; i < num_columns; ++i) {
+    ASSERT_EQ(result->get_column(i).type().id(), cudf::type_id::EMPTY);
+  }
 }

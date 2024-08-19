@@ -12,7 +12,7 @@ import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
-from cudf.api.types import is_scalar, is_timedelta64_dtype
+from cudf.api.types import is_scalar
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
@@ -75,28 +75,33 @@ class TimeDeltaColumn(ColumnBase):
     def __init__(
         self,
         data: Buffer,
-        dtype: Dtype,
-        size: int | None = None,  # TODO: make non-optional
+        size: int | None,
+        dtype: np.dtype,
         mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
+        children: tuple = (),
     ):
-        dtype = cudf.dtype(dtype)
-        if dtype.kind != "m":
-            raise TypeError(f"{self.dtype} is not a supported duration type")
+        if not isinstance(data, Buffer):
+            raise ValueError("data must be a Buffer.")
+        if not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
+            raise ValueError("dtype must be a timedelta numpy dtype.")
 
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = data.size // dtype.itemsize
             size = size - offset
+        if len(children) != 0:
+            raise ValueError("TimedeltaColumn must have no children.")
         super().__init__(
-            data,
+            data=data,
             size=size,
             dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
 
     def __contains__(self, item: DatetimeLikeScalar) -> bool:
@@ -107,7 +112,9 @@ class TimeDeltaColumn(ColumnBase):
             # np.timedelta64 raises ValueError, hence `item`
             # cannot exist in `self`.
             return False
-        return item.view("int64") in self.as_numerical_column("int64")
+        return item.view("int64") in cast(
+            "cudf.core.column.NumericalColumn", self.astype("int64")
+        )
 
     @property
     def values(self):
@@ -132,9 +139,7 @@ class TimeDeltaColumn(ColumnBase):
                 self.mask_array_view(mode="read").copy_to_host()
             )
         data = pa.py_buffer(
-            self.as_numerical_column("int64")
-            .data_array_view(mode="read")
-            .copy_to_host()
+            self.astype("int64").data_array_view(mode="read").copy_to_host()
         )
         pa_dtype = np_to_pa_dtype(self.dtype)
         return pa.Array.from_buffers(
@@ -153,7 +158,7 @@ class TimeDeltaColumn(ColumnBase):
         this: ColumnBinaryOperand = self
         out_dtype = None
 
-        if is_timedelta64_dtype(other.dtype):
+        if other.dtype.kind == "m":
             # TODO: pandas will allow these operators to work but return false
             # when comparing to non-timedelta dtypes. We should do the same.
             if op in {
@@ -251,57 +256,67 @@ class TimeDeltaColumn(ColumnBase):
     def time_unit(self) -> str:
         return np.datetime_data(self.dtype)[0]
 
+    def total_seconds(self) -> ColumnBase:
+        raise NotImplementedError("total_seconds is currently not implemented")
+
+    def ceil(self, freq: str) -> ColumnBase:
+        raise NotImplementedError("ceil is currently not implemented")
+
+    def floor(self, freq: str) -> ColumnBase:
+        raise NotImplementedError("floor is currently not implemented")
+
+    def round(self, freq: str) -> ColumnBase:
+        raise NotImplementedError("round is currently not implemented")
+
     def as_numerical_column(
         self, dtype: Dtype
-    ) -> "cudf.core.column.NumericalColumn":
-        col = column.build_column(
-            data=self.base_data,
-            dtype=np.int64,
+    ) -> cudf.core.column.NumericalColumn:
+        col = cudf.core.column.NumericalColumn(
+            data=self.base_data,  # type: ignore[arg-type]
+            dtype=np.dtype(np.int64),
             mask=self.base_mask,
             offset=self.offset,
             size=self.size,
         )
         return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
 
-    def as_datetime_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.DatetimeColumn":
+    def as_datetime_column(self, dtype: Dtype) -> None:  # type: ignore[override]
         raise TypeError(
             f"cannot astype a timedelta from {self.dtype} to {dtype}"
         )
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
-        if format is None:
-            format = "%D days %H:%M:%S"
-        if len(self) > 0:
-            return string._timedelta_to_str_typecast_functions[
-                cudf.dtype(self.dtype)
-            ](self, format=format)
-        else:
+    def strftime(self, format: str) -> cudf.core.column.StringColumn:
+        if len(self) == 0:
             return cast(
-                "cudf.core.column.StringColumn",
+                cudf.core.column.StringColumn,
                 column.column_empty(0, dtype="object", masked=False),
             )
+        else:
+            return string._timedelta_to_str_typecast_functions[self.dtype](
+                self, format=format
+            )
 
-    def as_timedelta_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> TimeDeltaColumn:
-        dtype = cudf.dtype(dtype)
+    def as_string_column(self) -> cudf.core.column.StringColumn:
+        return self.strftime("%D days %H:%M:%S")
+
+    def as_timedelta_column(self, dtype: Dtype) -> TimeDeltaColumn:
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
-    def mean(self, skipna=None, dtype: Dtype = np.float64) -> pd.Timedelta:
+    def mean(self, skipna=None) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical_column("int64").mean(skipna=skipna, dtype=dtype),
+            cast(
+                "cudf.core.column.NumericalColumn", self.astype("int64")
+            ).mean(skipna=skipna),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
     def median(self, skipna: bool | None = None) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical_column("int64").median(skipna=skipna),
+            cast(
+                "cudf.core.column.NumericalColumn", self.astype("int64")
+            ).median(skipna=skipna),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
@@ -315,7 +330,7 @@ class TimeDeltaColumn(ColumnBase):
         exact: bool,
         return_scalar: bool,
     ) -> ColumnBase:
-        result = self.as_numerical_column("int64").quantile(
+        result = self.astype("int64").quantile(
             q=q,
             interpolation=interpolation,
             exact=exact,
@@ -337,7 +352,7 @@ class TimeDeltaColumn(ColumnBase):
             # Since sum isn't overridden in Numerical[Base]Column, mypy only
             # sees the signature from Reducible (which doesn't have the extra
             # parameters from ColumnBase._reduce) so we have to ignore this.
-            self.as_numerical_column("int64").sum(  # type: ignore
+            self.astype("int64").sum(  # type: ignore
                 skipna=skipna, min_count=min_count, dtype=dtype
             ),
             unit=self.time_unit,
@@ -347,12 +362,11 @@ class TimeDeltaColumn(ColumnBase):
         self,
         skipna: bool | None = None,
         min_count: int = 0,
-        dtype: Dtype = np.float64,
         ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical_column("int64").std(
-                skipna=skipna, min_count=min_count, ddof=ddof, dtype=dtype
+            cast("cudf.core.column.NumericalColumn", self.astype("int64")).std(
+                skipna=skipna, min_count=min_count, ddof=ddof
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
@@ -362,18 +376,18 @@ class TimeDeltaColumn(ColumnBase):
             raise TypeError(
                 f"cannot perform cov with types {self.dtype}, {other.dtype}"
             )
-        return self.as_numerical_column("int64").cov(
-            other.as_numerical_column("int64")
-        )
+        return cast(
+            "cudf.core.column.NumericalColumn", self.astype("int64")
+        ).cov(cast("cudf.core.column.NumericalColumn", other.astype("int64")))
 
     def corr(self, other: TimeDeltaColumn) -> float:
         if not isinstance(other, TimeDeltaColumn):
             raise TypeError(
                 f"cannot perform corr with types {self.dtype}, {other.dtype}"
             )
-        return self.as_numerical_column("int64").corr(
-            other.as_numerical_column("int64")
-        )
+        return cast(
+            "cudf.core.column.NumericalColumn", self.astype("int64")
+        ).corr(cast("cudf.core.column.NumericalColumn", other.astype("int64")))
 
     def components(self) -> dict[str, ColumnBase]:
         """

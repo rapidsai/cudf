@@ -158,12 +158,12 @@ def assert_column_equal(
             return True
 
     if check_datetimelike_compat:
-        if np.issubdtype(left.dtype, np.datetime64):
+        if left.dtype.kind == "M":
             right = right.astype(left.dtype)
-        elif np.issubdtype(right.dtype, np.datetime64):
+        elif right.dtype.kind == "M":
             left = left.astype(right.dtype)
 
-        if np.issubdtype(left.dtype, np.datetime64):
+        if left.dtype.kind == "M":
             if not left.equals(right):
                 raise AssertionError(
                     f"[datetimelike_compat=True] {left.values} "
@@ -398,8 +398,12 @@ def assert_index_equal(
             )
 
         for level in range(left.nlevels):
-            llevel = cudf.Index(left._columns[level], name=left.names[level])
-            rlevel = cudf.Index(right._columns[level], name=right.names[level])
+            llevel = cudf.Index._from_column(
+                left._columns[level], name=left.names[level]
+            )
+            rlevel = cudf.Index._from_column(
+                right._columns[level], name=right.names[level]
+            )
             mul_obj = f"MultiIndex level [{level}]"
             assert_index_equal(
                 llevel,
@@ -779,9 +783,7 @@ def assert_eq(left, right, **kwargs):
                 tm.assert_index_equal(left, right, **kwargs)
 
     elif isinstance(left, np.ndarray) and isinstance(right, np.ndarray):
-        if np.issubdtype(left.dtype, np.floating) and np.issubdtype(
-            right.dtype, np.floating
-        ):
+        if left.dtype.kind == "f" and right.dtype.kind == "f":
             assert np.allclose(left, right, equal_nan=True)
         else:
             assert np.array_equal(left, right)

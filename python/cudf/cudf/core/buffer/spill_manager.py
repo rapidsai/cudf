@@ -18,14 +18,14 @@ from typing import TYPE_CHECKING
 import rmm.mr
 
 from cudf.options import get_option
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.string import format_bytes
 
 if TYPE_CHECKING:
     from cudf.core.buffer.spillable_buffer import SpillableBufferOwner
 
 _spill_cudf_nvtx_annotate = partial(
-    _cudf_nvtx_annotate, domain="cudf_python-spill"
+    _performance_tracking, domain="cudf_python-spill"
 )
 
 

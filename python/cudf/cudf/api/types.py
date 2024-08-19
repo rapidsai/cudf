@@ -90,7 +90,7 @@ def is_integer(obj):
     bool
     """
     if isinstance(obj, cudf.Scalar):
-        return pd.api.types.is_integer_dtype(obj.dtype)
+        return obj.dtype.kind in "iu"
     return pd.api.types.is_integer(obj)
 
 
@@ -249,7 +249,7 @@ def _union_categoricals(
             new_categories=sorted_categories
         )
 
-    return cudf.Index(result_col)
+    return cudf.CategoricalIndex._from_column(result_col)
 
 
 def is_bool_dtype(arr_or_dtype):

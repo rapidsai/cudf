@@ -97,7 +97,7 @@ def test_typecast_from_float_to_decimal(request, data, from_dtype, to_dtype):
         pytest.mark.xfail(
             condition=version.parse(pa.__version__) >= version.parse("13.0.0")
             and from_dtype == np.dtype("float32")
-            and to_dtype.precision > 7,
+            and to_dtype.precision > 12,
             reason="https://github.com/rapidsai/cudf/issues/14169",
         )
     )
@@ -106,7 +106,7 @@ def test_typecast_from_float_to_decimal(request, data, from_dtype, to_dtype):
     pa_arr = got.to_arrow().cast(
         pa.decimal128(to_dtype.precision, to_dtype.scale)
     )
-    expected = cudf.Series(Decimal64Column.from_arrow(pa_arr))
+    expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
     got = got.astype(to_dtype)
 
@@ -146,7 +146,7 @@ def test_typecast_from_int_to_decimal(data, from_dtype, to_dtype):
         .cast("float64")
         .cast(pa.decimal128(to_dtype.precision, to_dtype.scale))
     )
-    expected = cudf.Series(Decimal64Column.from_arrow(pa_arr))
+    expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
     got = got.astype(to_dtype)
 
@@ -206,9 +206,9 @@ def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
         pa.decimal128(to_dtype.precision, to_dtype.scale), safe=False
     )
     if isinstance(to_dtype, Decimal32Dtype):
-        expected = cudf.Series(Decimal32Column.from_arrow(pa_arr))
+        expected = cudf.Series._from_column(Decimal32Column.from_arrow(pa_arr))
     elif isinstance(to_dtype, Decimal64Dtype):
-        expected = cudf.Series(Decimal64Column.from_arrow(pa_arr))
+        expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
     with expect_warning_if(to_dtype.scale < s.dtype.scale, UserWarning):
         got = s.astype(to_dtype)
@@ -245,7 +245,7 @@ def test_typecast_from_decimal(data, from_dtype, to_dtype):
     pa_arr = got.to_arrow().cast(to_dtype, safe=False)
 
     got = got.astype(to_dtype)
-    expected = cudf.Series(NumericalColumn.from_arrow(pa_arr))
+    expected = cudf.Series._from_column(NumericalColumn.from_arrow(pa_arr))
 
     assert_eq(got, expected)
     assert_eq(got.dtype, expected.dtype)

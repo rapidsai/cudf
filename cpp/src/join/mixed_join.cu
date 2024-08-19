@@ -82,9 +82,7 @@ mixed_join(
       // Left and full joins all return all the row indices from
       // left with a corresponding NULL from the right.
       case join_kind::LEFT_JOIN:
-      case join_kind::FULL_JOIN:
-        return get_trivial_left_join_indices(
-          left_conditional, stream, rmm::mr::get_current_device_resource());
+      case join_kind::FULL_JOIN: return get_trivial_left_join_indices(left_conditional, stream, mr);
       // Inner joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN:
         return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
@@ -100,8 +98,7 @@ mixed_join(
                          std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
       // Full joins need to return the trivial complement.
       case join_kind::FULL_JOIN: {
-        auto ret_flipped = get_trivial_left_join_indices(
-          right_conditional, stream, rmm::mr::get_current_device_resource());
+        auto ret_flipped = get_trivial_left_join_indices(right_conditional, stream, mr);
         return std::pair(std::move(ret_flipped.second), std::move(ret_flipped.first));
       }
       default: CUDF_FAIL("Invalid join kind."); break;
@@ -129,11 +126,12 @@ mixed_join(
   auto build_view = table_device_view::create(build, stream);
 
   // Don't use multimap_type because we want a CG size of 1.
-  mixed_multimap_type hash_table{compute_hash_table_size(build.num_rows()),
-                                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-                                 cuco::empty_value{cudf::detail::JoinNoneValue},
-                                 stream.value(),
-                                 cudf::detail::cuco_allocator{stream}};
+  mixed_multimap_type hash_table{
+    compute_hash_table_size(build.num_rows()),
+    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+    cuco::empty_value{cudf::detail::JoinNoneValue},
+    stream.value(),
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
@@ -394,11 +392,12 @@ compute_mixed_join_output_size(table_view const& left_equality,
   auto build_view = table_device_view::create(build, stream);
 
   // Don't use multimap_type because we want a CG size of 1.
-  mixed_multimap_type hash_table{compute_hash_table_size(build.num_rows()),
-                                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-                                 cuco::empty_value{cudf::detail::JoinNoneValue},
-                                 stream.value(),
-                                 cudf::detail::cuco_allocator{stream}};
+  mixed_multimap_type hash_table{
+    compute_hash_table_size(build.num_rows()),
+    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+    cuco::empty_value{cudf::detail::JoinNoneValue},
+    stream.value(),
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we

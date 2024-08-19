@@ -451,8 +451,8 @@ struct replace_multi_fn {
     while (spos < d_str.size_bytes()) {
       for (int tgt_idx = 0; tgt_idx < d_targets.size(); ++tgt_idx) {
         auto const d_tgt = d_targets.element<string_view>(tgt_idx);
-        if ((d_tgt.size_bytes() <= (d_str.size_bytes() - spos)) &&    // check fit
-            (d_tgt.compare(in_ptr + spos, d_tgt.size_bytes()) == 0))  // and match
+        if (!d_tgt.empty() && (d_tgt.size_bytes() <= (d_str.size_bytes() - spos)) &&  // check fit
+            (d_tgt.compare(in_ptr + spos, d_tgt.size_bytes()) == 0))                  // and match
         {
           auto const d_repl = (d_repls.size() == 1) ? d_repls.element<string_view>(0)
                                                     : d_repls.element<string_view>(tgt_idx);
@@ -468,9 +468,8 @@ struct replace_multi_fn {
       }
       ++spos;
     }
-    if (out_ptr)  // copy remainder
-    {
-      memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
+    if (out_ptr) {
+      memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);  // copy remainder
     } else {
       d_sizes[idx] = bytes;
     }
@@ -529,17 +528,6 @@ std::unique_ptr<column> replace_multiple(strings_column_view const& strings,
                                          strings_column_view const& repls,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::replace_multiple(strings, targets, repls, stream, mr);
-}
-
-// deprecated in 24.08
-std::unique_ptr<column> replace(strings_column_view const& strings,
-                                strings_column_view const& targets,
-                                strings_column_view const& repls,
-                                rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::replace_multiple(strings, targets, repls, stream, mr);

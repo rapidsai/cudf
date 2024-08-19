@@ -40,8 +40,13 @@ target_include_directories(
 
 # Use an OBJECT library so we only compile these helper source files only once
 add_library(
-  cudf_benchmark_common OBJECT "${CUDF_SOURCE_DIR}/tests/utilities/random_seed.cpp"
-                               synchronization/synchronization.cpp io/cuio_common.cpp
+  cudf_benchmark_common OBJECT
+  "${CUDF_SOURCE_DIR}/tests/utilities/random_seed.cpp"
+  synchronization/synchronization.cpp
+  io/cuio_common.cpp
+  common/table_utilities.cpp
+  common/benchmark_utilities.cpp
+  common/nvbench_utilities.cpp
 )
 target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env>)
 add_custom_command(
@@ -157,6 +162,7 @@ ConfigureNVBench(
   stream_compaction/distinct.cpp
   stream_compaction/distinct_count.cpp
   stream_compaction/stable_distinct.cpp
+  stream_compaction/stream_compaction_common.cpp
   stream_compaction/unique.cpp
   stream_compaction/unique_count.cpp
 )
@@ -226,8 +232,8 @@ ConfigureBench(
 )
 
 ConfigureNVBench(
-  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_nunique.cpp groupby/group_rank.cpp
-  groupby/group_struct_keys.cpp
+  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_max_multithreaded.cpp
+  groupby/group_nunique.cpp groupby/group_rank.cpp groupby/group_struct_keys.cpp
 )
 
 # ##################################################################################################
@@ -347,6 +353,11 @@ ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
 ConfigureNVBench(JSON_READER_OPTION_NVBENCH io/json/json_reader_option.cpp)
 ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
+
+# ##################################################################################################
+# * multi buffer memset benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(BATCHED_MEMSET_BENCH io/utilities/batched_memset_bench.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------

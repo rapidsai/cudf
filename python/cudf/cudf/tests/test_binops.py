@@ -290,6 +290,47 @@ def test_series_compare(cmpop, obj_class, dtype):
     np.testing.assert_equal(result3.to_numpy(), cmpop(arr1, arr2))
 
 
+@pytest.mark.parametrize(
+    "dtype,val",
+    [("int8", 200), ("int32", 2**32), ("uint8", -128), ("uint64", -1)],
+)
+@pytest.mark.parametrize(
+    "op",
+    [
+        operator.eq,
+        operator.ne,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+    ],
+)
+@pytest.mark.parametrize("reverse", [False, True])
+def test_series_compare_integer(dtype, val, op, reverse):
+    # Tests that these actually work, even though they are out of bound.
+    force_cast_val = np.array(val).astype(dtype)
+    sr = Series(
+        [np.iinfo(dtype).min, np.iinfo(dtype).max, force_cast_val, None],
+        dtype=dtype,
+    )
+
+    if reverse:
+        _op = op
+
+        def op(x, y):
+            return _op(y, x)
+
+    # We expect the same result as comparing to a value within range (e.g. 0)
+    # except that a NULL value evaluates to False
+    if op(0, val):
+        expected = Series([True, True, True, None])
+    else:
+        expected = Series([False, False, False, None])
+
+    res = op(sr, val)
+    assert_eq(res, expected)
+
+
 def _series_compare_nulls_typegen():
     return [
         *combinations_with_replacement(DATETIME_TYPES, 2),
@@ -539,7 +580,14 @@ def test_series_reflected_ops_scalar(func, dtype, obj_class):
     if obj_class == "Index":
         gs = Index(gs)
 
-    gs_result = func(gs)
+    try:
+        gs_result = func(gs)
+    except OverflowError:
+        # An error is fine, if pandas raises the same error:
+        with pytest.raises(OverflowError):
+            func(random_series)
+
+        return
 
     # class typing
     if obj_class == "Index":
@@ -589,7 +637,14 @@ def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
     if obj_class == "Index":
         gs = Index(gs)
 
-    gs_result = gpu_func(gs)
+    try:
+        gs_result = gpu_func(gs)
+    except OverflowError:
+        # An error is fine, if pandas raises the same error:
+        with pytest.raises(OverflowError):
+            cpu_func(random_series)
+
+        return
 
     # class typing
     if obj_class == "Index":
@@ -770,7 +825,8 @@ def test_operator_func_series_and_scalar(
         fill_value=fill_value,
     )
     pdf_series_result = getattr(pdf_series, func)(
-        scalar, fill_value=fill_value
+        np.array(scalar)[()] if use_cudf_scalar else scalar,
+        fill_value=fill_value,
     )
 
     assert_eq(pdf_series_result, gdf_series_result)
@@ -1679,12 +1735,7 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
     rhs = cudf.Scalar(cudf.NA, dtype=dtype_r)
 
     result = op(lhs, rhs)
-    assert result.value is (
-        cudf.NaT
-        if cudf.api.types.is_datetime64_dtype(result.dtype)
-        or cudf.api.types.is_timedelta64_dtype(result.dtype)
-        else cudf.NA
-    )
+    assert result.value is (cudf.NaT if result.dtype.kind in "mM" else cudf.NA)
 
     # make sure dtype is the same as had there been a valid scalar
     valid_lhs = cudf.Scalar(1, dtype=dtype_l)

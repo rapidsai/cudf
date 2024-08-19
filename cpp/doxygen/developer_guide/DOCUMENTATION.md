@@ -363,7 +363,7 @@ Here is an example of a doxygen description comment for a namespace declaration.
      *
      * This is the top-level namespace which contains all cuDF functions and types.
      */
-    namespace cudf {
+    namespace CUDF_EXPORT cudf {
 
 A description comment should be included only once for each unique namespace declaration.
 Otherwise, if more than one description is found, doxygen aggregates the descriptions in an arbitrary order in the output pages.
@@ -385,7 +385,7 @@ The existing groups have been carefully structured and named, so new groups shou
 
 When creating a new API, specify its group using the [\@ingroup](https://www.doxygen.nl/manual/commands.html#cmdingroup) tag and the group reference id from the [doxygen_groups.h](../include/doxygen_groups.h) file.
 
-    namespace cudf {
+    namespace CUDF_EXPORT cudf {
 
     /**
      * @brief ...
@@ -401,7 +401,7 @@ When creating a new API, specify its group using the [\@ingroup](https://www.dox
 
 You can also use the \@addtogroup with a `@{ ... @}` pair to automatically include doxygen comment blocks as part of a group.
 
-    namespace cudf {
+    namespace CUDF_EXPORT cudf {
     /**
      * @addtogroup transformation_fill
      * @{

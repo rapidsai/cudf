@@ -27,6 +27,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -443,14 +444,17 @@ namespace {
  */
 file_segmentation calculate_segmentation(host_span<orc_column_view const> columns,
                                          hostdevice_2dvector<rowgroup_rows>&& rowgroup_bounds,
-                                         stripe_size_limits max_stripe_size)
+                                         stripe_size_limits max_stripe_size,
+                                         rmm::cuda_stream_view stream)
 {
-  std::vector<stripe_rowgroups> infos;
-  auto const num_rowgroups = rowgroup_bounds.size().first;
-  size_t stripe_start      = 0;
-  size_t stripe_bytes      = 0;
-  size_type stripe_rows    = 0;
-  for (size_t rg_idx = 0; rg_idx < num_rowgroups; ++rg_idx) {
+  // Number of stripes is not known in advance. Only reserve a single element to use pinned memory
+  // resource if at all enabled.
+  auto infos                    = cudf::detail::make_empty_host_vector<stripe_rowgroups>(1, stream);
+  size_type const num_rowgroups = rowgroup_bounds.size().first;
+  size_type stripe_start        = 0;
+  size_t stripe_bytes           = 0;
+  size_type stripe_rows         = 0;
+  for (size_type rg_idx = 0; rg_idx < num_rowgroups; ++rg_idx) {
     auto const rowgroup_total_bytes =
       std::accumulate(columns.begin(), columns.end(), 0ul, [&](size_t total_size, auto const& col) {
         auto const rows = rowgroup_bounds[rg_idx][col.index()].size();
@@ -469,7 +473,9 @@ file_segmentation calculate_segmentation(host_span<orc_column_view const> column
     // Check if adding the current rowgroup to the stripe will make the stripe too large or long
     if ((rg_idx > stripe_start) && (stripe_bytes + rowgroup_total_bytes > max_stripe_size.bytes ||
                                     stripe_rows + rowgroup_rows_max > max_stripe_size.rows)) {
-      infos.emplace_back(infos.size(), stripe_start, rg_idx - stripe_start);
+      infos.push_back(stripe_rowgroups{static_cast<size_type>(infos.size()),
+                                       stripe_start,
+                                       static_cast<size_type>(rg_idx - stripe_start)});
       stripe_start = rg_idx;
       stripe_bytes = 0;
       stripe_rows  = 0;
@@ -478,7 +484,9 @@ file_segmentation calculate_segmentation(host_span<orc_column_view const> column
     stripe_bytes += rowgroup_total_bytes;
     stripe_rows += rowgroup_rows_max;
     if (rg_idx + 1 == num_rowgroups) {
-      infos.emplace_back(infos.size(), stripe_start, num_rowgroups - stripe_start);
+      infos.push_back(stripe_rowgroups{static_cast<size_type>(infos.size()),
+                                       stripe_start,
+                                       static_cast<size_type>(num_rowgroups - stripe_start)});
     }
   }
 
@@ -1335,7 +1343,7 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
     if (num_file_blobs == 0) { return {}; }
 
     // Create empty file stats and merge groups
-    std::vector<statistics_chunk> h_stat_chunks(num_file_blobs);
+    auto h_stat_chunks = cudf::detail::make_host_vector<statistics_chunk>(num_file_blobs, stream);
     cudf::detail::hostdevice_vector<statistics_merge_group> stats_merge(num_file_blobs, stream);
     // Fill in stats_merge and stat_chunks on the host
     for (auto i = 0u; i < num_file_blobs; ++i) {
@@ -1676,39 +1684,39 @@ struct pushdown_null_masks {
   // Owning vector for masks in device memory
   std::vector<rmm::device_uvector<bitmask_type>> data;
   // Pointers to pushdown masks in device memory. Can be same for multiple columns.
-  std::vector<bitmask_type const*> masks;
+  cudf::detail::host_vector<bitmask_type const*> masks;
 };
 
 pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
                                              rmm::cuda_stream_view stream)
 {
-  std::vector<bitmask_type const*> mask_ptrs;
-  mask_ptrs.reserve(orc_table.num_columns());
+  auto mask_ptrs =
+    cudf::detail::make_empty_host_vector<bitmask_type const*>(orc_table.num_columns(), stream);
   std::vector<rmm::device_uvector<bitmask_type>> pd_masks;
   for (auto const& col : orc_table.columns) {
     // Leaf columns don't need pushdown masks
     if (col.num_children() == 0) {
-      mask_ptrs.emplace_back(nullptr);
+      mask_ptrs.push_back({nullptr});
       continue;
     }
     auto const parent_pd_mask = col.is_child() ? mask_ptrs[col.parent_index()] : nullptr;
     auto const null_mask      = col.null_mask();
 
     if (null_mask == nullptr and parent_pd_mask == nullptr) {
-      mask_ptrs.emplace_back(nullptr);
+      mask_ptrs.push_back({nullptr});
       continue;
     }
     if (col.orc_kind() == STRUCT) {
       if (null_mask != nullptr and parent_pd_mask == nullptr) {
         // Reuse own null mask
-        mask_ptrs.emplace_back(null_mask);
+        mask_ptrs.push_back(null_mask);
       } else if (null_mask == nullptr and parent_pd_mask != nullptr) {
         // Reuse parent's pushdown mask
-        mask_ptrs.emplace_back(parent_pd_mask);
+        mask_ptrs.push_back(parent_pd_mask);
       } else {
         // Both are nullable, allocate new pushdown mask
         pd_masks.emplace_back(num_bitmask_words(col.size()), stream);
-        mask_ptrs.emplace_back(pd_masks.back().data());
+        mask_ptrs.push_back({pd_masks.back().data()});
 
         thrust::transform(rmm::exec_policy(stream),
                           null_mask,
@@ -1723,7 +1731,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
       auto const child_col = orc_table.column(col.child_begin()[0]);
       // pushdown mask applies to child column(s); use the child column size
       pd_masks.emplace_back(num_bitmask_words(child_col.size()), stream);
-      mask_ptrs.emplace_back(pd_masks.back().data());
+      mask_ptrs.push_back({pd_masks.back().data()});
       pushdown_lists_null_mask(col, orc_table.d_columns, parent_pd_mask, pd_masks.back(), stream);
     }
   }
@@ -1814,8 +1822,7 @@ orc_table_view make_orc_table_view(table_view const& table,
     append_orc_column(table.column(col_idx), nullptr, table_meta.column_metadata[col_idx]);
   }
 
-  std::vector<TypeKind> type_kinds;
-  type_kinds.reserve(orc_columns.size());
+  auto type_kinds = cudf::detail::make_empty_host_vector<TypeKind>(orc_columns.size(), stream);
   std::transform(
     orc_columns.cbegin(), orc_columns.cend(), std::back_inserter(type_kinds), [](auto& orc_column) {
       return orc_column.orc_kind();
@@ -2298,7 +2305,7 @@ auto convert_table_to_orc_data(table_view const& input,
 
   // Decide stripe boundaries based on rowgroups and char counts
   auto segmentation =
-    calculate_segmentation(orc_table.columns, std::move(rowgroup_bounds), max_stripe_size);
+    calculate_segmentation(orc_table.columns, std::move(rowgroup_bounds), max_stripe_size, stream);
 
   auto stripe_dicts    = build_dictionaries(orc_table, segmentation, sort_dictionaries, stream);
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);

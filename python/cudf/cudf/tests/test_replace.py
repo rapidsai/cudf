@@ -817,12 +817,12 @@ def test_fillna_string(ps_data, fill_value, inplace):
 def test_series_fillna_invalid_dtype(data_dtype):
     gdf = cudf.Series([1, 2, None, 3], dtype=data_dtype)
     fill_value = 2.5
-    with pytest.raises(TypeError) as raises:
-        gdf.fillna(fill_value)
-    raises.match(
+    msg = (
         f"Cannot safely cast non-equivalent"
         f" {type(fill_value).__name__} to {gdf.dtype.type.__name__}"
     )
+    with pytest.raises(TypeError, match=msg):
+        gdf.fillna(fill_value)
 
 
 @pytest.mark.parametrize("data_dtype", NUMERIC_TYPES)
@@ -1377,4 +1377,10 @@ def test_fillna_nan_and_null():
     ser = cudf.Series(pa.array([float("nan"), None, 1.1]), nan_as_null=False)
     result = ser.fillna(2.2)
     expected = cudf.Series([2.2, 2.2, 1.1])
+    assert_eq(result, expected)
+
+
+def test_replace_with_index_objects():
+    result = cudf.Series([1, 2]).replace(cudf.Index([1]), cudf.Index([2]))
+    expected = pd.Series([1, 2]).replace(pd.Index([1]), pd.Index([2]))
     assert_eq(result, expected)

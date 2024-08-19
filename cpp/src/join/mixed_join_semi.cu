@@ -117,9 +117,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
       // Anti and semi return all the row indices from left
       // with a corresponding NULL from the right.
       case join_kind::LEFT_ANTI_JOIN:
-        return get_trivial_left_join_indices(
-                 left_conditional, stream, rmm::mr::get_current_device_resource())
-          .first;
+        return get_trivial_left_join_indices(left_conditional, stream, mr).first;
       // Inner and left semi joins return empty output because no matches can exist.
       case join_kind::LEFT_SEMI_JOIN:
         return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
@@ -165,11 +163,12 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
-  semi_map_type hash_table{compute_hash_table_size(build.num_rows()),
-                           cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-                           cuco::empty_value{cudf::detail::JoinNoneValue},
-                           cudf::detail::cuco_allocator{stream},
-                           stream.value()};
+  semi_map_type hash_table{
+    compute_hash_table_size(build.num_rows()),
+    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+    cuco::empty_value{cudf::detail::JoinNoneValue},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream.value()};
 
   // Create hash table containing all keys found in right table
   // TODO: To add support for nested columns we will need to flatten in many
