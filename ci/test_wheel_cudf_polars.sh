@@ -10,7 +10,7 @@ set -eou pipefail
 # files in cudf_polars/pylibcudf", rather than "are there changes
 # between upstream and this branch which touch cudf_polars/pylibcudf"
 # TODO: is the target branch exposed anywhere in an environment variable?
-if [ -n "$(git diff --name-only origin/branch-24.10...HEAD -- python/cudf_polars/ python/cudf/cudf/_lib/pylibcudf/)" ];
+if [ -n "$(git diff --name-only origin/branch-24.10...HEAD -- python/cudf_polars/ python/pylibcudf/)" ];
 then
     HAS_CHANGES=1
 else
@@ -22,6 +22,7 @@ RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE
 
 # Download the cudf built in the previous step
 RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
+RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-pylibcudf-dep
 
 rapids-logger "Install cudf_polars and test requirements"
 # Constraint to minimum dependency versions if job is set up as "oldest"
@@ -39,6 +40,7 @@ python -m pip install \
     -v \
     --constraint ./constraints.txt \
     ./local-cudf-dep/cudf*.whl \
+    ./local-pylibcudf-dep/pylibcudf*.whl \
     $(echo ./dist/cudf_polars*.whl)[test]
 
 rapids-logger "Run cudf_polars tests"

@@ -7,6 +7,7 @@ RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="dask_cudf_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-s3 ./dist
 
 # Download the cudf built in the previous step
+RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-pylibcudf-dep
 RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
 
 rapids-logger "Install dask and dask_cudf and test requirements"
@@ -24,6 +25,7 @@ fi
 python -m pip install \
     -v \
     --constraint ./constraints.txt \
+    "$(echo ./local-pylibcudf-dep/pylibcudf*.whl)" \
     ./local-cudf-dep/cudf*.whl \
     $(echo ./dist/dask_cudf*.whl)[test]
 

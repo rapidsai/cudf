@@ -36,6 +36,7 @@ if [ "$no_cudf" = true ]; then
     echo "Skipping cudf install"
 else
     RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
+    RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-pylibcudf-dep
     RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
 
     echo "" > ./constraints.txt
@@ -51,6 +52,7 @@ else
     python -m pip install \
         -v \
         --constraint ./constraints.txt \
+        $(ls ./local-pylibcudf-dep/pylibcudf*.whl) \
         $(ls ./local-cudf-dep/cudf*.whl)[test,cudf-pandas-tests]
 fi
 
