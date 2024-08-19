@@ -1978,6 +1978,25 @@ def test_parquet_partitioned(tmpdir_factory, cols, filename):
                 assert fn == filename
 
 
+@pytest.mark.parametrize("kwargs", [{"nrows": 1}, {"skip_rows": 1}])
+def test_parquet_partitioned_notimplemented(tmpdir_factory, kwargs):
+    # Checks that write_to_dataset is wrapping to_parquet
+    # as expected
+    pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
+    size = 100
+    pdf = pd.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="int64"),
+            "b": np.random.choice(list("abcd"), size=size),
+            "c": np.random.choice(np.arange(4), size=size),
+        }
+    )
+    pdf.to_parquet(pdf_dir, index=False, partition_cols=["b"])
+
+    with pytest.raises(NotImplementedError):
+        cudf.read_parquet(pdf_dir, **kwargs)
+
+
 @pytest.mark.parametrize("return_meta", [True, False])
 def test_parquet_writer_chunked_partitioned(tmpdir_factory, return_meta):
     pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
@@ -3766,6 +3785,26 @@ def test_parquet_chunked_reader(
         buffer, use_pandas_metadata=use_pandas_metadata, row_groups=row_groups
     )
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "nrows,skip_rows",
+    [
+        (0, 0),
+        (1000, 0),
+        (0, 1000),
+        (1000, 10000),
+    ],
+)
+def test_parquet_reader_nrows_skiprows(nrows, skip_rows):
+    df = pd.DataFrame(
+        {"a": [1, 2, 3, 4] * 100000, "b": ["av", "qw", "hi", "xyz"] * 100000}
+    )
+    expected = df[skip_rows : skip_rows + nrows]
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+    got = cudf.read_parquet(buffer, nrows=nrows, skip_rows=skip_rows)
+    assert_eq(expected, got)
 
 
 def test_parquet_reader_pandas_compatibility():

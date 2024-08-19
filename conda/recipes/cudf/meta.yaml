@@ -62,12 +62,13 @@ requirements:
     - python
     - cython >=3.0.3
     - rapids-build-backend >=0.3.0,<0.4.0.dev0
-    - scikit-build-core >=0.7.0
+    - scikit-build-core >=0.10.0
     - dlpack >=0.8,<1.0
     # TODO: Change to `2.0` for NumPy 2
     - numpy 1.23
     - pyarrow ==16.1.0.*
     - libcudf ={{ version }}
+    - pylibcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
     - cudatoolkit
@@ -87,6 +88,7 @@ requirements:
     - numpy >=1.23,<2.0a0
     - {{ pin_compatible('pyarrow', max_pin='x.x') }}
     - libcudf ={{ version }}
+    - pylibcudf ={{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0
     {% if cuda_major == "11" %}
