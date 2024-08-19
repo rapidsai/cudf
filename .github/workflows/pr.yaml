@@ -41,11 +41,33 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.10
     with:
       enable_check_generated_files: false
+  fetch-pandas-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      pandas-versions: ${{ steps.get-versions.outputs.versions }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Fetch pandas versions
+        id: get-versions
+        run: |
+          versions=$(python fetch_pandas_versions.py)
+          echo "::set-output name=versions::${versions}"
   wheel-tests-cudf1:
+    needs: fetch-pandas-versions
     secrets: inherit
     strategy:
       matrix:
-        pandas-version: [2.0, 2.1, 2.2, 2.3, 2.4, 2.5] # Add more versions as needed
+        pandas-version: ${{ fromJson(needs.fetch-pandas-versions.outputs.pandas-versions) }}
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
     with:
       build_type: pull-request
