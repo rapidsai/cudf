@@ -106,11 +106,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
             "xsimd_SOURCE AUTO"
   )
 
-  set(ARROW_FOUND
-      TRUE
-      PARENT_SCOPE
-  )
-
   # Arrow_ADDED: set if CPM downloaded Arrow from Github
   if(Arrow_ADDED)
     # Copy these files so we can avoid adding paths in Arrow_BINARY_DIR to
@@ -152,10 +147,16 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
       endif()
     endif()
   endif()
+
   set(ARROW_LIBRARIES
       "${ARROW_LIBRARIES}"
       PARENT_SCOPE
   )
+  set(ARROW_FOUND
+      TRUE
+      PARENT_SCOPE
+  )
+
 endfunction()
 
 if(NOT DEFINED CUDF_VERSION_Arrow)
