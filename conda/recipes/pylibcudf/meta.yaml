@@ -64,8 +64,6 @@ requirements:
     - rapids-build-backend >=0.3.0,<0.4.0.dev0
     - scikit-build-core >=0.10.0
     - dlpack >=0.8,<1.0
-    # TODO: Change to `2.0` for NumPy 2
-    - numpy 1.23
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
@@ -80,7 +78,6 @@ requirements:
     - python
     - typing_extensions >=4.0.0
     - pandas >=2.0,<2.2.3dev0
-    # TODO: Update `numpy` in `host` when dropping `<2.0a0`
     - numpy >=1.23,<2.0a0
     - pyarrow ==16.1.0.*
     - {{ pin_compatible('rmm', max_pin='x.x') }}
