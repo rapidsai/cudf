@@ -66,7 +66,6 @@ requirements:
     - dlpack >=0.8,<1.0
     # TODO: Change to `2.0` for NumPy 2
     - numpy 1.23
-    - pyarrow ==16.1.0.*
     - libcudf ={{ version }}
     - pylibcudf ={{ version }}
     - rmm ={{ minor_version }}
@@ -86,7 +85,7 @@ requirements:
     - numba >=0.57
     # TODO: Update `numpy` in `host` when dropping `<2.0a0`
     - numpy >=1.23,<2.0a0
-    - {{ pin_compatible('pyarrow', max_pin='x.x') }}
+    - pyarrow ==16.1.0.*
     - libcudf ={{ version }}
     - pylibcudf ={{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}

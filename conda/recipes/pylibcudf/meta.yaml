@@ -66,7 +66,6 @@ requirements:
     - dlpack >=0.8,<1.0
     # TODO: Change to `2.0` for NumPy 2
     - numpy 1.23
-    - pyarrow ==16.1.0.*
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
@@ -83,7 +82,7 @@ requirements:
     - pandas >=2.0,<2.2.3dev0
     # TODO: Update `numpy` in `host` when dropping `<2.0a0`
     - numpy >=1.23,<2.0a0
-    - {{ pin_compatible('pyarrow', max_pin='x.x') }}
+    - pyarrow ==16.1.0.*
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0
     {% if cuda_major == "11" %}

@@ -10,6 +10,7 @@ files:
       - build_all
       - build_cpp
       - build_python_common
+      - pyarrow_run
       - cuda
       - cuda_version
       - depends_on_cupy
@@ -356,9 +357,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cython>=3.0.3
-          # Hard pin the patch version used during the build. This must be kept
-          # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==16.1.0.*
       - output_types: pyproject
         packages:
           # Hard pin the patch version used during the build.
