@@ -2501,6 +2501,7 @@ class DatetimeIndex(Index):
         out_column = self._column.get_dt_field(field)
         out_column = NumericalColumn(
             data=out_column.base_data,
+            size=out_column.size,
             dtype=out_column.dtype,
             mask=out_column.base_mask,
             offset=out_column.offset,
@@ -3353,6 +3354,7 @@ def interval_range(
         return IntervalIndex(data, closed=closed, name=name)
 
     interval_col = IntervalColumn(
+        data=None,
         dtype=IntervalDtype(left_col.dtype, closed),
         size=len(left_col),
         children=(left_col, right_col),
@@ -3424,6 +3426,7 @@ class IntervalIndex(Index):
             elif isinstance(data.dtype, (pd.IntervalDtype, IntervalDtype)):
                 data = np.array([], dtype=data.dtype.subtype)
             interval_col = IntervalColumn(
+                None,
                 dtype=IntervalDtype(data.dtype, closed),
                 size=len(data),
                 children=(as_column(data), as_column(data)),
@@ -3435,12 +3438,13 @@ class IntervalIndex(Index):
             if copy:
                 col = col.copy()
             interval_col = IntervalColumn(
+                data=None,
                 dtype=IntervalDtype(col.dtype.subtype, closed),
                 mask=col.mask,
                 size=col.size,
                 offset=col.offset,
                 null_count=col.null_count,
-                children=col.children,
+                children=col.children,  # type: ignore[arg-type]
             )
 
         if dtype:
@@ -3516,6 +3520,7 @@ class IntervalIndex(Index):
         )
 
         interval_col = IntervalColumn(
+            data=None,
             dtype=IntervalDtype(left_col.dtype, closed),
             size=len(left_col),
             children=(left_col, right_col),

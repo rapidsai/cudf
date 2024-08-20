@@ -6,7 +6,8 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 
-from cudf._lib import pylibcudf
+import pylibcudf
+
 from cudf._lib.scalar import as_device_scalar
 
 

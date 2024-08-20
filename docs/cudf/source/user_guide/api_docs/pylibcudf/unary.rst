@@ -2,5 +2,5 @@
 unary
 =====
 
-.. automodule:: cudf._lib.pylibcudf.unary
+.. automodule:: pylibcudf.unary
    :members:
