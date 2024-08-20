@@ -1286,7 +1286,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   }
 
   // Variable to keep track of the current offset
-  uint32_t curr_offset = 0;
+  size_t total_map_storage_size = 0;
   // Populate dict offsets and sizes for each chunk that need to build a dictionary.
   std::for_each(h_chunks.begin(), h_chunks.end(), [&](auto& chunk) {
     auto const& chunk_col_desc = col_desc[chunk.col_desc_id];
@@ -1303,13 +1303,11 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
       chunk.dict_map_size =
         static_cast<cudf::size_type>(cuco::make_window_extent<map_cg_size, window_size>(
           static_cast<cudf::size_type>(occupancy_factor * chunk.num_values)));
-      chunk.dict_map_offset = curr_offset;
-      curr_offset += chunk.dict_map_size;
+      chunk.dict_map_offset = total_map_storage_size;
+      total_map_storage_size += chunk.dict_map_size;
     }
   });
 
-  // Compute total map storage
-  auto const total_map_storage_size = static_cast<std::size_t>(curr_offset);
 
   // No chunk needs to create a dictionary, exit early
   if (total_map_storage_size == 0) { return {std::move(dict_data), std::move(dict_index)}; }
