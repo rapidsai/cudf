@@ -27,9 +27,6 @@ project(
 option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulting to local files"
        OFF
 )
-option(USE_LIBARROW_FROM_PYARROW "Only use the libarrow contained in pyarrow" OFF)
-mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
-
 # Find Python early so that later commands can use it
 find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
 
@@ -39,19 +36,6 @@ if(FIND_CUDF_CPP)
   include(rapids-export)
   include(rapids-find)
   rapids_cpm_init()
-
-  if(USE_LIBARROW_FROM_PYARROW)
-    # We need to find arrow before libcudf since libcudf requires it but doesn't bundle arrow
-    # libraries. These variables have no effect because we are always searching for arrow via
-    # pyarrow, but they must be set as they are required arguments to the function in
-    # get_arrow.cmake.
-    set(CUDF_USE_ARROW_STATIC OFF)
-    set(CUDF_ENABLE_ARROW_S3 OFF)
-    set(CUDF_ENABLE_ARROW_ORC OFF)
-    set(CUDF_ENABLE_ARROW_PYTHON OFF)
-    set(CUDF_ENABLE_ARROW_PARQUET OFF)
-    include(../../cpp/cmake/thirdparty/get_arrow.cmake)
-  endif()
 
   find_package(cudf "${RAPIDS_VERSION}" REQUIRED)
 
@@ -92,7 +76,6 @@ endif()
 
 rapids_cython_init()
 
-include(cmake/Modules/LinkPyarrowHeaders.cmake)
 add_subdirectory(pylibcudf)
 
 if(DEFINED cython_lib_dir)
