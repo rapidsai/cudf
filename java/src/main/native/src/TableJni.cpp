@@ -2637,8 +2637,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv
     // The pointer to the shared_ptr<> is returned as a jlong.
     using result_t = std::shared_ptr<arrow::Table>;
 
-    auto got_arrow_schema = cudf::to_arrow_schema(*tview, state->get_column_metadata(*tview));
-    auto got_arrow_array  = cudf::to_arrow_host(*tview);
+    auto got_arrow_schema   = cudf::to_arrow_schema(*tview, state->get_column_metadata(*tview));
+    got_arrow_schema->flags = ARROW_FLAG_NULLABLE;
+    auto got_arrow_array    = cudf::to_arrow_host(*tview);
     auto batch =
       arrow::ImportRecordBatch(&got_arrow_array->array, got_arrow_schema.get()).ValueOrDie();
     auto result = arrow::Table::FromRecordBatches({batch}).ValueOrDie();
