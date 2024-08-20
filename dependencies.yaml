@@ -24,7 +24,6 @@ files:
       - rapids_build_setuptools
       - run_common
       - run_cudf
-      - run_libcudf
       - run_pylibcudf
       - run_dask_cudf
       - run_custreamz
@@ -166,6 +165,7 @@ files:
     extras:
       table: project
     includes:
+      - depends_on_libcudf
       - run_pylibcudf
       - pyarrow_run
   py_test_pylibcudf:
@@ -510,25 +510,6 @@ dependencies:
         packages:
           # Allow runtime version to float up to patch version
           - pyarrow>=16.1.0,<16.2.0a0
-  run_libcudf:
-    common:
-      - output_types: [conda]
-        packages:
-          - *libcudf_unsuffixed
-    specific:
-      - output_types: [pyproject]
-        matrices:
-          - matrix:
-              cuda: "12.*"
-              cuda_suffixed: "true"
-            packages:
-              - libcudf-cu12==24.10.*,>=0.0.0a0
-          - matrix:
-              cuda: "11.*"
-              cuda_suffixed: "true"
-            packages:
-              - libcudf-cu11==24.10.*,>=0.0.0a0
-          - {matrix: null, packages: [*libcudf_unsuffixed]}
   cuda_version:
     specific:
       - output_types: conda
@@ -718,7 +699,6 @@ dependencies:
           - typing_extensions>=4.0.0
       - output_types: conda
         packages:
-          - *libcudf_unsuffixed
           - *rmm_unsuffixed
       - output_types: requirements
         packages:
@@ -742,15 +722,13 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - *libcudf_cu12
               - *rmm_cu12
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
-              - *libcudf_cu11
               - *rmm_cu11
-          - {matrix: null, packages: [*libcudf_unsuffixed, *rmm_unsuffixed]}
+          - {matrix: null, packages: [*rmm_unsuffixed]}
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
