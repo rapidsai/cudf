@@ -16,7 +16,6 @@ files:
       - depends_on_rmm
       - develop
       - docs
-      - libarrow_build
       - notebooks
       - py_version
       - rapids_build_skbuild
@@ -366,16 +365,6 @@ dependencies:
           # Sync with conda build constraint & wheel run constraint.
           # TODO: Change to `2.0.*` for NumPy 2
           - numpy==1.23.*
-  libarrow_build:
-    common:
-      - output_types: conda
-        packages:
-          # Hard pin the Arrow patch version used during the build. This must
-          # be kept in sync with the version pinned in get_arrow.cmake.
-          - libarrow-acero==16.1.0.*
-          - libarrow-dataset==16.1.0.*
-          - libarrow==16.1.0.*
-          - libparquet==16.1.0.*
   libarrow_run:
     common:
       - output_types: conda
