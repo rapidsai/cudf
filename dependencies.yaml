@@ -97,6 +97,7 @@ files:
       - build_python_common
       - depends_on_pylibcudf
       - depends_on_libcudf
+      - depends_on_librmm
       - depends_on_rmm
   py_run_cudf:
     output: pyproject
@@ -162,6 +163,7 @@ files:
       - build_base
       - build_python_common
       - depends_on_libcudf
+      - depends_on_librmm
       - depends_on_rmm
   py_run_pylibcudf:
     output: pyproject
