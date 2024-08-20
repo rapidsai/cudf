@@ -1285,7 +1285,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     return std::pair(std::move(dict_data), std::move(dict_index));
   }
 
-  // Variable to keep track of the current offset
+  // Variable to keep track of the current total map storage size
   size_t total_map_storage_size = 0;
   // Populate dict offsets and sizes for each chunk that need to build a dictionary.
   std::for_each(h_chunks.begin(), h_chunks.end(), [&](auto& chunk) {
@@ -1307,7 +1307,6 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
       total_map_storage_size += chunk.dict_map_size;
     }
   });
-
 
   // No chunk needs to create a dictionary, exit early
   if (total_map_storage_size == 0) { return {std::move(dict_data), std::move(dict_index)}; }
