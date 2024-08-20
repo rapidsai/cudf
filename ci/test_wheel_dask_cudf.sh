@@ -15,7 +15,7 @@ RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels
 python -m pip install \
   "$(echo ./dist/cudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \
   "$(echo ./dist/dask_cudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test]" \
-  "$(echo ./dist/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test]" \
+  "$(echo ./dist/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \
   "$(echo ./dist/pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}

@@ -87,6 +87,7 @@ jobs:
       date: ${{ inputs.date }}
       package-name: libcudf
   wheel-build-pylibcudf:
+    needs: [wheel-publish-libcudf]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.10
     with:
