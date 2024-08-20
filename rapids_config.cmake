@@ -26,14 +26,11 @@ else()
   )
 endif()
 
-include(FetchContent)
-# GIT_TAG = last commit prior to https://github.com/rapidsai/rapids-cmake/pull/678
-FetchContent_Declare(
-  rapids-cmake
-  GIT_REPOSITORY https://github.com/rapidsai/rapids-cmake.git
-  GIT_TAG        0e65a8481b9895b5075d2b601690540a21b45deb
-)
-file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-24.10/RAPIDS.cmake
-  ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS-${RAPIDS_VERSION_MAJOR_MINOR}.cmake)
-
+if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS-${RAPIDS_VERSION_MAJOR_MINOR}.cmake")
+  file(
+    DOWNLOAD
+    "https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-${RAPIDS_VERSION_MAJOR_MINOR}/RAPIDS.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS-${RAPIDS_VERSION_MAJOR_MINOR}.cmake"
+  )
+endif()
 include("${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS-${RAPIDS_VERSION_MAJOR_MINOR}.cmake")
