@@ -6,7 +6,6 @@ import functools
 import os
 import traceback
 import warnings
-from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
@@ -404,28 +403,3 @@ def _all_bools_with_nulls(lhs, rhs, bool_fill_value):
     if result_mask is not None:
         result_col = result_col.set_mask(result_mask.as_mask())
     return result_col
-
-
-@contextmanager
-def maybe_filter_deprecation(
-    condition: bool, message: str, category: type[Warning]
-):
-    """Conditionally filter a warning category.
-
-    Parameters
-    ----------
-    condition
-        If true, filter the warning
-    message
-        Message to match, passed to :func:`warnings.filterwarnings`
-    category
-        Category of warning, passed to :func:`warnings.filterwarnings`
-    """
-    with warnings.catch_warnings():
-        if condition:
-            warnings.filterwarnings(
-                "ignore",
-                message,
-                category=category,
-            )
-        yield
