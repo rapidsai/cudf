@@ -435,7 +435,5 @@ if(NOT DEFINED CUDF_VERSION_Arrow)
   )
 endif()
 
-find_and_configure_arrow(
-  ${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} ${CUDF_ENABLE_ARROW_S3} ${CUDF_ENABLE_ARROW_ORC}
-  ${CUDF_ENABLE_ARROW_PYTHON} ${CUDF_ENABLE_ARROW_PARQUET} ${USE_LIBARROW_FROM_PYARROW}
-)
+# TODO: Remove arguments we deem unnecessary going forward
+find_and_configure_arrow(${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} OFF OFF OFF OFF OFF)

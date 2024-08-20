@@ -24,8 +24,8 @@ rapids_test_init()
 # properties and linking to build the test
 function(ConfigureTest CMAKE_TEST_NAME)
   set(options)
-  set(one_value GPUS PERCENT STREAM_MODE EXTRA_LIB)
-  set(multi_value)
+  set(one_value GPUS PERCENT STREAM_MODE)
+  set(multi_value EXTRA_LIBS)
   cmake_parse_arguments(_CUDF_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
   if(NOT DEFINED _CUDF_TEST_GPUS AND NOT DEFINED _CUDF_TEST_PERCENT)
     set(_CUDF_TEST_GPUS 1)
@@ -57,7 +57,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
   target_link_libraries(
     ${CMAKE_TEST_NAME}
     PRIVATE cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
-            nvtx3::nvtx3-cpp $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIB}"
+            nvtx3::nvtx3-cpp $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
   )
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
@@ -77,6 +77,14 @@ function(ConfigureTest CMAKE_TEST_NAME)
     )
   endif()
 endfunction()
+
+# ##################################################################################################
+# dependencies  ###################################################################################
+# ##################################################################################################
+
+# find arrow. TODO: Always use static for tests set(CUDF_USE_ARROW_STATIC ON)
+set(CUDF_USE_ARROW_STATIC OFF)
+include(../cmake/thirdparty/get_arrow.cmake)
 
 # ##################################################################################################
 # test sources ##################################################################################
@@ -197,7 +205,7 @@ ConfigureTest(
   QUANTILES_TEST quantiles/percentile_approx_test.cpp quantiles/quantile_test.cpp
   quantiles/quantiles_test.cpp
   GPUS 1
-  PERCENT 70
+  PERCENT 70 EXTRA_LIBS ${ARROW_LIBRARIES}
 )
 
 # ##################################################################################################
@@ -276,8 +284,9 @@ ConfigureTest(
   interop/from_arrow_host_test.cpp
   interop/from_arrow_stream_test.cpp
   interop/dlpack_test.cpp
-  EXTRA_LIB
+  EXTRA_LIBS
   nanoarrow
+  ${ARROW_LIBRARIES}
 )
 
 # ##################################################################################################
