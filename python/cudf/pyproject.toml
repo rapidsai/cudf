@@ -24,7 +24,7 @@ dependencies = [
     "cupy-cuda11x>=12.0.0",
     "fsspec>=0.6.0",
     "numba>=0.57",
-    "numpy>=1.23,<3",
+    "numpy>=1.23,<3.0a0",
     "nvtx>=0.2.1",
     "packaging",
     "pandas>=2.0,<2.2.3dev0",
