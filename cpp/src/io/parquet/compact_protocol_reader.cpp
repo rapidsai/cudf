@@ -140,7 +140,7 @@ struct parquet_field_bool_list : public parquet_field_list<bool, FieldType::BOOL
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       auto const current_byte = cpr->getb();
       assert_bool_field_type(current_byte);
-      CUDF_EXPECTS(i >= 0 and i < val.size());
+      CUDF_EXPECTS(i < val.size());
       val[i] = current_byte == static_cast<int>(FieldType::BOOLEAN_TRUE);
     };
     bind_read_func(read_value);
@@ -190,7 +190,7 @@ struct parquet_field_int_list : public parquet_field_list<T, EXPECTED_TYPE> {
   parquet_field_int_list(int f, std::vector<T>& v) : parquet_field_list<T, EXPECTED_TYPE>(f, v)
   {
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
-      CUDF_EXPECTS(i >= 0 and i < val.size());
+      CUDF_EXPECTS(i < val.size());
       val[i] = cpr->get_zigzag<T>();
     };
     this->bind_read_func(read_value);
@@ -235,7 +235,7 @@ struct parquet_field_string_list : public parquet_field_list<std::string, FieldT
       auto const l = cpr->get_u32();
       CUDF_EXPECTS(l < static_cast<size_t>(cpr->m_end - cpr->m_cur), "string length mismatch");
 
-      CUDF_EXPECTS(i >= 0 and i < val.size());
+      CUDF_EXPECTS(i < val.size());
       val[i].assign(reinterpret_cast<char const*>(cpr->m_cur), l);
       cpr->m_cur += l;
     };
@@ -273,7 +273,7 @@ struct parquet_field_enum_list : public parquet_field_list<Enum, FieldType::I32>
     : parquet_field_list<Enum, FieldType::I32>(f, v)
   {
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
-      CUDF_EXPECTS(i >= 0 and i < val.size());
+      CUDF_EXPECTS(i < val.size());
       val[i] = static_cast<Enum>(cpr->get_i32());
     };
     this->bind_read_func(read_value);
@@ -359,7 +359,7 @@ struct parquet_field_struct_list : public parquet_field_list<T, FieldType::STRUC
     : parquet_field_list<T, FieldType::STRUCT>(f, v)
   {
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
-      CUDF_EXPECTS(i >= 0 and i < val.size());
+      CUDF_EXPECTS(i < val.size());
       cpr->read(&val[i]);
     };
     this->bind_read_func(read_value);
@@ -404,7 +404,7 @@ struct parquet_field_binary_list
       auto const l = cpr->get_u32();
       CUDF_EXPECTS(l <= static_cast<size_t>(cpr->m_end - cpr->m_cur), "binary length mismatch");
 
-      CUDF_EXPECTS(i >= 0 and i < val.size());
+      CUDF_EXPECTS(i < val.size());
       val[i].resize(l);
       val[i].assign(cpr->m_cur, cpr->m_cur + l);
       cpr->m_cur += l;
