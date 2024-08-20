@@ -270,7 +270,7 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
       switch (jnk.starttype) {
         case BOL: {
           if (pos == 0) { break; }
-          if (startchar != '^' && startchar != 'S') { return thrust::nullopt; }
+          if (startchar != '^' && startchar != 'S') { return cuda::std::nullopt; }
           if (startchar != '\n') { break; }
           --itr;
           startchar = static_cast<char_utf8>('\n');
@@ -278,7 +278,7 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
         }
         case CHAR: {
           auto const find_itr = find_char(startchar, dstr, itr);
-          if (find_itr.byte_offset() >= dstr.size_bytes()) { return thrust::nullopt; }
+          if (find_itr.byte_offset() >= dstr.size_bytes()) { return cuda::std::nullopt; }
           itr = find_itr + (jnk.starttype == BOL);
           pos = itr.position();
           break;
@@ -418,7 +418,7 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
     checkstart = jnk.list1->get_size() == 0;
   } while (!last_character && (!checkstart || !match));
 
-  return match ? match_result({begin, end}) : thrust::nullopt;
+  return match ? match_result({begin, end}) : cuda::std::nullopt;
 }
 
 __device__ __forceinline__ match_result reprog_device::find(int32_t const thread_idx,

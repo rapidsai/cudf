@@ -22,7 +22,6 @@ except ImportError:
     import json
 
 cimport pylibcudf.libcudf.io.types as cudf_io_types
-from pylibcudf.io.datasource cimport NativeFileDatasource
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.orc cimport (
     chunked_orc_writer_options,
@@ -70,8 +69,6 @@ from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
-
-from pyarrow.lib import NativeFile
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
@@ -203,10 +200,6 @@ cpdef read_parsed_orc_statistics(filepath_or_buffer):
     --------
     cudf.io.orc.read_orc_statistics
     """
-
-    # Handle NativeFile input
-    if isinstance(filepath_or_buffer, NativeFile):
-        filepath_or_buffer = NativeFileDatasource(filepath_or_buffer)
 
     cdef parsed_orc_statistics parsed = (
         libcudf_read_parsed_orc_statistics(make_source_info([filepath_or_buffer]))
@@ -490,9 +483,6 @@ cdef orc_reader_options make_orc_reader_options(
     bool use_index
 ) except*:
 
-    for i, datasource in enumerate(filepaths_or_buffers):
-        if isinstance(datasource, NativeFile):
-            filepaths_or_buffers[i] = NativeFileDatasource(datasource)
     cdef vector[vector[size_type]] strps = stripes
     cdef orc_reader_options opts
     cdef source_info src = make_source_info(filepaths_or_buffers)
