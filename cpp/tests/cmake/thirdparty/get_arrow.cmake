@@ -37,6 +37,14 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
       )
       return()
     endif()
+
+    set(ARROW_BUILD_STATIC ON)
+    set(ARROW_BUILD_SHARED OFF)
+    set(ARROW_DEPENDENCY_USE_SHARED OFF)
+    set(ARROW_LIBRARIES arrow_static)
+    # Turn off CPM using `find_package` so we always download and make sure we get proper static
+    # library.
+    set(CPM_DOWNLOAD_Arrow TRUE)
   else()
     if(TARGET arrow_shared)
       set(ARROW_FOUND
@@ -49,25 +57,15 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
       )
       return()
     endif()
-  endif()
 
-  if(NOT ARROW_SIMD_LEVEL)
-    set(ARROW_SIMD_LEVEL "NONE")
-  endif()
-
-  if(BUILD_STATIC)
-    set(ARROW_BUILD_STATIC ON)
-    set(ARROW_BUILD_SHARED OFF)
-    set(ARROW_DEPENDENCY_USE_SHARED OFF)
-    set(ARROW_LIBRARIES arrow_static)
-    # Turn off CPM using `find_package` so we always download and make sure we get proper static
-    # library.
-    set(CPM_DOWNLOAD_Arrow TRUE)
-  else()
     set(ARROW_BUILD_STATIC OFF)
     set(ARROW_BUILD_SHARED ON)
     set(ARROW_DEPENDENCY_USE_SHARED ON)
     set(ARROW_LIBRARIES arrow_shared)
+  endif()
+
+  if(NOT ARROW_SIMD_LEVEL)
+    set(ARROW_SIMD_LEVEL "NONE")
   endif()
 
   rapids_cpm_find(
