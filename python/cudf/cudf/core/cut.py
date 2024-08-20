@@ -9,7 +9,7 @@ import pandas as pd
 import cudf
 from cudf.api.types import is_list_like
 from cudf.core.column import as_column
-from cudf.core.column.categorical import CategoricalColumn
+from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.index import IntervalIndex, interval_range
 
 
@@ -282,6 +282,8 @@ def cut(
             # when we have duplicate labels and ordered is False, we
             # should allow duplicate categories.
             return interval_labels[index_labels]
+
+    index_labels = as_unsigned_codes(len(interval_labels), index_labels)
 
     col = CategoricalColumn(
         data=None,

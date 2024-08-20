@@ -21,7 +21,7 @@ import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
 from cudf.core.column import as_column, column_empty
-from cudf.core.column.categorical import CategoricalColumn
+from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
 
@@ -843,6 +843,9 @@ def _parquet_to_frame(
                 codes = as_column(
                     partition_categories[name].index(value),
                     length=_len,
+                )
+                codes = as_unsigned_codes(
+                    len(partition_categories[name]), codes
                 )
                 dfs[-1][name] = CategoricalColumn(
                     data=None,

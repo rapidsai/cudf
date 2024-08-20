@@ -21,8 +21,6 @@ from typing_extensions import Self
 import rmm
 
 import cudf
-import cudf.core.column
-import cudf.core.column.categorical
 from cudf import _lib as libcudf
 from cudf._lib.column import Column
 from cudf._lib.null_mask import (
@@ -354,7 +352,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
             codes = libcudf.interop.from_arrow(indices_table)[0]
             categories = libcudf.interop.from_arrow(dictionaries_table)[0]
-
+            codes = cudf.core.column.categorical.as_unsigned_codes(
+                len(categories), codes
+            )
             return cudf.core.column.CategoricalColumn(
                 data=None,
                 size=codes.size,
@@ -1042,13 +1042,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             and dtype._categories is not None
         ):
             cat_col = dtype._categories
-            labels = self._label_encoding(cats=cat_col)
+            codes = self._label_encoding(cats=cat_col)
+            codes = cudf.core.column.categorical.as_unsigned_codes(
+                len(cat_col), codes
+            )
             return cudf.core.column.categorical.CategoricalColumn(
                 data=None,
                 size=None,
                 dtype=dtype,
                 mask=self.mask,
-                children=(labels,),
+                children=(codes,),
             )
 
         # Categories must be unique and sorted in ascending order.
@@ -1060,10 +1063,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # columns include null index in factorization; remove:
         if self.has_nulls():
             cats = cats.dropna()
-            min_type = min_unsigned_type(len(cats), 8)
-            if cudf.dtype(min_type).itemsize < labels.dtype.itemsize:
-                labels = labels.astype(min_type)
 
+        labels = cudf.core.column.categorical.as_unsigned_codes(
+            len(cats), labels
+        )
         return cudf.core.column.categorical.CategoricalColumn(
             data=None,
             size=None,

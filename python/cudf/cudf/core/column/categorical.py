@@ -52,6 +52,15 @@ if TYPE_CHECKING:
 _DEFAULT_CATEGORICAL_VALUE = np.int8(-1)
 
 
+def as_unsigned_codes(
+    num_cats: int, codes: NumericalColumn
+) -> NumericalColumn:
+    codes_dtype = min_unsigned_type(num_cats)
+    return cast(
+        cudf.core.column.numerical.NumericalColumn, codes.astype(codes_dtype)
+    )
+
+
 class CategoricalAccessor(ColumnMethods):
     """
     Accessor object for categorical properties of the Series values.
@@ -715,7 +724,7 @@ class CategoricalColumn(column.ColumnBase):
             )
         return self.codes._binaryop(other.codes, op)
 
-    def normalize_binop_value(self, other: ScalarLike) -> CategoricalColumn:
+    def normalize_binop_value(self, other: ScalarLike) -> Self:
         if isinstance(other, column.ColumnBase):
             if not isinstance(other, CategoricalColumn):
                 return NotImplemented
@@ -723,9 +732,17 @@ class CategoricalColumn(column.ColumnBase):
                 raise TypeError(
                     "Categoricals can only compare with the same type"
                 )
-            return other
-
-        return column.as_column(other, length=len(self)).astype(self.dtype)
+            return cast(Self, other)
+        codes = column.as_column(
+            self._encode(other), length=len(self), dtype=self.codes.dtype
+        )
+        return type(self)(
+            data=None,
+            size=self.size,
+            dtype=self.dtype,
+            mask=self.base_mask,
+            children=(codes,),
+        )
 
     def sort_values(self, ascending: bool = True, na_position="last") -> Self:
         codes = self.codes.sort_values(ascending, na_position)
@@ -973,16 +990,17 @@ class CategoricalColumn(column.ColumnBase):
         output = libcudf.replace.replace(
             replaced, to_replace_col, replacement_col
         )
+        codes = as_unsigned_codes(len(new_cats["cats"]), output)
 
         result = type(self)(
             data=self.data,  # type: ignore[arg-type]
-            size=output.size,
+            size=codes.size,
             dtype=CategoricalDtype(
                 categories=new_cats["cats"], ordered=self.dtype.ordered
             ),
-            mask=output.base_mask,
-            offset=output.offset,
-            children=(output,),
+            mask=codes.base_mask,
+            offset=codes.offset,
+            children=(codes,),
         )
         if result.dtype != self.dtype:
             warnings.warn(
@@ -1091,6 +1109,7 @@ class CategoricalColumn(column.ColumnBase):
                 length=self.size,
                 dtype=self.codes.dtype,
             )
+            codes = as_unsigned_codes(len(dtype.categories), codes)
             return type(self)(
                 data=self.data,  # type: ignore[arg-type]
                 size=self.size,
@@ -1184,6 +1203,10 @@ class CategoricalColumn(column.ColumnBase):
             codes = [o for o in codes if len(o)]
             codes_col = libcudf.concat.concat_columns(objs)
 
+        codes_col = as_unsigned_codes(
+            len(cats),
+            cast(cudf.core.column.numerical.NumericalColumn, codes_col),
+        )
         return CategoricalColumn(
             data=None,
             size=codes_col.size,
@@ -1250,6 +1273,7 @@ class CategoricalColumn(column.ColumnBase):
                     length=self.size,
                     dtype=self.codes.dtype,
                 )
+                new_codes = as_unsigned_codes(len(new_categories), new_codes)
                 out_col = type(self)(
                     data=self.data,  # type: ignore[arg-type]
                     size=self.size,
@@ -1346,6 +1370,7 @@ class CategoricalColumn(column.ColumnBase):
         new_codes = df._data["new_codes"]
 
         # codes can't have masks, so take mask out before moving in
+        new_codes = as_unsigned_codes(len(new_cats), new_codes)
         return type(self)(
             data=self.data,  # type: ignore[arg-type]
             size=new_codes.size,

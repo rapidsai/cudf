@@ -51,6 +51,7 @@ from cudf.core.column import (
     column_empty,
     concat_columns,
 )
+from cudf.core.column.categorical import as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask
 from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
@@ -8504,15 +8505,16 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
 def _reassign_categories(categories, cols, col_idxs):
     for name, idx in zip(cols, col_idxs):
         if idx in categories:
+            codes = as_unsigned_codes(len(categories[idx]), cols[name])
             cols[name] = CategoricalColumn(
                 data=None,
-                size=cols[name].size,
+                size=codes.size,
                 dtype=cudf.CategoricalDtype(
                     categories=categories[idx], ordered=False
                 ),
-                mask=cols[name].base_mask,
-                offset=cols[name].offset,
-                children=(cols[name],),
+                mask=codes.base_mask,
+                offset=codes.offset,
+                children=(codes,),
             )
 
 

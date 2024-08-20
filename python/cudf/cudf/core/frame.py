@@ -27,7 +27,7 @@ from cudf.core.column import (
     deserialize_columns,
     serialize_columns,
 )
-from cudf.core.column.categorical import CategoricalColumn
+from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.utils import ioutils
@@ -889,21 +889,21 @@ class Frame(BinaryOperand, Scannable):
                 for name in dict_dictionaries.keys()
             }
 
-            cudf_category_frame = {
-                name: CategoricalColumn(
+            for name, codes in zip(
+                dict_indices_table.column_names, indices_columns
+            ):
+                categories = cudf_dictionaries_columns[name]
+                codes = as_unsigned_codes(len(categories), codes)
+                cudf_category_frame[name] = CategoricalColumn(
                     data=None,
                     size=codes.size,
                     dtype=cudf.CategoricalDtype(
-                        categories=cudf_dictionaries_columns[name],
+                        categories=categories,
                         ordered=dict_ordered[name],
                     ),
                     mask=codes.base_mask,
                     children=(codes,),
                 )
-                for name, codes in zip(
-                    dict_indices_table.column_names, indices_columns
-                )
-            }
 
         # Handle non-dict arrays
         cudf_non_category_frame = {
