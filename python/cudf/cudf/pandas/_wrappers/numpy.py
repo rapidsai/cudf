@@ -11,6 +11,7 @@ from packaging import version
 
 from ..fast_slow_proxy import (
     _FastSlowAttribute,
+    is_proxy_object,
     make_final_proxy_type,
     make_intermediate_proxy_type,
 )
@@ -104,6 +105,18 @@ def wrap_ndarray(cls, arr: cupy.ndarray | numpy.ndarray, constructor):
         # super(ndarray, cls) == super(ndarray, ndarray) == super(cls,
         # cls)
         return super(cls, cls)._fsproxy_wrap(arr, constructor)
+
+
+numpy_asarray = numpy.asarray
+
+
+def asarray(*args, **kwargs):
+    if is_proxy_object(args[0]):
+        return numpy_asarray(args[0]._fsproxy_slow, *args[1:], **kwargs)
+    return numpy_asarray(*args, **kwargs)
+
+
+numpy.asarray = asarray
 
 
 ndarray = make_final_proxy_type(

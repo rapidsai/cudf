@@ -1634,9 +1634,17 @@ def test_change_index_name(index):
         assert df.index.name == name
 
 
-def test_numpy_ndarray_isinstancecheck(series):
-    s1, s2 = series
-    arr1 = s1.values
-    arr2 = s2.values
+def test_numpy_ndarray_isinstancecheck(array):
+    arr1, arr2 = array
     assert isinstance(arr1, np.ndarray)
     assert isinstance(arr2, np.ndarray)
+
+
+def test_numpy_ndarray_np_ufunc(array):
+    arr1, arr2 = array
+
+    @np.vectorize
+    def add_one_ufunc(arr):
+        return arr + 1
+
+    tm.assert_almost_equal(add_one_ufunc(arr1), add_one_ufunc(arr2))

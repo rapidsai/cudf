@@ -4,9 +4,18 @@
 
 import numpy as np
 
+numpy_asarray = np.asarray
+
 
 class ProxyNDarrayBase(np.ndarray):
     def __new__(cls, input_array, *args, **kwargs):
-        obj = super().__new__(cls, shape=(0,))
-        obj._fsproxy_wrapped = input_array
-        return np.asarray(obj).view(cls)
+        if isinstance(input_array, np.ndarray):
+            obj = input_array
+        else:
+            obj = super().__new__(
+                cls, shape=input_array.shape, dtype=input_array.dtype
+            )
+        view = numpy_asarray(obj).view(cls)
+        view._fsproxy_wrapped = input_array
+
+        return view
