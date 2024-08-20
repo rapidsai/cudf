@@ -115,14 +115,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
     set(ARROW_LIBRARIES arrow_shared)
   endif()
 
-  # Arrow_DIR:   set if CPM found Arrow on the system/conda/etc.
-  if(Arrow_DIR)
-    # This extra find_package is necessary because rapids_cpm_find does not propagate all the
-    # variables from find_package that we might need. This is especially problematic when
-    # rapids_cpm_find builds from source.
-    find_package(Arrow REQUIRED QUIET)
-    # Arrow_ADDED: set if CPM downloaded Arrow from Github
-  elseif(Arrow_ADDED)
+  # Arrow_ADDED: set if CPM downloaded Arrow from Github
+  if(Arrow_ADDED)
     # Copy these files so we can avoid adding paths in Arrow_BINARY_DIR to
     # target_include_directories. That defeats ccache.
     file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/util/config.h"
@@ -143,7 +137,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
                   "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/flatbuffers/include>"
       )
     endforeach()
-  else()
+  elseif(NOT Arrow_DIR)
     set(ARROW_FOUND
         FALSE
         PARENT_SCOPE
