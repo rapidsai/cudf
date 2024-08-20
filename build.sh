@@ -342,6 +342,7 @@ if buildAll || hasArg libcudf; then
     fi
 fi
 
+# Build and install the libcudf Python package
 if buildAll || hasArg libcudfwheel; then
 
     cd ${REPODIR}/python/libcudf
@@ -357,7 +358,7 @@ if buildAll || hasArg pylibcudf; then
         python ${PYTHON_ARGS_FOR_INSTALL} .
 fi
 
-# Build and install the cudf Python packages
+# Build and install the cudf Python package
 if buildAll || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
