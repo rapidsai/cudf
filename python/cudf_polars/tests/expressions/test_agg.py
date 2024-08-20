@@ -14,7 +14,25 @@ from cudf_polars.testing.asserts import (
 
 
 @pytest.fixture(
-    params=sorted(expr.Agg._SUPPORTED | expr.UnaryFunction._supported_cum_aggs)
+    params=[
+        # regular aggs from Agg
+        "min",
+        "max",
+        "median",
+        "n_unique",
+        "first",
+        "last",
+        "mean",
+        "sum",
+        "count",
+        "std",
+        "var",
+        # scan aggs from UnaryFunction
+        "cum_min",
+        "cum_max",
+        "cum_prod",
+        "cum_sum",
+    ]
 )
 def agg(request):
     return request.param
