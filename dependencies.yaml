@@ -15,6 +15,7 @@ files:
       - build_python_cudf
       - cuda
       - cuda_version
+      - depends_on_librmm
       - develop
       - docs
       - libarrow_build
@@ -97,6 +98,7 @@ files:
       - build_base
       - build_python_common
       - build_python_cudf
+      - depends_on_libcudf
   py_run_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -135,6 +137,7 @@ files:
       - build_base
       - build_cpp
       - build_python_libcudf
+      - depends_on_librmm
   py_run_libcudf:
     output: pyproject
     pyproject_dir: python/libcudf
@@ -159,6 +162,7 @@ files:
       - build_base
       - build_python_common
       - build_python_pylibcudf
+      - depends_on_libcudf
   py_run_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -393,37 +397,13 @@ dependencies:
           - numpy==1.23.*
   build_python_libcudf:
     common:
-      - output_types: conda
-        packages:
-          - &librmm_unsuffixed librmm==24.10.*,>=0.0.0a0
       - output_types: [conda, requirements, pyproject]
         packages:
           - *pyarrow_build
-      - output_types: requirements
-        packages:
-          # pip recognizes the index as a global option for the requirements.txt file
-          # This index is needed for rmm-cu{11,12}.
-          - --extra-index-url=https://pypi.nvidia.com
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
-    specific:
-      - output_types: [requirements, pyproject]
-        matrices:
-          - matrix:
-              cuda: "12.*"
-              cuda_suffixed: "true"
-            packages:
-              - librmm-cu12==24.10.*,>=0.0.0a0
-          - matrix:
-              cuda: "11.*"
-              cuda_suffixed: "true"
-            packages:
-              - librmm-cu11==24.10.*,>=0.0.0a0
-          - {matrix: null, packages: [*librmm_unsuffixed]}
   build_python_pylibcudf:
     common:
       - output_types: conda
         packages:
-          - &libcudf_unsuffixed libcudf==24.10.*,>=0.0.0a0
           - &rmm_unsuffixed rmm==24.10.*,>=0.0.0a0
       - output_types: requirements
         packages:
@@ -438,20 +418,17 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - &libcudf_cu12 libcudf-cu12==24.10.*,>=0.0.0a0
               - &rmm_cu12 rmm-cu12==24.10.*,>=0.0.0a0
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
-              - &libcudf_cu11 libcudf-cu11==24.10.*,>=0.0.0a0
               - &rmm_cu11 rmm-cu11==24.10.*,>=0.0.0a0
-          - {matrix: null, packages: [*libcudf_unsuffixed, *rmm_unsuffixed]}
+          - {matrix: null, packages: [*rmm_unsuffixed]}
   build_python_cudf:
     common:
       - output_types: conda
         packages:
-          - *libcudf_unsuffixed
           - *rmm_unsuffixed
           - pip
           - pip:
@@ -470,19 +447,16 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - *libcudf_cu12
               - &pylibcudf_cu12 pylibcudf-cu12==24.10.*,>=0.0.0a0
               - *rmm_cu12
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
-              - *libcudf_cu11
               - &pylibcudf_cu11 pylibcudf-cu11==24.10.*,>=0.0.0a0
               - *rmm_cu11
           - matrix:
             packages:
-              - *libcudf_unsuffixed
               - &pylibcudf_unsuffixed pylibcudf==24.10.*,>=0.0.0a0
               - *rmm_unsuffixed
   libarrow_build:
@@ -905,7 +879,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - *libcudf_unsuffixed
+          - &libcudf_unsuffixed libcudf==24.10.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -919,12 +893,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - *libcudf_cu12
+              - libcudf-cu12==24.10.*,>=0.0.0a0
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
-              - *libcudf_cu11
+              - libcudf-cu11==24.10.*,>=0.0.0a0
           - {matrix: null, packages: [*libcudf_unsuffixed]}
   depends_on_pylibcudf:
     common:
@@ -1016,6 +990,25 @@ dependencies:
             packages: &cupy_packages_cu11
               - cupy-cuda11x>=12.0.0
           - {matrix: null, packages: *cupy_packages_cu11}
+  depends_on_librmm:
+    common:
+      - output_types: conda
+        packages:
+          - &librmm_unsuffixed librmm==24.10.*,>=0.0.0a0
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - librmm-cu12==24.10.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
+              - librmm-cu11==24.10.*,>=0.0.0a0
+          - {matrix: null, packages: [*librmm_unsuffixed]}
   test_python_pandas_cudf:
     common:
       - output_types: [requirements, pyproject]
