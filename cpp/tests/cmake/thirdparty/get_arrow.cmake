@@ -122,21 +122,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
     file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/util/config.h"
          DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/util"
     )
-    # Arrow populates INTERFACE_INCLUDE_DIRECTORIES for the `arrow_static` and `arrow_shared`
-    # targets in FindArrow, so for static source-builds, we have to do it after-the-fact.
-    #
-    # This only works because we know exactly which components we're using. Don't forget to update
-    # this list if we add more!
-    #
-    foreach(ARROW_LIBRARY ${ARROW_LIBRARIES})
-      target_include_directories(
-        ${ARROW_LIBRARY}
-        INTERFACE "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src>"
-                  "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src/generated>"
-                  "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/hadoop/include>"
-                  "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/flatbuffers/include>"
-      )
-    endforeach()
   elseif(NOT Arrow_DIR)
     set(ARROW_FOUND
         FALSE
@@ -157,7 +142,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
           endif()
         ]=]
     )
-    rapids_cmake_install_lib_dir(lib_dir)
     if(TARGET arrow_static)
       get_target_property(interface_libs arrow_static INTERFACE_LINK_LIBRARIES)
       # The `arrow_static` library is leaking a dependency on the object libraries it was built with
