@@ -4,7 +4,6 @@ import datetime
 import warnings
 
 import pyarrow as pa
-from fsspec.utils import stringify_path
 
 import cudf
 from cudf._lib import orc as liborc
@@ -318,33 +317,15 @@ def read_orc(
                 "A list of stripes must be provided for each input source"
             )
 
-    filepaths_or_buffers = []
-    for source in filepath_or_buffer:
-        if ioutils.is_directory(
-            path_or_data=source, storage_options=storage_options
-        ):
-            fs = ioutils._ensure_filesystem(
-                passed_filesystem=None,
-                path=source,
-                storage_options=storage_options,
-            )
-            source = stringify_path(source)
-            source = fs.sep.join([source, "*.orc"])
-
-        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            storage_options=storage_options,
-            bytes_per_thread=bytes_per_thread,
-        )
-        if compression is not None:
-            raise ValueError(
-                "URL content-encoding decompression is not supported"
-            )
-        if isinstance(tmp_source, list):
-            filepaths_or_buffers.extend(tmp_source)
-        else:
-            filepaths_or_buffers.append(tmp_source)
+    filepaths_or_buffers, compression = ioutils.get_reader_filepath_or_buffer(
+        path_or_data=filepath_or_buffer,
+        compression=None,
+        storage_options=storage_options,
+        bytes_per_thread=bytes_per_thread,
+        expand_dir_pattern="*.orc",
+    )
+    if compression is not None:
+        raise ValueError("URL content-encoding decompression is not supported")
 
     if filters is not None:
         selected_stripes = _filter_stripes(

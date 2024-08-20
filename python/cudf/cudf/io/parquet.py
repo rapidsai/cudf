@@ -343,25 +343,16 @@ def read_parquet_metadata(filepath_or_buffer):
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
     # List of filepaths or buffers
-    filepaths_or_buffers = []
+    filepaths_or_buffers, compression = ioutils.get_reader_filepath_or_buffer(
+        path_or_data=filepath_or_buffer,
+        compression=None,
+        fs=fs,
+        storage_options=None,
+        bytes_per_thread=None,
+    )
 
-    for source in filepath_or_buffer:
-        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            fs=fs,
-            storage_options=None,
-            bytes_per_thread=None,
-        )
-
-        if compression is not None:
-            raise ValueError(
-                "URL content-encoding decompression is not supported"
-            )
-        if isinstance(tmp_source, list):
-            filepath_or_buffer.extend(tmp_source)
-        else:
-            filepaths_or_buffers.append(tmp_source)
+    if compression is not None:
+        raise ValueError("URL content-encoding decompression is not supported")
 
     return libparquet.read_parquet_metadata(filepaths_or_buffers)
 
@@ -595,24 +586,15 @@ def read_parquet(
         )
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
-    filepaths_or_buffers = []
-    for source in filepath_or_buffer:
-        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            fs=fs,
-            storage_options=storage_options,
-            bytes_per_thread=bytes_per_thread,
-        )
-
-        if compression is not None:
-            raise ValueError(
-                "URL content-encoding decompression is not supported"
-            )
-        if isinstance(tmp_source, list):
-            filepath_or_buffer.extend(tmp_source)
-        else:
-            filepaths_or_buffers.append(tmp_source)
+    filepaths_or_buffers, compression = ioutils.get_reader_filepath_or_buffer(
+        path_or_data=filepath_or_buffer,
+        compression=None,
+        fs=fs,
+        storage_options=storage_options,
+        bytes_per_thread=bytes_per_thread,
+    )
+    if compression is not None:
+        raise ValueError("URL content-encoding decompression is not supported")
 
     # Warn user if they are not using cudf for IO
     # (There is a good chance this was not the intention)

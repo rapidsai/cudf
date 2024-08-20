@@ -67,32 +67,18 @@ def read_json(
         if not is_list_like(path_or_buf):
             path_or_buf = [path_or_buf]
 
-        filepaths_or_buffers = []
-        for source in path_or_buf:
-            if ioutils.is_directory(
-                path_or_data=source, storage_options=storage_options
-            ):
-                fs = ioutils._ensure_filesystem(
-                    passed_filesystem=None,
-                    path=source,
-                    storage_options=storage_options,
-                )
-                source = ioutils.stringify_pathlike(source)
-                source = fs.sep.join([source, "*.json"])
-
-            tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-                path_or_data=source,
+        filepaths_or_buffers, compression = (
+            ioutils.get_reader_filepath_or_buffer(
+                path_or_buf,
                 compression=compression,
                 iotypes=(BytesIO, StringIO),
                 allow_raw_text_input=True,
                 storage_options=storage_options,
                 warn_on_raw_text_input=True,
                 warn_meta=("json", "read_json"),
+                expand_dir_pattern="*.json",
             )
-            if isinstance(tmp_source, list):
-                filepaths_or_buffers.extend(tmp_source)
-            else:
-                filepaths_or_buffers.append(tmp_source)
+        )
 
         df = libjson.read_json(
             filepaths_or_buffers=filepaths_or_buffers,
