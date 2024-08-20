@@ -956,29 +956,7 @@ class UnaryFunction(Expr):
             "unique",
             "drop_nulls",
             "fill_null",
-            "pow",
-            "sin",
-            "cos",
-            "tan",
-            "arcsin",
-            "arccos",
-            "arctan",
-            "sinh",
-            "cosh",
-            "tanh",
-            "arcsinh",
-            "arccosh",
-            "arctanh",
-            "exp",
-            "log",
-            "sqrt",
-            "cbrt",
-            "ceil",
-            "floor",
-            "abs",
-            "bit_invert",
-            "not",
-        ):
+        ) or self.name not in self._MAPPING:
             raise NotImplementedError(f"Unary function {name=}")
 
     def do_evaluate(
