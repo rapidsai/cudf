@@ -228,5 +228,4 @@ if(NOT DEFINED CUDF_VERSION_Arrow)
   )
 endif()
 
-# TODO: Remove arguments we deem unnecessary going forward
-find_and_configure_arrow(${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} OFF OFF OFF OFF OFF)
+find_and_configure_arrow(${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC})
