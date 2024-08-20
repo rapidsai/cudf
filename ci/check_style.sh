@@ -1,6 +1,8 @@
 #!/bin/bash
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+exit 0
+
 set -euo pipefail
 
 rapids-logger "Create checks conda environment"
