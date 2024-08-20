@@ -82,8 +82,8 @@ endfunction()
 # dependencies  ###################################################################################
 # ##################################################################################################
 
-# find arrow. TODO: Always use static for tests set(CUDF_USE_ARROW_STATIC ON)
-set(CUDF_USE_ARROW_STATIC OFF)
+# find arrow. Always use static for tests
+set(CUDF_USE_ARROW_STATIC ON)
 include(cmake/thirdparty/get_arrow.cmake)
 
 # ##################################################################################################
