@@ -155,26 +155,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
           if (TARGET cudf::arrow_static AND (NOT TARGET arrow_static))
               add_library(arrow_static ALIAS cudf::arrow_static)
           endif()
-          if (NOT TARGET arrow::flatbuffers)
-            add_library(arrow::flatbuffers INTERFACE IMPORTED)
-          endif()
-          if (NOT TARGET arrow::hadoop)
-            add_library(arrow::hadoop INTERFACE IMPORTED)
-          endif()
         ]=]
     )
-    if(NOT TARGET xsimd)
-      string(
-        APPEND
-        arrow_code_string
-        "
-          if(NOT TARGET arrow::xsimd)
-            add_library(arrow::xsimd INTERFACE IMPORTED)
-            target_include_directories(arrow::xsimd INTERFACE \"${Arrow_BINARY_DIR}/xsimd_ep/src/xsimd_ep-install/include\")
-          endif()
-        "
-      )
-    endif()
     rapids_cmake_install_lib_dir(lib_dir)
     if(TARGET arrow_static)
       get_target_property(interface_libs arrow_static INTERFACE_LINK_LIBRARIES)
