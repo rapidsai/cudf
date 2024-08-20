@@ -15,120 +15,79 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/nvbench_utilities.hpp>
 
 #include <cudf/stream_compaction.hpp>
+#include <cudf/strings/string_view.hpp>
 
-#include <fixture/benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
+#include <nvbench/nvbench.cuh>
 
 namespace {
 
-constexpr cudf::size_type hundredM      = 1e8;
-constexpr cudf::size_type tenM          = 1e7;
-constexpr cudf::size_type tenK          = 1e4;
-constexpr cudf::size_type fifty_percent = 50;
-
-void percent_range(benchmark::internal::Benchmark* b)
-{
-  b->Unit(benchmark::kMillisecond);
-  for (int percent = 0; percent <= 100; percent += 10)
-    b->Args({hundredM, percent});
-}
-
-void size_range(benchmark::internal::Benchmark* b)
-{
-  b->Unit(benchmark::kMillisecond);
-  for (int size = tenK; size <= hundredM; size *= 10)
-    b->Args({size, fifty_percent});
-}
-
 template <typename T>
-void calculate_bandwidth(benchmark::State& state, cudf::size_type num_columns)
+void calculate_bandwidth(nvbench::state& state)
 {
-  cudf::size_type const column_size{static_cast<cudf::size_type>(state.range(0))};
-  cudf::size_type const percent_true{static_cast<cudf::size_type>(state.range(1))};
+  auto const n_rows       = static_cast<cudf::size_type>(state.get_int64("rows"));
+  auto const n_cols       = static_cast<cudf::size_type>(state.get_int64("columns"));
+  auto const percent_true = static_cast<cudf::size_type>(state.get_int64("hits"));
 
-  float const fraction                  = percent_true / 100.f;
-  cudf::size_type const column_size_out = fraction * column_size;
-  int64_t const mask_size =
-    sizeof(bool) * column_size + cudf::bitmask_allocation_size_bytes(column_size);
-  int64_t const validity_bytes_in  = (fraction >= 1.0f / 32)
-                                       ? cudf::bitmask_allocation_size_bytes(column_size)
-                                       : 4 * column_size_out;
-  int64_t const validity_bytes_out = cudf::bitmask_allocation_size_bytes(column_size_out);
-  int64_t const column_bytes_out   = sizeof(T) * column_size_out;
+  float const fraction              = percent_true / 100.f;
+  cudf::size_type const output_size = fraction * n_rows;
+  int64_t const mask_size = sizeof(bool) * n_rows + cudf::bitmask_allocation_size_bytes(n_rows);
+  int64_t const validity_bytes_in =
+    (fraction >= 1.0f / 32) ? cudf::bitmask_allocation_size_bytes(n_rows) : 4 * output_size;
+  int64_t const validity_bytes_out = cudf::bitmask_allocation_size_bytes(output_size);
+  int64_t const column_bytes_out   = sizeof(T) * output_size;
   int64_t const column_bytes_in    = column_bytes_out;  // we only read unmasked inputs
 
-  int64_t const bytes_read =
-    (column_bytes_in + validity_bytes_in) * num_columns +  // reading columns
-    mask_size;                                             // reading boolean mask
+  int64_t const bytes_read = (column_bytes_in + validity_bytes_in) * n_cols +  // reading columns
+                             mask_size;  // reading boolean mask
   int64_t const bytes_written =
-    (column_bytes_out + validity_bytes_out) * num_columns;  // writing columns
+    (column_bytes_out + validity_bytes_out) * n_cols;  // writing columns
 
-  state.SetItemsProcessed(state.iterations() * column_size * num_columns);
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * (bytes_read + bytes_written));
+  state.add_element_count(n_rows * n_cols);
+  state.add_global_memory_reads<nvbench::int8_t>(bytes_read);
+  state.add_global_memory_writes<nvbench::int8_t>(bytes_written);
 }
 
 }  // namespace
 
-template <class T>
-void BM_apply_boolean_mask(benchmark::State& state, cudf::size_type num_columns)
+template <typename DataType>
+void apply_boolean_mask_benchmark(nvbench::state& state, nvbench::type_list<DataType>)
 {
-  cudf::size_type const column_size{static_cast<cudf::size_type>(state.range(0))};
-  cudf::size_type const percent_true{static_cast<cudf::size_type>(state.range(1))};
+  auto const n_rows = static_cast<cudf::size_type>(state.get_int64("rows"));
+  auto const n_cols = static_cast<cudf::size_type>(state.get_int64("columns"));
 
-  data_profile profile = data_profile_builder().cardinality(0).null_probability(0.0).distribution(
-    cudf::type_to_id<T>(), distribution_id::UNIFORM, 0, 100);
+  auto const percent_true = static_cast<cudf::size_type>(state.get_int64("hits"));
 
-  auto source_table = create_random_table(
-    cycle_dtypes({cudf::type_to_id<T>()}, num_columns), row_count{column_size}, profile);
+  auto const input_type = cudf::type_to_id<DataType>();
+  data_profile profile  = data_profile_builder().cardinality(0).null_probability(0.).distribution(
+    input_type, distribution_id::UNIFORM, 0, 20);
+
+  auto source_table =
+    create_random_table(cycle_dtypes({input_type}, n_cols), row_count{n_rows}, profile);
 
   profile.set_bool_probability_true(percent_true / 100.0);
   profile.set_null_probability(std::nullopt);  // no null mask
-  auto mask = create_random_column(cudf::type_id::BOOL8, row_count{column_size}, profile);
+  auto mask = create_random_column(cudf::type_id::BOOL8, row_count{n_rows}, profile);
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);
-    auto result = cudf::apply_boolean_mask(*source_table, mask->view());
-  }
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  calculate_bandwidth<DataType>(state);
 
-  calculate_bandwidth<T>(state, num_columns);
+  state.exec(nvbench::exec_tag::sync, [&source_table, &mask](nvbench::launch& launch) {
+    cudf::apply_boolean_mask(*source_table, mask->view());
+  });
+
+  set_throughputs(state);
 }
 
-template <class T>
-class ApplyBooleanMask : public cudf::benchmark {
- public:
-  using TypeParam = T;
-};
-
-#define ABM_BENCHMARK_DEFINE(name, type, n_columns)                                  \
-  BENCHMARK_TEMPLATE_DEFINE_F(ApplyBooleanMask, name, type)(::benchmark::State & st) \
-  {                                                                                  \
-    BM_apply_boolean_mask<TypeParam>(st, n_columns);                                 \
-  }
-
-ABM_BENCHMARK_DEFINE(float_1_col, float, 1);
-ABM_BENCHMARK_DEFINE(float_2_col, float, 2);
-ABM_BENCHMARK_DEFINE(float_4_col, float, 4);
-
-// shmoo 1, 2, 4 column float across percentage true
-BENCHMARK_REGISTER_F(ApplyBooleanMask, float_1_col)->Apply(percent_range);
-BENCHMARK_REGISTER_F(ApplyBooleanMask, float_2_col)->Apply(percent_range);
-BENCHMARK_REGISTER_F(ApplyBooleanMask, float_4_col)->Apply(percent_range);
-
-// shmoo 1, 2, 4 column float across column sizes with 50% true
-BENCHMARK_REGISTER_F(ApplyBooleanMask, float_1_col)->Apply(size_range);
-BENCHMARK_REGISTER_F(ApplyBooleanMask, float_2_col)->Apply(size_range);
-BENCHMARK_REGISTER_F(ApplyBooleanMask, float_4_col)->Apply(size_range);
-
-// spot benchmark other types
-ABM_BENCHMARK_DEFINE(int8_1_col, int8_t, 1);
-ABM_BENCHMARK_DEFINE(int16_1_col, int16_t, 1);
-ABM_BENCHMARK_DEFINE(int32_1_col, int32_t, 1);
-ABM_BENCHMARK_DEFINE(int64_1_col, int64_t, 1);
-ABM_BENCHMARK_DEFINE(double_1_col, double, 1);
-BENCHMARK_REGISTER_F(ApplyBooleanMask, int8_1_col)->Args({tenM, fifty_percent});
-BENCHMARK_REGISTER_F(ApplyBooleanMask, int16_1_col)->Args({tenM, fifty_percent});
-BENCHMARK_REGISTER_F(ApplyBooleanMask, int32_1_col)->Args({tenM, fifty_percent});
-BENCHMARK_REGISTER_F(ApplyBooleanMask, int64_1_col)->Args({tenM, fifty_percent});
-BENCHMARK_REGISTER_F(ApplyBooleanMask, double_1_col)->Args({tenM, fifty_percent});
+// using data_type = nvbench::type_list<int8_t, int16_t, int32_t, int64_t, double,
+// cudf::string_view>;
+using data_type = nvbench::type_list<int32_t, int64_t, double, cudf::string_view>;
+NVBENCH_BENCH_TYPES(apply_boolean_mask_benchmark, NVBENCH_TYPE_AXES(data_type))
+  .set_name("apply_boolean_mask")
+  .set_type_axes_names({"type"})
+  .add_int64_axis("columns", {1, 4})
+  .add_int64_axis("rows", {100'000, 1'000'000, 10'000'000})
+  .add_int64_axis("hits", {10, 50, 100});
