@@ -12,14 +12,6 @@
 # the License.
 # =============================================================================
 
-# Finding arrow is far more complex than it should be, and as a result we violate multiple linting
-# rules aiming to limit complexity. Since all our other CMake scripts conform to expectations
-# without undue difficulty, disabling those rules for just this function is our best approach for
-# now. The spacing between this comment, the cmake-lint directives, and the function docstring is
-# necessary to prevent cmake-format from trying to combine the lines.
-
-# cmake-lint: disable=R0912,R0913,R0915
-
 include_guard(GLOBAL)
 
 # This function finds arrow and sets any additional necessary environment variables.
