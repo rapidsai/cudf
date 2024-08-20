@@ -42,6 +42,8 @@ from pandas.tseries.holiday import (
     get_calendar,
 )
 
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+
 # Accelerated pandas has the real pandas and cudf modules as attributes
 pd = xpd._fsproxy_slow
 cudf = xpd._fsproxy_fast
@@ -607,6 +609,10 @@ def test_array_function_series_fallback(series):
     tm.assert_equal(expect, got)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_timedeltaproperties(series):
     psr, sr = series
     psr, sr = psr.astype("timedelta64[ns]"), sr.astype("timedelta64[ns]")
@@ -666,6 +672,10 @@ def test_maintain_container_subclasses(multiindex):
     assert isinstance(got, xpd.core.indexes.frozen.FrozenList)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas due to unsupported boxcar window type",
+)
 def test_rolling_win_type():
     pdf = pd.DataFrame(range(5))
     df = xpd.DataFrame(range(5))
@@ -1281,6 +1291,10 @@ def test_super_attribute_lookup():
     assert s.max_times_two() == 6
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="DatetimeArray.__floordiv__ missing in pandas-2.0.0",
+)
 def test_floordiv_array_vs_df():
     xarray = xpd.Series([1, 2, 3], dtype="datetime64[ns]").array
     parray = pd.Series([1, 2, 3], dtype="datetime64[ns]").array
@@ -1552,6 +1566,10 @@ def test_numpy_cupy_flatiter(series):
     assert type(arr.flat._fsproxy_slow) == np.flatiter
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="pyarrow_numpy storage type was not supported in pandas-2.0.0",
+)
 def test_arrow_string_arrays():
     cu_s = xpd.Series(["a", "b", "c"])
     pd_s = pd.Series(["a", "b", "c"])
