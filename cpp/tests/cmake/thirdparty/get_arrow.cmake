@@ -155,24 +155,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
         get_target_property(interface_libs arrow_static INTERFACE_LINK_LIBRARIES)
       endif()
     endif()
-    rapids_export(
-      BUILD Arrow
-      VERSION ${VERSION}
-      EXPORT_SET arrow_targets
-      GLOBAL_TARGETS arrow_shared arrow_static
-      NAMESPACE cudf::
-      FINAL_CODE_BLOCK arrow_code_string
-    )
-
   endif()
-  # We generate the arrow-configfiles when we built arrow locally, so always do `find_dependency`
-  rapids_export_package(BUILD Arrow cudf-exports)
-  rapids_export_package(INSTALL Arrow cudf-exports)
-
-  include("${rapids-cmake-dir}/export/find_package_root.cmake")
-  rapids_export_find_package_root(
-    BUILD Arrow [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-exports
-  )
   set(ARROW_LIBRARIES
       "${ARROW_LIBRARIES}"
       PARENT_SCOPE
