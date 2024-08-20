@@ -122,17 +122,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
   endif()
 
   if(Arrow_ADDED)
-
-    set(arrow_code_string
-        [=[
-          if (TARGET cudf::arrow_shared AND (NOT TARGET arrow_shared))
-              add_library(arrow_shared ALIAS cudf::arrow_shared)
-          endif()
-          if (TARGET cudf::arrow_static AND (NOT TARGET arrow_static))
-              add_library(arrow_static ALIAS cudf::arrow_static)
-          endif()
-        ]=]
-    )
     if(TARGET arrow_static)
       get_target_property(interface_libs arrow_static INTERFACE_LINK_LIBRARIES)
       # The `arrow_static` library is leaking a dependency on the object libraries it was built with
