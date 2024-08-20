@@ -22,8 +22,6 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-#include <thrust/optional.h>
-
 namespace CUDF_EXPORT cudf {
 
 /**
