@@ -1625,31 +1625,33 @@ def build_column(
         )
     elif isinstance(dtype, ListDtype):
         return cudf.core.column.ListColumn(
-            size=size,
+            data=None,
+            size=size,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            children=children,  # type: ignore[arg-type]
         )
     elif isinstance(dtype, IntervalDtype):
         return cudf.core.column.IntervalColumn(
+            data=None,
+            size=size,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
-            size=size,
             offset=offset,
-            children=children,
             null_count=null_count,
+            children=children,  # type: ignore[arg-type]
         )
     elif isinstance(dtype, StructDtype):
         return cudf.core.column.StructColumn(
-            data=data,
-            dtype=dtype,
+            data=None,
             size=size,  # type: ignore[arg-type]
-            offset=offset,
+            dtype=dtype,
             mask=mask,
+            offset=offset,
             null_count=null_count,
-            children=children,
+            children=children,  # type: ignore[arg-type]
         )
     elif isinstance(dtype, cudf.Decimal64Dtype):
         return cudf.core.column.Decimal64Column(
