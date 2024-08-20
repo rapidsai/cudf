@@ -101,8 +101,10 @@ CUDF_KERNEL void substring_from_kernel(column_device_view const d_strings,
   }
 
   auto const start = max(starts[str_idx], 0);
-  auto const stop  = stops[str_idx];
-  auto const end   = d_str.data() + d_str.size_bytes();
+  auto stop        = [stop = stops[str_idx]] {
+    return (stop < 0) ? std::numeric_limits<size_type>::max() : stop;
+  }();
+  auto const end = d_str.data() + d_str.size_bytes();
 
   namespace cg    = cooperative_groups;
   auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
@@ -115,8 +117,12 @@ CUDF_KERNEL void substring_from_kernel(column_device_view const d_strings,
   size_type char_count = 0;
   size_type byte_count = 0;
   while (byte_count < d_str.size_bytes()) {
-    if (char_count < start) { start_counts = {char_count, byte_count}; }
-    if (char_count < stop) { stop_counts = {char_count, byte_count}; }
+    if (char_count <= start) { start_counts = {char_count, byte_count}; }
+    if (char_count <= stop) {
+      stop_counts = {char_count, byte_count};
+    } else {
+      break;
+    }
     size_type const cc = (itr < end) && is_begin_utf8_char(*itr);
     size_type const bc = (itr < end);
     char_count += cg::reduce(warp, cc, cg::plus<int>());
@@ -137,7 +143,7 @@ CUDF_KERNEL void substring_from_kernel(column_device_view const d_strings,
       first_byte += std::get<0>(bytes_to_character_position(sub_str, start - start_counts.first));
     }
 
-    if (stop < 0 || stop > char_count) { stop_counts = {char_count, byte_count}; }
+    stop           = max(stop, char_count);
     auto last_byte = stop_counts.second;
     if (stop_counts.first < stop) {
       auto const sub_str = string_view(d_str.data() + last_byte, d_str.size_bytes() - last_byte);
