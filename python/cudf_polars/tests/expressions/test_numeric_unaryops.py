@@ -30,16 +30,20 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
         "ceil",
         "floor",
         "abs",
-        "not_",
     ]
 )
 def op(request):
     return request.param
 
 
+@pytest.fixture(params=[pl.Int32, pl.Float32])
+def dtype(request):
+    return request.param
+
+
 @pytest.fixture
-def ldf():
-    return pl.DataFrame({"a": [1, 2, None, 4, 5]}).lazy()
+def ldf(dtype):
+    return pl.DataFrame({"a": pl.Series([1, 2, None, 4, 5], dtype=dtype)}).lazy()
 
 
 def test_unary(ldf, op):

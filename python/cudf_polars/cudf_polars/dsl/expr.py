@@ -1086,13 +1086,9 @@ class UnaryFunction(Expr):
             return Column(plc.replace.replace_nulls(column.obj, arg))
         elif self.name == "pow":
             column = self.children[0].evaluate(df, context=context, mapping=mapping)
-            if isinstance(self.children[1], Literal):
-                arg = plc.interop.from_arrow(self.children[1].value)
-            else:
-                evaluated = self.children[1].evaluate(
-                    df, context=context, mapping=mapping
-                )
-                arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
+
+            evaluated = self.children[1].evaluate(df, context=context, mapping=mapping)
+            arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
             return Column(
                 plc.binaryop.binary_operation(
                     column.obj, arg, plc.binaryop.BinaryOperator.POW, self.dtype
@@ -1100,8 +1096,11 @@ class UnaryFunction(Expr):
             )
         elif self.name in self._MAPPING:
             column = self.children[0].evaluate(df, context=context, mapping=mapping)
-            casted = plc.unary.cast(column.obj, self.dtype)
-            return Column(plc.unary.unary_operation(casted, self._MAPPING[self.name]))
+            if column.obj.type().id() != self.dtype.id():
+                arg = plc.unary.cast(column.obj, self.dtype)
+            else:
+                arg = column.obj
+            return Column(plc.unary.unary_operation(arg, self._MAPPING[self.name]))
 
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
