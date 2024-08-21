@@ -58,7 +58,8 @@ jobs:
 
       - name: Install requests
         run: pip install requests
-
+      - name: Install packaging
+        run: pip install packaging
       - name: Fetch pandas versions
         id: get-versions
         run: |
