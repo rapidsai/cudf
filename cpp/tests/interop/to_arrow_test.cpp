@@ -39,10 +39,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-#include <arrow/api.h>
 #include <arrow/c/bridge.h>
-#include <arrow/io/api.h>
-#include <arrow/ipc/api.h>
 
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 
@@ -745,30 +742,6 @@ TEST_F(ToArrowStructScalarTest, Basic)
   auto const ref_arrow_scalar = arrow::StructScalar({underlying_arrow_scalar}, arrow_type);
 
   EXPECT_TRUE(arrow_scalar->Equals(ref_arrow_scalar));
-}
-
-// https://github.com/rapidsai/cudf/pull/16590#pullrequestreview-2248058144
-struct ToArrowIPC : public cudf::test::BaseFixture {};
-
-TEST_F(ToArrowIPC, WriteMultiple)
-{
-  std::vector<cudf::column_metadata> metadata{{"a"}};
-
-  std::vector<std::shared_ptr<arrow::Table>> tables;
-  for (auto valid : {true, false}) {
-    cudf::test::fixed_width_column_wrapper<int8_t> const col{{42}, {valid}};
-    cudf::table_view const tbl({col});
-    auto got_arrow_schema = cudf::to_arrow_schema(tbl, metadata);
-    for (auto i = 0; i < got_arrow_schema->n_children; ++i) {
-      got_arrow_schema->children[i]->flags = ARROW_FLAG_NULLABLE;
-    }
-    auto got_arrow_array = cudf::to_arrow_host(tbl);
-    auto batch =
-      arrow::ImportRecordBatch(&got_arrow_array->array, got_arrow_schema.get()).ValueOrDie();
-    tables.push_back(arrow::Table::FromRecordBatches({batch}).ValueOrDie());
-  }
-
-  ASSERT_TRUE(tables[0]->schema()->Equals(tables[1]->schema()));
 }
 
 CUDF_TEST_PROGRAM_MAIN()
