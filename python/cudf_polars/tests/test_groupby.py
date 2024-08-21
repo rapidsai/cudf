@@ -30,6 +30,7 @@ def df():
     params=[
         [pl.col("key1")],
         [pl.col("key2")],
+        [pl.col("key1"), pl.lit(1)],
         [pl.col("key1") * pl.col("key2")],
         [pl.col("key1"), pl.col("key2")],
         [pl.col("key1") == pl.col("key2")],
