@@ -16,7 +16,7 @@ authors = [
     { name = "NVIDIA Corporation" },
 ]
 license = { text = "Apache 2.0" }
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "cachetools",
     "cubinlinker",
@@ -41,7 +41,6 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
 ]

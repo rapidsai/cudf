@@ -31,7 +31,7 @@ option(USE_LIBARROW_FROM_PYARROW "Only use the libarrow contained in pyarrow" OF
 mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 # Find Python early so that later commands can use it
-find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
+find_package(Python 3.10 REQUIRED COMPONENTS Interpreter)
 
 # If the user requested it we attempt to find CUDF.
 if(FIND_CUDF_CPP)
