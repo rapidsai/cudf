@@ -25,6 +25,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuda/atomic>
+#include <cuda/std/type_traits>
 
 #include <cmath>
 
@@ -64,17 +65,15 @@ struct var_hash_functor {
   }
 
   template <typename Source>
-  __device__ std::enable_if_t<!is_supported<Source>()> operator()(column_device_view const& source,
-                                                                  size_type source_index,
-                                                                  size_type target_index) noexcept
+  __device__ cuda::std::enable_if_t<!is_supported<Source>()> operator()(
+    column_device_view const& source, size_type source_index, size_type target_index) noexcept
   {
     CUDF_UNREACHABLE("Invalid source type for std, var aggregation combination.");
   }
 
   template <typename Source>
-  __device__ std::enable_if_t<is_supported<Source>()> operator()(column_device_view const& source,
-                                                                 size_type source_index,
-                                                                 size_type target_index) noexcept
+  __device__ cuda::std::enable_if_t<is_supported<Source>()> operator()(
+    column_device_view const& source, size_type source_index, size_type target_index) noexcept
   {
     using Target    = target_type_t<Source, aggregation::VARIANCE>;
     using SumType   = target_type_t<Source, aggregation::SUM>;
@@ -93,6 +92,7 @@ struct var_hash_functor {
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
+
   __device__ inline void operator()(size_type source_index)
   {
     if (row_bitmask == nullptr or cudf::bit_is_set(row_bitmask, source_index)) {
