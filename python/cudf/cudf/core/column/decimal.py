@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import TYPE_CHECKING, Sequence, cast
+from typing import TYPE_CHECKING, Literal, Sequence, cast
 
 import cupy as cp
 import numpy as np
@@ -135,9 +135,14 @@ class DecimalBaseColumn(NumericalBaseColumn):
         # are computed outside of libcudf
         if op in {"__add__", "__sub__", "__mul__", "__div__"}:
             output_type = _get_decimal_type(lhs.dtype, rhs.dtype, op)
-            result = libcudf.binaryop.binaryop(lhs, rhs, op, output_type)
-            # TODO:  Why is this necessary? Why isn't the result's
-            # precision already set correctly based on output_type?
+            result = libcudf.binaryop.binaryop(
+                lhs.astype(output_type),
+                rhs.astype(output_type),
+                op,
+                output_type,
+            )
+            # libcudf doesn't support precision, so result.dtype doesn't
+            # maintain output_type.precision
             result.dtype.precision = output_type.precision
         elif op in {
             "__eq__",
@@ -430,7 +435,11 @@ class Decimal64Column(DecimalBaseColumn):
         return self
 
 
-def _get_decimal_type(lhs_dtype, rhs_dtype, op):
+def _get_decimal_type(
+    lhs_dtype: DecimalDtype,
+    rhs_dtype: DecimalDtype,
+    op: Literal["__add__", "__sub__", "__mul__", "__div__"],
+) -> DecimalDtype:
     """
     Returns the resulting decimal type after calculating
     precision & scale when performing the binary operation
@@ -441,6 +450,7 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
 
     # This should at some point be hooked up to libcudf's
     # binary_operation_fixed_point_scale
+    # Note: libcudf decimal types don't have a concept of precision
 
     p1, p2 = lhs_dtype.precision, rhs_dtype.precision
     s1, s2 = lhs_dtype.scale, rhs_dtype.scale
