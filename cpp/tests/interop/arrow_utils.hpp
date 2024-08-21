@@ -92,18 +92,6 @@ std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
   }
 }
 
-/**
- * @brief Return a maximum precision for a given type.
- *
- * @tparam T the type to get the maximum precision for
- */
-template <typename T>
-constexpr std::size_t max_precision()
-{
-  auto constexpr num_bits = sizeof(T) * 8;
-  return std::floor(num_bits * std::log(2) / std::log(10));
-}
-
 template <typename T>
 std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>,
                  std::shared_ptr<arrow::Array>>
