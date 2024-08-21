@@ -541,7 +541,7 @@ void launch_compute_aggregates(int grid_size,
  * over the data and stores the results in `sparse_results`
  */
 template <typename SetType, typename KeyEqual, typename RowHasher>
-rmm::device_uvector<cudf::size_type> compute_single_pass_set_aggs(
+rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   cudf::table_view const& keys,
   cudf::host_span<cudf::groupby::aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
@@ -729,7 +729,7 @@ std::unique_ptr<table> groupby(table_view const& keys,
       stream.value()};
 
     // Compute all single pass aggs first
-    auto gather_map = compute_single_pass_set_aggs(
+    auto gather_map = compute_single_pass_aggs(
       keys, requests, &sparse_results, set, stream, d_key_equal, d_row_hash);
 
     // Compact all results from sparse_results and insert into cache
