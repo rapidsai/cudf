@@ -835,7 +835,7 @@ def _protocol_to_cudf_column_categorical(
     assert buffers["data"] is not None, "data buffer should not be None"
     codes_buffer, codes_dtype = buffers["data"]
     codes_buffer = _ensure_gpu_buffer(codes_buffer, codes_dtype, allow_copy)
-    cdtype = protocol_dtype_to_cupy_dtype(codes_dtype)
+    cdtype = np.dtype(protocol_dtype_to_cupy_dtype(codes_dtype))
     codes = NumericalColumn(
         data=codes_buffer._buf,
         size=None,
