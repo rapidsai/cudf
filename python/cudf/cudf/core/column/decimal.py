@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import TYPE_CHECKING, Literal, Sequence, cast
+from typing import TYPE_CHECKING, Sequence, cast
 
 import cupy as cp
 import numpy as np
@@ -438,7 +438,7 @@ class Decimal64Column(DecimalBaseColumn):
 def _get_decimal_type(
     lhs_dtype: DecimalDtype,
     rhs_dtype: DecimalDtype,
-    op: Literal["__add__", "__sub__", "__mul__", "__div__"],
+    op: str,
 ) -> DecimalDtype:
     """
     Returns the resulting decimal type after calculating
