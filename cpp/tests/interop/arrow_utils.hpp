@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -32,8 +34,6 @@
 
 #include <arrow/api.h>
 #include <arrow/util/bitmap_builders.h>
-
-#pragma once
 
 // Creating arrow as per given type_id and buffer arguments
 template <typename... Ts>
