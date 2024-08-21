@@ -84,7 +84,7 @@ std::vector<std::string> const vocab_priorities = {
 std::vector<std::string> const vocab_segments = {
   "AUTOMOBILE", "BUILDING", "FURNITURE", "MACHINERY", "HOUSEHOLD"};
 
-std::vector<std::string> gen_vocab_types()
+std::vector<std::string> generate_vocab_types()
 {
   std::vector<std::string> syllable_a = {
     "STANDARD", "SMALL", "MEDIUM", "LARGE", "ECONOMY", "PROMO"};
@@ -101,7 +101,7 @@ std::vector<std::string> gen_vocab_types()
   return syllable_combinations;
 }
 
-std::vector<std::string> gen_vocab_containers()
+std::vector<std::string> generate_vocab_containers()
 {
   std::vector<std::string> syllable_a = {"SM", "LG", "MED", "JUMBO", "WRAP"};
   std::vector<std::string> syllable_b = {"CASE", "BOX", "BAG", "JAR", "PKG", "PACK", "CAN", "DRUM"};
@@ -620,14 +620,15 @@ std::unique_ptr<cudf::table> generate_part(cudf::size_type const& scale_factor,
   }();
 
   // Generate the `p_type` column
-  auto p_type = generate_random_string_column_from_set(gen_vocab_types(), num_rows, stream, mr);
+  auto p_type =
+    generate_random_string_column_from_set(generate_vocab_types(), num_rows, stream, mr);
 
   // Generate the `p_size` column
   auto p_size = generate_random_numeric_column<int8_t>(1, 50, num_rows, stream, mr);
 
   // Generate the `p_container` column
   auto p_container =
-    generate_random_string_column_from_set(gen_vocab_containers(), num_rows, stream, mr);
+    generate_random_string_column_from_set(generate_vocab_containers(), num_rows, stream, mr);
 
   // Generate the `p_retailprice` column
   auto p_retailprice = calc_p_retailprice(p_partkey->view(), stream, mr);
