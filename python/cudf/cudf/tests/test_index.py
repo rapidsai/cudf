@@ -16,7 +16,11 @@ import pytest
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_220
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
+    PANDAS_VERSION,
+)
 from cudf.core.index import CategoricalIndex, DatetimeIndex, Index, RangeIndex
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
@@ -797,7 +801,7 @@ def test_index_difference(request, data, other, sort, name_data, name_other):
     pd_other = pd.Index(other, name=name_other)
     request.applymarker(
         pytest.mark.xfail(
-            condition=PANDAS_GE_220
+            condition=not PANDAS_GE_220
             and isinstance(pd_data.dtype, pd.CategoricalDtype)
             and not isinstance(pd_other.dtype, pd.CategoricalDtype)
             and pd_other.isnull().any(),
@@ -1035,6 +1039,10 @@ def test_index_equal_misc(data, other):
         ["abcd", "defgh", "werty", "poiu"],
     ],
 )
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Does not warn on older versions of pandas",
+)
 def test_index_append(data, other):
     pd_data = pd.Index(data)
     pd_other = pd.Index(other)
@@ -1237,6 +1245,10 @@ def test_index_append_error(data, other):
             ],
         ),
     ],
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Does not warn on older versions of pandas",
 )
 def test_index_append_list(data, other):
     pd_data = data
@@ -2102,6 +2114,10 @@ def test_get_indexer_multi_numeric_deviate(key, method):
 
 
 @pytest.mark.parametrize("method", ["ffill", "bfill"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_get_indexer_multi_error(method):
     pi = pd.MultiIndex.from_tuples(
         [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 10), (1, 1, 1), (2, 2, 1)]

@@ -188,6 +188,10 @@ def test_groupby_as_index_single_agg(pdf, gdf, as_index):
 
 @pytest.mark.parametrize("engine", ["cudf", "jit"])
 @pytest.mark.parametrize("as_index", [True, False])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Include groups missing on old versions of pandas",
+)
 def test_groupby_as_index_apply(pdf, gdf, as_index, engine):
     gdf = gdf.groupby("y", as_index=as_index).apply(
         lambda df: df["x"].mean(), engine=engine
@@ -500,6 +504,10 @@ def groupby_apply_jit_reductions_test_inner(func, data, dtype):
     "func", ["min", "max", "sum", "mean", "var", "std", "idxmin", "idxmax"]
 )
 @pytest.mark.parametrize("dataset", ["small", "large", "nans"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Include groups missing on old versions of pandas",
+)
 def test_groupby_apply_jit_unary_reductions(
     func, dtype, dataset, groupby_jit_datasets
 ):
@@ -555,6 +563,10 @@ def groupby_apply_jit_idx_reductions_special_vals_inner(
 @pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
 @pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
 @pytest.mark.parametrize("dataset", ["small", "large", "nans"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Include groups missing on old versions of pandas",
+)
 def test_groupby_apply_jit_reductions_special_vals(
     func, dtype, dataset, groupby_jit_datasets, special_val
 ):
@@ -1940,6 +1952,10 @@ def test_groupby_agg_combinations(agg):
     )
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Include groups missing on old versions of pandas",
+)
 def test_groupby_apply_noempty_group():
     pdf = pd.DataFrame(
         {"a": [1, 1, 2, 2], "b": [1, 2, 1, 2], "c": [1, 2, 3, 4]}
@@ -2265,6 +2281,10 @@ def create_test_groupby_apply_return_series_dataframe_params():
 
 @pytest.mark.parametrize(
     "func,args", create_test_groupby_apply_return_series_dataframe_params()
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Include groups missing on old versions of pandas",
 )
 def test_groupby_apply_return_series_dataframe(func, args):
     pdf = pd.DataFrame(
@@ -2744,6 +2764,10 @@ def test_groupby_diff_row_zero_shift(nelem):
 
 # TODO: test for category columns when cudf.Scalar supports category type
 @pytest.mark.parametrize("nelem", [10, 100, 1000])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 def test_groupby_fillna_multi_value(nelem):
     t = rand_dataframe(
         dtypes_meta=[
@@ -2790,6 +2814,10 @@ def test_groupby_fillna_multi_value(nelem):
 # TODO: test for category columns when cudf.Scalar supports category type
 # TODO: cudf.fillna does not support decimal column to column fill yet
 @pytest.mark.parametrize("nelem", [10, 100, 1000])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 def test_groupby_fillna_multi_value_df(nelem):
     t = rand_dataframe(
         dtypes_meta=[
@@ -2843,6 +2871,10 @@ def test_groupby_fillna_multi_value_df(nelem):
     "data", [[1, None, 2, None, 3, None], [1, 2, 3, 4, 5, 6]]
 )
 @pytest.mark.parametrize("args", [{"value": 42}, {"method": "ffill"}])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 def test_groupby_various_by_fillna(by, data, args):
     ps = pd.Series(data)
     gs = cudf.from_pandas(ps)
@@ -3145,6 +3177,10 @@ def test_groupby_freq_s(label, closed):
             pd.DataFrame({"a": [1, 2, 0, 11]}),
         ),
     ],
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Warnings only given on newer versions.",
 )
 def test_groupby_get_group(pdf, group, name, obj):
     gdf = cudf.from_pandas(pdf)
@@ -3644,6 +3680,10 @@ def test_group_by_pandas_sort_order(groups, sort):
         "last",
     ],
 )
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_group_by_empty_reduction(dtype, reduce_op):
     gdf = cudf.DataFrame({"a": [], "b": [], "c": []}, dtype=dtype)
     pdf = gdf.to_pandas()
@@ -3663,6 +3703,10 @@ def test_group_by_empty_reduction(dtype, reduce_op):
 @pytest.mark.parametrize(
     "apply_op",
     ["sum", "min", "max", "idxmax"],
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
 )
 def test_group_by_empty_apply(request, dtype, apply_op):
     request.applymarker(
@@ -3719,6 +3763,10 @@ def test_groupby_consecutive_operations():
     assert_groupby_results_equal(actual, expected, check_dtype=False)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Warning only given on newer versions.",
+)
 def test_categorical_grouping_pandas_compatibility():
     gdf = cudf.DataFrame(
         {

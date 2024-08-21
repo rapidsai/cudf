@@ -805,6 +805,10 @@ def test_to_datetime_different_formats_notimplemented():
         cudf.to_datetime(["2015-02-01", "2015-02-01 10:10:10"])
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas.",
+)
 def test_datetime_can_cast_safely():
     sr = cudf.Series(
         ["1679-01-01", "2000-01-31", "2261-01-01"], dtype="datetime64[ms]"
@@ -851,6 +855,10 @@ def test_datetime_array_timeunit_cast(dtype):
 
 
 @pytest.mark.parametrize("timeunit", ["D", "W", "M", "Y"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_datetime_scalar_timeunit_cast(timeunit):
     testscalar = np.datetime64("2016-11-20", timeunit)
 
@@ -1555,6 +1563,10 @@ def test_date_range_start_end_freq(start, end, freq):
     )
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_date_range_start_freq_periods(start, freq, periods):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
@@ -2008,6 +2020,10 @@ def test_first(idx, offset):
         )
     ],
 )
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 def test_first_start_at_end_of_month(idx, offset):
     p = pd.Series(range(len(idx)), index=idx)
     g = cudf.from_pandas(p)
@@ -2332,6 +2348,10 @@ def test_datetime_to_str(data, dtype):
     assert_eq(actual.to_pandas(nullable=True), expected)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_datetime_string_to_datetime_resolution_loss_raises():
     data = ["2020-01-01 00:00:00.00001"]
     dtype = "datetime64[s]"

@@ -1859,7 +1859,9 @@ def test_datetime_dateoffset_binaryop(
 def test_datetime_dateoffset_binaryop_multiple(request, date_col, kwargs, op):
     request.applymarker(
         pytest.mark.xfail(
-            PANDAS_GE_220 and len(kwargs) == 1 and "milliseconds" in kwargs,
+            not PANDAS_GE_220
+            and len(kwargs) == 1
+            and "milliseconds" in kwargs,
             reason="https://github.com/pandas-dev/pandas/issues/57529",
         )
     )

@@ -3625,18 +3625,13 @@ def test_dataframe_sort_index(
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_dataframe_mulitindex_sort_index(
     request, axis, level, ascending, inplace, ignore_index, na_position
 ):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_220
-            and axis in (1, "columns")
-            and ignore_index
-            and not (level is None and not ascending),
-            reason="https://github.com/pandas-dev/pandas/issues/56478",
-        )
-    )
     request.applymarker(
         pytest.mark.xfail(
             condition=axis in (1, "columns")
@@ -6768,6 +6763,10 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
         np.array("abc"),
         None,
     ],
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
 )
 def test_dataframe_assign_scalar(request, col_data, assign_val):
     request.applymarker(

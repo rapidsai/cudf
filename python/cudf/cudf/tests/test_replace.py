@@ -1073,6 +1073,10 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
         ),
     ],
 )
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Warning not given on older versions of pandas",
+)
 def test_replace_inplace(pframe, replace_args):
     gpu_frame = cudf.from_pandas(pframe)
     pandas_frame = pframe.copy()
