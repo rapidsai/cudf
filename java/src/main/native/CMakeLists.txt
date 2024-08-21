@@ -212,6 +212,10 @@ target_compile_definitions(
 )
 target_link_options(cudfjni PRIVATE "-Wl,--no-undefined")
 
+set(CUDF_USE_ARROW_STATIC ON)
+include(cmake/thirdparty/get_arrow.cmake)
+target_link_libraries(cudfjni PRIVATE ${ARROW_LIBRARIES})
+
 if(USE_GDS)
   add_library(cufilejni src/CuFileJni.cpp)
   set_target_properties(
