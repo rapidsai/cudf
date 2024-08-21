@@ -20,7 +20,7 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 @pytest.mark.skipif(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="funciton names change across versions of pandas, so making sure it only runs on latest version of pandas",
+    reason="function names change across versions of pandas, so making sure it only runs on latest version of pandas",
 )
 def test_profiler():
     np.random.seed(42)
