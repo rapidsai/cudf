@@ -42,8 +42,6 @@ from dask.sizeof import sizeof as sizeof_dispatch
 from dask.utils import Dispatch, is_arraylike
 
 import cudf
-import cudf.core.column
-import cudf.core.dtypes
 from cudf.api.types import is_string_dtype
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 

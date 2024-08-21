@@ -125,7 +125,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return self._binaryop(other, "__rdiv__")
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str):
-        breakpoint()
         reflect, op = self._check_reflected_op(op)
         other = self._wrap_binop_normalization(other)
         if other is NotImplemented:
