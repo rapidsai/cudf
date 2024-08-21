@@ -24,7 +24,7 @@ HELP="$0 [clean] [libcudf] [libcudfwheel] [pylibcudf] [cudf] [cudfjar] [dask_cud
    libcudf                       - build the cudf C++ code only
    pylibcudf                     - build the pylibcudf Python package
    cudf                          - build the cudf Python package
-   libcudfwheel                  - build the cudf C++ code packaged as a python wheel package
+   libcudfwheel                  - build the cudf C++ code packaged as a Python wheel package
    cudfjar                       - build cudf JAR with static libcudf using devtoolset toolchain
    dask_cudf                     - build the dask_cudf Python package
    benchmarks                    - build benchmarks

@@ -52,6 +52,7 @@ DEPENDENCIES=(
   libcudf
   libkvikio
   librmm
+  pylibcudf
   rapids-dask-dependency
   rmm
 )
