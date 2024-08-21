@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
-import types
 from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
@@ -492,36 +491,6 @@ class Reduce(IR):
         return DataFrame(columns)
 
 
-def placeholder_column(n: int) -> plc.Column:
-    """
-    Produce a placeholder pylibcudf column with NO BACKING DATA.
-
-    Parameters
-    ----------
-    n
-        Number of rows the column will advertise
-
-    Returns
-    -------
-    pylibcudf Column that is almost unusable. DO NOT ACCESS THE DATA BUFFER.
-
-    Notes
-    -----
-    This is used to avoid allocating data for count aggregations.
-    """
-    return plc.Column(
-        plc.DataType(plc.TypeId.INT8),
-        n,
-        plc.gpumemoryview(
-            types.SimpleNamespace(__cuda_array_interface__={"data": (1, True)})
-        ),
-        None,
-        0,
-        0,
-        [],
-    )
-
-
 @dataclasses.dataclass
 class GroupBy(IR):
     """Perform a groupby."""
@@ -602,7 +571,10 @@ class GroupBy(IR):
         for info in self.agg_infos:
             for pre_eval, req, rep in info.requests:
                 if pre_eval is None:
-                    col = placeholder_column(df.num_rows)
+                    # A count aggregation, doesn't touch the column,
+                    # but we need to have one. Rather than evaluating
+                    # one, just use one of the key columns.
+                    col = keys[0].obj
                 else:
                     col = pre_eval.evaluate(df).obj
                 requests.append(plc.groupby.GroupByRequest(col, [req]))
