@@ -42,6 +42,8 @@ from dask.sizeof import sizeof as sizeof_dispatch
 from dask.utils import Dispatch, is_arraylike
 
 import cudf
+import cudf.core.column
+import cudf.core.dtypes
 from cudf.api.types import is_string_dtype
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
@@ -134,6 +136,8 @@ def _get_non_empty_data(
         return cudf.core.column.as_column(
             np.arange(start=0, stop=2, dtype=s.dtype)
         )
+    elif isinstance(s.dtype, cudf.core.dtypes.DecimalDtype):
+        return cudf.core.column.as_column(range(2), dtype=s.dtype)
     else:
         raise TypeError(
             f"Don't know how to handle column of type {type(s).__name__}"

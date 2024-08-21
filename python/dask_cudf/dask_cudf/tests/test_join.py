@@ -386,3 +386,15 @@ def test_issue_12773():
         expected.to_pandas(),
         check_index=False,
     )
+
+
+@pytest.mark.parametrize(
+    "typ", [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype]
+)
+def test_merge_on_decimal(typ):
+    df = cudf.DataFrame({"a": [1], "b": [2]}, dtype=typ(1))
+    dask_frame = dask_cudf.from_cudf(df)
+    result = dask_frame.merge(dask_frame, left_on="a", right_on="a").compute()
+    expected = df.merge(df, left_on="a", right_on="a")
+    dd.assert_eq(result.to_pandas(), expected.to_pandas())
+    dd.assert_eq(result.dtypes, expected.dtypes)
