@@ -56,10 +56,9 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install requests
-        run: pip install requests
-      - name: Install packaging
-        run: pip install packaging
+      - name: Install requests and packaging
+        run: pip install requests packaging
+
       - name: Fetch pandas versions
         id: get-versions
         run: |
