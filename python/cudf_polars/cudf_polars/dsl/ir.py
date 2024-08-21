@@ -633,23 +633,15 @@ class GroupBy(IR):
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
             )
-            right = plc.Table(
-                [key.obj for key in result_keys],
-            )
+            right = plc.Table([key.obj for key in result_keys])
             _, indices = plc.join.left_join(left, right, plc.types.NullEquality.EQUAL)
             ordered_tbl = plc.copying.gather(
-                plc.Table([col.obj for col in result_keys + results]),
+                plc.Table([col.obj for col in broadcasted]),
                 indices,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
             )
-            result_keys = ordered_tbl.columns()[: len(keys)]
-            results = ordered_tbl.columns()[len(keys) :]
-            result_keys = [NamedColumn(gk, k.name) for gk, k in zip(result_keys, keys)]
-            results = [
-                NamedColumn(res, req.name)
-                for res, req in zip(results, self.agg_requests)
-            ]
-        return DataFrame(result_keys + results).slice(self.options.slice)
+            broadcasted = [NamedColumn(reordered, b.name) for reordered, b in zip(ordered_tbl.column(), broadcasted))]
+        return DataFrame(broadcasted).slice(self.options.slice)
 
 
 @dataclasses.dataclass
