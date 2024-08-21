@@ -149,6 +149,10 @@ def test_interval_range_periods_basic_dtype(start_t, end_t, periods_t):
     assert_eq(pindex, gindex)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Does not warn on older versions of pandas",
+)
 def test_interval_range_periods_warnings():
     start_val, end_val, periods_val = 0, 4, 1.0
 

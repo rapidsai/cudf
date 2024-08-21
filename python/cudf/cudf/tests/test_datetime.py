@@ -1547,6 +1547,10 @@ def test_date_range_start_end_periods(start, end, periods):
     )
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_date_range_start_end_freq(start, end, freq):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq

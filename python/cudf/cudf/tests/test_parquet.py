@@ -23,6 +23,7 @@ from pyarrow import parquet as pq
 
 import cudf
 from cudf._lib.parquet import read_parquet_chunked
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -3026,6 +3027,10 @@ def test_parquet_reader_rle_boolean(datadir):
 #                a list column in a schema, the cudf reader was confusing
 #                nesting information between a list column and a subsequent
 #                string column, ultimately causing a crash.
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Older versions of pandas do not have DataFrame.map()",
+)
 def test_parquet_reader_one_level_list2(datadir):
     # we are reading in a file containing binary types, but cudf returns
     # those as strings. so we have to massage the pandas data to get

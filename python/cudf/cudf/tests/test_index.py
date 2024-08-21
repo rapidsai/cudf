@@ -796,6 +796,10 @@ def test_index_to_series(data):
     "name_data,name_other",
     [("abc", "c"), (None, "abc"), ("abc", pd.NA), ("abc", "abc")],
 )
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_index_difference(request, data, other, sort, name_data, name_other):
     pd_data = pd.Index(data, name=name_data)
     pd_other = pd.Index(other, name=name_other)
