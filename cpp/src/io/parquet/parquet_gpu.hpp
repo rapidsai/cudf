@@ -400,7 +400,8 @@ struct ColumnChunkDesc {
                            int32_t src_col_schema_,
                            column_chunk_info const* chunk_info_,
                            float list_bytes_per_row_est_,
-                           bool strings_to_categorical_)
+                           bool strings_to_categorical_,
+                           int32_t src_file_idx_)
     : compressed_data(compressed_data_),
       compressed_size(compressed_size_),
       num_values(num_values_),
@@ -419,7 +420,8 @@ struct ColumnChunkDesc {
       src_col_schema(src_col_schema_),
       h_chunk_info(chunk_info_),
       list_bytes_per_row_est(list_bytes_per_row_est_),
-      is_strings_to_cat(strings_to_categorical_)
+      is_strings_to_cat(strings_to_categorical_),
+      src_file_idx(src_file_idx_)
 
   {
   }
@@ -456,6 +458,7 @@ struct ColumnChunkDesc {
 
   bool is_strings_to_cat{};    // convert strings to hashes
   bool is_large_string_col{};  // `true` if string data uses 64-bit offsets
+  int32_t src_file_idx{};      // source file index
 };
 
 /**

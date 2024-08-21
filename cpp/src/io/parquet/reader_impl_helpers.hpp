@@ -202,9 +202,9 @@ class aggregate_reader_metadata {
 
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
 
-  [[nodiscard]] auto const& get_schema(int schema_idx) const
+  [[nodiscard]] auto const& get_schema(int schema_idx, int pfm_idx = 0) const
   {
-    return per_file_metadata[0].schema[schema_idx];
+    return per_file_metadata[pfm_idx].schema[schema_idx];
   }
 
   [[nodiscard]] auto const& get_key_value_metadata() const& { return keyval_maps; }
@@ -214,12 +214,13 @@ class aggregate_reader_metadata {
    * @brief Gets the concrete nesting depth of output cudf columns
    *
    * @param schema_index Schema index of the input column
+   * @param pfm_index File index of the input column
    *
    * @return comma-separated index column names in quotes
    */
-  [[nodiscard]] inline int get_output_nesting_depth(int schema_index) const
+  [[nodiscard]] inline int get_output_nesting_depth(int schema_index, int pfm_index = 0) const
   {
-    auto& pfm = per_file_metadata[0];
+    auto& pfm = per_file_metadata[pfm_index];
     int depth = 0;
 
     // walk upwards, skipping repeated fields

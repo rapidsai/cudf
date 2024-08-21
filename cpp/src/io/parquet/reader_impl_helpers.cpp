@@ -545,11 +545,11 @@ aggregate_reader_metadata::aggregate_reader_metadata(
     num_rows(calc_num_rows()),
     num_row_groups(calc_num_row_groups())
 {
-  if (per_file_metadata.size() > 0) {
-    auto const& first_meta = per_file_metadata.front();
+  if (per_file_metadata.size() > 1) {
+    auto& first_meta = per_file_metadata.front();
     auto const num_cols =
       first_meta.row_groups.size() > 0 ? first_meta.row_groups.front().columns.size() : 0;
-    auto const& schema = first_meta.schema;
+    auto& schema = first_meta.schema;
 
     // Verify that the input files have matching numbers of columns and schema.
     for (auto const& pfm : per_file_metadata) {
@@ -559,6 +559,21 @@ aggregate_reader_metadata::aggregate_reader_metadata(
       }
       CUDF_EXPECTS(schema == pfm.schema, "All sources must have the same schema");
     }
+
+    // Mark the column schema in the first (default) source as nullable if it is nullable in any of
+    // the input sources.
+    std::for_each(
+      thrust::make_counting_iterator(static_cast<size_t>(1)),
+      thrust::make_counting_iterator(schema.size()),
+      [&](auto const schema_idx) {
+        if (schema[schema_idx].repetition_type == REQUIRED and
+            std::any_of(
+              per_file_metadata.begin() + 1, per_file_metadata.end(), [&](auto const& pfm) {
+                return pfm.schema[schema_idx].repetition_type != REQUIRED;
+              })) {
+          schema[schema_idx].repetition_type = OPTIONAL;
+        }
+      });
   }
 
   // Collect and apply arrow:schema from Parquet's key value metadata section

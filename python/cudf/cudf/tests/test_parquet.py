@@ -3793,3 +3793,77 @@ def test_parquet_reader_pandas_compatibility():
     with cudf.option_context("io.parquet.low_memory", True):
         expected = cudf.read_parquet(buffer)
     assert_eq(expected, df)
+
+
+def test_parquet_reader_mismatched_nullability(tmpdir):
+    # Ensure that we can faithfully read the tables with mismatched nullabilities
+    df1 = cudf.DataFrame(
+        {
+            "ms": cudf.Series([12, 54, 1231], dtype="timedelta64[ms]"),
+            "duration_list": list(
+                [
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        datetime.timedelta(minutes=7),
+                    ],
+                    [
+                        datetime.timedelta(minutes=12),
+                        datetime.timedelta(minutes=3),
+                    ],
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        datetime.timedelta(minutes=5),
+                    ],
+                ]
+            ),
+            "int64": cudf.Series([1234, 123, 4123], dtype="int64"),
+            "int32": cudf.Series([1234, 123, 4123], dtype="int32"),
+            "list": list([[1, 2], [1, 2], [1, 2]]),
+            "datetime": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
+            "map": cudf.Series(["cat", "dog", "lion"]).map(
+                {"cat": "kitten", "dog": "puppy", "lion": "cub"}
+            ),
+        }
+    )
+
+    df2 = cudf.DataFrame(
+        {
+            "ms": cudf.Series([None, None, None], dtype="timedelta64[ms]"),
+            "duration_list": list(
+                [
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        datetime.timedelta(minutes=7),
+                    ],
+                    None,
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        None,
+                    ],
+                ]
+            ),
+            "int64": cudf.Series([1234, 123, 4123], dtype="int64"),
+            "int32": cudf.Series([1234, None, 4123], dtype="int32"),
+            "list": list([[1, 2], None, [1, 2]]),
+            "datetime": cudf.Series(
+                [1234, None, 4123], dtype="datetime64[ms]"
+            ),
+            "map": cudf.Series(["cat", "dog", "lion"]).map(
+                {"cat": "kitten", "dog": None, "lion": "cub"}
+            ),
+        }
+    )
+
+    # Write tables to parquet with arrow schema for compatibility for duration column(s)
+    fname1 = tmpdir.join("no-nulls.pq")
+    df1.to_parquet(fname1, store_schema=True)
+    fname2 = tmpdir.join("null.pq")
+    df2.to_parquet(fname2, store_schema=True)
+
+    # Read tables back with cudf and arrow in either order and compare
+    assert_eq(
+        cudf.read_parquet([fname1, fname2]), pq.read_table([fname1, fname2])
+    )
+    assert_eq(
+        cudf.read_parquet([fname2, fname1]), pq.read_table([fname2, fname1])
+    )

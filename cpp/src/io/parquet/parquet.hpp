@@ -203,7 +203,7 @@ struct SchemaElement {
   bool operator==(SchemaElement const& other) const
   {
     return type == other.type && converted_type == other.converted_type &&
-           type_length == other.type_length && repetition_type == other.repetition_type &&
+           type_length == other.type_length && /* repetition_type == other.repetition_type && */
            name == other.name && num_children == other.num_children &&
            decimal_scale == other.decimal_scale && decimal_precision == other.decimal_precision &&
            field_id == other.field_id;

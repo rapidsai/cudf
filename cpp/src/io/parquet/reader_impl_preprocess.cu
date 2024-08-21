@@ -78,23 +78,28 @@ void print_pages(cudf::detail::hostdevice_vector<PageInfo>& pages, rmm::cuda_str
  * is indicated when adding new values.  This function generates the mappings of
  * the R/D levels to those start/end bounds
  *
- * @param remap Maps column schema index to the R/D remapping vectors for that column
+ * @param remap Maps column schema index to the R/D remapping vectors for that column for a
+ *              particular input source file
  * @param src_col_schema The column schema to generate the new mapping for
+ * @param src_file_idx The input source file index for the column schema
  * @param md File metadata information
  */
-void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::vector<int>>>& remap,
-                               int src_col_schema,
-                               aggregate_reader_metadata const& md)
+void generate_depth_remappings(
+  std::map<std::pair<int, int>, std::pair<std::vector<int>, std::vector<int>>>& remap,
+  int const src_col_schema,
+  int const src_file_idx,
+  aggregate_reader_metadata const& md)
 {
   // already generated for this level
-  if (remap.find(src_col_schema) != remap.end()) { return; }
-  auto schema   = md.get_schema(src_col_schema);
-  int max_depth = md.get_output_nesting_depth(src_col_schema);
+  if (remap.find({src_col_schema, src_file_idx}) != remap.end()) { return; }
+  auto schema   = md.get_schema(src_col_schema, src_file_idx);
+  int max_depth = md.get_output_nesting_depth(src_col_schema, src_file_idx);
 
-  CUDF_EXPECTS(remap.find(src_col_schema) == remap.end(),
+  CUDF_EXPECTS(remap.find({src_col_schema, src_file_idx}) == remap.end(),
                "Attempting to remap a schema more than once");
   auto inserted =
-    remap.insert(std::pair<int, std::pair<std::vector<int>, std::vector<int>>>{src_col_schema, {}});
+    remap.insert(std::pair<std::pair<int, int>, std::pair<std::vector<int>, std::vector<int>>>{
+      {src_col_schema, src_file_idx}, {}});
   auto& depth_remap = inserted.first->second;
 
   std::vector<int>& rep_depth_remap = (depth_remap.first);
@@ -137,13 +142,13 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
       int cur_depth  = max_depth - 1;
       int schema_idx = src_col_schema;
       while (schema_idx > 0) {
-        auto cur_schema = md.get_schema(schema_idx);
+        auto cur_schema = md.get_schema(schema_idx, src_file_idx);
         if (cur_schema.max_repetition_level == r) {
           // if this is a repeated field, map it one level deeper
           shallowest = cur_schema.is_stub() ? cur_depth + 1 : cur_depth;
         }
         // if it's one-level encoding list
-        else if (cur_schema.is_one_level_list(md.get_schema(cur_schema.parent_idx))) {
+        else if (cur_schema.is_one_level_list(md.get_schema(cur_schema.parent_idx, src_file_idx))) {
           shallowest = cur_depth - 1;
         }
         if (!cur_schema.is_stub()) { cur_depth--; }
@@ -161,7 +166,7 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
       int schema_idx = src_col_schema;
       int r1         = 0;
       while (schema_idx > 0) {
-        SchemaElement cur_schema = md.get_schema(schema_idx);
+        SchemaElement cur_schema = md.get_schema(schema_idx, src_file_idx);
         if (cur_schema.max_definition_level == d) {
           // if this is a repeated field, map it one level deeper
           r1 = cur_schema.is_stub() ? prev_schema.max_repetition_level
@@ -177,7 +182,7 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
       schema_idx = src_col_schema;
       int depth  = max_depth - 1;
       while (schema_idx > 0) {
-        SchemaElement cur_schema = md.get_schema(schema_idx);
+        SchemaElement cur_schema = md.get_schema(schema_idx, src_file_idx);
         if (cur_schema.max_repetition_level == r1) {
           // if this is a repeated field, map it one level deeper
           depth = cur_schema.is_stub() ? depth + 1 : depth;
@@ -782,9 +787,20 @@ void reader::impl::allocate_nesting_info()
   std::vector<int> per_page_nesting_info_size(num_columns);
   auto iter = thrust::make_counting_iterator(size_type{0});
   std::transform(iter, iter + num_columns, per_page_nesting_info_size.begin(), [&](size_type i) {
+    // Schema index of the current input column
     auto const schema_idx = _input_columns[i].schema_idx;
-    auto const& schema    = _metadata->get_schema(schema_idx);
-    return max(schema.max_definition_level + 1, _metadata->get_output_nesting_depth(schema_idx));
+    // Compute the max per_page_nesting_info_size across all input source files
+    auto max_per_page_nesting_info_size = 0;
+    std::for_each(thrust::make_counting_iterator(static_cast<size_t>(0)),
+                  thrust::make_counting_iterator(_sources.size()),
+                  [&](auto const src_file_idx) {
+                    auto const& schema = _metadata->get_schema(schema_idx, src_file_idx);
+                    max_per_page_nesting_info_size = std::max(
+                      max_per_page_nesting_info_size,
+                      std::max(schema.max_definition_level + 1,
+                               _metadata->get_output_nesting_depth(schema_idx, src_file_idx)));
+                  });
+    return max_per_page_nesting_info_size;
   });
 
   // compute total # of page_nesting infos needed and allocate space. doing this in one
@@ -812,33 +828,53 @@ void reader::impl::allocate_nesting_info()
         page_nesting_decode_info.device_ptr() + src_info_index;
 
       pages[target_page_index + p_idx].nesting_info_size = per_page_nesting_info_size[idx];
+      // Set the number of output nesting levels to the max from all input source files.
       pages[target_page_index + p_idx].num_output_nesting_levels =
         _metadata->get_output_nesting_depth(src_col_schema);
+      std::for_each(thrust::make_counting_iterator(static_cast<size_t>(1)),
+                    thrust::make_counting_iterator(_sources.size()),
+                    [&](auto const src_file_idx) {
+                      pages[target_page_index + p_idx].num_output_nesting_levels =
+                        std::max(pages[target_page_index + p_idx].num_output_nesting_levels,
+                                 _metadata->get_output_nesting_depth(src_col_schema, src_file_idx));
+                    });
 
       src_info_index += per_page_nesting_info_size[idx];
     }
     target_page_index += subpass.column_page_count[idx];
   }
 
+  // Reset the target_page_index
+  target_page_index = 0;
+
   // fill in
   int nesting_info_index = 0;
-  std::map<int, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
     auto const src_col_schema = _input_columns[idx].schema_idx;
 
-    // schema of the input column
-    auto& schema = _metadata->get_schema(src_col_schema);
-    // real depth of the output cudf column hierarchy (1 == no nesting, 2 == 1 level, etc)
-    int const max_output_depth = _metadata->get_output_nesting_depth(src_col_schema);
+    // Map to store depths if this column has lists
+    std::map<std::pair<int, int>, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
 
-    // if this column has lists, generate depth remapping
-    std::map<int, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
-    if (schema.max_repetition_level > 0) {
-      generate_depth_remappings(depth_remapping, src_col_schema, *_metadata);
-    }
+    // real depth of the output cudf column hierarchy (1 == no nesting, 2 == 1 level, etc)
+    int max_output_depth = 0;
+    // Compute the max_output_depth across all input source files.
+    std::for_each(
+      thrust::make_counting_iterator(static_cast<size_t>(0)),
+      thrust::make_counting_iterator(_sources.size()),
+      [&](auto const src_file_idx) {
+        max_output_depth = std::max(
+          max_output_depth, _metadata->get_output_nesting_depth(src_col_schema, src_file_idx));
+
+        // if this column has lists, generate depth remapping
+        if (_metadata->get_schema(src_col_schema, src_file_idx).max_repetition_level > 0) {
+          generate_depth_remappings(depth_remapping, src_col_schema, src_file_idx, *_metadata);
+        }
+      });
 
     // fill in host-side nesting info
-    int schema_idx  = src_col_schema;
+    int schema_idx = src_col_schema;
+    // This is okay as we only use this to check stubness of cur_schema and
+    // to get its parent's indices, both of which are one to one mapped.
     auto cur_schema = _metadata->get_schema(schema_idx);
     int cur_depth   = max_output_depth - 1;
     while (schema_idx > 0) {
@@ -847,6 +883,11 @@ void reader::impl::allocate_nesting_info()
       if (!cur_schema.is_stub()) {
         // initialize each page within the chunk
         for (size_t p_idx = 0; p_idx < subpass.column_page_count[idx]; p_idx++) {
+          // Source file index for the current page.
+          auto const src_file_idx =
+            pass.chunks[pages[target_page_index + p_idx].chunk_idx].src_file_idx;
+          // Get the schema from the current input source.
+          cur_schema = _metadata->get_schema(schema_idx, src_file_idx);
           PageNestingInfo* pni =
             &page_nesting_info[nesting_info_index + (p_idx * per_page_nesting_info_size[idx])];
 
@@ -855,8 +896,8 @@ void reader::impl::allocate_nesting_info()
                                       (p_idx * per_page_nesting_info_size[idx])];
 
           // if we have lists, set our start and end depth remappings
-          if (schema.max_repetition_level > 0) {
-            auto remap = depth_remapping.find(src_col_schema);
+          if (_metadata->get_schema(src_col_schema, src_file_idx).max_repetition_level > 0) {
+            auto remap = depth_remapping.find({src_col_schema, src_file_idx});
             CUDF_EXPECTS(remap != depth_remapping.end(),
                          "Could not find depth remapping for schema");
             std::vector<int> const& rep_depth_remap = (remap->second.first);
@@ -887,6 +928,8 @@ void reader::impl::allocate_nesting_info()
       cur_schema = _metadata->get_schema(schema_idx);
     }
 
+    // Offset the page and nesting info indices
+    target_page_index += subpass.column_page_count[idx];
     nesting_info_index += (per_page_nesting_info_size[idx] * subpass.column_page_count[idx]);
   }
 

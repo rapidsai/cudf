@@ -893,7 +893,7 @@ __device__ void gpuDecodeLevels(page_state_s* s,
 {
   bool has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  constexpr int batch_size = 32;
+  constexpr int batch_size = cudf::detail::warp_size;
   int cur_leaf_count       = target_leaf_count;
   while (s->error == 0 && s->nz_count < target_leaf_count &&
          s->input_value_count < s->num_input_values) {
