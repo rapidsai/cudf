@@ -51,6 +51,9 @@ CUDF_HOST_DEVICE auto constexpr GROUPBY_CARDINALITY_THRESHOLD = 128;
 CUDF_HOST_DEVICE auto constexpr GROUPBY_SHM_MAX_ELEMENTS =
   GROUPBY_CARDINALITY_THRESHOLD + GROUPBY_BLOCK_SIZE;
 
+/**
+ * @brief Returns the smallest multiple of 8 that is greater than or equal to the given integer.
+ */
 CUDF_HOST_DEVICE constexpr std::size_t round_to_multiple_of_8(std::size_t num)
 {
   std::size_t constexpr base = 8;

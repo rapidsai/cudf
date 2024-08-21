@@ -890,6 +890,7 @@ struct compute_direct_aggregates {
       stride(stride)
   {
   }
+
   __device__ void operator()(cudf::size_type i)
   {
     int block_id = (i % stride) / GROUPBY_BLOCK_SIZE;
