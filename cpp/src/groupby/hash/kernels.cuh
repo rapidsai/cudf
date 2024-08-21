@@ -101,7 +101,6 @@ __device__ void compute_pre_aggregrates(int col_start,
   }
 }
 
-template <int shared_set_num_elements>
 __device__ void compute_final_aggregates(int col_start,
                                          int col_end,
                                          cudf::table_device_view input_values,
@@ -113,7 +112,7 @@ __device__ void compute_final_aggregates(int col_start,
                                          cudf::aggregation::Kind const* aggs)
 {
   for (auto cur_idx = threadIdx.x; cur_idx < cardinality; cur_idx += blockDim.x) {
-    auto out_idx = global_mapping_index[blockIdx.x * shared_set_num_elements + cur_idx];
+    auto out_idx = global_mapping_index[blockIdx.x * GROUPBY_SHM_MAX_ELEMENTS + cur_idx];
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
       auto output_col = output_values.column(col_idx);
 
@@ -132,7 +131,6 @@ __device__ void compute_final_aggregates(int col_start,
 
 /* Takes the local_mapping_index and global_mapping_index to compute
  * pre (shared) and final (global) aggregates*/
-template <cudf::size_type shared_set_num_elements, cudf::size_type cardinality_threshold>
 CUDF_KERNEL void compute_aggregates(cudf::size_type* local_mapping_index,
                                     cudf::size_type* global_mapping_index,
                                     cudf::size_type* block_cardinality,
@@ -144,7 +142,7 @@ CUDF_KERNEL void compute_aggregates(cudf::size_type* local_mapping_index,
                                     int pointer_size)
 {
   cudf::size_type cardinality = block_cardinality[blockIdx.x];
-  if (cardinality >= cardinality_threshold) { return; }
+  if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD) { return; }
   int num_input_cols = output_values.num_columns();
   extern __shared__ std::byte shared_set_aggregates[];
   std::byte** s_aggregates_pointer =
@@ -186,15 +184,15 @@ CUDF_KERNEL void compute_aggregates(cudf::size_type* local_mapping_index,
                             s_aggregates_valid_pointer,
                             aggs);
     __syncthreads();
-    compute_final_aggregates<shared_set_num_elements>(col_start,
-                                                      col_end,
-                                                      input_values,
-                                                      output_values,
-                                                      cardinality,
-                                                      global_mapping_index,
-                                                      s_aggregates_pointer,
-                                                      s_aggregates_valid_pointer,
-                                                      aggs);
+    compute_final_aggregates(col_start,
+                             col_end,
+                             input_values,
+                             output_values,
+                             cardinality,
+                             global_mapping_index,
+                             s_aggregates_pointer,
+                             s_aggregates_valid_pointer,
+                             aggs);
     __syncthreads();
   }
 }
@@ -233,24 +231,21 @@ template <typename SetType>
 __device__ void find_global_mapping(cudf::size_type cur_idx,
                                     SetType global_set,
                                     cudf::size_type* shared_set_indices,
-                                    cudf::size_type* global_mapping_index,
-                                    cudf::size_type shared_set_num_elements)
+                                    cudf::size_type* global_mapping_index)
 {
   auto input_idx = shared_set_indices[cur_idx];
   auto result    = global_set.insert_and_find(input_idx);
-  global_mapping_index[blockIdx.x * shared_set_num_elements + cur_idx] = *result.first;
+  global_mapping_index[blockIdx.x * GROUPBY_SHM_MAX_ELEMENTS + cur_idx] = *result.first;
 }
 
 /*
  * Inserts keys into the shared memory hash set, and stores the row index of the local
  * pre-aggregate table in `local_mapping_index`. If the number of unique keys found in a
- * threadblock exceeds `cardinality_threshold`, the threads in that block will exit without updating
- * `global_set` or setting `global_mapping_index`. Else, we insert the unique keys found to the
- * global hash set, and save the row index of the global sparse table in `global_mapping_index`.
+ * threadblock exceeds `GROUPBY_CARDINALITY_THRESHOLD`, the threads in that block will exit without
+ * updating `global_set` or setting `global_mapping_index`. Else, we insert the unique keys found to
+ * the global hash set, and save the row index of the global sparse table in `global_mapping_index`.
  */
 template <class SetRef,
-          cudf::size_type shared_set_num_elements,
-          cudf::size_type cardinality_threshold,
           typename GlobalSetType,
           typename KeyEqual,
           typename RowHasher,
@@ -265,7 +260,7 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
                                          cudf::size_type* block_cardinality,
                                          bool* direct_aggregations)
 {
-  __shared__ cudf::size_type shared_set_indices[shared_set_num_elements];
+  __shared__ cudf::size_type shared_set_indices[GROUPBY_SHM_MAX_ELEMENTS];
 
   // Shared set initialization
   __shared__ typename SetRef::window_type windows[window_extent.value()];
@@ -302,7 +297,7 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
 
     __syncthreads();
 
-    if (cardinality >= cardinality_threshold) {
+    if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD) {
       if (threadIdx.x == 0) { *direct_aggregations = true; }
       break;
     }
@@ -311,10 +306,9 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
   }
 
   // Insert unique keys from shared to global hash set
-  if (cardinality < cardinality_threshold) {
+  if (cardinality < GROUPBY_CARDINALITY_THRESHOLD) {
     for (auto cur_idx = threadIdx.x; cur_idx < cardinality; cur_idx += blockDim.x) {
-      find_global_mapping(
-        cur_idx, global_set, shared_set_indices, global_mapping_index, shared_set_num_elements);
+      find_global_mapping(cur_idx, global_set, shared_set_indices, global_mapping_index);
     }
   }
 

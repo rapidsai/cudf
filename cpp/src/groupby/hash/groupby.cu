@@ -505,7 +505,6 @@ size_t find_shmem_size(FuncType func, int block_size, int grid_size, int num_sms
   return get_previous_multiple_of_8(0.5 * dynamic_smem_size);
 }
 
-template <cudf::size_type shared_set_num_elements, cudf::size_type cardinality_threshold>
 void launch_compute_aggregates(int block_size,
                                int grid_size,
                                int num_sms,
@@ -518,8 +517,7 @@ void launch_compute_aggregates(int block_size,
                                cudf::aggregation::Kind const* aggs,
                                rmm::cuda_stream_view stream)
 {
-  auto compute_aggregates_fn_ptr =
-    compute_aggregates<shared_set_num_elements, cardinality_threshold>;
+  auto compute_aggregates_fn_ptr = compute_aggregates;
   size_t d_shmem_size = find_shmem_size(compute_aggregates_fn_ptr, block_size, grid_size, num_sms);
   // For each aggregation, need two pointers to arrays in shmem
   // One where the aggregation is performed, one indicating the validity of the aggregation
@@ -527,16 +525,15 @@ void launch_compute_aggregates(int block_size,
     round_to_multiple_of_8(sizeof(std::byte*) * output_values.num_columns());
   // The rest of shmem is utilized for the actual arrays in shmem
   auto shmem_agg_size = d_shmem_size - shmem_agg_pointer_size * 2;
-  compute_aggregates<shared_set_num_elements, cardinality_threshold>
-    <<<grid_size, block_size, d_shmem_size, stream>>>(local_mapping_index,
-                                                      global_mapping_index,
-                                                      block_cardinality,
-                                                      input_values,
-                                                      output_values,
-                                                      num_input_rows,
-                                                      aggs,
-                                                      shmem_agg_size,
-                                                      shmem_agg_pointer_size);
+  compute_aggregates<<<grid_size, block_size, d_shmem_size, stream>>>(local_mapping_index,
+                                                                      global_mapping_index,
+                                                                      block_cardinality,
+                                                                      input_values,
+                                                                      output_values,
+                                                                      num_input_rows,
+                                                                      aggs,
+                                                                      shmem_agg_size,
+                                                                      shmem_agg_pointer_size);
 }
 
 /**
@@ -553,17 +550,9 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_set_aggs(
   KeyEqual d_key_equal,
   RowHasher d_row_hash)
 {
-  auto constexpr block_size            = 128;
-  auto constexpr cardinality_threshold = 128;
-
-  auto const num_input_rows = keys.num_rows();
-
-  // We add additional `block_size`, because after the number of elements in the local hash set
-  // exceeds the threshold, all threads in the thread block can still insert one more element.
-  auto constexpr shared_set_num_elements = cardinality_threshold + block_size;
-  // shared_set_num_elements with 0.7 occupancy
+  // GROUPBY_SHM_MAX_ELEMENTS with 0.7 occupancy
   auto constexpr shared_set_capacity =
-    static_cast<std::size_t>(static_cast<double>(shared_set_num_elements) * 1.43);
+    static_cast<std::size_t>(static_cast<double>(GROUPBY_SHM_MAX_ELEMENTS) * 1.43);
   using extent_type            = cuco::extent<cudf::size_type, shared_set_capacity>;
   using shared_set_type        = cuco::static_set<cudf::size_type,
                                            extent_type,
@@ -575,37 +564,37 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_set_aggs(
   using shared_set_ref_type    = typename shared_set_type::ref_type<>;
   auto constexpr window_extent = cuco::make_window_extent<shared_set_ref_type>(extent_type{});
 
+  auto const num_input_rows = keys.num_rows();
+
   auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
   int num_sms                         = find_num_sms();
   auto compute_mapping_indices_fn_ptr = compute_mapping_indices<shared_set_ref_type,
-                                                                shared_set_num_elements,
-                                                                cardinality_threshold,
                                                                 decltype(global_set_ref),
                                                                 KeyEqual,
                                                                 RowHasher,
                                                                 decltype(window_extent)>;
   int grid_size =
-    find_grid_size(compute_mapping_indices_fn_ptr, block_size, num_input_rows, num_sms);
+    find_grid_size(compute_mapping_indices_fn_ptr, GROUPBY_BLOCK_SIZE, num_input_rows, num_sms);
   // 'local_mapping_index' maps from the global row index of the input table to the row index of
   // the local pre-aggregate table
   rmm::device_uvector<cudf::size_type> local_mapping_index(num_input_rows, stream);
   // 'global_mapping_index' maps from  the local pre-aggregate table to the row index of
   // global aggregate table
-  rmm::device_uvector<cudf::size_type> global_mapping_index(grid_size * shared_set_num_elements,
+  rmm::device_uvector<cudf::size_type> global_mapping_index(grid_size * GROUPBY_SHM_MAX_ELEMENTS,
                                                             stream);
   rmm::device_uvector<cudf::size_type> block_cardinality(grid_size, stream);
   rmm::device_scalar<bool> direct_aggregations(false, stream);
-  compute_mapping_indices<shared_set_ref_type, shared_set_num_elements, cardinality_threshold>
-    <<<grid_size, block_size, 0, stream>>>(global_set_ref,
-                                           num_input_rows,
-                                           window_extent,
-                                           d_key_equal,
-                                           d_row_hash,
-                                           local_mapping_index.data(),
-                                           global_mapping_index.data(),
-                                           block_cardinality.data(),
-                                           direct_aggregations.data());
+  compute_mapping_indices<shared_set_ref_type>
+    <<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream>>>(global_set_ref,
+                                                   num_input_rows,
+                                                   window_extent,
+                                                   d_key_equal,
+                                                   d_row_hash,
+                                                   local_mapping_index.data(),
+                                                   global_mapping_index.data(),
+                                                   block_cardinality.data(),
+                                                   direct_aggregations.data());
   stream.synchronize();
 
   // 'populated_keys' contains inserted row_indices (keys) of global hash set
@@ -628,21 +617,20 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_set_aggs(
 
   auto d_values = table_device_view::create(flattened_values, stream);
 
-  launch_compute_aggregates<shared_set_num_elements, cardinality_threshold>(
-    block_size,
-    grid_size,
-    num_sms,
-    local_mapping_index.data(),
-    global_mapping_index.data(),
-    block_cardinality.data(),
-    *d_values,
-    *d_sparse_table,
-    num_input_rows,
-    d_aggs.data(),
-    stream);
+  launch_compute_aggregates(GROUPBY_BLOCK_SIZE,
+                            grid_size,
+                            num_sms,
+                            local_mapping_index.data(),
+                            global_mapping_index.data(),
+                            block_cardinality.data(),
+                            *d_values,
+                            *d_sparse_table,
+                            num_input_rows,
+                            d_aggs.data(),
+                            stream);
 
   if (direct_aggregations.value(stream)) {
-    int stride = block_size * grid_size;
+    int stride = GROUPBY_BLOCK_SIZE * grid_size;
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator(0),
                        keys.num_rows(),
@@ -652,8 +640,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_set_aggs(
                                                  d_aggs.data(),
                                                  block_cardinality.data(),
                                                  stride,
-                                                 block_size,
-                                                 cardinality_threshold});
+                                                 GROUPBY_BLOCK_SIZE});
     extract_populated_keys(global_set, populated_keys, stream);
   }
 

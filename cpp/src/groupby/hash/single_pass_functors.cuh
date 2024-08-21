@@ -877,29 +877,26 @@ struct compute_direct_aggregates {
   cudf::size_type* block_cardinality;
   int stride;
   int block_size;
-  cudf::size_type cardinality_threshold;
   compute_direct_aggregates(SetType set,
                             cudf::table_device_view input_values,
                             cudf::mutable_table_device_view output_values,
                             cudf::aggregation::Kind const* aggs,
                             cudf::size_type* block_cardinality,
                             int stride,
-                            int block_size,
-                            cudf::size_type cardinality_threshold)
+                            int block_size)
     : set(set),
       input_values(input_values),
       output_values(output_values),
       aggs(aggs),
       block_cardinality(block_cardinality),
       stride(stride),
-      block_size(block_size),
-      cardinality_threshold(cardinality_threshold)
+      block_size(block_size)
   {
   }
   __device__ void operator()(cudf::size_type i)
   {
     int block_id = (i % stride) / block_size;
-    if (block_cardinality[block_id] >= cardinality_threshold) {
+    if (block_cardinality[block_id] >= GROUPBY_CARDINALITY_THRESHOLD) {
       auto const result = set.insert_and_find(i);
       cudf::detail::aggregate_row<true, true>(output_values, *result.first, input_values, i, aggs);
     }

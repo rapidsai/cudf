@@ -24,22 +24,37 @@
 
 namespace cudf::groupby::detail::hash {
 
+// TODO: similar to `contains_table`, using larger CG size like 2 or 4 for nested
+// types and `cg_size = 1`for flat data to improve performance
+/// Number of threads to handle each input element
+CUDF_HOST_DEVICE auto constexpr GROUPBY_CG_SIZE = 1;
+
+/// Number of slots per thread
+CUDF_HOST_DEVICE auto constexpr GROUPBY_WINDOW_SIZE = 1;
+
+/// Probing scheme type used by groupby hash table
+using probing_scheme_type = cuco::linear_probing<
+  GROUPBY_CG_SIZE,
+  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                   cudf::nullate::DYNAMIC>>;
+
+/// Thread block size
+CUDF_HOST_DEVICE auto constexpr GROUPBY_BLOCK_SIZE = 128;
+
+/// Threshold cardinality to switch between shared memory aggregations and global memory
+/// aggregations
+CUDF_HOST_DEVICE auto constexpr GROUPBY_CARDINALITY_THRESHOLD = 128;
+
+// We add additional `block_size`, because after the number of elements in the local hash set
+// exceeds the threshold, all threads in the thread block can still insert one more element.
+/// The maximum number of elements handled per block
+CUDF_HOST_DEVICE auto constexpr GROUPBY_SHM_MAX_ELEMENTS =
+  GROUPBY_CARDINALITY_THRESHOLD + GROUPBY_BLOCK_SIZE;
+
 CUDF_HOST_DEVICE constexpr std::size_t round_to_multiple_of_8(std::size_t num)
 {
   std::size_t constexpr base = 8;
   return cudf::util::div_rounding_up_safe(num, base) * base;
 }
-
-// TODO: similar to `contains_table`, using larger CG size like 2 or 4 for nested
-// types and `cg_size = 1`for flat data to improve performance
-/// Number of threads to handle each input element
-CUDF_HOST_DEVICE auto constexpr GROUPBY_CG_SIZE = 1;
-/// Number of slots per thread
-CUDF_HOST_DEVICE auto constexpr GROUPBY_WINDOW_SIZE = 1;
-
-using probing_scheme_type = cuco::linear_probing<
-  GROUPBY_CG_SIZE,
-  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                   cudf::nullate::DYNAMIC>>;
 
 }  // namespace cudf::groupby::detail::hash
