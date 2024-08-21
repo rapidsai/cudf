@@ -984,9 +984,9 @@ class CategoricalColumn(column.ColumnBase):
         )
         replacement_col = catmap._data["index"].astype(replaced.codes.dtype)
 
-        replaced = column.as_column(replaced.codes)
+        replaced_codes = column.as_column(replaced.codes)
         output = libcudf.replace.replace(
-            replaced, to_replace_col, replacement_col
+            replaced_codes, to_replace_col, replacement_col
         )
 
         result = column.build_categorical_column(
@@ -1064,7 +1064,7 @@ class CategoricalColumn(column.ColumnBase):
                 raise TypeError(
                     "Cannot set a categorical with non-categorical data"
                 )
-            fill_value = fill_value._set_categories(
+            fill_value = cast(CategoricalColumn, fill_value)._set_categories(
                 self.categories,
             )
             return fill_value.codes.astype(self.codes.dtype)
