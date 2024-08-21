@@ -18,23 +18,22 @@
 
 #include <cudf/table/table.hpp>
 
-#include <string>
-#include <vector>
+#include <array>
 
 namespace CUDF_EXPORT cudf {
 namespace datagen {
 namespace schema {
 
-auto const ORDERS   = std::vector<std::string>{"o_orderkey",
-                                               "o_custkey",
-                                               "o_orderdate",
-                                               "o_orderpriority",
-                                               "o_clerk",
-                                               "o_shippriority",
-                                               "o_comment",
-                                               "o_totalprice",
-                                               "o_orderstatus"};
-auto const LINEITEM = std::vector<std::string>{"l_orderkey",
+constexpr std::array<const char*, 9> ORDERS{"o_orderkey",
+                                            "o_custkey",
+                                            "o_orderdate",
+                                            "o_orderpriority",
+                                            "o_clerk",
+                                            "o_shippriority",
+                                            "o_comment",
+                                            "o_totalprice",
+                                            "o_orderstatus"};
+constexpr std::array<const char*, 16> LINEITEM{"l_orderkey",
                                                "l_partkey",
                                                "l_suppkey",
                                                "l_linenumber",
@@ -50,29 +49,29 @@ auto const LINEITEM = std::vector<std::string>{"l_orderkey",
                                                "l_shipmode",
                                                "l_comment",
                                                "l_extendedprice"};
-auto const PART     = std::vector<std::string>{"p_partkey",
-                                               "p_name",
-                                               "p_mfgr",
-                                               "p_brand",
-                                               "p_type",
-                                               "p_size",
-                                               "p_container",
-                                               "p_retailprice",
-                                               "p_comment"};
-auto const PARTSUPP = std::vector<std::string>{
+constexpr std::array<const char*, 9> PART{"p_partkey",
+                                          "p_name",
+                                          "p_mfgr",
+                                          "p_brand",
+                                          "p_type",
+                                          "p_size",
+                                          "p_container",
+                                          "p_retailprice",
+                                          "p_comment"};
+constexpr std::array<const char*, 5> PARTSUPP{
   "ps_partkey", "ps_suppkey", "ps_availqty", "ps_supplycost", "ps_comment"};
-auto const SUPPLIER = std::vector<std::string>{
+constexpr std::array<const char*, 7> SUPPLIER{
   "s_suppkey", "s_name", "s_address", "s_nationkey", "s_phone", "s_acctbal", "s_comment"};
-auto const CUSTOMER = std::vector<std::string>{"c_custkey",
-                                               "c_name",
-                                               "c_address",
-                                               "c_nationkey",
-                                               "c_phone",
-                                               "c_acctbal",
-                                               "c_mktsegment",
-                                               "c_comment"};
-auto const NATION   = std::vector<std::string>{"n_nationkey", "n_name", "n_regionkey", "n_comment"};
-auto const REGION   = std::vector<std::string>{"r_regionkey", "r_name", "r_comment"};
+constexpr std::array<const char*, 8> CUSTOMER{"c_custkey",
+                                              "c_name",
+                                              "c_address",
+                                              "c_nationkey",
+                                              "c_phone",
+                                              "c_acctbal",
+                                              "c_mktsegment",
+                                              "c_comment"};
+constexpr std::array<const char*, 4> NATION{"n_nationkey", "n_name", "n_regionkey", "n_comment"};
+constexpr std::array<const char*, 3> REGION{"r_regionkey", "r_name", "r_comment"};
 
 }  // namespace schema
 
