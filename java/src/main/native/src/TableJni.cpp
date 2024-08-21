@@ -1071,6 +1071,15 @@ void append_flattened_child_names(cudf::io::column_name_info const& info,
   }
 }
 
+void set_nullable(ArrowSchema* schema)
+{
+  schema->flags |= ARROW_FLAG_NULLABLE;
+  for (int i = 0; i < schema->n_children; i++) {
+    schema->children[i]->flags |= ARROW_FLAG_NULLABLE;
+    set_nullable(schema->children[i]);
+  }
+}
+
 }  // namespace
 
 }  // namespace jni
@@ -2637,9 +2646,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv
     // The pointer to the shared_ptr<> is returned as a jlong.
     using result_t = std::shared_ptr<arrow::Table>;
 
-    auto got_arrow_schema   = cudf::to_arrow_schema(*tview, state->get_column_metadata(*tview));
-    got_arrow_schema->flags = ARROW_FLAG_NULLABLE;
-    auto got_arrow_array    = cudf::to_arrow_host(*tview);
+    auto got_arrow_schema = cudf::to_arrow_schema(*tview, state->get_column_metadata(*tview));
+    cudf::jni::set_nullable(got_arrow_schema.get());
+    auto got_arrow_array = cudf::to_arrow_host(*tview);
     auto batch =
       arrow::ImportRecordBatch(&got_arrow_array->array, got_arrow_schema.get()).ValueOrDie();
     auto result = arrow::Table::FromRecordBatches({batch}).ValueOrDie();
