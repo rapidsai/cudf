@@ -16,7 +16,7 @@
 
 #include "table_helpers.hpp"
 
-#include "rand_utilities.hpp"
+#include "random_column_generator.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/ast/detail/operators.hpp>

@@ -16,7 +16,7 @@
 
 #include "tpch_datagen.hpp"
 
-#include "rand_utilities.hpp"
+#include "random_column_generator.hpp"
 #include "table_helpers.hpp"
 
 #include <cudf_test/column_wrapper.hpp>

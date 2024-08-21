@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "rand_utilities.hpp"
+#include "random_column_generator.hpp"
 
 #include <cudf_test/column_wrapper.hpp>
 

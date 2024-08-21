@@ -38,7 +38,7 @@ target_include_directories(
 add_library(
   cudf_tpch_datagen STATIC
   common/cudf_tpch_datagen/tpch_datagen.cpp common/cudf_tpch_datagen/table_helpers.cpp
-  common/cudf_tpch_datagen/rand_utilities.cu
+  common/cudf_tpch_datagen/random_column_generator.cu
 )
 target_compile_features(cudf_tpch_datagen PUBLIC cxx_std_17 cuda_std_17)
 
