@@ -190,6 +190,18 @@ __device__ T single_lane_block_sum_reduce(T lane_value)
 }
 
 /**
+ * @brief Get the number of multiprocessors on the device
+ */
+cudf::size_type num_multiprocessors()
+{
+  int device = 0;
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
+  int num_sms = 0;
+  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
+  return num_sms;
+}
+
+/**
  * @brief Get the number of elements that can be processed per thread.
  *
  * @param[in] kernel The kernel for which the elements per thread needs to be assessed
@@ -210,11 +222,7 @@ cudf::size_type elements_per_thread(Kernel kernel,
   int max_blocks = 0;
   CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, block_size, 0));
 
-  int device = 0;
-  CUDF_CUDA_TRY(cudaGetDevice(&device));
-  int num_sms = 0;
-  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
-  int per_thread = total_size / (max_blocks * num_sms * block_size);
+  int per_thread = total_size / (max_blocks * num_multiprocessors() * block_size);
   return std::clamp(per_thread, 1, max_per_thread);
 }
 
