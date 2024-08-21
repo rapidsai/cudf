@@ -220,7 +220,7 @@ std::unique_ptr<cudf::table> generate_orders_independent(cudf::size_type const& 
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
   auto o_comment = gen_rand_str_col(19, 78, o_num_rows, stream, mr);
 
-  // Generate the `orders_indenpendent` table
+  // Generate the `orders_independent` table
   std::vector<std::unique_ptr<cudf::column>> columns;
   columns.push_back(std::move(o_orderkey));
   columns.push_back(std::move(o_custkey));
