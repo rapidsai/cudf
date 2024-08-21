@@ -143,7 +143,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.10
     with:
       build_type: pull-request
-      script: "ci/build_wheel_python.sh"
+      script: "ci/build_wheel_cudf.sh"
   wheel-tests-cudf:
     needs: wheel-build-cudf
     secrets: inherit
