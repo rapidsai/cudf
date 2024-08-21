@@ -1013,9 +1013,7 @@ class Frame(BinaryOperand, Scannable):
         See `ColumnBase._with_type_metadata` for more information.
         """
         for (name, col), (_, dtype) in zip(self._data.items(), other._dtypes):
-            self._data.set_by_label(
-                name, col._with_type_metadata(dtype), validate=False
-            )
+            self._data.set_by_label(name, col._with_type_metadata(dtype))
 
         return self
 
