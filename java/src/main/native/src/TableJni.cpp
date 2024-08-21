@@ -1039,9 +1039,9 @@ cudf::io::schema_element read_schema_element(int& index,
     // go to the next entry, so recursion can parse it.
     index++;
     for (int i = 0; i < num_children; i++) {
+      auto const name = std::string{names.get(index).get()};
       child_elems.insert(
-        std::pair{names.get(index).get(),
-                  cudf::jni::read_schema_element(index, children, names, types, scales)});
+        std::pair{name, cudf::jni::read_schema_element(index, children, names, types, scales)});
     }
     return cudf::io::schema_element{d_type, std::move(child_elems)};
   } else {
@@ -1841,9 +1841,9 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
       std::map<std::string, cudf::io::schema_element> data_types;
       int at = 0;
       while (at < n_types.size()) {
+        auto const name = std::string{n_col_names.get(at).get()};
         data_types.insert(std::pair{
-          n_col_names.get(at).get(),
-          cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
+          name, cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
       }
       opts.dtypes(data_types);
     } else {
@@ -1940,9 +1940,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
       std::map<std::string, cudf::io::schema_element> data_types;
       int at = 0;
       while (at < n_types.size()) {
+        auto const name = std::string{n_col_names.get(at).get()};
         data_types.insert(std::pair{
-          n_col_names.get(at).get(),
-          cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
+          name, cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
       }
       opts.dtypes(data_types);
     } else {
