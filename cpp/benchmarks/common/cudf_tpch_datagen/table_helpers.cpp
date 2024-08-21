@@ -169,7 +169,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
                       mr);
 
   // Generate the `i` col
-  auto i = gen_rep_seq_col<cudf::size_type>(4, true, num_rows, stream, mr);
+  auto i = generate_repeat_sequence_column<cudf::size_type>(4, true, num_rows, stream, mr);
 
   // Create a table view out of `l_partkey`, `s`, and `i`
   auto table = cudf::table_view({l_partkey, s->view(), i->view()});
@@ -240,7 +240,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
                       mr);
 
   // Generate the `i` col
-  auto i = gen_rep_seq_col<cudf::size_type>(4, true, num_rows, stream, mr);
+  auto i = generate_repeat_sequence_column<cudf::size_type>(4, true, num_rows, stream, mr);
 
   // Create a table view out of `p_partkey`, `s`, and `i`
   auto table = cudf::table_view({ps_partkey, s->view(), i->view()});
@@ -341,12 +341,11 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] std::unique_ptr<cudf::column> gen_addr_col(cudf::size_type const& num_rows,
-                                                         rmm::cuda_stream_view stream,
-                                                         rmm::device_async_resource_ref mr)
+[[nodiscard]] std::unique_ptr<cudf::column> generate_address_column(
+  cudf::size_type const& num_rows, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return gen_rand_str_col(10, 40, num_rows, stream, mr);
+  return generate_random_string_column(10, 40, num_rows, stream, mr);
 }
 
 /**
@@ -356,19 +355,19 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] std::unique_ptr<cudf::column> gen_phone_col(cudf::size_type const& num_rows,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::device_async_resource_ref mr)
+[[nodiscard]] std::unique_ptr<cudf::column> generate_phone_column(cudf::size_type const& num_rows,
+                                                                  rmm::cuda_stream_view stream,
+                                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto const part_a =
-    cudf::strings::from_integers(gen_rand_num_col<int16_t>(10, 34, num_rows, stream, mr)->view());
-  auto const part_b =
-    cudf::strings::from_integers(gen_rand_num_col<int16_t>(100, 999, num_rows, stream, mr)->view());
-  auto const part_c =
-    cudf::strings::from_integers(gen_rand_num_col<int16_t>(100, 999, num_rows, stream, mr)->view());
+  auto const part_a = cudf::strings::from_integers(
+    generate_random_numeric_column<int16_t>(10, 34, num_rows, stream, mr)->view());
+  auto const part_b = cudf::strings::from_integers(
+    generate_random_numeric_column<int16_t>(100, 999, num_rows, stream, mr)->view());
+  auto const part_c = cudf::strings::from_integers(
+    generate_random_numeric_column<int16_t>(100, 999, num_rows, stream, mr)->view());
   auto const part_d = cudf::strings::from_integers(
-    gen_rand_num_col<int16_t>(1000, 9999, num_rows, stream, mr)->view());
+    generate_random_numeric_column<int16_t>(1000, 9999, num_rows, stream, mr)->view());
   auto const phone_parts_table =
     cudf::table_view({part_a->view(), part_b->view(), part_c->view(), part_d->view()});
   return cudf::strings::concatenate(phone_parts_table,

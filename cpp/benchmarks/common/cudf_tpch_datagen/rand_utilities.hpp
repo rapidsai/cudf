@@ -30,7 +30,7 @@
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::column> gen_rand_str_col(
+std::unique_ptr<cudf::column> generate_random_string_column(
   cudf::size_type const& lower,
   cudf::size_type const& upper,
   cudf::size_type const& num_rows,
@@ -46,7 +46,7 @@ std::unique_ptr<cudf::column> gen_rand_str_col(
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename T>
-std::unique_ptr<cudf::column> gen_rand_num_col(
+std::unique_ptr<cudf::column> generate_random_numeric_column(
   T const& lower,
   T const& upper,
   cudf::size_type const& num_rows,
@@ -61,7 +61,7 @@ std::unique_ptr<cudf::column> gen_rand_num_col(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::column> gen_primary_key_col(
+std::unique_ptr<cudf::column> generate_primary_key_column(
   cudf::scalar const& start,
   cudf::size_type const& num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -75,7 +75,7 @@ std::unique_ptr<cudf::column> gen_primary_key_col(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::column> gen_rep_str_col(
+std::unique_ptr<cudf::column> generate_repeat_string_column(
   std::string const& value,
   cudf::size_type const& num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -89,7 +89,7 @@ std::unique_ptr<cudf::column> gen_rep_str_col(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::column> gen_rand_str_col_from_set(
+std::unique_ptr<cudf::column> generate_random_string_column_from_set(
   std::vector<std::string> set,
   cudf::size_type const& num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -104,7 +104,7 @@ std::unique_ptr<cudf::column> gen_rand_str_col_from_set(
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename T>
-std::unique_ptr<cudf::column> gen_rep_seq_col(
+std::unique_ptr<cudf::column> generate_repeat_sequence_column(
   T const& seq_length,
   bool zero_indexed,
   cudf::size_type const& num_rows,

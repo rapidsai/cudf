@@ -133,7 +133,7 @@ std::unique_ptr<cudf::table> perform_left_join(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] std::unique_ptr<cudf::column> gen_addr_col(
+[[nodiscard]] std::unique_ptr<cudf::column> generate_address_column(
   cudf::size_type const& num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
@@ -145,7 +145,7 @@ std::unique_ptr<cudf::table> perform_left_join(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] std::unique_ptr<cudf::column> gen_phone_col(
+[[nodiscard]] std::unique_ptr<cudf::column> generate_phone_column(
   cudf::size_type const& num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
