@@ -14,14 +14,16 @@ import tempfile
 import types
 from io import BytesIO, StringIO
 
+import cupy as cp
 import numpy as np
 import pyarrow as pa
 import pytest
-from numba import NumbaDeprecationWarning
+from numba import NumbaDeprecationWarning, vectorize
 from pytz import utc
 
 from cudf.pandas import LOADED, Profiler
 from cudf.pandas.fast_slow_proxy import _Unusable, is_proxy_object
+from cudf.testing import assert_eq
 
 if not LOADED:
     raise ImportError("These tests must be run with cudf.pandas loaded")
@@ -1647,4 +1649,34 @@ def test_numpy_ndarray_np_ufunc(array):
     def add_one_ufunc(arr):
         return arr + 1
 
-    tm.assert_almost_equal(add_one_ufunc(arr1), add_one_ufunc(arr2))
+    assert_eq(add_one_ufunc(arr1), add_one_ufunc(arr2))
+
+
+def test_numpy_ndarray_cp_ufunc(array):
+    arr1, arr2 = array
+
+    @cp.vectorize
+    def add_one_ufunc(arr):
+        return arr + 1
+
+    assert_eq(add_one_ufunc(cp.asarray(arr1)), add_one_ufunc(arr2))
+
+
+def test_numpy_ndarray_numba_ufunc(array):
+    arr1, arr2 = array
+
+    @vectorize
+    def add_one_ufunc(arr):
+        return arr + 1
+
+    assert_eq(add_one_ufunc(arr1), add_one_ufunc(arr2))
+
+
+def test_numpy_ndarray_numba_cuda_ufunc(array):
+    arr1, arr2 = array
+
+    @vectorize(["int64(int64)"], target="cuda")
+    def add_one_ufunc(a):
+        return a + 1
+
+    assert_eq(cp.asarray(add_one_ufunc(arr1)), cp.asarray(add_one_ufunc(arr2)))

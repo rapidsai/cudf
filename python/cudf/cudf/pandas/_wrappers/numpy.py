@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import cupy
 import cupy._core.flags
+import numba
 import numpy
 from packaging import version
 
@@ -119,6 +120,44 @@ def asarray(*args, **kwargs):
 numpy.asarray = asarray
 
 
+def convert_args_to_slow(inputs):
+    new_inputs = []
+    for x in inputs:
+        if isinstance(x, ProxyNDarrayBase):
+            if hasattr(x._fsproxy_wrapped, "get"):
+                new_inputs.append(numpy.asarray(x._fsproxy_wrapped.get()))
+            else:
+                new_inputs.append(numpy.asarray(x._fsproxy_wrapped))
+        else:
+            new_inputs.append(x)
+    inputs = tuple(new_inputs)
+    return inputs
+
+
+def convert_args_to_fast(inputs):
+    new_inputs = []
+    for x in inputs:
+        if isinstance(x, ProxyNDarrayBase):
+            new_inputs.append(cupy.asarray(x._fsproxy_wrapped))
+        else:
+            new_inputs.append(x)
+    inputs = tuple(new_inputs)
+    return inputs
+
+
+def ndarray__array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+    if isinstance(ufunc, numba.np.ufunc.dufunc.DUFunc):
+        inputs = convert_args_to_slow(inputs)
+    elif isinstance(ufunc, (numpy.ufunc, numpy.vectorize)):
+        inputs = convert_args_to_slow(inputs)
+    elif isinstance(ufunc, (cupy.ufunc, cupy.vectorize)):
+        inputs = convert_args_to_fast(inputs)
+    else:
+        raise TypeError(f"Unrecognized ufunc of type {type(ufunc)}")
+    result = getattr(ufunc, method)(*inputs, **kwargs)
+    return result
+
+
 ndarray = make_final_proxy_type(
     "ndarray",
     cupy.ndarray,
@@ -132,7 +171,7 @@ ndarray = make_final_proxy_type(
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
         "__array_interface__": array_interface,
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "__array_ufunc__": ndarray__array_ufunc__,
         # ndarrays are unhashable
         "__hash__": None,
         # iter(cupy-array) produces an iterable of zero-dim device
