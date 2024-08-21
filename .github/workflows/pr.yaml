@@ -62,7 +62,7 @@ jobs:
       - name: Fetch pandas versions
         id: get-versions
         run: |
-          versions=$(python ci/cudf_pandas_scripts/fetch_pandas_versions.py)
+          versions=$(python ci/cudf_pandas_scripts/fetch_pandas_versions.py >=2.0,<2.2.3dev0)
           echo "::set-output name=versions::${versions}"
   cross-pandas-version-tests:
     needs: [fetch-pandas-versions, wheel-build-cudf]

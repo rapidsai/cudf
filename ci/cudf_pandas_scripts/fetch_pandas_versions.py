@@ -1,26 +1,26 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import requests
+from packaging.version import Version
+from packaging.specifiers import SpecifierSet
+import argparse
 
-def get_pandas_versions():
+def get_pandas_versions(pandas_range):
     url = "https://pypi.org/pypi/pandas/json"
     response = requests.get(url)
     data = response.json()
     versions = data['releases'].keys()
 
-    # Filter out pre-releases and major versions
-    minor_versions = sorted(set(
-        '.'.join(version.split('.')[:2]) for version in versions if 'rc' not in version and 'b' not in version
-    ))
+    specifier = SpecifierSet(pandas_range)
 
-    # Remove duplicates and sort
-    minor_versions = sorted(set(minor_versions))
-
-    # Filter for versions starting from 2.0
-    minor_versions = [v for v in minor_versions if v.startswith('2.')]
+    minor_versions = list(set([version[:3] for version in versions if Version(version) in specifier]))
 
     return minor_versions
 
 if __name__ == "__main__":
-    versions = get_pandas_versions()
+    parser = argparse.ArgumentParser(description="Filter pandas versions by prefix.")
+    parser.add_argument("pandas_range", type=str, help="The version prefix to filter by.")
+    args = parser.parse_args()
+
+    versions = get_pandas_versions(args.pandas_range)
     print(versions)
