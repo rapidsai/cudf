@@ -768,39 +768,7 @@ TEST_F(ToArrowIPC, WriteMultiple)
     tables.push_back(arrow::Table::FromRecordBatches({batch}).ValueOrDie());
   }
 
-  ASSERT_TRUE(tables[0]->schema()->field(0)->nullable() ==
-              tables[1]->schema()->field(0)->nullable());
-
-  auto tmp_sink = arrow::io::FileOutputStream::Open("/home/coder/cudf/arrow_table.arrow");
-  if (!tmp_sink.ok()) { throw std::runtime_error(tmp_sink.status().message()); }
-  auto sink = *tmp_sink;
-
-  auto tmp_writer = arrow::ipc::MakeStreamWriter(sink, tables[0]->schema());
-  if (!tmp_writer.ok()) { throw std::runtime_error(tmp_writer.status().message()); }
-  auto writer = *tmp_writer;
-
-  for (auto table : tables) {
-    auto status = writer->WriteTable(*table, 100);
-    if (!status.ok()) {
-      throw std::runtime_error("writer failed to write table with the following error: " +
-                               status.ToString());
-    };
-  }
-
-  {
-    auto status = writer->Close();
-    if (!status.ok()) {
-      throw std::runtime_error("Closing writer failed with the following error: " +
-                               status.ToString());
-    }
-  }
-  {
-    auto status = sink->Close();
-    if (!status.ok()) {
-      throw std::runtime_error("Closing sink failed with the following error: " +
-                               status.ToString());
-    }
-  }
+  ASSERT_TRUE(tables[0]->schema()->Equals(tables[1]->schema()));
 }
 
 CUDF_TEST_PROGRAM_MAIN()
