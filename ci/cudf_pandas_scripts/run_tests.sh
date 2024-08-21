@@ -9,6 +9,12 @@ RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
 RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 
+DEPENDENCIES_PATH="../../dependencies.yaml"
+package_name="pandas"
+
+# Use grep to find the line containing the package name and version constraint
+pandas_version_constraint=$(grep -oP "pandas>=\d+\.\d+,\<\d+\.\d+\.\d+dev\d+" $DEPENDENCIES_PATH)
+
 # Function to display script usage
 function display_usage {
     echo "Usage: $0 [--no-cudf] [pandas-version]"
@@ -61,6 +67,18 @@ else
     echo "No pandas version specified, using existing pandas installation"
 fi
 
+output=$(python fetch_pandas_versions.py $pandas_version_constraint 2)
+
+# Remove the brackets and spaces from the output to get a comma-separated list
+output=$(echo $output | tr -d '[] ')
+
+# Convert the comma-separated list into an array
+IFS=',' read -r -a versions <<< "$output"
+
+for version in "${versions[@]}"; do
+    echo "Installing pandas version: $version"
+    python -m pip install pandas==$version
+done
 python -m pytest -p cudf.pandas \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \

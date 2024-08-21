@@ -43,40 +43,6 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.10
     with:
       enable_check_generated_files: false
-  fetch-pandas-versions:
-    runs-on: ubuntu-latest
-    outputs:
-      pandas-versions: ${{ steps.get-versions.outputs.versions }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.11'
-
-      - name: Install requests
-        run: pip install requests
-      - name: Install packaging
-        run: pip install packaging
-      - name: Fetch pandas versions
-        id: get-versions
-        run: |
-          versions=$(python ci/cudf_pandas_scripts/fetch_pandas_versions.py ">=2.0,<2.2.3dev0")
-          echo "::set-output name=versions::${versions}"
-  cross-pandas-version-tests:
-    needs: [fetch-pandas-versions, wheel-build-cudf]
-    secrets: inherit
-    strategy:
-      matrix:
-        pandas-version: ${{ fromJson(needs.fetch-pandas-versions.outputs.pandas-versions) }}
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
-    with:
-      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
-      build_type: pull-request
-      script: ci/cudf_pandas_scripts/run_tests.sh ${{ matrix.pandas-version }}
   conda-cpp-build:
     needs: checks
     secrets: inherit

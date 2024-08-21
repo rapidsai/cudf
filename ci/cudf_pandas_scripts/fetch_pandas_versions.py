@@ -11,7 +11,7 @@ def get_pandas_versions(pandas_range):
     data = response.json()
     versions = data['releases'].keys()
 
-    specifier = SpecifierSet(pandas_range)
+    specifier = SpecifierSet(pandas_range.lstrip("pandas"))
 
     minor_versions = list(set([version[:3] for version in versions if Version(version) in specifier]))
 
