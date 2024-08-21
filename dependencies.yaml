@@ -10,6 +10,7 @@ files:
       - build_all
       - build_cpp
       - build_python_common
+      - build_pylibcudf
       - cuda
       - cuda_version
       - depends_on_cupy
@@ -133,6 +134,7 @@ files:
     includes:
       - build_base
       - build_python_common
+      - build_pylibcudf
       - depends_on_rmm
   py_run_pylibcudf:
     output: pyproject
@@ -360,6 +362,8 @@ dependencies:
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==16.1.0.*
+  build_pylibcudf:
+    common:
       - output_types: pyproject
         packages:
           # Hard pin the patch version used during the build.
@@ -568,7 +572,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          # TODO: Update `numpy` in `build_python_common` when dropping `<2.0a0`
+          # TODO: Update `numpy` in `build_pylibcudf` when dropping `<2.0a0`
           - numpy>=1.23,<2.0a0
           - pandas>=2.0,<2.2.3dev0
   run_pylibcudf:
