@@ -34,7 +34,7 @@ constexpr int DEFAULT_BLOCK_SIZE = 256;
 template <typename T>
 struct equality_functor {
   column_device_view const& col;
-  __device__ bool operator()(key_type const lhs_idx, key_type const rhs_idx) const
+  __device__ bool operator()(key_type lhs_idx, key_type rhs_idx) const
   {
     // We don't call this for nulls so this is fine.
     auto constexpr equal =
@@ -76,22 +76,20 @@ struct map_insert_fn {
       using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_fn_type>;
 
       // Make a view of the hash map.
-      cuco::static_map_ref<key_type,
-                           mapped_type,
-                           SCOPE,
-                           equality_fn_type,
-                           probing_scheme_type,
-                           storage_ref_type>
-        hash_map_ref{cuco::empty_key{KEY_SENTINEL},
-                     cuco::empty_value{VALUE_SENTINEL},
-                     {data_col},
-                     hash_fn_type{data_col},
-                     {},
-                     storage_ref};
+      auto hash_map_ref = cuco::static_map_ref{cuco::empty_key{KEY_SENTINEL},
+                                               cuco::empty_value{VALUE_SENTINEL},
+                                               equality_fn_type{data_col},
+                                               probing_scheme_type{hash_fn_type{data_col}},
+                                               cuco::thread_scope_block,
+                                               storage_ref};
 
       // Create a map ref with `cuco::insert` operator
       auto map_insert_ref = hash_map_ref.with_operators(cuco::insert);
       auto const t        = threadIdx.x;
+
+      // Create atomic refs to the current chunk's num_dict_entries and uniq_data_size
+      cuda::atomic_ref<size_type, SCOPE> const chunk_num_dict_entries{chunk->num_dict_entries};
+      cuda::atomic_ref<size_type, SCOPE> const chunk_uniq_data_size{chunk->uniq_data_size};
 
       // Note: Adjust the following loop to use `cg::tile<map_cg_size>` if needed in the future.
       for (thread_index_type val_idx = s_start_value_idx + t; val_idx - block_size < end_value_idx;
@@ -144,9 +142,10 @@ struct map_insert_fn {
         auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
         // The first thread in the block atomically updates total num_unique and uniq_data_size
         if (t == 0) {
-          total_num_dict_entries = atomicAdd(&chunk->num_dict_entries, num_unique);
+          total_num_dict_entries =
+            chunk_num_dict_entries.fetch_add(num_unique, cuda::std::memory_order_relaxed);
           total_num_dict_entries += num_unique;
-          atomicAdd(&chunk->uniq_data_size, uniq_data_size);
+          chunk_uniq_data_size.fetch_add(uniq_data_size, cuda::std::memory_order_relaxed);
         }
         __syncthreads();
 
@@ -179,18 +178,12 @@ struct map_find_fn {
       using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_fn_type>;
 
       // Make a view of the hash map.
-      cuco::static_map_ref<key_type,
-                           mapped_type,
-                           SCOPE,
-                           equality_fn_type,
-                           probing_scheme_type,
-                           storage_ref_type>
-        hash_map_ref{cuco::empty_key{KEY_SENTINEL},
-                     cuco::empty_value{VALUE_SENTINEL},
-                     {data_col},
-                     hash_fn_type{data_col},
-                     {},
-                     storage_ref};
+      auto hash_map_ref = cuco::static_map_ref{cuco::empty_key{KEY_SENTINEL},
+                                               cuco::empty_value{VALUE_SENTINEL},
+                                               equality_fn_type{data_col},
+                                               probing_scheme_type{hash_fn_type{data_col}},
+                                               cuco::thread_scope_block,
+                                               storage_ref};
 
       // Create a map ref with `cuco::find` operator
       auto const map_find_ref = hash_map_ref.with_operators(cuco::find);
