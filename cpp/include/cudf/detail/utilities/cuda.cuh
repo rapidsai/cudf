@@ -192,7 +192,7 @@ __device__ T single_lane_block_sum_reduce(T lane_value)
 /**
  * @brief Get the number of multiprocessors on the device
  */
-cudf::size_type num_multiprocessors()
+inline cudf::size_type num_multiprocessors()
 {
   int device = 0;
   CUDF_CUDA_TRY(cudaGetDevice(&device));

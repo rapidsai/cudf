@@ -150,13 +150,8 @@ void generate_input_tables(key_type* const build_tbl,
   CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
     &num_blocks_init_probe_tbl, init_probe_tbl<key_type, size_type>, block_size, 0));
 
-  int dev_id{-1};
-  CUDF_CUDA_TRY(cudaGetDevice(&dev_id));
-
-  int num_sms{-1};
-  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
-
-  int const num_states =
+  auto const num_sms = cudf::detail::num_multiprocessors();
+  auto const num_states =
     num_sms * std::max(num_blocks_init_build_tbl, num_blocks_init_probe_tbl) * block_size;
   rmm::device_uvector<curandState> devStates(num_states, cudf::get_default_stream());
 
