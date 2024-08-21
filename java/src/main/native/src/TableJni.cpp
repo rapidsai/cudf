@@ -1071,11 +1071,11 @@ void append_flattened_child_names(cudf::io::column_name_info const& info,
   }
 }
 
+// Recursively make schema and its children nullable
 void set_nullable(ArrowSchema* schema)
 {
   schema->flags |= ARROW_FLAG_NULLABLE;
-  for (int i = 0; i < schema->n_children; i++) {
-    schema->children[i]->flags |= ARROW_FLAG_NULLABLE;
+  for (int i = 0; i < schema->n_children; ++i) {
     set_nullable(schema->children[i]);
   }
 }
