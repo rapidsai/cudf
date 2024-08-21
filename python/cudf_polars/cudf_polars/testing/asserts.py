@@ -76,14 +76,10 @@ def assert_gpu_result_equal(
     NotImplementedError
         If GPU collection failed in some way.
     """
-    if collect_kwargs is None:
-        collect_kwargs = {}
-    final_polars_collect_kwargs = collect_kwargs.copy()
-    final_cudf_collect_kwargs = collect_kwargs.copy()
-    if polars_collect_kwargs is not None:  # pragma: no cover; not currently used
-        final_polars_collect_kwargs.update(polars_collect_kwargs)
-    if cudf_collect_kwargs is not None:  # pragma: no cover; not currently used
-        final_cudf_collect_kwargs.update(cudf_collect_kwargs)
+    final_polars_collect_kwargs, final_cudf_collect_kwargs = _process_kwargs(
+        collect_kwargs, polars_collect_kwargs, cudf_collect_kwargs
+    )
+
     expect = lazydf.collect(**final_polars_collect_kwargs)
     engine = GPUEngine(raise_on_fail=True)
     got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)
@@ -129,3 +125,87 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
         raise AssertionError(f"Translation DID NOT RAISE {exceptions}") from e
     else:
         raise AssertionError(f"Translation DID NOT RAISE {exceptions}")
+
+
+def _process_kwargs(
+    collect_kwargs: dict[OptimizationArgs, bool] | None,
+    polars_collect_kwargs: dict[OptimizationArgs, bool] | None,
+    cudf_collect_kwargs: dict[OptimizationArgs, bool] | None,
+) -> tuple[dict[OptimizationArgs, bool], dict[OptimizationArgs, bool]]:
+    if collect_kwargs is None:
+        collect_kwargs = {}
+    final_polars_collect_kwargs = collect_kwargs.copy()
+    final_cudf_collect_kwargs = collect_kwargs.copy()
+    if polars_collect_kwargs is not None:  # pragma: no cover; not currently used
+        final_polars_collect_kwargs.update(polars_collect_kwargs)
+    if cudf_collect_kwargs is not None:  # pragma: no cover; not currently used
+        final_cudf_collect_kwargs.update(cudf_collect_kwargs)
+    return final_polars_collect_kwargs, final_cudf_collect_kwargs
+
+
+def assert_errors_equal(
+    lazydf: pl.LazyFrame,
+    *,
+    collect_kwargs: dict[OptimizationArgs, bool] | None = None,
+    polars_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
+    cudf_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
+):
+    """
+    Assert that both the GPU and CPU execution of a query raises the same error.
+
+    Parameters
+    ----------
+    lazydf
+        frame to collect.
+    collect_kwargs
+        Common keyword arguments to pass to collect for both polars CPU and
+        cudf-polars.
+        Useful for controlling optimization settings.
+    polars_collect_kwargs
+        Keyword arguments to pass to collect for execution on polars CPU.
+        Overrides kwargs in collect_kwargs.
+        Useful for controlling optimization settings.
+    cudf_collect_kwargs
+        Keyword arguments to pass to collect for execution on cudf-polars.
+        Overrides kwargs in collect_kwargs.
+        Useful for controlling optimization settings.
+
+    Returns
+    -------
+    None
+        If both sides raised the same class of exception.
+
+    Raises
+    ------
+    AssertionError
+       If only one side raised an exceptin or if the exception classes differ.
+    """
+    final_polars_collect_kwargs, final_cudf_collect_kwargs = _process_kwargs(
+        collect_kwargs, polars_collect_kwargs, cudf_collect_kwargs
+    )
+
+    cpu_exception, gpu_exception = None, None
+    cpu_raised, gpu_raised = False, False
+
+    try:
+        lazydf.collect(**final_polars_collect_kwargs)
+    except Exception as e:
+        cpu_exception = e
+        cpu_raised = True
+
+    engine = GPUEngine(raise_on_fail=True)
+    try:
+        lazydf.collect(**final_cudf_collect_kwargs, engine=engine)
+    except Exception as e:
+        gpu_exception = e
+        gpu_raised = True
+
+    if not cpu_raised:
+        raise AssertionError("CPU did not raise an exception")
+    if not gpu_raised:
+        raise AssertionError("GPU did not raise an exception")
+
+    if type(cpu_exception) != type(gpu_exception):
+        raise AssertionError(
+            f"\nCPU raised {cpu_exception},\nGPU raised {gpu_exception}"
+        )

@@ -10,6 +10,7 @@ import polars as pl
 
 from cudf_polars import execute_with_cudf
 from cudf_polars.testing.asserts import (
+    assert_errors_equal,
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
@@ -179,9 +180,10 @@ def test_to_datetime(to_datetime_data, cache, strict, format, exact):
             pl.Datetime("ns"), format=format, cache=cache, strict=strict, exact=exact
         )
     )
-    if cache or format is None or not exact or strict:
+    if cache or format is None or not exact:
         assert_ir_translation_raises(query, NotImplementedError)
-        return
+    elif strict:
+        assert_errors_equal(query)
     else:
         assert_gpu_result_equal(query)
 
