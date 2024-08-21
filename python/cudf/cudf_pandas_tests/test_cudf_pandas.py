@@ -609,7 +609,7 @@ def test_array_function_series_fallback(series):
     tm.assert_equal(expect, got)
 
 
-@pytest.mark.skipif(
+@pytest.mark.xfail(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="Fails in older versions of pandas",
 )
@@ -672,7 +672,7 @@ def test_maintain_container_subclasses(multiindex):
     assert isinstance(got, xpd.core.indexes.frozen.FrozenList)
 
 
-@pytest.mark.skipif(
+@pytest.mark.xfail(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="Fails in older versions of pandas due to unsupported boxcar window type",
 )
@@ -1291,7 +1291,7 @@ def test_super_attribute_lookup():
     assert s.max_times_two() == 6
 
 
-@pytest.mark.skipif(
+@pytest.mark.xfail(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="DatetimeArray.__floordiv__ missing in pandas-2.0.0",
 )
@@ -1566,7 +1566,7 @@ def test_numpy_cupy_flatiter(series):
     assert type(arr.flat._fsproxy_slow) == np.flatiter
 
 
-@pytest.mark.skipif(
+@pytest.mark.xfail(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="pyarrow_numpy storage type was not supported in pandas-2.0.0",
 )
