@@ -2050,8 +2050,8 @@ size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
 {
   uint32_t max_fb_size, min_fb_size, fb_size;
   auto const sm_count = cudf::detail::num_multiprocessors();
-  max_num_inputs      = std::min(max_num_inputs,
-                            sm_count * 3);  // no more than 3 blocks/sm at most due to 32KB smem use
+  // no more than 3 blocks/sm at most due to 32KB smem use
+  max_num_inputs = std::min(max_num_inputs, sm_count * 3);
   if (max_num_inputs <= 0) {
     max_num_inputs = sm_count * 2;  // Target 2 blocks/SM by default for scratch mem computation
   }
