@@ -1078,7 +1078,6 @@ rapids_export(
   GLOBAL_TARGETS cudf cudftestutil
   NAMESPACE cudf::
   DOCUMENTATION doc_string
-  FINAL_CODE_BLOCK install_code_string
 )
 
 # ##################################################################################################
