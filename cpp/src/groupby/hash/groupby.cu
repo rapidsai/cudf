@@ -482,31 +482,30 @@ int find_num_sms()
 }
 
 template <typename FuncType>
-int find_grid_size(FuncType func, int block_size, cudf::size_type num_input_rows, int num_sms)
+int find_grid_size(FuncType func, cudf::size_type num_input_rows, int num_sms)
 {
   int max_active_blocks{-1};
   CUDF_CUDA_TRY(
-    cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_active_blocks, func, block_size, 0));
+    cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_active_blocks, func, GROUPBY_BLOCK_SIZE, 0));
   auto max_grid_size       = max_active_blocks * num_sms;
-  int needed_active_blocks = cudf::util::div_rounding_up_safe(num_input_rows, block_size);
+  int needed_active_blocks = cudf::util::div_rounding_up_safe(num_input_rows, GROUPBY_BLOCK_SIZE);
   return std::min(max_grid_size, needed_active_blocks);
 }
 
 size_t get_previous_multiple_of_8(size_t number) { return number / 8 * 8; }
 
 template <typename FuncType>
-size_t find_shmem_size(FuncType func, int block_size, int grid_size, int num_sms)
+size_t find_shmem_size(FuncType func, int grid_size, int num_sms)
 {
   auto active_blocks_per_sm = cudf::util::div_rounding_up_safe(grid_size, num_sms);
 
   size_t dynamic_smem_size;
   CUDF_CUDA_TRY(cudaOccupancyAvailableDynamicSMemPerBlock(
-    &dynamic_smem_size, func, active_blocks_per_sm, block_size));
+    &dynamic_smem_size, func, active_blocks_per_sm, GROUPBY_BLOCK_SIZE));
   return get_previous_multiple_of_8(0.5 * dynamic_smem_size);
 }
 
-void launch_compute_aggregates(int block_size,
-                               int grid_size,
+void launch_compute_aggregates(int grid_size,
                                int num_sms,
                                cudf::size_type* local_mapping_index,
                                cudf::size_type* global_mapping_index,
@@ -518,22 +517,23 @@ void launch_compute_aggregates(int block_size,
                                rmm::cuda_stream_view stream)
 {
   auto compute_aggregates_fn_ptr = compute_aggregates;
-  size_t d_shmem_size = find_shmem_size(compute_aggregates_fn_ptr, block_size, grid_size, num_sms);
+  size_t d_shmem_size            = find_shmem_size(compute_aggregates_fn_ptr, grid_size, num_sms);
   // For each aggregation, need two pointers to arrays in shmem
   // One where the aggregation is performed, one indicating the validity of the aggregation
   auto shmem_agg_pointer_size =
     round_to_multiple_of_8(sizeof(std::byte*) * output_values.num_columns());
   // The rest of shmem is utilized for the actual arrays in shmem
   auto shmem_agg_size = d_shmem_size - shmem_agg_pointer_size * 2;
-  compute_aggregates<<<grid_size, block_size, d_shmem_size, stream>>>(local_mapping_index,
-                                                                      global_mapping_index,
-                                                                      block_cardinality,
-                                                                      input_values,
-                                                                      output_values,
-                                                                      num_input_rows,
-                                                                      aggs,
-                                                                      shmem_agg_size,
-                                                                      shmem_agg_pointer_size);
+  compute_aggregates<<<grid_size, GROUPBY_BLOCK_SIZE, d_shmem_size, stream>>>(
+    local_mapping_index,
+    global_mapping_index,
+    block_cardinality,
+    input_values,
+    output_values,
+    num_input_rows,
+    aggs,
+    shmem_agg_size,
+    shmem_agg_pointer_size);
 }
 
 /**
@@ -574,8 +574,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_set_aggs(
                                                                 KeyEqual,
                                                                 RowHasher,
                                                                 decltype(window_extent)>;
-  int grid_size =
-    find_grid_size(compute_mapping_indices_fn_ptr, GROUPBY_BLOCK_SIZE, num_input_rows, num_sms);
+  int grid_size = find_grid_size(compute_mapping_indices_fn_ptr, num_input_rows, num_sms);
   // 'local_mapping_index' maps from the global row index of the input table to the row index of
   // the local pre-aggregate table
   rmm::device_uvector<cudf::size_type> local_mapping_index(num_input_rows, stream);
@@ -617,8 +616,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_set_aggs(
 
   auto d_values = table_device_view::create(flattened_values, stream);
 
-  launch_compute_aggregates(GROUPBY_BLOCK_SIZE,
-                            grid_size,
+  launch_compute_aggregates(grid_size,
                             num_sms,
                             local_mapping_index.data(),
                             global_mapping_index.data(),
@@ -639,8 +637,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_set_aggs(
                                                  *d_sparse_table,
                                                  d_aggs.data(),
                                                  block_cardinality.data(),
-                                                 stride,
-                                                 GROUPBY_BLOCK_SIZE});
+                                                 stride});
     extract_populated_keys(global_set, populated_keys, stream);
   }
 
