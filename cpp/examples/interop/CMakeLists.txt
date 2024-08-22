@@ -14,14 +14,6 @@ project(
 )
 
 include(../fetch_dependencies.cmake)
-
-# Try hardcoding build type for arrow
-if(NOT DEFINED CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE
-      Release
-      CACHE STRING "Choose the type of build."
-  )
-endif()
 include(../../tests/cmake/thirdparty/get_arrow.cmake)
 
 add_executable(interop interop.cpp)
