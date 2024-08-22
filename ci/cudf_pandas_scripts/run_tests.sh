@@ -59,18 +59,17 @@ else
         "$(echo ./dist/pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
 fi
 
-# Conditionally install the specified version of pandas
-if [ -n "$PANDAS_VERSION" ]; then
-    echo "Installing pandas version: $PANDAS_VERSION"
-    python -m pip install pandas==$PANDAS_VERSION
-else
-    echo "No pandas version specified, using existing pandas installation"
-fi
+python -m pytest -p cudf.pandas \
+    --cov-config=./python/cudf/.coveragerc \
+    --cov=cudf \
+    --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
+    --cov-report=term \
+    ./python/cudf/cudf_pandas_tests/
 
-output=$(python fetch_pandas_versions.py $pandas_version_constraint 2)
+output=$(python fetch_pandas_versions.py $pandas_version_constraint)
 
 # Remove the brackets and spaces from the output to get a comma-separated list
-output=$(echo $output | tr -d '[] ')
+output=$(echo $output | tr -d "[] \'\'")
 
 # Convert the comma-separated list into an array
 IFS=',' read -r -a versions <<< "$output"
@@ -78,10 +77,10 @@ IFS=',' read -r -a versions <<< "$output"
 for version in "${versions[@]}"; do
     echo "Installing pandas version: $version"
     python -m pip install pandas==$version
-done
-python -m pytest -p cudf.pandas \
+    python -m pytest -p cudf.pandas \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
     --cov-report=term \
     ./python/cudf/cudf_pandas_tests/
+done
