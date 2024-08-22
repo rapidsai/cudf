@@ -30,6 +30,7 @@ def df():
     params=[
         [pl.col("key1")],
         [pl.col("key2")],
+        [pl.col("key1"), pl.lit(1)],
         [pl.col("key1") * pl.col("key2")],
         [pl.col("key1"), pl.col("key2")],
         [pl.col("key1") == pl.col("key2")],
@@ -59,15 +60,7 @@ def exprs(request):
 
 
 @pytest.fixture(
-    params=[
-        False,
-        pytest.param(
-            True,
-            marks=pytest.mark.xfail(
-                reason="Maintaining order in groupby not implemented"
-            ),
-        ),
-    ],
+    params=[False, True],
     ids=["no_maintain_order", "maintain_order"],
 )
 def maintain_order(request):
@@ -125,6 +118,21 @@ def test_groupby_unsupported(df, expr):
     q = df.group_by("key1").agg(expr)
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_null_keys(maintain_order):
+    df = pl.LazyFrame(
+        {
+            "key": pl.Series([1, float("nan"), 2, None, 2, None], dtype=pl.Float64()),
+            "value": [-1, 2, 1, 2, 3, 4],
+        }
+    )
+
+    q = df.group_by("key", maintain_order=maintain_order).agg(pl.col("value").min())
+    if not maintain_order:
+        q = q.sort("key")
+
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.xfail(reason="https://github.com/pola-rs/polars/issues/17513")
