@@ -57,8 +57,10 @@ jobs:
     steps:
       - name: Echo
         run: |
-          echo "Test C++: ${{ needs.changed-files.outputs.test_cpp == 'true' }}"
-          echo "Test Python: ${{ needs.changed-files.outputs.test_python == 'true' }}"
+          echo "Test C++: ${{ needs.changed-files.outputs.test_cpp }}"
+          echo "Test Python: ${{ needs.changed-files.outputs.test_python }}"
+          echo "Test C++ == 'true': ${{ needs.changed-files.outputs.test_cpp == 'true' }}"
+          echo "Test Python == 'true': ${{ needs.changed-files.outputs.test_python == 'true' }}"
   pr-builder:
     needs:
       - checks
