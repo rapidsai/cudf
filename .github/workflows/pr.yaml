@@ -28,13 +28,13 @@ jobs:
         with:
           files_yaml: |
             cpp:
-              - **
+              - '**'
               - '!docs/**'
               - '!java/**'
               - '!notebooks/**'
               - '!python/**'
             python:
-              - **
+              - '**'
               - '!docs/**'
               - '!java/**'
   test-job:
