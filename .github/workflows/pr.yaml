@@ -12,12 +12,18 @@ concurrency:
 jobs:
   pr-builder:
     needs:
+      - never-run-test
       - never-run
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.10
-  never-run:
+  never-run-test:
     runs-on: ubuntu-latest
-    if: false
+    outputs:
+      run-never-run: true
+  never-run:
+    needs: never-run-test
+    runs-on: ubuntu-latest
+    if: ${{ needs.never-run-test.outputs.run-never-run == 'true' }}
     steps:
       - run: |
           echo "This should never run!"
