@@ -1507,7 +1507,7 @@ def _select_single_source(sources: list, caller: str):
     """
     if len(sources) > 1:
         raise ValueError(
-            f"{caller} does not support multiple sources," f" got: {sources}"
+            f"{caller} does not support multiple sources, got: {sources}"
         )
     return sources[0]
 
