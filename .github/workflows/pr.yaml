@@ -44,6 +44,11 @@ jobs:
               - cpp/**
             python:
               - python/**
+      - name: Print outputs
+        run: |
+          echo "CI changed: ${{ steps.changd-files.outputs.ci_any_changed }}"
+          echo "C++ changed: ${{ steps.changd-files.outputs.cpp_any_changed }}"
+          echo "Python changed: ${{ steps.changd-files.outputs.python_any_changed }}"
   pr-builder:
     needs:
       - checks
