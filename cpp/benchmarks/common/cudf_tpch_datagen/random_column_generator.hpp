@@ -39,6 +39,7 @@ std::unique_ptr<cudf::column> generate_random_string_column(
 
 /**
  * @brief Generate a column of random numbers
+ *
  * @param lower The lower bound of the random numbers
  * @param upper The upper bound of the random numbers
  * @param num_rows The number of rows in the column
