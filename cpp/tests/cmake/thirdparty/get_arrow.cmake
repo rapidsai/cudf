@@ -22,82 +22,10 @@
 
 include_guard(GLOBAL)
 
-# Generate a FindArrow module for the case where we need to search for arrow within a pip install
-# pyarrow.
-function(find_libarrow_in_python_wheel PYARROW_VERSION)
-  string(REPLACE "." ";" PYARROW_VER_COMPONENTS "${PYARROW_VERSION}")
-  list(GET PYARROW_VER_COMPONENTS 0 PYARROW_MAJOR_VER)
-  list(GET PYARROW_VER_COMPONENTS 1 PYARROW_MINOR_VER)
-
-  # Ensure that the major and minor versions are two digits long
-  string(LENGTH ${PYARROW_MAJOR_VER} PYARROW_MAJOR_LENGTH)
-  string(LENGTH ${PYARROW_MINOR_VER} PYARROW_MINOR_LENGTH)
-  if(${PYARROW_MAJOR_LENGTH} EQUAL 1)
-    set(PYARROW_MAJOR_VER "0${PYARROW_MAJOR_VER}")
-  endif()
-  if(${PYARROW_MINOR_LENGTH} EQUAL 1)
-    set(PYARROW_MINOR_VER "0${PYARROW_MINOR_VER}")
-  endif()
-
-  set(PYARROW_LIB "libarrow.so.${PYARROW_MAJOR_VER}${PYARROW_MINOR_VER}")
-
-  string(
-    APPEND
-    initial_code_block
-    [=[
-find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
-execute_process(
-    COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
-    OUTPUT_VARIABLE CUDF_PYARROW_WHEEL_DIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    COMMAND_ERROR_IS_FATAL ANY
-)
-list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
-]=]
-  )
-  string(
-    APPEND
-    final_code_block
-    [=[
-list(POP_BACK CMAKE_PREFIX_PATH)
-]=]
-  )
-  rapids_find_generate_module(
-    Arrow NO_CONFIG
-    VERSION "${PYARROW_VERSION}"
-    LIBRARY_NAMES "${PYARROW_LIB}"
-    BUILD_EXPORT_SET cudf-exports
-    INSTALL_EXPORT_SET cudf-exports
-    HEADER_NAMES arrow/python/arrow_to_pandas.h INITIAL_CODE_BLOCK initial_code_block
-                 FINAL_CODE_BLOCK final_code_block
-  )
-
-  find_package(Arrow ${PYARROW_VERSION} MODULE REQUIRED GLOBAL)
-  add_library(arrow_shared ALIAS Arrow::Arrow)
-
-  rapids_export_package(BUILD Arrow cudf-exports)
-  rapids_export_package(INSTALL Arrow cudf-exports)
-endfunction()
-
 # This function finds arrow and sets any additional necessary environment variables.
 function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENABLE_PYTHON
-         ENABLE_PARQUET PYARROW_LIBARROW
+         ENABLE_PARQUET
 )
-
-  if(PYARROW_LIBARROW)
-    # Generate a FindArrow.cmake to find pyarrow's libarrow.so
-    find_libarrow_in_python_wheel(${VERSION})
-    set(ARROW_FOUND
-        TRUE
-        PARENT_SCOPE
-    )
-    set(ARROW_LIBRARIES
-        arrow_shared
-        PARENT_SCOPE
-    )
-    return()
-  endif()
-
   if(BUILD_STATIC)
     if(TARGET arrow_static)
       set(ARROW_FOUND
@@ -437,5 +365,5 @@ endif()
 
 find_and_configure_arrow(
   ${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} ${CUDF_ENABLE_ARROW_S3} ${CUDF_ENABLE_ARROW_ORC}
-  ${CUDF_ENABLE_ARROW_PYTHON} ${CUDF_ENABLE_ARROW_PARQUET} ${USE_LIBARROW_FROM_PYARROW}
+  ${CUDF_ENABLE_ARROW_PYTHON} ${CUDF_ENABLE_ARROW_PARQUET}
 )
