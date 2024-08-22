@@ -54,7 +54,7 @@ jobs:
       - changed-files
     runs-on: ubuntu-latest
     name: "Test job"
-    if: ${{ needs.changed-files.outputs.test_cpp }}
+    if: ${{ needs.changed-files.outputs.test_cpp == 'true' }}
     steps:
       - name: Echo
         run: |
