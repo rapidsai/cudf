@@ -19,7 +19,4 @@ class ProxyNDarrayBase(np.ndarray):
     def __array_finalize__(self, obj):
         if obj is None:
             return
-        for attr in list(self.__dict__.keys()):
-            if attr not in {"__new__", "__array_finalize__"}:
-                delattr(self, attr)
         self._fsproxy_wrapped = obj

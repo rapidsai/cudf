@@ -146,9 +146,9 @@ def convert_args_to_fast(inputs):
 
 
 def ndarray__array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-    if isinstance(ufunc, numba.np.ufunc.dufunc.DUFunc):
-        inputs = convert_args_to_slow(inputs)
-    elif isinstance(ufunc, (numpy.ufunc, numpy.vectorize)):
+    if isinstance(
+        ufunc, (numpy.ufunc, numpy.vectorize, numba.np.ufunc.dufunc.DUFunc)
+    ):
         inputs = convert_args_to_slow(inputs)
     elif isinstance(ufunc, (cupy.ufunc, cupy.vectorize)):
         inputs = convert_args_to_fast(inputs)
