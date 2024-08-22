@@ -114,6 +114,9 @@ ignore = [
   "TD003", # Missing issue link on the line following this TODO
   # tryceratops
   "TRY003", # Avoid specifying long messages outside the exception class
+  # pyupgrade
+  "UP035",  # Import from `collections.abc` instead: `Callable`
+  "UP038",  # Use `X | Y` in `isinstance` call instead of `(X, Y)`
   # Lints below are turned off because of conflicts with the ruff
   # formatter
   # See https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
@@ -136,6 +139,10 @@ fixable = ["ALL"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/*.py" = ["D"]
+"**/cudf_polars/typing/__init__.py" = [
+  # pyupgrade
+  "UP007", # Use `X | Y` for type annotations
+]
 
 [tool.ruff.lint.flake8-pytest-style]
 # https://docs.astral.sh/ruff/settings/#lintflake8-pytest-style
