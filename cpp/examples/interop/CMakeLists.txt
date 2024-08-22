@@ -17,7 +17,7 @@ include(../fetch_dependencies.cmake)
 
 # Try hardcoding build type for arrow
 set(CMAKE_BUILD_TYPE Release)
-include(../../tests/cmake/thirdparty/get_arrow.cmake)
+include(../../cmake/thirdparty/get_arrow.cmake)
 
 add_executable(interop interop.cpp)
 target_link_libraries(interop PRIVATE cudf::cudf)
