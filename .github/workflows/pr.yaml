@@ -16,6 +16,7 @@ jobs:
       - never-run
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.10
+    if: always()
   never-run-test:
     runs-on: ubuntu-latest
     outputs:
