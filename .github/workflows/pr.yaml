@@ -16,6 +16,7 @@ jobs:
       - never-run
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@pr-builder-needs-check
+    if: always()
     with:
       needs: ${{ toJSON(needs) }}
   never-run-test:
