@@ -22,58 +22,6 @@
 
 namespace CUDF_EXPORT cudf {
 namespace datagen {
-namespace schema {
-
-const std::vector<std::string> ORDERS   = {"o_orderkey",
-                                           "o_custkey",
-                                           "o_orderdate",
-                                           "o_orderpriority",
-                                           "o_clerk",
-                                           "o_shippriority",
-                                           "o_comment",
-                                           "o_totalprice",
-                                           "o_orderstatus"};
-const std::vector<std::string> LINEITEM = {"l_orderkey",
-                                           "l_partkey",
-                                           "l_suppkey",
-                                           "l_linenumber",
-                                           "l_quantity",
-                                           "l_discount",
-                                           "l_tax",
-                                           "l_shipdate",
-                                           "l_commitdate",
-                                           "l_receiptdate",
-                                           "l_returnflag",
-                                           "l_linestatus",
-                                           "l_shipinstruct",
-                                           "l_shipmode",
-                                           "l_comment",
-                                           "l_extendedprice"};
-const std::vector<std::string> PART     = {"p_partkey",
-                                           "p_name",
-                                           "p_mfgr",
-                                           "p_brand",
-                                           "p_type",
-                                           "p_size",
-                                           "p_container",
-                                           "p_retailprice",
-                                           "p_comment"};
-const std::vector<std::string> PARTSUPP = {
-  "ps_partkey", "ps_suppkey", "ps_availqty", "ps_supplycost", "ps_comment"};
-const std::vector<std::string> SUPPLIER = {
-  "s_suppkey", "s_name", "s_address", "s_nationkey", "s_phone", "s_acctbal", "s_comment"};
-const std::vector<std::string> CUSTOMER = {"c_custkey",
-                                           "c_name",
-                                           "c_address",
-                                           "c_nationkey",
-                                           "c_phone",
-                                           "c_acctbal",
-                                           "c_mktsegment",
-                                           "c_comment"};
-const std::vector<std::string> NATION   = {"n_nationkey", "n_name", "n_regionkey", "n_comment"};
-const std::vector<std::string> REGION   = {"r_regionkey", "r_name", "r_comment"};
-
-}  // namespace schema
 
 /**
  * @brief Generate the `orders`, `lineitem`, and `part` tables
