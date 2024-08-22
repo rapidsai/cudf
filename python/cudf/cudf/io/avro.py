@@ -15,16 +15,13 @@ def read_avro(
 ):
     """{docstring}"""
 
-    filepath_or_buffer, compression = ioutils.get_reader_filepath_or_buffer(
+    filepath_or_buffer = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
-        compression=None,
         storage_options=storage_options,
     )
     filepath_or_buffer = ioutils._select_single_source(
         filepath_or_buffer, "read_avro"
     )
-    if compression is not None:
-        ValueError("URL content-encoding decompression is not supported")
 
     return cudf.DataFrame._from_data(
         *libcudf.avro.read_avro(

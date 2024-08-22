@@ -169,8 +169,8 @@ def read_orc_statistics(
     files_statistics = []
     stripes_statistics = []
     for source in filepaths_or_buffers:
-        path_or_buf, _ = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source, compression=None, **kwargs
+        path_or_buf = ioutils.get_reader_filepath_or_buffer(
+            path_or_data=source, **kwargs
         )
         path_or_buf = ioutils._select_single_source(
             path_or_buf, "read_orc_statistics"
@@ -320,15 +320,12 @@ def read_orc(
                 "A list of stripes must be provided for each input source"
             )
 
-    filepaths_or_buffers, compression = ioutils.get_reader_filepath_or_buffer(
+    filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
-        compression=None,
         storage_options=storage_options,
         bytes_per_thread=bytes_per_thread,
         expand_dir_pattern="*.orc",
     )
-    if compression is not None:
-        raise ValueError("URL content-encoding decompression is not supported")
 
     if filters is not None:
         selected_stripes = _filter_stripes(

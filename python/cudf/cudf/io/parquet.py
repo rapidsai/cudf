@@ -331,14 +331,10 @@ def read_parquet_metadata(filepath_or_buffer):
     """{docstring}"""
 
     # List of filepaths or buffers
-    filepaths_or_buffers, compression = ioutils.get_reader_filepath_or_buffer(
+    filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
-        compression=None,
         bytes_per_thread=None,
     )
-
-    if compression is not None:
-        raise ValueError("URL content-encoding decompression is not supported")
 
     return libparquet.read_parquet_metadata(filepaths_or_buffers)
 
@@ -575,15 +571,12 @@ def read_parquet(
         )
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
-    filepaths_or_buffers, compression = ioutils.get_reader_filepath_or_buffer(
+    filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
-        compression=None,
         fs=fs,
         storage_options=storage_options,
         bytes_per_thread=bytes_per_thread,
     )
-    if compression is not None:
-        raise ValueError("URL content-encoding decompression is not supported")
 
     # Warn user if they are not using cudf for IO
     # (There is a good chance this was not the intention)

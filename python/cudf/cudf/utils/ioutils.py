@@ -1408,8 +1408,6 @@ Parameters
 path_or_data : str, file-like object, bytes, ByteIO, list
     Path to data or the data itself. Pass in a list to process multiple
     sources of the same type at once.
-compression : str
-    Type of compression algorithm for the content
 mode : str
     Mode in which file is opened
 iotypes : (), default (BytesIO)
@@ -1443,8 +1441,6 @@ Returns
 -------
 filepath_or_buffer : List[str, bytes, BytesIO]
     List of filepath strings or in-memory data buffers.
-compression : str
-    Type of compression algorithm for the content
     """.format(bytes_per_thread=_BYTES_PER_THREAD_DEFAULT)
 
 
@@ -1611,7 +1607,7 @@ def _maybe_expand_directories(paths, glob_pattern, fs):
 @doc_get_reader_filepath_or_buffer()
 def get_reader_filepath_or_buffer(
     path_or_data,
-    compression,
+    *,
     mode="rb",
     fs=None,
     iotypes=(BytesIO,),
@@ -1747,7 +1743,7 @@ def get_reader_filepath_or_buffer(
             else:
                 filepaths_or_buffers.append(source)
 
-    return filepaths_or_buffers, compression
+    return filepaths_or_buffers
 
 
 def get_writer_filepath_or_buffer(path_or_data, mode, storage_options=None):

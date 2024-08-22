@@ -61,17 +61,14 @@ def read_json(
                 f"following positional arguments: {list(args)}"
             )
 
-        filepaths_or_buffers, compression = (
-            ioutils.get_reader_filepath_or_buffer(
-                path_or_buf,
-                compression=compression,
-                iotypes=(BytesIO, StringIO),
-                allow_raw_text_input=True,
-                storage_options=storage_options,
-                warn_on_raw_text_input=True,
-                warn_meta=("json", "read_json"),
-                expand_dir_pattern="*.json",
-            )
+        filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
+            path_or_buf,
+            iotypes=(BytesIO, StringIO),
+            allow_raw_text_input=True,
+            storage_options=storage_options,
+            warn_on_raw_text_input=True,
+            warn_meta=("json", "read_json"),
+            expand_dir_pattern="*.json",
         )
 
         df = libjson.read_json(
@@ -91,14 +88,12 @@ def read_json(
             "be GPU accelerated in the future"
         )
 
-        filepath_or_buffer, compression = (
-            ioutils.get_reader_filepath_or_buffer(
-                path_or_data=path_or_buf,
-                compression=compression,
-                iotypes=(BytesIO, StringIO),
-                allow_raw_text_input=True,
-                storage_options=storage_options,
-            )
+        filepath_or_buffer = ioutils.get_reader_filepath_or_buffer(
+            path_or_data=path_or_buf,
+            compression=compression,
+            iotypes=(BytesIO, StringIO),
+            allow_raw_text_input=True,
+            storage_options=storage_options,
         )
         filepath_or_buffer = ioutils._select_single_source(
             filepath_or_buffer, "read_json_metadata"
