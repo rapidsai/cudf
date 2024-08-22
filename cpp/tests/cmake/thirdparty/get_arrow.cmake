@@ -50,10 +50,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
     endif()
   endif()
 
-  if(NOT ARROW_ARMV8_ARCH)
-    set(ARROW_ARMV8_ARCH "armv8-a")
-  endif()
-
   if(NOT ARROW_SIMD_LEVEL)
     set(ARROW_SIMD_LEVEL "NONE")
   endif()
@@ -98,7 +94,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
             "ARROW_PYTHON OFF"
             # Arrow modifies CMake's GLOBAL RULE_LAUNCH_COMPILE unless this is off
             "ARROW_USE_CCACHE OFF"
-            "ARROW_ARMV8_ARCH ${ARROW_ARMV8_ARCH}"
             "ARROW_SIMD_LEVEL ${ARROW_SIMD_LEVEL}"
             "ARROW_BUILD_STATIC ${ARROW_BUILD_STATIC}"
             "ARROW_BUILD_SHARED ${ARROW_BUILD_SHARED}"
