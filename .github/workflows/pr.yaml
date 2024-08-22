@@ -46,7 +46,7 @@ jobs:
         run: |
           echo "Test C++: ${{ needs.changed-files.outputs.test_cpp }}"
           echo "Test Python: ${{ needs.changed-files.outputs.test_python }}"
-          echo ${{ toJSON(github) }}
+          echo "${{ toJSON(github) }}"
   pr-builder:
     needs:
       - checks
