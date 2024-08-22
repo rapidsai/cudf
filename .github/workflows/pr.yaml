@@ -49,7 +49,9 @@ jobs:
         run: |
           echo "Test C++: ${{ needs.changed-files.outputs.test_cpp }}"
           echo "Test Python: ${{ needs.changed-files.outputs.test_python }}"
-          echo "${{ toJSON(steps.get-pr-info) }}"
+          jq . <<EOFFFF
+            ${{ steps.get-pr-info.outputs.pr-info }}
+          EOFFFF
   pr-builder:
     needs:
       - checks
