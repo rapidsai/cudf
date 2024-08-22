@@ -17,6 +17,8 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.10
   never-run:
     runs-on: ubuntu-latest
+    if: false
     steps:
       - run: |
           echo "This should never run!"
+          exit 1
