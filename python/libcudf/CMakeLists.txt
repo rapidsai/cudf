@@ -51,9 +51,6 @@ include(../pylibcudf/cmake/Modules/LinkPyarrowHeaders.cmake)
 add_subdirectory(../../cpp cudf-cpp)
 
 # Ensure other libraries needed by libcudf.so get installed alongside it.
-#
-# TODO: This install is currently overzealous. We should only install the libraries that are
-# downloaded by CPM during the build, not libraries that were found on the system.
 include(cmake/Modules/WheelHelpers.cmake)
 install_aliased_imported_targets(
   TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp
