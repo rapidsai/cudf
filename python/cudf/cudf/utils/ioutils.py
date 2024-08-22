@@ -12,7 +12,7 @@ import fsspec
 import fsspec.implementations.local
 import numpy as np
 import pandas as pd
-from fsspec.core import get_fs_token_paths
+from fsspec.core import expand_paths_if_needed, get_fs_token_paths
 
 from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300
@@ -140,6 +140,9 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+filesystem : fsspec.AbstractFileSystem, default None
+    Filesystem object to use when reading the parquet data. This argument
+    should not be used at the same time as `storage_options`.
 filters : list of tuple, list of lists of tuples, default None
     If not None, specifies a filter predicate used to filter out row groups
     using statistics stored for each row group as Parquet metadata. Row groups
@@ -1543,11 +1546,18 @@ def is_directory(path_or_data, storage_options=None):
     return False
 
 
-def _get_filesystem_and_paths(path_or_data, storage_options):
+def _get_filesystem_and_paths(
+    path_or_data,
+    storage_options,
+    *,
+    filesystem=None,
+):
     # Returns a filesystem object and the filesystem-normalized
     # paths. If `path_or_data` does not correspond to a path or
     # list of paths (or if the protocol is not supported), the
     # return will be `None` for the fs and `[]` for the paths.
+    # If a filesystem object is already available, it can be
+    # passed with the `filesystem` argument.
 
     fs = None
     return_paths = path_or_data
@@ -1564,16 +1574,36 @@ def _get_filesystem_and_paths(path_or_data, storage_options):
         else:
             path_or_data = [path_or_data]
 
-        try:
-            fs, _, fs_paths = get_fs_token_paths(
-                path_or_data, mode="rb", storage_options=storage_options
-            )
-            return_paths = fs_paths
-        except ValueError as e:
-            if str(e).startswith("Protocol not known"):
-                return None, []
-            else:
-                raise e
+        if filesystem is None:
+            try:
+                fs, _, fs_paths = get_fs_token_paths(
+                    path_or_data, mode="rb", storage_options=storage_options
+                )
+                return_paths = fs_paths
+            except ValueError as e:
+                if str(e).startswith("Protocol not known"):
+                    return None, []
+                else:
+                    raise e
+        else:
+            if not isinstance(filesystem, fsspec.AbstractFileSystem):
+                raise ValueError(
+                    f"Expected fsspec.AbstractFileSystem. Got {filesystem}"
+                )
+
+            if storage_options:
+                raise ValueError(
+                    f"Cannot specify storage_options when an explicit "
+                    f"filesystem object is specified. Got: {storage_options}"
+                )
+
+            fs = filesystem
+            return_paths = [
+                fs._strip_protocol(u)
+                for u in expand_paths_if_needed(
+                    path_or_data, "rb", 1, fs, None
+                )
+            ]
 
     return fs, return_paths
 
