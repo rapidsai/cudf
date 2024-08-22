@@ -51,9 +51,9 @@ DEPENDENCIES=(
   kvikio
   libkvikio
   librmm
+  pylibcudf
   rapids-dask-dependency
   rmm
-  pylibcudf
 )
 for DEP in "${DEPENDENCIES[@]}"; do
   for FILE in dependencies.yaml conda/environments/*.yaml; do
