@@ -1539,7 +1539,7 @@ def is_directory(path_or_data, storage_options=None):
     return False
 
 
-def _get_filesystem_and_paths(path_or_data, storage_options, filesystem=None):
+def _get_filesystem_and_paths(path_or_data, storage_options, *, filesystem=None):
     # Returns a filesystem object and the filesystem-normalized
     # paths. If `path_or_data` does not correspond to a path or
     # list of paths (or if the protocol is not supported), the

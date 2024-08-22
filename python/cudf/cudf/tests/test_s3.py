@@ -285,7 +285,7 @@ def test_read_parquet_filesystem(s3_base, s3so, pdf):
         bucket=bucket,
         files={fname: buffer},
     ):
-        # Check that a glob patter works
+        # Check that a glob pattern works
         path = f"s3://{bucket}/{'data.*.parquet'}"
         got = cudf.read_parquet(path, filesystem=fs)
     assert_eq(pdf, got)
