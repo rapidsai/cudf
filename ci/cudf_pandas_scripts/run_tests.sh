@@ -9,7 +9,7 @@ RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
 RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 
-DEPENDENCIES_PATH="../../dependencies.yaml"
+DEPENDENCIES_PATH="dependencies.yaml"
 package_name="pandas"
 
 # Use grep to find the line containing the package name and version constraint
