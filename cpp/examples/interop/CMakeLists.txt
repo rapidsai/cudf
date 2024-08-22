@@ -15,7 +15,7 @@ project(
 
 include(../fetch_dependencies.cmake)
 
-# Try hardcoding build type for arrow
+# The Arrow CMake is currently broken if the build type is not set
 set(CMAKE_BUILD_TYPE Release)
 include(../../cmake/thirdparty/get_arrow.cmake)
 
