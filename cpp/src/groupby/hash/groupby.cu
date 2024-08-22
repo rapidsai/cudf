@@ -574,7 +574,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                                                                 KeyEqual,
                                                                 RowHasher,
                                                                 decltype(window_extent)>;
-  int grid_size = find_grid_size(compute_mapping_indices_fn_ptr, num_input_rows, num_sms);
+  auto const grid_size = find_grid_size(compute_mapping_indices_fn_ptr, num_input_rows, num_sms);
   // 'local_mapping_index' maps from the global row index of the input table to the row index of
   // the local pre-aggregate table
   rmm::device_uvector<cudf::size_type> local_mapping_index(num_input_rows, stream);

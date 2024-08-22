@@ -21,6 +21,7 @@
 #include "single_pass_functors.cuh"
 
 #include <cudf/detail/cuco_helpers.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 namespace cudf::groupby::detail::hash {
@@ -278,16 +279,15 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
 
   __shared__ cudf::size_type cardinality;
 
-  if (threadIdx.x == 0) { cardinality = 0; }
+  if (block.thread_rank() == 0) { cardinality = 0; }
 
-  __syncthreads();
+  block.sync();
 
-  int num_loops =
-    cudf::util::div_rounding_up_safe(num_input_rows, (cudf::size_type)(blockDim.x * gridDim.x));
-  auto end_idx = num_loops * blockDim.x * gridDim.x;
+  auto const stride = cudf::detail::grid_1d::grid_stride();
 
-  for (auto cur_idx = blockDim.x * blockIdx.x + threadIdx.x; cur_idx < end_idx;
-       cur_idx += blockDim.x * gridDim.x) {
+  for (auto cur_idx = cudf::detail::grid_1d::global_thread_id();
+       cur_idx - block.thread_rank() < num_input_rows;
+       cur_idx += stride) {
     find_local_mapping(cur_idx,
                        num_input_rows,
                        &cardinality,
@@ -295,24 +295,25 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
                        local_mapping_index,
                        shared_set_indices);
 
-    __syncthreads();
+    block.sync();
 
     if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD) {
-      if (threadIdx.x == 0) { *direct_aggregations = true; }
+      if (block.thread_rank() == 0) { *direct_aggregations = true; }
       break;
     }
 
-    __syncthreads();
+    block.sync();
   }
 
   // Insert unique keys from shared to global hash set
   if (cardinality < GROUPBY_CARDINALITY_THRESHOLD) {
-    for (auto cur_idx = threadIdx.x; cur_idx < cardinality; cur_idx += blockDim.x) {
+    for (auto cur_idx = block.thread_rank(); cur_idx < cardinality;
+         cur_idx += block.num_threads()) {
       find_global_mapping(cur_idx, global_set, shared_set_indices, global_mapping_index);
     }
   }
 
-  if (threadIdx.x == 0) block_cardinality[blockIdx.x] = cardinality;
+  if (block.thread_rank() == 0) { block_cardinality[block.group_index().x] = cardinality; }
 }
 
 }  // namespace cudf::groupby::detail::hash
