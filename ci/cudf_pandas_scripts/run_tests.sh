@@ -66,7 +66,7 @@ python -m pytest -p cudf.pandas \
     --cov-report=term \
     ./python/cudf/cudf_pandas_tests/
 
-output=$(python fetch_pandas_versions.py $pandas_version_constraint)
+output=$(python ci/cudf_pandas_scripts/fetch_pandas_versions.py $pandas_version_constraint)
 
 # Remove the brackets and spaces from the output to get a comma-separated list
 output=$(echo $output | tr -d "[] \'\'")
