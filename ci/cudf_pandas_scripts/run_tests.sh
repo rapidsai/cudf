@@ -75,8 +75,8 @@ output=$(echo $output | tr -d "[] \'\'")
 IFS=',' read -r -a versions <<< "$output"
 
 for version in "${versions[@]}"; do
-    echo "Installing pandas version: $version"
-    python -m pip install pandas==$version
+    echo "Installing pandas version: ${version}"
+    python -m pip install "pandas==${version}"
     python -m pytest -p cudf.pandas \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \

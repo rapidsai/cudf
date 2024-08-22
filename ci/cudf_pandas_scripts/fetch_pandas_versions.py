@@ -9,13 +9,11 @@ def get_pandas_versions(pandas_range):
     url = "https://pypi.org/pypi/pandas/json"
     response = requests.get(url)
     data = response.json()
-    versions = data['releases'].keys()
-
+    versions = [Version(v) for v in data['releases']]
     specifier = SpecifierSet(pandas_range.lstrip("pandas"))
-
-    minor_versions = list(set([version[:3] for version in versions if Version(version) in specifier]))
-
-    return minor_versions
+    matching_versions = [v for v in versions if v in specifier]
+    matching_minors = sorted(set(".".join((str(v.major), str(v.minor))) for v in matching_versions), key=Version)
+    return matching_minors
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Filter pandas versions by prefix.")
