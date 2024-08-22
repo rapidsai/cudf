@@ -14,13 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     name: "Check changed files"
     outputs:
-      test_cpp: |
-        ${{
+      test_cpp: ${{
           steps.changed-files.outputs.ci_any_changed == 'true' ||
           steps.changed-files.outputs.cpp_any_changed == 'true'
         }}
-      test_python: |
-        ${{
+      test_python: ${{
           steps.changed-files.outputs.ci_any_changed == 'true' ||
           steps.changed-files.outputs.cpp_any_changed == 'true' ||
           steps.changed-files.outputs.python_any_changed == 'true'
