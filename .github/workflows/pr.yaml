@@ -42,11 +42,14 @@ jobs:
     runs-on: ubuntu-latest
     name: "Output changed files"
     steps:
+      - name: Get PR Info
+        id: get-pr-info
+        uses: rapidsai/shared-actions/get-pr-info@main
       - name: "Output changed files"
         run: |
           echo "Test C++: ${{ needs.changed-files.outputs.test_cpp }}"
           echo "Test Python: ${{ needs.changed-files.outputs.test_python }}"
-          echo "${{ toJSON(github) }}"
+          echo "${{ toJSON(steps.get-pr-info) }}"
   pr-builder:
     needs:
       - checks
