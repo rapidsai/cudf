@@ -14,15 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     name: "Check changed files"
     outputs:
-      test_cpp: ${{
-          steps.changed-files.outputs.ci_any_changed == 'true' ||
-          steps.changed-files.outputs.cpp_any_changed == 'true'
-        }}
-      test_python: ${{
-          steps.changed-files.outputs.ci_any_changed == 'true' ||
-          steps.changed-files.outputs.cpp_any_changed == 'true' ||
-          steps.changed-files.outputs.python_any_changed == 'true'
-        }}
+      test_cpp: ${{ steps.changed-files.outputs.cpp_any_changed == 'true' }}
+      test_python: ${{ steps.changed-files.outputs.python_any_changed == 'true' }}
     steps:
       - name: Checkout code repo
         uses: actions/checkout@v4
@@ -34,14 +27,16 @@ jobs:
         uses: tj-actions/changed-files@v45
         with:
           files_yaml: |
-            ci:
-              - ci/**
-              - rapids_config.cmake
-              - build.sh
             cpp:
-              - cpp/**
+              - **
+              - '!docs/**'
+              - '!java/**'
+              - '!notebooks/**'
+              - '!python/**'
             python:
-              - python/**
+              - **
+              - '!docs/**'
+              - '!java/**'
   pr-builder:
     needs:
       - checks
