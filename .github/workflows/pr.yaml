@@ -54,11 +54,11 @@ jobs:
       - changed-files
     runs-on: ubuntu-latest
     name: "Test job"
-    if: ${{ needs.changed-files.outputs.test_cpp == 'true' }}
     steps:
       - name: Echo
         run: |
           echo "Test C++: ${{ needs.changed-files.outputs.test_cpp }}"
+          echo "Test Python: ${{ needs.changed-files.outputs.test_python }}"
   pr-builder:
     needs:
       - checks
