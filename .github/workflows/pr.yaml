@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run-never-run: true
+    steps:
+      - run: exit 0
   never-run:
     needs: never-run-test
     runs-on: ubuntu-latest
