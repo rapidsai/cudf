@@ -800,7 +800,7 @@ Using the `dtype` argument to specify type casting:
     k1   k2
 0  1.0  [1]
 """  # noqa: E501
-doc_read_json = docfmt_partial(docstring=_docstring_read_json)
+doc_read_json: Callable = docfmt_partial(docstring=_docstring_read_json)
 
 _docstring_to_json = """
 Convert the cuDF object to a JSON string.
@@ -870,7 +870,7 @@ See Also
 --------
 cudf.read_json
 """
-doc_to_json = docfmt_partial(docstring=_docstring_to_json)
+doc_to_json: Callable = docfmt_partial(docstring=_docstring_to_json)
 
 _docstring_read_hdf = """
 Read from the store, close it if we opened it.
@@ -1608,7 +1608,7 @@ def _get_filesystem_and_paths(
     return fs, return_paths
 
 
-def _expand_directories(paths, glob_pattern, fs):
+def _maybe_expand_directories(paths, glob_pattern, fs):
     # Expand directory paths using a glob pattern.
     # This is a no-op if either glob_pattern or fs are None
     if fs is None or glob_pattern is None:
@@ -1665,7 +1665,7 @@ def get_reader_filepath_or_buffer(
             fs, paths = _get_filesystem_and_paths(paths, storage_options)
 
         # Expand directories (if necessary)
-        paths = _expand_directories(paths, expand_dir_pattern, fs)
+        paths = _maybe_expand_directories(paths, expand_dir_pattern, fs)
 
         if _is_local_filesystem(fs):
             # Doing this as `read_json` accepts a json string
