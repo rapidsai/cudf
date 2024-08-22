@@ -17,6 +17,11 @@ jobs:
       test_cpp: ${{ steps.changed-files.outputs.ci_any_changed == 'true' || steps.changed-files.outputs.cpp_any_changed == 'true' }}
       test_python: ${{ steps.changed-files.outputs.ci_any_changed == 'true' || steps.changed-files.outputs.cpp_any_changed == 'true' || steps.changed-files.outputs.python_any_changed == 'true' }}
     steps:
+      - name: Checkout code repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+          persist-credentials: false
       - name: Get changed files
         id: changed-files
         uses: tj-actions/changed-files@v45
