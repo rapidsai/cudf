@@ -50,7 +50,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -4083,7 +4083,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(
     // `temp_mr` is the memory resource that `cudf::chunked_pack` will use to create temporary
     // and scratch memory only.
     auto temp_mr      = memoryResourceHandle != 0
-                          ? reinterpret_cast<rmm::mr::device_memory_resource*>(memoryResourceHandle)
+                          ? reinterpret_cast<rmm::device_async_resource_ref*>(memoryResourceHandle)
                           : rmm::mr::get_current_device_resource();
     auto chunked_pack = cudf::chunked_pack::create(*n_table, bounce_buffer_size, temp_mr);
     return reinterpret_cast<jlong>(chunked_pack.release());
