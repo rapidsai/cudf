@@ -57,6 +57,7 @@ jobs:
       - unit-tests-cudf-pandas
       - pandas-tests
       - pandas-tests-diff
+      - changed-files
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.10
   checks:
