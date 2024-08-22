@@ -172,11 +172,16 @@ def read_orc_statistics(
         path_or_buf, _ = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source, compression=None, **kwargs
         )
+        if len(path_or_buf) > 1:
+            raise ValueError(
+                "read_orc_statistics does not support multiple sources,"
+                f" got: {path_or_buf}"
+            )
         (
             column_names,
             parsed_file_statistics,
             parsed_stripes_statistics,
-        ) = liborc.read_parsed_orc_statistics(path_or_buf)
+        ) = liborc.read_parsed_orc_statistics(path_or_buf[0])
 
         # Parse column names
         column_names = [

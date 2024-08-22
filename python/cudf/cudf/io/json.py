@@ -9,7 +9,6 @@ import pandas as pd
 
 import cudf
 from cudf._lib import json as libjson
-from cudf.api.types import is_list_like
 from cudf.utils import ioutils
 from cudf.utils.dtypes import _maybe_convert_to_default_type
 
@@ -62,11 +61,6 @@ def read_json(
                 f"following positional arguments: {list(args)}"
             )
 
-        # Multiple sources are passed as a list. If a single source is passed,
-        # wrap it in a list for unified processing downstream.
-        if not is_list_like(path_or_buf):
-            path_or_buf = [path_or_buf]
-
         filepaths_or_buffers, compression = (
             ioutils.get_reader_filepath_or_buffer(
                 path_or_buf,
@@ -97,25 +91,23 @@ def read_json(
             "be GPU accelerated in the future"
         )
 
-        if not ioutils.ensure_single_filepath_or_buffer(
-            path_or_data=path_or_buf,
-            storage_options=storage_options,
-        ):
-            raise NotImplementedError(
-                "`read_json` does not yet support reading "
-                "multiple files via pandas"
+        filepaths_or_buffers, compression = (
+            ioutils.get_reader_filepath_or_buffer(
+                path_or_data=path_or_buf,
+                compression=compression,
+                iotypes=(BytesIO, StringIO),
+                allow_raw_text_input=True,
+                storage_options=storage_options,
+            )
+        )
+        if len(filepaths_or_buffers) > 1:
+            raise ValueError(
+                "read_json does not support multiple sources via pandas,"
+                f" got: {filepaths_or_buffers}"
             )
 
-        path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=path_or_buf,
-            compression=compression,
-            iotypes=(BytesIO, StringIO),
-            allow_raw_text_input=True,
-            storage_options=storage_options,
-        )
-
         pd_value = pd.read_json(
-            path_or_buf,
+            filepaths_or_buffers[0],
             lines=lines,
             dtype=dtype,
             compression=compression,

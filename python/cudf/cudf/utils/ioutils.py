@@ -1438,9 +1438,8 @@ expand_dir_pattern : str, default None
 
 Returns
 -------
-filepath_or_buffer : str, bytes, BytesIO, list
-    Filepath string or in-memory buffer of data or a
-    list of Filepath strings or in-memory buffers of data.
+filepath_or_buffer : List[str, bytes, BytesIO]
+    List of filepath strings or in-memory data buffers.
 compression : str
     Type of compression algorithm for the content
     """.format(bytes_per_thread=_BYTES_PER_THREAD_DEFAULT)
@@ -1610,24 +1609,14 @@ def get_reader_filepath_or_buffer(
     """{docstring}"""
 
     # Convert path_or_data to a list of input data sources
-    if is_list_like(path_or_data):
-        list_input = True
-        input_sources = [stringify_pathlike(source) for source in path_or_data]
-        if not input_sources:
-            raise ValueError("Empty input source list: {input_sources}.")
-    else:
-        # We were provided a string, buffer, or file-like object
-        # as input, so we should return a single element if the
-        # output list only contains one element.
-        list_input = False
-        input_sources = [stringify_pathlike(path_or_data)]
-
-    def handle_output(output):
-        # Helper function to return single source element if the
-        # path_or_data input was not a list
-        if not list_input and len(output) == 1:
-            return output[0]
-        return output
+    input_sources = [
+        stringify_pathlike(source)
+        for source in (
+            path_or_data if is_list_like(path_or_data) else [path_or_data]
+        )
+    ]
+    if not input_sources:
+        raise ValueError("Empty input source list: {input_sources}.")
 
     filepaths_or_buffers = []
     string_paths = [isinstance(source, str) for source in input_sources]
@@ -1742,7 +1731,7 @@ def get_reader_filepath_or_buffer(
             else:
                 filepaths_or_buffers.append(source)
 
-    return handle_output(filepaths_or_buffers), compression
+    return filepaths_or_buffers, compression
 
 
 def get_writer_filepath_or_buffer(path_or_data, mode, storage_options=None):

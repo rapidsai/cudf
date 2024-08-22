@@ -329,25 +329,11 @@ def write_to_dataset(
 @_performance_tracking
 def read_parquet_metadata(filepath_or_buffer):
     """{docstring}"""
-    # Multiple sources are passed as a list. If a single source is passed,
-    # wrap it in a list for unified processing downstream.
-    if not is_list_like(filepath_or_buffer):
-        filepath_or_buffer = [filepath_or_buffer]
-
-    # Start by trying to construct a filesystem object
-    fs, paths = ioutils._get_filesystem_and_paths(
-        path_or_data=filepath_or_buffer, storage_options=None
-    )
-
-    # Check if filepath or buffer
-    filepath_or_buffer = paths if paths else filepath_or_buffer
 
     # List of filepaths or buffers
     filepaths_or_buffers, compression = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         compression=None,
-        fs=fs,
-        storage_options=None,
         bytes_per_thread=None,
     )
 
