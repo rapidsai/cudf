@@ -23,7 +23,7 @@
 include_guard(GLOBAL)
 
 # This function finds arrow and sets any additional necessary environment variables.
-function(find_and_configure_arrow VERSION BUILD_STATIC)
+function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL)
   if(BUILD_STATIC)
     if(TARGET arrow_static)
       set(ARROW_FOUND
@@ -80,6 +80,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
     GIT_REPOSITORY https://github.com/apache/arrow.git
     GIT_TAG apache-arrow-${VERSION}
     GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
+    EXCLUDE_FROM_ALL ${EXCLUDE_FROM_ALL}
     OPTIONS "CMAKE_VERBOSE_MAKEFILE ON"
             "ARROW_ACERO ON"
             "ARROW_IPC ON"
@@ -191,4 +192,11 @@ if(NOT DEFINED CUDF_USE_ARROW_STATIC)
   set(CUDF_USE_ARROW_STATIC ON)
 endif()
 
-find_and_configure_arrow(${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC})
+# Default to excluding from installation since we generally privately and statically link Arrow.
+if(NOT DEFINED CUDF_EXCLUDE_ARROW_FROM_ALL)
+  set(CUDF_EXCLUDE_ARROW_FROM_ALL ${CUDF_USE_ARROW_STATIC})
+endif()
+
+find_and_configure_arrow(
+  ${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} ${CUDF_EXCLUDE_ARROW_FROM_ALL}
+)
