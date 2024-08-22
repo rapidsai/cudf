@@ -156,36 +156,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
   endif()
 
   if(Arrow_ADDED)
-
-    set(arrow_code_string
-        [=[
-          if (TARGET cudf::arrow_shared AND (NOT TARGET arrow_shared))
-              add_library(arrow_shared ALIAS cudf::arrow_shared)
-          endif()
-          if (TARGET cudf::arrow_static AND (NOT TARGET arrow_static))
-              add_library(arrow_static ALIAS cudf::arrow_static)
-          endif()
-          if (NOT TARGET arrow::flatbuffers)
-            add_library(arrow::flatbuffers INTERFACE IMPORTED)
-          endif()
-          if (NOT TARGET arrow::hadoop)
-            add_library(arrow::hadoop INTERFACE IMPORTED)
-          endif()
-        ]=]
-    )
-    if(NOT TARGET xsimd)
-      string(
-        APPEND
-        arrow_code_string
-        "
-          if(NOT TARGET arrow::xsimd)
-            add_library(arrow::xsimd INTERFACE IMPORTED)
-            target_include_directories(arrow::xsimd INTERFACE \"${Arrow_BINARY_DIR}/xsimd_ep/src/xsimd_ep-install/include\")
-          endif()
-        "
-      )
-    endif()
-    rapids_cmake_install_lib_dir(lib_dir)
     if(TARGET arrow_static)
       get_target_property(interface_libs arrow_static INTERFACE_LINK_LIBRARIES)
       # The `arrow_static` library is leaking a dependency on the object libraries it was built with
@@ -199,24 +169,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
         get_target_property(interface_libs arrow_static INTERFACE_LINK_LIBRARIES)
       endif()
     endif()
-    rapids_export(
-      BUILD Arrow
-      VERSION ${VERSION}
-      EXPORT_SET arrow_targets
-      GLOBAL_TARGETS arrow_shared arrow_static
-      NAMESPACE cudf::
-      FINAL_CODE_BLOCK arrow_code_string
-    )
-
   endif()
-  # We generate the arrow-configfiles when we built arrow locally, so always do `find_dependency`
-  rapids_export_package(BUILD Arrow cudf-exports)
-  rapids_export_package(INSTALL Arrow cudf-exports)
-
-  include("${rapids-cmake-dir}/export/find_package_root.cmake")
-  rapids_export_find_package_root(
-    BUILD Arrow [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-exports
-  )
 
   set(ARROW_LIBRARIES
       "${ARROW_LIBRARIES}"
