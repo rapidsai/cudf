@@ -186,6 +186,11 @@ if(NOT DEFINED CUDF_VERSION_Arrow)
   )
 endif()
 
+# Default to static arrow builds
+if(NOT DEFINED CUDF_USE_ARROW_STATIC)
+  set(CUDF_USE_ARROW_STATIC ON)
+endif()
+
 find_and_configure_arrow(
   ${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} ${CUDF_ENABLE_ARROW_S3} ${CUDF_ENABLE_ARROW_ORC}
   ${CUDF_ENABLE_ARROW_PYTHON}
