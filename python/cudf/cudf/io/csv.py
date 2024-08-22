@@ -80,6 +80,9 @@ def read_csv(
         storage_options=storage_options,
         bytes_per_thread=bytes_per_thread,
     )
+    filepath_or_buffer = ioutils._select_single_source(
+        filepath_or_buffer, "read_csv"
+    )
 
     if na_values is not None and is_scalar(na_values):
         na_values = [na_values]

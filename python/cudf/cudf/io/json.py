@@ -91,7 +91,7 @@ def read_json(
             "be GPU accelerated in the future"
         )
 
-        filepaths_or_buffers, compression = (
+        filepath_or_buffer, compression = (
             ioutils.get_reader_filepath_or_buffer(
                 path_or_data=path_or_buf,
                 compression=compression,
@@ -100,14 +100,12 @@ def read_json(
                 storage_options=storage_options,
             )
         )
-        if len(filepaths_or_buffers) > 1:
-            raise ValueError(
-                "read_json does not support multiple sources via pandas,"
-                f" got: {filepaths_or_buffers}"
-            )
+        filepath_or_buffer = ioutils._select_single_source(
+            filepath_or_buffer, "read_json_metadata"
+        )
 
         pd_value = pd.read_json(
-            filepaths_or_buffers[0],
+            filepath_or_buffer,
             lines=lines,
             dtype=dtype,
             compression=compression,

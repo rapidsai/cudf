@@ -1501,29 +1501,15 @@ def _is_local_filesystem(fs):
     return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
 
 
-def ensure_single_filepath_or_buffer(path_or_data, storage_options=None):
-    """Return False if `path_or_data` resolves to multiple filepaths or
-    buffers.
+def _select_single_source(sources: list, caller: str):
+    """Select the first element from a list of sources.
+    Raise an error if sources contains multiple elements
     """
-    path_or_data = stringify_pathlike(path_or_data)
-    if isinstance(path_or_data, str):
-        path_or_data = os.path.expanduser(path_or_data)
-        try:
-            fs, _, paths = get_fs_token_paths(
-                path_or_data, mode="rb", storage_options=storage_options
-            )
-        except ValueError as e:
-            if str(e).startswith("Protocol not known"):
-                return True
-            else:
-                raise e
-
-        if len(paths) > 1:
-            return False
-    elif isinstance(path_or_data, (list, tuple)) and len(path_or_data) > 1:
-        return False
-
-    return True
+    if len(sources) > 1:
+        raise ValueError(
+            f"{caller} does not support multiple sources," f" got: {sources}"
+        )
+    return sources[0]
 
 
 def is_directory(path_or_data, storage_options=None):
