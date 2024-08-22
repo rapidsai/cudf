@@ -42,6 +42,15 @@ jobs:
               - '**'
               - '!docs/**'
               - '!java/**'
+  debug-job:
+    needs: changed-files
+    runs-on: ubuntu-latest
+    name: "Debug job"
+    steps:
+      - name: Debug change-files output
+        run: |
+          echo "Test C++: ${{ needs.changed-files.outputs.test_cpp }}"
+          echo "Test Python: ${{ needs.changed-files.outputs.test_python }}"
   pr-builder:
     needs:
       - checks
@@ -67,6 +76,7 @@ jobs:
       - pandas-tests
       - pandas-tests-diff
       - changed-files
+      - debug-job
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.10
   checks:
