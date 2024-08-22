@@ -84,6 +84,7 @@ jobs:
       - pandas-tests
       - pandas-tests-diff
       - changed-files
+      - test-job
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.10
   checks:
