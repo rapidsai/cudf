@@ -16,8 +16,6 @@ jobs:
     outputs:
       test_cpp: ${{ steps.changed-files.outputs.cpp_any_changed == 'true' }}
       test_python: ${{ steps.changed-files.outputs.python_any_changed == 'true' }}
-      test_cpp_minus_github: ${{ steps.changed-files.outputs.cpp_minus_github_any_changed == 'true' }}
-      test_python_minus_github: ${{ steps.changed-files.outputs.python_minus_github_any_changed == 'true' }}
     steps:
       - name: Get PR info
         id: get-pr-info
@@ -44,29 +42,6 @@ jobs:
               - '**'
               - '!docs/**'
               - '!java/**'
-            cpp_minus_github:
-              - '**'
-              - '!docs/**'
-              - '!java/**'
-              - '!notebooks/**'
-              - '!python/**'
-              - '!.github/**'
-            python_minus_github:
-              - '**'
-              - '!docs/**'
-              - '!java/**'
-              - '!.github/**'
-  debug-job:
-    needs: changed-files
-    runs-on: ubuntu-latest
-    name: "Debug job"
-    steps:
-      - name: Debug change-files output
-        run: |
-          echo "Test C++: ${{ needs.changed-files.outputs.test_cpp }}"
-          echo "Test Python: ${{ needs.changed-files.outputs.test_python }}"
-          echo "Test C++ minus .github: ${{ needs.changed-files.outputs.test_cpp_minus_github }}"
-          echo "Test Python minus .github: ${{ needs.changed-files.outputs.test_python_minus_github }}"
   pr-builder:
     needs:
       - checks
@@ -92,7 +67,6 @@ jobs:
       - pandas-tests
       - pandas-tests-diff
       - changed-files
-      - debug-job
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.10
   checks:

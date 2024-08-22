@@ -147,5 +147,3 @@ wheel.packages = ["cudf"]
 provider = "scikit_build_core.metadata.regex"
 input = "cudf/VERSION"
 regex = "(?P<value>.*)"
-
-# Dummy comment
