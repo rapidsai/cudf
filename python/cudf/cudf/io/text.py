@@ -24,16 +24,21 @@ def read_text(
     if delimiter is None:
         raise ValueError("delimiter needs to be provided")
 
-    filepath_or_buffer, _ = ioutils.get_reader_filepath_or_buffer(
+    filepaths_or_buffers, _ = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         compression=None,
         iotypes=(BytesIO, StringIO),
         storage_options=storage_options,
     )
+    if len(filepaths_or_buffers) > 1:
+        raise ValueError(
+            "read_text does not support multiple sources,"
+            f" got: {filepaths_or_buffers}"
+        )
 
     return cudf.Series._from_data(
         libtext.read_text(
-            filepath_or_buffer,
+            filepaths_or_buffers[0],
             delimiter=delimiter,
             byte_range=byte_range,
             strip_delimiters=strip_delimiters,
