@@ -71,8 +71,26 @@ static void bench_find_string(nvbench::state& state)
       cudf::strings::find_multiple(input, cudf::strings_column_view(targets));
     });
   } else if (api == "contains") {
-    state.exec(nvbench::exec_tag::sync,
-               [&](nvbench::launch& launch) { cudf::strings::contains(input, target); });
+    constexpr int iters = 20;
+    std::vector<std::string> match_targets({"123", "abc", "4567890", "DEFGHI", "5W43"});
+    auto scalar_targets = std::vector<cudf::string_scalar>{};
+    for (int i = 0; i < iters; i++) {
+      scalar_targets.emplace_back(cudf::string_scalar(match_targets[i % match_targets.size()]));
+    }
+    auto targets = std::vector<std::reference_wrapper<cudf::string_scalar>>(scalar_targets.begin(),
+                                                                            scalar_targets.end());
+
+    constexpr bool combine = false;
+    if constexpr (not combine) {
+      state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+        for (size_t i = 0; i < scalar_targets.size(); i++) {
+          cudf::strings::contains(input, scalar_targets[i]);
+        }
+      });
+    } else {  // combine
+      state.exec(nvbench::exec_tag::sync,
+                 [&](nvbench::launch& launch) { cudf::strings::contains(input, targets); });
+    }
   } else if (api == "starts_with") {
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::starts_with(input, target); });
