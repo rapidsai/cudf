@@ -14,7 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     name: "Check changed files"
     steps:
-      - uses: action/checkout@v4
       - name: Get changed files
         id: changed-files
         uses: tj-actions/changed-files@v45
