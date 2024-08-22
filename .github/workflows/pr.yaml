@@ -10,6 +10,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pr-builder:
+    needs:
+      - changed-files
+      - checks
+      - conda-cpp-build
+      - conda-cpp-checks
+      - conda-cpp-tests
+      - conda-python-build
+      - conda-python-cudf-tests
+      - conda-python-other-tests
+      - conda-java-tests
+      - static-configure
+      - conda-notebook-tests
+      - docs-build
+      - wheel-build-pylibcudf
+      - wheel-build-cudf
+      - wheel-tests-cudf
+      - wheel-build-cudf-polars
+      - wheel-tests-cudf-polars
+      - wheel-build-dask-cudf
+      - wheel-tests-dask-cudf
+      - devcontainer
+      - unit-tests-cudf-pandas
+      - pandas-tests
+      - pandas-tests-diff
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.10
   changed-files:
     runs-on: ubuntu-latest
     name: "Check changed files"
@@ -48,33 +75,6 @@ jobs:
               - '!docs/**'
               - '!notebooks/**'
               - '!python/**'
-  pr-builder:
-    needs:
-      - checks
-      - conda-cpp-build
-      - conda-cpp-checks
-      - conda-cpp-tests
-      - conda-python-build
-      - conda-python-cudf-tests
-      - conda-python-other-tests
-      - conda-java-tests
-      - static-configure
-      - conda-notebook-tests
-      - docs-build
-      - wheel-build-pylibcudf
-      - wheel-build-cudf
-      - wheel-tests-cudf
-      - wheel-build-cudf-polars
-      - wheel-tests-cudf-polars
-      - wheel-build-dask-cudf
-      - wheel-tests-dask-cudf
-      - devcontainer
-      - unit-tests-cudf-pandas
-      - pandas-tests
-      - pandas-tests-diff
-      - changed-files
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.10
   checks:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.10
