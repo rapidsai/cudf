@@ -607,6 +607,10 @@ def test_groupby_apply_jit_reductions_special_vals(
     ],
 )
 @pytest.mark.parametrize("dataset", ["small", "large", "nans"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="include_groups keyword new in pandas 2.2",
+)
 def test_groupby_apply_jit_idx_reductions_special_vals(
     func, dtype, dataset, groupby_jit_datasets, special_val
 ):
