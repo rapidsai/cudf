@@ -28,6 +28,6 @@ def read_avro(
 
     return cudf.DataFrame._from_data(
         *libcudf.avro.read_avro(
-            filepath_or_buffer[0], columns, skiprows, num_rows
+            filepath_or_buffer, columns, skiprows, num_rows
         )
     )
