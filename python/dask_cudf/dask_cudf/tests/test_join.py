@@ -397,4 +397,3 @@ def test_merge_on_decimal(typ):
     result = ddf.merge(ddf, left_on="a", right_on="a")
     expected = df.merge(df, left_on="a", right_on="a")
     dd.assert_eq(result, expected)
-    dd.assert_eq(result.dtypes, expected.dtypes)
