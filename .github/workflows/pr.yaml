@@ -49,6 +49,16 @@ jobs:
           echo "CI changed: ${{ steps.changed-files.outputs.ci_any_changed }}"
           echo "C++ changed: ${{ steps.changed-files.outputs.cpp_any_changed }}"
           echo "Python changed: ${{ steps.changed-files.outputs.python_any_changed }}"
+  test-job:
+    needs:
+      - changed-files
+    runs-on: ubuntu-latest
+    name: "Test job"
+    if: ${{ needs.changed-files.outputs.ci_any_changed }}
+    steps:
+      - name: Echo
+        run: |
+          echo "CI changed: ${{ needs.changed-files.outputs.ci_any_changed }}"
   pr-builder:
     needs:
       - checks
