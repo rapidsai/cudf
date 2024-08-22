@@ -15,7 +15,7 @@ jobs:
       - never-run-test
       - never-run
     secrets: inherit
-    uses: KyleFromNVIDIA/cudf/.github/workflows/fake-pr-builder.yaml@test-pruning
+    uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@pr-builder-needs-check
     if: always()
   never-run-test:
     runs-on: ubuntu-latest
