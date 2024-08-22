@@ -135,12 +135,13 @@ class DecimalBaseColumn(NumericalBaseColumn):
         # are computed outside of libcudf
         if op in {"__add__", "__sub__", "__mul__", "__div__"}:
             output_type = _get_decimal_type(lhs.dtype, rhs.dtype, op)
-            result = libcudf.binaryop.binaryop(
-                lhs.astype(output_type),
-                rhs.astype(output_type),
-                op,
-                output_type,
+            lhs = lhs.astype(
+                type(output_type)(lhs.dtype.precision, lhs.dtype.scale)
             )
+            rhs = rhs.astype(
+                type(output_type)(rhs.dtype.precision, rhs.dtype.scale)
+            )
+            result = libcudf.binaryop.binaryop(lhs, rhs, op, output_type)
             # libcudf doesn't support precision, so result.dtype doesn't
             # maintain output_type.precision
             result.dtype.precision = output_type.precision
