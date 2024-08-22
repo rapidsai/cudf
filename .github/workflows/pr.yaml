@@ -16,6 +16,7 @@ jobs:
     outputs:
       test_cpp: ${{ steps.changed-files.outputs.cpp_any_changed == 'true' }}
       test_python: ${{ steps.changed-files.outputs.python_any_changed == 'true' }}
+      test_java: ${{ steps.changed-files.outputs.java_any_changed == 'true' }}
     steps:
       - name: Get PR info
         id: get-pr-info
@@ -42,6 +43,11 @@ jobs:
               - '**'
               - '!docs/**'
               - '!java/**'
+            java:
+              - '**'
+              - '!docs/**'
+              - '!notebooks/**'
+              - '!python/**'
   pr-builder:
     needs:
       - checks
@@ -121,6 +127,7 @@ jobs:
     needs: conda-cpp-build
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.10
+    if: needs.changed-files.outputs.test_java == 'true'
     with:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
@@ -233,6 +240,7 @@ jobs:
     needs: wheel-build-cudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
+    if: needs.changed-files.outputs.test_python == 'true'
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -243,6 +251,7 @@ jobs:
     needs: wheel-build-cudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
+    if: needs.changed-files.outputs.test_python == 'true'
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
