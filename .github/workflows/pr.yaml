@@ -17,14 +17,15 @@ jobs:
       test_cpp: ${{ steps.changed-files.outputs.cpp_any_changed == 'true' }}
       test_python: ${{ steps.changed-files.outputs.python_any_changed == 'true' }}
     steps:
+      - name: Get PR info
+        id: get-pr-info
+        uses: rapidsai/shared-actions/get-pr-info@main
       - name: Checkout code repo
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.sha }}
+          fetch-depth: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).commits }}
           persist-credentials: false
-      - name: Get PR info
-        id: get-pr-info
-        uses: rapidsai/shared-actions/get-pr-info@main
       - name: Get changed files
         id: changed-files
         uses: tj-actions/changed-files@v45
