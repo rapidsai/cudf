@@ -123,7 +123,7 @@ std::vector<std::string> generate_vocab_containers()
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::table> generate_orders_independent(cudf::size_type const& scale_factor,
+std::unique_ptr<cudf::table> generate_orders_independent(double scale_factor,
                                                          rmm::cuda_stream_view stream,
                                                          rmm::device_async_resource_ref mr)
 {
@@ -245,7 +245,7 @@ std::unique_ptr<cudf::table> generate_orders_independent(cudf::size_type const& 
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& orders_independent,
-                                                       cudf::size_type const& scale_factor,
+                                                       double scale_factor,
                                                        rmm::cuda_stream_view stream,
                                                        rmm::device_async_resource_ref mr)
 {
@@ -500,7 +500,7 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::table> generate_partsupp(cudf::size_type const& scale_factor,
+std::unique_ptr<cudf::table> generate_partsupp(double scale_factor,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
@@ -552,7 +552,7 @@ std::unique_ptr<cudf::table> generate_partsupp(cudf::size_type const& scale_fact
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::table> generate_part(cudf::size_type const& scale_factor,
+std::unique_ptr<cudf::table> generate_part(double scale_factor,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
@@ -659,7 +659,7 @@ std::unique_ptr<cudf::table> generate_part(cudf::size_type const& scale_factor,
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>>
-generate_orders_lineitem_part(cudf::size_type const& scale_factor,
+generate_orders_lineitem_part(double scale_factor,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
@@ -729,7 +729,7 @@ generate_orders_lineitem_part(cudf::size_type const& scale_factor,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::table> generate_supplier(cudf::size_type const& scale_factor,
+std::unique_ptr<cudf::table> generate_supplier(double scale_factor,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
@@ -795,7 +795,7 @@ std::unique_ptr<cudf::table> generate_supplier(cudf::size_type const& scale_fact
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<cudf::table> generate_customer(cudf::size_type const& scale_factor,
+std::unique_ptr<cudf::table> generate_customer(double scale_factor,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {

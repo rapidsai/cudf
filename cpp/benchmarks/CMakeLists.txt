@@ -98,8 +98,8 @@ function(ConfigureBench CMAKE_BENCH_NAME)
                CUDA_STANDARD_REQUIRED ON
   )
   target_link_libraries(
-    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
-                                $<TARGET_NAME_IF_EXISTS:conda_env>
+    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_tpch_datagen cudf_datagen
+                                benchmark::benchmark_main $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   add_custom_command(
     OUTPUT CUDF_BENCHMARKS
@@ -137,6 +137,8 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
     EXCLUDE_FROM_ALL
   )
 endfunction()
+
+ConfigureBench(DATAGEN common/cudf_tpch_datagen/datagen.cpp)
 
 # ##################################################################################################
 # * column benchmarks -----------------------------------------------------------------------------
