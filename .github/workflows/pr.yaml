@@ -141,7 +141,7 @@ jobs:
       build_type: pull-request
       script: "ci/test_python_other.sh"
   conda-java-tests:
-    needs: conda-cpp-build
+    needs: [conda-cpp-build, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.10
     if: needs.changed-files.outputs.test_java == 'true'
@@ -162,7 +162,7 @@ jobs:
       container_image: "rapidsai/ci-wheel:latest"
       run_script: "ci/configure_cpp_static.sh"
   conda-notebook-tests:
-    needs: conda-python-build
+    needs: [conda-python-build, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.10
     if: needs.changed-files.outputs.test_notebooks == 'true'
