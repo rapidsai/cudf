@@ -101,4 +101,5 @@ NVBENCH_BENCH_TYPES(bench_groupby_max,
 
 NVBENCH_BENCH_TYPES(bench_groupby_max_cardinality, NVBENCH_TYPE_AXES(nvbench::type_list<int32_t>))
   .set_name("groupby_max_cardinality")
+  .add_int64_axis("num_aggregations", {1})
   .add_int64_axis("cardinality", {10, 20, 50, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000});
