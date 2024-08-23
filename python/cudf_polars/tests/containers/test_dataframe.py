@@ -144,6 +144,11 @@ def test_sorted_flags_preserved(with_nulls, nulls_last):
     assert df.flags == gf.to_polars().flags
 
 
-def test_empty_name_roundtrips():
+def test_empty_name_roundtrips_overlap():
     df = pl.LazyFrame({"": [1, 2, 3], "column_0": [4, 5, 6]})
+    assert_gpu_result_equal(df)
+
+
+def test_empty_name_roundtrips_no_overlap():
+    df = pl.LazyFrame({"": [1, 2, 3], "b": [4, 5, 6]})
     assert_gpu_result_equal(df)
