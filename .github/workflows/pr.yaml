@@ -45,8 +45,9 @@ jobs:
     name: "Check changed files"
     outputs:
       test_cpp: ${{ steps.changed-files.outputs.cpp_any_changed == 'true' }}
-      test_python: ${{ steps.changed-files.outputs.python_any_changed == 'true' }}
       test_java: ${{ steps.changed-files.outputs.java_any_changed == 'true' }}
+      test_notebooks: ${{ steps.changed-files.outputs.notebooks_any_changed == 'true' }}
+      test_python: ${{ steps.changed-files.outputs.python_any_changed == 'true' }}
     steps:
       - name: Get PR info
         id: get-pr-info
@@ -71,17 +72,24 @@ jobs:
               - '!python/**'
               # TODO: Remove this before merging
               - '!.github/**'
-            python:
-              - '**'
-              - '!docs/**'
-              - '!java/**'
-              # TODO: Remove this before merging
-              - '!.github/**'
             java:
               - '**'
               - '!docs/**'
               - '!notebooks/**'
               - '!python/**'
+              # TODO: Remove this before merging
+              - '!.github/**'
+            notebooks:
+              - '**'
+              - '!docs/**'
+              - '!java/**'
+              # TODO: Remove this before merging
+              - '!.github/**'
+            python:
+              - '**'
+              - '!docs/**'
+              - '!java/**'
+              - '!notebooks/**'
               # TODO: Remove this before merging
               - '!.github/**'
   checks:
@@ -157,6 +165,7 @@ jobs:
     needs: conda-python-build
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.10
+    if: needs.changed-files.outputs.test_notebooks == 'true'
     with:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
