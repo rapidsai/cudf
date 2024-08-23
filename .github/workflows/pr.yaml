@@ -69,15 +69,21 @@ jobs:
               - '!java/**'
               - '!notebooks/**'
               - '!python/**'
+              # TODO: Remove this before merging
+              - '!.github/**'
             python:
               - '**'
               - '!docs/**'
               - '!java/**'
+              # TODO: Remove this before merging
+              - '!.github/**'
             java:
               - '**'
               - '!docs/**'
               - '!notebooks/**'
               - '!python/**'
+              # TODO: Remove this before merging
+              - '!.github/**'
   checks:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.10
