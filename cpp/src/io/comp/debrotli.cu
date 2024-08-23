@@ -58,7 +58,7 @@ THE SOFTWARE.
 #include "gpuinflate.hpp"
 #include "io/utilities/block_utils.cuh"
 
-#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>

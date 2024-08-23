@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/cuda.cuh>
+#include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+
+#include <cuda_runtime.h>
 
 namespace cudf::detail {
 

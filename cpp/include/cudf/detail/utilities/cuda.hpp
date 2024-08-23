@@ -17,18 +17,13 @@
 #pragma once
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
+#include <algorithm>
 
-#include <cub/cub.cuh>
-
-#include <type_traits>
-
-namespace cudf::detail {
+namespace CUDF_EXPORT cudf {
+namespace detail {
 
 /**
  * @brief Get the number of multiprocessors on the device
@@ -60,4 +55,5 @@ cudf::size_type elements_per_thread(Kernel kernel,
   return std::clamp(per_thread, 1, max_per_thread);
 }
 
-}  // namespace cudf::detail
+}  // namespace detail
+}  // namespace CUDF_EXPORT cudf
