@@ -21,4 +21,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     versions = get_pandas_versions(args.pandas_range)
-    print(versions)
+    print(','.join(versions))
