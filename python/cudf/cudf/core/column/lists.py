@@ -256,7 +256,10 @@ class ListColumn(ColumnBase):
                 offset += len(data)
                 offset_vals.append(offset)
 
-        offset_col = column.as_column(offset_vals, dtype=size_type_dtype)
+        offset_col = cast(
+            NumericalColumn,
+            column.as_column(offset_vals, dtype=size_type_dtype),
+        )
 
         # Build ListColumn
         res = cls(
@@ -338,7 +341,7 @@ class ListMethods(ColumnMethods):
 
     def get(
         self,
-        index: int,
+        index: int | ColumnLike,
         default: ScalarLike | ColumnLike | None = None,
     ) -> ParentType:
         """
