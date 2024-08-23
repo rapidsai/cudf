@@ -81,7 +81,6 @@ jobs:
               - '!.github/**'
             notebooks:
               - '**'
-              - '!docs/**'
               - '!java/**'
               # TODO: Remove this before merging
               - '!.github/**'
