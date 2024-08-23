@@ -3303,3 +3303,9 @@ def test_bool_rangeindex_raises():
         lfunc_args_and_kwargs=[[pd.RangeIndex(0)]],
         rfunc_args_and_kwargs=[[cudf.RangeIndex(0)]],
     )
+
+
+def test_index_struct_data_disallowed():
+    data = pa.array([{"a": [1], "b": [2]}])
+    with pytest.raises(NotImplementedError):
+        Index(data)
