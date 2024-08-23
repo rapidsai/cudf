@@ -382,19 +382,19 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 value = as_column(value, length=length)
 
             if isinstance(value, ColumnBase):
-                new_col = cudf.Series._from_column(value, index=idx)
+                new_ser = cudf.Series._from_column(value, index=idx)
             else:
-                new_col = cudf.Series(value, index=idx)
+                new_ser = cudf.Series(value, index=idx)
             if len(self._frame.index) != 0:
-                new_col = new_col._align_to_index(
+                new_ser = new_ser._align_to_index(
                     self._frame.index, how="right"
                 )
 
             if len(self._frame.index) == 0:
                 self._frame.index = (
-                    idx if idx is not None else cudf.RangeIndex(len(new_col))
+                    idx if idx is not None else cudf.RangeIndex(len(new_ser))
                 )
-            self._frame._data.insert(key[1], new_col)
+            self._frame._data.insert(key[1], new_ser._column)
         else:
             if is_scalar(value):
                 for col in columns_df._column_names:
@@ -981,6 +981,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self._data.rangeindex = isinstance(
                 columns, (range, cudf.RangeIndex, pd.RangeIndex)
             )
+            self._data.label_dtype = pd.Index(columns).dtype
         else:
             self._data.rangeindex = True
 
@@ -3272,9 +3273,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             If False, a reindexing operation is performed if
             `value.index` is not equal to `self.index`.
         """
-        if name in self._data:
-            raise NameError(f"duplicated column name {name}")
-
         num_cols = self._num_columns
         if loc < 0:
             loc += num_cols + 1
@@ -5832,7 +5830,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         df = cls._from_data(
             ColumnAccessor(
-                data=ca_data,
+                data=ca_data,  # type: ignore[arg-type]
                 multiindex=isinstance(
                     columns, (pd.MultiIndex, cudf.MultiIndex)
                 ),

@@ -272,8 +272,8 @@ class Merge:
                 lcol_casted = lcol_casted.astype("category")
                 rcol_casted = rcol_casted.astype("category")
 
-            left_key.set(self.lhs, lcol_casted, validate=False)
-            right_key.set(self.rhs, rcol_casted, validate=False)
+            left_key.set(self.lhs, lcol_casted)
+            right_key.set(self.rhs, rcol_casted)
 
         left_rows, right_rows = self._gather_maps(
             left_join_cols, right_join_cols
@@ -329,7 +329,6 @@ class Merge:
                     lkey.set(
                         left_result,
                         lkey.get(left_result).fillna(rkey.get(right_result)),
-                        validate=False,
                     )
 
         # All columns from the left table make it into the output. Non-key

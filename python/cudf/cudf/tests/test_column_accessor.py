@@ -370,7 +370,7 @@ def test_replace_level_values_MultiColumn():
 def test_clear_nrows_empty_before():
     ca = ColumnAccessor({})
     assert ca.nrows == 0
-    ca.insert("new", [1])
+    ca.insert("new", as_column([1]))
     assert ca.nrows == 1
 
 
