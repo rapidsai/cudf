@@ -20,39 +20,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  checkout:
+  integration-tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-  extract_libs:
-    name: Extract libraries from dependencies.yaml
-    runs-on: ubuntu-latest
-    outputs:
-      LIBS: ${{ steps.extractlib.outputs.LIBS }}
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-      - name: Extract libraries
+
+      - name: Extract libraries from dependencies.yaml
         id: extractlib
         run: |
-          python/cudf/cudf_pandas_tests/third_party_integration_tests/ci/extract_lib.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
+          LIBS=$(python/cudf/cudf_pandas_tests/third_party_integration_tests/ci/extract_lib.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml)
+          echo "LIBS=${LIBS}" >> $GITHUB_ENV
 
-  integration-tests:
+      - name: Run integration tests
+        run: |
+          for lib in ${{ env.LIBS }}; do
+            echo "Running tests for $lib"
+            CUDA_MAJOR=$(if [ "$lib" = "tensorflow" ]; then echo "11"; else echo "12"; fi)
+            python/cudf/cudf_pandas_tests/third_party_integration_tests/ci/test.sh $lib $CUDA_MAJOR
+          done
+        env:
+          LIBS: ${{ env.LIBS }}
     secrets: inherit
-    needs: extract_libs
-    strategy:
-      fail-fast: false # Continue testing other libraries even if one fails
-      matrix:
-          lib: ${{ fromJSON(needs.extract_libs.outputs.LIBS) }}
-          include:
-            - CUDA_MAJOR: "12" # By default, test libraries with the latest CUDA 12
-            - lib: "tensorflow"
-              CUDA_MAJOR: "11" # Tensorflow does not have cuda 12 build, use one CUDA 11 instance
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.10
-    with:
-      build_type: nightly
-      script: "python/cudf/cudf_pandas_tests/third_party_integration_tests/ci/test.sh ${{ matrix.lib }}"
-      run_codecov: false
-      # Select a single configuration using amd64 and the desired CUDA major version, with the latest (Python, CUDA) versions.
-      matrix_filter: 'map(select(.ARCH == "amd64" and (.CUDA_VER|startswith("${{ matrix.CUDA_MAJOR }}")))) | max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]) | [.]'
