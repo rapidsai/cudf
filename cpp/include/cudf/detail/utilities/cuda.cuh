@@ -190,43 +190,6 @@ __device__ T single_lane_block_sum_reduce(T lane_value)
 }
 
 /**
- * @brief Get the number of multiprocessors on the device
- */
-inline cudf::size_type num_multiprocessors()
-{
-  int device = 0;
-  CUDF_CUDA_TRY(cudaGetDevice(&device));
-  int num_sms = 0;
-  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
-  return num_sms;
-}
-
-/**
- * @brief Get the number of elements that can be processed per thread.
- *
- * @param[in] kernel The kernel for which the elements per thread needs to be assessed
- * @param[in] total_size Number of elements
- * @param[in] block_size Expected block size
- *
- * @return cudf::size_type Elements per thread that can be processed for given specification.
- */
-template <typename Kernel>
-cudf::size_type elements_per_thread(Kernel kernel,
-                                    cudf::size_type total_size,
-                                    cudf::size_type block_size,
-                                    cudf::size_type max_per_thread = 32)
-{
-  CUDF_FUNC_RANGE();
-
-  // calculate theoretical occupancy
-  int max_blocks = 0;
-  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, block_size, 0));
-
-  int per_thread = total_size / (max_blocks * num_multiprocessors() * block_size);
-  return std::clamp(per_thread, 1, max_per_thread);
-}
-
-/**
  * @brief Finds the smallest value not less than `number_to_round` and modulo `modulus` is
  * zero. Expects modulus to be a power of 2.
  *
