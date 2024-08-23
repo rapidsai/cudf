@@ -1439,7 +1439,7 @@ expand_dir_pattern : str, default None
 
 Returns
 -------
-filepath_or_buffer : List[str, bytes, BytesIO]
+List[str, bytes, BytesIO]
     List of filepath strings or in-memory data buffers.
     """.format(bytes_per_thread=_BYTES_PER_THREAD_DEFAULT)
 
