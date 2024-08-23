@@ -18,8 +18,6 @@
 
 #include <cudf/table/table.hpp>
 
-#include <array>
-
 namespace CUDF_EXPORT cudf {
 namespace datagen {
 

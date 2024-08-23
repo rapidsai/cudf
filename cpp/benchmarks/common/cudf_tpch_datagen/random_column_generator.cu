@@ -31,7 +31,6 @@
 #include <thrust/transform.h>
 
 #include <string>
-#include <vector>
 
 namespace {
 

@@ -19,7 +19,6 @@
 #include <cudf/column/column.hpp>
 
 #include <string>
-#include <vector>
 
 /**
  * @brief Generate a column of random strings

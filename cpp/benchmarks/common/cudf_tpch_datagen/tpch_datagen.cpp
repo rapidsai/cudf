@@ -36,6 +36,7 @@
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
 
+#include <array>
 #include <string>
 #include <vector>
 
