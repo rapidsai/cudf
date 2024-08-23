@@ -255,7 +255,7 @@ jobs:
         build-all -DBUILD_BENCHMARKS=ON --verbose;
         sccache -s;
   unit-tests-cudf-pandas:
-    needs: wheel-build-cudf
+    needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
     if: needs.changed-files.outputs.test_python == 'true'
@@ -266,7 +266,7 @@ jobs:
       script: ci/cudf_pandas_scripts/run_tests.sh
   pandas-tests:
     # run the Pandas unit tests using PR branch
-    needs: wheel-build-cudf
+    needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
     if: needs.changed-files.outputs.test_python == 'true'
