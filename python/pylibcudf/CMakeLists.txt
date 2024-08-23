@@ -24,55 +24,15 @@ project(
   LANGUAGES CXX CUDA
 )
 
-option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulting to local files"
-       OFF
-)
-# Find Python early so that later commands can use it
-find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
+find_package(cudf "${RAPIDS_VERSION}" REQUIRED)
 
-# If the user requested it we attempt to find CUDF.
-if(FIND_CUDF_CPP)
-  include(rapids-cpm)
-  include(rapids-export)
-  include(rapids-find)
-  rapids_cpm_init()
-
-  find_package(cudf "${RAPIDS_VERSION}" REQUIRED)
-
-  # an installed version of libcudf doesn't provide the dlpack headers so we need to download dlpack
-  # for the interop.pyx
-  include(../../cpp/cmake/thirdparty/get_dlpack.cmake)
-else()
-  set(cudf_FOUND OFF)
-endif()
+# an installed version of libcudf doesn't provide the dlpack headers so we need to download dlpack
+# for the interop.pyx
+include(rapids-cpm)
+rapids_cpm_init()
+include(../../cpp/cmake/thirdparty/get_dlpack.cmake)
 
 include(rapids-cython-core)
-
-if(NOT cudf_FOUND)
-  set(BUILD_TESTS OFF)
-  set(BUILD_BENCHMARKS OFF)
-  set(CUDF_BUILD_TESTUTIL OFF)
-  set(CUDF_BUILD_STREAMS_TEST_UTIL OFF)
-  set(CUDA_STATIC_RUNTIME ON)
-
-  add_subdirectory(../../cpp cudf-cpp EXCLUDE_FROM_ALL)
-
-  # libcudf targets are excluded by default above via EXCLUDE_FROM_ALL to remove extraneous
-  # components like headers from libcudacxx, but we do need the libraries. However, we want to
-  # control where they are installed to. Since there are multiple subpackages of pylibcudf that
-  # require access to libcudf, we place the library and all its dependent artifacts in the cudf
-  # directory as a single source of truth and modify the other rpaths appropriately.
-  set(cython_lib_dir pylibcudf)
-  include(cmake/Modules/WheelHelpers.cmake)
-  # TODO: This install is currently overzealous. We should only install the libraries that are
-  # downloaded by CPM during the build, not libraries that were found on the system.  However, in
-  # practice right this would only be a problem is if libcudf was not found but some of the
-  # dependencies were, and we have no real use cases where that happens.
-  install_aliased_imported_targets(
-    TARGETS cudf nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp DESTINATION
-    ${cython_lib_dir}
-  )
-endif()
 
 rapids_cython_init()
 

@@ -63,6 +63,7 @@ rapids_cython_create_modules(
 )
 
 target_link_libraries(strings_udf PUBLIC cudf_strings_udf)
+target_include_directories(interop PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
 
 include(${rapids-cmake-dir}/export/find_package_root.cmake)
 include(../../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)

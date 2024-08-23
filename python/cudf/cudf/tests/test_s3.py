@@ -269,6 +269,28 @@ def test_read_parquet_ext(
     assert_eq(expect, got1)
 
 
+def test_read_parquet_filesystem(s3_base, s3so, pdf):
+    fname = "data.0.parquet"
+    # NOTE: Need a unique bucket name when a glob pattern
+    # is used, otherwise fsspec seems to cache the bucket
+    # contents, and later tests using the same bucket name
+    # will fail.
+    bucket = "test_read_parquet_filesystem"
+    buffer = BytesIO()
+    pdf.to_parquet(path=buffer)
+    buffer.seek(0)
+    fs = get_fs_token_paths("s3://", mode="rb", storage_options=s3so)[0]
+    with s3_context(
+        s3_base=s3_base,
+        bucket=bucket,
+        files={fname: buffer},
+    ):
+        # Check that a glob pattern works
+        path = f"s3://{bucket}/{'data.*.parquet'}"
+        got = cudf.read_parquet(path, filesystem=fs)
+    assert_eq(pdf, got)
+
+
 def test_read_parquet_multi_file(s3_base, s3so, pdf):
     fname_1 = "test_parquet_reader_multi_file_1.parquet"
     buffer_1 = BytesIO()

@@ -52,7 +52,6 @@ dependencies:
 - ninja
 - notebook
 - numba>=0.57
-- numpy
 - numpy>=1.23,<2.0a0
 - numpydoc
 - nvcc_linux-64=11.8
@@ -64,7 +63,6 @@ dependencies:
 - pandoc
 - pre-commit
 - ptxcompiler
-- pyarrow>=16.1.0,<16.2.0a0
 - pydata-sphinx-theme!=0.14.2
 - pytest-benchmark
 - pytest-cases>=3.8.2
