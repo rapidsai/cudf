@@ -23,6 +23,7 @@ jobs:
       - static-configure
       - conda-notebook-tests
       - docs-build
+      - wheel-build-libcudf
       - wheel-build-pylibcudf
       - wheel-build-cudf
       - wheel-tests-cudf
@@ -121,8 +122,16 @@ jobs:
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/build_docs.sh"
-  wheel-build-pylibcudf:
+  wheel-build-libcudf:
     needs: checks
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.10
+    with:
+      matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
+      build_type: pull-request
+      script: "ci/build_wheel_libcudf.sh"
+  wheel-build-pylibcudf:
+    needs: [checks, wheel-build-libcudf]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.10
     with:
