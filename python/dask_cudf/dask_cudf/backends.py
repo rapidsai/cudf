@@ -134,6 +134,8 @@ def _get_non_empty_data(
         return cudf.core.column.as_column(
             np.arange(start=0, stop=2, dtype=s.dtype)
         )
+    elif isinstance(s.dtype, cudf.core.dtypes.DecimalDtype):
+        return cudf.core.column.as_column(range(2), dtype=s.dtype)
     else:
         raise TypeError(
             f"Don't know how to handle column of type {type(s).__name__}"
