@@ -43,20 +43,19 @@ namespace cudf {
 namespace datagen {
 
 namespace {
-std::vector<std::string> const nations = {
+constexpr std::array nations{
   "ALGERIA", "ARGENTINA", "BRAZIL",         "CANADA",       "EGYPT", "ETHIOPIA", "FRANCE",
   "GERMANY", "INDIA",     "INDONESIA",      "IRAN",         "IRAQ",  "JAPAN",    "JORDAN",
   "KENYA",   "MOROCCO",   "MOZAMBIQUE",     "PERU",         "CHINA", "ROMANIA",  "SAUDI ARABIA",
   "VIETNAM", "RUSSIA",    "UNITED KINGDOM", "UNITED STATES"};
 
-std::vector<std::string> const years  = {"1992", "1993", "1994", "1995", "1996", "1997", "1998"};
-std::vector<std::string> const months = {
-  "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"};
-std::vector<std::string> const days = {
-  "1",  "2",  "3",  "4",  "5",  "6",  "7",  "8",  "9",  "10", "11", "12", "13", "14", "15", "16",
-  "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31"};
+constexpr std::array years{"1992", "1993", "1994", "1995", "1996", "1997", "1998"};
+constexpr std::array months{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"};
+constexpr std::array days{"1",  "2",  "3",  "4",  "5",  "6",  "7",  "8",  "9",  "10", "11",
+                          "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22",
+                          "23", "24", "25", "26", "27", "28", "29", "30", "31"};
 
-std::vector<std::string> const vocab_p_name = {
+constexpr std::array vocab_p_name{
   "almond",   "antique",   "aquamarine", "azure",      "beige",     "bisque",    "black",
   "blanched", "blue",      "blush",      "brown",      "burlywood", "burnished", "chartreuse",
   "chiffon",  "chocolate", "coral",      "cornflower", "cornsilk",  "cream",     "cyan",
@@ -72,47 +71,75 @@ std::vector<std::string> const vocab_p_name = {
   "tan",      "thistle",   "tomato",     "turquoise",  "violet",    "wheat",     "white",
   "yellow"};
 
-std::vector<std::string> const vocab_modes = {
-  "REG AIR", "AIR", "RAIL", "SHIP", "TRUCK", "MAIL", "FOB"};
+constexpr std::array vocab_modes{"REG AIR", "AIR", "RAIL", "SHIP", "TRUCK", "MAIL", "FOB"};
 
-std::vector<std::string> const vocab_instructions = {
+constexpr std::array vocab_instructions{
   "DELIVER IN PERSON", "COLLECT COD", "NONE", "TAKE BACK RETURN"};
 
-std::vector<std::string> const vocab_priorities = {
-  "1-URGENT", "2-HIGH", "3-MEDIUM", "4-NOT SPECIFIED", "5-LOW"};
+constexpr std::array vocab_priorities{"1-URGENT", "2-HIGH", "3-MEDIUM", "4-NOT SPECIFIED", "5-LOW"};
 
-std::vector<std::string> const vocab_segments = {
+constexpr std::array vocab_segments{
   "AUTOMOBILE", "BUILDING", "FURNITURE", "MACHINERY", "HOUSEHOLD"};
 
-std::vector<std::string> generate_vocab_types()
-{
-  std::vector<std::string> syllable_a = {
-    "STANDARD", "SMALL", "MEDIUM", "LARGE", "ECONOMY", "PROMO"};
-  std::vector<std::string> syllable_b = {"ANODIZED", "BURNISHED", "PLATED", "POLISHED", "BRUSHED"};
-  std::vector<std::string> syllable_c = {"TIN", "NICKEL", "BRASS", "STEEL", "COPPER"};
-  std::vector<std::string> syllable_combinations;
-  for (auto const& s_a : syllable_a) {
-    for (auto const& s_b : syllable_b) {
-      for (auto const& s_c : syllable_c) {
-        syllable_combinations.push_back(s_a + " " + s_b + " " + s_c);
-      }
-    }
-  }
-  return syllable_combinations;
-}
+constexpr std::array vocab_types{
+  "STANDARD ANODIZED TIN",     "STANDARD ANODIZED NICKEL", "STANDARD ANODIZED BRASS",
+  "STANDARD ANODIZED STEEL",   "STANDARD ANODIZED COPPER", "STANDARD BURNISHED TIN",
+  "STANDARD BURNISHED NICKEL", "STANDARD BURNISHED BRASS", "STANDARD BURNISHED STEEL",
+  "STANDARD BURNISHED COPPER", "STANDARD PLATED TIN",      "STANDARD PLATED NICKEL",
+  "STANDARD PLATED BRASS",     "STANDARD PLATED STEEL",    "STANDARD PLATED COPPER",
+  "STANDARD POLISHED TIN",     "STANDARD POLISHED NICKEL", "STANDARD POLISHED BRASS",
+  "STANDARD POLISHED STEEL",   "STANDARD POLISHED COPPER", "STANDARD BRUSHED TIN",
+  "STANDARD BRUSHED NICKEL",   "STANDARD BRUSHED BRASS",   "STANDARD BRUSHED STEEL",
+  "STANDARD BRUSHED COPPER",   "SMALL ANODIZED TIN",       "SMALL ANODIZED NICKEL",
+  "SMALL ANODIZED BRASS",      "SMALL ANODIZED STEEL",     "SMALL ANODIZED COPPER",
+  "SMALL BURNISHED TIN",       "SMALL BURNISHED NICKEL",   "SMALL BURNISHED BRASS",
+  "SMALL BURNISHED STEEL",     "SMALL BURNISHED COPPER",   "SMALL PLATED TIN",
+  "SMALL PLATED NICKEL",       "SMALL PLATED BRASS",       "SMALL PLATED STEEL",
+  "SMALL PLATED COPPER",       "SMALL POLISHED TIN",       "SMALL POLISHED NICKEL",
+  "SMALL POLISHED BRASS",      "SMALL POLISHED STEEL",     "SMALL POLISHED COPPER",
+  "SMALL BRUSHED TIN",         "SMALL BRUSHED NICKEL",     "SMALL BRUSHED BRASS",
+  "SMALL BRUSHED STEEL",       "SMALL BRUSHED COPPER",     "MEDIUM ANODIZED TIN",
+  "MEDIUM ANODIZED NICKEL",    "MEDIUM ANODIZED BRASS",    "MEDIUM ANODIZED STEEL",
+  "MEDIUM ANODIZED COPPER",    "MEDIUM BURNISHED TIN",     "MEDIUM BURNISHED NICKEL",
+  "MEDIUM BURNISHED BRASS",    "MEDIUM BURNISHED STEEL",   "MEDIUM BURNISHED COPPER",
+  "MEDIUM PLATED TIN",         "MEDIUM PLATED NICKEL",     "MEDIUM PLATED BRASS",
+  "MEDIUM PLATED STEEL",       "MEDIUM PLATED COPPER",     "MEDIUM POLISHED TIN",
+  "MEDIUM POLISHED NICKEL",    "MEDIUM POLISHED BRASS",    "MEDIUM POLISHED STEEL",
+  "MEDIUM POLISHED COPPER",    "MEDIUM BRUSHED TIN",       "MEDIUM BRUSHED NICKEL",
+  "MEDIUM BRUSHED BRASS",      "MEDIUM BRUSHED STEEL",     "MEDIUM BRUSHED COPPER",
+  "LARGE ANODIZED TIN",        "LARGE ANODIZED NICKEL",    "LARGE ANODIZED BRASS",
+  "LARGE ANODIZED STEEL",      "LARGE ANODIZED COPPER",    "LARGE BURNISHED TIN",
+  "LARGE BURNISHED NICKEL",    "LARGE BURNISHED BRASS",    "LARGE BURNISHED STEEL",
+  "LARGE BURNISHED COPPER",    "LARGE PLATED TIN",         "LARGE PLATED NICKEL",
+  "LARGE PLATED BRASS",        "LARGE PLATED STEEL",       "LARGE PLATED COPPER",
+  "LARGE POLISHED TIN",        "LARGE POLISHED NICKEL",    "LARGE POLISHED BRASS",
+  "LARGE POLISHED STEEL",      "LARGE POLISHED COPPER",    "LARGE BRUSHED TIN",
+  "LARGE BRUSHED NICKEL",      "LARGE BRUSHED BRASS",      "LARGE BRUSHED STEEL",
+  "LARGE BRUSHED COPPER",      "ECONOMY ANODIZED TIN",     "ECONOMY ANODIZED NICKEL",
+  "ECONOMY ANODIZED BRASS",    "ECONOMY ANODIZED STEEL",   "ECONOMY ANODIZED COPPER",
+  "ECONOMY BURNISHED TIN",     "ECONOMY BURNISHED NICKEL", "ECONOMY BURNISHED BRASS",
+  "ECONOMY BURNISHED STEEL",   "ECONOMY BURNISHED COPPER", "ECONOMY PLATED TIN",
+  "ECONOMY PLATED NICKEL",     "ECONOMY PLATED BRASS",     "ECONOMY PLATED STEEL",
+  "ECONOMY PLATED COPPER",     "ECONOMY POLISHED TIN",     "ECONOMY POLISHED NICKEL",
+  "ECONOMY POLISHED BRASS",    "ECONOMY POLISHED STEEL",   "ECONOMY POLISHED COPPER",
+  "ECONOMY BRUSHED TIN",       "ECONOMY BRUSHED NICKEL",   "ECONOMY BRUSHED BRASS",
+  "ECONOMY BRUSHED STEEL",     "ECONOMY BRUSHED COPPER",   "PROMO ANODIZED TIN",
+  "PROMO ANODIZED NICKEL",     "PROMO ANODIZED BRASS",     "PROMO ANODIZED STEEL",
+  "PROMO ANODIZED COPPER",     "PROMO BURNISHED TIN",      "PROMO BURNISHED NICKEL",
+  "PROMO BURNISHED BRASS",     "PROMO BURNISHED STEEL",    "PROMO BURNISHED COPPER",
+  "PROMO PLATED TIN",          "PROMO PLATED NICKEL",      "PROMO PLATED BRASS",
+  "PROMO PLATED STEEL",        "PROMO PLATED COPPER",      "PROMO POLISHED TIN",
+  "PROMO POLISHED NICKEL",     "PROMO POLISHED BRASS",     "PROMO POLISHED STEEL",
+  "PROMO POLISHED COPPER",     "PROMO BRUSHED TIN",        "PROMO BRUSHED NICKEL",
+  "PROMO BRUSHED BRASS",       "PROMO BRUSHED STEEL",      "PROMO BRUSHED COPPER"};
 
-std::vector<std::string> generate_vocab_containers()
-{
-  std::vector<std::string> syllable_a = {"SM", "LG", "MED", "JUMBO", "WRAP"};
-  std::vector<std::string> syllable_b = {"CASE", "BOX", "BAG", "JAR", "PKG", "PACK", "CAN", "DRUM"};
-  std::vector<std::string> syllable_combinations;
-  for (auto const& s_a : syllable_a) {
-    for (auto const& s_b : syllable_b) {
-      syllable_combinations.push_back(s_a + " " + s_b);
-    }
-  }
-  return syllable_combinations;
-}
+constexpr std::array vocab_containers{
+  "SM CASE",   "SM BOX",     "SM BAG",    "SM JAR",     "SM PKG",    "SM PACK",   "SM CAN",
+  "SM DRUM",   "LG CASE",    "LG BOX",    "LG BAG",     "LG JAR",    "LG PKG",    "LG PACK",
+  "LG CAN",    "LG DRUM",    "MED CASE",  "MED BOX",    "MED BAG",   "MED JAR",   "MED PKG",
+  "MED PACK",  "MED CAN",    "MED DRUM",  "JUMBO CASE", "JUMBO BOX", "JUMBO BAG", "JUMBO JAR",
+  "JUMBO PKG", "JUMBO PACK", "JUMBO CAN", "JUMBO DRUM", "WRAP CASE", "WRAP BOX",  "WRAP BAG",
+  "WRAP JAR",  "WRAP PKG",   "WRAP PACK", "WRAP CAN",   "WRAP DRUM"};
 
 }  // namespace
 
@@ -171,12 +198,12 @@ std::unique_ptr<cudf::table> generate_orders_independent(double scale_factor,
 
   // Generate the `o_orderdate` column
   auto o_orderdate_ts = [&]() {
-    auto const o_orderdate_year =
-      generate_random_string_column_from_set(years, o_num_rows, stream, mr);
-    auto const o_orderdate_month =
-      generate_random_string_column_from_set(months, o_num_rows, stream, mr);
-    auto const o_orderdate_day =
-      generate_random_string_column_from_set(days, o_num_rows, stream, mr);
+    auto const o_orderdate_year = generate_random_string_column_from_set(
+      cudf::host_span<const char* const>(years.data(), years.size()), o_num_rows, stream, mr);
+    auto const o_orderdate_month = generate_random_string_column_from_set(
+      cudf::host_span<const char* const>(months.data(), months.size()), o_num_rows, stream, mr);
+    auto const o_orderdate_day = generate_random_string_column_from_set(
+      cudf::host_span<const char* const>(days.data(), days.size()), o_num_rows, stream, mr);
     auto const o_orderdate_str = cudf::strings::concatenate(
       cudf::table_view(
         {o_orderdate_year->view(), o_orderdate_month->view(), o_orderdate_day->view()}),
@@ -194,8 +221,11 @@ std::unique_ptr<cudf::table> generate_orders_independent(double scale_factor,
   }();
 
   // Generate the `o_orderpriority` column
-  auto o_orderpriority =
-    generate_random_string_column_from_set(vocab_priorities, o_num_rows, stream, mr);
+  auto o_orderpriority = generate_random_string_column_from_set(
+    cudf::host_span<const char* const>(vocab_priorities.data(), vocab_priorities.size()),
+    o_num_rows,
+    stream,
+    mr);
 
   // Generate the `o_clerk` column
   auto o_clerk = [&]() {
@@ -375,11 +405,18 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
   }();
 
   // Generate the `l_shipinstruct` column
-  auto l_shipinstruct =
-    generate_random_string_column_from_set(vocab_instructions, l_num_rows, stream, mr);
+  auto l_shipinstruct = generate_random_string_column_from_set(
+    cudf::host_span<const char* const>(vocab_instructions.data(), vocab_instructions.size()),
+    l_num_rows,
+    stream,
+    mr);
 
   // Generate the `l_shipmode` column
-  auto l_shipmode = generate_random_string_column_from_set(vocab_modes, l_num_rows, stream, mr);
+  auto l_shipmode = generate_random_string_column_from_set(
+    cudf::host_span<const char* const>(vocab_modes.data(), vocab_modes.size()),
+    l_num_rows,
+    stream,
+    mr);
 
   // Generate the `l_comment` column
   // NOTE: This column is not compliant with
@@ -567,16 +604,31 @@ std::unique_ptr<cudf::table> generate_part(double scale_factor,
 
   // Generate the `p_name` column
   auto p_name = [&]() {
-    auto const p_name_a =
-      generate_random_string_column_from_set(vocab_p_name, num_rows, stream, mr);
-    auto const p_name_b =
-      generate_random_string_column_from_set(vocab_p_name, num_rows, stream, mr);
-    auto const p_name_c =
-      generate_random_string_column_from_set(vocab_p_name, num_rows, stream, mr);
-    auto const p_name_d =
-      generate_random_string_column_from_set(vocab_p_name, num_rows, stream, mr);
-    auto const p_name_e =
-      generate_random_string_column_from_set(vocab_p_name, num_rows, stream, mr);
+    auto const p_name_a = generate_random_string_column_from_set(
+      cudf::host_span<const char* const>(vocab_p_name.data(), vocab_p_name.size()),
+      num_rows,
+      stream,
+      mr);
+    auto const p_name_b = generate_random_string_column_from_set(
+      cudf::host_span<const char* const>(vocab_p_name.data(), vocab_p_name.size()),
+      num_rows,
+      stream,
+      mr);
+    auto const p_name_c = generate_random_string_column_from_set(
+      cudf::host_span<const char* const>(vocab_p_name.data(), vocab_p_name.size()),
+      num_rows,
+      stream,
+      mr);
+    auto const p_name_d = generate_random_string_column_from_set(
+      cudf::host_span<const char* const>(vocab_p_name.data(), vocab_p_name.size()),
+      num_rows,
+      stream,
+      mr);
+    auto const p_name_e = generate_random_string_column_from_set(
+      cudf::host_span<const char* const>(vocab_p_name.data(), vocab_p_name.size()),
+      num_rows,
+      stream,
+      mr);
     return cudf::strings::concatenate(
       cudf::table_view(
         {p_name_a->view(), p_name_b->view(), p_name_c->view(), p_name_d->view(), p_name_e->view()}),
@@ -620,15 +672,21 @@ std::unique_ptr<cudf::table> generate_part(double scale_factor,
   }();
 
   // Generate the `p_type` column
-  auto p_type =
-    generate_random_string_column_from_set(generate_vocab_types(), num_rows, stream, mr);
+  auto p_type = generate_random_string_column_from_set(
+    cudf::host_span<const char* const>(vocab_types.data(), vocab_types.size()),
+    num_rows,
+    stream,
+    mr);
 
   // Generate the `p_size` column
   auto p_size = generate_random_numeric_column<int8_t>(1, 50, num_rows, stream, mr);
 
   // Generate the `p_container` column
-  auto p_container =
-    generate_random_string_column_from_set(generate_vocab_containers(), num_rows, stream, mr);
+  auto p_container = generate_random_string_column_from_set(
+    cudf::host_span<const char* const>(vocab_containers.data(), vocab_containers.size()),
+    num_rows,
+    stream,
+    mr);
 
   // Generate the `p_retailprice` column
   auto p_retailprice = calc_p_retailprice(p_partkey->view(), stream, mr);
@@ -839,7 +897,11 @@ std::unique_ptr<cudf::table> generate_customer(double scale_factor,
   }();
 
   // Generate the `c_mktsegment` column
-  auto c_mktsegment = generate_random_string_column_from_set(vocab_segments, num_rows, stream, mr);
+  auto c_mktsegment = generate_random_string_column_from_set(
+    cudf::host_span<const char* const>(vocab_segments.data(), vocab_segments.size()),
+    num_rows,
+    stream,
+    mr);
 
   // Generate the `c_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification

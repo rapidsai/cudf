@@ -91,7 +91,7 @@ std::unique_ptr<cudf::column> generate_repeat_string_column(
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<cudf::column> generate_random_string_column_from_set(
-  std::vector<std::string> set,
+  cudf::host_span<const char* const> set,
   cudf::size_type const& num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());

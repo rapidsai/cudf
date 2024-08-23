@@ -179,7 +179,7 @@ std::unique_ptr<cudf::column> generate_repeat_string_column(std::string const& v
 }
 
 std::unique_ptr<cudf::column> generate_random_string_column_from_set(
-  std::vector<std::string> set,
+  cudf::host_span<const char* const> set,
   cudf::size_type const& num_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
