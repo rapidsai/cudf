@@ -39,6 +39,7 @@ from cudf.core.column import (
     IntervalColumn,
     NumericalColumn,
     StringColumn,
+    StructColumn,
     TimeDeltaColumn,
     column,
 )
@@ -153,7 +154,7 @@ def _index_from_data(data: MutableMapping, name: Any = no_default):
             index_class_type = Index
         elif isinstance(values, CategoricalColumn):
             index_class_type = CategoricalIndex
-        elif isinstance(values, IntervalColumn):
+        elif isinstance(values, (IntervalColumn, StructColumn)):
             index_class_type = IntervalIndex
         else:
             raise NotImplementedError(
