@@ -95,7 +95,7 @@ def read_json(
             storage_options=storage_options,
         )
         filepath_or_buffer = ioutils._select_single_source(
-            filepath_or_buffer, "read_json_metadata"
+            filepath_or_buffer, "read_json (via pandas)"
         )
 
         pd_value = pd.read_json(
