@@ -86,6 +86,7 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       package-name: libcudf
+      package-type: cpp
   wheel-build-pylibcudf:
     needs: [wheel-publish-libcudf]
     secrets: inherit
@@ -106,6 +107,7 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       package-name: pylibcudf
+      package-type: python
   wheel-build-cudf:
     needs: wheel-publish-pylibcudf
     secrets: inherit
@@ -126,6 +128,7 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       package-name: cudf
+      package-type: python
   wheel-build-dask-cudf:
     needs: wheel-publish-cudf
     secrets: inherit
@@ -148,6 +151,7 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       package-name: dask_cudf
+      package-type: python
   wheel-build-cudf-polars:
     needs: wheel-publish-pylibcudf
     secrets: inherit
@@ -170,6 +174,7 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       package-name: cudf_polars
+      package-type: python
   trigger-pandas-tests:
     if: inputs.build_type == 'nightly'
     needs: wheel-build-cudf
