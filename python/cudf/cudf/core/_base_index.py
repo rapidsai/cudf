@@ -2009,7 +2009,7 @@ class BaseIndex(Serializable):
         return self._from_columns_like_self(
             drop_duplicates(
                 list(self._columns),
-                keys=range(len(self._data)),
+                keys=range(len(self._columns)),
                 keep=keep,
                 nulls_are_equal=nulls_are_equal,
             ),

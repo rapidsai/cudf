@@ -186,7 +186,7 @@ def to_datetime(
         if isinstance(arg, cudf.DataFrame):
             # we require at least Ymd
             required = ["year", "month", "day"]
-            req = list(set(required) - set(arg._data.names))
+            req = list(set(required) - set(arg._column_names))
             if len(req):
                 err_req = ",".join(req)
                 raise ValueError(
@@ -196,7 +196,7 @@ def to_datetime(
                 )
 
             # replace passed column name with values in _unit_map
-            got_units = {k: get_units(k) for k in arg._data.names}
+            got_units = {k: get_units(k) for k in arg._column_names}
             unit_rev = {v: k for k, v in got_units.items()}
 
             # keys we don't recognize

@@ -235,10 +235,10 @@ cdef object _process_metadata(object df,
             df._index = idx
         elif set(index_col).issubset(names):
             index_data = df[index_col]
-            actual_index_names = list(index_col_names.values())
-            if len(index_data._data) == 1:
+            actual_index_names = next(iter(index_col_names.values()))
+            if len(index_data._num_columns) == 1:
                 idx = cudf.Index._from_column(
-                    index_data._data.columns[0],
+                    index_data._column,
                     name=actual_index_names[0]
                 )
             else:
@@ -252,7 +252,7 @@ cdef object _process_metadata(object df,
             if use_pandas_metadata:
                 df.index.names = index_col
 
-    if len(df._data.names) == 0 and column_index_type is not None:
+    if df._num_columns == 0 and column_index_type is not None:
         df._data.label_dtype = cudf.dtype(column_index_type)
 
     return df

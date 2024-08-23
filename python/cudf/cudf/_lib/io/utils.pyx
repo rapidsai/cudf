@@ -179,7 +179,7 @@ cdef update_struct_field_names(
 ):
     # Deprecated, remove in favor of add_col_struct_names
     # when a reader is ported to pylibcudf
-    for i, (name, col) in enumerate(table._data.items()):
+    for i, (name, col) in enumerate(table._column_labels_and_values):
         table._data[name] = update_column_struct_field_names(
             col, schema_info[i]
         )

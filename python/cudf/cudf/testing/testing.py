@@ -676,7 +676,7 @@ def assert_frame_equal(
 
     if check_like:
         left, right = left.reindex(index=right.index), right
-        right = right[list(left._data.names)]
+        right = right[list(left._column_names)]
 
     # index comparison
     assert_index_equal(

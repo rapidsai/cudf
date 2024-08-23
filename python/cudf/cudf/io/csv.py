@@ -193,13 +193,13 @@ def to_csv(
                 "Dataframe doesn't have the labels provided in columns"
             )
 
-    for col in df._data.columns:
-        if isinstance(col, cudf.core.column.ListColumn):
+    for _, dtype in df._dtypes:
+        if isinstance(dtype, cudf.ListDtype):
             raise NotImplementedError(
                 "Writing to csv format is not yet supported with "
                 "list columns."
             )
-        elif isinstance(col, cudf.core.column.StructColumn):
+        elif isinstance(dtype, cudf.StructDtype):
             raise NotImplementedError(
                 "Writing to csv format is not yet supported with "
                 "Struct columns."
@@ -210,12 +210,11 @@ def to_csv(
     # workaround once following issue is fixed:
     # https://github.com/rapidsai/cudf/issues/6661
     if any(
-        isinstance(col, cudf.core.column.CategoricalColumn)
-        for col in df._data.columns
+        isinstance(dtype, cudf.CategoricalDtype) for _, dtype in df._dtypes
     ) or isinstance(df.index, cudf.CategoricalIndex):
         df = df.copy(deep=False)
-        for col_name, col in df._data.items():
-            if isinstance(col, cudf.core.column.CategoricalColumn):
+        for col_name, col in df._column_labels_and_values:
+            if isinstance(col.dtype, cudf.CategoricalDtype):
                 df._data[col_name] = col.astype(col.categories.dtype)
 
         if isinstance(df.index, cudf.CategoricalIndex):

@@ -723,10 +723,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             ) and not libgroupby._is_all_scan_aggregate(normalized_aggs):
                 # Even with `sort=False`, pandas guarantees that
                 # groupby preserves the order of rows within each group.
-                left_cols = list(
-                    self.grouping.keys.drop_duplicates()._data.columns
-                )
-                right_cols = list(result_index._data.columns)
+                left_cols = list(self.grouping.keys.drop_duplicates()._columns)
+                right_cols = list(result_index._columns)
                 join_keys = [
                     _match_join_keys(lcol, rcol, "left")
                     for lcol, rcol in zip(left_cols, right_cols)
@@ -1443,7 +1441,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     # the column name should be, especially if we applied
                     # a nameless UDF.
                     result = result.to_frame(
-                        name=grouped_values._data.names[0]
+                        name=grouped_values._column_names[0]
                     )
                 else:
                     index_data = group_keys._data.copy(deep=True)
@@ -1592,7 +1590,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             if func in {"sum", "product"}:
                 # For `sum` & `product`, boolean types
                 # will need to result in `int64` type.
-                for name, col in res._data.items():
+                for name, col in res._column_labels_and_values:
                     if col.dtype.kind == "b":
                         res._data[name] = col.astype("int")
             return res
@@ -2675,11 +2673,8 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
     def _reduce_numeric_only(self, op: str):
         columns = list(
             name
-            for name in self.obj._data.names
-            if (
-                is_numeric_dtype(self.obj._data[name].dtype)
-                and name not in self.grouping.names
-            )
+            for name, dtype in self.obj._dtypes
+            if (is_numeric_dtype(dtype) and name not in self.grouping.names)
         )
         return self[columns].agg(op)
 
@@ -3169,7 +3164,7 @@ class _Grouping(Serializable):
         """
         # If the key columns are in `obj`, filter them out
         value_column_names = [
-            x for x in self._obj._data.names if x not in self._named_columns
+            x for x in self._obj._column_names if x not in self._named_columns
         ]
         value_columns = self._obj._data.select_by_label(value_column_names)
         return self._obj.__class__._from_data(value_columns)
@@ -3184,8 +3179,8 @@ class _Grouping(Serializable):
         self.names.append(by.name)
 
     def _handle_index(self, by):
-        self._key_columns.extend(by._data.columns)
-        self.names.extend(by._data.names)
+        self._key_columns.extend(by._columns)
+        self.names.extend(by._column_names)
 
     def _handle_mapping(self, by):
         by = cudf.Series(by.values(), index=by.keys())

@@ -75,8 +75,13 @@ class Frame(BinaryOperand, Scannable):
         return self._data.columns
 
     @property
-    def _dtypes(self) -> abc.Iterable:
-        return zip(self._data.names, (col.dtype for col in self._data.columns))
+    def _column_labels_and_values(self) -> abc.Iterable:
+        return zip(self._column_names, self._columns)
+
+    @property
+    def _dtypes(self) -> abc.Generator:
+        for label, col in self._column_labels_and_values:
+            yield label, col.dtype
 
     @property
     def ndim(self) -> int:
@@ -87,7 +92,7 @@ class Frame(BinaryOperand, Scannable):
         # TODO: See if self._data can be serialized outright
         header = {
             "type-serialized": pickle.dumps(type(self)),
-            "column_names": pickle.dumps(tuple(self._data.names)),
+            "column_names": pickle.dumps(self._column_names),
             "column_rangeindex": pickle.dumps(self._data.rangeindex),
             "column_multiindex": pickle.dumps(self._data.multiindex),
             "column_label_dtype": pickle.dumps(self._data.label_dtype),
@@ -156,7 +161,7 @@ class Frame(BinaryOperand, Scannable):
         self, result: Self, inplace: bool = False
     ) -> Self | None:
         if inplace:
-            for col in self._data:
+            for col in self._column_names:
                 if col in result._data:
                     self._data[col]._mimic_inplace(
                         result._data[col], inplace=True
@@ -267,7 +272,7 @@ class Frame(BinaryOperand, Scannable):
     def astype(self, dtype: dict[Any, Dtype], copy: bool = False) -> Self:
         casted = (
             col.astype(dtype.get(col_name, col.dtype), copy=copy)
-            for col_name, col in self._data.items()
+            for col_name, col in self._column_labels_and_values
         )
         ca = self._data._from_columns_like_self(casted, verify=False)
         return self._from_data_like_self(ca)
@@ -338,9 +343,7 @@ class Frame(BinaryOperand, Scannable):
 
         return all(
             self_col.equals(other_col, check_dtypes=True)
-            for self_col, other_col in zip(
-                self._data.values(), other._data.values()
-            )
+            for self_col, other_col in zip(self._columns, other._columns)
         )
 
     @_performance_tracking
@@ -434,11 +437,9 @@ class Frame(BinaryOperand, Scannable):
 
         if dtype is None:
             if ncol == 1:
-                dtype = next(iter(self._data.values())).dtype
+                dtype = next(self._dtypes)[0]
             else:
-                dtype = find_common_type(
-                    [col.dtype for col in self._data.values()]
-                )
+                dtype = find_common_type([dtype for _, dtype in self._dtypes])
 
             if not isinstance(dtype, numpy.dtype):
                 raise NotImplementedError(
@@ -446,12 +447,12 @@ class Frame(BinaryOperand, Scannable):
                 )
 
         if self.ndim == 1:
-            return to_array(self._data.columns[0], dtype)
+            return to_array(self._columns[0], dtype)
         else:
             matrix = module.empty(
                 shape=(len(self), ncol), dtype=dtype, order="F"
             )
-            for i, col in enumerate(self._data.values()):
+            for i, col in enumerate(self._columns):
                 # TODO: col.values may fail if there is nullable data or an
                 # unsupported dtype. We may want to catch and provide a more
                 # suitable error.
@@ -751,7 +752,7 @@ class Frame(BinaryOperand, Scannable):
 
         filled_columns = [
             col.fillna(value[name], method) if name in value else col.copy()
-            for name, col in self._data.items()
+            for name, col in self._column_labels_and_values
         ]
 
         return self._mimic_inplace(
@@ -985,7 +986,10 @@ class Frame(BinaryOperand, Scannable):
         index: [[1,2,3]]
         """
         return pa.Table.from_pydict(
-            {str(name): col.to_arrow() for name, col in self._data.items()}
+            {
+                str(name): col.to_arrow()
+                for name, col in self._column_labels_and_values
+            }
         )
 
     @_performance_tracking
@@ -1009,7 +1013,9 @@ class Frame(BinaryOperand, Scannable):
 
         See `ColumnBase._with_type_metadata` for more information.
         """
-        for (name, col), (_, dtype) in zip(self._data.items(), other._dtypes):
+        for (name, col), (_, dtype) in zip(
+            self._column_labels_and_values, other._dtypes
+        ):
             self._data.set_by_label(name, col._with_type_metadata(dtype))
 
         return self
@@ -1259,7 +1265,7 @@ class Frame(BinaryOperand, Scannable):
             values = [as_column(values)]
         else:
             values = [*values._columns]
-        if len(values) != len(self._data):
+        if len(values) != len(self):
             raise ValueError("Mismatch number of columns to search for.")
 
         # TODO: Change behavior based on the decision in
@@ -1419,7 +1425,7 @@ class Frame(BinaryOperand, Scannable):
         """
         return [
             self._from_columns_like_self(
-                libcudf.copying.columns_split([*self._data.columns], splits)[
+                libcudf.copying.columns_split(list(self._columns), splits)[
                     split_idx
                 ],
                 self._column_names,
@@ -1429,7 +1435,7 @@ class Frame(BinaryOperand, Scannable):
 
     @_performance_tracking
     def _encode(self):
-        columns, indices = libcudf.transform.table_encode([*self._columns])
+        columns, indices = libcudf.transform.table_encode(list(self._columns))
         keys = self._from_columns_like_self(columns)
         return keys, indices
 
@@ -1575,7 +1581,7 @@ class Frame(BinaryOperand, Scannable):
                     col.unary_operator("not")
                     if col.dtype.kind == "b"
                     else -1 * col
-                    for col in self._data.columns
+                    for col in self._columns
                 )
             )
         )
@@ -1837,9 +1843,7 @@ class Frame(BinaryOperand, Scannable):
     def __invert__(self):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
-            self._data._from_columns_like_self(
-                (~col for col in self._data.columns)
-            )
+            self._data._from_columns_like_self((~col for col in self._columns))
         )
 
     @_performance_tracking

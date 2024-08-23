@@ -415,8 +415,8 @@ def to_orc(
 ):
     """{docstring}"""
 
-    for col in df._data.columns:
-        if isinstance(col, cudf.core.column.CategoricalColumn):
+    for _, dtype in df._dtypes:
+        if isinstance(dtype, cudf.CategoricalDtype):
             raise NotImplementedError(
                 "Writing to ORC format is not yet supported with "
                 "Categorical columns."

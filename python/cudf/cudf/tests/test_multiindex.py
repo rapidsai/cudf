@@ -813,8 +813,8 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
         mi1 = gdf.groupby(["Date", "Symbol"]).mean().index
         mi2 = mi1.copy(deep=deep)
 
-        lchildren = [col.children for _, col in mi1._data.items()]
-        rchildren = [col.children for _, col in mi2._data.items()]
+        lchildren = [col.children for col in mi1._columns]
+        rchildren = [col.children for col in mi2._columns]
 
         # Flatten
         lchildren = reduce(operator.add, lchildren)
@@ -849,12 +849,8 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
         # Assert ._data identity
-        lptrs = [
-            d.base_data.get_ptr(mode="read") for _, d in mi1._data.items()
-        ]
-        rptrs = [
-            d.base_data.get_ptr(mode="read") for _, d in mi2._data.items()
-        ]
+        lptrs = [d.base_data.get_ptr(mode="read") for d in mi1._columns]
+        rptrs = [d.base_data.get_ptr(mode="read") for d in mi2._columns]
 
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
     cudf.set_option("copy_on_write", original_cow_setting)

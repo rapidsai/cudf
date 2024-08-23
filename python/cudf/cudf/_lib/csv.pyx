@@ -273,8 +273,7 @@ def read_csv(
         elif isinstance(dtype, abc.Collection):
             for index, col_dtype in enumerate(dtype):
                 if isinstance(cudf.dtype(col_dtype), cudf.CategoricalDtype):
-                    col_name = df._data.names[index]
-                    df._data[col_name] = df._data[col_name].astype(col_dtype)
+                    df.iloc[:, index] = df.iloc[:, index].astype(col_dtype)
 
     if names is not None and len(names) and isinstance(names[0], (int)):
         df.columns = [int(x) for x in df._data]

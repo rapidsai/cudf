@@ -384,7 +384,7 @@ cdef class _CPackedColumns:
 
         p.column_names = input_table._column_names
         p.column_dtypes = {}
-        for name, col in input_table._data.items():
+        for name, col in input_table._column_labels_and_values:
             if isinstance(col.dtype, cudf.core.dtypes._BaseDtype):
                 p.column_dtypes[name] = col.dtype
 

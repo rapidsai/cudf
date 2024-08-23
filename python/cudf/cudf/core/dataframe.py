@@ -176,7 +176,7 @@ class _DataFrameIndexer(_FrameIndexer):
         return False
 
     @_performance_tracking
-    def _downcast_to_series(self, df, arg):
+    def _downcast_to_series(self, df: DataFrame, arg):
         """
         "Downcast" from a DataFrame to a Series
         based on Pandas indexing rules
@@ -203,16 +203,16 @@ class _DataFrameIndexer(_FrameIndexer):
 
         # take series along the axis:
         if axis == 1:
-            return df[df._data.names[0]]
+            return df[df._column_names[0]]
         else:
             if df._num_columns > 0:
                 dtypes = df.dtypes.values.tolist()
                 normalized_dtype = np.result_type(*dtypes)
-                for name, col in df._data.items():
+                for name, col in df._column_labels_and_values:
                     df[name] = col.astype(normalized_dtype)
 
             sr = df.T
-            return sr[sr._data.names[0]]
+            return sr[sr._column_names[0]]
 
 
 class _DataFrameLocIndexer(_DataFrameIndexer):
@@ -258,7 +258,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     and len(arg) > 1
                     and is_scalar(arg[1])
                 ):
-                    return result._data.columns[0].element_indexing(0)
+                    return result._columns[0].element_indexing(0)
                 return result
         else:
             if isinstance(arg[0], slice):
@@ -310,7 +310,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 else:
                     tmp_col_name = str(uuid4())
                     cantor_name = "_" + "_".join(
-                        map(str, columns_df._data.names)
+                        map(str, columns_df._column_names)
                     )
                     if columns_df._data.multiindex:
                         # column names must be appropriate length tuples
@@ -1415,7 +1415,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             else column.column_empty_like(
                                 col, masked=True, newsize=length
                             )
-                            for key, col in self._data.items()
+                            for key, col in self._column_labels_and_values
                         )
                         self._data = self._data._from_columns_like_self(
                             new_columns, verify=False
@@ -1497,8 +1497,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_performance_tracking
     def memory_usage(self, index=True, deep=False) -> cudf.Series:
-        mem_usage = [col.memory_usage for col in self._data.columns]
-        names = [str(name) for name in self._data.names]
+        mem_usage = [col.memory_usage for col in self._columns]
+        names = [str(name) for name in self._column_names]
         if index:
             mem_usage.append(self.index.memory_usage())
             names.append("Index")
@@ -1728,7 +1728,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 []
                 if are_all_range_index
                 or (ignore_index and not empty_has_index)
-                else list(f.index._data.columns)
+                else list(f.index._columns)
             )
             + [f._data[name] if name in f._data else None for name in names]
             for f in objs
@@ -1811,7 +1811,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 out.index.dtype, cudf.CategoricalDtype
             ):
                 out = out.set_index(out.index)
-        for name, col in out._data.items():
+        for name, col in out._column_labels_and_values:
             out._data[name] = col._with_type_metadata(
                 tables[0]._data[name].dtype
             )
@@ -1834,13 +1834,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         errors: Literal["raise", "ignore"] = "raise",
     ):
         if is_dict_like(dtype):
-            if len(set(dtype.keys()) - set(self._data.names)) > 0:
+            if len(set(dtype.keys()) - set(self._column_names)) > 0:
                 raise KeyError(
                     "Only a column name can be used for the "
                     "key in a dtype mappings argument."
                 )
         else:
-            dtype = {cc: dtype for cc in self._data.names}
+            dtype = {cc: dtype for cc in self._column_names}
         return super().astype(dtype, copy, errors)
 
     def _clean_renderable_dataframe(self, output):
@@ -2604,7 +2604,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # If all other checks matched, validate names.
         if ret:
             for self_name, other_name in zip(
-                self._data.names, other._data.names
+                self._column_names, other._column_names
             ):
                 if self_name != other_name:
                     ret = False
@@ -2679,7 +2679,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         self._data = ColumnAccessor(
-            data=dict(zip(pd_columns, self._data.columns)),
+            data=dict(zip(pd_columns, self._columns)),
             multiindex=multiindex,
             level_names=level_names,
             label_dtype=label_dtype,
@@ -2701,7 +2701,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 f"got {len(self)} elements"
             )
         self._data = ColumnAccessor(
-            data=dict(zip(other.names, self._data.columns)),
+            data=dict(zip(other.names, self._columns)),
             multiindex=other.multiindex,
             rangeindex=other.rangeindex,
             level_names=other.level_names,
@@ -2986,7 +2986,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             elif isinstance(col, (MultiIndex, pd.MultiIndex)):
                 if isinstance(col, pd.MultiIndex):
                     col = MultiIndex.from_pandas(col)
-                data_to_add.extend(col._data.columns)
+                data_to_add.extend(col._columns)
                 names.extend(col.names)
             elif isinstance(
                 col, (cudf.Series, cudf.Index, pd.Series, pd.Index)
@@ -3114,7 +3114,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         out = []
-        for (name, col), other_col in zip(self._data.items(), other_cols):
+        for (name, col), other_col in zip(
+            self._column_labels_and_values, other_cols
+        ):
             col, other_col = _check_and_cast_columns_with_other(
                 source_col=col,
                 other=other_col,
@@ -3320,7 +3322,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             column.column_empty_like(
                                 col_data, masked=True, newsize=length
                             )
-                            for col_data in self._data.values()
+                            for col_data in self._columns
                         ),
                         verify=False,
                     )
@@ -3670,7 +3672,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             name: col.find_and_replace(
                                 to_replace, vals, is_all_na
                             )
-                            for name, col in self.index._data.items()
+                            for name, col in self.index._column_labels_and_values
                         }
                     )
                 except OverflowError:
@@ -3692,9 +3694,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise NotImplementedError("axis is currently not implemented.")
         # TODO: Change to deep=False when copy-on-write is default
         out = self.copy(deep=True)
-        out.columns = [
-            prefix + col_name for col_name in list(self._data.keys())
-        ]
+        out.columns = [prefix + col_name for col_name in self._column_names]
         return out
 
     @_performance_tracking
@@ -3703,9 +3703,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise NotImplementedError("axis is currently not implemented.")
         # TODO: Change to deep=False when copy-on-write is default
         out = self.copy(deep=True)
-        out.columns = [
-            col_name + suffix for col_name in list(self._data.keys())
-        ]
+        out.columns = [col_name + suffix for col_name in self._column_names]
         return out
 
     @_performance_tracking
@@ -4811,7 +4809,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # TODO: naive implementation
         # this could be written as a single kernel
         result = {}
-        for name, col in self._data.items():
+        for name, col in self._column_labels_and_values:
             apply_sr = Series._from_column(col)
             result[name] = apply_sr.apply(_func)._column
 
@@ -5450,7 +5448,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         out_index = self.index.to_pandas()
         out_data = {
             i: col.to_pandas(nullable=nullable, arrow_type=arrow_type)
-            for i, col in enumerate(self._data.columns)
+            for i, col in enumerate(self._columns)
         }
 
         out_df = pd.DataFrame(out_data, index=out_index)
@@ -5671,14 +5669,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     index = index._as_int_index()
                     index.name = "__index_level_0__"
                 if isinstance(index, MultiIndex):
-                    index_descr = list(index._data.names)
+                    index_descr = index._column_names
                     index_levels = index.levels
                 else:
                     index_descr = (
                         index.names if index.name is not None else ("index",)
                     )
                 data = data.copy(deep=False)
-                for gen_name, col_name in zip(index_descr, index._data.names):
+                for gen_name, col_name in zip(
+                    index_descr, index._column_names
+                ):
                     data._insert(
                         data.shape[1],
                         gen_name,
@@ -5687,7 +5687,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         out = super(DataFrame, data).to_arrow()
         metadata = pa.pandas_compat.construct_metadata(
-            columns_to_convert=[self[col] for col in self._data.names],
+            columns_to_convert=[self[col] for col in self._column_names],
             df=self,
             column_names=out.schema.names,
             index_levels=index_levels,
@@ -5730,12 +5730,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "column_dtypes is currently not supported."
             )
         members = [("index", self.index.dtype)] if index else []
-        members += [(col, self[col].dtype) for col in self._data.names]
+        members += list(self._dtypes)
         dtype = np.dtype(members)
         ret = np.recarray(len(self), dtype=dtype)
         if index:
             ret["index"] = self.index.to_numpy()
-        for col in self._data.names:
+        for col in self._column_namess:
             ret[col] = self[col].to_numpy()
         return ret
 
@@ -6065,7 +6065,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         if columns is None:
-            columns = data_df._data.names
+            columns = set(data_df._column_names)
 
         if isinstance(q, numbers.Number):
             q_is_number = True
@@ -6090,7 +6090,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # Ensure that qs is non-scalar so that we always get a column back.
             interpolation = interpolation or "linear"
             result = {}
-            for k in data_df._data.names:
+            for k in data_df._column_names:
                 if k in columns:
                     ser = data_df[k]
                     res = ser.quantile(
@@ -6204,7 +6204,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if isinstance(values, DataFrame)
                 else {name: values._column for name in self._data}
             )
-            for col, self_col in self._data.items():
+            for col, self_col in self._column_labels_and_values:
                 if col in other_cols:
                     other_col = other_cols[col]
                     self_is_cat = isinstance(self_col, CategoricalColumn)
@@ -6237,13 +6237,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 else:
                     result[col] = make_false_column_like_self()
         elif is_dict_like(values):
-            for name, col in self._data.items():
+            for name, col in self._column_labels_and_values:
                 if name in values:
                     result[name] = col.isin(values[name])
                 else:
                     result[name] = make_false_column_like_self()
         elif is_list_like(values):
-            for name, col in self._data.items():
+            for name, col in self._column_labels_and_values:
                 result[name] = col.isin(values)
         else:
             raise TypeError(
@@ -6298,7 +6298,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     name: filtered._data[name]._get_mask_as_column()
                     if filtered._data[name].nullable
                     else as_column(True, length=len(filtered._data[name]))
-                    for name in filtered._data.names
+                    for name in filtered._column_names
                 }
             )
             mask = mask.all(axis=1)
@@ -6348,7 +6348,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         length = len(self)
         return Series._from_column(
             as_column([length - col.null_count for col in self._columns]),
-            index=cudf.Index(self._data.names),
+            index=cudf.Index(self._column_names),
         )
 
     _SUPPORT_AXIS_LOOKUP = {
@@ -6415,7 +6415,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return source._apply_cupy_method_axis_1(op, **kwargs)
         else:
             axis_0_results = []
-            for col_label, col in source._data.items():
+            for col_label, col in source._column_labels_and_values:
                 try:
                     axis_0_results.append(getattr(col, op)(**kwargs))
                 except AttributeError as err:
@@ -6640,7 +6640,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         prepared, mask, common_dtype = self._prepare_for_rowwise_op(
             method, skipna, numeric_only
         )
-        for col in prepared._data.names:
+        for col in prepared._column_names:
             if prepared._data[col].nullable:
                 prepared._data[col] = (
                     prepared._data[col]
@@ -6826,7 +6826,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # remove all exclude types
         inclusion = inclusion - exclude_subtypes
 
-        for k, col in self._data.items():
+        for k, col in self._column_labels_and_values:
             infered_type = cudf_dtype_from_pydata_dtype(col.dtype)
             if infered_type in inclusion:
                 df._insert(len(df._data), k, col)
@@ -7198,7 +7198,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # Compute the column indices that serves as the input for
         # `interleave_columns`
         column_idx_df = pd.DataFrame(
-            data=range(len(self._data)), index=named_levels
+            data=range(self._num_columns), index=named_levels
         )
 
         column_indices: list[list[int]] = []
@@ -7398,17 +7398,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -----
         Note: a copy of the columns is made.
         """
-        if not all(isinstance(name, str) for name in self._data.names):
+        if not all(isinstance(name, str) for name in self._column_names):
             warnings.warn(
                 "DataFrame contains non-string column name(s). Struct column "
                 "requires field name to be string. Non-string column names "
                 "will be casted to string as the field name."
             )
-        fields = {str(name): col.dtype for name, col in self._data.items()}
+        fields = {str(name): dtype for name, dtype in self._dtypes}
         col = StructColumn(
             data=None,
             dtype=cudf.StructDtype(fields=fields),
-            children=tuple(col.copy(deep=True) for col in self._data.columns),
+            children=tuple(col.copy(deep=True) for col in self._columns),
             size=len(self),
             offset=0,
         )
@@ -7990,7 +7990,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             diff = set(subset) - set(self._data)
             if len(diff) != 0:
                 raise KeyError(f"columns {diff} do not exist")
-        columns = list(self._data.names) if subset is None else subset
+        columns = list(self._column_names) if subset is None else subset
         result = (
             self.groupby(
                 by=columns,
@@ -8111,7 +8111,7 @@ def _make_replacement_func(value):
                 right._column_names
             )
         elif _is_scalar_or_zero_d_array(right):
-            for name, col in output._data.items():
+            for name, col in output._column_labels_and_values:
                 output._data[name] = col.fillna(value)
             return output
         else:
@@ -8393,7 +8393,7 @@ def extract_col(df, col):
             and col not in df.index._data
             and not isinstance(df.index, MultiIndex)
         ):
-            return df.index._data.columns[0]
+            return df.index._column
         return df.index._data[col]
 
 

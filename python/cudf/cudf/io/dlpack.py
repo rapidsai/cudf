@@ -79,13 +79,13 @@ def to_dlpack(cudf_obj):
         )
 
     if any(
-        not cudf.api.types._is_non_decimal_numeric_dtype(col.dtype)
-        for col in gdf._data.columns
+        not cudf.api.types._is_non_decimal_numeric_dtype(dtype)
+        for _, dtype in gdf._dtypes
     ):
         raise TypeError("non-numeric data not yet supported")
 
     dtype = cudf.utils.dtypes.find_common_type(
-        [col.dtype for col in gdf._data.columns]
+        [dtype for _, dtype in gdf._dtypes]
     )
     gdf = gdf.astype(dtype)
 

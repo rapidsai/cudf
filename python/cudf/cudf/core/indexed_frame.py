@@ -304,7 +304,7 @@ class IndexedFrame(Frame):
 
     @property
     def _index_names(self) -> tuple[Any, ...]:  # TODO: Tuple[str]?
-        return self.index._data.names
+        return self.index._column_names
 
     @classmethod
     def _from_data(
@@ -317,7 +317,7 @@ class IndexedFrame(Frame):
             raise ValueError(
                 f"index must be None or a cudf.Index not {type(index).__name__}"
             )
-        out._index = RangeIndex(out._data.nrows) if index is None else index
+        out._index = RangeIndex(out._num_rows) if index is None else index
         return out
 
     @_performance_tracking
@@ -892,7 +892,7 @@ class IndexedFrame(Frame):
                 columns_dtype_map=dict(self._dtypes),
             )
             copy_data = []
-            for name, col in self._data.items():
+            for name, col in self._column_labels_and_values:
                 try:
                     replaced = col.find_and_replace(
                         to_replace_per_column[name],
@@ -2713,11 +2713,11 @@ class IndexedFrame(Frame):
                         by.extend(
                             filter(
                                 lambda n: n not in handled,
-                                self.index._data.names,
+                                self.index._column_names,
                             )
                         )
                 else:
-                    by = list(idx._data.names)
+                    by = list(idx._column_names)
 
                 inds = idx._get_sorted_inds(
                     by=by, ascending=ascending, na_position=na_position
@@ -3023,7 +3023,7 @@ class IndexedFrame(Frame):
 
         columns_to_slice = [
             *(
-                self.index._data.columns
+                self.index._columns
                 if keep_index and not has_range_index
                 else []
             ),
@@ -3218,7 +3218,7 @@ class IndexedFrame(Frame):
         result = self._from_columns_like_self(
             libcudf.copying.columns_empty_like(
                 [
-                    *(self.index._data.columns if keep_index else ()),
+                    *(self.index._columns if keep_index else ()),
                     *self._columns,
                 ]
             ),
@@ -3235,7 +3235,7 @@ class IndexedFrame(Frame):
 
         columns_split = libcudf.copying.columns_split(
             [
-                *(self.index._data.columns if keep_index else []),
+                *(self.index._columns if keep_index else []),
                 *self._columns,
             ],
             splits,
@@ -3771,8 +3771,8 @@ class IndexedFrame(Frame):
             idx_dtype_match = (df.index.nlevels == index.nlevels) and all(
                 _is_same_dtype(left_dtype, right_dtype)
                 for left_dtype, right_dtype in zip(
-                    (col.dtype for col in df.index._data.columns),
-                    (col.dtype for col in index._data.columns),
+                    (dtype for _, dtype in df.index._dtypes),
+                    (dtype for _, dtype in index._dtypes),
                 )
             )
 
@@ -3791,7 +3791,7 @@ class IndexedFrame(Frame):
                         (name or 0)
                         if isinstance(self, cudf.Series)
                         else name: col
-                        for name, col in df._data.items()
+                        for name, col in df._column_labels_and_values
                     },
                     index=df.index,
                 )
@@ -3802,7 +3802,7 @@ class IndexedFrame(Frame):
         index = index if index is not None else df.index
 
         if column_names is None:
-            names = list(df._data.names)
+            names = list(df._column_names)
             level_names = self._data.level_names
             multiindex = self._data.multiindex
             rangeindex = self._data.rangeindex
@@ -3956,7 +3956,7 @@ class IndexedFrame(Frame):
             col.round(decimals[name], how=how)
             if name in decimals and col.dtype.kind in "fiu"
             else col.copy(deep=True)
-            for name, col in self._data.items()
+            for name, col in self._column_labels_and_values
         )
         return self._from_data_like_self(
             self._data._from_columns_like_self(cols)
@@ -4278,7 +4278,7 @@ class IndexedFrame(Frame):
             else:
                 thresh = len(df)
 
-        for name, col in df._data.items():
+        for name, col in df._column_labels_and_values:
             check_col = col.nans_to_nulls()
             no_threshold_valid_count = (
                 len(col) - check_col.null_count
@@ -4313,7 +4313,7 @@ class IndexedFrame(Frame):
 
         return self._from_columns_like_self(
             libcudf.stream_compaction.drop_nulls(
-                [*self.index._data.columns, *data_columns],
+                [*self.index._columns, *data_columns],
                 how=how,
                 keys=self._positions_from_column_names(
                     subset, offset_by_index_columns=True
@@ -4861,7 +4861,7 @@ class IndexedFrame(Frame):
                 # This works for Index too
                 inputs = {
                     name: (col, None, False, None)
-                    for name, col in self._data.items()
+                    for name, col in self._column_labels_and_values
                 }
                 index = self.index
 
@@ -4941,7 +4941,7 @@ class IndexedFrame(Frame):
         """
         res = self._from_columns_like_self(
             Frame._repeat(
-                [*self.index._data.columns, *self._columns], repeats, axis
+                [*self.index._columns, *self._columns], repeats, axis
             ),
             self._column_names,
             self._index_names,
@@ -6232,7 +6232,7 @@ class IndexedFrame(Frame):
             not np.iterable(subset)
             or isinstance(subset, str)
             or isinstance(subset, tuple)
-            and subset in self._data.names
+            and subset in self._column_names
         ):
             subset = (subset,)
         diff = set(subset) - set(self._data)
@@ -6314,8 +6314,8 @@ class IndexedFrame(Frame):
                 )
             numeric_cols = (
                 name
-                for name in self._data.names
-                if _is_non_decimal_numeric_dtype(self._data[name])
+                for name, dtype in self._dtypes
+                if _is_non_decimal_numeric_dtype(dtype)
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:

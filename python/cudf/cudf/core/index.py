@@ -121,13 +121,13 @@ def _lexsorted_equal_range(
         sort_inds = None
         sort_vals = idx
     lower_bound = search_sorted(
-        [*sort_vals._data.columns],
+        list(sort_vals._columns),
         keys,
         side="left",
         ascending=sort_vals.is_monotonic_increasing,
     ).element_indexing(0)
     upper_bound = search_sorted(
-        [*sort_vals._data.columns],
+        list(sort_vals._columns),
         keys,
         side="right",
         ascending=sort_vals.is_monotonic_increasing,
@@ -284,6 +284,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def name(self, value):
         self._name = value
+
+    @property
+    @_performance_tracking
+    def _column_names(self) -> tuple[Any]:
+        return (self.name,)
+
+    @property
+    @_performance_tracking
+    def _columns(self) -> tuple[NumericalColumn]:
+        return (self._values,)
 
     @property  # type: ignore
     @_performance_tracking
@@ -1062,7 +1072,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             else:
                 inputs = {
                     name: (col, None, False, None)
-                    for name, col in self._data.items()
+                    for name, col in self._column_labels_and_values
                 }
 
             data = self._apply_cupy_ufunc_to_operands(

@@ -151,9 +151,9 @@ class ColumnAccessor(abc.MutableMapping):
         self.set_by_label(key, value)
 
     def __delitem__(self, key: abc.Hashable) -> None:
-        old_ncols = len(self._data)
+        old_ncols = len(self)
         del self._data[key]
-        new_ncols = len(self._data)
+        new_ncols = len(self)
         self._clear_cache(old_ncols, new_ncols)
 
     def __len__(self) -> int:
@@ -213,7 +213,7 @@ class ColumnAccessor(abc.MutableMapping):
 
     @property
     def nlevels(self) -> int:
-        if len(self._data) == 0:
+        if len(self) == 0:
             return 0
         if not self.multiindex:
             return 1
@@ -226,7 +226,7 @@ class ColumnAccessor(abc.MutableMapping):
 
     @cached_property
     def nrows(self) -> int:
-        if len(self._data) == 0:
+        if len(self) == 0:
             return 0
         else:
             return len(next(iter(self.values())))
@@ -257,9 +257,9 @@ class ColumnAccessor(abc.MutableMapping):
         Parameters
         ----------
         old_ncols: int
-            len(self._data) before self._data was modified
+            len(self) before self._data was modified
         new_ncols: int
-            len(self._data) after self._data was modified
+            len(self) after self._data was modified
         """
         cached_properties = ("columns", "names", "_grouped_data")
         for attr in cached_properties:
@@ -335,7 +335,7 @@ class ColumnAccessor(abc.MutableMapping):
         if name in self._data:
             raise ValueError(f"Cannot insert '{name}', already exists")
 
-        old_ncols = len(self._data)
+        old_ncols = len(self)
         if loc == -1:
             loc = old_ncols
         elif not (0 <= loc <= old_ncols):
@@ -414,7 +414,7 @@ class ColumnAccessor(abc.MutableMapping):
         tuple
         """
         if isinstance(index, slice):
-            start, stop, step = index.indices(len(self._data))
+            start, stop, step = index.indices(len(self))
             return self.names[start:stop:step]
         elif pd.api.types.is_integer(index):
             return (self.names[index],)
@@ -526,9 +526,9 @@ class ColumnAccessor(abc.MutableMapping):
         if len(self) > 0 and len(value) != self.nrows:
             raise ValueError("All columns must be of equal length")
 
-        old_ncols = len(self._data)
+        old_ncols = len(self)
         self._data[key] = value
-        new_ncols = len(self._data)
+        new_ncols = len(self)
         self._clear_cache(old_ncols, new_ncols)
 
     def _select_by_label_list_like(self, key: tuple) -> Self:
@@ -718,12 +718,12 @@ class ColumnAccessor(abc.MutableMapping):
         if level < 0:
             level += self.nlevels
 
-        old_ncols = len(self._data)
+        old_ncols = len(self)
         self._data = {
             _remove_key_level(key, level): value  # type: ignore[arg-type]
             for key, value in self._data.items()
         }
-        new_ncols = len(self._data)
+        new_ncols = len(self)
         self._level_names = (
             self._level_names[:level] + self._level_names[level + 1 :]
         )
