@@ -68,9 +68,6 @@ python -m pytest -p cudf.pandas \
 
 output=$(python ci/cudf_pandas_scripts/fetch_pandas_versions.py $pandas_version_constraint)
 
-# Remove the brackets and spaces from the output to get a comma-separated list
-output=$(echo $output | tr -d "[] \'\'")
-
 # Convert the comma-separated list into an array
 IFS=',' read -r -a versions <<< "$output"
 
