@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
@@ -44,15 +44,17 @@ class GatherMap:
         If the map is not in bounds.
     """
 
-    #: The gather map
-    column: "NumericalColumn"
     #: The number of rows the gather map has been validated for
     nrows: int
     #: Was the validation for nullify=True?
     nullify: bool
 
     def __init__(self, column: Any, nrows: int, *, nullify: bool):
-        self.column = cudf.core.column.as_column(column)
+        #: The gather map
+        self.column = cast(
+            cudf.core.column.NumericalColumn,
+            cudf.core.column.as_column(column),
+        )
         self.nrows = nrows
         self.nullify = nullify
         if len(self.column) == 0:
@@ -135,11 +137,12 @@ class BooleanMask:
         If the mask has the wrong number of rows
     """
 
-    #: The boolean mask
-    column: "NumericalColumn"
-
     def __init__(self, column: Any, nrows: int):
-        self.column = cudf.core.column.as_column(column)
+        #: The boolean mask
+        self.column = cast(
+            cudf.core.column.NumericalColumn,
+            cudf.core.column.as_column(column),
+        )
         if self.column.dtype.kind != "b":
             raise TypeError("Boolean mask must have bool dtype")
         if len(column) != nrows:
