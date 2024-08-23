@@ -27,3 +27,5 @@ cdef class DataType:
 
     @staticmethod
     cdef DataType from_libcudf(data_type dt)
+
+cpdef size_type size_of(DataType t)
