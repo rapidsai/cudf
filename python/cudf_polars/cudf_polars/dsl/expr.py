@@ -959,7 +959,9 @@ class UnaryFunction(Expr):
             "cum_sum",
         }
     )
-    _supported_fns = frozenset(_supported_misc_fns.union(_supported_cum_aggs))
+    _supported_fns = frozenset(
+        _supported_misc_fns.union(_supported_cum_aggs).union(frozenset(_MAPPING.keys()))
+    )
 
     def __init__(
         self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -969,10 +971,7 @@ class UnaryFunction(Expr):
         self.options = options
         self.children = children
 
-        if (
-            self.name not in UnaryFunction._supported_fns
-            and self.name not in self._MAPPING
-        ):
+        if self.name not in UnaryFunction._supported_fns:
             raise NotImplementedError(f"Unary function {name=}")
         if self.name in UnaryFunction._supported_cum_aggs:
             (reverse,) = self.options
