@@ -90,7 +90,6 @@ def read_json(
 
         filepath_or_buffer = ioutils.get_reader_filepath_or_buffer(
             path_or_data=path_or_buf,
-            compression=compression,
             iotypes=(BytesIO, StringIO),
             allow_raw_text_input=True,
             storage_options=storage_options,
