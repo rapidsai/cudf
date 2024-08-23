@@ -22,9 +22,9 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <cuda/std/optional>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/optional.h>
 #include <thrust/pair.h>
 
 namespace cudf {
@@ -376,10 +376,10 @@ struct indexalator_factory {
       iter = make_input_iterator(col);
     }
 
-    __device__ thrust::optional<size_type> operator()(size_type i) const
+    __device__ cuda::std::optional<size_type> operator()(size_type i) const
     {
-      return has_nulls && !bit_is_set(null_mask, i + offset) ? thrust::nullopt
-                                                             : thrust::make_optional(iter[i]);
+      return has_nulls && !bit_is_set(null_mask, i + offset) ? cuda::std::nullopt
+                                                             : cuda::std::make_optional(iter[i]);
     }
   };
 
@@ -400,9 +400,9 @@ struct indexalator_factory {
       iter = indexalator_factory::make_input_iterator(input);
     }
 
-    __device__ thrust::optional<size_type> operator()(size_type) const
+    __device__ cuda::std::optional<size_type> operator()(size_type) const
     {
-      return is_null ? thrust::nullopt : thrust::make_optional(*iter);
+      return is_null ? cuda::std::nullopt : cuda::std::make_optional(*iter);
     }
   };
 

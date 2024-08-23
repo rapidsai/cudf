@@ -402,7 +402,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
                 cuco::empty_value{cudf::detail::JoinNoneValue},
                 stream.value(),
-                cudf::detail::cuco_allocator{stream}},
+                cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}},
     _build{build},
     _preprocessed_build{
       cudf::experimental::row::equality::preprocessed_table::create(_build, stream)}

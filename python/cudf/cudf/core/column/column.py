@@ -1506,13 +1506,14 @@ def column_empty(
     elif isinstance(dtype, CategoricalDtype):
         data = None
         children = (
-            build_column(
+            cudf.core.column.NumericalColumn(
                 data=as_buffer(
                     rmm.DeviceBuffer(
                         size=row_count
                         * cudf.dtype(libcudf.types.size_type_dtype).itemsize
                     )
                 ),
+                size=None,
                 dtype=libcudf.types.size_type_dtype,
             ),
         )
@@ -1577,25 +1578,18 @@ def build_column(
         return col
 
     if isinstance(dtype, CategoricalDtype):
-        if not len(children) == 1:
-            raise ValueError(
-                "Must specify exactly one child column for CategoricalColumn"
-            )
-        if not isinstance(children[0], ColumnBase):
-            raise TypeError("children must be a tuple of Columns")
         return cudf.core.column.CategoricalColumn(
+            data=data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             size=size,
             offset=offset,
             null_count=null_count,
-            children=children,
+            children=children,  # type: ignore[arg-type]
         )
     elif dtype.type is np.datetime64:
-        if data is None:
-            raise TypeError("Must specify data buffer")
         return cudf.core.column.DatetimeColumn(
-            data=data,
+            data=data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             size=size,
@@ -1603,10 +1597,8 @@ def build_column(
             null_count=null_count,
         )
     elif isinstance(dtype, pd.DatetimeTZDtype):
-        if data is None:
-            raise TypeError("Must specify data buffer")
         return cudf.core.column.datetime.DatetimeTZColumn(
-            data=data,
+            data=data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             size=size,
@@ -1614,10 +1606,8 @@ def build_column(
             null_count=null_count,
         )
     elif dtype.type is np.timedelta64:
-        if data is None:
-            raise TypeError("Must specify data buffer")
         return cudf.core.column.TimeDeltaColumn(
-            data=data,
+            data=data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             size=size,
@@ -1635,40 +1625,38 @@ def build_column(
         )
     elif isinstance(dtype, ListDtype):
         return cudf.core.column.ListColumn(
-            size=size,
+            data=None,
+            size=size,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            children=children,  # type: ignore[arg-type]
         )
     elif isinstance(dtype, IntervalDtype):
         return cudf.core.column.IntervalColumn(
+            data=None,
+            size=size,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
-            size=size,
             offset=offset,
-            children=children,
             null_count=null_count,
+            children=children,  # type: ignore[arg-type]
         )
     elif isinstance(dtype, StructDtype):
-        if size is None:
-            raise TypeError("Must specify size")
         return cudf.core.column.StructColumn(
-            data=data,
+            data=None,
+            size=size,  # type: ignore[arg-type]
             dtype=dtype,
-            size=size,
-            offset=offset,
             mask=mask,
+            offset=offset,
             null_count=null_count,
-            children=children,
+            children=children,  # type: ignore[arg-type]
         )
     elif isinstance(dtype, cudf.Decimal64Dtype):
-        if size is None:
-            raise TypeError("Must specify size")
         return cudf.core.column.Decimal64Column(
-            data=data,
-            size=size,
+            data=data,  # type: ignore[arg-type]
+            size=size,  # type: ignore[arg-type]
             offset=offset,
             dtype=dtype,
             mask=mask,
@@ -1676,11 +1664,9 @@ def build_column(
             children=children,
         )
     elif isinstance(dtype, cudf.Decimal32Dtype):
-        if size is None:
-            raise TypeError("Must specify size")
         return cudf.core.column.Decimal32Column(
-            data=data,
-            size=size,
+            data=data,  # type: ignore[arg-type]
+            size=size,  # type: ignore[arg-type]
             offset=offset,
             dtype=dtype,
             mask=mask,
@@ -1688,11 +1674,9 @@ def build_column(
             children=children,
         )
     elif isinstance(dtype, cudf.Decimal128Dtype):
-        if size is None:
-            raise TypeError("Must specify size")
         return cudf.core.column.Decimal128Column(
-            data=data,
-            size=size,
+            data=data,  # type: ignore[arg-type]
+            size=size,  # type: ignore[arg-type]
             offset=offset,
             dtype=dtype,
             mask=mask,

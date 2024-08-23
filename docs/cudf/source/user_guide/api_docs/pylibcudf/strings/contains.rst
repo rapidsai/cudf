@@ -2,5 +2,5 @@
 contains
 ========
 
-.. automodule:: cudf._lib.pylibcudf.strings.contains
+.. automodule:: pylibcudf.strings.contains
    :members:
