@@ -124,3 +124,19 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: ci/cudf_pandas_scripts/run_tests.sh
+  integration-tests:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.10
+    with:
+      build_type: nightly
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      container_image: "rapidsai/ci-conda:latest"
+      run_script: |
+        LIBS=$(python/cudf/cudf_pandas_tests/third_party_integration_tests/ci/extract_lib.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml)
+        for lib in $LIBS; do
+          echo "Running tests for $lib"
+          CUDA_MAJOR=$(if [ "$lib" = "tensorflow" ]; then echo "11"; else echo "12"; fi)
+          python/cudf/cudf_pandas_tests/third_party_integration_tests/ci/test.sh $lib $CUDA_MAJOR
+        done
