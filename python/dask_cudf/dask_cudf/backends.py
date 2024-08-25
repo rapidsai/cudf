@@ -134,6 +134,8 @@ def _get_non_empty_data(
         return cudf.core.column.as_column(
             np.arange(start=0, stop=2, dtype=s.dtype)
         )
+    elif isinstance(s.dtype, cudf.core.dtypes.DecimalDtype):
+        return cudf.core.column.as_column(range(2), dtype=s.dtype)
     else:
         raise TypeError(
             f"Don't know how to handle column of type {type(s).__name__}"
@@ -537,6 +539,12 @@ def to_cudf_dispatch_from_pandas(data, nan_as_null=None, **kwargs):
     return cudf.from_pandas(data, nan_as_null=nan_as_null)
 
 
+@to_cudf_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+def to_cudf_dispatch_from_cudf(data, **kwargs):
+    _unsupported_kwargs("cudf", "cudf", kwargs)
+    return data
+
+
 # Define "cudf" backend engine to be registered with Dask
 class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
     """Backend-entrypoint class for Dask-DataFrame
@@ -643,20 +651,20 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
     Examples
     --------
     >>> import dask
-    >>> import dask_expr
+    >>> import dask_expr as dx
     >>> with dask.config.set({"dataframe.backend": "cudf"}):
     ...     ddf = dx.from_dict({"a": range(10)})
     >>> type(ddf._meta)
     <class 'cudf.core.dataframe.DataFrame'>
     """
 
-    @classmethod
-    def to_backend_dispatch(cls):
-        return CudfBackendEntrypoint.to_backend_dispatch()
+    @staticmethod
+    def to_backend(data, **kwargs):
+        import dask_expr as dx
 
-    @classmethod
-    def to_backend(cls, *args, **kwargs):
-        return CudfBackendEntrypoint.to_backend(*args, **kwargs)
+        from dask_cudf.expr._expr import ToCudfBackend
+
+        return dx.new_collection(ToCudfBackend(data, kwargs))
 
     @staticmethod
     def from_dict(

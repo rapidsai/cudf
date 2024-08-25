@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -29,30 +29,46 @@ from cudf._lib.types import size_type_dtype
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethods, ParentType
+from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 
 if TYPE_CHECKING:
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
+    from cudf.core.buffer import Buffer
 
 
 class ListColumn(ColumnBase):
-    dtype: ListDtype
     _VALID_BINARY_OPERATIONS = {"__add__", "__radd__"}
 
     def __init__(
         self,
-        size,
-        dtype,
-        mask=None,
-        offset=0,
-        null_count=None,
-        children=(),
+        data: None,
+        size: int,
+        dtype: ListDtype,
+        mask: Buffer | None = None,
+        offset: int = 0,
+        null_count: int | None = None,
+        children: tuple[NumericalColumn, ColumnBase] = (),  # type: ignore[assignment]
     ):
+        if data is not None:
+            raise ValueError("data must be None")
+        if not isinstance(dtype, ListDtype):
+            raise ValueError("dtype must be a cudf.ListDtype")
+        if not (
+            len(children) == 2
+            and isinstance(children[0], NumericalColumn)
+            # TODO: Enforce int32_t (size_type) used in libcudf?
+            and children[0].dtype.kind == "i"
+            and isinstance(children[1], ColumnBase)
+        ):
+            raise ValueError(
+                "children must a tuple of 2 columns of (signed integer offsets, list values)"
+            )
         super().__init__(
-            None,
-            size,
-            dtype,
+            data=data,
+            size=size,
+            dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
@@ -131,7 +147,7 @@ class ListColumn(ColumnBase):
             raise TypeError("can only concatenate list to list")
 
     @property
-    def elements(self):
+    def elements(self) -> ColumnBase:
         """
         Column containing the elements of each list (may itself be a
         ListColumn)
@@ -139,11 +155,11 @@ class ListColumn(ColumnBase):
         return self.children[1]
 
     @property
-    def offsets(self):
+    def offsets(self) -> NumericalColumn:
         """
         Integer offsets to elements specifying each row of the ListColumn
         """
-        return self.children[0]
+        return cast(NumericalColumn, self.children[0])
 
     def to_arrow(self):
         offsets = self.offsets.to_arrow()
@@ -172,10 +188,9 @@ class ListColumn(ColumnBase):
         else:
             super().set_base_data(value)
 
-    def set_base_children(self, value: tuple[ColumnBase, ...]):
+    def set_base_children(self, value: tuple[NumericalColumn, ColumnBase]):  # type: ignore[override]
         super().set_base_children(value)
-        _, values = value
-        self._dtype = cudf.ListDtype(element_type=values.dtype)
+        self._dtype = cudf.ListDtype(element_type=value[1].dtype)
 
     @property
     def __cuda_array_interface__(self):
@@ -196,12 +211,13 @@ class ListColumn(ColumnBase):
                 dtype.element_type
             )
             return ListColumn(
+                data=None,
                 dtype=dtype,
                 mask=self.base_mask,
                 size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=(self.base_children[0], elements),
+                children=(self.base_children[0], elements),  # type: ignore[arg-type]
             )
 
         return self
@@ -226,24 +242,28 @@ class ListColumn(ColumnBase):
         """
         data_col = column.column_empty(0)
         mask_col = []
-        offset_col = [0]
+        offset_vals = [0]
         offset = 0
 
         # Build Data, Mask & Offsets
         for data in arbitrary:
             if cudf._lib.scalar._is_null_host_scalar(data):
                 mask_col.append(False)
-                offset_col.append(offset)
+                offset_vals.append(offset)
             else:
                 mask_col.append(True)
                 data_col = data_col.append(as_column(data))
                 offset += len(data)
-                offset_col.append(offset)
+                offset_vals.append(offset)
 
-        offset_col = column.as_column(offset_col, dtype=size_type_dtype)
+        offset_col = cast(
+            NumericalColumn,
+            column.as_column(offset_vals, dtype=size_type_dtype),
+        )
 
         # Build ListColumn
         res = cls(
+            data=None,
             size=len(arbitrary),
             dtype=cudf.ListDtype(data_col.dtype),
             mask=cudf._lib.transform.bools_to_mask(as_column(mask_col)),
@@ -283,12 +303,13 @@ class ListColumn(ColumnBase):
         for c in cc:
             o = c.children[0]
             lc = cudf.core.column.ListColumn(  # type: ignore
+                data=None,
                 size=c.size,
                 dtype=cudf.ListDtype(lc.dtype),
                 mask=c.mask,
                 offset=c.offset,
                 null_count=c.null_count,
-                children=(o, lc),
+                children=(o, lc),  # type: ignore[arg-type]
             )
         return lc
 
@@ -320,7 +341,7 @@ class ListMethods(ColumnMethods):
 
     def get(
         self,
-        index: int,
+        index: int | ColumnLike,
         default: ScalarLike | ColumnLike | None = None,
     ) -> ParentType:
         """

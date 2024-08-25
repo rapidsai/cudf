@@ -363,17 +363,14 @@ add_library(
   src/hash/sha512_hash.cu
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
-  src/interop/from_arrow.cu
   src/interop/arrow_utilities.cpp
   src/interop/decimal_conversion_utilities.cu
-  src/interop/to_arrow.cu
   src/interop/to_arrow_device.cu
   src/interop/to_arrow_host.cu
   src/interop/from_arrow_device.cu
   src/interop/from_arrow_host.cu
   src/interop/from_arrow_stream.cu
   src/interop/to_arrow_schema.cpp
-  src/interop/detail/arrow_allocator.cpp
   src/io/avro/avro.cpp
   src/io/avro/avro_gpu.cu
   src/io/avro/reader_impl.cu
@@ -438,7 +435,6 @@ add_library(
   src/io/text/bgzip_data_chunk_source.cu
   src/io/text/bgzip_utils.cpp
   src/io/text/multibyte_split.cu
-  src/io/utilities/arrow_io_source.cpp
   src/io/utilities/base64_utilities.cpp
   src/io/utilities/column_buffer.cpp
   src/io/utilities/column_buffer_strings.cu

@@ -56,7 +56,7 @@ dependencies:
 - notebook
 - numba>=0.57
 - numpy
-- numpy>=1.23,<2.0a0
+- numpy>=1.23,<3.0a0
 - numpydoc
 - nvcomp==3.0.6
 - nvtx>=0.2.1
@@ -64,7 +64,6 @@ dependencies:
 - pandas
 - pandas>=2.0,<2.2.3dev0
 - pandoc
-- pip
 - pre-commit
 - pyarrow==16.1.0.*
 - pydata-sphinx-theme!=0.14.2
@@ -97,6 +96,4 @@ dependencies:
 - transformers==4.39.3
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
-- pip:
-  - git+https://github.com/python-streamz/streamz.git@master
 name: all_cuda-125_arch-x86_64
