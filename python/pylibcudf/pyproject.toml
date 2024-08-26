@@ -41,7 +41,7 @@ classifiers = [
 test = [
     "fastavro>=0.22.9",
     "hypothesis",
-    "numpy>=1.23,<2.0a0",
+    "numpy>=1.23,<3.0a0",
     "pandas",
     "pytest-cov",
     "pytest-xdist",
