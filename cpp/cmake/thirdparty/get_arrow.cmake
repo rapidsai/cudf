@@ -72,6 +72,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
     set(ARROW_OPENSSL_USE_SHARED ON)
   endif()
 
+  set(ARROW_PARQUET_OPTIONS "")
   if(ENABLE_PARQUET)
     # Arrow's logic to build Boost from source is busted, so we have to get it from the system.
     list(APPEND ARROW_PARQUET_OPTIONS "BOOST_SOURCE SYSTEM")
