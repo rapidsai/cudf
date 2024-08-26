@@ -67,21 +67,33 @@ jobs:
           files_yaml: |
             cpp:
               - '**'
+              - '!CONTRIBUTING.md'
+              - '!README.md'
               - '!docs/**'
+              - '!img/**'
               - '!java/**'
               - '!notebooks/**'
               - '!python/**'
             java:
               - '**'
+              - '!CONTRIBUTING.md'
+              - '!README.md'
               - '!docs/**'
+              - '!img/**'
               - '!notebooks/**'
               - '!python/**'
             notebooks:
               - '**'
+              - '!CONTRIBUTING.md'
+              - '!README.md'
+              - '!img/**'
               - '!java/**'
             python:
               - '**'
+              - '!CONTRIBUTING.md'
+              - '!README.md'
               - '!docs/**'
+              - '!img/**'
               - '!java/**'
               - '!notebooks/**'
   checks:
