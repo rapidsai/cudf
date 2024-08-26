@@ -40,7 +40,7 @@ from cudf.api.types import (
 from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase, as_column
+from cudf.core.column import ColumnBase, NumericalColumn, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask, GatherMap
 from cudf.core.dtypes import ListDtype
@@ -3008,9 +3008,12 @@ class IndexedFrame(Frame):
         if stride != 1:
             return self._gather(
                 GatherMap.from_column_unchecked(
-                    as_column(
-                        range(start, stop, stride),
-                        dtype=libcudf.types.size_type_dtype,
+                    cast(
+                        NumericalColumn,
+                        as_column(
+                            range(start, stop, stride),
+                            dtype=libcudf.types.size_type_dtype,
+                        ),
                     ),
                     len(self),
                     nullify=False,
@@ -3195,8 +3198,10 @@ class IndexedFrame(Frame):
         """
         subset = self._preprocess_subset(subset)
 
+        name = None
         if isinstance(self, cudf.Series):
             columns = [self._column]
+            name = self.name
         else:
             columns = [self._data[n] for n in subset]
         distinct = libcudf.stream_compaction.distinct_indices(
@@ -3208,7 +3213,7 @@ class IndexedFrame(Frame):
             [as_column(True, length=len(self), dtype=bool)],
             bounds_check=False,
         )[0]
-        return cudf.Series._from_column(result, index=self.index)
+        return cudf.Series._from_column(result, index=self.index, name=name)
 
     @_performance_tracking
     def _empty_like(self, keep_index=True) -> Self:
@@ -4761,10 +4766,13 @@ class IndexedFrame(Frame):
     ):
         try:
             gather_map = GatherMap.from_column_unchecked(
-                cudf.core.column.as_column(
-                    random_state.choice(
-                        len(self), size=n, replace=replace, p=weights
-                    )
+                cast(
+                    NumericalColumn,
+                    cudf.core.column.as_column(
+                        random_state.choice(
+                            len(self), size=n, replace=replace, p=weights
+                        )
+                    ),
                 ),
                 len(self),
                 nullify=False,
@@ -6599,7 +6607,7 @@ def _drop_rows_by_labels(
             level = 0
 
         levels_index = obj.index.get_level_values(level)
-        if errors == "raise" and not labels.isin(levels_index).all():
+        if errors == "raise" and not labels.isin(levels_index).all():  # type: ignore[union-attr]
             raise KeyError("One or more values not found in axis")
 
         if isinstance(level, int):
@@ -6649,7 +6657,7 @@ def _drop_rows_by_labels(
             )
 
     else:
-        if errors == "raise" and not labels.isin(obj.index).all():
+        if errors == "raise" and not labels.isin(obj.index).all():  # type: ignore[union-attr]
             raise KeyError("One or more values not found in axis")
 
         if isinstance(labels, ColumnBase):
