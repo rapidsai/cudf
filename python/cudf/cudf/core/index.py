@@ -295,6 +295,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _columns(self) -> tuple[NumericalColumn]:
         return (self._values,)
 
+    @property
+    def _column_labels_and_values(self) -> Iterable:
+        return zip(self._column_names, self._columns)
+
     @property  # type: ignore
     @_performance_tracking
     def start(self) -> int:

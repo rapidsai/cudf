@@ -437,7 +437,7 @@ class Frame(BinaryOperand, Scannable):
 
         if dtype is None:
             if ncol == 1:
-                dtype = next(self._dtypes)[0]
+                dtype = next(self._dtypes)[1]
             else:
                 dtype = find_common_type([dtype for _, dtype in self._dtypes])
 
@@ -1265,7 +1265,7 @@ class Frame(BinaryOperand, Scannable):
             values = [as_column(values)]
         else:
             values = [*values._columns]
-        if len(values) != len(self):
+        if len(values) != len(self._data):
             raise ValueError("Mismatch number of columns to search for.")
 
         # TODO: Change behavior based on the decision in

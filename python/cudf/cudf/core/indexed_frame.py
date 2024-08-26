@@ -317,7 +317,8 @@ class IndexedFrame(Frame):
             raise ValueError(
                 f"index must be None or a cudf.Index not {type(index).__name__}"
             )
-        out._index = RangeIndex(out._num_rows) if index is None else index
+        # out._num_rows requires .index to be defined
+        out._index = RangeIndex(out._data.nrows) if index is None else index
         return out
 
     @_performance_tracking
