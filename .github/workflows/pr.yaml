@@ -86,7 +86,6 @@ jobs:
               - '**'
               - '!CONTRIBUTING.md'
               - '!README.md'
-              - '!img/**'
               - '!java/**'
             python:
               - '**'
