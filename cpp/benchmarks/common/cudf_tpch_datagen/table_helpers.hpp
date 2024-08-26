@@ -79,8 +79,8 @@ std::unique_ptr<cudf::table> perform_left_join(
  */
 [[nodiscard]] std::unique_ptr<cudf::column> calc_l_suppkey(
   cudf::column_view const& l_partkey,
-  cudf::size_type const& scale_factor,
-  cudf::size_type const& num_rows,
+  cudf::size_type scale_factor,
+  cudf::size_type num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
@@ -95,8 +95,8 @@ std::unique_ptr<cudf::table> perform_left_join(
  */
 [[nodiscard]] std::unique_ptr<cudf::column> calc_ps_suppkey(
   cudf::column_view const& ps_partkey,
-  cudf::size_type const& scale_factor,
-  cudf::size_type const& num_rows,
+  cudf::size_type scale_factor,
+  cudf::size_type num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 /**
@@ -134,7 +134,7 @@ std::unique_ptr<cudf::table> perform_left_join(
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 [[nodiscard]] std::unique_ptr<cudf::column> generate_address_column(
-  cudf::size_type const& num_rows,
+  cudf::size_type num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
@@ -146,6 +146,6 @@ std::unique_ptr<cudf::table> perform_left_join(
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 [[nodiscard]] std::unique_ptr<cudf::column> generate_phone_column(
-  cudf::size_type const& num_rows,
+  cudf::size_type num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
