@@ -32,6 +32,7 @@ files:
       - test_python_cudf
       - test_python_dask_cudf
       - test_python_pylibcudf
+      - test_python_cudf_pandas
   test_static_build:
     output: none
     includes:
