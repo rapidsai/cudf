@@ -111,13 +111,34 @@ def wrap_ndarray(cls, arr: cupy.ndarray | numpy.ndarray, constructor):
 numpy_asarray = numpy.asarray
 
 
-def asarray(*args, **kwargs):
-    if is_proxy_object(args[0]):
-        return numpy_asarray(args[0]._fsproxy_slow, *args[1:], **kwargs)
-    return numpy_asarray(*args, **kwargs)
+def asarray(a, dtype=None, order=None, *, device=None, copy=None, like=None):
+    if is_proxy_object(a):
+        return numpy_asarray(
+            a._fsproxy_slow, dtype, order, device=None, copy=None, like=None
+        )
+    return numpy_asarray(a, dtype, order, device=None, copy=None, like=None)
 
 
 numpy.asarray = asarray
+numpy.asarray.__doc__ = numpy_asarray.__doc__
+numpy.asarray.__module__ = numpy_asarray.__module__
+
+numpy_dot = numpy.dot
+
+
+def dot(a, b, out=None):
+    if is_proxy_object(a) and is_proxy_object(b):
+        return numpy_dot(a._fsproxy_slow, b._fsproxy_slow, out=out)
+    elif is_proxy_object(a):
+        return numpy_dot(a._fsproxy_slow, b, out=out)
+    elif is_proxy_object(b):
+        return numpy_dot(a, b._fsproxy_slow, out=out)
+    return numpy_dot(a, b, out=out)
+
+
+numpy.dot = dot
+numpy.dot.__doc__ = numpy_dot.__doc__
+numpy.dot.__module__ = numpy_dot.__module__
 
 
 def convert_args_to_slow(inputs):
