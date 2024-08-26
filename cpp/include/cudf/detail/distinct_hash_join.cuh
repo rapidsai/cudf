@@ -117,7 +117,7 @@ struct distinct_hash_join {
     comparator_adapter<
       cudf::experimental::row::equality::strong_index_comparator_adapter<Comparator>>,
     probing_scheme_type,
-    cudf::detail::cuco_allocator,
+    cudf::detail::cuco_allocator<char>,
     cuco_storage_type>;
   using hash_table_type = std::variant<static_set_with_comparator<row_comparator>,
                                        static_set_with_comparator<row_comparator_no_nested>,

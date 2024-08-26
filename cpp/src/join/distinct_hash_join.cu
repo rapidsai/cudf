@@ -158,7 +158,7 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
                          cuda::thread_scope_device,
                          typename std::remove_reference_t<decltype(comparator_adapter)>,
                          distinct_hash_join::probing_scheme_type,
-                         cudf::detail::cuco_allocator,
+                         cudf::detail::cuco_allocator<char>,
                          distinct_hash_join::cuco_storage_type>;
 
       this->_hash_table = std::make_unique<hash_table_type>(
@@ -171,7 +171,7 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
         distinct_hash_join::probing_scheme_type{},
         cuco::thread_scope_device,
         distinct_hash_join::cuco_storage_type{},
-        cudf::detail::cuco_allocator{stream},
+        cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
         stream.value());
     },
     var_comparator_adapter);
