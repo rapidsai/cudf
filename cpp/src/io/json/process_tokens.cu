@@ -16,8 +16,7 @@
  */
 
 #include "nested_json.hpp"
-// #include "tabulate_output_iterator.cuh"
-#include "output_writer_iterator.h"
+#include "tabulate_output_iterator.cuh"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -231,7 +230,7 @@ void validate_token_stream(device_span<char const> d_input,
       auto u_count = 0;
       for (SymbolOffsetT idx = start + 1; idx < end; idx++) {
         auto c = data[idx];
-        if (!allow_unquoted_control_chars && c >= 0 && c < 32) { return false; }
+        if (!allow_unquoted_control_chars && c < 32) { return false; }
 
         switch (state) {
           case string_state::normal:
@@ -285,7 +284,7 @@ void validate_token_stream(device_span<char const> d_input,
     // auto conditional_output_it = tokens.begin();
     // auto conditional_output_it = thrust::make_tabulate_output_iterator(conditional_write);
     auto conditional_output_it =
-      thrust::make_output_writer_iterator(thrust::make_counting_iterator(0), conditional_write);
+      thrust::make_tabulate_output_iterator(thrust::make_counting_iterator(0), conditional_write);
     auto transform_op = cuda::proclaim_return_type<scan_type>(
       [predicate, tokens = tokens.begin()] __device__(auto i) -> scan_type {
         if (predicate(i)) return {token_t::ErrorBegin, tokens[i] == token_t::LineEnd};
