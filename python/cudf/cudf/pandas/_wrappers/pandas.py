@@ -234,7 +234,7 @@ DataFrame = make_final_proxy_type(
 
 
 def custom_repr_html(obj):
-    # This customer method is need to register a html format
+    # This custom method is need to register a html format
     # for ipython
     return _fast_slow_function_call(
         lambda obj: obj._repr_html_(),
