@@ -3198,8 +3198,10 @@ class IndexedFrame(Frame):
         """
         subset = self._preprocess_subset(subset)
 
+        name = None
         if isinstance(self, cudf.Series):
             columns = [self._column]
+            name = self.name
         else:
             columns = [self._data[n] for n in subset]
         distinct = libcudf.stream_compaction.distinct_indices(
@@ -3211,7 +3213,7 @@ class IndexedFrame(Frame):
             [as_column(True, length=len(self), dtype=bool)],
             bounds_check=False,
         )[0]
-        return cudf.Series._from_column(result, index=self.index)
+        return cudf.Series._from_column(result, index=self.index, name=name)
 
     @_performance_tracking
     def _empty_like(self, keep_index=True) -> Self:
