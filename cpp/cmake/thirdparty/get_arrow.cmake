@@ -215,11 +215,11 @@ endif()
 
 # Default to excluding from installation since we generally privately and statically link Arrow.
 if(NOT DEFINED CUDF_EXCLUDE_ARROW_FROM_ALL)
-  set(CUDF_EXCLUDE_ARROW_FROM_ALL ${CUDF_USE_ARROW_STATIC})
+  set(CUDF_EXCLUDE_ARROW_FROM_ALL OFF)
 endif()
 
 if(NOT DEFINED CUDF_ENABLE_ARROW_PARQUET)
-  set(CUDF_ENABLE_ARROW_PARQUET OFF)
+  set(CUDF_ENABLE_ARROW_PARQUET ON)
 endif()
 
 find_and_configure_arrow(

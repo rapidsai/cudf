@@ -82,7 +82,8 @@ endfunction()
 # dependencies  ###################################################################################
 # ##################################################################################################
 
-# find arrow.
+# No need to install Arrow libs when only the final test executables are shipped.
+set(CUDF_EXCLUDE_ARROW_FROM_ALL ON)
 include(../cmake/thirdparty/get_arrow.cmake)
 
 # ##################################################################################################

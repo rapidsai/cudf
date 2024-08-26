@@ -17,6 +17,8 @@ include(../fetch_dependencies.cmake)
 
 # The Arrow CMake is currently broken if the build type is not set
 set(CMAKE_BUILD_TYPE Release)
+# No need to install Arrow libs when only the final example executable is shipped.
+set(CUDF_EXCLUDE_ARROW_FROM_ALL ON)
 include(../../cmake/thirdparty/get_arrow.cmake)
 
 add_executable(interop interop.cpp)
