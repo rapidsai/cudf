@@ -176,6 +176,18 @@ ConfigureBench(COPY_IF_ELSE_BENCH copying/copy_if_else.cpp)
 ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cpp)
 
 # ##################################################################################################
+# * apply_boolean_mask benchmark ------------------------------------------------------------------
+ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask.cpp)
+
+# ##################################################################################################
+# * tpch benchmark --------------------------------------------------------------------------------
+ConfigureBench(TPCH_Q1 tpch/q1.cpp)
+ConfigureBench(TPCH_Q5 tpch/q5.cpp)
+ConfigureBench(TPCH_Q6 tpch/q6.cpp)
+ConfigureBench(TPCH_Q9 tpch/q9.cpp)
+ConfigureBench(TPCH_Q10 tpch/q10.cpp)
+
+# ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   STREAM_COMPACTION_NVBENCH

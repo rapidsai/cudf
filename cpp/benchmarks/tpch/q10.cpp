@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "../utilities/timer.hpp"
 #include "utils.hpp"
 
 #include <cudf/ast/expressions.hpp>
@@ -98,8 +97,6 @@ int main(int argc, char const** argv)
   auto resource = create_memory_resource(args.memory_resource_type);
   cudf::set_current_device_resource(resource.get());
 
-  cudf::examples::timer timer;
-
   // Define the column projection and filter predicate for the `orders` table
   std::vector<std::string> const orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
   auto const o_orderdate_ref                 = cudf::ast::column_reference(std::distance(
@@ -158,8 +155,6 @@ int main(int argc, char const** argv)
   // Perform the order by operation
   auto const orderedby_table =
     apply_orderby(groupedby_table, {"revenue"}, {cudf::order::DESCENDING});
-
-  timer.print_elapsed_millis();
 
   // Write query result to a parquet file
   orderedby_table->to_parquet("q10.parquet");
