@@ -11,6 +11,7 @@ set -euo pipefail
 
 rapids-logger "Generate Python testing dependencies"
 rapids-dependency-file-generator \
+  --config "../dependencies.yaml"
   --output conda \
   --file-key test_${LIB} \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
