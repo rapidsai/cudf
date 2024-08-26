@@ -7,6 +7,6 @@ from cudf._lib.pylibcudf.strings.side_type cimport side_type
 
 cpdef Column strip(
     Column input,
-    side_type side,
-    Scalar to_strip
+    side_type side=*,
+    Scalar to_strip=*
 )
