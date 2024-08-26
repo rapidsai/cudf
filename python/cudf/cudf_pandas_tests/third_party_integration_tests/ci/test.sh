@@ -50,7 +50,7 @@ for serial_library in "${serial_libraries[@]}"; do
     fi
 done
 
-RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR} TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} ci/ci_run_library_tests.sh ${LIB}
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR} TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} python/cudf/cudf_pandas_tests/third_party_integration_tests/ci/ci_run_library_tests.sh ${LIB}
 
 rapids-logger "Test script exiting with value: ${EXITCODE}"
 exit ${EXITCODE}
