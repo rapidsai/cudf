@@ -323,6 +323,8 @@ class json_reader_options {
    * @brief Whether leading zeros are allowed in numeric values. strict validation
    * must be enabled for this to work.
    *
+   * @note: strict_validation must be enabled for this to work.
+   *
    * @return true if leading zeros are allowed in numeric values
    */
   [[nodiscard]] bool is_allowed_numeric_leading_zeros() const
@@ -334,6 +336,8 @@ class json_reader_options {
    * @brief Whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity, Infinity,
    * and -Infinity. strict validation must be enabled for this to work.
    *
+   * @note: strict_validation must be enabled for this to work.
+   *
    * @return true if leading zeros are allowed in numeric values
    */
   [[nodiscard]] bool is_allowed_nonnumeric_numbers() const { return _allow_nonnumeric_numbers; }
@@ -341,6 +345,8 @@ class json_reader_options {
   /**
    * @brief Whether in a quoted string should characters greater than or equal to 0 and less than 32
    * be allowed without some form of escaping. Strict validation must be enabled for this to work.
+   *
+   * @note: strict_validation must be enabled for this to work.
    *
    * @return true if unquoted control chars are allowed.
    */
@@ -497,6 +503,8 @@ class json_reader_options {
    * @brief Set whether leading zeros are allowed in numeric values. strict validation
    * must be enabled for this to work.
    *
+   * @note: strict_validation must be enabled for this to work.
+   *
    * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
    */
   void allow_numeric_leading_zeros(bool val) { _allow_numeric_leading_zeros = val; }
@@ -504,6 +512,8 @@ class json_reader_options {
   /**
    * @brief Set whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity,
    * Infinity, and -Infinity. strict validation must be enabled for this to work.
+   *
+   * @note: strict_validation must be enabled for this to work.
    *
    * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
    */
@@ -513,6 +523,8 @@ class json_reader_options {
    * @brief Set whether in a quoted string should characters greater than or equal to 0
    * and less than 32 be allowed without some form of escaping. Strict validation must
    * be enabled for this to work.
+   *
+   * @note: strict_validation must be enabled for this to work.
    *
    * @param val true to indicate whether unquoted control chars are allowed.
    */
@@ -751,6 +763,8 @@ class json_reader_options_builder {
    * @brief Set Whether leading zeros are allowed in numeric values. strict validation must
    * be enabled for this to have any effect.
    *
+   * @note: strict_validation must be enabled for this to work.
+   *
    * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
    * @return this for chaining
    */
@@ -765,6 +779,8 @@ class json_reader_options_builder {
    * +INF, -INF, +Infinity, Infinity, and -Infinity.
    * strict validation must be enabled for this to have any effect.
    *
+   * @note: strict_validation must be enabled for this to work.
+   *
    * @param val Boolean value to indicate if unquoted nonnumeric values are valid json or not.
    * @return this for chaining
    */
@@ -777,6 +793,8 @@ class json_reader_options_builder {
   /**
    * @brief Set whether chars >= 0 and < 32 are allowed in a quoted string without
    * some form of escaping. strict validation must be enabled for this to have any effect.
+   *
+   * @note: strict_validation must be enabled for this to work.
    *
    * @param val Boolean value to indicate if unquoted control chars are allowed or not.
    * @return this for chaining
