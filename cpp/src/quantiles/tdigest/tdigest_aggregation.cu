@@ -366,8 +366,8 @@ std::unique_ptr<scalar> to_tdigest_scalar(std::unique_ptr<column>&& tdigest,
  * @param group_cluster_wl    Output.  The set of cluster weight limits for each group.
  * @param group_num_clusters  Output.  The number of output clusters for each input group.
  * @param group_cluster_offsets  Offsets per-group to the start of it's clusters
- * @param has_nulls Whether or not the input contains nulls
- *
+ * @param may_have_empty_clusters Whether or not there could be empty clusters. False if there
+ * should be no empty clusters.
  */
 
 template <typename GroupInfo, typename NearestWeightFunc, typename CumulativeWeight>
@@ -379,7 +379,7 @@ CUDF_KERNEL void generate_cluster_limits_kernel(int delta,
                                                 double* group_cluster_wl,
                                                 size_type* group_num_clusters,
                                                 size_type const* group_cluster_offsets,
-                                                bool has_nulls)
+                                                bool may_have_empty_clusters)
 {
   int const tid = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -403,7 +403,7 @@ CUDF_KERNEL void generate_cluster_limits_kernel(int delta,
     // clusters because -all- of the input values are null.  in that case, the reduce_by_key call
     // in the tdigest generation step will need a location to store the unused reduction value for
     // that group of nulls. these "stubs" will be postprocessed out afterwards.
-    if (has_nulls) { group_num_clusters[group_index] = 1; }
+    if (may_have_empty_clusters) { group_num_clusters[group_index] = 1; }
     return;
   }
 
@@ -502,7 +502,8 @@ CUDF_KERNEL void generate_cluster_limits_kernel(int delta,
  * stream that falls before our current cluster limit
  * @param group_info         A functor which returns the info for the specified group (total weight,
  * size and start offset)
- * @param has_nulls          Whether or not the input data contains nulls
+ * @param may_have_empty_clusters Whether or not there could be empty clusters. False if there
+ * should be no empty clusters.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
@@ -516,7 +517,7 @@ generate_group_cluster_info(int delta,
                             NearestWeight nearest_weight,
                             GroupInfo group_info,
                             CumulativeWeight cumulative_weight,
-                            bool has_nulls,
+                            bool may_have_empty_clusters,
                             rmm::cuda_stream_view stream,
                             rmm::device_async_resource_ref mr)
 {
@@ -535,7 +536,7 @@ generate_group_cluster_info(int delta,
     nullptr,
     group_num_clusters.begin(),
     nullptr,
-    has_nulls);
+    may_have_empty_clusters);
 
   // generate group cluster offsets (where the clusters for a given group start and end)
   auto group_cluster_offsets = cudf::make_numeric_column(
@@ -567,7 +568,7 @@ generate_group_cluster_info(int delta,
     group_cluster_wl.begin(),
     group_num_clusters.begin(),
     group_cluster_offsets->view().begin<size_type>(),
-    has_nulls);
+    may_have_empty_clusters);
 
   return {std::move(group_cluster_wl),
           std::move(group_cluster_offsets),
@@ -580,7 +581,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
                                             std::unique_ptr<column>&& offsets,
                                             std::unique_ptr<column>&& min_col,
                                             std::unique_ptr<column>&& max_col,
-                                            bool has_nulls,
+                                            bool may_have_empty_clusters,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
@@ -595,7 +596,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
                           size_type i) { return is_stub_weight(offsets[i]) ? 1 : 0; };
 
   size_type const num_stubs = [&]() {
-    if (!has_nulls) { return 0; }
+    if (!may_have_empty_clusters) { return 0; }
     auto iter = cudf::detail::make_counting_transform_iterator(
       0, cuda::proclaim_return_type<size_type>(is_stub_digest));
     return thrust::reduce(rmm::exec_policy(stream), iter, iter + num_rows);
@@ -661,6 +662,10 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
                                                     mr);
 }
 
+/**
+ * @brief A functor which returns the cluster index within a group that the value at
+ * the given value index falls into.
+ */
 template <typename CumulativeWeight>
 struct compute_tdigests_keys_fn {
   int const delta;
@@ -706,8 +711,8 @@ struct compute_tdigests_keys_fn {
  * boundaries.
  *
  * @param delta              tdigest compression level
- * @param values_begin       Beginning of the range of input values.
- * @param values_end         End of the range of input values.
+ * @param centroids_begin    Beginning of the range of centroids.
+ * @param centroids_end      End of the range of centroids.
  * @param cumulative_weight  Functor which returns cumulative weight and group information for
  * an absolute input value index.
  * @param min_col            Column containing the minimum value per group.
@@ -715,7 +720,8 @@ struct compute_tdigests_keys_fn {
  * @param group_cluster_wl   Cluster weight limits for each group.
  * @param group_cluster_offsets R-value reference of offsets into the cluster weight limits.
  * @param total_clusters     Total number of clusters in all groups.
- * @param has_nulls          Whether or not the input contains nulls
+ * @param may_have_empty_clusters Whether or not there could be empty clusters. False if there
+ * should be no empty clusters.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
@@ -731,7 +737,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
                                          rmm::device_uvector<double> const& group_cluster_wl,
                                          std::unique_ptr<column>&& group_cluster_offsets,
                                          size_type total_clusters,
-                                         bool has_nulls,
+                                         bool may_have_empty_clusters,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
 {
@@ -793,7 +799,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
                              std::move(group_cluster_offsets),
                              std::move(min_col),
                              std::move(max_col),
-                             has_nulls,
+                             may_have_empty_clusters,
                              stream,
                              mr);
 }
@@ -1145,8 +1151,14 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   auto merged =
     cudf::detail::concatenate(tdigest_views, stream, rmm::mr::get_current_device_resource());
 
+  auto merged_weights = merged->get_column(1).view();
+  // If there are no values, we can simply return a column that has only empty tdigests.
+  if (merged_weights.size() == 0) {
+    auto empty_tdigest = cudf::tdigest::detail::make_empty_tdigest_scalar(stream, mr);
+    return cudf::make_column_from_scalar(*empty_tdigest, num_groups, stream, mr);
+  }
+
   // generate cumulative weights
-  auto merged_weights     = merged->get_column(1).view();
   auto cumulative_weights = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, merged_weights.size(), mask_state::UNALLOCATED, stream);
   auto keys = cudf::detail::make_counting_transform_iterator(
@@ -1160,6 +1172,10 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                                 cumulative_weights->mutable_view().begin<double>());
 
   auto const delta = max_centroids;
+
+  // We do not know whether there is any empty cluster in the input without actually reading the
+  // data, which could be expensive. So, we just assume that there could be empty clusters.
+  auto const may_have_empty_clusters = true;
 
   // generate cluster info
   auto [group_cluster_wl, group_cluster_offsets, total_clusters] = generate_group_cluster_info(
@@ -1177,7 +1193,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
       group_labels,
       group_offsets,
       {tdigest_offsets.begin<size_type>(), static_cast<size_t>(tdigest_offsets.size())}},
-    false,
+    may_have_empty_clusters,
     stream,
     mr);
 
@@ -1202,7 +1218,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
     group_cluster_wl,
     std::move(group_cluster_offsets),
     total_clusters,
-    false,
+    may_have_empty_clusters,
     stream,
     mr);
 }

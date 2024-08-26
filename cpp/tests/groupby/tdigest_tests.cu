@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -505,4 +505,79 @@ TEST_F(TDigestMergeTest, EmptyGroups)
     {{expected_means, expected_weights, 2, 600}, {FCW{}, FCW{}, 0, 0}, {FCW{}, FCW{}, 0, 0}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result.second[0].results[0]);
+}
+
+std::unique_ptr<cudf::table> do_agg(
+  cudf::column_view key,
+  cudf::column_view val,
+  std::function<std::unique_ptr<cudf::groupby_aggregation>()> make_agg)
+{
+  std::vector<cudf::column_view> keys;
+  keys.push_back(key);
+  cudf::table_view key_table(keys);
+
+  cudf::groupby::groupby gb(key_table);
+  std::vector<cudf::groupby::aggregation_request> requests;
+  cudf::groupby::aggregation_request req;
+  req.values = val;
+  req.aggregations.push_back(make_agg());
+  requests.push_back(std::move(req));
+
+  auto result = gb.aggregate(requests);
+
+  std::vector<std::unique_ptr<cudf::column>> result_columns;
+  for (auto&& c : result.first->release()) {
+    result_columns.push_back(std::move(c));
+  }
+
+  EXPECT_EQ(result.second.size(), 1);
+  EXPECT_EQ(result.second[0].results.size(), 1);
+  result_columns.push_back(std::move(result.second[0].results[0]));
+
+  return std::make_unique<cudf::table>(std::move(result_columns));
+}
+
+TEST_F(TDigestMergeTest, AllGroupsHaveEmptyClusters)
+{
+  // The input must be sorted by the key.
+  // See `aggregate_result_functor::operator()<aggregation::TDIGEST>` for details.
+  auto keys       = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 0, 1, 1, 2}};
+  auto val_elems  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto val_valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    // All values are null
+    return false;
+  });
+  auto vals       = cudf::test::fixed_width_column_wrapper<int32_t>{
+    val_elems, val_elems + cudf::column_view(keys).size(), val_valids};
+
+  auto const delta = 10000;
+
+  // Compute tdigest. The result should have 3 empty clusters, one per group.
+  auto compute_result = do_agg(cudf::column_view(keys), cudf::column_view(vals), [&delta]() {
+    return cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(delta);
+  });
+
+  auto expected_computed_keys = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 1, 2}};
+  cudf::column_view expected_computed_keys_view{expected_computed_keys};
+  auto empty_tdigest = cudf::tdigest::detail::make_empty_tdigest_scalar(
+    cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto expected_computed_vals =
+    cudf::make_column_from_scalar(*empty_tdigest, expected_computed_keys_view.size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_computed_keys_view, compute_result->get_column(0).view());
+  // The computed values are nullable even though the input values are not.
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_computed_vals->view(),
+                                 compute_result->get_column(1).view());
+
+  // Merge tdigest. The result should have 3 empty clusters, one per group.
+  auto merge_result =
+    do_agg(compute_result->get_column(0).view(), compute_result->get_column(1).view(), [&delta]() {
+      return cudf::make_merge_tdigest_aggregation<cudf::groupby_aggregation>(delta);
+    });
+
+  auto expected_merged_keys = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 1, 2}};
+  cudf::column_view expected_merged_keys_view{expected_merged_keys};
+  auto expected_merged_vals =
+    cudf::make_column_from_scalar(*empty_tdigest, expected_merged_keys_view.size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_merged_keys_view, merge_result->get_column(0).view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_merged_vals->view(), merge_result->get_column(1).view());
 }
