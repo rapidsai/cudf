@@ -23,7 +23,7 @@
 include_guard(GLOBAL)
 
 # This function finds arrow and sets any additional necessary environment variables.
-function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL)
+function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_PARQUET)
   if(BUILD_STATIC)
     if(TARGET arrow_static)
       set(ARROW_FOUND
@@ -72,6 +72,13 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL)
     set(ARROW_OPENSSL_USE_SHARED ON)
   endif()
 
+  if(ENABLE_PARQUET)
+    # Arrow's logic to build Boost from source is busted, so we have to get it from the system.
+    list(APPEND ARROW_PARQUET_OPTIONS "BOOST_SOURCE SYSTEM")
+    list(APPEND ARROW_PARQUET_OPTIONS "Thrift_SOURCE BUNDLED")
+    list(APPEND ARROW_PARQUET_OPTIONS "ARROW_DEPENDENCY_SOURCE AUTO")
+  endif()
+
   rapids_cpm_find(
     Arrow ${VERSION}
     GLOBAL_TARGETS arrow_shared parquet_shared arrow_acero_shared arrow_dataset_shared arrow_static
@@ -90,7 +97,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL)
             "ARROW_JEMALLOC OFF"
             "ARROW_S3 OFF"
             "ARROW_ORC OFF"
-            "ARROW_PARQUET OFF"
+            ${ARROW_PARQUET_OPTIONS}
+            "ARROW_PARQUET ${ENABLE_PARQUET}"
             "ARROW_FILESYSTEM ON"
             "ARROW_PYTHON OFF"
             # Arrow modifies CMake's GLOBAL RULE_LAUNCH_COMPILE unless this is off
@@ -126,6 +134,13 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL)
     # variables from find_package that we might need. This is especially problematic when
     # rapids_cpm_find builds from source.
     find_package(Arrow REQUIRED QUIET)
+    if(ENABLE_PARQUET)
+      # Setting Parquet_DIR is conditional because parquet may be installed independently of arrow.
+      if(NOT Parquet_DIR)
+        # Set this to enable `find_package(Parquet)`
+        set(Parquet_DIR "${Arrow_DIR}")
+      endif()
+    endif()
     # Arrow_ADDED: set if CPM downloaded Arrow from Github
   elseif(Arrow_ADDED)
     # Copy these files so we can avoid adding paths in Arrow_BINARY_DIR to
@@ -133,6 +148,11 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL)
     file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/util/config.h"
          DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/util"
     )
+    if(ENABLE_PARQUET)
+      file(INSTALL "${Arrow_BINARY_DIR}/src/parquet/parquet_version.h"
+           DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/parquet"
+      )
+    endif()
     # Arrow populates INTERFACE_INCLUDE_DIRECTORIES for the `arrow_static` and `arrow_shared`
     # targets in FindArrow, so for static source-builds, we have to do it after-the-fact.
     #
@@ -197,6 +217,11 @@ if(NOT DEFINED CUDF_EXCLUDE_ARROW_FROM_ALL)
   set(CUDF_EXCLUDE_ARROW_FROM_ALL ${CUDF_USE_ARROW_STATIC})
 endif()
 
+if(NOT DEFINED CUDF_ENABLE_ARROW_PARQUET)
+  set(CUDF_ENABLE_ARROW_PARQUET OFF)
+endif()
+
 find_and_configure_arrow(
   ${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} ${CUDF_EXCLUDE_ARROW_FROM_ALL}
+  ${CUDF_ENABLE_ARROW_PARQUET}
 )
