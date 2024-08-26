@@ -1,4 +1,5 @@
 // Copyright (c) 2024, NVIDIA CORPORATION.
+#include "build/conda/cuda-12.5/release/_deps/gtest-src/googletest/include/gtest/gtest.h"
 #include "cudf/column/column_view.hpp"
 #include "cudf/copying.hpp"
 #include "cudf/types.hpp"
@@ -33,8 +34,8 @@ using bool_wrapper         = wrapper<bool>;
 using cudf::data_type;
 using cudf::type_id;
 using cudf::type_to_id;
-using cudf::spark_rapids_jni::json_path_t;
-using cudf::spark_rapids_jni::path_instruction_type;
+using cudf::io::json_path_t;
+using cudf::io::path_instruction_type;
 
 void print_json_path(json_path_t const& paths)
 {
@@ -92,7 +93,7 @@ auto get_json_object_single(cudf::column_view input, std::string path, std::stri
   cudf::scoped_range rng(lineno);
   auto json_paths = pathstrs_to_json_paths({path});
   print_json_path(json_paths[0]);
-  return std::move(cudf::spark_rapids_jni::get_json_object_multiple_paths2(
+  return std::move(cudf::io::get_json_object_multiple_paths2(
     input, json_paths, cudf::get_default_stream())[0]);
 }
 
@@ -115,7 +116,7 @@ auto get_json_object_multiple2(cudf::column_view input,
   cudf::scoped_range rng("m" + lineno);
   auto json_paths = pathstrs_to_json_paths(paths);
   // print_json_path(json_paths[0]);
-  auto result = cudf::spark_rapids_jni::get_json_object_multiple_paths2(
+  auto result = cudf::io::get_json_object_multiple_paths2(
     input, json_paths, cudf::get_default_stream());
   // TODO check if returned leaf columns are all STRING and count is equal.
   auto num_outputs = paths.size();
@@ -234,12 +235,12 @@ TEST_F(GetJsonTest, DifferentGetJSONObject)
     std::vector<std::string> paths = {
       "$.JEBEDJPKEFHPHGLLGPM",
       "$.FLMEPG.CGEGPD",
-      // "$.JACICCCIMMHJHKPDED.ACHCPIHLFCPHMBPNKJNOLNO.CGEGPD[*].GMFDD", // FIXME: wildcard
+      "$.JACICCCIMMHJHKPDED.ACHCPIHLFCPHMBPNKJNOLNO.CGEGPD[*].GMFDD", // FIXME: wildcard
       "$.JACICCCIMMHJHKPDED.OGGC.CGEGPD[0].MDGA",
       "$.AGHF.DPKEAPDACLPHGPEMH",
       "$.AGHF.ONNILHPABGIKKFJOEK",
       "$.AGHF.FFFPOENCNBBNOOMOJGDBNIPD",
-      // "$.AENBHHGIABBBDDGOEI.POFNDBFHDEJ.CGEGPD[*].GMFDD", // FIXME: wildcard
+      "$.AENBHHGIABBBDDGOEI.POFNDBFHDEJ.CGEGPD[*].GMFDD", // FIXME: wildcard
       "$.AENBHHGIABBBDDGOEI.PIGOFCPIPPBNNB.CGEGPD[0].GMFDD",
       "$.AENBHHGIABBBDDGOEI.CCBJKBHGPBJCKFPCBHGLOAFE.CGEGPD[0].GMFDD",
       "$.AENBHHGIABBBDDGOEI.LMPCGHBIJGCIPDPNELPBCOP.CGEGPD[0].GMFDD",
@@ -253,7 +254,7 @@ TEST_F(GetJsonTest, DifferentGetJSONObject)
       "$.AENBHHGIABBBDDGOEI.EAGCHCMLMOLGJK.BEACAHEBBO.GPIHMJ",
       "$.AENBHHGIABBBDDGOEI.EAGCHCMLMOLGJK.CGEGPD[0].GJFKCFJELPJEDBAD",
       "$.AENBHHGIABBBDDGOEI.EAGCHCMLMOLGJK.CGEGPD[0].GMFDD",
-      // "$.AENBHHGIABBBDDGOEI.DLJPDEPFEKDCKBI.CGEGPD[*].GMFDD", // FIXME: wildcard
+      "$.AENBHHGIABBBDDGOEI.DLJPDEPFEKDCKBI.CGEGPD[*].GMFDD", // FIXME: wildcard
       "$.AENBHHGIABBBDDGOEI.PMJPCGCHAALKBPKHDM.CGEGPD[0].GMFDD",
       "$.AENBHHGIABBBDDGOEI.OCFGAF.CGEGPD[0].GMFDD",
       "$.AENBHHGIABBBDDGOEI.GMJICFMBNPLBEOLMGDN.CGEGPD[0].GMFDD",
@@ -282,11 +283,10 @@ TEST_F(GetJsonTest, DifferentGetJSONObject)
       "$.AENBHHGIABBBDDGOEI.NBJNFKKKCHEGCABDGKG.BEACAHEBBO.GPIHMJ",
       "$.AENBHHGIABBBDDGOEI.NBJNFKKKCHEGCABDGKG.CGEGPD[0].GJFKCFJELPJEDBAD",
       "$.AENBHHGIABBBDDGOEI.NBJNFKKKCHEGCABDGKG.CGEGPD[0].GMFDD",
-      // "$.AENBHHGIABBBDDGOEI.AOHKGCPAOGANLKEJDLMIGDD.BEACAHEBBO.BNLFCI", // FIXME mixed type as
-      // struct
-      // "$.AENBHHGIABBBDDGOEI.AOHKGCPAOGANLKEJDLMIGDD.BEACAHEBBO.GPIHMJ", // FIXME as struct
-      // "$.AENBHHGIABBBDDGOEI.AOHKGCPAOGANLKEJDLMIGDD[0].GMFDD",          // FIXME as list
-      // "$.AENBHHGIABBBDDGOEI.IKHLECMHMONKLKIBD.CGEGPD[0].GMFDD",         // FIXME as list
+      "$.AENBHHGIABBBDDGOEI.AOHKGCPAOGANLKEJDLMIGDD.BEACAHEBBO.BNLFCI", // FIXME mixed type as struct
+      "$.AENBHHGIABBBDDGOEI.AOHKGCPAOGANLKEJDLMIGDD.BEACAHEBBO.GPIHMJ", // FIXME as struct
+      "$.AENBHHGIABBBDDGOEI.AOHKGCPAOGANLKEJDLMIGDD[0].GMFDD",          // FIXME as list
+      "$.AENBHHGIABBBDDGOEI.IKHLECMHMONKLKIBD.CGEGPD[0].GMFDD",         // FIXME as list
       "$.AENBHHGIABBBDDGOEI.PNJPGEHPDLMPBDMFPLKABFFGG.CGEGPD[0].GMFDD",
       "$.AENBHHGIABBBDDGOEI.IGAJPHHGOENI.CGEGPD[0].GMFDD",
       "$.AENBHHGIABBBDDGOEI.LDPMFNAGLJGDMFOLAKH.CGEGPD[0].KMEJHDA",
@@ -294,7 +294,7 @@ TEST_F(GetJsonTest, DifferentGetJSONObject)
       "$.AENBHHGIABBBDDGOEI.BFAJJIOLJBEOMFKLE.CGEGPD[0].GMFDD",
       "$.AENBHHGIABBBDDGOEI.DOONHL.CGEGPD[0].GMFDD",
       "$.OCIKAF",
-      // "$.IBMBCGNOCGCPCEN[*].GLNLBEA", // FIXME: wildcard
+      "$.IBMBCGNOCGCPCEN[*].GLNLBEA", // FIXME: wildcard
     };
 
     auto columnCC = cudf::slice(columnC, {0, 20})[0];
@@ -321,16 +321,12 @@ TEST_F(GetJsonTest, DifferentGetJSONObject)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(res1[0]->view(), res2[0]->view());
   }
   {
-    std::cout << "DEBUG:\n";
-    auto columnS = columnE;  // = cudf::slice(columnE, {0, 2})[0];
-    auto res1    = old_get_json_object_multiple1(
-      columnS,
-      {
+    std::vector<std::string> paths = {
         "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].GPGACKDIBMPAKJMDMJ",
         "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].NOIIFOJOPJP",
         "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].CEJOOHNF",
         "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].HODJK[0].HHKEKMIIGI",
-        // "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].KDGJICMEANMA[*].ILEADAN", //FIXME: wildcard null
+        "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].KDGJICMEANMA[*].ILEADAN", //FIXME: wildcard null
         // count mismatch
         "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].OKPLFLHHEBDJELFA",
         // "$.NHKDIEPJNND.CHNFGBB.KIKNFPPAPGDO.KLFALIBALPPK.HGABIFNPHAHHGP", //FIXME: float
@@ -342,33 +338,64 @@ TEST_F(GetJsonTest, DifferentGetJSONObject)
         "$.KPIGLEDEOCFELKLJLAFE",
         "$.PACKGGMDGCLEHD.IAFMNJMMNJPDAAHND",
         "$.PACKGGMDGCLEHD.MNIMBEMMOJFHILDMDBML",
-      });
+      };
+    std::cout << "DEBUG:\n";
+    auto columnS = columnE;  // = cudf::slice(columnE, {0, 2})[0];
+    auto res1    = old_get_json_object_multiple1(
+      columnS,
+      paths);
     auto res2 = get_json_object_multiple(
       columnS,
-      {
-        "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].GPGACKDIBMPAKJMDMJ",
-        "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].NOIIFOJOPJP",
-        "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].CEJOOHNF",
-        "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].HODJK[0].HHKEKMIIGI",
-        // "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].KDGJICMEANMA[*].ILEADAN",
-        "$.NHKDIEPJNND.DPBFKLKAKDHLMDLIONCCLJ[0].OKPLFLHHEBDJELFA",
-        // "$.NHKDIEPJNND.CHNFGBB.KIKNFPPAPGDO.KLFALIBALPPK.HGABIFNPHAHHGP",
-        "$.NHKDIEPJNND.IHIIKIHHMPFL.KCCCHAM.KCCCHAM",
-        "$.KFPJHMGFEELFG[0].AFHKGOFNFID[0].DPBFKLKAKDHLMDLIONCCLJ[0].CEJOOHNF",
-        "$.KFPJHMGFEELFG[0].AFHKGOFNFID[0].DPBFKLKAKDHLMDLIONCCLJ[0].HODJK[0].HHKEKMIIGI",
-        "$.KFPJHMGFEELFG[0].AFHKGOFNFID[0].DPBFKLKAKDHLMDLIONCCLJ[0].OKPLFLHHEBDJELFA",
-        "$.JJKPNPFMNICGLC.GGLF.JKKJDAKAB",
-        "$.KPIGLEDEOCFELKLJLAFE",
-        "$.PACKGGMDGCLEHD.IAFMNJMMNJPDAAHND",
-        "$.PACKGGMDGCLEHD.MNIMBEMMOJFHILDMDBML",
-      });
+      paths);
     EXPECT_EQ(res1.size(), res2.size());
     for (size_t i = 0; i < res1.size(); i++) {
       std::cout << i << "\n";
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(res1[i]->view(), res2[i]->view());
     }
 
-    // cudf::test::print(res1[0]->view());
-    // cudf::test::print(res2[0]->view());
+    // cudf::test::print(res1[4]->view());
+    // cudf::test::print(res2[4]->view());
   }
+}
+
+TEST_F(GetJsonTest, TestCases)
+{
+  constexpr auto null = "";
+  // Empty path should return all of valid json as string.
+  // TODO add testcase from email, with UTF-8 decoding?
+  // Empty path should return all of valid json as string.
+  auto test_fn = [&](auto& input, auto& paths) {
+    auto res1                      = old_get_json_object_multiple1(input, paths);
+    auto res2                      = get_json_object_multiple(input, paths);
+    EXPECT_EQ(res1.size(), res2.size());
+    for (size_t i = 0; i < res1.size(); i++) {
+      std::cout << i << "\n";
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(res1[i]->view(), res2[i]->view());
+    }
+  };
+  {
+    cudf::test::strings_column_wrapper input(
+      {"['\n']", "['\n\n\n\n\n\n\n\n\n\n']", "", "", "", "", "", "", "", ""});
+    cudf::test::strings_column_wrapper output(
+      {"[\"\\n\"]", "[\"\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\"]",
+       null, null, null, null, null, null, null, null},
+      {true, true, false, false, false, false, false, false, false, false});
+    std::vector<std::string> paths = {"$"};
+    test_fn(input, paths);
+  }
+  // arrays
+  {
+  cudf::test::strings_column_wrapper input({"{\"k0\": \"v0\", \"k1\": \"v1\"}", "['\n\n\n\n\n\n\n\n\n\n']"});
+  cudf::test::strings_column_wrapper output({"v0", null}, {true, false});
+    std::vector<std::string> paths = {"$k0", "$k1", "$"};
+  test_fn(input, paths);
+  }
+  // 123
+  {
+  cudf::test::strings_column_wrapper input({"123"});
+  cudf::test::strings_column_wrapper output({null}, {false});
+    std::vector<std::string> paths = {"$"};
+  test_fn(input, paths);
+  }
+
 }

@@ -17,6 +17,7 @@
 #pragma once
 
 #include "types.hpp"
+#include "new_json_object.hpp"
 
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -93,7 +94,8 @@ class json_reader_options {
   // Data types of the column; empty to infer dtypes
   std::variant<std::vector<data_type>,
                std::map<std::string, data_type>,
-               std::map<std::string, schema_element>>
+               std::map<std::string, schema_element>,
+               std::vector<json_path_t>>
     _dtypes;
   // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
@@ -181,7 +183,8 @@ class json_reader_options {
    */
   [[nodiscard]] std::variant<std::vector<data_type>,
                              std::map<std::string, data_type>,
-                             std::map<std::string, schema_element>> const&
+                             std::map<std::string, schema_element>,
+                             std::vector<json_path_t>> const&
   get_dtypes() const
   {
     return _dtypes;
@@ -377,6 +380,12 @@ class json_reader_options {
    */
   void set_dtypes(std::map<std::string, schema_element> types) { _dtypes = std::move(types); }
 
+  /**
+   * @brief Set data types for a potentially nested column hierarchy.
+   *
+   * @param types Map of column names to schema_element to support arbitrary nesting of data types
+   */
+  void set_dtypes(std::vector<json_path_t> types) { _dtypes = std::move(types); }
   /**
    * @brief Set the compression type.
    *
@@ -582,7 +591,17 @@ class json_reader_options_builder {
     options._dtypes = std::move(types);
     return *this;
   }
-
+  /**
+   * @brief Set data types for columns to be read.
+   *
+   * @param types json column path, all columns are read as string
+   * @return this for chaining
+   */
+  json_reader_options_builder& dtypes(std::vector<json_path_t> types)
+  {
+    options._dtypes = std::move(types);
+    return *this;
+  }
   /**
    * @brief Set the compression type.
    *

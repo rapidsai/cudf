@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "cudf/io/new_json_object.hpp"
+#include "cudf/utilities/error.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/detail/utilities/visitor_overload.hpp>
@@ -46,6 +48,11 @@ std::optional<schema_element> child_schema_element(std::string const& col_name,
         return (user_dtypes.find(col_name) != std::end(user_dtypes))
                  ? user_dtypes.find(col_name)->second
                  : std::optional<schema_element>{};
+      },
+      [col_name](
+        std::vector<json_path_t> const& user_dtypes) -> std::optional<schema_element> {
+        CUDF_FAIL("Unsupported option in this mode, use spark mode");
+        return std::optional<schema_element>{};
       }},
     options.get_dtypes());
 }

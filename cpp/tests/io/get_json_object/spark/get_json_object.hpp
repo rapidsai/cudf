@@ -35,7 +35,7 @@ constexpr int MAX_JSON_PATH_DEPTH = 16;
  * @brief Type of instruction in a JSON path.
  */
 // enum class path_instruction_type : int8_t { WILDCARD, INDEX, NAMED };
-using cudf::spark_rapids_jni::path_instruction_type;
+using cudf::io::path_instruction_type;
 
 /**
  * @brief Extract JSON object from a JSON string based on the specified JSON path.

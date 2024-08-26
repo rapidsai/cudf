@@ -24,7 +24,7 @@
 #include <memory>
 
 namespace CUDF_EXPORT cudf {
-namespace spark_rapids_jni {
+namespace io {
 
 /**
  * @brief Type of instruction in a JSON path.
@@ -32,7 +32,8 @@ namespace spark_rapids_jni {
 enum class path_instruction_type : int8_t { WILDCARD, INDEX, NAMED };
 /// path instruction type
 // enum class path_instruction_type : int8_t { WILDCARD, INDEX, NAMED };
-using json_path_t = std::vector<std::tuple<path_instruction_type, std::string, int32_t>>;
+using json_location_t = std::tuple<path_instruction_type, std::string, int32_t>;
+using json_path_t = std::vector<json_location_t>;
 
 std::vector<std::unique_ptr<cudf::column>> get_json_object_multiple_paths2(
   cudf::column_view const& input,

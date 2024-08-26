@@ -77,5 +77,14 @@ CUDF_EXPORT std::unique_ptr<column> parse_data(
   cudf::io::parse_options_view const& options,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
+
+CUDF_EXPORT std::unique_ptr<column> parse_raw_strings(char const* data,
+                                                      device_span<size_type> string_offsets,
+                                                      device_span<size_type> string_lengths,
+                                                      rmm::device_buffer&& null_mask,
+                                                      size_type null_count,
+                                                      bool skip_double_quotes,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr);
 }  // namespace json::detail
 }  // namespace cudf::io

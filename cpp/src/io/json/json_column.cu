@@ -580,7 +580,7 @@ void make_device_json_column(device_span<SymbolT const> input,
       init_to_zero(col.child_offsets);
     }
     col.num_rows = max_row_offsets[i] + 1;
-    col.validity =
+    col.string_validity =
       cudf::detail::create_null_mask(col.num_rows, cudf::mask_state::ALL_NULL, stream, mr);
     col.type = to_json_col_type(column_category);
   };
@@ -591,7 +591,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     init_to_zero(col.string_offsets);
     init_to_zero(col.string_lengths);
     col.num_rows = max_row_offsets[i] + 1;
-    col.validity =
+    col.string_validity =
       cudf::detail::create_null_mask(col.num_rows, cudf::mask_state::ALL_NULL, stream, mr);
     col.type = json_col_t::StringColumn;
     // destroy references of all child columns after this step, by calling remove_child_columns
@@ -821,7 +821,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     columns_data[col_id] = json_column_data{col.string_offsets.data(),
                                             col.string_lengths.data(),
                                             col.child_offsets.data(),
-                                            static_cast<bitmask_type*>(col.validity.data())};
+                                            static_cast<bitmask_type*>(col.string_validity.data())};
   }
 
   auto d_ignore_vals = cudf::detail::make_device_uvector_async(
@@ -952,16 +952,16 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
 {
   CUDF_FUNC_RANGE();
   auto validity_size_check = [](device_json_column& json_col) {
-    CUDF_EXPECTS(json_col.validity.size() >= bitmask_allocation_size_bytes(json_col.num_rows),
+    CUDF_EXPECTS(json_col.string_validity.size() >= bitmask_allocation_size_bytes(json_col.num_rows),
                  "valid_count is too small");
   };
   auto make_validity = [stream, validity_size_check](
                          device_json_column& json_col) -> std::pair<rmm::device_buffer, size_type> {
     validity_size_check(json_col);
     auto null_count = cudf::detail::null_count(
-      static_cast<bitmask_type*>(json_col.validity.data()), 0, json_col.num_rows, stream);
+      static_cast<bitmask_type*>(json_col.string_validity.data()), 0, json_col.num_rows, stream);
     // full null_mask is always required for parse_data
-    return {std::move(json_col.validity), null_count};
+    return {std::move(json_col.string_validity), null_count};
     // Note: json_col modified here, moves this memory
   };
 
@@ -1108,6 +1108,22 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   }
 }
 
+void make_device_json_column2(device_span<SymbolT const> input,
+                             tree_meta_t& tree,
+                             device_span<NodeIndexT> col_ids,
+                             device_span<size_type> row_offsets,
+                             device_json_column& root,
+                             bool is_array_of_arrays,
+                             cudf::io::json_reader_options const& options,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr);
+table_with_metadata extract_result_columns(
+  device_json_column& json_col,
+  device_span<SymbolT const> d_input,
+  cudf::io::json_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
 table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
@@ -1161,6 +1177,17 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                0);
 
   // Get internal JSON column
+  if(options.is_strict_validation())
+  make_device_json_column2(d_input,
+                          gpu_tree,
+                          gpu_col_id,
+                          gpu_row_offsets,
+                          root_column,
+                          is_array_of_arrays,
+                          options,
+                          stream,
+                          mr);
+  else
   make_device_json_column(d_input,
                           gpu_tree,
                           gpu_col_id,
@@ -1176,17 +1203,17 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     options.is_enabled_lines() ? root_column : root_column.child_columns.begin()->second;
 
   // Zero row entries
-  if (data_root.type == json_col_t::ListColumn && data_root.child_columns.empty()) {
-    return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{})};
-  }
+  // if (data_root.type == json_col_t::ListColumn && data_root.child_columns.empty()) {
+  //   return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{})};
+  // }
 
-  // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
-  auto constexpr single_child_col_count = 1;
-  CUDF_EXPECTS(data_root.type == json_col_t::ListColumn and
-                 data_root.child_columns.size() == single_child_col_count and
-                 data_root.child_columns.begin()->second.type ==
-                   (is_array_of_arrays ? json_col_t::ListColumn : json_col_t::StructColumn),
-               "Input needs to be an array of arrays or an array of (nested) objects");
+  // // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
+  // auto constexpr single_child_col_count = 1;
+  // CUDF_EXPECTS(data_root.type == json_col_t::ListColumn and
+  //                data_root.child_columns.size() == single_child_col_count and
+  //                data_root.child_columns.begin()->second.type ==
+  //                  (is_array_of_arrays ? json_col_t::ListColumn : json_col_t::StructColumn),
+  //              "Input needs to be an array of arrays or an array of (nested) objects");
 
   // Slice off the root list column, which has only a single row that contains all the structs
   auto& root_struct_col = data_root.child_columns.begin()->second;
@@ -1195,6 +1222,9 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   std::vector<std::unique_ptr<column>> out_columns;
   std::vector<column_name_info> out_column_names;
   auto parse_opt = parsing_options(options, stream);
+
+  if (options.is_strict_validation())
+    return extract_result_columns(data_root.list_child_columns[0], d_input, options, stream, mr);
 
   // Iterate over the struct's child columns and convert to cudf column
   size_type column_index = 0;
@@ -1219,6 +1249,11 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
           return (user_dtypes.find(col_name) != std::end(user_dtypes))
                    ? user_dtypes.find(col_name)->second
                    : std::optional<schema_element>{};
+      },
+      [col_name](
+        std::vector<json_path_t> const& user_dtypes) -> std::optional<schema_element> {
+        CUDF_FAIL("Unsupported option in this mode, use spark mode");
+        return std::optional<schema_element>{};
         }},
       options.get_dtypes());
 #ifdef NJP_DEBUG_PRINT

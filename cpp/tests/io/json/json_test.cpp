@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf_test/debug_utilities.hpp"
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -2174,7 +2175,7 @@ TEST_F(JsonReaderTest, ValueValidation)
     R"({"b":{"a":3} })"
     "\n"
     // 3 -> c: (valid/null based on option)
-    R"({"a": 1, "c":nan, "d": "null" } )"
+    R"({"a": 1, "c":NaN, "d": "null" } )"
     "\n"
     "\n"
     // 4 -> (valid/null based on option)
@@ -2195,6 +2196,7 @@ TEST_F(JsonReaderTest, ValueValidation)
     cudf::io::json_reader_options in_options =
       cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
         .lines(true)
+        .strict_validation(true)
         .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
     cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
@@ -2216,9 +2218,11 @@ TEST_F(JsonReaderTest, ValueValidation)
     cudf::io::json_reader_options in_options =
       cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
         .lines(true)
+        .strict_validation(true)
         .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
         .numeric_leading_zeros(false)
-        .na_values({"nan"});
+        .nonnumeric_numbers(true)
+        .na_values({"nan"}); //TODO fix validation to accept null values from here too.
     cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
     EXPECT_EQ(result.tbl->num_columns(), 4);

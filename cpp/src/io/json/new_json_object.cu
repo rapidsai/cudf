@@ -58,7 +58,7 @@
 #include "cub/device/device_histogram.cuh"
 
 namespace cudf {
-namespace spark_rapids_jni {
+namespace io {
 
 void print_schema(cudf::io::schema_element const& sch)
 {
@@ -478,7 +478,7 @@ std::vector<std::unique_ptr<cudf::column>> get_json_object_multiple_paths2(
   //  We will probably do ws normalization as we write out the data. This is true for number
   //  normalization too
 
-  auto schema = json_path_to_schema(json_paths);
+  // auto schema = json_path_to_schema(json_paths);
   // print_schema(schema);
   auto json_opts = cudf::io::json_reader_options_builder(
                      cudf::io::source_info(cudf::device_span<std::byte const>{
@@ -486,7 +486,8 @@ std::vector<std::unique_ptr<cudf::column>> get_json_object_multiple_paths2(
                      .lines(true)
                      .mixed_types_as_string(true)
                      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
-                     .dtypes(schema.child_types)
+                     .dtypes(json_paths)
+                    //  .dtypes(schema.child_types)
                      .prune_columns(true)
                      .strict_validation(true)
                      .build();
@@ -497,8 +498,8 @@ std::vector<std::unique_ptr<cudf::column>> get_json_object_multiple_paths2(
   //   stream,
   //   mr);
   auto result = cudf::io::read_json(json_opts, stream, mr);
-  return extract_result_columns(std::move(result), json_paths, stream, mr);
-  // return .tbl->release();
+  // return extract_result_columns(std::move(result), json_paths, stream, mr);
+  return result.tbl->release();
 }
 
 std::vector<json_path_t> pathstrs_to_json_paths(std::vector<std::string> const& paths)
@@ -535,5 +536,5 @@ std::vector<json_path_t> pathstrs_to_json_paths(std::vector<std::string> const& 
   return json_paths;
 }
 
-}  // namespace spark_rapids_jni
+}  // namespace io
 }  // namespace cudf
