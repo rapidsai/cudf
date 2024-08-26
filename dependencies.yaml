@@ -39,7 +39,6 @@ files:
     output: none
     includes:
       - cuda_version
-      - libarrow_run
       - test_cpp
   test_python:
     output: none
@@ -57,7 +56,6 @@ files:
       - build_all
       - cuda
       - cuda_version
-      - libarrow_run
       - test_java
   test_notebooks:
     output: none
@@ -76,7 +74,6 @@ files:
       - cuda
       - cuda_version
       - docs
-      - libarrow_run
       - py_version
   py_build_cudf:
     output: pyproject
@@ -387,15 +384,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cython>=3.0.3
-  libarrow_run:
-    common:
-      - output_types: conda
-        packages:
-          # Allow runtime version to float up to patch version
-          - libarrow-acero>=16.1.0,<16.2.0a0
-          - libarrow-dataset>=16.1.0,<16.2.0a0
-          - libarrow>=16.1.0,<16.2.0a0
-          - libparquet>=16.1.0,<16.2.0a0
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
