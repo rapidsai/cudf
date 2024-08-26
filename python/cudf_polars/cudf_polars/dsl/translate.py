@@ -387,6 +387,15 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
     name, *options = node.function_data
     options = tuple(options)
     if isinstance(name, pl_expr.StringFunction):
+        if name in {
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+        }:
+            column, chars = (translate_expr(visitor, n=n) for n in node.input)
+            if isinstance(chars, expr.Literal) and chars.value == pa.scalar(""):
+                # No-op in python, polars, but libcudf removes whitespace so return early
+                return column
         return expr.StringFunction(
             dtype,
             name,

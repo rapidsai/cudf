@@ -847,10 +847,7 @@ class StringFunction(Expr):
             expr_chars = self.children[1]
             assert isinstance(expr_chars, Literal)
 
-            if expr_chars.value == pa.scalar(""):
-                # No-op in python, polars, but libcudf removes whitespace so return early
-                return column
-            elif expr_chars.value == pa.scalar(None):
+            if expr_chars.value == pa.scalar(None):
                 # Polars api for chars:
                 # If set to None (default), all leading and trailing whitespace is removed
                 # libcudf api for chars:
