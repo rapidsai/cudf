@@ -300,16 +300,6 @@ void validate_token_stream(device_span<char const> d_input,
         auto op_result = (prev.first == token_t::ErrorBegin ? prev.first : curr.first);
         return scan_type((curr.second ? curr.first : op_result), prev.second | curr.second);
       });
-    rmm::device_uvector<int8_t> error(num_tokens, stream);
-    thrust::transform(rmm::exec_policy(stream),
-                      count_it,
-                      count_it + num_tokens,
-                      error.begin(),
-                      predicate);  // in-place scan
-    // printf("error:");
-    // for (auto tk : cudf::detail::make_std_vector_sync(error, stream))
-    //   printf("%d ", tk);
-    // printf("\n");
 
     thrust::transform_inclusive_scan(rmm::exec_policy(stream),
                                      count_it,
@@ -318,49 +308,6 @@ void validate_token_stream(device_span<char const> d_input,
                                      transform_op,
                                      binary_op);  // in-place scan
   }
-  // printf("pre_process_token:");
-  // for (auto tk : cudf::detail::make_std_vector_sync(device_span<PdaTokenT const>(tokens),
-  // stream))
-  //   printf("%d ", tk);
-  // printf("\n");
-
-  // LE SB FB FE VB VE SE LE SB ER LE SB LB VB VE SE LE LE
-  // 1   0  0  0  0  0  0  1  0  0  0  0  0  0  0  0  1  1
-  // 1   1  1  1  1  1  1  2  2  2  2  2  2  2  2  2  3  4
-  // auto unary_op = [] __device__ (auto) -> token_t { return token_t::ErrorBegin; };
-  // thrust::transform_if(rmm::exec_policy(stream), count_it, count_it + num_tokens, tokens.begin(),
-  // unary_op, predicate); auto num_rows = thrust::count(rmm::exec_policy(stream), tokens.begin(),
-  // tokens.end(), token_t::LineEnd); rmm::device_uvector<bool> row_is_error(num_rows, stream);
-  // rmm::device_uvector<SymbolOffsetT> row_index(num_tokens, stream);
-  // auto is_LineEnd = [] __device__ (auto token) -> SymbolOffsetT { return token ==
-  // token_t::LineEnd; }; thrust::transform_inclusive_scan(rmm::exec_policy(stream),
-  //   tokens.begin(), tokens.end(), row_index.begin(), is_LineEnd, thrust::plus<SymbolOffsetT>{});
-  // auto is_error_it = thrust::make_transform_iterator(tokens.begin(), [] __device__ (auto token)
-  // -> bool { return token == token_t::ErrorBegin; });
-  // thrust::reduce_by_key(rmm::exec_policy(stream), row_index.begin(), row_index.end(),
-  // is_error_it, thrust::make_discard_iterator(), row_is_error.begin());
-
-  // if current == ErrorBegin and tokens[i+1]==LE or i==n-1) then write ErrorBegin to tokens[i],
-  // else nothing. if VB, or SB, then if validate(token[i], token[i+1])==false,
-  //
-  // Transform_if to errors tokens
-  // Count LE (num_rows)
-  // create int vector [num_rows], bool[num_rows]
-  // TODO: fuse them together with single scan algorithm.
-  // LE==1, to scan to row_index.
-  // reduce_by_key, to check if it has any error, and number of non-errors tokens.
-  // reduce them to get output tokens count.
-  // copy_if -> use cub cub::DeviceSelect::If(d_data, d_num_selected_out, num_items, select_op)
 }
-
-// corner cases: empty LE,
-// alternate Decoupled look back idea:
-// count LineEnd, allocate bool[num_rows] as is_error.
-// decoupled look back for LineEnd tokens for row indices,
-//  transform_if to error tokens and write to bool[row_index] atomically (reduce and write within
-//  warp/block?)
-// decoupled look back for LineEnd tokens for row indices,
-//  (if not error row & not lineEnd token) -> decoupled look back for output indices,
-//  CopyIf (if not error row & not lineEnd token) write to output.
 }  // namespace detail
 }  // namespace cudf::io::json
