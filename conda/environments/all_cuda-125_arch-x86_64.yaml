@@ -51,6 +51,7 @@ dependencies:
 - moto>=4.0.8
 - msgpack-python
 - myst-nb
+- nbformat
 - nbsphinx
 - ninja
 - notebook
@@ -60,6 +61,7 @@ dependencies:
 - numpydoc
 - nvcomp==3.0.6
 - nvtx>=0.2.1
+- openpyxl
 - packaging
 - pandas
 - pandas>=2.0,<2.2.3dev0
@@ -73,6 +75,7 @@ dependencies:
 - pytest-cov
 - pytest-xdist
 - pytest<8
+- pytest_notebook
 - python-confluent-kafka>=1.9.0,<1.10.0a0
 - python>=3.9,<3.12
 - pytorch>=2.1.0

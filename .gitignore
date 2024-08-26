@@ -180,5 +180,5 @@ compile_commands.json
 .clangd/
 
 # pytest artifacts
-
+rmm_log.txt
 python/cudf/cudf_pandas_tests/data/rmm_log.txt

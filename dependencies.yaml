@@ -978,7 +978,7 @@ dependencies:
           - pytest-reportlog
   test_python_cudf_pandas:
     common:
-      - output_types: [requirements, pyproject]
+      - output_types: [conda, requirements, pyproject]
         packages:
           - ipython
           - nbformat
