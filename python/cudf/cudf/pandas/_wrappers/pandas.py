@@ -247,7 +247,7 @@ def custom_repr_html(obj):
 
 
 if ipython_shell:
-    html_formatter = get_ipython().display_formatter.formatters["text/html"]
+    html_formatter = ipython_shell.display_formatter.formatters["text/html"]
     html_formatter.for_type(DataFrame, custom_repr_html)
 
 
