@@ -698,6 +698,7 @@ dependencies:
           - *cmake_ver
           - maven
           - openjdk=8.*
+          - boost
   test_python_common:
     common:
       - output_types: [conda, requirements, pyproject]
