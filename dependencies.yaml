@@ -981,4 +981,6 @@ dependencies:
       - output_types: [requirements, pyproject]
         packages:
           - ipython
+          - nbformat
+          - pytest_notebook
           - openpyxl
