@@ -678,7 +678,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     3  3   0.3
     """
 
-    _PROTECTED_KEYS = frozenset(("_data", "_index"))
+    _PROTECTED_KEYS = frozenset(
+        ("_data", "_index", "_ipython_canary_method_should_not_exist_")
+    )
     _accessors: set[Any] = set()
     _loc_indexer_type = _DataFrameLocIndexer
     _iloc_indexer_type = _DataFrameIlocIndexer

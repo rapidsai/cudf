@@ -9,6 +9,7 @@ import pickle
 import sys
 
 import pandas as pd
+from IPython import get_ipython
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
     EasterMonday as pd_EasterMonday,
@@ -61,6 +62,7 @@ from pandas.core.resample import (  # isort: skip
     TimeGrouper as pd_TimeGrouper,
 )
 
+ipython_shell = get_ipython()
 
 cudf.set_option("mode.pandas_compatible", True)
 
@@ -208,6 +210,12 @@ def _DataFrame__dir__(self):
     ]
 
 
+def custom_func(self, **kwargs):
+    raise AttributeError(
+        "_ipython_canary_method_should_not_exist_ doesn't exist"
+    )
+
+
 DataFrame = make_final_proxy_type(
     "DataFrame",
     cudf.DataFrame,
@@ -220,8 +228,23 @@ DataFrame = make_final_proxy_type(
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
         "_accessors": set(),
+        "_ipython_canary_method_should_not_exist_": custom_func,
     },
 )
+
+
+def custom_repr_html(obj):
+    # This customer method is need to register a html format
+    # for ipython
+    return _fast_slow_function_call(
+        lambda obj: obj._repr_html_(),
+        obj,
+    )[0]
+
+
+if ipython_shell:
+    html_formatter = get_ipython().display_formatter.formatters["text/html"]
+    html_formatter.for_type(DataFrame, custom_repr_html)
 
 
 Series = make_final_proxy_type(

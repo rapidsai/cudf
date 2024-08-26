@@ -178,3 +178,7 @@ jupyter_execute
 # clang tooling
 compile_commands.json
 .clangd/
+
+# pytest artifacts
+
+python/cudf/cudf_pandas_tests/data/rmm_log.txt
