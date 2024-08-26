@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "../utilities/timer.hpp"
 #include "utils.hpp"
 
 #include <cudf/ast/expressions.hpp>
@@ -108,8 +107,6 @@ int main(int argc, char const** argv)
   auto resource = create_memory_resource(args.memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
 
-  cudf::examples::timer timer;
-
   // Define the column projections and filter predicate for `lineitem` table
   std::vector<std::string> const lineitem_cols = {"l_returnflag",
                                                   "l_linestatus",
@@ -165,8 +162,6 @@ int main(int argc, char const** argv)
   auto const orderedby_table = apply_orderby(groupedby_table,
                                              {"l_returnflag", "l_linestatus"},
                                              {cudf::order::ASCENDING, cudf::order::ASCENDING});
-
-  timer.print_elapsed_millis();
 
   // Write query result to a parquet file
   orderedby_table->to_parquet("q1.parquet");

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "../utilities/timer.hpp"
 #include "utils.hpp"
 
 #include <cudf/column/column.hpp>
@@ -116,8 +115,6 @@ int main(int argc, char const** argv)
   auto resource = create_memory_resource(args.memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
 
-  cudf::examples::timer timer;
-
   // Read out the table from parquet files
   auto const lineitem = read_parquet(
     args.dataset_dir + "/lineitem.parquet",
@@ -173,8 +170,6 @@ int main(int argc, char const** argv)
   // Perform the orderby operation
   auto const orderedby_table = apply_orderby(
     groupedby_table, {"nation", "o_year"}, {cudf::order::ASCENDING, cudf::order::DESCENDING});
-
-  timer.print_elapsed_millis();
 
   // Write query result to a parquet file
   orderedby_table->to_parquet("q9.parquet");

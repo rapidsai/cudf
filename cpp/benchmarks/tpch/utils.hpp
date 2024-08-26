@@ -312,7 +312,7 @@ struct groupby_context_t {
   }
   auto agg_results = groupby_obj.aggregate(requests);
   std::vector<std::unique_ptr<cudf::column>> result_columns;
-  for (size_t i = 0; i < agg_results.first->num_columns(); i++) {
+  for (auto i = 0; i < agg_results.first->num_columns(); i++) {
     auto col = std::make_unique<cudf::column>(agg_results.first->get_column(i));
     result_columns.push_back(std::move(col));
   }

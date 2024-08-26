@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "../utilities/timer.hpp"
 #include "utils.hpp"
 
 #include <cudf/ast/expressions.hpp>
@@ -66,8 +65,6 @@ int main(int argc, char const** argv)
   // Use a memory pool
   auto resource = create_memory_resource(args.memory_resource_type);
   rmm::mr::set_current_device_resource(resource.get());
-
-  cudf::examples::timer timer;
 
   // Read out the `lineitem` table from parquet file
   std::vector<std::string> const lineitem_cols = {
@@ -128,8 +125,6 @@ int main(int argc, char const** argv)
   // Sum the `revenue` column
   auto const revenue_view = revenue->view();
   auto const result_table = apply_reduction(revenue_view, cudf::aggregation::Kind::SUM, "revenue");
-
-  timer.print_elapsed_millis();
 
   // Write query result to a parquet file
   result_table->to_parquet("q6.parquet");
