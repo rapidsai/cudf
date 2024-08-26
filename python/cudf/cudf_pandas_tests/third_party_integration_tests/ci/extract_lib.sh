@@ -16,7 +16,6 @@ extract_lib_from_dependencies_yaml() {
     # rest
     local extracted_libs="$(yq -o json $file | jq -rc '.files | with_entries( select(.key | contains("test_")) ) | keys | map(sub("^test_"; ""))')"
     echo $extracted_libs
-    write_output "LIBS" $extracted_libs
 }
 
 
