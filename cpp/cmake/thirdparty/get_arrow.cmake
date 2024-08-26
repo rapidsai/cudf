@@ -141,6 +141,10 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
         # Set this to enable `find_package(Parquet)`
         set(Parquet_DIR "${Arrow_DIR}")
       endif()
+      # Set this to enable `find_package(ArrowDataset)`. This will call find_package(ArrowAcero) for
+      # us
+      set(ArrowDataset_DIR "${Arrow_DIR}")
+      find_package(ArrowDataset REQUIRED QUIET)
     endif()
     # Arrow_ADDED: set if CPM downloaded Arrow from Github
   elseif(Arrow_ADDED)
@@ -178,6 +182,47 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
   endif()
 
   if(Arrow_ADDED)
+    set(arrow_code_string
+        [=[
+          if (TARGET cudf::arrow_shared AND (NOT TARGET arrow_shared))
+              add_library(arrow_shared ALIAS cudf::arrow_shared)
+          endif()
+          if (TARGET cudf::arrow_static AND (NOT TARGET arrow_static))
+              add_library(arrow_static ALIAS cudf::arrow_static)
+          endif()
+          if (NOT TARGET arrow::flatbuffers)
+            add_library(arrow::flatbuffers INTERFACE IMPORTED)
+          endif()
+          if (NOT TARGET arrow::hadoop)
+            add_library(arrow::hadoop INTERFACE IMPORTED)
+          endif()
+        ]=]
+    )
+    if(ENABLE_PARQUET)
+      string(
+        APPEND
+        arrow_code_string
+        "
+          find_package(Boost)
+          if (NOT TARGET Boost::headers)
+            add_library(Boost::headers INTERFACE IMPORTED)
+          endif()
+        "
+      )
+    endif()
+    if(NOT TARGET xsimd)
+      string(
+        APPEND
+        arrow_code_string
+        "
+          if(NOT TARGET arrow::xsimd)
+            add_library(arrow::xsimd INTERFACE IMPORTED)
+            target_include_directories(arrow::xsimd INTERFACE \"${Arrow_BINARY_DIR}/xsimd_ep/src/xsimd_ep-install/include\")
+          endif()
+        "
+      )
+    endif()
+    rapids_cmake_install_lib_dir(lib_dir)
     if(TARGET arrow_static)
       get_target_property(interface_libs arrow_static INTERFACE_LINK_LIBRARIES)
       # The `arrow_static` library is leaking a dependency on the object libraries it was built with
@@ -191,7 +236,100 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
         get_target_property(interface_libs arrow_static INTERFACE_LINK_LIBRARIES)
       endif()
     endif()
+    rapids_export(
+      BUILD Arrow
+      VERSION ${VERSION}
+      EXPORT_SET arrow_targets
+      GLOBAL_TARGETS arrow_shared arrow_static
+      NAMESPACE cudf::
+      FINAL_CODE_BLOCK arrow_code_string
+    )
+
+    if(ENABLE_PARQUET)
+      set(arrow_acero_code_string
+          [=[
+              if (TARGET cudf::arrow_acero_shared AND (NOT TARGET arrow_acero_shared))
+                  add_library(arrow_acero_shared ALIAS cudf::arrow_acero_shared)
+              endif()
+              if (TARGET cudf::arrow_acero_static AND (NOT TARGET arrow_acero_static))
+                  add_library(arrow_acero_static ALIAS cudf::arrow_acero_static)
+              endif()
+            ]=]
+      )
+
+      rapids_export(
+        BUILD ArrowAcero
+        VERSION ${VERSION}
+        EXPORT_SET arrow_acero_targets
+        GLOBAL_TARGETS arrow_acero_shared arrow_acero_static
+        NAMESPACE cudf::
+        FINAL_CODE_BLOCK arrow_acero_code_string
+      )
+
+      set(arrow_dataset_code_string
+          [=[
+              if (TARGET cudf::arrow_dataset_shared AND (NOT TARGET arrow_dataset_shared))
+                  add_library(arrow_dataset_shared ALIAS cudf::arrow_dataset_shared)
+              endif()
+              if (TARGET cudf::arrow_dataset_static AND (NOT TARGET arrow_dataset_static))
+                  add_library(arrow_dataset_static ALIAS cudf::arrow_dataset_static)
+              endif()
+            ]=]
+      )
+
+      rapids_export(
+        BUILD ArrowDataset
+        VERSION ${VERSION}
+        EXPORT_SET arrow_dataset_targets
+        GLOBAL_TARGETS arrow_dataset_shared arrow_dataset_static
+        NAMESPACE cudf::
+        FINAL_CODE_BLOCK arrow_dataset_code_string
+      )
+      set(parquet_code_string
+          [=[
+              if (TARGET cudf::parquet_shared AND (NOT TARGET parquet_shared))
+                  add_library(parquet_shared ALIAS cudf::parquet_shared)
+              endif()
+              if (TARGET cudf::parquet_static AND (NOT TARGET parquet_static))
+                  add_library(parquet_static ALIAS cudf::parquet_static)
+              endif()
+            ]=]
+      )
+
+      rapids_export(
+        BUILD Parquet
+        VERSION ${VERSION}
+        EXPORT_SET parquet_targets
+        GLOBAL_TARGETS parquet_shared parquet_static
+        NAMESPACE cudf::
+        FINAL_CODE_BLOCK parquet_code_string
+      )
+    endif()
   endif()
+
+  # We generate the arrow-configfiles when we built arrow locally, so always do `find_dependency`
+  rapids_export_package(BUILD Arrow cudf-exports)
+  rapids_export_package(INSTALL Arrow cudf-exports)
+
+  if(ENABLE_PARQUET)
+    rapids_export_package(BUILD Parquet cudf-exports)
+    rapids_export_package(BUILD ArrowDataset cudf-exports)
+  endif()
+
+  include("${rapids-cmake-dir}/export/find_package_root.cmake")
+  rapids_export_find_package_root(
+    BUILD Arrow [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-exports
+  )
+  rapids_export_find_package_root(
+    BUILD Parquet [=[${CMAKE_CURRENT_LIST_DIR}]=]
+    EXPORT_SET cudf-exports
+    CONDITION ENABLE_PARQUET
+  )
+  rapids_export_find_package_root(
+    BUILD ArrowDataset [=[${CMAKE_CURRENT_LIST_DIR}]=]
+    EXPORT_SET cudf-exports
+    CONDITION ENABLE_PARQUET
+  )
 
   set(ARROW_LIBRARIES
       "${ARROW_LIBRARIES}"
