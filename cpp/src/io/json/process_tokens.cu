@@ -279,13 +279,10 @@ void validate_token_stream(device_span<char const> d_input,
       return false;
     };
 
-    using scan_type        = write_if::scan_type;
-    auto conditional_write = write_if{tokens.begin(), num_tokens};
-    // auto conditional_output_it = tokens.begin();
-    // auto conditional_output_it = thrust::make_tabulate_output_iterator(conditional_write);
-    auto conditional_output_it =
-      thrust::make_tabulate_output_iterator(thrust::make_counting_iterator(0), conditional_write);
-    auto transform_op = cuda::proclaim_return_type<scan_type>(
+    using scan_type            = write_if::scan_type;
+    auto conditional_write     = write_if{tokens.begin(), num_tokens};
+    auto conditional_output_it = thrust::make_tabulate_output_iterator(conditional_write);
+    auto transform_op          = cuda::proclaim_return_type<scan_type>(
       [predicate, tokens = tokens.begin()] __device__(auto i) -> scan_type {
         if (predicate(i)) return {token_t::ErrorBegin, tokens[i] == token_t::LineEnd};
         return {static_cast<token_t>(tokens[i]), tokens[i] == token_t::LineEnd};
