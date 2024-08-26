@@ -2169,14 +2169,15 @@ TEST_F(JsonReaderTest, ValueValidation)
     cudf::io::json_reader_options in_options =
       cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
         .lines(true)
-        .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+        .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+        .strict_validation(true);
     cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
     EXPECT_EQ(result.tbl->num_columns(), 4);
     EXPECT_EQ(result.tbl->num_rows(), 8);
-    auto b_a_col = int64_wrapper({0, 0, 3, 0, 0, 0, 0, 0});
-    auto a_column =
-      int64_wrapper{{-2, 0, 0, 1, 4, 5, 6, 0}, {true, false, false, true, true, true, true, false}};
+    auto b_a_col  = int64_wrapper({0, 0, 3, 0, 0, 0, 0, 0});
+    auto a_column = int64_wrapper{{-2, 0, 0, 0, 4, 5, 6, 0},
+                                  {true, false, false, false, true, true, true, false}};
     auto b_column = cudf::test::structs_column_wrapper(
       {b_a_col}, {false, false, true, false, false, false, false, false});
     auto c_column = float64_wrapper({0.0, 0.0, 0.0, 0.0, 1.23, 0.0, 0.0, 0.0},
@@ -2192,7 +2193,8 @@ TEST_F(JsonReaderTest, ValueValidation)
         .lines(true)
         .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
         .numeric_leading_zeros(false)
-        .na_values({"nan"});
+        .na_values({"nan"})
+        .strict_validation(true);
     cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
     EXPECT_EQ(result.tbl->num_columns(), 4);
