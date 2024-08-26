@@ -982,5 +982,5 @@ dependencies:
         packages:
           - ipython
           - nbformat
-          - pytest_notebook
           - openpyxl
+          - pytest_notebook
