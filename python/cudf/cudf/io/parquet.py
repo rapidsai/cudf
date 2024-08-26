@@ -571,11 +571,26 @@ def read_parquet(
         )
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
+    # Prepare remote-IO options
+    prefetch_options = kwargs.pop("prefetch_options", {})
+    if not ioutils._is_local_filesystem(fs):
+        method = prefetch_options.get("method", "parquet")
+        if method == "parquet":
+            prefetch_options = prefetch_options.update(
+                {
+                    "method": method,
+                    "columns": columns,
+                    # All paths must have the same row-group selection
+                    "row_groups": row_groups[0] if row_groups else None,
+                }
+            )
+
     filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         fs=fs,
         storage_options=storage_options,
         bytes_per_thread=bytes_per_thread,
+        prefetch_options=prefetch_options,
     )
 
     # Warn user if they are not using cudf for IO
