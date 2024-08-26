@@ -20,7 +20,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/iterator_adaptor.h>
 
-THRUST_NAMESPACE_BEGIN
+namespace cudf {
 namespace detail {
 
 // Proxy reference that calls BinaryFunction with index value and the rhs of assignment operator
@@ -43,19 +43,11 @@ class tabulate_output_iterator_proxy {
   BinaryFunction fun;
 };
 
-// Register tabulate_output_iterator_proxy with 'is_proxy_reference' from
-// type_traits to enable its use with algorithms.
-template <class BinaryFunction, class IndexT>
-struct is_proxy_reference<tabulate_output_iterator_proxy<BinaryFunction, IndexT>>
-  : public thrust::detail::true_type {};
-
-}  // namespace detail
-
 /**
  * @brief Transform output iterator with custom binary function which takes index and value.
  *
  * @code {.cpp}
- * #include <thrust/iterator/tabulate_output_iterator.cuh>
+ * #include "tabulate_output_iterator.cuh"
  * #include <thrust/device_vector.h>
  * #include <thrust/iterator/counting_iterator.h>
  * #include <thrust/iterator/transform_iterator.h>
@@ -95,22 +87,20 @@ struct is_proxy_reference<tabulate_output_iterator_proxy<BinaryFunction, IndexT>
  */
 template <typename BinaryFunction, typename IndexT = ptrdiff_t>
 class tabulate_output_iterator
-  : public thrust::iterator_adaptor<
-      tabulate_output_iterator<BinaryFunction, IndexT>,
-      counting_iterator<IndexT>,
-      thrust::use_default,
-      thrust::use_default,
-      thrust::use_default,
-      thrust::detail::tabulate_output_iterator_proxy<BinaryFunction, IndexT>> {
+  : public thrust::iterator_adaptor<tabulate_output_iterator<BinaryFunction, IndexT>,
+                                    thrust::counting_iterator<IndexT>,
+                                    thrust::use_default,
+                                    thrust::use_default,
+                                    thrust::use_default,
+                                    tabulate_output_iterator_proxy<BinaryFunction, IndexT>> {
  public:
   // parent class.
-  using super_t = thrust::iterator_adaptor<
-    tabulate_output_iterator<BinaryFunction, IndexT>,
-    counting_iterator<IndexT>,
-    thrust::use_default,
-    thrust::use_default,
-    thrust::use_default,
-    thrust::detail::tabulate_output_iterator_proxy<BinaryFunction, IndexT>>;
+  using super_t = thrust::iterator_adaptor<tabulate_output_iterator<BinaryFunction, IndexT>,
+                                           thrust::counting_iterator<IndexT>,
+                                           thrust::use_default,
+                                           thrust::use_default,
+                                           thrust::use_default,
+                                           tabulate_output_iterator_proxy<BinaryFunction, IndexT>>;
   // friend thrust::iterator_core_access to allow it access to the private interface dereference()
   friend class thrust::iterator_core_access;
   __host__ __device__ tabulate_output_iterator(BinaryFunction fun) : fun(fun) {}
@@ -121,8 +111,7 @@ class tabulate_output_iterator
   // thrust::iterator_core_access accesses this function
   __host__ __device__ typename super_t::reference dereference() const
   {
-    return thrust::detail::tabulate_output_iterator_proxy<BinaryFunction, IndexT>(*this->base(),
-                                                                                  fun);
+    return tabulate_output_iterator_proxy<BinaryFunction, IndexT>(*this->base(), fun);
   }
 };
 
@@ -132,4 +121,13 @@ make_tabulate_output_iterator(BinaryFunction fun)
 {
   return tabulate_output_iterator<BinaryFunction>(fun);
 }  // end make_tabulate_output_iterator
-THRUST_NAMESPACE_END
+
+}  // namespace detail
+}  // namespace cudf
+
+// Register tabulate_output_iterator_proxy with 'is_proxy_reference' from
+// type_traits to enable its use with algorithms.
+template <class BinaryFunction, class IndexT>
+struct thrust::detail::is_proxy_reference<
+  cudf::detail::tabulate_output_iterator_proxy<BinaryFunction, IndexT>>
+  : public thrust::detail::true_type {};
