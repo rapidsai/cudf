@@ -771,6 +771,15 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "Slice only supports literal start and stop values"
                 )
+        elif self.name in {
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+        }:
+            if not isinstance(self.children[1], Literal):
+                raise NotImplementedError(
+                    "strip operations only support scalar patterns"
+                )
 
     def do_evaluate(
         self,

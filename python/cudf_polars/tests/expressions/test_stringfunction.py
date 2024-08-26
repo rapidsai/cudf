@@ -276,3 +276,8 @@ def test_strip_chars_start(strip_ldf, to_strip):
 def test_strip_chars_end(strip_ldf, to_strip):
     q = strip_ldf.select(pl.col("a").str.strip_chars_end(to_strip))
     assert_gpu_result_equal(q)
+
+
+def test_strip_chars_column(strip_ldf):
+    q = strip_ldf.select(pl.col("a").str.strip_chars(pl.col("a")))
+    assert_ir_translation_raises(q, NotImplementedError)
