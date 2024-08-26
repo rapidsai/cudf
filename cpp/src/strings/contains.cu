@@ -112,7 +112,7 @@ std::unique_ptr<column> count_re(strings_column_view const& input,
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
-  auto result = count_matches(*d_strings, *d_prog, input.size(), stream, mr);
+  auto result = count_matches(*d_strings, *d_prog, stream, mr);
   if (input.has_nulls()) {
     result->set_null_mask(cudf::detail::copy_bitmask(input.parent(), stream, mr),
                           input.null_count());

@@ -549,6 +549,7 @@ class StringMethods(ColumnMethods):
         offset_col = col.children[0]
 
         return cudf.core.column.ListColumn(
+            data=None,
             size=len(col),
             dtype=cudf.ListDtype(col.dtype),
             mask=col.mask,
@@ -775,11 +776,13 @@ class StringMethods(ColumnMethods):
             # TODO: we silently ignore the `regex=` flag here
             if case is False:
                 input_column = libstrings.to_lower(self._column)
-                pat = libstrings.to_lower(column.as_column(pat, dtype="str"))
+                col_pat = libstrings.to_lower(
+                    column.as_column(pat, dtype="str")
+                )
             else:
                 input_column = self._column
-                pat = column.as_column(pat, dtype="str")
-            result_col = libstrings.contains_multiple(input_column, pat)
+                col_pat = column.as_column(pat, dtype="str")
+            result_col = libstrings.contains_multiple(input_column, col_pat)
         return self._return_or_inplace(result_col)
 
     def like(self, pat: str, esc: str | None = None) -> SeriesOrIndex:
@@ -4693,7 +4696,7 @@ class StringMethods(ColumnMethods):
                 result_col, name=self._parent.name, index=index
             )
         elif isinstance(self._parent, cudf.BaseIndex):
-            return cudf.Index(result_col, name=self._parent.name)
+            return cudf.Index._from_column(result_col, name=self._parent.name)
         else:
             return result_col
 

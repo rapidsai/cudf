@@ -9,9 +9,10 @@ import numpy as np
 import pandas as pd
 from typing_extensions import Self
 
+import pylibcudf
+
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib import pylibcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.dtypes import CategoricalDtype
@@ -61,25 +62,30 @@ class NumericalColumn(NumericalBaseColumn):
     def __init__(
         self,
         data: Buffer,
-        dtype: DtypeObj,
+        size: int | None,
+        dtype: np.dtype,
         mask: Buffer | None = None,
-        size: int | None = None,  # TODO: make this non-optional
         offset: int = 0,
         null_count: int | None = None,
+        children: tuple = (),
     ):
-        dtype = cudf.dtype(dtype)
+        if not (isinstance(dtype, np.dtype) and dtype.kind in "iufb"):
+            raise ValueError(
+                "dtype must be a floating, integer or boolean numpy dtype."
+            )
 
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = (data.size // dtype.itemsize) - offset
         super().__init__(
-            data,
+            data=data,
             size=size,
             dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
 
     def _clear_cache(self):
@@ -136,7 +142,7 @@ class NumericalColumn(NumericalBaseColumn):
         """
 
         # Normalize value to scalar/column
-        device_value = (
+        device_value: cudf.Scalar | ColumnBase = (
             cudf.Scalar(
                 value,
                 dtype=self.dtype
@@ -199,16 +205,53 @@ class NumericalColumn(NumericalBaseColumn):
             np.bool_: np.float32,
         }
 
+        out_dtype = None
         if op in {"__truediv__", "__rtruediv__"}:
             # Division with integer types results in a suitable float.
             if truediv_type := int_float_dtype_mapping.get(self.dtype.type):
                 return self.astype(truediv_type)._binaryop(other, op)
+        elif op in {
+            "__lt__",
+            "__gt__",
+            "__le__",
+            "__ge__",
+            "__eq__",
+            "__ne__",
+        }:
+            out_dtype = "bool"
+
+            # If `other` is a Python integer and it is out-of-bounds
+            # promotion could fail but we can trivially define the result
+            # in terms of `notnull` or `NULL_NOT_EQUALS`.
+            if type(other) is int and self.dtype.kind in "iu":  # noqa: E721
+                truthiness = None
+                iinfo = np.iinfo(self.dtype)
+                if iinfo.min > other:
+                    truthiness = op in {"__ne__", "__gt__", "__ge__"}
+                elif iinfo.max < other:
+                    truthiness = op in {"__ne__", "__lt__", "__le__"}
+
+                # Compare with minimum value so that the result is true/false
+                if truthiness is True:
+                    other = iinfo.min
+                    op = "__ge__"
+                elif truthiness is False:
+                    other = iinfo.min
+                    op = "__lt__"
+
+        elif op in {"NULL_EQUALS", "NULL_NOT_EQUALS"}:
+            out_dtype = "bool"
 
         reflect, op = self._check_reflected_op(op)
         if (other := self._wrap_binop_normalization(other)) is NotImplemented:
             return NotImplemented
-        out_dtype = self.dtype
-        if other is not None:
+
+        if out_dtype is not None:
+            pass  # out_dtype was already set to bool
+        if other is None:
+            # not a binary operator, so no need to promote
+            out_dtype = self.dtype
+        elif out_dtype is None:
             out_dtype = np.result_type(self.dtype, other.dtype)
             if op in {"__mod__", "__floordiv__"}:
                 tmp = self if reflect else other
@@ -225,17 +268,6 @@ class NumericalColumn(NumericalBaseColumn):
                             out_dtype = cudf.dtype("float64")
                     elif is_scalar(tmp) and tmp == 0:
                         out_dtype = cudf.dtype("float64")
-        if op in {
-            "__lt__",
-            "__gt__",
-            "__le__",
-            "__ge__",
-            "__eq__",
-            "__ne__",
-            "NULL_EQUALS",
-            "NULL_NOT_EQUALS",
-        }:
-            out_dtype = "bool"
 
         if op in {"__and__", "__or__", "__xor__"}:
             if self.dtype.kind == "f" or other.dtype.kind == "f":
@@ -247,7 +279,7 @@ class NumericalColumn(NumericalBaseColumn):
             if self.dtype.kind == "b" or other.dtype.kind == "b":
                 out_dtype = "bool"
 
-        if (
+        elif (
             op == "__pow__"
             and self.dtype.kind in "iu"
             and (is_integer(other) or other.dtype.kind in "iu")
@@ -520,7 +552,7 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> cudf.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
-            cudf_obj = cudf.Scalar(fill_value)
+            cudf_obj: cudf.Scalar | ColumnBase = cudf.Scalar(fill_value)
             if not as_column(cudf_obj).can_cast_safely(self.dtype):
                 raise TypeError(
                     f"Cannot safely cast non-equivalent "
@@ -623,6 +655,7 @@ class NumericalColumn(NumericalBaseColumn):
                 categories=dtype.categories._values,
                 codes=cudf.core.column.NumericalColumn(
                     self.base_data,  # type: ignore[arg-type]
+                    self.size,
                     dtype=self.dtype,
                 ),
                 mask=self.base_mask,

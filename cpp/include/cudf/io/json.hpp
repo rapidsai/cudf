@@ -855,6 +855,8 @@ class json_writer_options_builder;
 class json_writer_options {
   // Specify the sink to use for writer output
   sink_info _sink;
+  // maximum number of rows to write in each chunk (limits memory use)
+  size_type _rows_per_chunk = std::numeric_limits<size_type>::max();
   // Set of columns to output
   table_view _table;
   // string to use for null entries
@@ -863,8 +865,6 @@ class json_writer_options {
   bool _include_nulls = false;
   // Indicates whether to use JSON lines for records format
   bool _lines = false;
-  // maximum number of rows to write in each chunk (limits memory use)
-  size_type _rows_per_chunk = std::numeric_limits<size_type>::max();
   // string to use for values != 0 in INT8 types (default 'true')
   std::string _true_value = std::string{"true"};
   // string to use for values == 0 in INT8 types (default 'false')
@@ -879,7 +879,7 @@ class json_writer_options {
    * @param table Table to be written to output
    */
   explicit json_writer_options(sink_info sink, table_view table)
-    : _sink(std::move(sink)), _table(std::move(table)), _rows_per_chunk(table.num_rows())
+    : _sink(std::move(sink)), _rows_per_chunk(table.num_rows()), _table(std::move(table))
   {
   }
 
