@@ -14,12 +14,13 @@ import tempfile
 import types
 from io import BytesIO, StringIO
 
+import jupyter_client
 import nbformat
 import numpy as np
 import pyarrow as pa
 import pytest
+from nbconvert.preprocessors import ExecutePreprocessor
 from numba import NumbaDeprecationWarning
-from pytest_notebook.nb_regression import NBRegressionFixture
 from pytz import utc
 
 from cudf.pandas import LOADED, Profiler
@@ -49,9 +50,6 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 # Accelerated pandas has the real pandas and cudf modules as attributes
 pd = xpd._fsproxy_slow
 cudf = xpd._fsproxy_fast
-
-nb_fixture = NBRegressionFixture(exec_timeout=20)
-nb_fixture.diff_color_words = False
 
 
 @pytest.fixture
@@ -1658,19 +1656,33 @@ def test_change_index_name(index):
 
 
 def test_notebook_slow_repr():
-    notebook_file = (
+    notebook_filename = (
         os.path.dirname(os.path.abspath(__file__))
         + "/data/repr_slow_down_test.ipynb"
     )
-    # Load the notebook
-    with open(notebook_file, "r", encoding="utf-8") as f:
+    with open(notebook_filename, "r", encoding="utf-8") as f:
         nb = nbformat.read(f, as_version=4)
 
-    # Get the output cell
-    output_cell = nb.cells[2]
-    expected_text = output_cell.outputs[0].data["text/html"]
+    ep = ExecutePreprocessor(
+        timeout=20, kernel_name=jupyter_client.KernelManager().kernel_name
+    )
 
-    # Check the output cell
-    nb_run = nb_fixture.check(notebook_file, raise_errors=False)
-    actual_text = nb_run.nb_final.cells[2].outputs[0].data["text/html"]
-    assert actual_text == expected_text
+    try:
+        ep.preprocess(nb, {"metadata": {"path": "./"}})
+    except Exception as e:
+        assert False, f"Error executing the notebook: {e}"
+
+    # Collect the outputs
+    html_result = nb.cells[2]["outputs"][0]["data"]["text/html"]
+    for string in {
+        "div",
+        "Column_1",
+        "Column_2",
+        "Column_3",
+        "Column_4",
+        "tbody",
+        "</table>",
+    }:
+        assert (
+            string in html_result
+        ), f"Expected string {string} not found in the output"

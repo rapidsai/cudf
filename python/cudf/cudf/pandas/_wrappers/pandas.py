@@ -9,7 +9,6 @@ import pickle
 import sys
 
 import pandas as pd
-from IPython import get_ipython
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
     EasterMonday as pd_EasterMonday,
@@ -62,7 +61,12 @@ from pandas.core.resample import (  # isort: skip
     TimeGrouper as pd_TimeGrouper,
 )
 
-ipython_shell = get_ipython()
+try:
+    from IPython import get_ipython
+
+    ipython_shell = get_ipython()
+except ImportError:
+    ipython_shell = None
 
 cudf.set_option("mode.pandas_compatible", True)
 
