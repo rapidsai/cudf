@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+#include "io/utilities/trie.cuh"
 #include "nested_json.hpp"
 #include "tabulate_output_iterator.cuh"
 
@@ -91,8 +92,12 @@ void validate_token_stream(device_span<char const> d_input,
   CUDF_FUNC_RANGE();
   if (options.is_strict_validation()) {
     using token_t = cudf::io::json::token_t;
+    cudf::detail::optional_trie trie_na =
+      cudf::detail::create_serialized_trie(options.get_na_values(), stream);
+    auto trie_na_view = cudf::detail::make_trie_view(trie_na);
     auto validate_values =
       [data                        = d_input.data(),
+       trie_na                     = trie_na_view,
        allow_numeric_leading_zeros = options.is_allowed_numeric_leading_zeros(),
        allow_nonnumeric =
          options.is_allowed_nonnumeric_numbers()] __device__(SymbolOffsetT start,
@@ -100,8 +105,11 @@ void validate_token_stream(device_span<char const> d_input,
       // This validates an unquoted value. A value must match https://www.json.org/json-en.html
       // but the leading and training whitespace should already have been removed, and is not
       // a string
-      auto c = data[start];
-      if ('n' == c) {
+      auto c               = data[start];
+      auto is_null_literal = serialized_trie_contains(trie_na, {data + start, end - start});
+      if (is_null_literal) {
+        return true;
+      } else if ('n' == c) {
         return substr_eq(data, start, end, 4, "null");
       } else if ('t' == c) {
         return substr_eq(data, start, end, 4, "true");
