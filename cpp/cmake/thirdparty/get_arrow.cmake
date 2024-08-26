@@ -72,14 +72,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
     set(ARROW_OPENSSL_USE_SHARED ON)
   endif()
 
-  set(ARROW_PARQUET_OPTIONS "")
-  if(ENABLE_PARQUET)
-    # Arrow's logic to build Boost from source is busted, so we have to get it from the system.
-    list(APPEND ARROW_PARQUET_OPTIONS "BOOST_SOURCE SYSTEM")
-    list(APPEND ARROW_PARQUET_OPTIONS "Thrift_SOURCE BUNDLED")
-    list(APPEND ARROW_PARQUET_OPTIONS "ARROW_DEPENDENCY_SOURCE AUTO")
-  endif()
-
   rapids_cpm_find(
     Arrow ${VERSION}
     GLOBAL_TARGETS arrow_shared parquet_shared arrow_acero_shared arrow_dataset_shared arrow_static
@@ -98,7 +90,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
             "ARROW_JEMALLOC OFF"
             "ARROW_S3 OFF"
             "ARROW_ORC OFF"
-            ${ARROW_PARQUET_OPTIONS}
             "ARROW_PARQUET ${ENABLE_PARQUET}"
             "ARROW_FILESYSTEM ON"
             "ARROW_PYTHON OFF"
