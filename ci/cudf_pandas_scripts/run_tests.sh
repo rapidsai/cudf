@@ -61,6 +61,8 @@ else
         "$(echo ./dist/pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
 fi
 
+python -m ipykernel install --user --name python3
+
 python -m pytest -p cudf.pandas \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
