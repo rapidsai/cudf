@@ -931,7 +931,6 @@ def _fast_slow_function_call(
                             f"The exception was {e}."
                         )
     except Exception as err:
-        print(err)
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
