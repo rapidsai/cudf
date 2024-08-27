@@ -214,7 +214,7 @@ def _DataFrame__dir__(self):
     ]
 
 
-def custom_func(self, **kwargs):
+def ignore_ipython_canary_check(self, **kwargs):
     raise AttributeError(
         "_ipython_canary_method_should_not_exist_ doesn't exist"
     )
@@ -232,7 +232,7 @@ DataFrame = make_final_proxy_type(
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
         "_accessors": set(),
-        "_ipython_canary_method_should_not_exist_": custom_func,
+        "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
     },
 )
 
