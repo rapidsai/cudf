@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 cleanup() {
-    rm tests/results-*.pickle
+    rm ${TEST_DIR}/results-*.pickle
 }
 
 trap cleanup EXIT

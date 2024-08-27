@@ -62,6 +62,7 @@ else
 fi
 
 python -m pytest -p cudf.pandas \
+    --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
@@ -77,6 +78,7 @@ for version in "${versions[@]}"; do
     echo "Installing pandas version: ${version}"
     python -m pip install "numpy>=1.23,<2.0a0" "pandas==${version}"
     python -m pytest -p cudf.pandas \
+    --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
