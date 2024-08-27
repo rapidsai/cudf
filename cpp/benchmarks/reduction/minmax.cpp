@@ -47,6 +47,8 @@ static void reduction_minmax(nvbench::state& state, nvbench::type_list<DataType>
   set_throughputs(state);
 }
 
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_ms, "cudf::timestamp_ms", "cudf::timestamp_ms");
+
 using Types = nvbench::type_list<bool, int8_t, int32_t, float, cudf::timestamp_ms>;
 
 NVBENCH_BENCH_TYPES(reduction_minmax, NVBENCH_TYPE_AXES(Types))
