@@ -120,7 +120,7 @@ Please see the [Dask CUDA](https://docs.rapids.ai/api/dask-cuda/stable/) documen
 
 ## Install
 
-See the [RAPIDS install page](https://docs.rapids.ai/install) for the most up-to-date information and commands for installing cuDF and other RAPIDS packages.
+See the [RAPIDS install page](https://docs.rapids.ai/install) for the most up-to-date information and commands for installing Dask cuDF and other RAPIDS packages.
 
 ## Resources
 
