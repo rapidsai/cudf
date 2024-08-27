@@ -124,7 +124,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: ci/cudf_pandas_scripts/run_tests.sh
-  integration-tests:
+  third-party-integration-tests-cudf-pandas:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.10
     with:
