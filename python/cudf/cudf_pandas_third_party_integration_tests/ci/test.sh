@@ -11,7 +11,7 @@ set -euo pipefail
 
 rapids-logger "Generate Python testing dependencies"
 rapids-dependency-file-generator \
-  --config "python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml" \
+  --config "python/cudf/cudf_pandas_third_party_integration_tests/dependencies.yaml" \
   --output conda \
   --file-key test_${LIB} \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
@@ -28,7 +28,7 @@ echo "The working directory is ${PWD}"
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
 repo_root=$(git rev-parse --show-toplevel)
-TEST_DIR=${repo_root}/python/cudf/cudf_pandas_tests/third_party_integration_tests/tests
+TEST_DIR=${repo_root}/python/cudf/cudf_pandas_third_party_integration_tests/tests
 
 rapids-print-env
 
@@ -51,7 +51,7 @@ for serial_library in "${serial_libraries[@]}"; do
     fi
 done
 
-RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR} TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} python/cudf/cudf_pandas_tests/third_party_integration_tests/ci/ci_run_library_tests.sh ${LIB}
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR} TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} python/cudf/cudf_pandas_third_party_integration_tests/ci/ci_run_library_tests.sh ${LIB}
 
 rapids-logger "Test script exiting with value: ${EXITCODE}"
 exit ${EXITCODE}
