@@ -19,6 +19,9 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/parquet.hpp>
 
+#include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/managed_memory_resource.hpp>
+
 namespace {
 const std::vector<std::string> ORDERS   = {"o_orderkey",
                                            "o_custkey",
@@ -72,6 +75,22 @@ const std::vector<std::string> REGION   = {"r_regionkey", "r_name", "r_comment"}
 }  // namespace
 
 /**
+ * @brief Create a device memory resource
+ *
+ * @param rmm_type The type of memory resource to create
+ */
+std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& rmm_type)
+{
+  if (rmm_type == "cuda") {
+    return std::make_shared<rmm::mr::cuda_memory_resource>();
+  } else if (rmm_type == "managed") {
+    return std::make_shared<rmm::mr::managed_memory_resource>();
+  } else {
+    CUDF_FAIL("Unknown rmm_type parameter: " + rmm_type + "\nExpecting: cuda or managed");
+  }
+}
+
+/**
  * @brief Write a `cudf::table` to a parquet file
  *
  * @param table The cudf::table to write
@@ -99,12 +118,17 @@ void write_parquet(std::unique_ptr<cudf::table> table,
 int main(int argc, char** argv)
 {
   if (argc < 2) {
-    std::cerr << "Usage: " << argv[0] << " [scale_factor]" << std::endl;
+    std::cerr << "Usage: " << argv[0] << " [scale_factor] [rmm_type]" << std::endl;
     return 1;
   }
 
   double scale_factor = std::atof(argv[1]);
   std::cout << "Generating scale factor: " << scale_factor << std::endl;
+
+  // Set the desired type of memory resource
+  std::string rmm_type = argv[2];
+  auto resource        = create_memory_resource(rmm_type);
+  rmm::mr::set_current_device_resource(resource.get());
 
   auto [orders, lineitem, part] = cudf::datagen::generate_orders_lineitem_part(
     scale_factor, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
