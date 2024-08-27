@@ -1069,23 +1069,12 @@ if(CUDF_ENABLE_ARROW_PARQUET)
   )
 endif()
 
-string(
-  APPEND
-  install_code_string
-  [=[
-if(testing IN_LIST cudf_FIND_COMPONENTS)
-  enable_language(CUDA)
-endif()
-]=]
-)
-
 rapids_export(
   INSTALL cudf
   EXPORT_SET cudf-exports ${_components_export_string}
   GLOBAL_TARGETS cudf cudftestutil
   NAMESPACE cudf::
   DOCUMENTATION doc_string
-  FINAL_CODE_BLOCK install_code_string
 )
 
 # ##################################################################################################
