@@ -37,7 +37,7 @@ A cuDF-backed DataFrame collection can be moved to the `"pandas"` backend at any
 df = df.to_backend("pandas")
 ```
 
-Similarly, a Pandas-backed DataFrame collection can always be moved to the `"cudf"` backend:
+Similarly, a Pandas-backed DataFrame collection can be moved to the `"cudf"` backend:
 
 ```python
 df = df.to_backend("cudf")
