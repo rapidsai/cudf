@@ -81,6 +81,8 @@ static void reduction(nvbench::state& state, nvbench::type_list<DataType, nvbenc
   set_throughputs(state);
 }
 
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_ms, "cudf::timestamp_ms", "cudf::timestamp_ms");
+
 using Types    = nvbench::type_list<int32_t, int64_t, double, cudf::timestamp_ms>;
 using AggKinds = nvbench::enum_type_list<cudf::reduce_aggregation::MIN,
                                          cudf::reduce_aggregation::SUM,
