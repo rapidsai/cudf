@@ -689,10 +689,127 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
         )
 
     @staticmethod
-    def read_parquet(*args, **kwargs):
-        from dask_cudf.expr._parquet import _read_parquet
+    def read_parquet(
+        path,
+        columns=None,
+        filters=None,
+        categories=None,
+        index=None,
+        storage_options=None,
+        dtype_backend=None,
+        calculate_divisions=False,
+        ignore_metadata_file=False,
+        metadata_task_size=None,
+        split_row_groups="infer",
+        blocksize="default",
+        aggregate_files=None,
+        parquet_file_extension=(".parq", ".parquet", ".pq"),
+        filesystem="fsspec",
+        engine=None,
+        arrow_to_pandas=None,
+        open_file_options=None,
+        **kwargs,
+    ):
+        import dask_expr as dx
+        from fsspec.utils import stringify_path
+        from pyarrow import fs as pa_fs
 
-        return _read_parquet(*args, **kwargs)
+        from dask.core import flatten
+        from dask.dataframe.utils import pyarrow_strings_enabled
+
+        if not isinstance(path, str):
+            path = stringify_path(path)
+
+        kwargs["dtype_backend"] = dtype_backend
+        if arrow_to_pandas:
+            kwargs["arrow_to_pandas"] = arrow_to_pandas
+
+        if dtype_backend is not None:
+            raise NotImplementedError()
+        if arrow_to_pandas is not None:
+            raise NotImplementedError()
+        if open_file_options is not None:
+            raise NotImplementedError()
+
+        if filters is not None:
+            for filter in flatten(filters, container=list):
+                col, op, val = filter
+                if op == "in" and not isinstance(val, (set, list, tuple)):
+                    raise TypeError(
+                        "Value of 'in' filter must be a list, set or tuple."
+                    )
+
+        if (
+            isinstance(filesystem, pa_fs.FileSystem)
+            or isinstance(filesystem, str)
+            and filesystem.lower() in ("arrow", "pyarrow")
+        ):
+            from dask_cudf.expr._expr import CudfReadParquetPyarrowFS
+
+            if metadata_task_size is not None:
+                raise NotImplementedError(
+                    "metadata_task_size is not supported when using the pyarrow filesystem."
+                )
+            if split_row_groups != "infer":
+                raise NotImplementedError(
+                    "split_row_groups is not supported when using the pyarrow filesystem."
+                )
+            if blocksize is not None and blocksize != "default":
+                raise NotImplementedError(
+                    "blocksize is not supported when using the pyarrow filesystem."
+                )
+            if aggregate_files is not None:
+                raise NotImplementedError(
+                    "aggregate_files is not supported when using the pyarrow filesystem."
+                )
+            if parquet_file_extension != (".parq", ".parquet", ".pq"):
+                raise NotImplementedError(
+                    "parquet_file_extension is not supported when using the pyarrow filesystem."
+                )
+            if engine is not None:
+                raise NotImplementedError(
+                    "engine is not supported when using the pyarrow filesystem."
+                )
+
+            return dx.new_collection(
+                CudfReadParquetPyarrowFS(
+                    path,
+                    columns=dx._util._convert_to_list(columns),
+                    filters=filters,
+                    categories=categories,
+                    index=index,
+                    calculate_divisions=calculate_divisions,
+                    storage_options=storage_options,
+                    filesystem=filesystem,
+                    ignore_metadata_file=ignore_metadata_file,
+                    arrow_to_pandas=arrow_to_pandas,
+                    pyarrow_strings_enabled=pyarrow_strings_enabled(),
+                    kwargs=kwargs,
+                    _series=isinstance(columns, str),
+                )
+            )
+        else:
+            from dask_cudf.io.parquet import CudfEngine
+
+            return _default_backend(
+                dx.read_parquet,
+                path,
+                columns=columns,
+                filters=filters,
+                categories=categories,
+                index=index,
+                storage_options=storage_options,
+                calculate_divisions=calculate_divisions,
+                ignore_metadata_file=ignore_metadata_file,
+                metadata_task_size=metadata_task_size,
+                split_row_groups=split_row_groups,
+                blocksize=blocksize,
+                aggregate_files=aggregate_files,
+                parquet_file_extension=parquet_file_extension,
+                filesystem=filesystem,
+                engine=CudfEngine,
+                **kwargs,
+            )
 
     @staticmethod
     def read_csv(
