@@ -18,10 +18,6 @@ import os
 
 
 def load_library():
-    # This is loading the libarrow shared library in situations where it comes from the
-    # pyarrow package (i.e. when installed as a wheel).
-    import pyarrow  # noqa: F401
-
     # Dynamically load libcudf.so. Prefer a system library if one is present to
     # avoid clobbering symbols that other packages might expect, but if no
     # other library is present use the one in the wheel.
