@@ -32,6 +32,9 @@
 
 #include <string>
 
+namespace cudf {
+namespace datagen {
+
 namespace {
 
 // Functor for generating random strings
@@ -239,3 +242,6 @@ template std::unique_ptr<cudf::column> generate_repeat_sequence_column<cudf::siz
   cudf::size_type num_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
+
+}  // namespace datagen
+}  // namespace cudf

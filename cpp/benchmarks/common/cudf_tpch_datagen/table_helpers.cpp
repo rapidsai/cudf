@@ -37,6 +37,9 @@
 
 #include <vector>
 
+namespace cudf {
+namespace datagen {
+
 /**
  * @brief Add a column of days to a column of timestamp_days
  *
@@ -380,3 +383,6 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
                                     stream,
                                     mr);
 }
+
+}  // namespace datagen
+}  // namespace cudf
