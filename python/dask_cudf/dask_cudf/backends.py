@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from functools import partial
 
 import cupy as cp
+import fsspec
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -500,25 +501,6 @@ def _unsupported_kwargs(old, new, kwargs):
         )
 
 
-def _raise_unsupported_parquet_kwargs(
-    open_file_options=None, filesystem=None, **kwargs
-):
-    import fsspec
-
-    if open_file_options is not None:
-        raise ValueError(
-            "The open_file_options argument is no longer supported "
-            "by the 'cudf' backend."
-        )
-
-    if filesystem not in ("fsspec", None) and not isinstance(
-        filesystem, fsspec.AbstractFileSystem
-    ):
-        raise ValueError(
-            f"filesystem={filesystem} is not supported by the 'cudf' backend."
-        )
-
-
 # Register cudf->pandas
 to_pandas_dispatch = PandasBackendEntrypoint.to_backend_dispatch()
 
@@ -597,13 +579,32 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
         )
 
     @staticmethod
-    def read_parquet(*args, engine=None, **kwargs):
+    def read_parquet(
+        *args,
+        open_file_options=None,
+        filesystem=None,
+        engine=None,
+        **kwargs,
+    ):
         from dask_cudf.io.parquet import CudfEngine
 
-        _raise_unsupported_parquet_kwargs(**kwargs)
+        if open_file_options is not None:
+            raise ValueError(
+                "The open_file_options argument is no longer supported "
+                "by the 'cudf' backend."
+            )
+
+        if filesystem not in ("fsspec", None) and not isinstance(
+            filesystem, fsspec.AbstractFileSystem
+        ):
+            raise ValueError(
+                f"filesystem={filesystem} is not supported by the legacy 'cudf' backend."
+            )
+
         return _default_backend(
             dd.read_parquet,
             *args,
+            filesystem=filesystem,
             engine=CudfEngine,
             **kwargs,
         )
@@ -688,15 +689,10 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
         )
 
     @staticmethod
-    def read_parquet(*args, engine=None, **kwargs):
-        import dask_expr as dx
+    def read_parquet(*args, **kwargs):
+        from dask_cudf.expr._parquet import _read_parquet
 
-        from dask_cudf.io.parquet import CudfEngine
-
-        _raise_unsupported_parquet_kwargs(**kwargs)
-        return _default_backend(
-            dx.read_parquet, *args, engine=CudfEngine, **kwargs
-        )
+        return _read_parquet(*args, **kwargs)
 
     @staticmethod
     def read_csv(
