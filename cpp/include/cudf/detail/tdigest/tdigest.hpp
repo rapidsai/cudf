@@ -153,9 +153,9 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
  * @returns An empty tdigest column.
  */
 CUDF_EXPORT
-std::unique_ptr<column> make_empty_tdigest_column(size_type num_rows,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr);
+std::unique_ptr<column> make_tdigest_column_of_empty_clusters(size_type num_rows,
+                                                              rmm::cuda_stream_view stream,
+                                                              rmm::device_async_resource_ref mr);
 
 /**
  * @brief Create an empty tdigest scalar.

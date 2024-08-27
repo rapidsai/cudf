@@ -270,7 +270,7 @@ void tdigest_simple_all_nulls_aggregation(Func op)
     static_cast<column_view>(values).type(), tdigest_gen{}, op, values, delta);
 
   // NOTE: an empty tdigest column still has 1 row.
-  auto expected = cudf::tdigest::detail::make_empty_tdigest_column(
+  auto expected = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
     1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
@@ -562,11 +562,11 @@ template <typename MergeFunc>
 void tdigest_merge_empty(MergeFunc merge_op)
 {
   // 3 empty tdigests all in the same group
-  auto a = cudf::tdigest::detail::make_empty_tdigest_column(
+  auto a = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
     1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  auto b = cudf::tdigest::detail::make_empty_tdigest_column(
+  auto b = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
     1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  auto c = cudf::tdigest::detail::make_empty_tdigest_column(
+  auto c = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
     1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   std::vector<column_view> cols;
   cols.push_back(*a);
@@ -577,7 +577,7 @@ void tdigest_merge_empty(MergeFunc merge_op)
   auto const delta = 1000;
   auto result      = merge_op(*values, delta);
 
-  auto expected = cudf::tdigest::detail::make_empty_tdigest_column(
+  auto expected = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
     1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result);

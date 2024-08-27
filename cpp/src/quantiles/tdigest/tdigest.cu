@@ -292,9 +292,9 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
   return make_structs_column(num_rows, std::move(children), 0, {}, stream, mr);
 }
 
-std::unique_ptr<column> make_empty_tdigest_column(size_type num_rows,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr)
+std::unique_ptr<column> make_tdigest_column_of_empty_clusters(size_type num_rows,
+                                                              rmm::cuda_stream_view stream,
+                                                              rmm::device_async_resource_ref mr)
 {
   auto offsets = cudf::make_fixed_width_column(
     data_type(type_id::INT32), num_rows + 1, mask_state::UNALLOCATED, stream, mr);
@@ -314,20 +314,6 @@ std::unique_ptr<column> make_empty_tdigest_column(size_type num_rows,
   thrust::fill(rmm::exec_policy(stream),
                max_col->mutable_view().begin<double>(),
                max_col->mutable_view().end<double>(),
-               0);
-
-  auto centroid_means = cudf::make_numeric_column(
-    data_type(type_id::FLOAT64), num_rows, mask_state::UNALLOCATED, stream, mr);
-  thrust::fill(rmm::exec_policy(stream),
-               centroid_means->mutable_view().begin<double>(),
-               centroid_means->mutable_view().end<double>(),
-               0);
-
-  auto centroid_weights = cudf::make_numeric_column(
-    data_type(type_id::FLOAT64), num_rows, mask_state::UNALLOCATED, stream, mr);
-  thrust::fill(rmm::exec_policy(stream),
-               centroid_weights->mutable_view().begin<double>(),
-               centroid_weights->mutable_view().end<double>(),
                0);
 
   return make_tdigest_column(num_rows,
@@ -353,7 +339,7 @@ std::unique_ptr<column> make_empty_tdigest_column(size_type num_rows,
 std::unique_ptr<scalar> make_empty_tdigest_scalar(rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr)
 {
-  auto contents = make_empty_tdigest_column(1, stream, mr)->release();
+  auto contents = make_tdigest_column_of_empty_clusters(1, stream, mr)->release();
   return std::make_unique<struct_scalar>(
     std::move(*std::make_unique<table>(std::move(contents.children))), true, stream, mr);
 }
