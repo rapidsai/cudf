@@ -1443,7 +1443,18 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                     output[:break_idx].replace("'", "") + output[break_idx:]
                 )
             else:
-                output = repr(preprocess.to_pandas())
+                import pdb
+
+                pdb.set_trace()
+                pd_cats = pd.Categorical(
+                    preprocess.astype(preprocess.categories.dtype).to_pandas()
+                )
+                preprocess1 = pd.CategoricalIndex(pd_cats)
+                output1 = repr(preprocess1)
+                preprocess1.dtype._categories = (
+                    preprocess.categories.to_pandas()
+                )
+                output2 = repr(preprocess1)
 
             output = output.replace("nan", str(cudf.NA))
         elif preprocess._values.nullable:
