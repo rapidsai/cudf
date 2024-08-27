@@ -31,7 +31,7 @@ dd.from_pandas(pd.DataFrame({"a": range(10)}))
 dd.from_pandas(cudf.DataFrame({"a": range(10)}))
 ```
 
-A cuDF-backed DataFrame collection can be moved to the `"pandas"` backend at any time:
+A cuDF-backed DataFrame collection can be moved to the `"pandas"` backend:
 
 ```python
 df = df.to_backend("pandas")
