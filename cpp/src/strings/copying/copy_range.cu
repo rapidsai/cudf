@@ -91,15 +91,6 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
       mr);
   }();
 
-  auto [check_source, check_target] = [target, null_count = null_count] {
-    // check validities for both source & target
-    if (target.has_nulls()) { return std::make_pair(true, true); }
-    // check validities for source only
-    if (null_count > 0) { return std::make_pair(true, false); }
-    // no need to check validities
-    return std::make_pair(false, false);
-  }();
-
   // create offsets
   auto sizes_begin = cudf::detail::make_counting_transform_iterator(
     0, compute_element_size{d_source, d_target, source_begin, target_begin, target_end});
