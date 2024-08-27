@@ -756,7 +756,9 @@ std::unique_ptr<column> compute_tdigests(int delta,
   //   double       // max
   // }
   //
-  if (total_clusters == 0) { return cudf::tdigest::detail::make_empty_tdigest_column(stream, mr); }
+  if (total_clusters == 0) {
+    return cudf::tdigest::detail::make_empty_tdigest_column(1, stream, mr);
+  }
 
   // each input group represents an individual tdigest.  within each tdigest, we want the keys
   // to represent cluster indices (for example, if a tdigest had 100 clusters, the keys should fall
@@ -1154,8 +1156,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   auto merged_weights = merged->get_column(1).view();
   // If there are no values, we can simply return a column that has only empty tdigests.
   if (merged_weights.size() == 0) {
-    auto empty_tdigest = cudf::tdigest::detail::make_empty_tdigest_scalar(stream, mr);
-    return cudf::make_column_from_scalar(*empty_tdigest, num_groups, stream, mr);
+    return cudf::tdigest::detail::make_empty_tdigest_column(num_groups, stream, mr);
   }
 
   // generate cumulative weights
@@ -1283,7 +1284,7 @@ std::unique_ptr<column> group_tdigest(column_view const& col,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
-  if (col.size() == 0) { return cudf::tdigest::detail::make_empty_tdigest_column(stream, mr); }
+  if (col.size() == 0) { return cudf::tdigest::detail::make_empty_tdigest_column(1, stream, mr); }
 
   auto const delta = max_centroids;
   return cudf::type_dispatcher(col.type(),
@@ -1309,7 +1310,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
   tdigest_column_view tdv(input);
 
   if (num_groups == 0 || input.size() == 0) {
-    return cudf::tdigest::detail::make_empty_tdigest_column(stream, mr);
+    return cudf::tdigest::detail::make_empty_tdigest_column(1, stream, mr);
   }
 
   // bring group offsets back to the host

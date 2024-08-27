@@ -145,7 +145,7 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
 /**
  * @brief Create an empty tdigest column.
  *
- * An empty tdigest column contains a single row of length 0
+ * An empty tdigest column contains rows of length 0.
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
@@ -153,7 +153,8 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
  * @returns An empty tdigest column.
  */
 CUDF_EXPORT
-std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
+std::unique_ptr<column> make_empty_tdigest_column(size_type num_rows,
+                                                  rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr);
 
 /**
