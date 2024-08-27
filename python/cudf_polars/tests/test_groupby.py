@@ -97,9 +97,9 @@ def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs):
     # Multiple keys don't do sorting
     qsorted = q.sort(*sort_keys)
     if len(keys) > 1:
-        with pytest.raises(AssertionError):
-            # https://github.com/pola-rs/polars/issues/17556
-            assert_gpu_result_equal(q, check_exact=False)
+        # https://github.com/pola-rs/polars/issues/17556
+        # Can't assert that the query without post-sorting fails,
+        # since it _might_ pass.
         assert_gpu_result_equal(qsorted, check_exact=False)
     elif schema[sort_keys[0]] == pl.Boolean():
         # Boolean keys don't do sorting, so we get random order
