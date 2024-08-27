@@ -394,10 +394,9 @@ dependencies:
           - &pyarrow_build pyarrow==16.1.0.*
       - output_types: pyproject
         packages:
-          # Hard pin the patch version used during the build.
+          # Hard pin the version used during the build.
           # Sync with conda build constraint & wheel run constraint.
-          # TODO: Change to `2.0.*` for NumPy 2
-          - numpy==1.23.*
+          - numpy==2.0.*
   build_python_libcudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -586,10 +585,6 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              py: "3.9"
-            packages:
-              - python=3.9
-          - matrix:
               py: "3.10"
             packages:
               - python=3.10
@@ -599,14 +594,13 @@ dependencies:
               - python=3.11
           - matrix:
             packages:
-              - python>=3.9,<3.12
+              - python>=3.10,<3.12
   run_common:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          # TODO: Update `numpy` in `build_python_common` when dropping `<2.0a0`
-          - numpy>=1.23,<2.0a0
+          - numpy>=1.23,<3.0a0
           - pandas>=2.0,<2.2.3dev0
   run_pylibcudf:
     common:
