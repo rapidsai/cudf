@@ -209,3 +209,75 @@ def test_replace_many_ascii_case(ldf):
     )
 
     assert_ir_translation_raises(query, NotImplementedError)
+
+
+_strip_data = [
+    "AbC",
+    "123abc",
+    "",
+    " ",
+    None,
+    "aAaaaAAaa",
+    " ab c ",
+    "abc123",
+    "    ",
+    "\tabc\t",
+    "\nabc\n",
+    "\r\nabc\r\n",
+    "\t\n abc \n\t",
+    "!@#$%^&*()",
+    "   abc!!!   ",
+    "   abc\t\n!!!   ",
+    "__abc__",
+    "abc\n\n",
+    "123abc456",
+    "abcxyzabc",
+]
+
+strip_chars = [
+    "a",
+    "",
+    " ",
+    "\t",
+    "\n",
+    "\r\n",
+    "!",
+    "@#",
+    "123",
+    "xyz",
+    "abc",
+    "__",
+    " \t\n",
+    "abc123",
+    None,
+]
+
+
+@pytest.fixture
+def strip_ldf():
+    return pl.DataFrame({"a": _strip_data}).lazy()
+
+
+@pytest.fixture(params=strip_chars)
+def to_strip(request):
+    return request.param
+
+
+def test_strip_chars(strip_ldf, to_strip):
+    q = strip_ldf.select(pl.col("a").str.strip_chars(to_strip))
+    assert_gpu_result_equal(q)
+
+
+def test_strip_chars_start(strip_ldf, to_strip):
+    q = strip_ldf.select(pl.col("a").str.strip_chars_start(to_strip))
+    assert_gpu_result_equal(q)
+
+
+def test_strip_chars_end(strip_ldf, to_strip):
+    q = strip_ldf.select(pl.col("a").str.strip_chars_end(to_strip))
+    assert_gpu_result_equal(q)
+
+
+def test_strip_chars_column(strip_ldf):
+    q = strip_ldf.select(pl.col("a").str.strip_chars(pl.col("a")))
+    assert_ir_translation_raises(q, NotImplementedError)

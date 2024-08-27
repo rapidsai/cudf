@@ -722,6 +722,9 @@ class StringFunction(Expr):
             pl_expr.StringFunction.ReplaceMany,
             pl_expr.StringFunction.Slice,
             pl_expr.StringFunction.StartsWith,
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
             pl_expr.StringFunction.Uppercase,
         ):
             raise NotImplementedError(f"String function {self.name}")
@@ -767,6 +770,15 @@ class StringFunction(Expr):
             if not all(isinstance(child, Literal) for child in self.children[1:]):
                 raise NotImplementedError(
                     "Slice only supports literal start and stop values"
+                )
+        elif self.name in {
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+        }:
+            if not isinstance(self.children[1], Literal):
+                raise NotImplementedError(
+                    "strip operations only support scalar patterns"
                 )
 
     def do_evaluate(
@@ -826,6 +838,22 @@ class StringFunction(Expr):
                     plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
                 )
             )
+        elif self.name in {
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+        }:
+            column, chars = (
+                c.evaluate(df, context=context, mapping=mapping) for c in self.children
+            )
+            if self.name == pl_expr.StringFunction.StripCharsStart:
+                side = plc.strings.SideType.LEFT
+            elif self.name == pl_expr.StringFunction.StripCharsEnd:
+                side = plc.strings.SideType.RIGHT
+            else:
+                side = plc.strings.SideType.BOTH
+            return Column(plc.strings.strip.strip(column.obj, side, chars.obj_scalar))
+
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
