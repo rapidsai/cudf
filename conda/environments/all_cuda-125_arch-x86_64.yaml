@@ -39,13 +39,9 @@ dependencies:
 - identify>=2.5.20
 - ipython
 - jupyter_client
-- libarrow-acero==16.1.0.*
-- libarrow-dataset==16.1.0.*
-- libarrow==16.1.0.*
 - libcufile-dev
 - libcurand-dev
 - libkvikio==24.10.*,>=0.0.0a0
-- libparquet==16.1.0.*
 - librdkafka>=1.9.0,<1.10.0a0
 - librmm==24.10.*,>=0.0.0a0
 - make
@@ -58,7 +54,6 @@ dependencies:
 - ninja
 - notebook
 - numba>=0.57
-- numpy
 - numpy>=1.23,<3.0a0
 - numpydoc
 - nvcomp==3.0.6
@@ -69,7 +64,6 @@ dependencies:
 - pandas>=2.0,<2.2.3dev0
 - pandoc
 - pre-commit
-- pyarrow==16.1.0.*
 - pydata-sphinx-theme!=0.14.2
 - pynvjitlink>=0.0.0a0
 - pytest-benchmark

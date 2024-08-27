@@ -17,7 +17,6 @@ files:
       - depends_on_rmm
       - develop
       - docs
-      - libarrow_build
       - notebooks
       - py_version
       - rapids_build_skbuild
@@ -41,7 +40,6 @@ files:
     output: none
     includes:
       - cuda_version
-      - libarrow_run
       - test_cpp
   test_python:
     output: none
@@ -60,7 +58,6 @@ files:
       - build_all
       - cuda
       - cuda_version
-      - libarrow_run
       - test_java
   test_notebooks:
     output: none
@@ -79,7 +76,6 @@ files:
       - cuda
       - cuda_version
       - docs
-      - libarrow_run
       - py_version
   py_build_cudf:
     output: pyproject
@@ -139,7 +135,6 @@ files:
     includes:
       - build_base
       - build_cpp
-      - build_python_libcudf
       - depends_on_librmm
   py_run_libcudf:
     output: pyproject
@@ -391,38 +386,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cython>=3.0.3
-          # Hard pin the patch version used during the build. This must be kept
-          # in sync with the version pinned in get_arrow.cmake.
-          - &pyarrow_build pyarrow==16.1.0.*
-      - output_types: pyproject
-        packages:
-          # Hard pin the version used during the build.
-          # Sync with conda build constraint & wheel run constraint.
-          - numpy==2.0.*
-  build_python_libcudf:
-    common:
-      - output_types: [conda, requirements, pyproject]
-        packages:
-          - *pyarrow_build
-  libarrow_build:
-    common:
-      - output_types: conda
-        packages:
-          # Hard pin the Arrow patch version used during the build. This must
-          # be kept in sync with the version pinned in get_arrow.cmake.
-          - libarrow-acero==16.1.0.*
-          - libarrow-dataset==16.1.0.*
-          - libarrow==16.1.0.*
-          - libparquet==16.1.0.*
-  libarrow_run:
-    common:
-      - output_types: conda
-        packages:
-          # Allow runtime version to float up to patch version
-          - libarrow-acero>=16.1.0,<16.2.0a0
-          - libarrow-dataset>=16.1.0,<16.2.0a0
-          - libarrow>=16.1.0,<16.2.0a0
-          - libparquet>=16.1.0,<16.2.0a0
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -602,7 +565,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - numpy>=1.23,<3.0a0
+          - &numpy numpy>=1.23,<3.0a0
           - pandas>=2.0,<2.2.3dev0
   run_pylibcudf:
     common:
@@ -733,6 +696,7 @@ dependencies:
           - *cmake_ver
           - maven
           - openjdk=8.*
+          - boost
   test_python_common:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -746,7 +710,7 @@ dependencies:
         packages:
           - fastavro>=0.22.9
           - hypothesis
-          - numpy
+          - *numpy
           - pandas
   test_python_cudf:
     common:
