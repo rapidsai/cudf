@@ -52,6 +52,7 @@ dependencies:
 - moto>=4.0.8
 - msgpack-python
 - myst-nb
+- nbconvert
 - nbformat
 - nbsphinx
 - ninja

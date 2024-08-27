@@ -983,5 +983,6 @@ dependencies:
         packages:
           - ipython
           - jupyter_client
+          - nbconvert
           - nbformat
           - openpyxl
