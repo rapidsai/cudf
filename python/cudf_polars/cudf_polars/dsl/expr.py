@@ -918,7 +918,7 @@ class UnaryFunction(Expr):
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
-    _MAPPING: ClassVar[dict[str, plc.unary.UnaryOperator]] = {
+    _OP_MAPPING: ClassVar[dict[str, plc.unary.UnaryOperator]] = {
         "sin": plc.unary.UnaryOperator.SIN,
         "cos": plc.unary.UnaryOperator.COS,
         "tan": plc.unary.UnaryOperator.TAN,
@@ -960,8 +960,8 @@ class UnaryFunction(Expr):
             "cum_sum",
         }
     )
-    _supported_fns = frozenset(
-        _supported_misc_fns.union(_supported_cum_aggs).union(frozenset(_MAPPING.keys()))
+    _supported_fns = frozenset().union(
+        _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
     )
 
     def __init__(
@@ -1099,13 +1099,13 @@ class UnaryFunction(Expr):
                     base_obj, exponent_obj, plc.binaryop.BinaryOperator.POW, self.dtype
                 )
             )
-        elif self.name in self._MAPPING:
+        elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context, mapping=mapping)
             if column.obj.type().id() != self.dtype.id():
                 arg = plc.unary.cast(column.obj, self.dtype)
             else:
                 arg = column.obj
-            return Column(plc.unary.unary_operation(arg, self._MAPPING[self.name]))
+            return Column(plc.unary.unary_operation(arg, self._OP_MAPPING[self.name]))
         elif self.name in UnaryFunction._supported_cum_aggs:
             column = self.children[0].evaluate(df, context=context, mapping=mapping)
             plc_col = column.obj
