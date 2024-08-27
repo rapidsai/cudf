@@ -843,27 +843,16 @@ class StringFunction(Expr):
             pl_expr.StringFunction.StripCharsStart,
             pl_expr.StringFunction.StripCharsEnd,
         }:
-            column = self.children[0].evaluate(df, context=context, mapping=mapping)
-            expr_chars = self.children[1]
-            assert isinstance(expr_chars, Literal)
-
-            if expr_chars.value == pa.scalar(None):
-                # Polars api for chars:
-                # If set to None (default), all leading and trailing whitespace is removed
-                # libcudf api for chars:
-                # If to_strip is the empty string, whitespace characters are removed
-                chars = plc.interop.from_arrow(pa.scalar("", type=pa.string()))
-            else:
-                chars = plc.interop.from_arrow(expr_chars.value)
-
+            column, chars = (
+                c.evaluate(df, context=context, mapping=mapping) for c in self.children
+            )
             if self.name == pl_expr.StringFunction.StripCharsStart:
-                side_type = plc.strings.SideType.LEFT
+                side = plc.strings.SideType.LEFT
             elif self.name == pl_expr.StringFunction.StripCharsEnd:
-                side_type = plc.strings.SideType.RIGHT
+                side = plc.strings.SideType.RIGHT
             else:
-                side_type = plc.strings.SideType.BOTH
-
-            return Column(plc.strings.strip.strip(column.obj, side_type, chars))
+                side = plc.strings.SideType.BOTH
+            return Column(plc.strings.strip.strip(column.obj, side, chars.obj_scalar))
 
         columns = [
             child.evaluate(df, context=context, mapping=mapping)

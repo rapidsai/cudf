@@ -393,9 +393,18 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
             pl_expr.StringFunction.StripCharsEnd,
         }:
             column, chars = (translate_expr(visitor, n=n) for n in node.input)
-            if isinstance(chars, expr.Literal) and chars.value == pa.scalar(""):
-                # No-op in python, polars, but libcudf removes whitespace so return early
-                return column
+            if isinstance(chars, expr.Literal):
+                if chars.value == pa.scalar(""):
+                    # No-op in polars, but libcudf uses empty string
+                    # as signifier to remove whitespace.
+                    return column
+                elif chars.value == pa.scalar(None):
+                    # Polars uses None to mean "strip all whitespace"
+                    chars = expr.Literal(
+                        column.dtype,
+                        pa.scalar("", type=plc.interop.to_arrow(column.dtype)),
+                    )
+            return expr.StringFunction(dtype, name, options, column, chars)
         return expr.StringFunction(
             dtype,
             name,
