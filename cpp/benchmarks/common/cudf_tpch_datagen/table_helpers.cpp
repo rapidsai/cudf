@@ -106,9 +106,10 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_p_retailprice(cudf::column_view const& p_partkey,
-                                                               rmm::cuda_stream_view stream,
-                                                               rmm::device_async_resource_ref mr)
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_p_retailprice(
+  cudf::column_view const& p_partkey,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   // Expression: (90000 + ((p_partkey/10) modulo 20001) + 100 * (p_partkey modulo 1000)) / 100
@@ -148,11 +149,11 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_l_suppkey(cudf::column_view const& l_partkey,
-                                                           cudf::size_type scale_factor,
-                                                           cudf::size_type num_rows,
-                                                           rmm::cuda_stream_view stream,
-                                                           rmm::device_async_resource_ref mr)
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_l_suppkey(cudf::column_view const& l_partkey,
+                                                                cudf::size_type scale_factor,
+                                                                cudf::size_type num_rows,
+                                                                rmm::cuda_stream_view stream,
+                                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   // Expression: (l_partkey + (i * (s/4 + (int)(l_partkey - 1)/s))) % s + 1
@@ -219,11 +220,12 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_ps_suppkey(cudf::column_view const& ps_partkey,
-                                                            cudf::size_type scale_factor,
-                                                            cudf::size_type num_rows,
-                                                            rmm::cuda_stream_view stream,
-                                                            rmm::device_async_resource_ref mr)
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_ps_suppkey(
+  cudf::column_view const& ps_partkey,
+  cudf::size_type scale_factor,
+  cudf::size_type num_rows,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   // Expression: ps_suppkey = (ps_partkey + (i * (s/4 + (int)(ps_partkey - 1)/s))) % s + 1
@@ -288,9 +290,9 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] cudf::size_type calc_l_cardinality(cudf::column_view const& o_rep_freqs,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::device_async_resource_ref mr)
+[[nodiscard]] cudf::size_type calculate_l_cardinality(cudf::column_view const& o_rep_freqs,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto const sum_agg = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
@@ -309,11 +311,11 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
  * @param stream The CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_charge(cudf::column_view const& extendedprice,
-                                                        cudf::column_view const& tax,
-                                                        cudf::column_view const& discount,
-                                                        rmm::cuda_stream_view stream,
-                                                        rmm::device_async_resource_ref mr)
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_charge(cudf::column_view const& extendedprice,
+                                                             cudf::column_view const& tax,
+                                                             cudf::column_view const& discount,
+                                                             rmm::cuda_stream_view stream,
+                                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto const one                = cudf::numeric_scalar<double>(1);

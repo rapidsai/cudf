@@ -293,7 +293,7 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
   // Sum up the `o_rep_freqs` to get the number of rows in the
   // `lineitem` table. This is required to generate the independent columns
   // in the `lineitem` table
-  auto const l_num_rows = calc_l_cardinality(o_rep_freqs->view(), stream, mr);
+  auto const l_num_rows = calculate_l_cardinality(o_rep_freqs->view(), stream, mr);
 
   // We create a table out of `o_orderkey` and `o_orderdate_ts` by repeating
   // the rows of `orders` according to the frequencies in `o_rep_freqs`
@@ -310,7 +310,7 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
     1, scale_factor * 200'000, l_num_rows, stream, mr);
 
   // Generate the `l_suppkey` column
-  auto l_suppkey = calc_l_suppkey(l_partkey->view(), scale_factor, l_num_rows, stream, mr);
+  auto l_suppkey = calculate_l_suppkey(l_partkey->view(), scale_factor, l_num_rows, stream, mr);
 
   // Generate the `l_linenumber` column
   auto l_linenumber = generate_repeat_sequence_column<int8_t>(7, false, l_num_rows, stream, mr);
@@ -461,7 +461,7 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
   // Generate the `o_totalprice` column
   // We calculate the `charge` column, which is a function of `l_extendedprice`,
   // `l_tax`, and `l_discount` and then group by `l_orderkey` and sum the `charge`
-  auto const l_charge = calc_charge(l_extendedprice, l_tax, l_discount, stream, mr);
+  auto const l_charge = calculate_charge(l_extendedprice, l_tax, l_discount, stream, mr);
   auto o_totalprice   = [&]() {
     auto const keys = cudf::table_view({l_orderkey});
     cudf::groupby::groupby gb(keys);
@@ -558,7 +558,7 @@ std::unique_ptr<cudf::table> generate_partsupp(double scale_factor,
   }();
 
   // Generate the `ps_suppkey` column
-  auto ps_suppkey = calc_ps_suppkey(ps_partkey->view(), scale_factor, ps_num_rows, stream, mr);
+  auto ps_suppkey = calculate_ps_suppkey(ps_partkey->view(), scale_factor, ps_num_rows, stream, mr);
 
   // Generate the `ps_availqty` column
   auto ps_availqty = generate_random_numeric_column<int16_t>(1, 9999, ps_num_rows, stream, mr);
@@ -690,7 +690,7 @@ std::unique_ptr<cudf::table> generate_part(double scale_factor,
     mr);
 
   // Generate the `p_retailprice` column
-  auto p_retailprice = calc_p_retailprice(p_partkey->view(), stream, mr);
+  auto p_retailprice = calculate_p_retailprice(p_partkey->view(), stream, mr);
 
   // Generate the `p_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification

@@ -63,7 +63,7 @@ std::unique_ptr<cudf::table> perform_left_join(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_p_retailprice(
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_p_retailprice(
   cudf::column_view const& p_partkey,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
@@ -77,7 +77,7 @@ std::unique_ptr<cudf::table> perform_left_join(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_l_suppkey(
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_l_suppkey(
   cudf::column_view const& l_partkey,
   cudf::size_type scale_factor,
   cudf::size_type num_rows,
@@ -93,7 +93,7 @@ std::unique_ptr<cudf::table> perform_left_join(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_ps_suppkey(
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_ps_suppkey(
   cudf::column_view const& ps_partkey,
   cudf::size_type scale_factor,
   cudf::size_type num_rows,
@@ -106,7 +106,7 @@ std::unique_ptr<cudf::table> perform_left_join(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] cudf::size_type calc_l_cardinality(
+[[nodiscard]] cudf::size_type calculate_l_cardinality(
   cudf::column_view const& o_rep_freqs,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
@@ -119,7 +119,7 @@ std::unique_ptr<cudf::table> perform_left_join(
  * @param stream The CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_charge(
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_charge(
   cudf::column_view const& extendedprice,
   cudf::column_view const& tax,
   cudf::column_view const& discount,
