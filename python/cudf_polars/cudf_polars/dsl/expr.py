@@ -1105,31 +1105,32 @@ class UnaryFunction(Expr):
             plc_col = column.obj
             col_type = column.obj.type()
             # cum_sum casts
-            # INT8, UInt8, Int16, UInt16 -> Int64 for overflow prevention
-            _cum_sum_cast_cond = self.name == "cum_sum" and col_type.id() in {
-                plc.types.TypeId.INT8,
-                plc.types.TypeId.UINT8,
-                plc.types.TypeId.INT16,
-                plc.types.TypeId.UINT16,
-            }
+            # Int8, UInt8, Int16, UInt16 -> Int64 for overflow prevention
+            # Bool -> UInt32
             # cum_prod casts integer dtypes < int64 and bool to int64
-            # note: bool counted in is_integral
-            # xref https://github.com/pola-rs/polars/blob/3dda47e578e0b50a5bb7c459ebee6c5c76d41c75/crates/polars-ops/src/series/ops/cum_agg.rs#L141-L142
-            _cum_prod_cast_cond = (
+            # See:
+            # https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/cum_agg.rs
+            if (
+                self.name == "cum_sum"
+                and col_type.id()
+                in {
+                    plc.types.TypeId.INT8,
+                    plc.types.TypeId.UINT8,
+                    plc.types.TypeId.INT16,
+                    plc.types.TypeId.UINT16,
+                }
+            ) or (
                 self.name == "cum_prod"
                 and plc.traits.is_integral(col_type)
                 and plc.types.size_of(col_type) <= 4
-            )
-            if _cum_sum_cast_cond or _cum_prod_cast_cond:
+            ):
                 plc_col = plc.unary.cast(
                     plc_col, plc.types.DataType(plc.types.TypeId.INT64)
                 )
-            if (
+            elif (
                 self.name == "cum_sum"
                 and column.obj.type().id() == plc.types.TypeId.BOOL8
             ):
-                # polars cum_sum bools by casting to uint32 first
-                # https://github.com/pola-rs/polars/blob/3dda47e578e0b50a5bb7c459ebee6c5c76d41c75/crates/polars-ops/src/series/ops/cum_agg.rs#L146-L149
                 plc_col = plc.unary.cast(
                     plc_col, plc.types.DataType(plc.types.TypeId.UINT32)
                 )
