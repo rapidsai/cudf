@@ -183,7 +183,8 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
     return decode_kernel_mask::STRING;
   } 
   
-  if (is_list(chunk)) {
+  if (is_list(chunk) && !is_string_col(chunk) && !is_byte_array(chunk) && !is_boolean(chunk)) {
+  //if (is_list(chunk)) {
     if (page.encoding == Encoding::PLAIN) {
       return decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST;
     } else if (page.encoding == Encoding::BYTE_STREAM_SPLIT) {

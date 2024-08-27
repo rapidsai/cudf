@@ -71,8 +71,6 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   // figure out which kernels to run
   auto const kernel_mask = GetAggregatedDecodeKernelMask(subpass.pages, _stream);
 
-printf("DECODE DATA PAGE, mask %d\n", kernel_mask);
-
   // Check to see if there are any string columns present. If so, then we need to get size info
   // for each string page. This size info will be used to pre-allocate memory for the column,
   // allowing the page decoder to write string data directly to the column buffer, rather than
@@ -223,6 +221,11 @@ printf("DECODE DATA PAGE, mask %d\n", kernel_mask);
   int const nkernels = std::bitset<32>(kernel_mask).count();
   auto streams       = cudf::detail::fork_streams(_stream, nkernels);
 
+  static constexpr bool enable_print = false;
+  if constexpr (enable_print) {
+    printf("PAGE DATA DECODE MASK: %d\n", kernel_mask);
+  }
+
   // launch string decoder
   int s_idx = 0;
   if (BitAnd(kernel_mask, decode_kernel_mask::STRING) != 0) {
@@ -333,7 +336,6 @@ printf("DECODE DATA PAGE, mask %d\n", kernel_mask);
 
   // launch fixed width type decoder for lists
   if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST) != 0) {
-printf("LIST PAGE\n");
     DecodePageDataFixed(subpass.pages,
                         pass.chunks,
                         num_rows,

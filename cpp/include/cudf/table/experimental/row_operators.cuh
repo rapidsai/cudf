@@ -1429,18 +1429,30 @@ class device_row_comparator {
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
     {
+      static constexpr bool enable_print = false;
       if (check_nulls) {
         bool const lhs_is_null{lhs.is_null(lhs_element_index)};
         bool const rhs_is_null{rhs.is_null(rhs_element_index)};
         if (lhs_is_null and rhs_is_null) {
           return nulls_are_equal == null_equality::EQUAL;
         } else if (lhs_is_null != rhs_is_null) {
+          if constexpr (enable_print) {
+            printf("NULLS UNEQUAL AT %d, %d; values: %d %d\n", 
+              lhs_element_index, rhs_element_index, int(lhs_is_null), int(rhs_is_null));
+          }
           return false;
         }
       }
 
-      return comparator(lhs.element<Element>(lhs_element_index),
+      bool result = comparator(lhs.element<Element>(lhs_element_index),
                         rhs.element<Element>(rhs_element_index));
+      if constexpr (enable_print && cuda::std::is_integral_v<Element>) {
+        if(!result) {
+          printf("VALUES UNEQUAL: AT %d, %d, VALUES %d, %d\n", lhs_element_index, rhs_element_index, 
+            (int)lhs.element<Element>(lhs_element_index), (int)rhs.element<Element>(rhs_element_index));
+        }
+      }
+      return result;
     }
 
     template <typename Element,

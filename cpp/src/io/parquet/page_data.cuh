@@ -89,6 +89,14 @@ inline __device__ void gpuStoreOutput(uint32_t* dst,
     bytebuf = 0;
   }
   *dst = bytebuf;
+
+  static constexpr bool enable_print = false;
+  if constexpr (enable_print) {
+    if (threadIdx.x == 0) {
+      printf("STORE VALUE %u at %p, src8 %p, dict_pos %u, dict_size %u, ofs %u\n", 
+        bytebuf, dst, src8, dict_pos, dict_size, ofs);
+    }
+  }
 }
 
 /**
@@ -328,6 +336,7 @@ inline __device__ void gpuOutputFast(page_state_s* s, state_buf* sb, int src_pos
   uint8_t const* dict;
   uint32_t dict_pos, dict_size = s->dict_size;
 
+auto dict_lookup_idx = rolling_index<state_buf::dict_buf_size>(src_pos);
   if (s->dict_base) {
     // Dictionary
     dict_pos =
@@ -339,6 +348,15 @@ inline __device__ void gpuOutputFast(page_state_s* s, state_buf* sb, int src_pos
     dict     = s->data_start;
   }
   dict_pos *= (uint32_t)s->dtype_len_in;
+
+  static constexpr bool enable_print = false;
+  if constexpr (enable_print) {
+    if (threadIdx.x == 0) {
+      printf("PREP OUTPUT VALUE at dst %p, dict %p, dict_pos %u, dict_size %u, dict_base %p, dict_bits %d, dict_lookup_idx %d, dtype_len_in %d\n", 
+        dst, dict, dict_pos, dict_size, s->dict_base, s->dict_bits, dict_lookup_idx, s->dtype_len_in);
+    }
+  }
+
   gpuStoreOutput(dst, dict, dict_pos, dict_size);
 }
 
