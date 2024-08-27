@@ -296,7 +296,8 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
   auto const sum_agg = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
   auto const l_num_rows_scalar =
     cudf::reduce(o_rep_freqs, *sum_agg, cudf::data_type{cudf::type_id::INT32}, stream, mr);
-  return reinterpret_cast<cudf::numeric_scalar<cudf::size_type>*>(l_num_rows_scalar.get())->value();
+  return reinterpret_cast<cudf::numeric_scalar<cudf::size_type>*>(l_num_rows_scalar.get())
+    ->value(stream);
 }
 
 /**

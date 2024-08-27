@@ -67,7 +67,7 @@ struct random_number_generator {
 
   __host__ __device__ T operator()(const int64_t idx) const
   {
-    if (cudf::is_integral<T>()) {
+    if constexpr (cudf::is_integral<T>()) {
       thrust::default_random_engine engine;
       thrust::uniform_int_distribution<T> dist(lower, upper);
       engine.discard(idx);
