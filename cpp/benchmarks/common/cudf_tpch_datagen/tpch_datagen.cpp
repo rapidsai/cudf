@@ -403,8 +403,8 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
     auto const gather_map     = cudf::table_view({indices->view(), keys->view()});
     auto const gathered_table = cudf::gather(
       gather_map, mask_index_type->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
-    return std::make_tuple(std::make_unique<cudf::column>(gathered_table->get_column(1)),
-                           std::move(mask_index_type));
+    auto gathered_table_columns = gathered_table->release();
+    return std::make_tuple(std::move(gathered_table_columns[1]), std::move(mask_index_type));
   }();
 
   // Generate the `l_shipinstruct` column
