@@ -949,6 +949,7 @@ class UnaryFunction(Expr):
             "round",
             "set_sorted",
             "unique",
+            "pow",
         }
     )
     _supported_cum_aggs = frozenset(
@@ -1084,13 +1085,18 @@ class UnaryFunction(Expr):
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
             return Column(plc.replace.replace_nulls(column.obj, arg))
         elif self.name == "pow":
-            column = self.children[0].evaluate(df, context=context, mapping=mapping)
-
-            evaluated = self.children[1].evaluate(df, context=context, mapping=mapping)
-            arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
+            (base, exponent) = (
+                c.evaluate(df, context=context, mapping=mapping) for c in self.children
+            )
+            base_obj = (
+                base.obj_scalar
+                if (base.is_scalar and not exponent.is_scalar)
+                else base.obj
+            )
+            exponent_obj = exponent.obj_scalar if exponent.is_scalar else exponent.obj
             return Column(
                 plc.binaryop.binary_operation(
-                    column.obj, arg, plc.binaryop.BinaryOperator.POW, self.dtype
+                    base_obj, exponent_obj, plc.binaryop.BinaryOperator.POW, self.dtype
                 )
             )
         elif self.name in self._MAPPING:
