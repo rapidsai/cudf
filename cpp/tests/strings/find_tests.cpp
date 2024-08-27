@@ -211,16 +211,11 @@ TEST_F(StringsFindTest, MultiContains)
      ""},
     null_at(8)};
   auto strings_view = cudf::strings_column_view(strings);
-
-  auto search_key_0 = cudf::string_scalar{" the "};
-  auto search_key_1 = cudf::string_scalar{"a"};
-  auto search_key_2 = cudf::string_scalar{""};
-  auto search_keys  = std::vector<std::reference_wrapper<cudf::string_scalar>>{};
-  search_keys.emplace_back(search_key_0);
-  search_keys.emplace_back(search_key_1);
-  search_keys.emplace_back(search_key_2);
-
-  auto results = cudf::strings::contains(strings_view, search_keys);
+  std::vector<std::string> match_targets({" the ", "a", ""});
+  cudf::test::strings_column_wrapper multi_targets_column(match_targets.begin(),
+                                                          match_targets.end());
+  auto results =
+    cudf::strings::multi_contains(strings_view, cudf::strings_column_view(multi_targets_column));
   auto expected_0 =
     cudf::test::fixed_width_column_wrapper<bool>({0, 1, 0, 1, 0, 0, 0, 0, 0}, null_at(8));
   auto expected_1 =

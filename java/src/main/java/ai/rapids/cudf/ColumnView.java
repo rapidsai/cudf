@@ -3360,13 +3360,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return ret;
   }
 
-  public final ColumnVector[] stringContains(Scalar[] compStrings) {
+  public final ColumnVector[] stringContains(ColumnView targets) {
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert Arrays.stream(compStrings).allMatch(Objects::nonNull) : "compString scalars may not be null";
-    assert Arrays.stream(compStrings).allMatch(str -> str.getType().equals(DType.STRING)) : "compString scalars must be string scalars";
-    Long[] scalarHandles = Arrays.stream(compStrings).map(Scalar::getScalarHandle).toArray(Long[]::new);
-
-    long[] resultPointers = stringContainsMulti(getNativeView(), toPrimitive(scalarHandles));
+    assert targets.getType().equals(DType.STRING) : "targets type must be a string";
+    assert targets.getNullCount() > 0 : "targets must not be null";
+    long[] resultPointers = stringContainsMulti(getNativeView(), targets.getNativeView());
     return Arrays.stream(resultPointers).mapToObj(ColumnVector::new).toArray(ColumnVector[]::new);
   }
 
@@ -4478,7 +4476,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Check multiple target strings against the same input column.
    */
-  private static native long[] stringContainsMulti(long cudfViewHandle, long[] compStrings) throws CudfException;
+  private static native long[] stringContainsMulti(long cudfViewHandle, long targets) throws CudfException;
 
   /**
    * Native method for extracting results from a regex program pattern. Returns a table handle.

@@ -3836,15 +3836,12 @@ public class ColumnVectorTest extends CudfTestBase {
           "On a winter's day",
           null,
           "");
-           Scalar needle0 = Scalar.fromString("the");
-           Scalar needle1 = Scalar.fromString("a");
+          ColumnVector targets = ColumnVector.fromStrings("the", "a");
            ColumnVector expected0 = ColumnVector.fromBoxedBooleans(true, true, false, false, null, false);
            ColumnVector expected1 = ColumnVector.fromBoxedBooleans(true, false, true, true, null, false)) {
-
-        results = haystack.stringContains(new Scalar[]{needle0, needle1});
+        results = haystack.stringContains(targets);
         assertColumnsAreEqual(results[0], expected0);
         assertColumnsAreEqual(results[1], expected1);
-
       } finally {
         if (results != null) {
           for (ColumnVector c : results) {

@@ -1522,35 +1522,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringContains(JNIEnv* en
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringContainsMulti(
-  JNIEnv* env, jobject j_object, jlong j_view_handle, jlongArray j_comp_strings)
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringContainsMulti(JNIEnv* env,
+                                                                                jobject j_object,
+                                                                                jlong j_view_handle,
+                                                                                jlong comp_strings)
 {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", 0);
-  JNI_NULL_CHECK(env, j_comp_strings, "array of comparison scalars is null", 0);
+  JNI_NULL_CHECK(env, comp_strings, "targets is null", 0);
 
   try {
     cudf::jni::auto_set_device(env);
     auto* column_view         = reinterpret_cast<cudf::column_view*>(j_view_handle);
+    auto* targets_view        = reinterpret_cast<cudf::column_view*>(comp_strings);
     auto const strings_column = cudf::strings_column_view(*column_view);
-    auto comp_string_pointers =
-      cudf::jni::native_jpointerArray<cudf::string_scalar>{env, j_comp_strings};
-    auto comp_strings = std::vector<cudf::string_scalar>{};
-    std::transform(comp_string_pointers.begin(),
-                   comp_string_pointers.end(),
-                   std::back_inserter(comp_strings),
-                   [](auto i) { return *i; });
-    auto comp_strings_refs = std::vector<std::reference_wrapper<cudf::string_scalar>>(
-      comp_strings.begin(), comp_strings.end());
-    auto contains_results = cudf::strings::contains(strings_column, comp_strings_refs);
-    //    auto comp_strings_iter = thrust::make_transform_iterator(comp_string_pointers.begin(),
-    //    [](auto i) -> cudf::string_scalar const& { return *i; }); auto comp_strings =
-    //    std::vector<std::reference_wrapper<cudf::string_scalar>>(comp_strings_iter,
-    //                                                                                 comp_strings_iter
-    //                                                                                 +
-    //                                                                                 comp_string_pointers.size());
-    //    auto contains_results = cudf::strings::contains(strings_column, comp_strings);
+    auto const targets_column = cudf::strings_column_view(*targets_view);
+    auto contains_results     = cudf::strings::multi_contains(strings_column, targets_column);
     return cudf::jni::convert_table_for_return(env, std::move(contains_results));
-    //     return 0;
   }
   CATCH_STD(env, 0);
 }

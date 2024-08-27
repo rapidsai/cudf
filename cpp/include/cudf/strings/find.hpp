@@ -152,16 +152,21 @@ std::unique_ptr<column> contains(
  * If the target is an empty string, true is returned for all non-null entries in the output column.
  *
  * Any null string entries return corresponding null entries in the output columns.
- *
+ * e.g.:
+ *   input:   "a", "b", "c"
+ *   targets: "a", "c"
+ *   output is a table with two boolean columns:
+ *     column_0: true, false, false
+ *     column_1: false, false, true
  * @param input Strings instance for this operation
  * @param targets UTF-8 encoded strings to search for in each string in `input`
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New BOOL8 column
  */
-std::unique_ptr<table> contains(
+std::unique_ptr<table> multi_contains(
   strings_column_view const& input,
-  std::vector<std::reference_wrapper<string_scalar>> const& targets,
+  strings_column_view const& targets,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

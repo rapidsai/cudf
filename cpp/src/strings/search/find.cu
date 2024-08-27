@@ -415,7 +415,7 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
 }
 
 CUDF_KERNEL void multi_contains_fn(column_device_view const d_strings,
-                                   cudf::device_span<string_view> d_targets,
+                                   column_device_view const d_targets,
                                    cudf::device_span<bool*> d_results)
 {
   auto const str_idx     = static_cast<size_type>(cudf::detail::grid_1d::global_thread_id());
@@ -427,19 +427,15 @@ CUDF_KERNEL void multi_contains_fn(column_device_view const d_strings,
 
   // check empty target
   for (auto target_idx = 0; target_idx < num_targets; ++target_idx) {
-    auto const d_target = d_targets[target_idx];
-    if (d_target.size_bytes() == 0) {
-      d_results[target_idx][str_idx] = true;  // Empty string is always found.
-    } else {
-      d_results[target_idx][str_idx] = false;
-    }
+    auto const d_target            = d_targets.element<string_view>(target_idx);
+    d_results[target_idx][str_idx] = d_target.size_bytes() == 0;
   }
 
   for (auto str_byte_idx = 0; str_byte_idx < d_str.size_bytes();
        ++str_byte_idx) {  // iterate the start index in the string
     for (auto target_idx = 0; target_idx < num_targets; ++target_idx) {  // iterate targets
       if (!d_results[target_idx][str_idx]) {                             // not found before
-        auto const d_target = d_targets[target_idx];
+        auto const d_target = d_targets.element<string_view>(target_idx);
         if (d_str.size_bytes() - str_byte_idx >= d_target.size_bytes() &&
             (d_target.compare(d_str.data() + str_byte_idx, d_target.size_bytes()) == 0)) {
           // found
@@ -450,10 +446,9 @@ CUDF_KERNEL void multi_contains_fn(column_device_view const d_strings,
   }
 }
 
-CUDF_KERNEL void multi_contains_warp_parallel_multi_scalars_fn(
-  column_device_view const d_strings,
-  cudf::device_span<string_view> d_targets,
-  cudf::device_span<bool*> d_results)
+CUDF_KERNEL void multi_contains_warp_parallel_multi_scalars_fn(column_device_view const d_strings,
+                                                               column_device_view const d_targets,
+                                                               cudf::device_span<bool*> d_results)
 {
   auto const num_targets = d_targets.size();
   auto const num_rows    = d_strings.size();
@@ -473,14 +468,14 @@ CUDF_KERNEL void multi_contains_warp_parallel_multi_scalars_fn(
 
   for (size_t target_idx = 0; target_idx < num_targets; target_idx++) {
     // Identify the target.
-    auto const d_target = d_targets[target_idx];
+    auto const d_target = d_targets.element<string_view>(target_idx);
 
     // each thread of the warp will check just part of the string
     auto found = false;
     if (d_target.empty()) {
       found = true;
     } else {
-      for (auto i = static_cast<size_type>(idx % cudf::detail::warp_size);
+      for (auto i = static_cast<size_type>(lane_idx);
            !found && ((i + d_target.size_bytes()) <= d_str.size_bytes());
            i += cudf::detail::warp_size) {
         // check the target matches this part of the d_str data
@@ -493,35 +488,18 @@ CUDF_KERNEL void multi_contains_warp_parallel_multi_scalars_fn(
   }
 }
 
-std::vector<std::unique_ptr<column>> multi_contains(
-  strings_column_view const& input,
-  std::vector<std::reference_wrapper<string_scalar>> const& targets,
-  bool warp_parallel,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::vector<std::unique_ptr<column>> multi_contains(strings_column_view const& input,
+                                                    strings_column_view const& targets,
+                                                    bool warp_parallel,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
 {
   auto const num_targets = static_cast<size_type>(targets.size());
-  CUDF_EXPECTS(not targets.empty(), "Must specify at least one target string.");
-  CUDF_EXPECTS(std::all_of(targets.begin(),
-                           targets.end(),
-                           [&](auto const& target) { return target.get().is_valid(stream); }),
-               "Target search strings must be valid.");
-
-  // Convert targets into string-views for querying. Copy to device.
-  auto device_targets = [&] {
-    auto const host_target_iter =
-      thrust::make_transform_iterator(targets.begin(), [](auto const& ref) {
-        return string_view{ref.get().data(), ref.get().size()};
-      });
-    auto const host_targets =
-      std::vector<string_view>(host_target_iter, host_target_iter + targets.size());
-    return cudf::detail::make_device_uvector_async(
-      host_targets, stream, rmm::mr::get_current_device_resource());
-  }();
+  CUDF_EXPECTS(not targets.is_empty(), "Must specify at least one target string.");
 
   // Create output columns.
   auto const results_iter =
-    thrust::make_transform_iterator(targets.begin(), [&](auto const& target) {
+    thrust::make_transform_iterator(thrust::counting_iterator<cudf::size_type>(0), [&](int i) {
       return make_numeric_column(data_type{type_id::BOOL8},
                                  input.size(),
                                  cudf::detail::copy_bitmask(input.parent(), stream, mr),
@@ -531,7 +509,6 @@ std::vector<std::unique_ptr<column>> multi_contains(
     });
   auto results_list =
     std::vector<std::unique_ptr<column>>(results_iter, results_iter + targets.size());
-
   auto device_results_list = [&] {
     auto host_results_pointer_iter =
       thrust::make_transform_iterator(results_list.begin(), [](auto const& results_column) {
@@ -547,18 +524,20 @@ std::vector<std::unique_ptr<column>> multi_contains(
   constexpr int block_size = 256;
   // launch warp per string
   auto const d_strings = column_device_view::create(input.parent(), stream);
+  auto const d_targets = column_device_view::create(targets.parent(), stream);
 
   if (warp_parallel) {
-    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size * num_targets, block_size};
+    // one warp handles multi-targets for a string
+    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
     multi_contains_warp_parallel_multi_scalars_fn<<<grid.num_blocks,
                                                     grid.num_threads_per_block,
                                                     0,
                                                     stream.value()>>>(
-      *d_strings, device_targets, device_results_list);
+      *d_strings, *d_targets, device_results_list);
   } else {
     cudf::detail::grid_1d grid{input.size(), block_size};
     multi_contains_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      *d_strings, device_targets, device_results_list);
+      *d_strings, *d_targets, device_results_list);
   }
   return results_list;
 }
@@ -710,10 +689,10 @@ std::unique_ptr<column> contains(strings_column_view const& input,
   return contains_small_strings_impl(input, target, stream, mr);
 }
 
-std::unique_ptr<table> contains(strings_column_view const& input,
-                                std::vector<std::reference_wrapper<string_scalar>> const& targets,
-                                rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> multi_contains(strings_column_view const& input,
+                                      strings_column_view const& targets,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   auto result_columns = [&] {
     if ((input.null_count() < input.size()) &&
@@ -807,13 +786,13 @@ std::unique_ptr<column> contains(strings_column_view const& strings,
   return detail::contains(strings, target, stream, mr);
 }
 
-std::unique_ptr<table> contains(strings_column_view const& strings,
-                                std::vector<std::reference_wrapper<string_scalar>> const& targets,
-                                rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> multi_contains(strings_column_view const& strings,
+                                      strings_column_view const& targets,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(strings, targets, stream, mr);
+  return detail::multi_contains(strings, targets, stream, mr);
 }
 
 std::unique_ptr<column> contains(strings_column_view const& strings,
