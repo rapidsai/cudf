@@ -236,100 +236,104 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
         get_target_property(interface_libs arrow_static INTERFACE_LINK_LIBRARIES)
       endif()
     endif()
-    rapids_export(
-      BUILD Arrow
-      VERSION ${VERSION}
-      EXPORT_SET arrow_targets
-      GLOBAL_TARGETS arrow_shared arrow_static
-      NAMESPACE cudf::
-      FINAL_CODE_BLOCK arrow_code_string
-    )
-
-    if(ENABLE_PARQUET)
-      set(arrow_acero_code_string
-          [=[
-              if (TARGET cudf::arrow_acero_shared AND (NOT TARGET arrow_acero_shared))
-                  add_library(arrow_acero_shared ALIAS cudf::arrow_acero_shared)
-              endif()
-              if (TARGET cudf::arrow_acero_static AND (NOT TARGET arrow_acero_static))
-                  add_library(arrow_acero_static ALIAS cudf::arrow_acero_static)
-              endif()
-            ]=]
-      )
-
+    if(NOT EXCLUDE_FROM_ALL)
       rapids_export(
-        BUILD ArrowAcero
+        BUILD Arrow
         VERSION ${VERSION}
-        EXPORT_SET arrow_acero_targets
-        GLOBAL_TARGETS arrow_acero_shared arrow_acero_static
+        EXPORT_SET arrow_targets
+        GLOBAL_TARGETS arrow_shared arrow_static
         NAMESPACE cudf::
-        FINAL_CODE_BLOCK arrow_acero_code_string
+        FINAL_CODE_BLOCK arrow_code_string
       )
 
-      set(arrow_dataset_code_string
-          [=[
-              if (TARGET cudf::arrow_dataset_shared AND (NOT TARGET arrow_dataset_shared))
-                  add_library(arrow_dataset_shared ALIAS cudf::arrow_dataset_shared)
-              endif()
-              if (TARGET cudf::arrow_dataset_static AND (NOT TARGET arrow_dataset_static))
-                  add_library(arrow_dataset_static ALIAS cudf::arrow_dataset_static)
-              endif()
-            ]=]
-      )
+      if(ENABLE_PARQUET)
+        set(arrow_acero_code_string
+            [=[
+                if (TARGET cudf::arrow_acero_shared AND (NOT TARGET arrow_acero_shared))
+                    add_library(arrow_acero_shared ALIAS cudf::arrow_acero_shared)
+                endif()
+                if (TARGET cudf::arrow_acero_static AND (NOT TARGET arrow_acero_static))
+                    add_library(arrow_acero_static ALIAS cudf::arrow_acero_static)
+                endif()
+              ]=]
+        )
 
-      rapids_export(
-        BUILD ArrowDataset
-        VERSION ${VERSION}
-        EXPORT_SET arrow_dataset_targets
-        GLOBAL_TARGETS arrow_dataset_shared arrow_dataset_static
-        NAMESPACE cudf::
-        FINAL_CODE_BLOCK arrow_dataset_code_string
-      )
-      set(parquet_code_string
-          [=[
-              if (TARGET cudf::parquet_shared AND (NOT TARGET parquet_shared))
-                  add_library(parquet_shared ALIAS cudf::parquet_shared)
-              endif()
-              if (TARGET cudf::parquet_static AND (NOT TARGET parquet_static))
-                  add_library(parquet_static ALIAS cudf::parquet_static)
-              endif()
-            ]=]
-      )
+        rapids_export(
+          BUILD ArrowAcero
+          VERSION ${VERSION}
+          EXPORT_SET arrow_acero_targets
+          GLOBAL_TARGETS arrow_acero_shared arrow_acero_static
+          NAMESPACE cudf::
+          FINAL_CODE_BLOCK arrow_acero_code_string
+        )
 
-      rapids_export(
-        BUILD Parquet
-        VERSION ${VERSION}
-        EXPORT_SET parquet_targets
-        GLOBAL_TARGETS parquet_shared parquet_static
-        NAMESPACE cudf::
-        FINAL_CODE_BLOCK parquet_code_string
-      )
+        set(arrow_dataset_code_string
+            [=[
+                if (TARGET cudf::arrow_dataset_shared AND (NOT TARGET arrow_dataset_shared))
+                    add_library(arrow_dataset_shared ALIAS cudf::arrow_dataset_shared)
+                endif()
+                if (TARGET cudf::arrow_dataset_static AND (NOT TARGET arrow_dataset_static))
+                    add_library(arrow_dataset_static ALIAS cudf::arrow_dataset_static)
+                endif()
+              ]=]
+        )
+
+        rapids_export(
+          BUILD ArrowDataset
+          VERSION ${VERSION}
+          EXPORT_SET arrow_dataset_targets
+          GLOBAL_TARGETS arrow_dataset_shared arrow_dataset_static
+          NAMESPACE cudf::
+          FINAL_CODE_BLOCK arrow_dataset_code_string
+        )
+        set(parquet_code_string
+            [=[
+                if (TARGET cudf::parquet_shared AND (NOT TARGET parquet_shared))
+                    add_library(parquet_shared ALIAS cudf::parquet_shared)
+                endif()
+                if (TARGET cudf::parquet_static AND (NOT TARGET parquet_static))
+                    add_library(parquet_static ALIAS cudf::parquet_static)
+                endif()
+              ]=]
+        )
+
+        rapids_export(
+          BUILD Parquet
+          VERSION ${VERSION}
+          EXPORT_SET parquet_targets
+          GLOBAL_TARGETS parquet_shared parquet_static
+          NAMESPACE cudf::
+          FINAL_CODE_BLOCK parquet_code_string
+        )
+      endif()
     endif()
   endif()
 
-  # We generate the arrow-configfiles when we built arrow locally, so always do `find_dependency`
-  rapids_export_package(BUILD Arrow cudf-exports)
-  rapids_export_package(INSTALL Arrow cudf-exports)
+  if(NOT EXCLUDE_FROM_ALL)
+    # We generate the arrow-configfiles when we built arrow locally, so always do `find_dependency`
+    rapids_export_package(BUILD Arrow cudf-exports)
+    rapids_export_package(INSTALL Arrow cudf-exports)
 
-  if(ENABLE_PARQUET)
-    rapids_export_package(BUILD Parquet cudf-exports)
-    rapids_export_package(BUILD ArrowDataset cudf-exports)
+    if(ENABLE_PARQUET)
+      rapids_export_package(BUILD Parquet cudf-exports)
+      rapids_export_package(BUILD ArrowDataset cudf-exports)
+    endif()
+
+    include("${rapids-cmake-dir}/export/find_package_root.cmake")
+    rapids_export_find_package_root(
+      BUILD Arrow [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-exports
+    )
+    rapids_export_find_package_root(
+      BUILD Parquet [=[${CMAKE_CURRENT_LIST_DIR}]=]
+      EXPORT_SET cudf-exports
+      CONDITION ENABLE_PARQUET
+    )
+    rapids_export_find_package_root(
+      BUILD ArrowDataset [=[${CMAKE_CURRENT_LIST_DIR}]=]
+      EXPORT_SET cudf-exports
+      CONDITION ENABLE_PARQUET
+    )
   endif()
-
-  include("${rapids-cmake-dir}/export/find_package_root.cmake")
-  rapids_export_find_package_root(
-    BUILD Arrow [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-exports
-  )
-  rapids_export_find_package_root(
-    BUILD Parquet [=[${CMAKE_CURRENT_LIST_DIR}]=]
-    EXPORT_SET cudf-exports
-    CONDITION ENABLE_PARQUET
-  )
-  rapids_export_find_package_root(
-    BUILD ArrowDataset [=[${CMAKE_CURRENT_LIST_DIR}]=]
-    EXPORT_SET cudf-exports
-    CONDITION ENABLE_PARQUET
-  )
 
   set(ARROW_LIBRARIES
       "${ARROW_LIBRARIES}"
