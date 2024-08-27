@@ -59,11 +59,6 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
 )
 
-add_executable(datagen common/cudf_tpch_datagen/datagen.cpp)
-target_link_libraries(
-  datagen PRIVATE cudf_tpch_datagen benchmark::benchmark_main $<TARGET_NAME_IF_EXISTS:conda_env>
-)
-
 # ##################################################################################################
 # * compiler function -----------------------------------------------------------------------------
 
