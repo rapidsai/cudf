@@ -64,8 +64,6 @@ requirements:
     - rapids-build-backend >=0.3.0,<0.4.0.dev0
     - scikit-build-core >=0.10.0
     - dlpack >=0.8,<1.0
-    - numpy 2.0
-    - pyarrow ==16.1.0.*
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
@@ -81,7 +79,7 @@ requirements:
     - typing_extensions >=4.0.0
     - pandas >=2.0,<2.2.3dev0
     - numpy >=1.23,<3.0a0
-    - {{ pin_compatible('pyarrow', max_pin='x.x') }}
+    - pyarrow ==16.1.0.*
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0
     {% if cuda_major == "11" %}
