@@ -114,9 +114,9 @@ numpy_asarray = numpy.asarray
 def asarray(a, dtype=None, order=None, *, device=None, copy=None, like=None):
     if is_proxy_object(a):
         return numpy_asarray(
-            a._fsproxy_slow, dtype, order, device=None, copy=None, like=None
+            a._fsproxy_slow, dtype, order, device=device, copy=copy, like=like
         )
-    return numpy_asarray(a, dtype, order, device=None, copy=None, like=None)
+    return numpy_asarray(a, dtype, order, device=device, copy=copy, like=like)
 
 
 numpy.asarray = asarray
