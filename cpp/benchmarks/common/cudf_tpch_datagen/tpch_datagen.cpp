@@ -301,9 +301,10 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
   auto const o_orderdate_ts = orders_independent.column(2);
   auto const l_base =
     cudf::repeat(cudf::table_view({o_orderkey, o_orderdate_ts}), o_rep_freqs->view(), stream, mr);
+  auto l_base_columns = l_base->release();
 
   // Generate the `l_orderkey` column
-  auto l_orderkey = std::make_unique<cudf::column>(l_base->get_column(0));
+  auto l_orderkey = std::move(l_base_columns[0]);
 
   // Generate the `l_partkey` column
   auto l_partkey = generate_random_numeric_column<cudf::size_type>(
@@ -331,14 +332,14 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
   }();
 
   // Get the orderdate column from the `l_base` table
-  auto const ol_orderdate_ts = l_base->get_column(1);
+  auto const ol_orderdate_ts = std::move(l_base_columns[1]);
 
   // Generate the `l_shipdate` column
   auto l_shipdate_ts = [&]() {
     auto const l_shipdate_rand_add_days =
       generate_random_numeric_column<int8_t>(1, 121, l_num_rows, stream, mr);
     return add_calendrical_days(
-      ol_orderdate_ts.view(), l_shipdate_rand_add_days->view(), stream, mr);
+      ol_orderdate_ts->view(), l_shipdate_rand_add_days->view(), stream, mr);
   }();
 
   // Generate the `l_commitdate` column
@@ -346,7 +347,7 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
     auto const l_commitdate_rand_add_days =
       generate_random_numeric_column<int8_t>(30, 90, l_num_rows, stream, mr);
     return add_calendrical_days(
-      ol_orderdate_ts.view(), l_commitdate_rand_add_days->view(), stream, mr);
+      ol_orderdate_ts->view(), l_commitdate_rand_add_days->view(), stream, mr);
   }();
 
   // Generate the `l_receiptdate` column
@@ -385,7 +386,8 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
     auto const gather_map     = cudf::table_view({indices->view(), keys->view()});
     auto const gathered_table = cudf::gather(
       gather_map, ternary_mask->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
-    return std::make_unique<cudf::column>(gathered_table->get_column(1));
+    auto gathered_table_columns = gathered_table->release();
+    return std::move(gathered_table_columns[1]);
   }();
 
   // Generate the `l_linestatus` column
@@ -553,8 +555,9 @@ std::unique_ptr<cudf::table> generate_partsupp(double scale_factor,
   auto ps_partkey = [&]() {
     auto const p_partkey =
       generate_primary_key_column(cudf::numeric_scalar<cudf::size_type>(1), p_num_rows, stream, mr);
-    auto const rep_table = cudf::repeat(cudf::table_view({p_partkey->view()}), 4, stream, mr);
-    return std::make_unique<cudf::column>(rep_table->get_column(0));
+    auto const rep_table   = cudf::repeat(cudf::table_view({p_partkey->view()}), 4, stream, mr);
+    auto rep_table_columns = rep_table->release();
+    return std::move(rep_table_columns[0]);
   }();
 
   // Generate the `ps_suppkey` column

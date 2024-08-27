@@ -201,7 +201,8 @@ std::unique_ptr<cudf::column> generate_random_string_column_from_set(
   // Perform the gather operation
   auto const gathered_table =
     cudf::gather(gather_map, indices->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
-  return std::make_unique<cudf::column>(gathered_table->get_column(1));
+  auto gathered_table_columns = gathered_table->release();
+  return std::move(gathered_table_columns[1]);
 }
 
 template <typename T>
