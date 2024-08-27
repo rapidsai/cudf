@@ -78,7 +78,7 @@ dependencies:
 - pytest-xdist
 - pytest<8
 - python-confluent-kafka>=1.9.0,<1.10.0a0
-- python>=3.9,<3.12
+- python>=3.10,<3.12
 - pytorch>=2.1.0
 - rapids-build-backend>=0.3.0,<0.4.0.dev0
 - rapids-dask-dependency==24.10.*,>=0.0.0a0
