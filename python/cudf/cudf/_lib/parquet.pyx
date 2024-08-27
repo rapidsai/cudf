@@ -236,7 +236,7 @@ cdef object _process_metadata(object df,
         elif set(index_col).issubset(names):
             index_data = df[index_col]
             actual_index_names = next(iter(index_col_names.values()))
-            if len(index_data._num_columns) == 1:
+            if index_data._num_columns == 1:
                 idx = cudf.Index._from_column(
                     index_data._column,
                     name=actual_index_names[0]
