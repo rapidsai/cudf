@@ -24,10 +24,11 @@ conda activate test
 set -u
 
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
+echo "The working directory is ${PWD}"
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
 repo_root=$(git rev-parse --show-toplevel)
-TEST_DIR=${repo_root}/tests
+TEST_DIR=${repo_root}/python/cudf/cudf_pandas_tests/third_party_integration_tests/tests
 
 rapids-print-env
 

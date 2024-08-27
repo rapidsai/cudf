@@ -13,7 +13,7 @@ runtest_gold() {
     local lib=$1
     local test_keys=${@:2}
 
-    PYTHONPATH=python/cudf/cudf_pandas_tests/third_party_integration_tests/tests pytest \
+    pytest \
     -v \
     --continue-on-collection-errors \
     --cache-clear \
@@ -28,7 +28,7 @@ runtest_cudf_pandas() {
     local lib=$1
     local test_keys=${@:2}
 
-    PYTHONPATH=python/cudf/cudf_pandas_tests/third_party_integration_tests/tests pytest \
+    pytest \
     -p cudf.pandas \
     -v \
     --continue-on-collection-errors \
@@ -49,7 +49,7 @@ main() {
     runtest_cudf_pandas ${lib} ${test_keys}
 
     # assertion phase
-    PYTHONPATH=python/cudf/cudf_pandas_tests/third_party_integration_tests/tests pytest \
+    pytest \
     --compare \
     -p cudf.pandas \
     -v \
