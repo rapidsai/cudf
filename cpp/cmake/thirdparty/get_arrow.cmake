@@ -236,6 +236,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
         get_target_property(interface_libs arrow_static INTERFACE_LINK_LIBRARIES)
       endif()
     endif()
+
+    include(rapids-export)
     if(NOT EXCLUDE_FROM_ALL)
       rapids_export(
         BUILD Arrow
