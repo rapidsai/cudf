@@ -23,11 +23,7 @@ from cudf.core.column import CategoricalColumn, as_column
 from cudf.io import write_to_dataset
 from cudf.io.parquet import _apply_post_filters, _normalize_filters
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
-from cudf.utils.ioutils import (
-    _ROW_GROUP_SIZE_BYTES_DEFAULT,
-    _fsspec_data_transfer,
-    _is_local_filesystem,
-)
+from cudf.utils.ioutils import _ROW_GROUP_SIZE_BYTES_DEFAULT
 
 
 class CudfEngine(ArrowDatasetEngine):
@@ -93,40 +89,35 @@ class CudfEngine(ArrowDatasetEngine):
         dataset_kwargs = dataset_kwargs or {}
         dataset_kwargs["partitioning"] = partitioning or "hive"
 
-        # Non-local filesystem handling
-        paths_or_fobs = paths
-        if not _is_local_filesystem(fs):
-            paths_or_fobs = [
-                _fsspec_data_transfer(fpath, fs=fs) for fpath in paths
-            ]
-
         # Use cudf to read in data
         try:
             df = cudf.read_parquet(
-                paths_or_fobs,
+                paths,
                 engine="cudf",
                 columns=columns,
                 row_groups=row_groups if row_groups else None,
                 dataset_kwargs=dataset_kwargs,
                 categorical_partitions=False,
+                filesystem=fs,
                 **kwargs,
             )
         except RuntimeError as err:
             # TODO: Remove try/except after null-schema issue is resolved
             # (See: https://github.com/rapidsai/cudf/issues/12702)
-            if len(paths_or_fobs) > 1:
+            if len(paths) > 1:
                 df = cudf.concat(
                     [
                         cudf.read_parquet(
-                            pof,
+                            path,
                             engine="cudf",
                             columns=columns,
                             row_groups=row_groups[i] if row_groups else None,
                             dataset_kwargs=dataset_kwargs,
                             categorical_partitions=False,
+                            filesystem=fs,
                             **kwargs,
                         )
-                        for i, pof in enumerate(paths_or_fobs)
+                        for i, path in enumerate(paths)
                     ]
                 )
             else:

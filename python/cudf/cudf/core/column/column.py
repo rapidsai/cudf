@@ -557,7 +557,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
 
         # Normalize value to scalar/column
-        value_normalized = (
+        value_normalized: cudf.Scalar | ColumnBase = (
             cudf.Scalar(value, dtype=self.dtype)
             if is_scalar(value)
             else as_column(value, dtype=self.dtype)
@@ -613,9 +613,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 )
 
         # step != 1, create a scatter map with arange
-        scatter_map = as_column(
-            rng,
-            dtype=cudf.dtype(np.int32),
+        scatter_map = cast(
+            cudf.core.column.NumericalColumn,
+            as_column(
+                rng,
+                dtype=cudf.dtype(np.int32),
+            ),
         )
 
         return self._scatter_by_column(scatter_map, value)
@@ -1120,11 +1123,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if (ascending and self.is_monotonic_increasing) or (
             not ascending and self.is_monotonic_decreasing
         ):
-            return as_column(range(len(self)))
+            return cast(
+                cudf.core.column.NumericalColumn, as_column(range(len(self)))
+            )
         elif (ascending and self.is_monotonic_decreasing) or (
             not ascending and self.is_monotonic_increasing
         ):
-            return as_column(range(len(self) - 1, -1, -1))
+            return cast(
+                cudf.core.column.NumericalColumn,
+                as_column(range(len(self) - 1, -1, -1)),
+            )
         else:
             return libcudf.sort.order_by(
                 [self], [ascending], na_position, stable=True
@@ -1716,7 +1724,7 @@ def as_column(
     nan_as_null: bool | None = None,
     dtype: Dtype | None = None,
     length: int | None = None,
-):
+) -> ColumnBase:
     """Create a Column from an arbitrary object
 
     Parameters

@@ -13,6 +13,7 @@ files:
       - cuda
       - cuda_version
       - depends_on_cupy
+      - depends_on_librmm
       - depends_on_rmm
       - develop
       - docs
@@ -95,6 +96,8 @@ files:
       - build_base
       - build_python_common
       - depends_on_pylibcudf
+      - depends_on_libcudf
+      - depends_on_librmm
       - depends_on_rmm
   py_run_cudf:
     output: pyproject
@@ -106,6 +109,7 @@ files:
       - run_cudf
       - pyarrow_run
       - depends_on_cupy
+      - depends_on_libcudf
       - depends_on_pylibcudf
       - depends_on_rmm
   py_test_cudf:
@@ -117,6 +121,31 @@ files:
     includes:
       - test_python_common
       - test_python_cudf
+  py_build_libcudf:
+    output: pyproject
+    pyproject_dir: python/libcudf
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_skbuild
+  py_rapids_build_libcudf:
+    output: pyproject
+    pyproject_dir: python/libcudf
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes:
+      - build_base
+      - build_cpp
+      - build_python_libcudf
+      - depends_on_librmm
+  py_run_libcudf:
+    output: pyproject
+    pyproject_dir: python/libcudf
+    extras:
+      table: project
+    includes:
+      - pyarrow_run
   py_build_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -133,6 +162,8 @@ files:
     includes:
       - build_base
       - build_python_common
+      - depends_on_libcudf
+      - depends_on_librmm
       - depends_on_rmm
   py_run_pylibcudf:
     output: pyproject
@@ -140,6 +171,7 @@ files:
     extras:
       table: project
     includes:
+      - depends_on_libcudf
       - depends_on_rmm
       - pyarrow_run
       - run_pylibcudf
@@ -359,13 +391,17 @@ dependencies:
           - cython>=3.0.3
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==16.1.0.*
+          - &pyarrow_build pyarrow==16.1.0.*
       - output_types: pyproject
         packages:
-          # Hard pin the patch version used during the build.
+          # Hard pin the version used during the build.
           # Sync with conda build constraint & wheel run constraint.
-          # TODO: Change to `2.0.*` for NumPy 2
-          - numpy==1.23.*
+          - numpy==2.0.*
+  build_python_libcudf:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - *pyarrow_build
   libarrow_build:
     common:
       - output_types: conda
@@ -549,10 +585,6 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              py: "3.9"
-            packages:
-              - python=3.9
-          - matrix:
               py: "3.10"
             packages:
               - python=3.10
@@ -562,14 +594,13 @@ dependencies:
               - python=3.11
           - matrix:
             packages:
-              - python>=3.9,<3.12
+              - python>=3.10,<3.12
   run_common:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          # TODO: Update `numpy` in `build_python_common` when dropping `<2.0a0`
-          - numpy>=1.23,<2.0a0
+          - numpy>=1.23,<3.0a0
           - pandas>=2.0,<2.2.3dev0
   run_pylibcudf:
     common:
@@ -759,6 +790,31 @@ dependencies:
         packages:
           - dask-cuda==24.10.*,>=0.0.0a0
           - *numba
+  depends_on_libcudf:
+    common:
+      - output_types: conda
+        packages:
+          - &libcudf_unsuffixed libcudf==24.10.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          # This index is needed for libcudf-cu{11,12}.
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - libcudf-cu12==24.10.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
+              - libcudf-cu11==24.10.*,>=0.0.0a0
+          - {matrix: null, packages: [*libcudf_unsuffixed]}
   depends_on_pylibcudf:
     common:
       - output_types: conda
@@ -849,6 +905,33 @@ dependencies:
             packages: &cupy_packages_cu11
               - cupy-cuda11x>=12.0.0
           - {matrix: null, packages: *cupy_packages_cu11}
+  depends_on_librmm:
+    common:
+      - output_types: conda
+        packages:
+          - &librmm_unsuffixed librmm==24.10.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          # This index is needed for librmm-cu{11,12}.
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - librmm-cu12==24.10.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
+              - librmm-cu11==24.10.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *librmm_unsuffixed
   depends_on_rmm:
     common:
       - output_types: conda
