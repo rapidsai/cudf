@@ -117,7 +117,7 @@ def _get_non_empty_data(
             dtype=cudf.CategoricalDtype(
                 categories=categories, ordered=s.dtype.ordered
             ),
-            children=(codes,),
+            children=(codes,),  # type: ignore[arg-type]
         )
     elif isinstance(s.dtype, cudf.ListDtype):
         leaf_type = s.dtype.leaf_type

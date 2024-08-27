@@ -741,7 +741,7 @@ class CategoricalColumn(column.ColumnBase):
             size=self.size,
             dtype=self.dtype,
             mask=self.base_mask,
-            children=(codes,),
+            children=(codes,),  # type: ignore[arg-type]
         )
 
     def sort_values(self, ascending: bool = True, na_position="last") -> Self:
@@ -1104,10 +1104,13 @@ class CategoricalColumn(column.ColumnBase):
         if not isinstance(self.categories, type(dtype.categories._column)):
             # If both categories are of different Column types,
             # return a column full of Nulls.
-            codes = column.as_column(
-                _DEFAULT_CATEGORICAL_VALUE,
-                length=self.size,
-                dtype=self.codes.dtype,
+            codes = cast(
+                cudf.core.column.numerical.NumericalColumn,
+                column.as_column(
+                    _DEFAULT_CATEGORICAL_VALUE,
+                    length=self.size,
+                    dtype=self.codes.dtype,
+                ),
             )
             codes = as_unsigned_codes(len(dtype.categories), codes)
             return type(self)(
@@ -1268,10 +1271,13 @@ class CategoricalColumn(column.ColumnBase):
             if type(out_col.categories) is not type(new_categories):
                 # If both categories are of different Column types,
                 # return a column full of Nulls.
-                new_codes = column.as_column(
-                    _DEFAULT_CATEGORICAL_VALUE,
-                    length=self.size,
-                    dtype=self.codes.dtype,
+                new_codes = cast(
+                    cudf.core.column.numerical.NumericalColumn,
+                    column.as_column(
+                        _DEFAULT_CATEGORICAL_VALUE,
+                        length=self.size,
+                        dtype=self.codes.dtype,
+                    ),
                 )
                 new_codes = as_unsigned_codes(len(new_categories), new_codes)
                 out_col = type(self)(
@@ -1367,7 +1373,9 @@ class CategoricalColumn(column.ColumnBase):
         df.reset_index(drop=True, inplace=True)
 
         ordered = ordered if ordered is not None else self.ordered
-        new_codes = df._data["new_codes"]
+        new_codes = cast(
+            cudf.core.column.numerical.NumericalColumn, df._data["new_codes"]
+        )
 
         # codes can't have masks, so take mask out before moving in
         new_codes = as_unsigned_codes(len(new_cats), new_codes)
