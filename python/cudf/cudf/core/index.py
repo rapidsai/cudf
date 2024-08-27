@@ -1443,6 +1443,11 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                     output[:break_idx].replace("'", "") + output[break_idx:]
                 )
             else:
+                # Too many non-unique categories will cause
+                # the output to take too long. In this case, we
+                # split the categories into data and categories
+                # and generate the repr separately and
+                # merge them.
                 pd_cats = pd.Categorical(
                     preprocess.astype(preprocess.categories.dtype).to_pandas()
                 )
