@@ -982,5 +982,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - ipython
+          - jupyter_client
           - nbformat
           - openpyxl

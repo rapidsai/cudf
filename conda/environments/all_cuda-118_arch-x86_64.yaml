@@ -37,6 +37,7 @@ dependencies:
 - hypothesis
 - identify>=2.5.20
 - ipython
+- jupyter_client
 - libarrow-acero==16.1.0.*
 - libarrow-dataset==16.1.0.*
 - libarrow==16.1.0.*
