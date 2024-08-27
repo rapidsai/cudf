@@ -363,17 +363,14 @@ add_library(
   src/hash/sha512_hash.cu
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
-  src/interop/from_arrow.cu
   src/interop/arrow_utilities.cpp
   src/interop/decimal_conversion_utilities.cu
-  src/interop/to_arrow.cu
   src/interop/to_arrow_device.cu
   src/interop/to_arrow_host.cu
   src/interop/from_arrow_device.cu
   src/interop/from_arrow_host.cu
   src/interop/from_arrow_stream.cu
   src/interop/to_arrow_schema.cpp
-  src/interop/detail/arrow_allocator.cpp
   src/io/avro/avro.cpp
   src/io/avro/avro_gpu.cu
   src/io/avro/reader_impl.cu
@@ -392,7 +389,6 @@ add_library(
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
-  src/io/json/byte_range_info.cu
   src/io/json/json_column.cu
   src/io/json/json_normalization.cu
   src/io/json/json_tree.cu
@@ -439,7 +435,6 @@ add_library(
   src/io/text/bgzip_data_chunk_source.cu
   src/io/text/bgzip_utils.cpp
   src/io/text/multibyte_split.cu
-  src/io/utilities/arrow_io_source.cpp
   src/io/utilities/base64_utilities.cpp
   src/io/utilities/column_buffer.cpp
   src/io/utilities/column_buffer_strings.cu
@@ -671,6 +666,7 @@ add_library(
   src/unary/math_ops.cu
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
+  src/utilities/cuda.cpp
   src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
   src/utilities/host_memory.cpp
@@ -1074,23 +1070,12 @@ if(CUDF_ENABLE_ARROW_PARQUET)
   )
 endif()
 
-string(
-  APPEND
-  install_code_string
-  [=[
-if(testing IN_LIST cudf_FIND_COMPONENTS)
-  enable_language(CUDA)
-endif()
-]=]
-)
-
 rapids_export(
   INSTALL cudf
   EXPORT_SET cudf-exports ${_components_export_string}
   GLOBAL_TARGETS cudf cudftestutil
   NAMESPACE cudf::
   DOCUMENTATION doc_string
-  FINAL_CODE_BLOCK install_code_string
 )
 
 # ##################################################################################################

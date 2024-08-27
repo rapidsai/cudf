@@ -2,7 +2,7 @@
 
 from libc.stdint cimport uint8_t, uint16_t, uintptr_t
 
-from cudf._lib.pylibcudf.libcudf.strings_udf cimport (
+from pylibcudf.libcudf.strings_udf cimport (
     get_character_cases_table as cpp_get_character_cases_table,
     get_character_flags_table as cpp_get_character_flags_table,
     get_special_case_mapping_table as cpp_get_special_case_mapping_table,
@@ -15,17 +15,17 @@ from libcpp.utility cimport move
 
 from cudf.core.buffer import as_buffer
 
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
-
-from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_view
-from cudf._lib.pylibcudf.libcudf.strings_udf cimport (
+from pylibcudf.libcudf.column.column cimport column, column_view
+from pylibcudf.libcudf.strings_udf cimport (
     column_from_udf_string_array as cpp_column_from_udf_string_array,
     free_udf_string_array as cpp_free_udf_string_array,
     get_cuda_build_version as cpp_get_cuda_build_version,
     to_string_view_array as cpp_to_string_view_array,
     udf_string,
 )
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+
+from cudf._lib.column cimport Column
 
 
 def get_cuda_build_version():

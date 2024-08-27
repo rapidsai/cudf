@@ -7,11 +7,11 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 
+import pylibcudf
 import rmm
 
 import cudf
 import cudf._lib as libcudf
-from cudf._lib import pylibcudf
 from cudf.core.buffer import (
     Buffer,
     ExposureTrackedBuffer,
@@ -39,18 +39,18 @@ from cudf._lib.types cimport (
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf._lib.types import dtype_from_pylibcudf_column
 
-
-cimport cudf._lib.pylibcudf.libcudf.copying as cpp_copying
-cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
-cimport cudf._lib.pylibcudf.libcudf.unary as libcudf_unary
-from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_contents
-from cudf._lib.pylibcudf.libcudf.column.column_factories cimport (
+cimport pylibcudf.libcudf.copying as cpp_copying
+cimport pylibcudf.libcudf.types as libcudf_types
+cimport pylibcudf.libcudf.unary as libcudf_unary
+from pylibcudf.libcudf.column.column cimport column, column_contents
+from pylibcudf.libcudf.column.column_factories cimport (
     make_column_from_scalar as cpp_make_column_from_scalar,
     make_numeric_column,
 )
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
+from pylibcudf.libcudf.scalar.scalar cimport scalar
+
 from cudf._lib.scalar cimport DeviceScalar
 
 
@@ -86,8 +86,10 @@ cdef class Column:
         object mask=None,
         int offset=0,
         object null_count=None,
-        object children=()
+        tuple children=()
     ):
+        if size < 0:
+            raise ValueError("size must be >=0")
         self._size = size
         self._distinct_count = {}
         self._dtype = dtype
@@ -295,11 +297,11 @@ cdef class Column:
                 dtypes = [
                     base_child.dtype for base_child in self.base_children
                 ]
-                self._children = [
+                self._children = tuple(
                     child._with_type_metadata(dtype) for child, dtype in zip(
                         children, dtypes
                     )
-                ]
+                )
         return self._children
 
     def set_base_children(self, value):

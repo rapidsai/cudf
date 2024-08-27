@@ -26,7 +26,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/repeat_strings.hpp>
@@ -956,31 +955,6 @@ TEST_F(JsonReaderTest, NoDataFileValues)
 
   auto const view = result.tbl->view();
   EXPECT_EQ(0, view.num_columns());
-}
-
-TEST_F(JsonReaderTest, ArrowFileSource)
-{
-  const std::string fname = temp_env->get_temp_dir() + "ArrowFileSource.csv";
-
-  std::ofstream outfile(fname, std::ofstream::out);
-  outfile << "[9]\n[8]\n[7]\n[6]\n[5]\n[4]\n[3]\n[2]\n";
-  outfile.close();
-
-  std::shared_ptr<arrow::io::ReadableFile> infile;
-  ASSERT_TRUE(arrow::io::ReadableFile::Open(fname).Value(&infile).ok());
-
-  auto arrow_source = cudf::io::arrow_io_source{infile};
-  cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{&arrow_source})
-      .dtypes({dtype<int8_t>()})
-      .lines(true);
-
-  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-
-  EXPECT_EQ(result.tbl->num_columns(), 1);
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT8);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int8_wrapper{{9, 8, 7, 6, 5, 4, 3, 2}});
 }
 
 TEST_P(JsonReaderParamTest, InvalidFloatingPoint)
@@ -2351,7 +2325,7 @@ TEST_F(JsonReaderTest, MapTypes)
   // Testing function for mixed types in JSON (for spark json reader)
   auto test_fn = [](std::string_view json_string, bool lines, std::vector<type_id> types) {
     std::map<std::string, cudf::io::schema_element> dtype_schema{
-      {"foo1", {data_type{type_id::STRING}}},  // list won't be a string
+      {"foo1", {data_type{type_id::STRING}}},  // list forced as a string
       {"foo2", {data_type{type_id::STRING}}},  // struct forced as a string
       {"1", {data_type{type_id::STRING}}},
       {"2", {data_type{type_id::STRING}}},
@@ -2378,17 +2352,17 @@ TEST_F(JsonReaderTest, MapTypes)
   test_fn(R"([{ "foo1": [1,2,3], "bar": 123 },
               { "foo2": { "a": 1 }, "bar": 456 }])",
           false,
-          {type_id::LIST, type_id::INT32, type_id::STRING});
+          {type_id::STRING, type_id::INT32, type_id::STRING});
   // jsonl
   test_fn(R"( { "foo1": [1,2,3], "bar": 123 }
               { "foo2": { "a": 1 }, "bar": 456 })",
           true,
-          {type_id::LIST, type_id::INT32, type_id::STRING});
+          {type_id::STRING, type_id::INT32, type_id::STRING});
   // jsonl-array
   test_fn(R"([123, [1,2,3]]
               [456, null,  { "a": 1 }])",
           true,
-          {type_id::INT64, type_id::LIST, type_id::STRING});
+          {type_id::INT64, type_id::STRING, type_id::STRING});
   // json-array
   test_fn(R"([[[1,2,3], null, 123],
               [null, { "a": 1 }, 456 ]])",
@@ -2678,38 +2652,81 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilter)
 
 TEST_F(JsonReaderTest, JSONMixedTypeChildren)
 {
-  std::string const json_str = R"(
-{ "Root": { "Key": [ { "EE": "A" } ] } }
-{ "Root": { "Key": {  } } }
-{ "Root": { "Key": [{ "YY": 1}] } }
-)";
-  // Column "EE" is created and destroyed
-  // Column "YY" should not be created
+  // struct mixed.
+  {
+    std::string const json_str = R"(
+  { "Root": { "Key": [ { "EE": "A" } ] } }
+  { "Root": { "Key": {  } } }
+  { "Root": { "Key": [{ "YY": 1}] } }
+  )";
+    // Column "EE" is created and destroyed
+    // Column "YY" should not be created
 
-  cudf::io::json_reader_options options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{json_str.c_str(), json_str.size()})
-      .lines(true)
-      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
-      .normalize_single_quotes(true)
-      .normalize_whitespace(false)
-      .mixed_types_as_string(true)
-      .keep_quotes(true);
+    cudf::io::json_reader_options options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_str.c_str(), json_str.size()})
+        .lines(true)
+        .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+        .normalize_single_quotes(true)
+        .normalize_whitespace(false)
+        .mixed_types_as_string(true)
+        .keep_quotes(true);
 
-  auto result = cudf::io::read_json(options);
+    auto result = cudf::io::read_json(options);
 
-  ASSERT_EQ(result.tbl->num_columns(), 1);
-  ASSERT_EQ(result.metadata.schema_info.size(), 1);
-  EXPECT_EQ(result.metadata.schema_info[0].name, "Root");
-  ASSERT_EQ(result.metadata.schema_info[0].children.size(), 1);
-  EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "Key");
-  ASSERT_EQ(result.metadata.schema_info[0].children[0].children.size(), 2);
-  EXPECT_EQ(result.metadata.schema_info[0].children[0].children[0].name, "offsets");
-  // types
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRUCT);
-  EXPECT_EQ(result.tbl->get_column(0).child(0).type().id(), cudf::type_id::STRING);
-  cudf::test::strings_column_wrapper expected({R"([ { "EE": "A" } ])", "{  }", R"([{ "YY": 1}])"});
+    ASSERT_EQ(result.tbl->num_columns(), 1);
+    ASSERT_EQ(result.metadata.schema_info.size(), 1);
+    EXPECT_EQ(result.metadata.schema_info[0].name, "Root");
+    ASSERT_EQ(result.metadata.schema_info[0].children.size(), 1);
+    EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "Key");
+    ASSERT_EQ(result.metadata.schema_info[0].children[0].children.size(), 2);
+    EXPECT_EQ(result.metadata.schema_info[0].children[0].children[0].name, "offsets");
+    // types
+    EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRUCT);
+    EXPECT_EQ(result.tbl->get_column(0).child(0).type().id(), cudf::type_id::STRING);
+    cudf::test::strings_column_wrapper expected(
+      {R"([ { "EE": "A" } ])", "{  }", R"([{ "YY": 1}])"});
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result.tbl->get_column(0).child(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result.tbl->get_column(0).child(0));
+  }
+
+  // list mixed.
+  {
+    std::string const json_str = R"(
+  { "Root": { "Key": [ { "EE": "A" } ] } }
+  { "Root": { "Key": "abc" } }
+  { "Root": { "Key": [{ "YY": 1}] } }
+  )";
+    // Column "EE" is created and destroyed
+    // Column "YY" should not be created
+
+    cudf::io::json_reader_options options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_str.c_str(), json_str.size()})
+        .lines(true)
+        .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+        .normalize_single_quotes(true)
+        .normalize_whitespace(false)
+        .mixed_types_as_string(true)
+        .keep_quotes(true);
+
+    auto result = cudf::io::read_json(options);
+
+    ASSERT_EQ(result.tbl->num_columns(), 1);
+    ASSERT_EQ(result.metadata.schema_info.size(), 1);
+    EXPECT_EQ(result.metadata.schema_info[0].name, "Root");
+    ASSERT_EQ(result.metadata.schema_info[0].children.size(), 1);
+    EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "Key");
+    ASSERT_EQ(result.metadata.schema_info[0].children[0].children.size(), 2);
+    EXPECT_EQ(result.metadata.schema_info[0].children[0].children[0].name, "offsets");
+    // types
+    EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRUCT);
+    EXPECT_EQ(result.tbl->get_column(0).child(0).type().id(), cudf::type_id::STRING);
+    cudf::test::strings_column_wrapper expected(
+      {R"([ { "EE": "A" } ])", "\"abc\"", R"([{ "YY": 1}])"});
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result.tbl->get_column(0).child(0));
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()
