@@ -2,5 +2,5 @@
 groupby
 =======
 
-.. automodule:: cudf._lib.pylibcudf.groupby
+.. automodule:: pylibcudf.groupby
    :members:

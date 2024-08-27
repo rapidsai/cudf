@@ -868,6 +868,24 @@ class BaseIndex(Serializable):
         """Convert to a numpy array."""
         raise NotImplementedError
 
+    def to_flat_index(self) -> Self:
+        """
+        Identity method.
+
+        This is implemented for compatibility with subclass implementations
+        when chaining.
+
+        Returns
+        -------
+        pd.Index
+            Caller.
+
+        See Also
+        --------
+        MultiIndex.to_flat_index : Subclass implementation.
+        """
+        return self
+
     def any(self):
         """
         Return whether any elements is True in Index.
@@ -945,7 +963,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def isin(self, values):
+    def isin(self, values, level=None):
         """Return a boolean array where the index values are in values.
 
         Compute boolean array of whether each index value is found in
@@ -956,6 +974,9 @@ class BaseIndex(Serializable):
         ----------
         values : set, list-like, Index
             Sought values.
+        level : str or int, optional
+            Name or position of the index level to use (if the index is a
+            `MultiIndex`).
 
         Returns
         -------
@@ -979,7 +1000,7 @@ class BaseIndex(Serializable):
         # ColumnBase.isin).
         raise NotImplementedError
 
-    def unique(self):
+    def unique(self, level: int | None = None):
         """
         Return unique values in the index.
 
@@ -1677,7 +1698,7 @@ class BaseIndex(Serializable):
         # in case of MultiIndex
         if isinstance(lhs, cudf.MultiIndex):
             on = (
-                lhs._data.select_by_index(level).names[0]
+                lhs._data.get_labels_by_index(level)[0]
                 if isinstance(level, int)
                 else level
             )
@@ -1958,7 +1979,7 @@ class BaseIndex(Serializable):
                 name=index.name,
             )
         else:
-            return cudf.Index(
+            return cudf.Index._from_column(
                 column.as_column(index, nan_as_null=nan_as_null),
                 name=index.name,
             )

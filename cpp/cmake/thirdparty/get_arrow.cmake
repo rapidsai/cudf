@@ -45,7 +45,7 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
     APPEND
     initial_code_block
     [=[
-find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
+find_package(Python 3.10 REQUIRED COMPONENTS Interpreter)
 execute_process(
     COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
     OUTPUT_VARIABLE CUDF_PYARROW_WHEEL_DIR

@@ -321,7 +321,6 @@ ConfigureTest(
 ConfigureTest(JSON_WRITER_TEST io/json/json_writer.cpp)
 ConfigureTest(JSON_TYPE_CAST_TEST io/json/json_type_cast_test.cu)
 ConfigureTest(NESTED_JSON_TEST io/json/nested_json_test.cpp io/json/json_tree.cpp)
-ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
 ConfigureTest(JSON_QUOTE_NORMALIZATION io/json/json_quote_normalization_test.cpp)
 ConfigureTest(JSON_WHITESPACE_NORMALIZATION io/json/json_whitespace_normalization_test.cu)
@@ -334,9 +333,6 @@ target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
 ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
-if(CUDF_ENABLE_ARROW_S3)
-  target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
-endif()
 
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
@@ -393,6 +389,7 @@ ConfigureTest(
   utilities_tests/pinned_memory_tests.cpp
   utilities_tests/type_check_tests.cpp
   utilities_tests/type_list_tests.cpp
+  utilities_tests/batched_memset_tests.cu
 )
 
 # ##################################################################################################
@@ -689,7 +686,6 @@ ConfigureTest(STREAM_DICTIONARY_TEST streams/dictionary_test.cpp STREAM_MODE tes
 ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp STREAM_MODE testing)
-ConfigureTest(STREAM_INTEROP_TEST streams/interop_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LABELING_BINS_TEST streams/labeling_bins_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
@@ -701,6 +697,7 @@ ConfigureTest(STREAM_PARQUETIO_TEST streams/io/parquet_test.cpp STREAM_MODE test
 ConfigureTest(STREAM_POOL_TEST streams/pool_test.cu STREAM_MODE testing)
 ConfigureTest(STREAM_REDUCTION_TEST streams/reduction_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_RESHAPE_TEST streams/reshape_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_ROLLING_TEST streams/rolling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
@@ -731,6 +728,7 @@ ConfigureTest(
   STREAM_MODE
   testing
 )
+ConfigureTest(STREAM_TRANSFORM_TEST streams/transform_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_UNARY_TEST streams/unary_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################

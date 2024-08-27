@@ -18,6 +18,7 @@ from cudf._lib.strings.convert.convert_integers import (
 )
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
+from cudf.core.index import ensure_index
 
 # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
 _unit_map = {
@@ -275,7 +276,7 @@ def to_datetime(
                 format=format,
                 utc=utc,
             )
-            return cudf.Series(col, index=arg.index)
+            return cudf.Series._from_column(col, index=arg.index)
         else:
             col = _process_col(
                 col=column.as_column(arg),
@@ -286,13 +287,15 @@ def to_datetime(
                 utc=utc,
             )
             if isinstance(arg, (cudf.BaseIndex, pd.Index)):
-                return cudf.Index(col, name=arg.name)
+                return cudf.DatetimeIndex._from_column(col, name=arg.name)
             elif isinstance(arg, (cudf.Series, pd.Series)):
-                return cudf.Series(col, index=arg.index, name=arg.name)
+                return cudf.Series._from_column(
+                    col, name=arg.name, index=ensure_index(arg.index)
+                )
             elif is_scalar(arg):
                 return col.element_indexing(0)
             else:
-                return cudf.Index(col)
+                return cudf.Index._from_column(col)
     except Exception as e:
         if errors == "raise":
             raise e
@@ -782,7 +785,7 @@ def date_range(
     tz=None,
     normalize: bool = False,
     name=None,
-    closed: Literal["left", "right", "both", "neither"] = "both",
+    inclusive: Literal["left", "right", "both", "neither"] = "both",
     *,
     unit: str | None = None,
 ):
@@ -820,7 +823,7 @@ def date_range(
     name : str, default None
         Name of the resulting DatetimeIndex
 
-    closed : {"left", "right", "both", "neither"}, default "both"
+    inclusive : {"left", "right", "both", "neither"}, default "both"
         Whether to set each bound as closed or open.
         Currently only "both" is supported
 
@@ -836,7 +839,7 @@ def date_range(
     -----
     Of the four parameters `start`, `end`, `periods`, and `freq`, exactly three
     must be specified. If `freq` is omitted, the resulting DatetimeIndex will
-    have periods linearly spaced elements between start and end (closed on both
+    have periods linearly spaced elements between start and end (inclusive on both
     sides).
 
     cudf supports `freq` specified with either fixed-frequency offset
@@ -863,8 +866,8 @@ def date_range(
                 '2026-04-23 08:00:00'],
                 dtype='datetime64[ns]')
     """
-    if closed != "both":
-        raise NotImplementedError(f"{closed=} is currently unsupported.")
+    if inclusive != "both":
+        raise NotImplementedError(f"{inclusive=} is currently unsupported.")
     if unit is not None:
         raise NotImplementedError(f"{unit=} is currently unsupported.")
     if normalize is not False:
@@ -895,7 +898,9 @@ def date_range(
         end = cudf.Scalar(end, dtype=dtype).value.astype("int64")
         arr = np.linspace(start=start, stop=end, num=periods)
         result = cudf.core.column.as_column(arr).astype("datetime64[ns]")
-        return cudf.DatetimeIndex._from_data({name: result}).tz_localize(tz)
+        return cudf.DatetimeIndex._from_column(result, name=name).tz_localize(
+            tz
+        )
 
     # The code logic below assumes `freq` is defined. It is first normalized
     # into `DateOffset` for further computation with timestamps.
@@ -946,7 +951,7 @@ def date_range(
         end = cudf.Scalar(end, dtype=dtype)
         _is_increment_sequence = end >= start
 
-        periods = math.ceil(
+        periods = math.floor(
             int(end - start) / _offset_to_nanoseconds_lower_bound(offset)
         )
 
@@ -954,9 +959,10 @@ def date_range(
             # Mismatched sign between (end-start) and offset, return empty
             # column
             periods = 0
-        elif periods == 0:
-            # end == start, return exactly 1 timestamp (start)
-            periods = 1
+        else:
+            # If end == start, periods == 0 and we return exactly 1 timestamp (start).
+            # Otherwise, since inclusive="both", we ensure the end point is included.
+            periods += 1
 
     # We compute `end_estim` (the estimated upper bound of the date
     # range) below, but don't always use it.  We do this to ensure
@@ -995,9 +1001,9 @@ def date_range(
             "datetime64[ns]"
         )
 
-    return cudf.DatetimeIndex._from_data({name: res}, freq=freq).tz_localize(
-        tz
-    )
+    return cudf.DatetimeIndex._from_column(
+        res, name=name, freq=freq
+    ).tz_localize(tz)
 
 
 def _has_fixed_frequency(freq: DateOffset) -> bool:
