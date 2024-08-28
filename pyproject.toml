@@ -87,7 +87,9 @@ select = [
     # non-pep585-annotation
     "UP006",
     # non-pep604-annotation
-    "UP007"
+    "UP007",
+    # Import from `collections.abc` instead: `Callable`
+    "UP035",
 ]
 ignore = [
     # whitespace before :

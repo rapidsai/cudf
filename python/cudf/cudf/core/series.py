@@ -38,7 +38,9 @@ from cudf.core.column import (
     as_column,
 )
 from cudf.core.column.categorical import (
+    _DEFAULT_CATEGORICAL_VALUE,
     CategoricalAccessor as CategoricalAccessor,
+    CategoricalColumn,
 )
 from cudf.core.column.column import concat_columns
 from cudf.core.column.lists import ListMethods
@@ -511,9 +513,22 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: category
         Categories (3, object): ['a', 'b', 'c']
         """  # noqa: E501
-        col = cudf.core.column.categorical.pandas_categorical_as_column(
-            categorical, codes=codes
-        )
+        col = as_column(categorical)
+        if codes is not None:
+            codes = as_column(codes)
+
+            valid_codes = codes != codes.dtype.type(_DEFAULT_CATEGORICAL_VALUE)
+
+            mask = None
+            if not valid_codes.all():
+                mask = libcudf.transform.bools_to_mask(valid_codes)
+            col = CategoricalColumn(
+                data=col.data,
+                size=codes.size,
+                dtype=col.dtype,
+                mask=mask,
+                children=(codes,),
+            )
         return Series._from_column(col)
 
     @classmethod
