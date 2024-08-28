@@ -12,7 +12,7 @@ RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels
 
 rapids-logger "Install cudf, pylibcudf, and test requirements"
 
-# Constraint to minimum dependency versions if job is set up as "oldest"
+# Constrain to minimum dependency versions if job is set up as "oldest"
 echo "" > ./constraints.txt
 if [[ $RAPIDS_DEPENDENCIES == "oldest" ]]; then
     rapids-dependency-file-generator \
