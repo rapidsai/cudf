@@ -307,12 +307,4 @@ jobs:
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: |
-        LIBS=$(ci/cudf_pandas_scripts/third-party-integration/extract_lib.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml)
-        LIBS=${LIBS#[}
-        LIBS=${LIBS%]}
-        for lib in ${LIBS//,/ }; do
-          lib=$(echo "$lib" | tr -d '""')
-          echo "Running tests for $lib"
-          CUDA_MAJOR=$(if [ "$lib" = "tensorflow" ]; then echo "11"; else echo "12"; fi)
-          ci/cudf_pandas_scripts/third-party-integration/test.sh $lib $CUDA_MAJOR
-        done
+        ci/cudf_pandas_scripts/third-party-integration/test_new.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
