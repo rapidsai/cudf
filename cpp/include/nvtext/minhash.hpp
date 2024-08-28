@@ -20,9 +20,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
-
-#include <rmm/resource_ref.hpp>
 
 namespace CUDF_EXPORT nvtext {
 /**
@@ -56,7 +55,7 @@ std::unique_ptr<cudf::column> minhash(
   cudf::numeric_scalar<uint32_t> seed = 0,
   cudf::size_type width               = 4,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr   = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr  = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the minhash values for each string per seed
@@ -86,9 +85,9 @@ std::unique_ptr<cudf::column> minhash(
 std::unique_ptr<cudf::column> minhash(
   cudf::strings_column_view const& input,
   cudf::device_span<uint32_t const> seeds,
-  cudf::size_type width             = 4,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::size_type width              = 4,
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the minhash value for each string
@@ -117,7 +116,7 @@ std::unique_ptr<cudf::column> minhash64(
   cudf::numeric_scalar<uint64_t> seed = 0,
   cudf::size_type width               = 4,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr   = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr  = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the minhash values for each string per seed
@@ -147,9 +146,9 @@ std::unique_ptr<cudf::column> minhash64(
 std::unique_ptr<cudf::column> minhash64(
   cudf::strings_column_view const& input,
   cudf::device_span<uint64_t const> seeds,
-  cudf::size_type width             = 4,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::size_type width              = 4,
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT nvtext

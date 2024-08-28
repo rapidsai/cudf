@@ -37,8 +37,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <limits>
 
@@ -69,7 +68,7 @@ std::unique_ptr<cudf::table> join_and_gather(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   auto left_selected  = left_input.select(left_on);
   auto right_selected = right_input.select(right_on);
@@ -2028,7 +2027,7 @@ struct JoinTestLists : public cudf::test::BaseFixture {
     auto const probe_tv = cudf::table_view{{probe}};
 
     auto const [left_result_map, right_result_map] =
-      join_func(build_tv, probe_tv, nulls_equal, rmm::mr::get_current_device_resource());
+      join_func(build_tv, probe_tv, nulls_equal, cudf::get_current_device_resource_ref());
 
     auto const left_result_table =
       sort_and_gather(build_tv, column_view_from_device_uvector(*left_result_map), oob_policy);

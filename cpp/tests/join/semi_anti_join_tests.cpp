@@ -28,8 +28,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -59,7 +58,7 @@ std::unique_ptr<cudf::table> join_and_gather(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   auto left_selected      = left_input.select(left_on);
   auto right_selected     = right_input.select(right_on);

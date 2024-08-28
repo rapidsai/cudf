@@ -23,10 +23,10 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/null_mask.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/scan.h>

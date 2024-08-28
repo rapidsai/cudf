@@ -25,11 +25,11 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/distance.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -207,13 +207,13 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
   // If input JSON buffer has single quotes and option to normalize single quotes is enabled,
   // invoke pre-processing FST
   if (reader_opts.is_enabled_normalize_single_quotes()) {
-    normalize_single_quotes(bufview, stream, rmm::mr::get_current_device_resource());
+    normalize_single_quotes(bufview, stream, cudf::get_current_device_resource_ref());
   }
 
   // If input JSON buffer has unquoted spaces and tabs and option to normalize whitespaces is
   // enabled, invoke pre-processing FST
   if (reader_opts.is_enabled_normalize_whitespace()) {
-    normalize_whitespace(bufview, stream, rmm::mr::get_current_device_resource());
+    normalize_whitespace(bufview, stream, cudf::get_current_device_resource_ref());
   }
 
   auto buffer =
@@ -282,7 +282,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                     "Currently only single-character delimiters are supported");
       auto const delimiter_source = thrust::make_constant_iterator('\n');
       auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
-        delimiter_map, stream, rmm::mr::get_current_device_resource());
+        delimiter_map, stream, cudf::get_current_device_resource_ref());
       thrust::scatter(rmm::exec_policy_nosync(stream),
                       delimiter_source,
                       delimiter_source + d_delimiter_map.size(),
@@ -399,7 +399,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     batched_reader_opts.set_byte_range_offset(batch_offsets[i]);
     batched_reader_opts.set_byte_range_size(batch_offsets[i + 1] - batch_offsets[i]);
     partial_tables.emplace_back(
-      read_batch(sources, batched_reader_opts, stream, rmm::mr::get_current_device_resource()));
+      read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
   }
 
   auto expects_schema_equality =

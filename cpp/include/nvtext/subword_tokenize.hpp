@@ -19,8 +19,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/export.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace CUDF_EXPORT nvtext {
 
@@ -68,7 +67,7 @@ struct hashed_vocabulary {
  */
 std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::string const& filename_hashed_vocabulary,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Result object for the subword_tokenize functions.
@@ -158,7 +157,7 @@ tokenizer_result subword_tokenize(
   uint32_t stride,
   bool do_lower_case,
   bool do_truncate,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT nvtext

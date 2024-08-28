@@ -24,9 +24,9 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <vector>
@@ -88,7 +88,7 @@ std::unique_ptr<table> gather(
   column_view const& gather_map,
   out_of_bounds_policy bounds_policy = out_of_bounds_policy::DONT_CHECK,
   rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr  = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Reverses the rows within a table.
@@ -107,8 +107,8 @@ std::unique_ptr<table> gather(
  */
 std::unique_ptr<table> reverse(
   table_view const& source_table,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Reverses the elements of a column
@@ -127,8 +127,8 @@ std::unique_ptr<table> reverse(
  */
 std::unique_ptr<column> reverse(
   column_view const& source_column,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Scatters the rows of the source table into a copy of the target table
@@ -176,8 +176,8 @@ std::unique_ptr<table> scatter(
   table_view const& source,
   column_view const& scatter_map,
   table_view const& target,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Scatters a row of scalar values into a copy of the target table
@@ -219,8 +219,8 @@ std::unique_ptr<table> scatter(
   std::vector<std::reference_wrapper<scalar const>> const& source,
   column_view const& indices,
   table_view const& target,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Indicates when to allocate a mask, based on an existing mask.
@@ -266,9 +266,9 @@ std::unique_ptr<column> empty_like(scalar const& input);
  */
 std::unique_ptr<column> allocate_like(
   column_view const& input,
-  mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  mask_allocation_policy mask_alloc  = mask_allocation_policy::RETAIN,
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
@@ -289,9 +289,9 @@ std::unique_ptr<column> allocate_like(
 std::unique_ptr<column> allocate_like(
   column_view const& input,
   size_type size,
-  mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  mask_allocation_policy mask_alloc  = mask_allocation_policy::RETAIN,
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates a table of empty columns with the same types as the `input_table`
@@ -382,8 +382,8 @@ std::unique_ptr<column> copy_range(
   size_type source_begin,
   size_type source_end,
   size_type target_begin,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates a new column by shifting all values by an offset.
@@ -426,8 +426,8 @@ std::unique_ptr<column> shift(
   column_view const& input,
   size_type offset,
   scalar const& fill_value,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Slices a `column_view` into a set of `column_view`s according to a set of indices.
@@ -629,8 +629,8 @@ std::unique_ptr<column> copy_if_else(
   column_view const& lhs,
   column_view const& rhs,
   column_view const& boolean_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
@@ -655,8 +655,8 @@ std::unique_ptr<column> copy_if_else(
   scalar const& lhs,
   column_view const& rhs,
   column_view const& boolean_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
@@ -681,8 +681,8 @@ std::unique_ptr<column> copy_if_else(
   column_view const& lhs,
   scalar const& rhs,
   column_view const& boolean_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
@@ -705,8 +705,8 @@ std::unique_ptr<column> copy_if_else(
   scalar const& lhs,
   scalar const& rhs,
   column_view const& boolean_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Scatters rows from the input table to rows of the output corresponding
@@ -749,8 +749,8 @@ std::unique_ptr<table> boolean_mask_scatter(
   table_view const& input,
   table_view const& target,
   column_view const& boolean_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Scatters scalar values to rows of the output corresponding
@@ -788,8 +788,8 @@ std::unique_ptr<table> boolean_mask_scatter(
   std::vector<std::reference_wrapper<scalar const>> const& input,
   table_view const& target,
   column_view const& boolean_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Get the element at specified index from a column
@@ -808,8 +808,8 @@ std::unique_ptr<table> boolean_mask_scatter(
 std::unique_ptr<scalar> get_element(
   column_view const& input,
   size_type index,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Indicates whether a row can be sampled more than once.
@@ -853,7 +853,7 @@ std::unique_ptr<table> sample(
   sample_with_replacement replacement = sample_with_replacement::FALSE,
   int64_t const seed                  = 0,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr   = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr  = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Checks if a column or its descendants have non-empty null rows
@@ -969,8 +969,8 @@ bool may_have_nonempty_nulls(column_view const& input);
  */
 std::unique_ptr<column> purge_nonempty_nulls(
   column_view const& input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */
 }  // namespace CUDF_EXPORT cudf

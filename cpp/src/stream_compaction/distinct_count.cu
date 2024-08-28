@@ -159,7 +159,7 @@ cudf::size_type distinct_count(table_view const& keys,
       // We must consider a row if any of its column entries is valid,
       // hence OR together the validities of the columns.
       auto const [row_bitmask, null_count] =
-        cudf::detail::bitmask_or(keys, stream, rmm::mr::get_current_device_resource());
+        cudf::detail::bitmask_or(keys, stream, cudf::get_current_device_resource_ref());
 
       // Unless all columns have a null mask, row_bitmask will be
       // null, and null_count will be zero. Equally, unless there is

@@ -20,9 +20,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <string>
@@ -1353,8 +1353,8 @@ class csv_reader_options_builder {
  */
 table_with_metadata read_csv(
   csv_reader_options options,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 /**

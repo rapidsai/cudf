@@ -58,7 +58,7 @@ std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const
 {
   return std::make_unique<rmm::device_buffer>(
     std::move(cudf::strings::create_string_vector_from_column(
-                cudf::strings_column_view(input), stream, rmm::mr::get_current_device_resource())
+                cudf::strings_column_view(input), stream, cudf::get_current_device_resource_ref())
                 .release()));
 }
 

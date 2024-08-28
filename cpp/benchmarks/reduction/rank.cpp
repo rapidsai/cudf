@@ -45,7 +45,7 @@ static void nvbench_reduction_scan(nvbench::state& state, nvbench::type_list<typ
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
     result = cudf::detail::inclusive_dense_rank_scan(
-      input, stream_view, rmm::mr::get_current_device_resource());
+      input, stream_view, cudf::get_current_device_resource_ref());
   });
 
   state.add_element_count(input.size());

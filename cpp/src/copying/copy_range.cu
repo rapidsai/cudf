@@ -31,11 +31,11 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -100,7 +100,7 @@ struct out_of_place_copy_range_dispatch {
     cudf::size_type source_end,
     cudf::size_type target_begin,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+    cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
   {
     auto p_ret = std::make_unique<cudf::column>(target, stream, mr);
     if ((!p_ret->nullable()) && source.has_nulls(source_begin, source_end)) {
@@ -157,7 +157,7 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
     cudf::dictionary::detail::add_keys(dict_target, dict_source.keys(), stream, mr);
   auto const target_view = cudf::dictionary_column_view(target_matched->view());
   auto source_matched    = cudf::dictionary::detail::set_keys(
-    dict_source, target_view.keys(), stream, rmm::mr::get_current_device_resource());
+    dict_source, target_view.keys(), stream, cudf::get_current_device_resource_ref());
   auto const source_view = cudf::dictionary_column_view(source_matched->view());
 
   // build the new indices by calling in_place_copy_range on just the indices

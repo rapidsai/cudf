@@ -21,10 +21,10 @@
 #include <cudf/strings/detail/copy_if_else.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>

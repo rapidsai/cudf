@@ -17,8 +17,7 @@
 #include "counts.hpp"
 
 #include <cudf/detail/null_mask.cuh>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/adjacent_difference.h>
 

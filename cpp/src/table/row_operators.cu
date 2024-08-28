@@ -27,11 +27,11 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -319,7 +319,7 @@ auto list_lex_preprocess(table_view const& table, rmm::cuda_stream_view stream)
     }
   }
   auto d_dremel_device_views = detail::make_device_uvector_sync(
-    dremel_device_views, stream, rmm::mr::get_current_device_resource());
+    dremel_device_views, stream, cudf::get_current_device_resource_ref());
   return std::make_tuple(std::move(dremel_data), std::move(d_dremel_device_views));
 }
 
@@ -588,12 +588,12 @@ transform_lists_of_structs(column_view const& lhs,
       auto const concatenated_children =
         cudf::detail::concatenate(std::vector<column_view>{child_lhs, child_rhs},
                                   stream,
-                                  rmm::mr::get_current_device_resource());
+                                  cudf::get_current_device_resource_ref());
 
       auto const ranks        = compute_ranks(concatenated_children->view(),
                                        column_null_order,
                                        stream,
-                                       rmm::mr::get_current_device_resource());
+                                       cudf::get_current_device_resource_ref());
       auto const ranks_slices = cudf::detail::slice(
         ranks->view(),
         {0, child_lhs.size(), child_lhs.size(), child_lhs.size() + child_rhs.size()},
@@ -647,13 +647,13 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
 {
   check_lex_compatibility(preprocessed_input);
 
-  auto d_table = table_device_view::create(preprocessed_input, stream);
-  auto d_column_order =
-    detail::make_device_uvector_async(column_order, stream, rmm::mr::get_current_device_resource());
+  auto d_table        = table_device_view::create(preprocessed_input, stream);
+  auto d_column_order = detail::make_device_uvector_async(
+    column_order, stream, cudf::get_current_device_resource_ref());
   auto d_null_precedence = detail::make_device_uvector_async(
-    null_precedence, stream, rmm::mr::get_current_device_resource());
+    null_precedence, stream, cudf::get_current_device_resource_ref());
   auto d_depths = detail::make_device_uvector_async(
-    verticalized_col_depths, stream, rmm::mr::get_current_device_resource());
+    verticalized_col_depths, stream, cudf::get_current_device_resource_ref());
 
   if (detail::has_nested_columns(preprocessed_input)) {
     auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(preprocessed_input, stream);
@@ -699,7 +699,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
           lhs_col,
           null_precedence.empty() ? null_order::BEFORE : new_null_precedence[col_idx],
           stream,
-          rmm::mr::get_current_device_resource());
+          cudf::get_current_device_resource_ref());
 
         transformed_cvs.emplace_back(std::move(transformed));
         transformed_columns.insert(transformed_columns.end(),
@@ -761,7 +761,7 @@ preprocessed_table::create(table_view const& lhs,
           rhs_col,
           null_precedence.empty() ? null_order::BEFORE : null_precedence[col_idx],
           stream,
-          rmm::mr::get_current_device_resource());
+          cudf::get_current_device_resource_ref());
 
       transformed_lhs_cvs.emplace_back(std::move(transformed_lhs));
       transformed_rhs_cvs.emplace_back(std::move(transformed_rhs));
@@ -854,7 +854,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
   check_eq_compatibility(t);
 
   auto [null_pushed_table, nullable_data] =
-    structs::detail::push_down_nulls(t, stream, rmm::mr::get_current_device_resource());
+    structs::detail::push_down_nulls(t, stream, cudf::get_current_device_resource_ref());
   auto struct_offset_removed_table = remove_struct_child_offsets(null_pushed_table);
   auto verticalized_t =
     std::get<0>(decompose_structs(struct_offset_removed_table, decompose_lists_column::YES));

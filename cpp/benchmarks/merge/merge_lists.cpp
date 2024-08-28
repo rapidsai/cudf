@@ -27,11 +27,11 @@ void nvbench_merge_list(nvbench::state& state)
 
   auto const input1 = create_lists_data(state);
   auto const sorted_input1 =
-    cudf::detail::sort(*input1, {}, {}, stream, rmm::mr::get_current_device_resource());
+    cudf::detail::sort(*input1, {}, {}, stream, cudf::get_current_device_resource_ref());
 
   auto const input2 = create_lists_data(state);
   auto const sorted_input2 =
-    cudf::detail::sort(*input2, {}, {}, stream, rmm::mr::get_current_device_resource());
+    cudf::detail::sort(*input2, {}, {}, stream, cudf::get_current_device_resource_ref());
 
   stream.synchronize();
 
@@ -43,7 +43,7 @@ void nvbench_merge_list(nvbench::state& state)
                         {cudf::order::ASCENDING},
                         {},
                         stream_view,
-                        rmm::mr::get_current_device_resource());
+                        cudf::get_current_device_resource_ref());
   });
 }
 

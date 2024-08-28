@@ -55,7 +55,7 @@ void nvbench_set_op(nvbench::state& state, BenchFuncPtr bfunc)
           cudf::null_equality::EQUAL,
           cudf::nan_equality::ALL_EQUAL,
           cudf::get_default_stream(),
-          rmm::mr::get_current_device_resource());
+          cudf::get_current_device_resource_ref());
   });
 }
 

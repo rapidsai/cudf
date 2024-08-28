@@ -18,11 +18,11 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <vector>
 
@@ -91,8 +91,8 @@ size_type num_bitmask_words(size_type number_of_bits);
 rmm::device_buffer create_null_mask(
   size_type size,
   mask_state state,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Sets a pre-allocated bitmask buffer to a given state in the range
@@ -134,8 +134,8 @@ rmm::device_buffer copy_bitmask(
   bitmask_type const* mask,
   size_type begin_bit,
   size_type end_bit,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Copies `view`'s bitmask from the bits
@@ -151,8 +151,8 @@ rmm::device_buffer copy_bitmask(
  */
 rmm::device_buffer copy_bitmask(
   column_view const& view,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs bitwise AND of the bitmasks of columns of a table. Returns
@@ -168,8 +168,8 @@ rmm::device_buffer copy_bitmask(
  */
 std::pair<rmm::device_buffer, size_type> bitmask_and(
   table_view const& view,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs bitwise OR of the bitmasks of columns of a table. Returns
@@ -185,8 +185,8 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(
  */
 std::pair<rmm::device_buffer, size_type> bitmask_or(
   table_view const& view,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Given a validity bitmask, counts the number of null elements (unset bits)

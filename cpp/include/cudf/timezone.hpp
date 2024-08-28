@@ -16,9 +16,9 @@
 #pragma once
 
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <optional>
@@ -52,6 +52,6 @@ static constexpr uint32_t solar_cycle_entry_count = 2 * solar_cycle_years;
 std::unique_ptr<table> make_timezone_transition_table(
   std::optional<std::string_view> tzif_dir,
   std::string_view timezone_name,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 }  // namespace CUDF_EXPORT cudf

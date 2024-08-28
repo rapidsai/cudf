@@ -82,7 +82,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
 
   std::vector<decimal32> vec1(1000, decimal32{1, scale_type{-2}});
   auto d_vec1 = cudf::detail::make_device_uvector_sync(
-    vec1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    vec1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   auto const sum = thrust::reduce(rmm::exec_policy(cudf::get_default_stream()),
                                   std::cbegin(d_vec1),
@@ -96,7 +96,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   thrust::inclusive_scan(std::cbegin(vec1), std::cend(vec1), std::begin(vec1));
 
   d_vec1 = cudf::detail::make_device_uvector_sync(
-    vec1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    vec1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   std::vector<int32_t> vec2(1000);
   std::iota(std::begin(vec2), std::end(vec2), 1);

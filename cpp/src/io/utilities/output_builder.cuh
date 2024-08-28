@@ -16,12 +16,12 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 
@@ -207,7 +207,7 @@ class output_builder {
   output_builder(size_type max_write_size,
                  size_type max_growth,
                  rmm::cuda_stream_view stream,
-                 rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+                 cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
     : _max_write_size{max_write_size}, _max_growth{max_growth}
   {
     CUDF_EXPECTS(max_write_size > 0, "Internal error");

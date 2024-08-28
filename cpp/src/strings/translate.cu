@@ -25,10 +25,10 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
@@ -107,8 +107,8 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
     return lhs.first < rhs.first;
   });
   // copy translate table to device memory
-  rmm::device_uvector<translate_table> table =
-    cudf::detail::make_device_uvector_async(htable, stream, rmm::mr::get_current_device_resource());
+  rmm::device_uvector<translate_table> table = cudf::detail::make_device_uvector_async(
+    htable, stream, cudf::get_current_device_resource_ref());
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 

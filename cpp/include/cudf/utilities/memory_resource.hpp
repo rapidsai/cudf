@@ -69,16 +69,6 @@ inline device_async_resource_ref set_current_device_resource_ref(device_async_re
 }
 
 /**
- * @brief Reset the current device memory resource to the initial resource.
- *
- * @return The previous device memory resource.
- */
-inline device_memory_resource* reset_current_device_resource()
-{
-  return rmm::mr::reset_current_device_resource();
-}
-
-/**
  * @brief Reset the current device memory resource reference to the initial resource.
  *
  * @return The previous device memory resource reference.

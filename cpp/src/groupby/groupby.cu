@@ -35,12 +35,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -284,7 +284,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
     std::back_inserter(results),
     [&](auto i) {
       bool nullable       = values.column(i).nullable();
-      auto final_mr       = nullable ? rmm::mr::get_current_device_resource() : mr;
+      auto final_mr       = nullable ? cudf::get_current_device_resource_ref() : mr;
       auto grouped_values = helper().grouped_values(values.column(i), stream, final_mr);
       return nullable ? detail::group_replace_nulls(
                           *grouped_values, group_labels, replace_policies[i], stream, mr)
@@ -331,7 +331,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
     std::back_inserter(results),
     [&](size_type i) {
       auto grouped_values =
-        helper().grouped_values(values.column(i), stream, rmm::mr::get_current_device_resource());
+        helper().grouped_values(values.column(i), stream, cudf::get_current_device_resource_ref());
       return cudf::detail::segmented_shift(
         grouped_values->view(), group_offsets, offsets[i], fill_values[i].get(), stream, mr);
     });

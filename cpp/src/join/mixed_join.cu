@@ -29,11 +29,11 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/scan.h>
@@ -138,7 +138,7 @@ mixed_join(
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
   auto const row_bitmask =
-    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
+    cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref()).first;
   auto const preprocessed_build =
     experimental::row::equality::preprocessed_table::create(build, stream);
   build_join_hash_table(build,
@@ -404,7 +404,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
   auto const row_bitmask =
-    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
+    cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref()).first;
   auto const preprocessed_build =
     experimental::row::equality::preprocessed_table::create(build, stream);
   build_join_hash_table(build,

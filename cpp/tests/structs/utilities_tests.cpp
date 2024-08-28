@@ -60,7 +60,7 @@ TYPED_TEST(TypedStructUtilitiesTest, ListsAtTopLevel)
                                                   {},
                                                   cudf::structs::detail::column_nullability::FORCE,
                                                   cudf::get_default_stream(),
-                                                  rmm::mr::get_current_device_resource());
+                                                  cudf::get_current_device_resource_ref());
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(table, flattened_table->flattened_columns());
 }
@@ -82,7 +82,7 @@ TYPED_TEST(TypedStructUtilitiesTest, NoStructs)
                                                   {},
                                                   cudf::structs::detail::column_nullability::FORCE,
                                                   cudf::get_default_stream(),
-                                                  rmm::mr::get_current_device_resource());
+                                                  cudf::get_current_device_resource_ref());
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(table, flattened_table->flattened_columns());
 }
@@ -114,7 +114,7 @@ TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStruct)
                                                   {},
                                                   cudf::structs::detail::column_nullability::FORCE,
                                                   cudf::get_default_stream(),
-                                                  rmm::mr::get_current_device_resource());
+                                                  cudf::get_current_device_resource_ref());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
@@ -147,7 +147,7 @@ TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStructWithNulls)
                                                   {},
                                                   cudf::structs::detail::column_nullability::FORCE,
                                                   cudf::get_default_stream(),
-                                                  rmm::mr::get_current_device_resource());
+                                                  cudf::get_current_device_resource_ref());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
@@ -196,7 +196,7 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStruct)
                                                   {},
                                                   cudf::structs::detail::column_nullability::FORCE,
                                                   cudf::get_default_stream(),
-                                                  rmm::mr::get_current_device_resource());
+                                                  cudf::get_current_device_resource_ref());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
@@ -246,7 +246,7 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtLeafLevel)
                                                   {},
                                                   cudf::structs::detail::column_nullability::FORCE,
                                                   cudf::get_default_stream(),
-                                                  rmm::mr::get_current_device_resource());
+                                                  cudf::get_current_device_resource_ref());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
@@ -297,7 +297,7 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtTopLevel)
                                                   {},
                                                   cudf::structs::detail::column_nullability::FORCE,
                                                   cudf::get_default_stream(),
-                                                  rmm::mr::get_current_device_resource());
+                                                  cudf::get_current_device_resource_ref());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
@@ -348,7 +348,7 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
                                                   {},
                                                   cudf::structs::detail::column_nullability::FORCE,
                                                   cudf::get_default_stream(),
-                                                  rmm::mr::get_current_device_resource());
+                                                  cudf::get_current_device_resource_ref());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
@@ -363,7 +363,7 @@ void test_non_struct_columns(cudf::column_view const& input)
 {
   // push_down_nulls() on non-struct columns should return the input column, unchanged.
   auto [superimposed, backing_data] = cudf::structs::detail::push_down_nulls(
-    input, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    input, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, superimposed);
   EXPECT_TRUE(backing_data.new_null_masks.empty());
@@ -427,7 +427,7 @@ TYPED_TEST(TypedSuperimposeTest, BasicStruct)
                                  make_lists_member<T>(cudf::test::iterators::nulls_at({4, 5})));
 
   auto [output, backing_data] = cudf::structs::detail::push_down_nulls(
-    structs_view, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    structs_view, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   // After push_down_nulls(), the struct nulls (i.e. at index-0) should have been pushed
   // down to the children. All members should have nulls at row-index 0.
@@ -453,7 +453,7 @@ TYPED_TEST(TypedSuperimposeTest, NonNullableParentStruct)
                          .release();
 
   auto [output, backing_data] = cudf::structs::detail::push_down_nulls(
-    structs_input->view(), cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    structs_input->view(), cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   // After push_down_nulls(), none of the child structs should have changed,
   // because the parent had no nulls to begin with.
@@ -487,8 +487,10 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNonNullable)
   auto structs_of_structs =
     cudf::test::structs_column_wrapper{std::move(outer_struct_members)}.release();
 
-  auto [output, backing_data] = cudf::structs::detail::push_down_nulls(
-    structs_of_structs->view(), cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto [output, backing_data] =
+    cudf::structs::detail::push_down_nulls(structs_of_structs->view(),
+                                           cudf::get_default_stream(),
+                                           cudf::get_current_device_resource_ref());
 
   // After push_down_nulls(), outer-struct column should not have pushed nulls to child
   // structs. But the child struct column must push its nulls to its own children.
@@ -530,8 +532,10 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
   cudf::detail::set_null_mask(
     structs_of_structs_view.null_mask(), 1, 2, false, cudf::get_default_stream());
 
-  auto [output, backing_data] = cudf::structs::detail::push_down_nulls(
-    structs_of_structs->view(), cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto [output, backing_data] =
+    cudf::structs::detail::push_down_nulls(structs_of_structs->view(),
+                                           cudf::get_default_stream(),
+                                           cudf::get_current_device_resource_ref());
 
   // After push_down_nulls(), outer-struct column should not have pushed nulls to child
   // structs. But the child struct column must push its nulls to its own children.
@@ -587,7 +591,7 @@ TYPED_TEST(TypedSuperimposeTest, Struct_Sliced)
   // lists_member: 00111
 
   auto [output, backing_data] = cudf::structs::detail::push_down_nulls(
-    sliced_structs, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    sliced_structs, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   // After push_down_nulls(), the null masks should be:
   // STRUCT:       11110
@@ -640,7 +644,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_Sliced)
   // lists_member:   00110
 
   auto [output, backing_data] = cudf::structs::detail::push_down_nulls(
-    sliced_structs, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    sliced_structs, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   // After push_down_nulls(), the null masks will be:
   // STRUCT<STRUCT>: 11101

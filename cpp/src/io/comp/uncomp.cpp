@@ -510,7 +510,7 @@ size_t decompress_zstd(host_span<uint8_t const> src,
 {
   // Init device span of spans (source)
   auto const d_src =
-    cudf::detail::make_device_uvector_async(src, stream, rmm::mr::get_current_device_resource());
+    cudf::detail::make_device_uvector_async(src, stream, cudf::get_current_device_resource_ref());
   auto hd_srcs = cudf::detail::hostdevice_vector<device_span<uint8_t const>>(1, stream);
   hd_srcs[0]   = d_src;
   hd_srcs.host_to_device_async(stream);

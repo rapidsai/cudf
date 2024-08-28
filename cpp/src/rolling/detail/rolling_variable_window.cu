@@ -18,8 +18,7 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/utilities/default_stream.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <cuda/functional>
 #include <thrust/extrema.h>

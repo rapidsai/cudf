@@ -189,7 +189,7 @@ std::vector<T> concat(std::vector<T> const& lhs, std::vector<T> const& rhs)
   auto const left_selected                           = left_input.select(left_on);
   auto const right_selected                          = right_input.select(right_on);
   auto const [left_join_indices, right_join_indices] = cudf::inner_join(
-    left_selected, right_selected, compare_nulls, rmm::mr::get_current_device_resource());
+    left_selected, right_selected, compare_nulls, cudf::get_current_device_resource_ref());
 
   auto const left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
   auto const right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};

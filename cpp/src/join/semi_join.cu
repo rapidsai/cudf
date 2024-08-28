@@ -25,11 +25,11 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/distance.h>
@@ -72,7 +72,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
                                               compare_nulls,
                                               nan_equality::ALL_EQUAL,
                                               stream,
-                                              rmm::mr::get_current_device_resource());
+                                              cudf::get_current_device_resource_ref());
 
   auto const left_num_rows = left_keys.num_rows();
   auto gather_map =

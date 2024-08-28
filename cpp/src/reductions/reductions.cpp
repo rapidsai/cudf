@@ -29,10 +29,10 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <utility>
 
@@ -78,7 +78,7 @@ struct reduce_dispatch_functor {
         return standard_deviation(col, output_dtype, var_agg._ddof, stream, mr);
       }
       case aggregation::MEDIAN: {
-        auto current_mr     = rmm::mr::get_current_device_resource();
+        auto current_mr     = cudf::get_current_device_resource_ref();
         auto sorted_indices = cudf::detail::sorted_order(
           table_view{{col}}, {}, {null_order::AFTER}, stream, current_mr);
         auto valid_sorted_indices =
@@ -91,7 +91,7 @@ struct reduce_dispatch_functor {
         auto quantile_agg = static_cast<cudf::detail::quantile_aggregation const&>(agg);
         CUDF_EXPECTS(quantile_agg._quantiles.size() == 1,
                      "Reduction quantile accepts only one quantile value");
-        auto current_mr     = rmm::mr::get_current_device_resource();
+        auto current_mr     = cudf::get_current_device_resource_ref();
         auto sorted_indices = cudf::detail::sorted_order(
           table_view{{col}}, {}, {null_order::AFTER}, stream, current_mr);
         auto valid_sorted_indices =

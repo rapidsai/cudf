@@ -771,10 +771,10 @@ class strings_column_wrapper : public detail::column_wrapper {
     auto all_valid        = thrust::make_constant_iterator(true);
     auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, all_valid);
     auto d_chars          = cudf::detail::make_device_uvector_async(
-      chars, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+      chars, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
     auto d_offsets = std::make_unique<cudf::column>(
       cudf::detail::make_device_uvector_sync(
-        offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
+        offsets, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref()),
       rmm::device_buffer{},
       0);
     wrapped =
@@ -821,14 +821,14 @@ class strings_column_wrapper : public detail::column_wrapper {
     auto [chars, offsets]        = detail::make_chars_and_offsets(begin, end, v);
     auto [null_mask, null_count] = detail::make_null_mask_vector(v, v + num_strings);
     auto d_chars                 = cudf::detail::make_device_uvector_async(
-      chars, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+      chars, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
     auto d_offsets = std::make_unique<cudf::column>(
       cudf::detail::make_device_uvector_async(
-        offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
+        offsets, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref()),
       rmm::device_buffer{},
       0);
     auto d_bitmask = cudf::detail::make_device_uvector_sync(
-      null_mask, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+      null_mask, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
     wrapped = cudf::make_strings_column(
       num_strings, std::move(d_offsets), d_chars.release(), null_count, d_bitmask.release());
   }
@@ -1651,7 +1651,7 @@ class lists_column_wrapper : public detail::column_wrapper {
     auto data = children.empty() ? cudf::empty_like(expected_hierarchy)
                                  : cudf::concatenate(children,
                                                      cudf::test::get_default_stream(),
-                                                     rmm::mr::get_current_device_resource());
+                                                     cudf::get_current_device_resource_ref());
 
     // increment depth
     depth = expected_depth + 1;
@@ -1756,7 +1756,7 @@ class lists_column_wrapper : public detail::column_wrapper {
                        lists_column_view(expected_hierarchy).child()),
       col.null_count(),
       cudf::copy_bitmask(
-        col, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
+        col, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref()),
       cudf::test::get_default_stream());
   }
 

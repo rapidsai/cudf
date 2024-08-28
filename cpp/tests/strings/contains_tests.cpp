@@ -298,10 +298,10 @@ TEST_F(StringsContainsTests, HexTest)
     {thrust::make_counting_iterator<cudf::size_type>(0),
      thrust::make_counting_iterator<cudf::size_type>(0) + count + 1});
   auto d_chars = cudf::detail::make_device_uvector_sync(
-    ascii_chars, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    ascii_chars, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto d_offsets = std::make_unique<cudf::column>(
     cudf::detail::make_device_uvector_sync(
-      offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource()),
+      offsets, cudf::get_default_stream(), cudf::get_current_device_resource_ref()),
     rmm::device_buffer{},
     0);
   auto input = cudf::make_strings_column(count, std::move(d_offsets), d_chars.release(), 0, {});

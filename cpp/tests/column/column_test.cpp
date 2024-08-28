@@ -373,7 +373,7 @@ TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorNoMask)
                                                  this->num_elements());
 
   auto original = cudf::detail::make_device_uvector_async(
-    data, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    data, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto original_data = original.data();
   cudf::column moved_to{std::move(original), rmm::device_buffer{}, 0};
   verify_column_views(moved_to);
@@ -389,7 +389,7 @@ TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorWithMask)
                                                  this->num_elements());
 
   auto original = cudf::detail::make_device_uvector_async(
-    data, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    data, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto original_data = original.data();
   auto original_mask = this->all_valid_mask.data();
   cudf::column moved_to{std::move(original), std::move(this->all_valid_mask), 0};

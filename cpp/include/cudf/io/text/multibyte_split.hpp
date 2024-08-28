@@ -19,10 +19,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <optional>
@@ -92,9 +92,9 @@ struct parse_options {
 std::unique_ptr<cudf::column> multibyte_split(
   data_chunk_source const& source,
   std::string const& delimiter,
-  parse_options options             = {},
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  parse_options options              = {},
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 

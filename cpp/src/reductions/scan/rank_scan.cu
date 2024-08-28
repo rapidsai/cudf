@@ -21,10 +21,10 @@
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
@@ -135,7 +135,7 @@ std::unique_ptr<column> inclusive_one_normalized_percent_rank_scan(
   column_view const& order_by, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   auto const rank_column =
-    inclusive_rank_scan(order_by, stream, rmm::mr::get_current_device_resource());
+    inclusive_rank_scan(order_by, stream, cudf::get_current_device_resource_ref());
   auto const rank_view = rank_column->view();
 
   // Result type for min 0-index percent rank is independent of input type.

@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/utilities/memory_resource.hpp>
+
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
@@ -83,13 +85,13 @@ class benchmark : public ::benchmark::Fixture {
   void SetUp(::benchmark::State const& state) override
   {
     mr = make_pool_instance();
-    rmm::mr::set_current_device_resource(mr.get());  // set default resource to pool
+    cudf::set_current_device_resource(mr.get());  // set default resource to pool
   }
 
   void TearDown(::benchmark::State const& state) override
   {
     // reset default resource to the initial resource
-    rmm::mr::set_current_device_resource(nullptr);
+    cudf::set_current_device_resource(nullptr);
     mr.reset();
   }
 
@@ -106,13 +108,13 @@ class benchmark : public ::benchmark::Fixture {
 class memory_stats_logger {
  public:
   memory_stats_logger()
-    : existing_mr(rmm::mr::get_current_device_resource()),
+    : existing_mr(cudf::get_current_device_resource()),
       statistics_mr(rmm::mr::statistics_resource_adaptor(existing_mr))
   {
-    rmm::mr::set_current_device_resource(&statistics_mr);
+    cudf::set_current_device_resource(&statistics_mr);
   }
 
-  ~memory_stats_logger() { rmm::mr::set_current_device_resource(existing_mr); }
+  ~memory_stats_logger() { cudf::set_current_device_resource(existing_mr); }
 
   [[nodiscard]] size_t peak_memory_usage() const noexcept
   {

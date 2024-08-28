@@ -47,7 +47,7 @@ void row_comparison(cudf::table_view input1,
   auto device_table_1 = cudf::table_device_view::create(input1, stream);
   auto device_table_2 = cudf::table_device_view::create(input2, stream);
   auto d_column_order = cudf::detail::make_device_uvector_sync(
-    column_order, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    column_order, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   auto comparator = cudf::row_lexicographic_comparator(
     cudf::nullate::NO{}, *device_table_1, *device_table_2, d_column_order.data());

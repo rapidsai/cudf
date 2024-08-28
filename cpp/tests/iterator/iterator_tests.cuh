@@ -87,7 +87,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
     InputIterator d_in_last = d_in + num_items;
     EXPECT_EQ(thrust::distance(d_in, d_in_last), num_items);
     auto dev_expected = cudf::detail::make_device_uvector_sync(
-      expected, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+      expected, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
     // using a temporary vector and calling transform and all_of separately is
     // equivalent to thrust::equal but compiles ~3x faster

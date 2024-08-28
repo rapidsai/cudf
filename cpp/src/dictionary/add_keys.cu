@@ -30,10 +30,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -61,7 +61,7 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
   // first, concatenate the keys together
   // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
   auto combined_keys = cudf::detail::concatenate(
-    std::vector<column_view>{old_keys, new_keys}, stream, rmm::mr::get_current_device_resource());
+    std::vector<column_view>{old_keys, new_keys}, stream, cudf::get_current_device_resource_ref());
 
   // Drop duplicates from the combined keys, then sort the result.
   // sort(distinct([a,b,c,d,f,d,b,e])) = [a,b,c,d,e,f]

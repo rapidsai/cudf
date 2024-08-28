@@ -17,9 +17,9 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace CUDF_EXPORT cudf {
 
@@ -48,7 +48,7 @@ namespace strings {
  */
 std::unique_ptr<column> count_characters(
   strings_column_view const& input,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a column containing byte lengths
@@ -66,7 +66,7 @@ std::unique_ptr<column> count_characters(
  */
 std::unique_ptr<column> count_bytes(
   strings_column_view const& input,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates a numeric column with code point values (integers) for each
@@ -86,7 +86,7 @@ std::unique_ptr<column> count_bytes(
  */
 std::unique_ptr<column> code_points(
   strings_column_view const& input,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of strings_apis group
 

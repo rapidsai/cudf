@@ -25,13 +25,13 @@
 #include <cudf/strings/detail/copy_if_else.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/distance.h>
@@ -180,7 +180,7 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                     out_of_bounds_policy::DONT_CHECK,
                                                     negative_index_policy::NOT_ALLOWED,
                                                     stream,
-                                                    rmm::mr::get_current_device_resource());
+                                                    cudf::get_current_device_resource_ref());
 
   auto result = cudf::detail::scatter(
     table_view{std::vector<column_view>{scatter_src_lhs->get_column(0).view()}},

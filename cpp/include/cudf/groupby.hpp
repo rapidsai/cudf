@@ -22,11 +22,11 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <utility>
@@ -186,7 +186,7 @@ class groupby {
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
     host_span<aggregation_request const> requests,
-    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+    cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @copydoc aggregate(host_span<aggregation_request const>, rmm::device_async_resource_ref)
@@ -196,7 +196,7 @@ class groupby {
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
     host_span<aggregation_request const> requests,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+    cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
   /**
    * @brief Performs grouped scans on the specified values.
    *
@@ -250,7 +250,7 @@ class groupby {
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> scan(
     host_span<scan_request const> requests,
-    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+    cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Performs grouped shifts for specified values.
@@ -306,7 +306,7 @@ class groupby {
     table_view const& values,
     host_span<size_type const> offsets,
     std::vector<std::reference_wrapper<scalar const>> const& fill_values,
-    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+    cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief The grouped data corresponding to a groupby operation on a set of values.
@@ -334,8 +334,8 @@ class groupby {
    * returned groups
    * @return A `groups` object representing grouped keys and values
    */
-  groups get_groups(cudf::table_view values           = {},
-                    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  groups get_groups(cudf::table_view values            = {},
+                    cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Performs grouped replace nulls on @p value
@@ -375,7 +375,7 @@ class groupby {
   std::pair<std::unique_ptr<table>, std::unique_ptr<table>> replace_nulls(
     table_view const& values,
     host_span<cudf::replace_policy const> replace_policies,
-    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+    cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
  private:
   table_view _keys;                                      ///< Keys that determine grouping

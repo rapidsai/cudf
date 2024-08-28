@@ -79,7 +79,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
     h_offsets[idx + 1] = offset;
   }
   auto d_strings = cudf::detail::make_device_uvector_sync(
-    strings, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    strings, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   CUDF_CUDA_TRY(cudaMemcpy(d_buffer.data(), h_buffer.data(), memsize, cudaMemcpyDefault));
   auto column = cudf::make_strings_column(d_strings);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
@@ -140,14 +140,14 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
 
   std::vector<cudf::bitmask_type> h_nulls{h_null_mask};
   auto d_buffer = cudf::detail::make_device_uvector_sync(
-    h_buffer, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    h_buffer, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto d_offsets = std::make_unique<cudf::column>(
     cudf::detail::make_device_uvector_sync(
-      h_offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource()),
+      h_offsets, cudf::get_default_stream(), cudf::get_current_device_resource_ref()),
     rmm::device_buffer{},
     0);
   auto d_nulls = cudf::detail::make_device_uvector_sync(
-    h_nulls, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    h_nulls, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto column = cudf::make_strings_column(
     count, std::move(d_offsets), d_buffer.release(), null_count, d_nulls.release());
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
@@ -191,7 +191,7 @@ TEST_F(StringsFactoriesTest, EmptyStringsColumn)
   auto d_chars   = rmm::device_uvector<char>(0, cudf::get_default_stream());
   auto d_offsets = std::make_unique<cudf::column>(
     cudf::detail::make_zeroed_device_uvector_sync<cudf::size_type>(
-      1, cudf::get_default_stream(), rmm::mr::get_current_device_resource()),
+      1, cudf::get_default_stream(), cudf::get_current_device_resource_ref()),
     rmm::device_buffer{},
     0);
   rmm::device_uvector<cudf::bitmask_type> d_nulls{0, cudf::get_default_stream()};

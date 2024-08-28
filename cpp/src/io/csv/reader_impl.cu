@@ -37,10 +37,10 @@
 #include <cudf/strings/detail/replace.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -532,7 +532,7 @@ void infer_column_types(parse_options const& parse_opts,
   auto const column_stats = cudf::io::csv::gpu::detect_column_types(
     parse_opts.view(),
     data,
-    make_device_uvector_async(column_flags, stream, rmm::mr::get_current_device_resource()),
+    make_device_uvector_async(column_flags, stream, cudf::get_current_device_resource_ref()),
     row_offsets,
     num_inferred_columns,
     stream);
@@ -601,16 +601,16 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
   }
 
   auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_active_columns, stream, rmm::mr::get_current_device_resource());
+    num_active_columns, stream, cudf::get_current_device_resource_ref());
 
   cudf::io::csv::gpu::decode_row_column_data(
     parse_opts.view(),
     data,
-    make_device_uvector_async(column_flags, stream, rmm::mr::get_current_device_resource()),
+    make_device_uvector_async(column_flags, stream, cudf::get_current_device_resource_ref()),
     row_offsets,
-    make_device_uvector_async(column_types, stream, rmm::mr::get_current_device_resource()),
-    make_device_uvector_async(h_data, stream, rmm::mr::get_current_device_resource()),
-    make_device_uvector_async(h_valid, stream, rmm::mr::get_current_device_resource()),
+    make_device_uvector_async(column_types, stream, cudf::get_current_device_resource_ref()),
+    make_device_uvector_async(h_data, stream, cudf::get_current_device_resource_ref()),
+    make_device_uvector_async(h_valid, stream, cudf::get_current_device_resource_ref()),
     d_valid_counts,
     stream);
 

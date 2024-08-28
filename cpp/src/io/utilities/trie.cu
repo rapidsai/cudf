@@ -104,7 +104,7 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(std::vector<std::st
     if (has_children) { nodes.push_back(serial_trie_node(trie_terminating_character)); }
   }
   return cudf::detail::make_device_uvector_sync(
-    nodes, stream, rmm::mr::get_current_device_resource());
+    nodes, stream, cudf::get_current_device_resource_ref());
 }
 
 }  // namespace detail

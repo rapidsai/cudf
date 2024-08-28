@@ -26,11 +26,11 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <utility>
 #include <vector>
@@ -134,7 +134,7 @@ std::unique_ptr<table> distinct(table_view const& input,
                                                    nulls_equal,
                                                    nans_equal,
                                                    stream,
-                                                   rmm::mr::get_current_device_resource());
+                                                   cudf::get_current_device_resource_ref());
   return detail::gather(input,
                         gather_map,
                         out_of_bounds_policy::DONT_CHECK,

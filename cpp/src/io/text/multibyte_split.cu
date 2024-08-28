@@ -33,13 +33,13 @@
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
@@ -345,9 +345,9 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     auto const concurrency = 2;
     auto num_tile_states   = std::max(32, TILES_PER_CHUNK * concurrency + 32);
     auto tile_multistates =
-      scan_tile_state<multistate>(num_tile_states, stream, rmm::mr::get_current_device_resource());
+      scan_tile_state<multistate>(num_tile_states, stream, cudf::get_current_device_resource_ref());
     auto tile_offsets = scan_tile_state<output_offset>(
-      num_tile_states, stream, rmm::mr::get_current_device_resource());
+      num_tile_states, stream, cudf::get_current_device_resource_ref());
 
     multibyte_split_init_kernel<<<TILES_PER_CHUNK,
                                   THREADS_PER_TILE,

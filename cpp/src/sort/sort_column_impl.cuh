@@ -21,11 +21,11 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/sequence.h>
 #include <thrust/sort.h>

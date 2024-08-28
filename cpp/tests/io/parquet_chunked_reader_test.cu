@@ -80,7 +80,7 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
         null_count,
         std::move(col),
         cudf::get_default_stream(),
-        rmm::mr::get_current_device_resource());
+        cudf::get_current_device_resource_ref());
 
       // Shift nulls of the next column by one position, to avoid having all nulls
       // in the same table rows.

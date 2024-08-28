@@ -21,12 +21,12 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cub/block/block_reduce.cuh>
 #include <cub/device/device_segmented_reduce.cuh>
@@ -164,7 +164,7 @@ size_type inplace_bitmask_binop(Binop op,
   CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
                "Mask pointer cannot be null");
 
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource();
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
   rmm::device_scalar<size_type> d_counter{0, stream, mr};
   rmm::device_uvector<bitmask_type const*> d_masks(masks.size(), stream, mr);
   rmm::device_uvector<size_type> d_begin_bits(masks_begin_bits.size(), stream, mr);
@@ -434,7 +434,7 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
     std::distance(indices_begin, indices_end), stream);
   std::copy(indices_begin, indices_end, std::back_inserter(h_indices));
   auto const d_indices =
-    make_device_uvector_async(h_indices, stream, rmm::mr::get_current_device_resource());
+    make_device_uvector_async(h_indices, stream, cudf::get_current_device_resource_ref());
 
   // Compute the bit counts over each segment.
   auto first_bit_indices_begin = thrust::make_transform_iterator(
@@ -449,7 +449,7 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                        last_bit_indices_begin,
                                        count_bits,
                                        stream,
-                                       rmm::mr::get_current_device_resource());
+                                       cudf::get_current_device_resource_ref());
 
   // Copy the results back to the host.
   return make_std_vector_sync(d_bit_counts, stream);
@@ -576,7 +576,7 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
                                        last_bit_indices_begin,
                                        cudf::detail::count_bits_policy::SET_BITS,
                                        stream,
-                                       rmm::mr::get_current_device_resource());
+                                       cudf::get_current_device_resource_ref());
   auto const length_and_valid_count =
     thrust::make_zip_iterator(segment_length_iterator, segment_valid_counts.begin());
   return cudf::detail::valid_if(

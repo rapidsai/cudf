@@ -86,7 +86,7 @@ void BM_join(state_type& state, Join JoinFunc)
                                   validity + size,
                                   thrust::identity<bool>{},
                                   cudf::get_default_stream(),
-                                  rmm::mr::get_current_device_resource());
+                                  cudf::get_current_device_resource_ref());
   };
 
   std::unique_ptr<cudf::column> right_key_column0 = [&]() {

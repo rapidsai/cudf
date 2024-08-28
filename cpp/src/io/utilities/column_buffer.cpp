@@ -24,9 +24,9 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <iomanip>
 #include <sstream>
@@ -44,7 +44,7 @@ void gather_column_buffer::allocate_strings_data(bool memset_data, rmm::cuda_str
   // default rmm memory resource.
   _strings = std::make_unique<rmm::device_uvector<string_index_pair>>(
     cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
-      size, stream, rmm::mr::get_current_device_resource()));
+      size, stream, cudf::get_current_device_resource_ref()));
 }
 
 std::unique_ptr<column> gather_column_buffer::make_string_column_impl(rmm::cuda_stream_view stream)

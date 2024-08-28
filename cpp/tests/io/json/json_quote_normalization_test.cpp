@@ -43,7 +43,7 @@ void run_test(std::string const& host_input, std::string const& expected_host_ou
 
   auto stream_view  = cudf::test::get_default_stream();
   auto device_input = rmm::device_buffer(
-    host_input.c_str(), host_input.size(), stream_view, rmm::mr::get_current_device_resource());
+    host_input.c_str(), host_input.size(), stream_view, cudf::get_current_device_resource_ref());
 
   // Preprocessing FST
   cudf::io::datasource::owning_buffer<rmm::device_buffer> device_data(std::move(device_input));

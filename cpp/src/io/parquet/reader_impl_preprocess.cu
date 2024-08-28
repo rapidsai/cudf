@@ -392,7 +392,7 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
   }
 
   auto d_page_indexes = cudf::detail::make_device_uvector_async(
-    page_indexes, stream, rmm::mr::get_current_device_resource());
+    page_indexes, stream, cudf::get_current_device_resource_ref());
 
   auto iter = thrust::make_counting_iterator<size_type>(0);
   thrust::for_each(
@@ -754,7 +754,7 @@ void reader::impl::build_string_dict_indices()
 
   // allocate and distribute pointers
   pass.str_dict_index = cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
-    total_str_dict_indexes, _stream, rmm::mr::get_current_device_resource());
+    total_str_dict_indexes, _stream, cudf::get_current_device_resource_ref());
 
   auto iter = thrust::make_counting_iterator(0);
   thrust::for_each(
@@ -907,7 +907,7 @@ void reader::impl::allocate_level_decode_space()
   size_t const per_page_decode_buf_size = LEVEL_DECODE_BUF_SIZE * 2 * pass.level_type_size;
   auto const decode_buf_size            = per_page_decode_buf_size * pages.size();
   subpass.level_decode_data =
-    rmm::device_buffer(decode_buf_size, _stream, rmm::mr::get_current_device_resource());
+    rmm::device_buffer(decode_buf_size, _stream, cudf::get_current_device_resource_ref());
 
   // distribute the buffers
   uint8_t* buf = static_cast<uint8_t*>(subpass.level_decode_data.data());
@@ -1551,7 +1551,7 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
         .nesting_depth;
 
     auto const d_cols_info = cudf::detail::make_device_uvector_async(
-      h_cols_info, _stream, rmm::mr::get_current_device_resource());
+      h_cols_info, _stream, cudf::get_current_device_resource_ref());
 
     auto const num_keys = _input_columns.size() * max_depth * subpass.pages.size();
     // size iterator. indexes pages by sorted order

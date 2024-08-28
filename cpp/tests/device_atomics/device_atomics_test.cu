@@ -144,9 +144,9 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     result_init[5] = result_init[2];
 
     auto dev_data = cudf::detail::make_device_uvector_sync(
-      v, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+      v, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     auto dev_result = cudf::detail::make_device_uvector_sync(
-      result_init, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+      result_init, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
     if (block_size == 0) { block_size = vec_size; }
 

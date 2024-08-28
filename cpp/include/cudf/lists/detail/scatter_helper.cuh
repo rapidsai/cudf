@@ -20,10 +20,10 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <memory>
 

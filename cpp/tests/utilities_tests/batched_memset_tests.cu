@@ -41,7 +41,7 @@ TEST(MultiBufferTestIntegral, BasicTest1)
 
   // Device init
   auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto mr     = cudf::get_current_device_resource_ref();
 
   // Creating base vector for data and setting it to all 0xFF
   std::vector<std::vector<uint64_t>> expected;

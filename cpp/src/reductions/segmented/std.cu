@@ -17,9 +17,9 @@
 #include "compound.cuh"
 
 #include <cudf/reduction/detail/segmented_reduction_functions.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace reduction {

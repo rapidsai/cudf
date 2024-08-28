@@ -19,9 +19,9 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/replace/nulls.cuh>
 #include <cudf/replace.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>

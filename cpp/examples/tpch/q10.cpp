@@ -74,8 +74,8 @@
 [[nodiscard]] std::unique_ptr<cudf::column> calc_revenue(
   cudf::column_view const& extendedprice,
   cudf::column_view const& discount,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   auto const one = cudf::numeric_scalar<double>(1);
   auto const one_minus_discount =

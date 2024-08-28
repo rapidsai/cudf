@@ -18,8 +18,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/utilities/default_stream.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>

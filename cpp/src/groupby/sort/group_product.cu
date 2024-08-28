@@ -17,10 +17,10 @@
 #include "groupby/sort/group_single_pass_reduction_util.cuh"
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace groupby {

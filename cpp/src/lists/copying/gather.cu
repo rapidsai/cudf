@@ -16,9 +16,9 @@
 
 #include <cudf/detail/gather.cuh>
 #include <cudf/lists/detail/gather.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>

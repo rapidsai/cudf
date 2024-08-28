@@ -19,12 +19,12 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <type_traits>
@@ -64,8 +64,8 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   column(column const& other,
-         rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-         rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+         rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+         cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Move the contents from `other` to create a new column.
@@ -142,8 +142,8 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   explicit column(column_view view,
-                  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+                  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+                  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Returns the column's logical element type

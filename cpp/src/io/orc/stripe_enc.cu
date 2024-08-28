@@ -1425,7 +1425,7 @@ void decimal_sizes_to_offsets(device_2dspan<rowgroup_rows const> rg_bounds,
 
   // Copy the vector of views to the device so that we can pass it to the kernel
   auto d_sizes = cudf::detail::make_device_uvector_async<decimal_column_element_sizes>(
-    h_sizes, stream, rmm::mr::get_current_device_resource());
+    h_sizes, stream, cudf::get_current_device_resource_ref());
 
   constexpr int block_size = 256;
   dim3 const grid_size{static_cast<unsigned int>(elem_sizes.size()),        // num decimal columns

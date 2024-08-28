@@ -399,7 +399,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv* env
     return release_as_jlong(
       is_lists_column
         ? cudf::lists::detail::concatenate(
-            columns, cudf::get_default_stream(), rmm::mr::get_current_device_resource())
+            columns, cudf::get_default_stream(), cudf::get_current_device_resource_ref())
         : cudf::concatenate(columns));
   }
   CATCH_STD(env, 0);

@@ -25,9 +25,9 @@
 #include <cudf/lists/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <utility>
@@ -50,7 +50,7 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
 
   auto const child = input.get_sliced_child(stream);
   auto const labels =
-    generate_labels(input, child.size(), stream, rmm::mr::get_current_device_resource());
+    generate_labels(input, child.size(), stream, cudf::get_current_device_resource_ref());
 
   auto const distinct_table =
     cudf::detail::stable_distinct(table_view{{labels->view(), child}},  // input table

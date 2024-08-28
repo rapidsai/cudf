@@ -33,12 +33,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/functional.h>
 #include <thrust/gather.h>
@@ -582,11 +582,11 @@ void gather_bitmask(table_view const& source,
     return col->mutable_view().null_mask();
   });
   auto d_target_masks =
-    make_device_uvector_async(target_masks, stream, rmm::mr::get_current_device_resource());
+    make_device_uvector_async(target_masks, stream, cudf::get_current_device_resource_ref());
 
   auto const device_source = table_device_view::create(source, stream);
   auto d_valid_counts      = make_zeroed_device_uvector_async<size_type>(
-    target.size(), stream, rmm::mr::get_current_device_resource());
+    target.size(), stream, cudf::get_current_device_resource_ref());
 
   // Dispatch operation enum to get implementation
   auto const impl = [op]() {

@@ -18,9 +18,9 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -49,7 +49,7 @@ namespace datetime {
  */
 std::unique_ptr<cudf::column> extract_year(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts month from any datetime type and returns an int16_t
@@ -63,7 +63,7 @@ std::unique_ptr<cudf::column> extract_year(
  */
 std::unique_ptr<cudf::column> extract_month(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts day from any datetime type and returns an int16_t
@@ -77,7 +77,7 @@ std::unique_ptr<cudf::column> extract_month(
  */
 std::unique_ptr<cudf::column> extract_day(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts a weekday from any datetime type and returns an int16_t
@@ -91,7 +91,7 @@ std::unique_ptr<cudf::column> extract_day(
  */
 std::unique_ptr<cudf::column> extract_weekday(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts hour from any datetime type and returns an int16_t
@@ -105,7 +105,7 @@ std::unique_ptr<cudf::column> extract_weekday(
  */
 std::unique_ptr<cudf::column> extract_hour(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts minute from any datetime type and returns an int16_t
@@ -119,7 +119,7 @@ std::unique_ptr<cudf::column> extract_hour(
  */
 std::unique_ptr<cudf::column> extract_minute(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts second from any datetime type and returns an int16_t
@@ -133,7 +133,7 @@ std::unique_ptr<cudf::column> extract_minute(
  */
 std::unique_ptr<cudf::column> extract_second(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts millisecond fraction from any datetime type and returns an int16_t
@@ -150,7 +150,7 @@ std::unique_ptr<cudf::column> extract_second(
  */
 std::unique_ptr<cudf::column> extract_millisecond_fraction(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts microsecond fraction from any datetime type and returns an int16_t
@@ -167,7 +167,7 @@ std::unique_ptr<cudf::column> extract_millisecond_fraction(
  */
 std::unique_ptr<cudf::column> extract_microsecond_fraction(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts nanosecond fraction from any datetime type and returns an int16_t
@@ -184,7 +184,7 @@ std::unique_ptr<cudf::column> extract_microsecond_fraction(
  */
 std::unique_ptr<cudf::column> extract_nanosecond_fraction(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 /**
@@ -205,7 +205,7 @@ std::unique_ptr<cudf::column> extract_nanosecond_fraction(
  */
 std::unique_ptr<cudf::column> last_day_of_month(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Computes the day number since the start of the year from the datetime and
@@ -219,7 +219,7 @@ std::unique_ptr<cudf::column> last_day_of_month(
  */
 std::unique_ptr<cudf::column> day_of_year(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Adds or subtracts a number of months from the datetime type and returns a
@@ -254,7 +254,7 @@ std::unique_ptr<cudf::column> day_of_year(
 std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
   cudf::column_view const& months,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Adds or subtracts a number of months from the datetime type and returns a
@@ -289,7 +289,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(
 std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
   cudf::scalar const& months,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Check if the year of the given date is a leap year
@@ -306,7 +306,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(
  */
 std::unique_ptr<cudf::column> is_leap_year(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Extract the number of days in the month
@@ -322,7 +322,7 @@ std::unique_ptr<cudf::column> is_leap_year(
  */
 std::unique_ptr<cudf::column> days_in_month(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Returns the quarter of the date
@@ -338,7 +338,7 @@ std::unique_ptr<cudf::column> days_in_month(
  */
 std::unique_ptr<cudf::column> extract_quarter(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Fixed frequencies supported by datetime rounding functions ceil, floor, round.
@@ -367,7 +367,7 @@ enum class rounding_frequency : int32_t {
 std::unique_ptr<cudf::column> ceil_datetimes(
   cudf::column_view const& column,
   rounding_frequency freq,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Round datetimes down to the nearest multiple of the given frequency.
@@ -382,7 +382,7 @@ std::unique_ptr<cudf::column> ceil_datetimes(
 std::unique_ptr<cudf::column> floor_datetimes(
   cudf::column_view const& column,
   rounding_frequency freq,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Round datetimes to the nearest multiple of the given frequency.
@@ -397,7 +397,7 @@ std::unique_ptr<cudf::column> floor_datetimes(
 std::unique_ptr<cudf::column> round_datetimes(
   cudf::column_view const& column,
   rounding_frequency freq,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 

@@ -24,11 +24,11 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cooperative_groups.h>
 #include <cub/block/block_scan.cuh>
@@ -139,7 +139,8 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
   } else {
     auto stencil = thrust::counting_iterator<size_type>{0};
     auto const row_bitmask =
-      cudf::detail::bitmask_and(this->_build, stream, rmm::mr::get_current_device_resource()).first;
+      cudf::detail::bitmask_and(this->_build, stream, cudf::get_current_device_resource_ref())
+        .first;
     auto const pred =
       cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
 

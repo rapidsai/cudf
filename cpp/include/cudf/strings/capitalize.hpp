@@ -19,9 +19,9 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace CUDF_EXPORT cudf {
 namespace strings {
@@ -61,9 +61,9 @@ namespace strings {
  */
 std::unique_ptr<column> capitalize(
   strings_column_view const& input,
-  string_scalar const& delimiters   = string_scalar("", true, cudf::get_default_stream()),
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  string_scalar const& delimiters    = string_scalar("", true, cudf::get_default_stream()),
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Modifies first character of each word to upper-case and lower-cases the rest.
@@ -96,7 +96,7 @@ std::unique_ptr<column> title(
   strings_column_view const& input,
   string_character_types sequence_type = string_character_types::ALPHA,
   rmm::cuda_stream_view stream         = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr    = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr   = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Checks if the strings in the input column are title formatted.
@@ -124,8 +124,8 @@ std::unique_ptr<column> title(
  */
 std::unique_ptr<column> is_title(
   strings_column_view const& input,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

@@ -26,10 +26,10 @@
 #include <cudf/lists/extract.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/fill.h>
@@ -105,7 +105,7 @@ std::unique_ptr<cudf::column> make_index_offsets(size_type num_lists, rmm::cuda_
   return cudf::detail::sequence(num_lists + 1,
                                 cudf::scalar_type_t<size_type>(0, true, stream),
                                 stream,
-                                rmm::mr::get_current_device_resource());
+                                cudf::get_current_device_resource_ref());
 }
 
 }  // namespace

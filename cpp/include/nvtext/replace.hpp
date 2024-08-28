@@ -19,8 +19,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/export.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 //! NVText APIs
 namespace CUDF_EXPORT nvtext {
@@ -91,7 +90,7 @@ std::unique_ptr<cudf::column> replace_tokens(
   cudf::strings_column_view const& replacements,
   cudf::string_scalar const& delimiter = cudf::string_scalar{""},
   rmm::cuda_stream_view stream         = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr    = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr   = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Removes tokens whose lengths are less than a specified number of characters.
@@ -140,7 +139,7 @@ std::unique_ptr<cudf::column> filter_tokens(
   cudf::string_scalar const& replacement = cudf::string_scalar{""},
   cudf::string_scalar const& delimiter   = cudf::string_scalar{""},
   rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr      = rmm::mr::get_current_device_resource());
+  cudf::device_async_resource_ref mr     = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT nvtext

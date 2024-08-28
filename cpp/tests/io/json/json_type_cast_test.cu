@@ -73,7 +73,7 @@ auto default_json_options()
 TEST_F(JSONTypeCastTest, String)
 {
   auto const stream = cudf::get_default_stream();
-  auto mr           = rmm::mr::get_current_device_resource();
+  auto mr           = cudf::get_current_device_resource_ref();
   auto const type   = cudf::data_type{cudf::type_id::STRING};
 
   auto in_valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; });
@@ -110,7 +110,7 @@ TEST_F(JSONTypeCastTest, String)
 TEST_F(JSONTypeCastTest, Int)
 {
   auto const stream = cudf::get_default_stream();
-  auto mr           = rmm::mr::get_current_device_resource();
+  auto mr           = cudf::get_current_device_resource_ref();
   auto const type   = cudf::data_type{cudf::type_id::INT64};
 
   cudf::test::strings_column_wrapper data({"1", "null", "3", "true", "5", "false"});
@@ -141,7 +141,7 @@ TEST_F(JSONTypeCastTest, Int)
 TEST_F(JSONTypeCastTest, StringEscapes)
 {
   auto const stream = cudf::get_default_stream();
-  auto mr           = rmm::mr::get_current_device_resource();
+  auto mr           = cudf::get_current_device_resource_ref();
   auto const type   = cudf::data_type{cudf::type_id::STRING};
 
   cudf::test::strings_column_wrapper data({
@@ -183,7 +183,7 @@ TEST_F(JSONTypeCastTest, StringEscapes)
 TEST_F(JSONTypeCastTest, ErrorNulls)
 {
   auto const stream = cudf::get_default_stream();
-  auto mr           = rmm::mr::get_current_device_resource();
+  auto mr           = cudf::get_current_device_resource_ref();
   auto const type   = cudf::data_type{cudf::type_id::STRING};
 
   // error in decoding

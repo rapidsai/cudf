@@ -19,10 +19,9 @@
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 

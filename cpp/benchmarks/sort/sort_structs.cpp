@@ -26,7 +26,8 @@ void nvbench_sort_struct(nvbench::state& state)
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
-    cudf::detail::sorted_order(*input, {}, {}, stream_view, rmm::mr::get_current_device_resource());
+    cudf::detail::sorted_order(
+      *input, {}, {}, stream_view, cudf::get_current_device_resource_ref());
   });
 }
 

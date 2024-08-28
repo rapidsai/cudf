@@ -21,9 +21,9 @@
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/search.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace detail {
@@ -59,10 +59,10 @@ std::unique_ptr<column> contains_column_dispatch::operator()<dictionary32>(
   dictionary_column_view const needles(needles_in);
   // first combine keys so both dictionaries have the same set
   auto needles_matched = dictionary::detail::add_keys(
-    needles, haystack.keys(), stream, rmm::mr::get_current_device_resource());
+    needles, haystack.keys(), stream, cudf::get_current_device_resource_ref());
   auto const needles_view = dictionary_column_view(needles_matched->view());
   auto haystack_matched   = dictionary::detail::set_keys(
-    haystack, needles_view.keys(), stream, rmm::mr::get_current_device_resource());
+    haystack, needles_view.keys(), stream, cudf::get_current_device_resource_ref());
   auto const haystack_view = dictionary_column_view(haystack_matched->view());
 
   // now just use the indices for the contains

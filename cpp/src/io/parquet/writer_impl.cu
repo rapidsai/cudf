@@ -1048,7 +1048,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
   // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
   // hostdevice_vector. Currently this involves a cudaMemcpyAsync for each column.
   _d_nullability = cudf::detail::make_device_uvector_async(
-    _nullability, stream, rmm::mr::get_current_device_resource());
+    _nullability, stream, cudf::get_current_device_resource_ref());
 
   _is_list = (_max_rep_level > 0);
 
@@ -1120,7 +1120,7 @@ void init_row_group_fragments(cudf::detail::hostdevice_2dvector<PageFragment>& f
                               rmm::cuda_stream_view stream)
 {
   auto d_partitions = cudf::detail::make_device_uvector_async(
-    partitions, stream, rmm::mr::get_current_device_resource());
+    partitions, stream, cudf::get_current_device_resource_ref());
   InitRowGroupFragments(frag, col_desc, d_partitions, part_frag_offset, fragment_size, stream);
   frag.device_to_host_sync(stream);
 }
@@ -1140,7 +1140,7 @@ void calculate_page_fragments(device_span<PageFragment> frag,
                               rmm::cuda_stream_view stream)
 {
   auto d_frag_sz = cudf::detail::make_device_uvector_async(
-    frag_sizes, stream, rmm::mr::get_current_device_resource());
+    frag_sizes, stream, cudf::get_current_device_resource_ref());
   CalculatePageFragments(frag, d_frag_sz, stream);
 }
 
@@ -1637,7 +1637,7 @@ std::vector<column_view> convert_decimal_columns_and_metadata(
       case type_id::DECIMAL32:
         // Convert data to decimal128 type
         d128_buffers.emplace_back(cudf::detail::convert_decimals_to_decimal128<int32_t>(
-          column, stream, rmm::mr::get_current_device_resource()));
+          column, stream, cudf::get_current_device_resource_ref()));
         // Update metadata
         metadata.set_decimal_precision(MAX_DECIMAL32_PRECISION);
         metadata.set_type_length(size_of(data_type{type_id::DECIMAL128, column.type().scale()}));
@@ -1652,7 +1652,7 @@ std::vector<column_view> convert_decimal_columns_and_metadata(
       case type_id::DECIMAL64:
         // Convert data to decimal128 type
         d128_buffers.emplace_back(cudf::detail::convert_decimals_to_decimal128<int64_t>(
-          column, stream, rmm::mr::get_current_device_resource()));
+          column, stream, cudf::get_current_device_resource_ref()));
         // Update metadata
         metadata.set_decimal_precision(MAX_DECIMAL64_PRECISION);
         metadata.set_type_length(size_of(data_type{type_id::DECIMAL128, column.type().scale()}));
@@ -1857,7 +1857,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   part_frag_offset.push_back(part_frag_offset.back() + num_frag_in_part.back());
 
   auto d_part_frag_offset = cudf::detail::make_device_uvector_async(
-    part_frag_offset, stream, rmm::mr::get_current_device_resource());
+    part_frag_offset, stream, cudf::get_current_device_resource_ref());
   cudf::detail::hostdevice_2dvector<PageFragment> row_group_fragments(
     num_columns, num_fragments, stream);
 

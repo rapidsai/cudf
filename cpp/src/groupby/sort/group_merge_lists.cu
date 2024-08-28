@@ -16,11 +16,11 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/gather.h>
 

@@ -18,11 +18,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <cuda/std/optional>

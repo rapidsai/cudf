@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/cuda_device.hpp>
@@ -27,7 +28,6 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <string>
 
@@ -110,7 +110,7 @@ struct nvbench_base_fixture {
     }
 
     mr = create_memory_resource(rmm_mode);
-    rmm::mr::set_current_device_resource(mr.get());
+    cudf::set_current_device_resource(mr.get());
     std::cout << "RMM memory resource = " << rmm_mode << "\n";
 
     cudf::set_pinned_memory_resource(create_cuio_host_memory_resource(cuio_host_mode));

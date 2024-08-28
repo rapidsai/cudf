@@ -21,8 +21,7 @@
 #include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/uninitialized_fill.h>

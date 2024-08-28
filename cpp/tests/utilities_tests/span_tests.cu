@@ -253,7 +253,7 @@ CUDF_KERNEL void simple_device_kernel(device_span<bool> result) { result[0] = tr
 TEST(SpanTest, CanUseDeviceSpan)
 {
   auto d_message = cudf::detail::make_zeroed_device_uvector_async<bool>(
-    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   auto d_span = device_span<bool>(d_message.data(), d_message.size());
 

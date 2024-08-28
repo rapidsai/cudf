@@ -28,10 +28,10 @@
 #include <cudf/reduction.hpp>
 #include <cudf/strings/detail/scan.hpp>
 #include <cudf/structs/detail/scan.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/find.h>
 #include <thrust/functional.h>

@@ -350,7 +350,7 @@ TEST_F(SegmentedSortInt, UnbalancedOffsets)
   std::fill_n(h_input.begin(), 4, 0);
   std::fill(h_input.begin() + 3533, h_input.end(), 10000);
   auto d_input = cudf::detail::make_device_uvector_sync(
-    h_input, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    h_input, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto input    = cudf::column_view(cudf::device_span<int64_t const>(d_input));
   auto segments = cudf::test::fixed_width_column_wrapper<int32_t>({0, 4, 3533, 3535});
   // full sort should match handcrafted input data here

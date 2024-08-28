@@ -178,7 +178,7 @@ inline auto make_memory_resource_adaptor(cxxopts::ParseResult const& cmd_opts)
  */
 inline auto make_stream_mode_adaptor(cxxopts::ParseResult const& cmd_opts)
 {
-  auto resource                      = rmm::mr::get_current_device_resource();
+  auto resource                      = cudf::get_current_device_resource_ref();
   auto const stream_mode             = cmd_opts["stream_mode"].as<std::string>();
   auto const stream_error_mode       = cmd_opts["stream_error_mode"].as<std::string>();
   auto const error_on_invalid_stream = (stream_error_mode == "error");

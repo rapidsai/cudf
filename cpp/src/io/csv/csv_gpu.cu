@@ -807,7 +807,7 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
   int const grid_size  = (row_starts.size() + block_size - 1) / block_size;
 
   auto d_stats = detail::make_zeroed_device_uvector_async<column_type_histogram>(
-    num_active_columns, stream, rmm::mr::get_current_device_resource());
+    num_active_columns, stream, cudf::get_current_device_resource_ref());
 
   data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);

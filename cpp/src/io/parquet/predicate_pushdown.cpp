@@ -25,11 +25,11 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -399,7 +399,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
-  auto mr = rmm::mr::get_current_device_resource();
+  auto mr = cudf::get_current_device_resource_ref();
   // Create row group indices.
   std::vector<std::vector<size_type>> filtered_row_group_indices;
   std::vector<std::vector<size_type>> all_row_group_indices;

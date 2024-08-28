@@ -19,11 +19,11 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/detail/multistate.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <algorithm>
 #include <queue>

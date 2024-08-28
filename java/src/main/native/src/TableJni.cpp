@@ -3951,7 +3951,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
                      nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL,
                      cudf::nan_equality::ALL_EQUAL,
                      cudf::get_default_stream(),
-                     rmm::mr::get_current_device_resource());
+                     cudf::get_current_device_resource_ref());
     return convert_table_for_return(env, result);
   }
   CATCH_STD(env, 0);
@@ -4116,7 +4116,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(
     // and scratch memory only.
     auto temp_mr      = memoryResourceHandle != 0
                           ? reinterpret_cast<rmm::mr::device_memory_resource*>(memoryResourceHandle)
-                          : rmm::mr::get_current_device_resource();
+                          : cudf::get_current_device_resource_ref();
     auto chunked_pack = cudf::chunked_pack::create(*n_table, bounce_buffer_size, temp_mr);
     return reinterpret_cast<jlong>(chunked_pack.release());
   }

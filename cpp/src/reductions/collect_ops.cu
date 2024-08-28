@@ -22,8 +22,7 @@
 #include <cudf/reduction/detail/reduction_functions.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf {
 namespace reduction {

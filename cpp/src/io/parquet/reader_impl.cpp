@@ -23,8 +23,7 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -704,7 +703,7 @@ table_with_metadata reader::impl::finalize_output(read_mode mode,
     auto predicate  = cudf::detail::compute_column(*read_table,
                                                   _expr_conv.get_converted_expr().value().get(),
                                                   _stream,
-                                                  rmm::mr::get_current_device_resource());
+                                                  cudf::get_current_device_resource_ref());
     CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
     // Exclude columns present in filter only in output

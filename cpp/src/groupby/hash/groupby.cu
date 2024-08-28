@@ -39,11 +39,11 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.cuh>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuco/static_set.cuh>
 #include <thrust/for_each.h>
@@ -401,7 +401,7 @@ void sparse_to_dense_results(table_view const& keys,
                              rmm::device_async_resource_ref mr)
 {
   auto row_bitmask =
-    cudf::detail::bitmask_and(keys, stream, rmm::mr::get_current_device_resource()).first;
+    cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first;
   bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
   bitmask_type const* row_bitmask_ptr =
     skip_key_rows_with_nulls ? static_cast<bitmask_type*>(row_bitmask.data()) : nullptr;
@@ -475,13 +475,13 @@ void compute_single_pass_aggs(table_view const& keys,
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
   auto d_values       = table_device_view::create(flattened_values, stream);
   auto const d_aggs   = cudf::detail::make_device_uvector_async(
-    agg_kinds, stream, rmm::mr::get_current_device_resource());
+    agg_kinds, stream, cudf::get_current_device_resource_ref());
   auto const skip_key_rows_with_nulls =
     keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
   auto row_bitmask =
     skip_key_rows_with_nulls
-      ? cudf::detail::bitmask_and(keys, stream, rmm::mr::get_current_device_resource()).first
+      ? cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first
       : rmm::device_buffer{};
 
   thrust::for_each_n(

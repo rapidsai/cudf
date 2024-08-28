@@ -31,11 +31,11 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
@@ -185,7 +185,7 @@ std::vector<std::unique_ptr<column>> match_dictionaries(
 {
   std::vector<column_view> keys(input.size());
   std::transform(input.begin(), input.end(), keys.begin(), [](auto& col) { return col.keys(); });
-  auto new_keys  = cudf::detail::concatenate(keys, stream, rmm::mr::get_current_device_resource());
+  auto new_keys  = cudf::detail::concatenate(keys, stream, cudf::get_current_device_resource_ref());
   auto keys_view = new_keys->view();
   std::vector<std::unique_ptr<column>> result(input.size());
   std::transform(input.begin(), input.end(), result.begin(), [keys_view, mr, stream](auto& col) {

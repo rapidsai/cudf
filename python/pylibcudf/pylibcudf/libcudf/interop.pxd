@@ -71,7 +71,7 @@ cdef extern from *:
     ArrowArray* to_arrow_host_raw(
       cudf::table_view const& tbl,
       rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) {
+      rmm::mr::device_memory_resource* mr = cudf::get_current_device_resource_ref()) {
       // Assumes the sync event is null and the data is already on the host.
       ArrowArray *arr = new ArrowArray();
       auto device_arr = cudf::to_arrow_host(tbl, stream, mr);

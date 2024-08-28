@@ -138,7 +138,7 @@ void BM_iterator(benchmark::State& state)
 
   // Initialize dev_result to false
   auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<TypeParam>(
-    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     if (cub_or_thrust) {

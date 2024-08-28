@@ -17,8 +17,7 @@
 #include "simple.cuh"
 
 #include <cudf/reduction/detail/reduction_functions.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf {
 namespace reduction {

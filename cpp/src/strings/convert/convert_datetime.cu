@@ -28,13 +28,13 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/std/optional>
 #include <thrust/execution_policy.h>
@@ -161,7 +161,7 @@ struct format_compiler {
 
     // copy format_items to device memory
     d_items = cudf::detail::make_device_uvector_async(
-      items, stream, rmm::mr::get_current_device_resource());
+      items, stream, cudf::get_current_device_resource_ref());
   }
 
   device_span<format_item const> format_items() { return device_span<format_item const>(d_items); }

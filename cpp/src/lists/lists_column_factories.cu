@@ -22,10 +22,10 @@
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/lists_column_factories.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/sequence.h>
@@ -48,7 +48,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
                              stream,
                              mr);
   }
-  auto mr_final = size == 1 ? mr : rmm::mr::get_current_device_resource();
+  auto mr_final = size == 1 ? mr : cudf::get_current_device_resource_ref();
 
   // Handcraft a 1-row column
   auto sizes_itr = thrust::constant_iterator<size_type>(value.view().size());

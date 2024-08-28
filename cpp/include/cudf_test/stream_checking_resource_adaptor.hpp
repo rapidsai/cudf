@@ -18,9 +18,9 @@
 #include <cudf_test/default_stream.hpp>
 
 #include <cudf/detail/utilities/stacktrace.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <iostream>
 

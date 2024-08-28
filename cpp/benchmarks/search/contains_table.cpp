@@ -58,7 +58,7 @@ static void nvbench_contains_table(nvbench::state& state, nvbench::type_list<Typ
                              cudf::null_equality::EQUAL,
                              cudf::nan_equality::ALL_EQUAL,
                              stream_view,
-                             rmm::mr::get_current_device_resource());
+                             cudf::get_current_device_resource_ref());
   });
 
   state.add_buffer_size(

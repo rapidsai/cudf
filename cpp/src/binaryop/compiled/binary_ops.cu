@@ -24,11 +24,11 @@
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/functional.h>
@@ -116,7 +116,7 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::struc
 auto scalar_to_column_view(
   scalar const& scal,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, mr);
 }

@@ -28,8 +28,7 @@
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/default_stream.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
@@ -605,9 +604,9 @@ get_null_bounds_for_orderby_column(column_view const& orderby_column,
 
     // When there are no nulls, just copy the input group offsets to the output.
     return std::make_tuple(cudf::detail::make_device_uvector_async(
-                             group_offsets_span, stream, rmm::mr::get_current_device_resource()),
+                             group_offsets_span, stream, cudf::get_current_device_resource_ref()),
                            cudf::detail::make_device_uvector_async(
-                             group_offsets_span, stream, rmm::mr::get_current_device_resource()));
+                             group_offsets_span, stream, cudf::get_current_device_resource_ref()));
   }
 }
 

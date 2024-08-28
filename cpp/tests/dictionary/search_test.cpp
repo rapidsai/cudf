@@ -39,7 +39,7 @@ TEST_F(DictionarySearchTest, StringsColumn)
   result   = cudf::dictionary::detail::get_insert_index(dictionary,
                                                       cudf::string_scalar("eee"),
                                                       cudf::get_default_stream(),
-                                                      rmm::mr::get_current_device_resource());
+                                                      cudf::get_current_device_resource_ref());
   n_result = dynamic_cast<cudf::numeric_scalar<uint32_t>*>(result.get());
   EXPECT_EQ(uint32_t{5}, n_result->value());
 }
@@ -59,7 +59,7 @@ TEST_F(DictionarySearchTest, WithNulls)
   result   = cudf::dictionary::detail::get_insert_index(dictionary,
                                                       cudf::numeric_scalar<int64_t>(5),
                                                       cudf::get_default_stream(),
-                                                      rmm::mr::get_current_device_resource());
+                                                      cudf::get_current_device_resource_ref());
   n_result = dynamic_cast<cudf::numeric_scalar<uint32_t>*>(result.get());
   EXPECT_EQ(uint32_t{1}, n_result->value());
 }
@@ -71,7 +71,7 @@ TEST_F(DictionarySearchTest, EmptyColumn)
   auto result = cudf::dictionary::get_index(dictionary, key);
   EXPECT_FALSE(result->is_valid());
   result = cudf::dictionary::detail::get_insert_index(
-    dictionary, key, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    dictionary, key, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   EXPECT_FALSE(result->is_valid());
 }
 
@@ -82,6 +82,6 @@ TEST_F(DictionarySearchTest, Errors)
   EXPECT_THROW(cudf::dictionary::get_index(dictionary, key), cudf::data_type_error);
   EXPECT_THROW(
     cudf::dictionary::detail::get_insert_index(
-      dictionary, key, cudf::get_default_stream(), rmm::mr::get_current_device_resource()),
+      dictionary, key, cudf::get_default_stream(), cudf::get_current_device_resource_ref()),
     cudf::data_type_error);
 }

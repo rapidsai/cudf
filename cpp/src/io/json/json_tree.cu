@@ -26,12 +26,12 @@
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cub/device/device_radix_sort.cuh>
 #include <cuco/static_set.cuh>

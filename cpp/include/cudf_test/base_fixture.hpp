@@ -20,11 +20,11 @@
 #include <cudf_test/file_utilities.hpp>
 
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace CUDF_EXPORT cudf {
 namespace test {
@@ -38,7 +38,7 @@ namespace test {
  * ```
  */
 class BaseFixture : public ::testing::Test {
-  rmm::device_async_resource_ref _mr{rmm::mr::get_current_device_resource()};
+  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
 
  public:
   /**
@@ -59,7 +59,7 @@ class BaseFixture : public ::testing::Test {
  */
 template <typename T>
 class BaseFixtureWithParam : public ::testing::TestWithParam<T> {
-  rmm::device_async_resource_ref _mr{rmm::mr::get_current_device_resource()};
+  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
 
  public:
   /**
