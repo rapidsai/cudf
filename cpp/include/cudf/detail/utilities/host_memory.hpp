@@ -29,7 +29,7 @@ namespace cudf::detail {
  *
  * @return Reference to the pageable memory resource
  */
-CUDF_EXPORT rmm::host_async_resource_ref get_pageable_memory_resource();
+CUDF_EXPORT cudf::host_async_resource_ref get_pageable_memory_resource();
 
 /**
  * @brief Get the allocator to be used for the host memory allocation.

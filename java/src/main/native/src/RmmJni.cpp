@@ -389,7 +389,7 @@ class java_debug_event_handler_memory_resource final : public java_event_handler
 
 inline auto& prior_cudf_pinned_mr()
 {
-  static rmm::host_device_async_resource_ref _prior_cudf_pinned_mr =
+  static cudf::host_device_async_resource_ref _prior_cudf_pinned_mr =
     cudf::get_pinned_memory_resource();
   return _prior_cudf_pinned_mr;
 }
