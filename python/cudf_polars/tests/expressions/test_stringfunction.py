@@ -157,7 +157,7 @@ def test_slice_column(slice_column_data):
 
 @pytest.fixture
 def to_datetime_data():
-    return pl.DataFrame(
+    return pl.LazyFrame(
         {
             "a": [
                 "2021-01-01",
@@ -165,14 +165,14 @@ def to_datetime_data():
                 "abcd",
             ]
         }
-    ).lazy()
+    )
 
 
-@pytest.mark.parametrize("cache", [True, False], ids=lambda cache: f"cache={cache}")
-@pytest.mark.parametrize("strict", [True, False], ids=lambda strict: f"strict={strict}")
-@pytest.mark.parametrize("exact", [True, False], ids=lambda exact: f"exact={exact}")
+@pytest.mark.parametrize("cache", [True, False], ids=lambda cache: f"{cache=}")
+@pytest.mark.parametrize("strict", [True, False], ids=lambda strict: f"{strict=}")
+@pytest.mark.parametrize("exact", [True, False], ids=lambda exact: f"{exact=}")
 @pytest.mark.parametrize(
-    "format", ["%Y-%m-%d", None], ids=lambda format: f"format={format}"
+    "format", ["%Y-%m-%d", None], ids=lambda format: f"{format=}"
 )
 def test_to_datetime(to_datetime_data, cache, strict, format, exact):
     query = to_datetime_data.select(
