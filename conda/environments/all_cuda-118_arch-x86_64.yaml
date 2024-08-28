@@ -67,7 +67,7 @@ dependencies:
 - pandoc
 - pre-commit
 - ptxcompiler
-- pyarrow>=14.0.0
+- pyarrow>=14.0.0,<18.0.0a0
 - pydata-sphinx-theme!=0.14.2
 - pytest-benchmark
 - pytest-cases>=3.8.2

@@ -383,7 +383,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pyarrow>=14.0.0
+          - pyarrow>=14.0.0,<18.0.0a0
   cuda_version:
     specific:
       - output_types: conda

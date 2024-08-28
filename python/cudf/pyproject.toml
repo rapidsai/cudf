@@ -30,7 +30,7 @@ dependencies = [
     "packaging",
     "pandas>=2.0,<2.2.3dev0",
     "ptxcompiler",
-    "pyarrow>=14.0.0",
+    "pyarrow>=14.0.0,<18.0.0a0",
     "pylibcudf==24.10.*,>=0.0.0a0",
     "rich",
     "rmm==24.10.*,>=0.0.0a0",
