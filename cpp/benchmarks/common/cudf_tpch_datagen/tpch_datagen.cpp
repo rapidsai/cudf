@@ -381,9 +381,8 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
                                                      cudf::data_type{cudf::type_id::INT8},
                                                      stream,
                                                      mr);
-    auto const indices        = cudf::test::fixed_width_column_wrapper<int8_t>({0, 1, 2}).release();
     auto const keys           = cudf::test::strings_column_wrapper({"N", "A", "R"}).release();
-    auto const gather_map     = cudf::table_view({indices->view(), keys->view()});
+    auto const gather_map     = cudf::table_view({keys->view()});
     auto const gathered_table = cudf::gather(
       gather_map, ternary_mask->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
     auto gathered_table_columns = gathered_table->release();
@@ -398,9 +397,8 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
       cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref, current_date_literal);
     auto mask = cudf::compute_column(cudf::table_view({l_shipdate_ts->view()}), pred, stream, mr);
     auto mask_index_type      = cudf::cast(mask->view(), cudf::data_type{cudf::type_id::INT8});
-    auto const indices        = cudf::test::fixed_width_column_wrapper<int8_t>({0, 1}).release();
     auto const keys           = cudf::test::strings_column_wrapper({"O", "F"}).release();
-    auto const gather_map     = cudf::table_view({indices->view(), keys->view()});
+    auto const gather_map     = cudf::table_view({keys->view()});
     auto const gathered_table = cudf::gather(
       gather_map, mask_index_type->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
     auto gathered_table_columns = gathered_table->release();
