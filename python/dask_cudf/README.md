@@ -6,7 +6,7 @@ Dask cuDF (a.k.a. dask-cudf or `dask_cudf`) is an extension library for [Dask Da
 
 ### The Dask DataFrame API (Recommended)
 
-Simply set the `"dataframe.backend"` [configuration](https://docs.dask.org/en/stable/configuration.html) to `"cudf"` in Dask, and the public Dask DataFrame API can be used as usual:
+Simply set the `"dataframe.backend"` [configuration](https://docs.dask.org/en/stable/configuration.html) to `"cudf"` in Dask, and the public Dask DataFrame API will leverage `cudf` automatically:
 
 ```python
 import dask
@@ -18,7 +18,7 @@ df = dd.read_parquet("data.parquet", ...)
 ```
 
 > [!IMPORTANT]
-> The `"dataframe.backend"` configuration will only be used for collection creation when the following APIs are used: `read_parquet`, `read_json`, `read_csv`, `read_orc`, `read_hdf`, and `from_dict`. For example, if `from_map`, `from_pandas`, `from_delayed`, or `from_array` are used, the backend of the new collection will depend on the input to those functions:
+> The `"dataframe.backend"` configuration will only be used for collection creation when the following APIs are used: `read_parquet`, `read_json`, `read_csv`, `read_orc`, `read_hdf`, and `from_dict`. For example, if `from_map`, `from_pandas`, `from_delayed`, or `from_array` are used, the backend of the new collection will depend on the input to the function:
 
 ```python
 import pandas as pd
@@ -45,7 +45,7 @@ df = df.to_backend("cudf")
 
 ### The Explicit Dask cuDF API
 
-In addition to providing the `"cudf"` backend for Dask DataFrame, Dask cuDF also provides it's own explicit `dask_cudf` API:
+In addition to providing the `"cudf"` backend for Dask DataFrame, Dask cuDF also provides an explicit `dask_cudf` API:
 
 ```python
 import dask_cudf
@@ -55,7 +55,7 @@ df = dask_cudf.read_parquet("data.parquet", ...)
 ```
 
 > [!NOTE]
-> This API is used implicitly by the Dask DataFrame API when the `"cudf"` backend is enabled. Therefore, using it directly will not provide any performance benefit over the CPU/GPU-portable `dask.dataframe` API.
+> This API is used implicitly by the Dask DataFrame API when the `"cudf"` backend is enabled. Therefore, using it directly will not provide any performance benefit over the CPU/GPU-portable `dask.dataframe` API. Also, using some parts of the explicit API are incompatible with automatic query planning (see the next section).
 
 See the [Dask cuDF's API documentation](https://docs.rapids.ai/api/dask-cudf/stable/) for further information.
 
@@ -85,7 +85,7 @@ Projection: columns='A'
 ```
 
 > [!NOTE]
-> Dask Expressions will automatically simplify the expression graph (within `optimize`) when the result is converted to a task graph (via `compute` or `persist`). The user does not need to call `simplify` themself.
+> Dask will automatically simplify the expression graph (within `optimize`) when the result is converted to a task graph (via `compute` or `persist`). The user does not need to call `simplify` themself.
 
 
 ## Using Multiple GPUs and Multiple Nodes
