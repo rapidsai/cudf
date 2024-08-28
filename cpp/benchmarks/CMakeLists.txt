@@ -36,25 +36,25 @@ target_include_directories(
 )
 
 add_library(
-  cudf_tpch_datagen STATIC
-  common/cudf_tpch_datagen/tpch_datagen.cpp common/cudf_tpch_datagen/table_helpers.cpp
-  common/cudf_tpch_datagen/random_column_generator.cu
+  tpch_data_generator STATIC
+  common/tpch_data_generator/tpch_datagen.cpp common/tpch_data_generator/table_helpers.cpp
+  common/tpch_data_generator/random_column_generator.cu
 )
-target_compile_features(cudf_tpch_datagen PUBLIC cxx_std_17 cuda_std_17)
+target_compile_features(tpch_data_generator PUBLIC cxx_std_17 cuda_std_17)
 
 target_compile_options(
-  cudf_tpch_datagen PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
-                           "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+  tpch_data_generator PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                             "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
 
 target_link_libraries(
-  cudf_tpch_datagen
+  tpch_data_generator
   PUBLIC cudf cudftestutil nvtx3::nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
 target_include_directories(
-  cudf_tpch_datagen
+  tpch_data_generator
   PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
 )
