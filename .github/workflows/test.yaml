@@ -134,4 +134,4 @@ jobs:
       sha: ${{ inputs.sha }}
       container_image: "rapidsai/ci-conda:latest"
       run_script: |
-        ci/cudf_pandas_scripts/third-party-integration/test_new.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
+        ci/cudf_pandas_scripts/third-party-integration/test.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
