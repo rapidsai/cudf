@@ -156,7 +156,6 @@ int main(int argc, char const** argv)
   std::vector<result_t> agg_data(divider);
   auto begin = agg_data.begin();
   for (auto& c : chunk_results) {
-    // std::transform(c.begin(), c.end(), begin, [](auto&& d) { return std::move(d); });
     std::move(c.begin(), c.end(), begin);
     begin += c.size();
   }
