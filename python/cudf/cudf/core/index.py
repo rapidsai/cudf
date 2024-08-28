@@ -1451,12 +1451,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 pd_cats = pd.Categorical(
                     preprocess.astype(preprocess.categories.dtype).to_pandas()
                 )
-                preprocess1 = pd.CategoricalIndex(pd_cats)
-                data_repr = repr(preprocess1).split("\n")
-                preprocess1.dtype._categories = (
+                pd_preprocess = pd.CategoricalIndex(pd_cats)
+                data_repr = repr(pd_preprocess).split("\n")
+                pd_preprocess.dtype._categories = (
                     preprocess.categories.to_pandas()
                 )
-                cats_repr = repr(preprocess1).split("\n")
+                cats_repr = repr(pd_preprocess).split("\n")
                 output = "\n".join(data_repr[:-1] + cats_repr[-1:])
 
             output = output.replace("nan", str(cudf.NA))
