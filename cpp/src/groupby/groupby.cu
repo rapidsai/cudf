@@ -40,7 +40,6 @@
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 

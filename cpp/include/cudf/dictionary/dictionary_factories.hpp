@@ -21,7 +21,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 namespace CUDF_EXPORT cudf {
 /**

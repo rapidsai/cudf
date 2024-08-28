@@ -31,7 +31,6 @@
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>

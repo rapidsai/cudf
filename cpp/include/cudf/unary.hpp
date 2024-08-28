@@ -24,8 +24,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-
 #include <memory>
 
 namespace CUDF_EXPORT cudf {

@@ -35,8 +35,6 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
 

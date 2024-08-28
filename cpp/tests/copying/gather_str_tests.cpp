@@ -25,8 +25,6 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-
 class GatherTestStr : public cudf::test::BaseFixture {};
 
 TEST_F(GatherTestStr, StringColumn)

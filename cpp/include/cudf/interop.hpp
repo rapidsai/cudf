@@ -25,8 +25,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-
 #include <utility>
 
 struct DLManagedTensor;

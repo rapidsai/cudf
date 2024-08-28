@@ -37,7 +37,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/device_buffer.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/functional.h>

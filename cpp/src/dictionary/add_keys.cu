@@ -33,8 +33,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-
 namespace cudf {
 namespace dictionary {
 namespace detail {

@@ -42,7 +42,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>

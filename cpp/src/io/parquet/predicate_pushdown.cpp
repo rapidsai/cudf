@@ -29,8 +29,6 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>

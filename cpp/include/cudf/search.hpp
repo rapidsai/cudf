@@ -23,8 +23,6 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-
 #include <vector>
 
 namespace CUDF_EXPORT cudf {

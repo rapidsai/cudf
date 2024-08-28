@@ -26,7 +26,6 @@
 #include <cudf/utilities/export.hpp>
 
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>

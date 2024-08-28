@@ -31,8 +31,6 @@
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
