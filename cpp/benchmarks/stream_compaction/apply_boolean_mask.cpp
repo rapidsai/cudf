@@ -29,7 +29,7 @@ void calculate_bandwidth(nvbench::state& state)
 {
   auto const n_rows       = static_cast<cudf::size_type>(state.get_int64("rows"));
   auto const n_cols       = static_cast<cudf::size_type>(state.get_int64("columns"));
-  auto const percent_true = static_cast<cudf::size_type>(state.get_int64("hits"));
+  auto const percent_true = static_cast<cudf::size_type>(state.get_int64("hits_%"));
 
   double const fraction             = percent_true / 100.0;
   cudf::size_type const output_size = fraction * n_rows;
@@ -55,10 +55,9 @@ void calculate_bandwidth(nvbench::state& state)
 template <typename DataType>
 void apply_boolean_mask_benchmark(nvbench::state& state, nvbench::type_list<DataType>)
 {
-  auto const n_rows = static_cast<cudf::size_type>(state.get_int64("rows"));
-  auto const n_cols = static_cast<cudf::size_type>(state.get_int64("columns"));
-
-  auto const percent_true = static_cast<cudf::size_type>(state.get_int64("hits"));
+  auto const n_rows       = static_cast<cudf::size_type>(state.get_int64("rows"));
+  auto const n_cols       = static_cast<cudf::size_type>(state.get_int64("columns"));
+  auto const percent_true = static_cast<cudf::size_type>(state.get_int64("hits_%"));
 
   auto const input_type = cudf::type_to_id<DataType>();
   data_profile profile  = data_profile_builder().cardinality(0).no_validity().distribution(
@@ -88,4 +87,4 @@ NVBENCH_BENCH_TYPES(apply_boolean_mask_benchmark, NVBENCH_TYPE_AXES(data_type))
   .set_type_axes_names({"type"})
   .add_int64_axis("columns", {1, 4})
   .add_int64_axis("rows", {100'000, 1'000'000, 10'000'000})
-  .add_int64_axis("hits", {10, 50, 100});
+  .add_int64_axis("hits_%", {10, 50, 100});
