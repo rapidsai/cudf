@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import functools
 import os
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import cachetools
 import cupy as cp
@@ -40,6 +40,9 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import initfunc
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # Maximum size of a string column is 2 GiB
 _STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get("STRINGS_UDF_HEAP_SIZE", 2**31)

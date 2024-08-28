@@ -4,9 +4,9 @@ import datetime
 import os
 import urllib
 import warnings
+from collections.abc import Callable
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
-from typing import Callable
 
 import fsspec
 import fsspec.implementations.local

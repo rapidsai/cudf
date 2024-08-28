@@ -6,7 +6,7 @@ import itertools
 import sys
 from collections import abc
 from functools import cached_property, reduce
-from typing import TYPE_CHECKING, Any, Callable, Mapping, cast
+from typing import TYPE_CHECKING, Any, Mapping, cast
 
 import numpy as np
 import pandas as pd
@@ -639,7 +639,7 @@ class ColumnAccessor(abc.MutableMapping):
 
     def rename_levels(
         self,
-        mapper: Mapping[abc.Hashable, abc.Hashable] | Callable,
+        mapper: Mapping[abc.Hashable, abc.Hashable] | abc.Callable,
         level: int | None = None,
     ) -> Self:
         """

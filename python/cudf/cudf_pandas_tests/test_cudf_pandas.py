@@ -14,9 +14,12 @@ import tempfile
 import types
 from io import BytesIO, StringIO
 
+import jupyter_client
+import nbformat
 import numpy as np
 import pyarrow as pa
 import pytest
+from nbconvert.preprocessors import ExecutePreprocessor
 from numba import NumbaDeprecationWarning
 from pytz import utc
 
@@ -1650,3 +1653,36 @@ def test_change_index_name(index):
 
         assert s.index.name == name
         assert df.index.name == name
+
+
+def test_notebook_slow_repr():
+    notebook_filename = (
+        os.path.dirname(os.path.abspath(__file__))
+        + "/data/repr_slow_down_test.ipynb"
+    )
+    with open(notebook_filename, "r", encoding="utf-8") as f:
+        nb = nbformat.read(f, as_version=4)
+
+    ep = ExecutePreprocessor(
+        timeout=20, kernel_name=jupyter_client.KernelManager().kernel_name
+    )
+
+    try:
+        ep.preprocess(nb, {"metadata": {"path": "./"}})
+    except Exception as e:
+        assert False, f"Error executing the notebook: {e}"
+
+    # Collect the outputs
+    html_result = nb.cells[2]["outputs"][0]["data"]["text/html"]
+    for string in {
+        "div",
+        "Column_1",
+        "Column_2",
+        "Column_3",
+        "Column_4",
+        "tbody",
+        "</table>",
+    }:
+        assert (
+            string in html_result
+        ), f"Expected string {string} not found in the output"
