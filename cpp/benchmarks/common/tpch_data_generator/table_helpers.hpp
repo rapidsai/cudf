@@ -23,8 +23,7 @@
 
 #include <vector>
 
-namespace cudf {
-namespace datagen {
+namespace cudf::datagen {
 
 /**
  * @brief Add a column of days to a column of timestamp_days
@@ -153,5 +152,4 @@ std::unique_ptr<cudf::table> perform_left_join(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
-}  // namespace datagen
-}  // namespace cudf
+}  // namespace cudf::datagen

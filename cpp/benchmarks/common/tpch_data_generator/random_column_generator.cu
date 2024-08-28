@@ -32,8 +32,7 @@
 
 #include <string>
 
-namespace cudf {
-namespace datagen {
+namespace cudf::datagen {
 
 namespace {
 
@@ -241,5 +240,4 @@ template std::unique_ptr<cudf::column> generate_repeat_sequence_column<cudf::siz
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
-}  // namespace datagen
-}  // namespace cudf
+}  // namespace cudf::datagen

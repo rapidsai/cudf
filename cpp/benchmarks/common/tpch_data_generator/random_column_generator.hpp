@@ -20,8 +20,7 @@
 
 #include <string>
 
-namespace cudf {
-namespace datagen {
+namespace cudf::datagen {
 
 /**
  * @brief Generate a column of random strings
@@ -147,5 +146,4 @@ std::unique_ptr<cudf::column> generate_repeat_sequence_column(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
-}  // namespace datagen
-}  // namespace cudf
+}  // namespace cudf::datagen

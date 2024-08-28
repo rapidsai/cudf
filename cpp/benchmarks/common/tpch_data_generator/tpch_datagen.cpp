@@ -40,8 +40,7 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace datagen {
+namespace cudf::datagen {
 
 namespace {
 constexpr std::array nations{
@@ -1000,5 +999,4 @@ std::unique_ptr<cudf::table> generate_region(rmm::cuda_stream_view stream,
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-}  // namespace datagen
-}  // namespace cudf
+}  // namespace cudf::datagen
