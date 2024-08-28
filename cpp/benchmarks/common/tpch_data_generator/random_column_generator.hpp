@@ -46,7 +46,8 @@ std::unique_ptr<cudf::column> generate_random_string_column(
  * lower = 10
  * upper = 15
  * num_rows = 10
- * result = ["10", "11", "14", "14", "13", "12", "11", "11", "12", "14"]
+ * result = [10, 11, 14, 14, 13, 12, 11, 11, 12, 14]
+
  *
  * @param lower The lower bound of the random numbers
  * @param upper The upper bound of the random numbers
