@@ -336,7 +336,6 @@ inline __device__ void gpuOutputFast(page_state_s* s, state_buf* sb, int src_pos
   uint8_t const* dict;
   uint32_t dict_pos, dict_size = s->dict_size;
 
-auto dict_lookup_idx = rolling_index<state_buf::dict_buf_size>(src_pos);
   if (s->dict_base) {
     // Dictionary
     dict_pos =
@@ -352,6 +351,7 @@ auto dict_lookup_idx = rolling_index<state_buf::dict_buf_size>(src_pos);
   static constexpr bool enable_print = false;
   if constexpr (enable_print) {
     if (threadIdx.x == 0) {
+      auto dict_lookup_idx = rolling_index<state_buf::dict_buf_size>(src_pos);
       printf("PREP OUTPUT VALUE at dst %p, dict %p, dict_pos %u, dict_size %u, dict_base %p, dict_bits %d, dict_lookup_idx %d, dtype_len_in %d\n", 
         dst, dict, dict_pos, dict_size, s->dict_base, s->dict_bits, dict_lookup_idx, s->dtype_len_in);
     }

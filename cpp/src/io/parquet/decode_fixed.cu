@@ -261,12 +261,21 @@ static __device__ int gpuUpdateValidityAndRowIndicesNestedNonLists(
   int const last_row                  = first_row + s->num_rows;
   int const capped_target_value_count = min(target_value_count, last_row);
 
+  static constexpr bool enable_print = false;
+  if constexpr (enable_print) {
+    if (t == 0) { printf("NESTED: s->input_value_count %d, first_row %d, last_row %d, target_value_count %d, capped_target_value_count %d\n", 
+      s->input_value_count, first_row, last_row, target_value_count, capped_target_value_count); }
+  }
+
   int const row_index_lower_bound = s->row_index_lower_bound;
 
   int const max_depth = s->col.max_nesting_depth - 1;
   __syncthreads();
 
   while (value_count < capped_target_value_count) {
+    if constexpr (enable_print) {
+      if(t == 0) { printf("NESTED VALUE COUNT: %d\n", value_count); }
+    }
     int const batch_size = min(max_batch_size, capped_target_value_count - value_count);
 
     // definition level. only need to process for nullable columns
@@ -289,6 +298,11 @@ static __device__ int gpuUpdateValidityAndRowIndicesNestedNonLists(
     int const in_row_bounds       = (row_index >= row_index_lower_bound) && (row_index < last_row);
     int const in_write_row_bounds = ballot(row_index >= first_row && row_index < last_row);
     int const write_start = __ffs(in_write_row_bounds) - 1;  // first bit in the warp to store
+
+    if constexpr (enable_print) {
+      if(t == 0) { printf("NESTED ROWS: row_index %d, row_index_lower_bound %d, last_row %d, in_row_bounds %d\n", 
+        row_index, row_index_lower_bound, last_row, in_row_bounds); }
+    }
 
     // iterate by depth
     for (int d_idx = 0; d_idx <= max_depth; d_idx++) {
@@ -356,6 +370,10 @@ static __device__ int gpuUpdateValidityAndRowIndicesNestedNonLists(
         int const dst_pos = (value_count + thread_value_count) - 1;
         int const src_pos = (ni.valid_count + thread_valid_count) - 1;
         sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)] = dst_pos;
+        if constexpr (enable_print) {
+          if(t == 0) {printf("NESTED STORE: first_row %d, row_index %d dst_pos %d, src_pos %d\n", 
+            first_row, row_index, dst_pos, src_pos);}
+        }
       }
       __syncthreads();  // handle modification of ni.value_count from below
 
@@ -395,12 +413,22 @@ static __device__ int gpuUpdateValidityAndRowIndicesFlat(
   int const last_row                  = first_row + s->num_rows;
   int const capped_target_value_count = min(target_value_count, last_row);
 
+  static constexpr bool enable_print = false;
+  if constexpr (enable_print) {
+    if (t == 0) { printf("FLAT: s->input_value_count %d, first_row %d, last_row %d, target_value_count %d, capped_target_value_count %d\n", 
+      s->input_value_count, first_row, last_row, target_value_count, capped_target_value_count); }
+  }
+
   int const valid_map_offset      = ni.valid_map_offset;
   int const row_index_lower_bound = s->row_index_lower_bound;
 
   __syncthreads();
 
   while (value_count < capped_target_value_count) {
+    if constexpr (enable_print) {
+      if(t == 0) { printf("FLAT VALUE COUNT: %d\n", value_count); }
+    }
+
     int const batch_size = min(max_batch_size, capped_target_value_count - value_count);
 
     int const thread_value_count = t;
@@ -519,7 +547,7 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
   int value_count = s->input_value_count;
 
   static constexpr bool enable_print = false;
-  int const printf_num_threads = 32;
+  int const printf_num_threads = 0;
 
   // how many rows we've processed in the page so far
   int input_row_count = s->input_row_count;
@@ -531,7 +559,8 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
   int const first_row                 = s->first_row;
   int const last_row                  = first_row + s->num_rows;
   if constexpr (enable_print) {
-    if (t == 0) { printf("first_row %d, last_row %d, target_value_count %d\n", first_row, last_row, target_value_count); }
+    if (t == 0) { printf("LIST s->input_value_count %d, first_row %d, last_row %d, target_value_count %d\n", 
+      s->input_value_count, first_row, last_row, target_value_count); }
   }
 
   int const row_index_lower_bound = s->row_index_lower_bound;
@@ -541,7 +570,7 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
 
   while (value_count < target_value_count) {
     if constexpr (enable_print) {
-      if(t == 0) { printf("VALUE COUNT: %d\n", value_count); }
+      if(t == 0) { printf("LIST VALUE COUNT: %d\n", value_count); }
     }
     bool const within_batch = value_count + t < target_value_count;
 
@@ -565,9 +594,9 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
         if((def_level < 0) || (def_level > (max_depth + 1))) {
           printf("WHOA: def level %d out of bounds (max_depth %d) (index %d) (end_depth %d)!\n", def_level, max_depth, index, end_depth);
         }
+        if (t < printf_num_threads) { printf("t %d, def_level %d, rep_level %d, start_depth %d, end_depth %d\n", \
+          t, def_level, rep_level, start_depth, end_depth); }
       }
-      if (enable_print && (t < printf_num_threads)) { printf("t %d, def_level %d, rep_level %d, start_depth %d, end_depth %d\n", \
-        t, def_level, rep_level, start_depth, end_depth); }
     }
 
     //Determine value count & row index
@@ -595,8 +624,8 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
     int in_nesting_bounds = ((0 >= start_depth && 0 <= end_depth) && in_row_bounds) ? 1 : 0;
 
     if constexpr (enable_print) {
-      if (t == 0) { printf("row_index %d, in_row_bounds %d, in_nesting_bounds %d, last_row %d\n", \
-        row_index, in_row_bounds, in_nesting_bounds, last_row); }
+      if(t == 0) { printf("LIST ROWS: row_index %d, row_index_lower_bound %d, last_row %d, in_row_bounds %d, in_nesting_bounds %d\n", 
+        row_index, row_index_lower_bound, last_row, in_row_bounds, in_nesting_bounds); }
       if (t < printf_num_threads) { printf("t %d, is_new_row %d, num_prior_new_rows %d, row_index %d, in_row_bounds %d\n", 
         t, is_new_row, num_prior_new_rows, row_index, in_row_bounds); }
     }
@@ -1040,6 +1069,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
         next_valid_count = gpuUpdateValidityAndRowIndicesLists<decode_block_size_t, true, level_t>(
           processed_count, s, sb, def, rep, t);
         if constexpr (enable_print) {
+          if(t == 0) { printf("LISTS NEXT: next_valid_count %d\n", next_valid_count); }
           if(t == 0) { printf("PROCESSING: page total values %d, num_input_values %d, pre value_count %d, post value_count %d, "
             "processed_count %d, valid_count %d, next_valid_count %d\n", 
             s->page.num_input_values, s->input_value_count, value_count, s->input_value_count, processed_count, valid_count, next_valid_count); }
@@ -1047,6 +1077,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
       } else if constexpr (has_nesting_t) {
         next_valid_count = gpuUpdateValidityAndRowIndicesNestedNonLists<decode_block_size_t, true, level_t>(
           processed_count, s, sb, def, t);
+        if constexpr (enable_print) {
+          if(t == 0) { printf("NESTED NEXT: next_valid_count %d\n", next_valid_count); }
+        }
       } else {
         next_valid_count = gpuUpdateValidityAndRowIndicesFlat<decode_block_size_t, true, level_t>(
           processed_count, s, sb, def, t);
