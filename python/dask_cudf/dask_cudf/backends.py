@@ -758,10 +758,8 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
                 raise NotImplementedError(
                     "split_row_groups is not supported when using the pyarrow filesystem."
                 )
-            if blocksize is not None and blocksize != "default":
-                raise NotImplementedError(
-                    "blocksize is not supported when using the pyarrow filesystem."
-                )
+            if blocksize == "default":
+                blocksize = "256 MiB"
             if aggregate_files is not None:
                 raise NotImplementedError(
                     "aggregate_files is not supported when using the pyarrow filesystem."
@@ -790,6 +788,7 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
                     pyarrow_strings_enabled=pyarrow_strings_enabled(),
                     kwargs=kwargs,
                     _series=isinstance(columns, str),
+                    _blocksize=blocksize,
                 )
             )
         else:
