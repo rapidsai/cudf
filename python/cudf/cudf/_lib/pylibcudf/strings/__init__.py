@@ -5,6 +5,7 @@ from . import (
     case,
     char_types,
     contains,
+    convert,
     find,
     regex_flags,
     regex_program,

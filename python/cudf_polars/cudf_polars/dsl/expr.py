@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 import pyarrow as pa
 import pyarrow.compute as pc
 
+from polars.exceptions import InvalidOperationError
 from polars.polars import _expr_nodes as pl_expr
 
 import cudf._lib.pylibcudf as plc
@@ -721,6 +722,7 @@ class StringFunction(Expr):
             pl_expr.StringFunction.Replace,
             pl_expr.StringFunction.ReplaceMany,
             pl_expr.StringFunction.Slice,
+            pl_expr.StringFunction.Strptime,
             pl_expr.StringFunction.StartsWith,
             pl_expr.StringFunction.StripChars,
             pl_expr.StringFunction.StripCharsStart,
@@ -771,6 +773,14 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "Slice only supports literal start and stop values"
                 )
+        elif self.name == pl_expr.StringFunction.Strptime:
+            format, _, exact, cache = self.options
+            if cache:
+                raise NotImplementedError("Strptime cache is a CPU feature")
+            if format is None:
+                raise NotImplementedError("Strptime format is required")
+            if not exact:
+                raise NotImplementedError("Strptime does not support exact=False")
         elif self.name in {
             pl_expr.StringFunction.StripChars,
             pl_expr.StringFunction.StripCharsStart,
@@ -884,6 +894,38 @@ class StringFunction(Expr):
                     else prefix.obj,
                 )
             )
+        elif self.name == pl_expr.StringFunction.Strptime:
+            # TODO: ignores ambiguous
+            format, strict, exact, cache = self.options
+            col = self.children[0].evaluate(df, context=context, mapping=mapping)
+
+            is_timestamps = plc.strings.convert.convert_datetime.is_timestamp(
+                col.obj, format.encode()
+            )
+
+            if strict:
+                if not plc.interop.to_arrow(
+                    plc.reduce.reduce(
+                        is_timestamps,
+                        plc.aggregation.all(),
+                        plc.DataType(plc.TypeId.BOOL8),
+                    )
+                ).as_py():
+                    raise InvalidOperationError("conversion from `str` failed.")
+            else:
+                not_timestamps = plc.unary.unary_operation(
+                    is_timestamps, plc.unary.UnaryOperator.NOT
+                )
+
+                null = plc.interop.from_arrow(pa.scalar(None, type=pa.string()))
+                res = plc.copying.boolean_mask_scatter(
+                    [null], plc.Table([col.obj]), not_timestamps
+                )
+                return Column(
+                    plc.strings.convert.convert_datetime.to_timestamps(
+                        res.columns()[0], self.dtype, format.encode()
+                    )
+                )
         elif self.name == pl_expr.StringFunction.Replace:
             column, target, repl = columns
             n, _ = self.options

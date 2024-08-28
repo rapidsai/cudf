@@ -10,6 +10,7 @@ import polars as pl
 
 from cudf_polars import execute_with_cudf
 from cudf_polars.testing.asserts import (
+    assert_collect_raises,
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
@@ -152,6 +153,41 @@ def test_slice_column(slice_column_data):
     else:
         query = slice_column_data.select(pl.col("a").str.slice(pl.col("start")))
     assert_ir_translation_raises(query, NotImplementedError)
+
+
+@pytest.fixture
+def to_datetime_data():
+    return pl.LazyFrame(
+        {
+            "a": [
+                "2021-01-01",
+                "2021-01-02",
+                "abcd",
+            ]
+        }
+    )
+
+
+@pytest.mark.parametrize("cache", [True, False], ids=lambda cache: f"{cache=}")
+@pytest.mark.parametrize("strict", [True, False], ids=lambda strict: f"{strict=}")
+@pytest.mark.parametrize("exact", [True, False], ids=lambda exact: f"{exact=}")
+@pytest.mark.parametrize("format", ["%Y-%m-%d", None], ids=lambda format: f"{format=}")
+def test_to_datetime(to_datetime_data, cache, strict, format, exact):
+    query = to_datetime_data.select(
+        pl.col("a").str.strptime(
+            pl.Datetime("ns"), format=format, cache=cache, strict=strict, exact=exact
+        )
+    )
+    if cache or format is None or not exact:
+        assert_ir_translation_raises(query, NotImplementedError)
+    elif strict:
+        assert_collect_raises(
+            query,
+            polars_except=pl.exceptions.InvalidOperationError,
+            cudf_except=pl.exceptions.ComputeError,
+        )
+    else:
+        assert_gpu_result_equal(query)
 
 
 @pytest.mark.parametrize(
