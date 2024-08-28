@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint32_t
 
@@ -9,15 +9,16 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
-from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.nvtext.subword_tokenize cimport (
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.nvtext.subword_tokenize cimport (
     hashed_vocabulary as cpp_hashed_vocabulary,
     load_vocabulary_file as cpp_load_vocabulary_file,
     move as tr_move,
     subword_tokenize as cpp_subword_tokenize,
     tokenizer_result as cpp_tokenizer_result,
 )
+
+from cudf._lib.column cimport Column
 
 
 cdef class Hashed_Vocabulary:

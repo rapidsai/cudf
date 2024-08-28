@@ -8,7 +8,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 from cudf.utils.dtypes import (
     pandas_dtypes_to_np_dtypes,
     pyarrow_dtypes_to_pandas_dtypes,
@@ -99,9 +99,9 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
                     low=1, high=10
                 )
             else:
-                meta[
-                    "max_types_at_each_level"
-                ] = obj._max_struct_types_at_each_level
+                meta["max_types_at_each_level"] = (
+                    obj._max_struct_types_at_each_level
+                )
 
         elif dtype == "decimal64":
             meta["max_precision"] = cudf.Decimal64Dtype.MAX_PRECISION
@@ -192,8 +192,7 @@ def convert_nulls_to_none(records, df):
         col
         for col in df.columns
         if df[col].dtype in pandas_dtypes_to_np_dtypes
-        or pd.api.types.is_datetime64_dtype(df[col].dtype)
-        or pd.api.types.is_timedelta64_dtype(df[col].dtype)
+        or df[col].dtype.kind in "mM"
     ]
 
     for record in records:

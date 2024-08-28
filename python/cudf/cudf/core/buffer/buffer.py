@@ -6,11 +6,12 @@ import math
 import pickle
 import weakref
 from types import SimpleNamespace
-from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple
+from typing import Any, Literal, Mapping
 
 import numpy
 from typing_extensions import Self
 
+import pylibcudf
 import rmm
 
 import cudf
@@ -42,7 +43,7 @@ def host_memory_allocation(nbytes: int) -> memoryview:
 def cuda_array_interface_wrapper(
     ptr: int,
     size: int,
-    owner: Optional[object] = None,
+    owner: object | None = None,
     readonly=False,
     typestr="|u1",
     version=0,
@@ -106,8 +107,25 @@ class BufferOwner(Serializable):
     been accessed outside of BufferOwner. In this case, we have no control
     over knowing if the data is being modified by a third party.
 
-    Use `_from_device_memory` and `_from_host_memory` to create
+    Use `from_device_memory` and `from_host_memory` to create
     a new instance from either device or host memory respectively.
+
+    Parameters
+    ----------
+    ptr
+        An integer representing a pointer to memory.
+    size
+        The size of the memory in nbytes
+    owner
+        Python object to which the lifetime of the memory allocation is tied.
+        This buffer will keep a reference to `owner`.
+    exposed
+        Pointer to the underlying memory
+
+    Raises
+    ------
+    ValueError
+        If size is negative
     """
 
     _ptr: int
@@ -117,14 +135,25 @@ class BufferOwner(Serializable):
     # The set of buffers that point to this owner.
     _slices: weakref.WeakSet[Buffer]
 
-    def __init__(self):
-        raise ValueError(
-            f"do not create a {self.__class__} directly, please "
-            "use the factory function `cudf.core.buffer.as_buffer`"
-        )
+    def __init__(
+        self,
+        *,
+        ptr: int,
+        size: int,
+        owner: object,
+        exposed: bool,
+    ):
+        if size < 0:
+            raise ValueError("size cannot be negative")
+
+        self._ptr = ptr
+        self._size = size
+        self._owner = owner
+        self._exposed = exposed
+        self._slices = weakref.WeakSet()
 
     @classmethod
-    def _from_device_memory(cls, data: Any, exposed: bool) -> Self:
+    def from_device_memory(cls, data: Any, exposed: bool) -> Self:
         """Create from an object providing a `__cuda_array_interface__`.
 
         No data is being copied.
@@ -151,28 +180,19 @@ class BufferOwner(Serializable):
             If the resulting buffer has negative size
         """
 
-        # Bypass `__init__` and initialize attributes manually
-        ret = cls.__new__(cls)
-        ret._owner = data
-        ret._exposed = exposed
-        ret._slices = weakref.WeakSet()
         if isinstance(data, rmm.DeviceBuffer):  # Common case shortcut
-            ret._ptr = data.ptr
-            ret._size = data.size
+            ptr = data.ptr
+            size = data.size
         else:
-            ret._ptr, ret._size = get_ptr_and_size(
-                data.__cuda_array_interface__
-            )
-        if ret.size < 0:
-            raise ValueError("size cannot be negative")
-        return ret
+            ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
+        return cls(ptr=ptr, size=size, owner=data, exposed=exposed)
 
     @classmethod
-    def _from_host_memory(cls, data: Any) -> Self:
+    def from_host_memory(cls, data: Any) -> Self:
         """Create an owner from a buffer or array like object
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
-        be convertible to a buffer object using `numpy.array()`
+        be convertible to a buffer object using `numpy.asanyarray()`
 
         The host memory is copied to a new device allocation.
 
@@ -181,7 +201,7 @@ class BufferOwner(Serializable):
         Parameters
         ----------
         data : Any
-            An object that represens host memory.
+            An object that represents host memory.
 
         Returns
         -------
@@ -190,13 +210,13 @@ class BufferOwner(Serializable):
         """
 
         # Convert to numpy array, this will not copy data in most cases.
-        ary = numpy.array(data, copy=False, subok=True)
+        ary = numpy.asanyarray(data)
         # Extract pointer and size
         ptr, size = get_ptr_and_size(ary.__array_interface__)
         # Copy to device memory
         buf = rmm.DeviceBuffer(ptr=ptr, size=size)
         # Create from device memory
-        return cls._from_device_memory(buf, exposed=False)
+        return cls.from_device_memory(buf, exposed=False)
 
     @property
     def size(self) -> int:
@@ -259,7 +279,7 @@ class BufferOwner(Serializable):
         return self._ptr
 
     def memoryview(
-        self, *, offset: int = 0, size: Optional[int] = None
+        self, *, offset: int = 0, size: int | None = None
     ) -> memoryview:
         """Read-only access to the buffer through host memory."""
         size = self._size if size is None else size
@@ -300,7 +320,7 @@ class Buffer(Serializable):
         *,
         owner: BufferOwner,
         offset: int = 0,
-        size: Optional[int] = None,
+        size: int | None = None,
     ) -> None:
         size = owner.size if size is None else size
         if size < 0:
@@ -375,7 +395,7 @@ class Buffer(Serializable):
             )
 
         # Otherwise, we create a new copy of the memory
-        owner = self._owner._from_device_memory(
+        owner = self._owner.from_device_memory(
             rmm.DeviceBuffer(
                 ptr=self._owner.get_ptr(mode="read") + self._offset,
                 size=self.size,
@@ -395,7 +415,7 @@ class Buffer(Serializable):
             "version": 0,
         }
 
-    def serialize(self) -> Tuple[dict, list]:
+    def serialize(self) -> tuple[dict, list]:
         """Serialize the buffer into header and frames.
 
         The frames can be a mixture of memoryview, Buffer, and BufferOwner
@@ -408,7 +428,7 @@ class Buffer(Serializable):
             serializable metadata required to reconstruct the object. The
             second element is a list containing single frame.
         """
-        header: Dict[str, Any] = {}
+        header: dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
         header["owner-type-serialized"] = pickle.dumps(type(self._owner))
         header["frame_count"] = 1
@@ -439,9 +459,9 @@ class Buffer(Serializable):
 
         owner_type: BufferOwner = pickle.loads(header["owner-type-serialized"])
         if hasattr(frame, "__cuda_array_interface__"):
-            owner = owner_type._from_device_memory(frame, exposed=False)
+            owner = owner_type.from_device_memory(frame, exposed=False)
         else:
-            owner = owner_type._from_host_memory(frame)
+            owner = owner_type.from_host_memory(frame)
         return cls(
             owner=owner,
             offset=0,
@@ -461,37 +481,7 @@ class Buffer(Serializable):
         )
 
 
-def is_c_contiguous(
-    shape: Sequence[int], strides: Sequence[int], itemsize: int
-) -> bool:
-    """Determine if shape and strides are C-contiguous
-
-    Parameters
-    ----------
-    shape : Sequence[int]
-        Number of elements in each dimension.
-    strides : Sequence[int]
-        The stride of each dimension in bytes.
-    itemsize : int
-        Size of an element in bytes.
-
-    Return
-    ------
-    bool
-        The boolean answer.
-    """
-
-    if any(dim == 0 for dim in shape):
-        return True
-    cumulative_stride = itemsize
-    for dim, stride in zip(reversed(shape), reversed(strides)):
-        if dim > 1 and stride != cumulative_stride:
-            return False
-        cumulative_stride *= dim
-    return True
-
-
-def get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
+def get_ptr_and_size(array_interface: Mapping) -> tuple[int, int]:
     """Retrieve the pointer and size from an array interface.
 
     Raises ValueError if array isn't C-contiguous.
@@ -512,7 +502,9 @@ def get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
     shape = array_interface["shape"] or (1,)
     strides = array_interface["strides"]
     itemsize = cudf.dtype(array_interface["typestr"]).itemsize
-    if strides is None or is_c_contiguous(shape, strides, itemsize):
+    if strides is None or pylibcudf.column.is_c_contiguous(
+        shape, strides, itemsize
+    ):
         nelem = math.prod(shape)
         ptr = array_interface["data"][0] or 0
         return ptr, nelem * itemsize

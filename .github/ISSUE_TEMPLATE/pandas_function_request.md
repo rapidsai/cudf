@@ -2,7 +2,7 @@
 name: Request a Missing Pandas Function
 about: Request GPU support for a function executed on the CPU in pandas accelerator mode.
 title: "[FEA]"
-labels: "? - Needs Triage, feature request"
+labels: "Needs Triage, feature request, cudf.pandas"
 assignees: ''
 
 ---

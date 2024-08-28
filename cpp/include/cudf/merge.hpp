@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,15 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup column_merge
  * @{
@@ -96,6 +98,7 @@ namespace cudf {
  * @param[in] column_order Sort order types of columns indexed by key_cols
  * @param[in] null_precedence Array indicating the order of nulls with respect
  * to non-nulls for the indexing columns (key_cols)
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  *
  * @returns A table containing sorted data from all input tables
@@ -105,7 +108,7 @@ std::unique_ptr<cudf::table> merge(
   std::vector<cudf::size_type> const& key_cols,
   std::vector<cudf::order> const& column_order,
   std::vector<cudf::null_order> const& null_precedence = {},
-  rmm::mr::device_memory_resource* mr                  = rmm::mr::get_current_device_resource());
-
+  rmm::cuda_stream_view stream                         = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr                    = rmm::mr::get_current_device_resource());
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

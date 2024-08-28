@@ -19,6 +19,8 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -219,7 +221,7 @@ class posix_parser {
   /**
    * @brief Returns the remaining number of characters in the input.
    */
-  auto remaining_char_cnt() const { return end - cur; }
+  [[nodiscard]] auto remaining_char_cnt() const { return end - cur; }
 
   /**
    * @brief Returns the next character in the input.
@@ -379,7 +381,7 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
 
 std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
                                                       std::string_view timezone_name,
-                                                      rmm::mr::device_memory_resource* mr)
+                                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::make_timezone_transition_table(
@@ -391,7 +393,7 @@ namespace detail {
 std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
                                                       std::string_view timezone_name,
                                                       rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+                                                      rmm::device_async_resource_ref mr)
 {
   if (timezone_name == "UTC" || timezone_name.empty()) {
     // Return an empty table for UTC
@@ -483,14 +485,12 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
   CUDF_EXPECTS(transition_times.size() == offsets.size(),
                "Error reading TZif file for timezone " + std::string{timezone_name});
 
-  std::vector<timestamp_s> ttimes_typed;
-  ttimes_typed.reserve(transition_times.size());
+  auto ttimes_typed = make_empty_host_vector<timestamp_s>(transition_times.size(), stream);
   std::transform(transition_times.cbegin(),
                  transition_times.cend(),
                  std::back_inserter(ttimes_typed),
                  [](auto ts) { return timestamp_s{duration_s{ts}}; });
-  std::vector<duration_s> offsets_typed;
-  offsets_typed.reserve(offsets.size());
+  auto offsets_typed = make_empty_host_vector<duration_s>(offsets.size(), stream);
   std::transform(offsets.cbegin(), offsets.cend(), std::back_inserter(offsets_typed), [](auto ts) {
     return duration_s{ts};
   });

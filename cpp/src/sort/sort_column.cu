@@ -21,6 +21,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <thrust/sequence.h>
 
 namespace cudf {
@@ -28,14 +30,14 @@ namespace detail {
 
 /**
  * @copydoc
- * sorted_order(column_view&,order,null_order,rmm::cuda_stream_view,rmm::mr::device_memory_resource*)
+ * sorted_order(column_view&,order,null_order,rmm::cuda_stream_view,rmm::device_async_resource_ref)
  */
 template <>
 std::unique_ptr<column> sorted_order<sort_method::UNSTABLE>(column_view const& input,
                                                             order column_order,
                                                             null_order null_precedence,
                                                             rmm::cuda_stream_view stream,
-                                                            rmm::mr::device_memory_resource* mr)
+                                                            rmm::device_async_resource_ref mr)
 {
   auto sorted_indices = cudf::make_numeric_column(
     data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);

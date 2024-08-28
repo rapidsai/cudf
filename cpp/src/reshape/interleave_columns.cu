@@ -21,7 +21,9 @@
 #include <cudf/detail/reshape.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/interleave_columns.hpp>
+#include <cudf/reshape.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -30,6 +32,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/for_each.h>
@@ -55,7 +58,7 @@ struct interleave_columns_functor {
   std::unique_ptr<cudf::column> operator()(table_view const& input,
                                            bool create_mask,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
   {
     return interleave_columns_impl<T>{}(input, create_mask, stream, mr);
   }
@@ -66,7 +69,7 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::list_
   std::unique_ptr<column> operator()(table_view const& lists_columns,
                                      bool create_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return lists::detail::interleave_columns(lists_columns, create_mask, stream, mr);
   }
@@ -77,7 +80,7 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::struc
   std::unique_ptr<cudf::column> operator()(table_view const& structs_columns,
                                            bool create_mask,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
   {
     // We can safely call `column(0)` as the number of columns is known to be non zero.
     auto const num_children = structs_columns.column(0).num_children();
@@ -139,85 +142,53 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::struc
   }
 };
 
+struct interleave_strings_fn {
+  using string_index_pair = cudf::strings::detail::string_index_pair;
+  table_device_view d_table;
+
+  __device__ string_index_pair operator()(size_type idx)
+  {
+    auto const num_columns    = d_table.num_columns();
+    auto const source_col_idx = idx % num_columns;
+    auto const source_row_idx = idx / num_columns;
+    auto const col            = d_table.column(source_col_idx);
+    if (col.is_null(source_row_idx)) { return string_index_pair{nullptr, 0}; }
+    auto const d_str = col.element<string_view>(source_row_idx);
+    // ensures an empty string is not identified as a null row
+    return !d_str.empty() ? string_index_pair{d_str.data(), d_str.size_bytes()}
+                          : string_index_pair{"", 0};
+  }
+};
+
 template <typename T>
 struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>> {
   std::unique_ptr<cudf::column> operator()(table_view const& strings_columns,
-                                           bool create_mask,
+                                           bool,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
   {
     auto num_columns = strings_columns.num_columns();
-    if (num_columns == 1)  // Single strings column returns a copy
+    if (num_columns == 1) {  // Single strings column returns a copy
       return std::make_unique<column>(*(strings_columns.begin()), stream, mr);
-
-    auto strings_count = strings_columns.num_rows();
-    if (strings_count == 0)  // All columns have 0 rows
-      return make_empty_column(type_id::STRING);
-
-    // Create device views from the strings columns.
-    auto table       = table_device_view::create(strings_columns, stream);
-    auto d_table     = *table;
-    auto num_strings = num_columns * strings_count;
-
-    std::pair<rmm::device_buffer, size_type> valid_mask{};
-    if (create_mask) {
-      // Create resulting null mask
-      valid_mask = cudf::detail::valid_if(
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(num_strings),
-        [num_columns, d_table] __device__(size_type idx) {
-          auto source_row_idx = idx % num_columns;
-          auto source_col_idx = idx / num_columns;
-          return !d_table.column(source_row_idx).is_null(source_col_idx);
-        },
-        stream,
-        mr);
     }
 
-    auto const null_count = valid_mask.second;
+    auto strings_count = strings_columns.num_rows();
+    if (strings_count == 0) {  // All columns have 0 rows
+      return make_empty_column(type_id::STRING);
+    }
 
-    // Build offsets column by computing sizes of each string in the output
-    auto offsets_transformer =
-      cuda::proclaim_return_type<size_type>([num_columns, d_table] __device__(size_type idx) {
-        // First compute the column and the row this item belongs to
-        auto source_row_idx = idx % num_columns;
-        auto source_col_idx = idx / num_columns;
-        return d_table.column(source_row_idx).is_valid(source_col_idx)
-                 ? d_table.column(source_row_idx).element<string_view>(source_col_idx).size_bytes()
-                 : 0;
-      });
-    auto offsets_transformer_itr = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<size_type>(0), offsets_transformer);
-    auto [offsets_column, bytes] = cudf::strings::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + num_strings, stream, mr);
-    auto d_results_offsets =
-      cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
+    // Create device views from the strings columns.
+    auto d_table     = table_device_view::create(strings_columns, stream);
+    auto num_strings = num_columns * strings_count;
 
-    // Create the chars column
-    rmm::device_uvector<char> chars(bytes, stream, mr);
-    auto d_results_chars = chars.data();
-    thrust::for_each_n(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator<size_type>(0),
-      num_strings,
-      [num_columns, d_table, d_results_offsets, d_results_chars] __device__(size_type idx) {
-        auto source_row_idx = idx % num_columns;
-        auto source_col_idx = idx / num_columns;
+    rmm::device_uvector<cudf::strings::detail::string_index_pair> indices(num_strings, stream);
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(num_strings),
+                      indices.begin(),
+                      interleave_strings_fn{*d_table});
 
-        // Do not write to buffer if the column value for this row is null
-        if (d_table.column(source_row_idx).is_null(source_col_idx)) return;
-
-        size_type offset = d_results_offsets[idx];
-        char* d_buffer   = d_results_chars + offset;
-        strings::detail::copy_string(
-          d_buffer, d_table.column(source_row_idx).element<string_view>(source_col_idx));
-      });
-
-    return make_strings_column(num_strings,
-                               std::move(offsets_column),
-                               chars.release(),
-                               null_count,
-                               std::move(valid_mask.first));
+    return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, mr);
   }
 };
 
@@ -226,7 +197,7 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
   std::unique_ptr<cudf::column> operator()(table_view const& input,
                                            bool create_mask,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
   {
     auto arch_column = input.column(0);
     auto output_size = input.num_columns() * input.num_rows();
@@ -273,7 +244,7 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
 
 std::unique_ptr<column> interleave_columns(table_view const& input,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(input.num_columns() > 0, "input must have at least one column to determine dtype.");
 
@@ -293,10 +264,11 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
 }  // namespace detail
 
 std::unique_ptr<column> interleave_columns(table_view const& input,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::interleave_columns(input, cudf::get_default_stream(), mr);
+  return detail::interleave_columns(input, stream, mr);
 }
 
 }  // namespace cudf

@@ -7,13 +7,14 @@ from cudf.core.buffer import acquire_spill_lock
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-cimport cudf._lib.cpp.datetime as libcudf_datetime
+cimport pylibcudf.libcudf.datetime as libcudf_datetime
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.filling cimport calendrical_month_sequence
+from pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.types cimport size_type
+
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.filling cimport calendrical_month_sequence
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 

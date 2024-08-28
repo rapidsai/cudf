@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,15 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @brief Scatters the rows of the source table into a copy of the target table
@@ -63,11 +65,11 @@ std::unique_ptr<table> scatter(table_view const& source,
                                column_view const& scatter_map,
                                table_view const& target,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr);
+                               rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::detail::scatter(table_view const&,column_view const&,table_view
- * const&,bool,rmm::cuda_stream_view,rmm::mr::device_memory_resource*)
+ * const&,bool,rmm::cuda_stream_view,rmm::device_async_resource_ref)
  *
  * @throws cudf::logic_error if `scatter_map` span size is larger than max of `size_type`.
  */
@@ -75,7 +77,7 @@ std::unique_ptr<table> scatter(table_view const& source,
                                device_span<size_type const> const scatter_map,
                                table_view const& target,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr);
+                               rmm::device_async_resource_ref mr);
 
 /**
  * @brief Scatters a row of scalar values into a copy of the target table
@@ -110,13 +112,13 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<scalar const>>
                                column_view const& indices,
                                table_view const& target,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr);
+                               rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::boolean_mask_scatter(
                       table_view const& source, table_view const& target,
  *                    column_view const& boolean_mask,
- *                    rmm::mr::device_memory_resource *mr)
+ *                    rmm::device_async_resource_ref mr)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -124,14 +126,14 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& source,
                                             table_view const& target,
                                             column_view const& boolean_mask,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr);
+                                            rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::boolean_mask_scatter(
  *                    std::vector<std::reference_wrapper<scalar>> const& source,
  *                    table_view const& target,
  *                    column_view const& boolean_mask,
- *                    rmm::mr::device_memory_resource *mr)
+ *                    rmm::device_async_resource_ref mr)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -140,7 +142,7 @@ std::unique_ptr<table> boolean_mask_scatter(
   table_view const& target,
   column_view const& boolean_mask,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr);
+  rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,14 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/scan.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
@@ -66,7 +68,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                                        value_resolver resolver,
                                        scan_operator scan_op,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   auto const order_by_tview = table_view{{order_by}};
   auto comp = cudf::experimental::row::equality::self_comparator(order_by_tview, stream);
@@ -105,7 +107,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
 
 std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::device_async_resource_ref mr)
 {
   return rank_generator(
     order_by,
@@ -117,7 +119,7 @@ std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
 
 std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
                "Unsupported list type in rank scan.");
@@ -130,7 +132,7 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
 }
 
 std::unique_ptr<column> inclusive_one_normalized_percent_rank_scan(
-  column_view const& order_by, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  column_view const& order_by, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   auto const rank_column =
     inclusive_rank_scan(order_by, stream, rmm::mr::get_current_device_resource());

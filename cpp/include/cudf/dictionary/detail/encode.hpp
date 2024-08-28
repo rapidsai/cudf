@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,10 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace dictionary {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace dictionary::detail {
 /**
  * @brief Construct a dictionary column by dictionary encoding an existing column.
  *
@@ -54,7 +54,7 @@ namespace detail {
 std::unique_ptr<column> encode(column_view const& column,
                                data_type indices_type,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr);
+                               rmm::device_async_resource_ref mr);
 
 /**
  * @brief Create a column by gathering the keys from the provided
@@ -73,7 +73,7 @@ std::unique_ptr<column> encode(column_view const& column,
  */
 std::unique_ptr<column> decode(dictionary_column_view const& dictionary_column,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr);
+                               rmm::device_async_resource_ref mr);
 
 /**
  * @brief Return minimal integer type for the given number of elements.
@@ -83,6 +83,5 @@ std::unique_ptr<column> decode(dictionary_column_view const& dictionary_column,
  */
 data_type get_indices_type_for_size(size_type keys_size);
 
-}  // namespace detail
-}  // namespace dictionary
-}  // namespace cudf
+}  // namespace dictionary::detail
+}  // namespace CUDF_EXPORT cudf

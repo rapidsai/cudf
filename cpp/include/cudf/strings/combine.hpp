@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,9 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 /**
  * @addtogroup strings_combine
@@ -77,10 +78,10 @@ enum class output_if_empty_list {
  */
 std::unique_ptr<column> join_strings(
   strings_column_view const& input,
-  string_scalar const& separator      = string_scalar(""),
-  string_scalar const& narep          = string_scalar("", false),
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  string_scalar const& separator    = string_scalar(""),
+  string_scalar const& narep        = string_scalar("", false),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Concatenates a list of strings columns using separators for each row
@@ -148,7 +149,7 @@ std::unique_ptr<column> concatenate(
   string_scalar const& col_narep       = string_scalar("", false),
   separator_on_nulls separate_nulls    = separator_on_nulls::YES,
   rmm::cuda_stream_view stream         = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr    = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Row-wise concatenates the given list of strings columns and
@@ -199,11 +200,11 @@ std::unique_ptr<column> concatenate(
  */
 std::unique_ptr<column> concatenate(
   table_view const& strings_columns,
-  string_scalar const& separator      = string_scalar(""),
-  string_scalar const& narep          = string_scalar("", false),
-  separator_on_nulls separate_nulls   = separator_on_nulls::YES,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  string_scalar const& separator    = string_scalar(""),
+  string_scalar const& narep        = string_scalar("", false),
+  separator_on_nulls separate_nulls = separator_on_nulls::YES,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Given a lists column of strings (each row is a list of strings), concatenates the strings
@@ -270,7 +271,7 @@ std::unique_ptr<column> join_list_elements(
   separator_on_nulls separate_nulls      = separator_on_nulls::YES,
   output_if_empty_list empty_list_policy = output_if_empty_list::EMPTY_STRING,
   rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr      = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Given a lists column of strings (each row is a list of strings), concatenates the strings
@@ -329,8 +330,8 @@ std::unique_ptr<column> join_list_elements(
   separator_on_nulls separate_nulls      = separator_on_nulls::YES,
   output_if_empty_list empty_list_policy = output_if_empty_list::EMPTY_STRING,
   rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr      = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

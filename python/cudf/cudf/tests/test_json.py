@@ -14,11 +14,11 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
-    assert_eq,
     expect_warning_if,
 )
 
@@ -355,6 +355,14 @@ def test_json_lines_basic(json_input, engine):
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
 
+@pytest.mark.filterwarnings("ignore:Using CPU")
+@pytest.mark.parametrize("engine", ["auto", "cudf", "pandas"])
+def test_nonexistent_json_correct_error(engine):
+    json_input = "doesnotexist.json"
+    with pytest.raises(FileNotFoundError):
+        cudf.read_json(json_input, engine=engine)
+
+
 @pytest.mark.skipif(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="warning not present in older pandas versions",
@@ -495,9 +503,6 @@ def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.filterwarnings(
-    "ignore:engine='cudf_legacy' is a deprecated engine."
-)
 def test_json_engine_selection():
     json = "[1, 2, 3]"
 
@@ -519,10 +524,6 @@ def test_json_engine_selection():
     for col_name in df.columns:
         assert isinstance(col_name, int)
 
-    # should raise an exception
-    with pytest.raises(ValueError):
-        cudf.read_json(StringIO(json), lines=False, engine="cudf_legacy")
-
 
 def test_json_bool_values():
     buffer = "[true,1]\n[false,false]\n[true,true]"
@@ -539,30 +540,6 @@ def test_json_bool_values():
         StringIO(buffer), lines=True, dtype={"0": "bool", "1": "long"}
     )
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
-
-
-@pytest.mark.filterwarnings(
-    "ignore:engine='cudf_legacy' is a deprecated engine."
-)
-@pytest.mark.parametrize(
-    "buffer",
-    [
-        "[1.0,]\n[null, ]",
-        '{"0":1.0,"1":}\n{"0":null,"1": }',
-        '{ "0" : 1.0 , "1" : }\n{ "0" : null , "1" : }',
-        '{"0":1.0}\n{"1":}',
-    ],
-)
-def test_json_null_literal(buffer):
-    df = cudf.read_json(StringIO(buffer), lines=True, engine="cudf_legacy")
-
-    # first column contains a null field, type should be set to float
-    # second column contains only empty fields, type should be set to int8
-    np.testing.assert_array_equal(df.dtypes, ["float64", "int8"])
-    np.testing.assert_array_equal(
-        df["0"].to_numpy(na_value=np.nan), [1.0, np.nan]
-    )
-    np.testing.assert_array_equal(df["1"].to_numpy(na_value=0), [0, 0])
 
 
 def test_json_bad_protocol_string():
@@ -739,14 +716,8 @@ def test_default_integer_bitwidth(default_integer_bitwidth, engine):
 @pytest.mark.parametrize(
     "engine",
     [
-        pytest.param(
-            "cudf_legacy",
-            marks=pytest.mark.skip(
-                reason="cannot partially set dtypes for cudf json engine"
-            ),
-        ),
-        "pandas",
         "cudf",
+        "pandas",
     ],
 )
 def test_default_integer_bitwidth_partial(default_integer_bitwidth, engine):
@@ -1106,8 +1077,13 @@ def test_json_dtypes_nested_data():
     )
 
     pdf = pd.read_json(
-        StringIO(expected_json_str), orient="records", lines=True
+        StringIO(expected_json_str),
+        orient="records",
+        lines=True,
     )
+
+    assert_eq(df, pdf)
+
     pdf.columns = pdf.columns.astype("str")
     pa_table_pdf = pa.Table.from_pandas(
         pdf, schema=df.to_arrow().schema, safe=False
@@ -1421,3 +1397,50 @@ def test_json_nested_mixed_types_error(jsonl_string):
             orient="records",
             lines=True,
         )
+
+
+@pytest.mark.parametrize("on_bad_lines", ["error", "recover", "abc"])
+def test_json_reader_on_bad_lines(on_bad_lines):
+    json_input = StringIO(
+        '{"a":1,"b":10}\n{"a":2,"b":11}\nabc\n{"a":3,"b":12}\n'
+    )
+    if on_bad_lines == "error":
+        with pytest.raises(RuntimeError):
+            cudf.read_json(
+                json_input,
+                lines=True,
+                orient="records",
+                on_bad_lines=on_bad_lines,
+            )
+    elif on_bad_lines == "recover":
+        actual = cudf.read_json(
+            json_input, lines=True, orient="records", on_bad_lines=on_bad_lines
+        )
+        expected = cudf.DataFrame(
+            {"a": [1, 2, None, 3], "b": [10, 11, None, 12]}
+        )
+        assert_eq(actual, expected)
+    else:
+        with pytest.raises(TypeError):
+            cudf.read_json(
+                json_input,
+                lines=True,
+                orient="records",
+                on_bad_lines=on_bad_lines,
+            )
+
+
+def test_chunked_json_reader():
+    df = cudf.DataFrame(
+        {
+            "a": ["aaaa"] * 9_00_00_00,
+            "b": list(range(0, 9_00_00_00)),
+        }
+    )
+    buf = BytesIO()
+    df.to_json(buf, lines=True, orient="records", engine="cudf")
+    buf.seek(0)
+    df = df.to_pandas()
+    with cudf.option_context("io.json.low_memory", True):
+        gdf = cudf.read_json(buf, lines=True)
+    assert_eq(df, gdf)

@@ -87,9 +87,17 @@ using `.from_arrow()` or `.from_pandas()`.
 
 ## Result ordering
 
-By default, `join` (or `merge`), `value_counts` and `groupby` operations in cuDF
-do *not* guarantee output ordering.
-Compare the results obtained from Pandas and cuDF below:
+In Pandas, `join` (or `merge`), `value_counts` and `groupby` operations provide
+certain guarantees about the order of rows in the result returned.  In a Pandas
+`join`, the order of join keys is (depending on the particular style of join
+being performed) either preserved or sorted lexicographically by default.
+`groupby` sorts the group keys, and preserves the order of rows within each
+group. In some cases, disabling this option in Pandas can yield better
+performance.
+
+By contrast, cuDF's default behavior is to return rows in a
+non-deterministic order to maximize performance.  Compare the results
+obtained from Pandas and cuDF below:
 
 ```{code} python
 >>> import cupy as cp
@@ -114,13 +122,16 @@ a
 4  342.000000
 ```
 
-To match Pandas behavior, you must explicitly pass `sort=True`
-or enable the `mode.pandas_compatible` option when trying to
-match Pandas behavior with `sort=False`:
+In most cases, the rows of a DataFrame are accessed by index labels
+rather than by position, so the order in which rows are returned
+doesn't matter. However, if you require that results be returned in a
+predictable (sorted) order, you can pass the `sort=True` option
+explicitly or enable the `mode.pandas_compatible` option when trying
+to match Pandas behavior with `sort=False`:
 
 ```{code} python
->>> df.to_pandas().groupby("a", sort=True).mean().head()
-            b
+>>> df.groupby("a", sort=True).mean().head()
+         b
 a
 0   70.000000
 1  356.333333

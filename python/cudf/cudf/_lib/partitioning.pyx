@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -7,17 +7,18 @@ from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.partitioning cimport partition as cpp_partition
+from pylibcudf.libcudf.table.table cimport table
+from pylibcudf.libcudf.table.table_view cimport table_view
+
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.partitioning cimport partition as cpp_partition
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 from cudf._lib.reduce import minmax
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 
-cimport cudf._lib.cpp.types as libcudf_types
+cimport pylibcudf.libcudf.types as libcudf_types
 
 
 @acquire_spill_lock()

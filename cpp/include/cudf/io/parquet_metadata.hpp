@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,14 @@
 #pragma once
 
 #include <cudf/io/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <optional>
 #include <string_view>
 #include <variant>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 /**
  * @addtogroup io_types
@@ -59,6 +60,13 @@ enum class TypeKind : int8_t {
  */
 struct parquet_column_schema {
  public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  explicit parquet_column_schema() = default;
+
   /**
    * @brief constructor
    *
@@ -135,6 +143,13 @@ struct parquet_column_schema {
 struct parquet_schema {
  public:
   /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  explicit parquet_schema() = default;
+
+  /**
    * @brief constructor
    *
    * @param root_column_schema root column
@@ -165,6 +180,15 @@ class parquet_metadata {
  public:
   /// Key-value metadata in the file footer.
   using key_value_metadata = std::unordered_map<std::string, std::string>;
+  /// row group metadata from each RowGroup element.
+  using row_group_metadata = std::unordered_map<std::string, int64_t>;
+
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  explicit parquet_metadata() = default;
 
   /**
    * @brief constructor
@@ -173,15 +197,18 @@ class parquet_metadata {
    * @param num_rows number of rows
    * @param num_rowgroups number of row groups
    * @param file_metadata key-value metadata in the file footer
+   * @param rg_metadata vector of maps containing metadata for each row group
    */
   parquet_metadata(parquet_schema schema,
                    int64_t num_rows,
                    size_type num_rowgroups,
-                   key_value_metadata file_metadata)
+                   key_value_metadata file_metadata,
+                   std::vector<row_group_metadata> rg_metadata)
     : _schema{std::move(schema)},
       _num_rows{num_rows},
       _num_rowgroups{num_rowgroups},
-      _file_metadata{std::move(file_metadata)}
+      _file_metadata{std::move(file_metadata)},
+      _rowgroup_metadata{std::move(rg_metadata)}
   {
   }
 
@@ -207,6 +234,7 @@ class parquet_metadata {
    * @return Number of row groups
    */
   [[nodiscard]] auto num_rowgroups() const { return _num_rowgroups; }
+
   /**
    * @brief Returns the Key value metadata in the file footer.
    *
@@ -214,11 +242,19 @@ class parquet_metadata {
    */
   [[nodiscard]] auto const& metadata() const { return _file_metadata; }
 
+  /**
+   * @brief Returns the row group metadata in the file footer.
+   *
+   * @return vector of row group metadata as maps
+   */
+  [[nodiscard]] auto const& rowgroup_metadata() const { return _rowgroup_metadata; }
+
  private:
   parquet_schema _schema;
   int64_t _num_rows;
   size_type _num_rowgroups;
   key_value_metadata _file_metadata;
+  std::vector<row_group_metadata> _rowgroup_metadata;
 };
 
 /**
@@ -235,4 +271,4 @@ parquet_metadata read_parquet_metadata(source_info const& src_info);
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

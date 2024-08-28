@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,19 +21,23 @@
  * @file vector_factories.hpp
  */
 
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/host_memory.hpp>
+#include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
-
-#include <thrust/host_vector.h>
+#include <rmm/resource_ref.hpp>
 
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -50,7 +54,7 @@ namespace detail {
 template <typename T>
 rmm::device_uvector<T> make_zeroed_device_uvector_async(std::size_t size,
                                                         rmm::cuda_stream_view stream,
-                                                        rmm::mr::device_memory_resource* mr)
+                                                        rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<T> ret(size, stream, mr);
   CUDF_CUDA_TRY(cudaMemsetAsync(ret.data(), 0, size * sizeof(T), stream.value()));
@@ -71,7 +75,7 @@ rmm::device_uvector<T> make_zeroed_device_uvector_async(std::size_t size,
 template <typename T>
 rmm::device_uvector<T> make_zeroed_device_uvector_sync(std::size_t size,
                                                        rmm::cuda_stream_view stream,
-                                                       rmm::mr::device_memory_resource* mr)
+                                                       rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<T> ret(size, stream, mr);
   CUDF_CUDA_TRY(cudaMemsetAsync(ret.data(), 0, size * sizeof(T), stream.value()));
@@ -94,14 +98,15 @@ rmm::device_uvector<T> make_zeroed_device_uvector_sync(std::size_t size,
 template <typename T>
 rmm::device_uvector<T> make_device_uvector_async(host_span<T const> source_data,
                                                  rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource* mr)
+                                                 rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<T> ret(source_data.size(), stream, mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(ret.data(),
-                                source_data.data(),
-                                source_data.size() * sizeof(T),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  auto const is_pinned = source_data.is_device_accessible();
+  cuda_memcpy_async(ret.data(),
+                    source_data.data(),
+                    source_data.size() * sizeof(T),
+                    is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
+                    stream);
   return ret;
 }
 
@@ -123,7 +128,7 @@ template <
   std::enable_if_t<
     std::is_convertible_v<Container, host_span<typename Container::value_type const>>>* = nullptr>
 rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
-  Container const& c, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  Container const& c, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   return make_device_uvector_async(host_span<typename Container::value_type const>{c}, stream, mr);
 }
@@ -143,7 +148,7 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
 template <typename T>
 rmm::device_uvector<T> make_device_uvector_async(device_span<T const> source_data,
                                                  rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource* mr)
+                                                 rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<T> ret(source_data.size(), stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(ret.data(),
@@ -172,7 +177,7 @@ template <
   std::enable_if_t<
     std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
 rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
-  Container const& c, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  Container const& c, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   return make_device_uvector_async(
     device_span<typename Container::value_type const>{c}, stream, mr);
@@ -193,7 +198,7 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
 template <typename T>
 rmm::device_uvector<T> make_device_uvector_sync(host_span<T const> source_data,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   auto ret = make_device_uvector_async(source_data, stream, mr);
   stream.synchronize();
@@ -218,7 +223,7 @@ template <
   std::enable_if_t<
     std::is_convertible_v<Container, host_span<typename Container::value_type const>>>* = nullptr>
 rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
-  Container const& c, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  Container const& c, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   return make_device_uvector_sync(host_span<typename Container::value_type const>{c}, stream, mr);
 }
@@ -238,7 +243,7 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
 template <typename T>
 rmm::device_uvector<T> make_device_uvector_sync(device_span<T const> source_data,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   auto ret = make_device_uvector_async(source_data, stream, mr);
   stream.synchronize();
@@ -263,26 +268,16 @@ template <
   std::enable_if_t<
     std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
 rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
-  Container const& c, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  Container const& c, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   return make_device_uvector_sync(device_span<typename Container::value_type const>{c}, stream, mr);
-}
-
-// Utility function template to allow copying to either a thrust::host_vector or std::vector
-template <typename T, typename OutContainer>
-OutContainer make_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
-{
-  OutContainer result(v.size());
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    result.data(), v.data(), v.size() * sizeof(T), cudaMemcpyDefault, stream.value()));
-  return result;
 }
 
 /**
  * @brief Asynchronously construct a `std::vector` containing a copy of data from a
  * `device_span`
  *
- * @note This function does not synchronize `stream`.
+ * @note This function does not synchronize `stream` after the copy.
  *
  * @tparam T The type of the data to copy
  * @param source_data The device data to copy
@@ -292,14 +287,17 @@ OutContainer make_vector_async(device_span<T const> v, rmm::cuda_stream_view str
 template <typename T>
 std::vector<T> make_std_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
 {
-  return make_vector_async<T, std::vector<T>>(v, stream);
+  std::vector<T> result(v.size());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    result.data(), v.data(), v.size() * sizeof(T), cudaMemcpyDefault, stream.value()));
+  return result;
 }
 
 /**
  * @brief Asynchronously construct a `std::vector` containing a copy of data from a device
  * container
  *
- * @note This function synchronizes `stream`.
+ * @note This function synchronizes `stream` after the copy.
  *
  * @tparam Container The type of the container to copy from
  * @tparam T The type of the data to copy
@@ -321,7 +319,7 @@ std::vector<typename Container::value_type> make_std_vector_async(Container cons
  * @brief Synchronously construct a `std::vector` containing a copy of data from a
  * `device_span`
  *
- * @note This function does a synchronize on `stream`.
+ * @note This function does a synchronize on `stream` after the copy.
  *
  * @tparam T The type of the data to copy
  * @param source_data The device data to copy
@@ -359,10 +357,45 @@ std::vector<typename Container::value_type> make_std_vector_sync(Container const
 }
 
 /**
+ * @brief Construct a `cudf::detail::host_vector` of the given size.
+ *
+ * @note The returned vector may be using a pinned memory resource.
+ *
+ * @tparam T The type of the vector data
+ * @param size The number of elements in the created vector
+ * @param stream The stream on which to allocate memory
+ * @return A host_vector of the given size
+ */
+template <typename T>
+host_vector<T> make_host_vector(size_t size, rmm::cuda_stream_view stream)
+{
+  return host_vector<T>(size, get_host_allocator<T>(size, stream));
+}
+
+/**
+ * @brief Construct an empty `cudf::detail::host_vector` with the given capacity.
+ *
+ * @note The returned vector may be using a pinned memory resource.
+ *
+ * @tparam T The type of the vector data
+ * @param capacity Initial capacity of the vector
+ * @param stream The stream on which to allocate memory
+ * @return A host_vector with the given capacity
+ */
+template <typename T>
+host_vector<T> make_empty_host_vector(size_t capacity, rmm::cuda_stream_view stream)
+{
+  auto result = host_vector<T>(get_host_allocator<T>(capacity, stream));
+  result.reserve(capacity);
+  return result;
+}
+
+/**
  * @brief Asynchronously construct a `thrust::host_vector` containing a copy of data from a
  * `device_span`
  *
- * @note This function does not synchronize `stream`.
+ * @note This function does not synchronize `stream` after the copy. The returned vector may be
+ * using a pinned memory resource.
  *
  * @tparam T The type of the data to copy
  * @param source_data The device data to copy
@@ -370,16 +403,24 @@ std::vector<typename Container::value_type> make_std_vector_sync(Container const
  * @return The data copied to the host
  */
 template <typename T>
-thrust::host_vector<T> make_host_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
+host_vector<T> make_host_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
 {
-  return make_vector_async<T, thrust::host_vector<T>>(v, stream);
+  auto result          = make_host_vector<T>(v.size(), stream);
+  auto const is_pinned = result.get_allocator().is_device_accessible();
+  cuda_memcpy_async(result.data(),
+                    v.data(),
+                    v.size() * sizeof(T),
+                    is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
+                    stream);
+  return result;
 }
 
 /**
  * @brief Asynchronously construct a `std::vector` containing a copy of data from a device
  * container
  *
- * @note This function synchronizes `stream`.
+ * @note This function does not synchronize `stream` after the copy. The returned vector may be
+ * using a pinned memory resource.
  *
  * @tparam Container The type of the container to copy from
  * @tparam T The type of the data to copy
@@ -391,8 +432,8 @@ template <
   typename Container,
   std::enable_if_t<
     std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
-thrust::host_vector<typename Container::value_type> make_host_vector_async(
-  Container const& c, rmm::cuda_stream_view stream)
+host_vector<typename Container::value_type> make_host_vector_async(Container const& c,
+                                                                   rmm::cuda_stream_view stream)
 {
   return make_host_vector_async(device_span<typename Container::value_type const>{c}, stream);
 }
@@ -401,7 +442,8 @@ thrust::host_vector<typename Container::value_type> make_host_vector_async(
  * @brief Synchronously construct a `thrust::host_vector` containing a copy of data from a
  * `device_span`
  *
- * @note This function does a synchronize on `stream`.
+ * @note This function does a synchronize on `stream` after the copy. The returned vector may be
+ * using a pinned memory resource.
  *
  * @tparam T The type of the data to copy
  * @param source_data The device data to copy
@@ -409,7 +451,7 @@ thrust::host_vector<typename Container::value_type> make_host_vector_async(
  * @return The data copied to the host
  */
 template <typename T>
-thrust::host_vector<T> make_host_vector_sync(device_span<T const> v, rmm::cuda_stream_view stream)
+host_vector<T> make_host_vector_sync(device_span<T const> v, rmm::cuda_stream_view stream)
 {
   auto result = make_host_vector_async(v, stream);
   stream.synchronize();
@@ -420,7 +462,7 @@ thrust::host_vector<T> make_host_vector_sync(device_span<T const> v, rmm::cuda_s
  * @brief Synchronously construct a `thrust::host_vector` containing a copy of data from a device
  * container
  *
- * @note This function synchronizes `stream`.
+ * @note This function synchronizes `stream` after the copy.
  *
  * @tparam Container The type of the container to copy from
  * @tparam T The type of the data to copy
@@ -432,12 +474,46 @@ template <
   typename Container,
   std::enable_if_t<
     std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
-thrust::host_vector<typename Container::value_type> make_host_vector_sync(
-  Container const& c, rmm::cuda_stream_view stream)
+host_vector<typename Container::value_type> make_host_vector_sync(Container const& c,
+                                                                  rmm::cuda_stream_view stream)
 {
   return make_host_vector_sync(device_span<typename Container::value_type const>{c}, stream);
 }
 
+/**
+ * @brief Asynchronously construct a pinned `cudf::detail::host_vector` of the given size
+ *
+ * @note This function may not synchronize `stream` after the copy.
+ *
+ * @tparam T The type of the vector data
+ * @param size The number of elements in the created vector
+ * @param stream The stream on which to allocate memory
+ * @return A host_vector of the given size
+ */
+template <typename T>
+host_vector<T> make_pinned_vector_async(size_t size, rmm::cuda_stream_view stream)
+{
+  return host_vector<T>(size, {cudf::get_pinned_memory_resource(), stream});
+}
+
+/**
+ * @brief Synchronously construct a pinned `cudf::detail::host_vector` of the given size
+ *
+ * @note This function synchronizes `stream` after the copy.
+ *
+ * @tparam T The type of the vector data
+ * @param size The number of elements in the created vector
+ * @param stream The stream on which to allocate memory
+ * @return A host_vector of the given size
+ */
+template <typename T>
+host_vector<T> make_pinned_vector_sync(size_t size, rmm::cuda_stream_view stream)
+{
+  auto result = make_pinned_vector_async<T>(size, stream);
+  stream.synchronize();
+  return result;
+}
+
 }  // namespace detail
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

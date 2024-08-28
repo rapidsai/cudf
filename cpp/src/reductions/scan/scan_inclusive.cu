@@ -22,6 +22,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/scan.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/reduction.hpp>
@@ -30,6 +31,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/find.h>
 #include <thrust/functional.h>
@@ -45,7 +47,7 @@ namespace detail {
 std::pair<rmm::device_buffer, size_type> mask_scan(column_view const& input_view,
                                                    scan_type inclusive,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::device_async_resource_ref mr)
 {
   rmm::device_buffer mask =
     detail::create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
@@ -74,7 +76,7 @@ struct scan_functor {
   static std::unique_ptr<column> invoke(column_view const& input_view,
                                         bitmask_type const*,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     auto output_column = detail::allocate_like(
       input_view, input_view.size(), mask_allocation_policy::NEVER, stream, mr);
@@ -99,7 +101,7 @@ struct scan_functor<Op, cudf::string_view> {
   static std::unique_ptr<column> invoke(column_view const& input_view,
                                         bitmask_type const* mask,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     return cudf::strings::detail::scan_inclusive<Op>(input_view, mask, stream, mr);
   }
@@ -110,7 +112,7 @@ struct scan_functor<Op, cudf::struct_view> {
   static std::unique_ptr<column> invoke(column_view const& input,
                                         bitmask_type const*,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     return cudf::structs::detail::scan_inclusive<Op>(input, stream, mr);
   }
@@ -150,7 +152,7 @@ struct scan_dispatcher {
   std::unique_ptr<column> operator()(column_view const& input,
                                      bitmask_type const* output_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return scan_functor<Op, T>::invoke(input, output_mask, stream, mr);
   }
@@ -168,7 +170,7 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
                                        scan_aggregation const& agg,
                                        null_policy null_handling,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   auto [mask, null_count] = [&] {
     if (null_handling == null_policy::EXCLUDE) {
@@ -181,7 +183,8 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
 
   auto output = scan_agg_dispatch<scan_dispatcher>(
     input, agg, static_cast<bitmask_type*>(mask.data()), stream, mr);
-  output->set_null_mask(std::move(mask), null_count);
+  // Use the null mask produced by the op for EWM
+  if (agg.kind != aggregation::EWMA) { output->set_null_mask(std::move(mask), null_count); }
 
   // If the input is a structs column, we also need to push down nulls from the parent output column
   // into the children columns.

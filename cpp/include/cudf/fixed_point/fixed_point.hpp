@@ -30,7 +30,7 @@
 #include <string>
 
 /// `fixed_point` and supporting types
-namespace numeric {
+namespace CUDF_EXPORT numeric {
 
 /**
  * @addtogroup fixed_point_classes
@@ -67,18 +67,6 @@ constexpr inline auto is_supported_representation_type()
          cuda::std::is_same_v<T, __int128_t>;
 }
 
-/**
- * @brief Returns `true` if the value type is supported for constructing a `fixed_point`
- *
- * @tparam T The construction value type
- * @return `true` if the value type is supported to construct a `fixed_point` type
- */
-template <typename T>
-constexpr inline auto is_supported_construction_value_type()
-{
-  return cuda::std::is_integral<T>() || cuda::std::is_floating_point_v<T>;
-}
-
 /** @} */  // end of group
 
 // Helper functions for `fixed_point` type
@@ -96,8 +84,8 @@ template <typename Rep,
           Radix Base,
           typename T,
           typename cuda::std::enable_if_t<(cuda::std::is_same_v<int32_t, T> &&
-                                           is_supported_representation_type<Rep>())>* = nullptr>
-CUDF_HOST_DEVICE inline Rep ipow(T exponent)
+                                           cuda::std::is_integral_v<Rep>)>* = nullptr>
+CUDF_HOST_DEVICE inline constexpr Rep ipow(T exponent)
 {
   cudf_assert(exponent >= 0 && "integer exponentiation with negative exponent is not possible.");
 
@@ -222,23 +210,8 @@ class fixed_point {
   scale_type _scale;
 
  public:
-  using rep = Rep;  ///< The representation type
-
-  /**
-   * @brief Constructor that will perform shifting to store value appropriately (from floating point
-   * types)
-   *
-   * @tparam T The floating point type that you are constructing from
-   * @param value The value that will be constructed from
-   * @param scale The exponent that is applied to Rad to perform shifting
-   */
-  template <typename T,
-            typename cuda::std::enable_if_t<cuda::std::is_floating_point<T>() &&
-                                            is_supported_representation_type<Rep>()>* = nullptr>
-  CUDF_HOST_DEVICE inline explicit fixed_point(T const& value, scale_type const& scale)
-    : _value{static_cast<Rep>(detail::shift<Rep, Rad>(value, scale))}, _scale{scale}
-  {
-  }
+  using rep                 = Rep;  ///< The representation type
+  static constexpr auto rad = Rad;  ///< The base
 
   /**
    * @brief Constructor that will perform shifting to store value appropriately (from integral
@@ -249,7 +222,7 @@ class fixed_point {
    * @param scale The exponent that is applied to Rad to perform shifting
    */
   template <typename T,
-            typename cuda::std::enable_if_t<cuda::std::is_integral<T>() &&
+            typename cuda::std::enable_if_t<cuda::std::is_integral_v<T> &&
                                             is_supported_representation_type<Rep>()>* = nullptr>
   CUDF_HOST_DEVICE inline explicit fixed_point(T const& value, scale_type const& scale)
     // `value` is cast to `Rep` to avoid overflow in cases where
@@ -275,8 +248,7 @@ class fixed_point {
    * @tparam T The value type being constructing from
    * @param value The value that will be constructed from
    */
-  template <typename T,
-            typename cuda::std::enable_if_t<is_supported_construction_value_type<T>()>* = nullptr>
+  template <typename T, typename cuda::std::enable_if_t<cuda::std::is_integral_v<T>>* = nullptr>
   CUDF_HOST_DEVICE inline fixed_point(T const& value)
     : _value{static_cast<Rep>(value)}, _scale{scale_type{0}}
   {
@@ -287,19 +259,6 @@ class fixed_point {
    * value and scale of zero
    */
   CUDF_HOST_DEVICE inline fixed_point() : _scale{scale_type{0}} {}
-
-  /**
-   * @brief Explicit conversion operator for casting to floating point types
-   *
-   * @tparam U The floating point type that is being explicitly converted to
-   * @return The `fixed_point` number in base 10 (aka human readable format)
-   */
-  template <typename U,
-            typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<U>>* = nullptr>
-  explicit constexpr operator U() const
-  {
-    return detail::shift<Rep, Rad>(static_cast<U>(_value), scale_type{-_scale});
-  }
 
   /**
    * @brief Explicit conversion operator for casting to integral types
@@ -332,14 +291,14 @@ class fixed_point {
    *
    * @return The underlying value of the `fixed_point` number
    */
-  CUDF_HOST_DEVICE inline rep value() const { return _value; }
+  CUDF_HOST_DEVICE [[nodiscard]] inline rep value() const { return _value; }
 
   /**
    * @brief Method that returns the scale of the `fixed_point` number
    *
    * @return The scale of the `fixed_point` number
    */
-  CUDF_HOST_DEVICE inline scale_type scale() const { return _scale; }
+  CUDF_HOST_DEVICE [[nodiscard]] inline scale_type scale() const { return _scale; }
 
   /**
    * @brief Explicit conversion operator to `bool`
@@ -614,7 +573,7 @@ class fixed_point {
    * @param scale The `scale` of the returned `fixed_point` number
    * @return `fixed_point` number with a new `scale`
    */
-  CUDF_HOST_DEVICE inline fixed_point<Rep, Rad> rescaled(scale_type scale) const
+  CUDF_HOST_DEVICE [[nodiscard]] inline fixed_point<Rep, Rad> rescaled(scale_type scale) const
   {
     if (scale == _scale) { return *this; }
     Rep const value = detail::shift<Rep, Rad>(_value, scale_type{scale - _scale});
@@ -840,4 +799,4 @@ using decimal64  = fixed_point<int64_t, Radix::BASE_10>;     ///<  64-bit decima
 using decimal128 = fixed_point<__int128_t, Radix::BASE_10>;  ///< 128-bit decimal fixed point
 
 /** @} */  // end of group
-}  // namespace numeric
+}  // namespace CUDF_EXPORT numeric

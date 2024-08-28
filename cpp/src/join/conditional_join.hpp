@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <optional>
 
@@ -49,7 +50,7 @@ conditional_join(table_view const& left,
                  join_kind JoinKind,
                  std::optional<std::size_t> output_size,
                  rmm::cuda_stream_view stream,
-                 rmm::mr::device_memory_resource* mr);
+                 rmm::device_async_resource_ref mr);
 
 /**
  * @brief Computes the size of a join operation between two tables without
@@ -68,7 +69,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
                                                  ast::expression const& binary_predicate,
                                                  join_kind JoinKind,
                                                  rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource* mr);
+                                                 rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace cudf

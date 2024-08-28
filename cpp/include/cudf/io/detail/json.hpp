@@ -16,11 +16,15 @@
 
 #pragma once
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
-namespace cudf::io::json::detail {
+namespace CUDF_EXPORT cudf {
+namespace io::json::detail {
 
 /**
  * @brief Reads and returns the entire data set.
@@ -35,7 +39,7 @@ namespace cudf::io::json::detail {
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& options,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
 /**
  * @brief Write an entire dataset to JSON format.
@@ -44,33 +48,32 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
  * @param table The set of columns
  * @param options Settings for controlling behavior
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource to use for device memory allocation
  */
 void write_json(data_sink* sink,
                 table_view const& table,
                 json_writer_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+                rmm::cuda_stream_view stream);
 
 /**
  * @brief Normalize single quotes to double quotes using FST
  *
- * @param inbuf Input device buffer
+ * @param indata Input device buffer
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  */
-rmm::device_uvector<char> normalize_single_quotes(rmm::device_uvector<char>&& inbuf,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr);
+void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& indata,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr);
 
 /**
  * @brief Normalize unquoted whitespace (space and tab characters) using FST
  *
- * @param inbuf Input device buffer
+ * @param indata Input device buffer
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  */
-rmm::device_uvector<char> normalize_whitespace(rmm::device_uvector<char>&& inbuf,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr);
-}  // namespace cudf::io::json::detail
+void normalize_whitespace(datasource::owning_buffer<rmm::device_buffer>& indata,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr);
+}  // namespace io::json::detail
+}  // namespace CUDF_EXPORT cudf

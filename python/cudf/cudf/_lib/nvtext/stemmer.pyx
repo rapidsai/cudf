@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -7,16 +7,17 @@ from libcpp.utility cimport move
 
 from enum import IntEnum
 
-from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.nvtext.stemmer cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.nvtext.stemmer cimport (
     is_letter as cpp_is_letter,
     letter_type,
     porter_stemmer_measure as cpp_porter_stemmer_measure,
     underlying_type_t_letter_type,
 )
-from cudf._lib.cpp.types cimport size_type
+from pylibcudf.libcudf.types cimport size_type
+
+from cudf._lib.column cimport Column
 
 
 class LetterType(IntEnum):

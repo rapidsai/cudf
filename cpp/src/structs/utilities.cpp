@@ -28,6 +28,8 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
@@ -92,7 +94,7 @@ struct table_flattener {
   std::vector<null_order> const& null_precedence;
   column_nullability nullability;
   rmm::cuda_stream_view stream;
-  rmm::mr::device_memory_resource* mr;
+  rmm::device_async_resource_ref mr;
 
   temporary_nullable_data nullable_data;
   std::vector<std::unique_ptr<column>> validity_as_column;
@@ -105,7 +107,7 @@ struct table_flattener {
                   std::vector<null_order> const& null_precedence,
                   column_nullability nullability,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr)
+                  rmm::device_async_resource_ref mr)
     : column_order{column_order},
       null_precedence{null_precedence},
       nullability{nullability},
@@ -202,7 +204,7 @@ std::unique_ptr<flattened_table> flatten_nested_columns(
   std::vector<null_order> const& null_precedence,
   column_nullability nullability,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto const has_struct = std::any_of(input.begin(), input.end(), is_struct);
   if (not has_struct) {
@@ -228,7 +230,7 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
                                                       size_type null_count,
                                                       std::unique_ptr<column>&& input,
                                                       rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+                                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   if (input->type().id() == cudf::type_id::EMPTY) {
@@ -280,7 +282,7 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
  * @copydoc cudf::structs::detail::push_down_nulls
  */
 std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
-  column_view const& input, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   auto ret_nullable_data = temporary_nullable_data{};
   if (input.type().id() != type_id::STRUCT) {
@@ -371,7 +373,7 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
                                           size_type null_count,
                                           std::unique_ptr<column>&& input,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+                                          rmm::device_async_resource_ref mr)
 {
   input = superimpose_nulls_no_sanitize(null_mask, null_count, std::move(input), stream, mr);
 
@@ -389,7 +391,7 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
 
 std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view const& input,
                                                                 rmm::cuda_stream_view stream,
-                                                                rmm::mr::device_memory_resource* mr)
+                                                                rmm::device_async_resource_ref mr)
 {
   auto output = push_down_nulls_no_sanitize(input, stream, mr);
 
@@ -410,7 +412,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view cons
 
 std::pair<table_view, temporary_nullable_data> push_down_nulls(table_view const& table,
                                                                rmm::cuda_stream_view stream,
-                                                               rmm::mr::device_memory_resource* mr)
+                                                               rmm::device_async_resource_ref mr)
 {
   auto processed_columns = std::vector<column_view>{};
   auto nullable_data     = temporary_nullable_data{};

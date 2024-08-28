@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ void json_write_common(cudf::io::json_writer_options const& write_opts,
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
-template <cudf::io::io_type IO>
+template <io_type IO>
 void BM_json_write_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<IO>>)
 {
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
@@ -114,9 +114,8 @@ void BM_json_writer_options(nvbench::state& state)
   json_write_common(write_opts, source_sink, data_size, state);
 }
 
-using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
-                                        cudf::io::io_type::HOST_BUFFER,
-                                        cudf::io::io_type::DEVICE_BUFFER>;
+using io_list =
+  nvbench::enum_type_list<io_type::FILEPATH, io_type::HOST_BUFFER, io_type::DEVICE_BUFFER>;
 
 NVBENCH_BENCH_TYPES(BM_json_write_io, NVBENCH_TYPE_AXES(io_list))
   .set_name("json_write_io")

@@ -13,10 +13,8 @@ To satisfy the goals of pylibcudf, we impose the following set of design princip
 - Every public function or method should be `cpdef`ed. This allows it to be used in both Cython and Python code. This incurs some slight overhead over `cdef` functions, but we assume that this is acceptable because 1) the vast majority of users will be using pure Python rather than Cython, and 2) the overhead of a `cpdef` function over a `cdef` function is on the order of a nanosecond, while CUDA kernel launch overhead is on the order of a microsecond, so these function overheads should be washed out by typical usage of pylibcudf.
 - Every variable used should be strongly typed and either be a primitive type (int, float, etc) or a cdef class. Any enums in C++ should be mirrored using `cpdef enum`, which will create both a C-style enum in Cython and a PEP 435-style Python enum that will automatically be used in Python.
 - All typing in code should be written using Cython syntax, not PEP 484 Python typing syntax. Not only does this ensure compatibility with Cython < 3, but even with Cython 3 PEP 484 support remains incomplete as of this writing.
-- All cudf code should interact only with pylibcudf, never with libcudf directly.
-- All imports should be relative so that pylibcudf can be easily extracted from cudf later
-  - Exception: All imports of libcudf API bindings in `cudf._lib.cpp` should use absolute imports of `cudf._lib.cpp as libcudf`. We should convert the `cpp` directory into a proper package so that it can be imported as `libcudf` in that fashion. When moving pylibcudf into a separate package, it will be renamed to `libcudf` and only the imports will need to change.
-- Ideally, pylibcudf should depend on nothing other than rmm and pyarrow. This will allow it to be extracted into a a largely standalone library and used in environments where the larger dependency tree of cudf may be cumbersome.
+- All cudf code should interact only with pylibcudf, never with libcudf directly. This is not currently the case, but is the direction that the library is moving towards.
+- Ideally, pylibcudf should depend on no RAPIDS component other than rmm, and should in general have minimal runtime dependencies.
 
 
 ## Relationship to libcudf
@@ -95,6 +93,75 @@ cpdef Table gather(
 There are a couple of notable points from the snippet above:
 - The object returned from libcudf is immediately converted to a pylibcudf type.
 - `cudf::gather` accepts a `cudf::out_of_bounds_policy` enum parameter. `OutOfBoundsPolicy` is an alias for this type in pylibcudf that matches our Python naming conventions (CapsCase instead of snake\_case).
+
+## Testing
+
+When writing pylibcudf tests, it is important to remember that all the APIs should be tested in the C++ layer in libcudf already.
+The primary purpose of pylibcudf tests is to ensure the correctness of the _bindings_; the correctness of the underlying implementation should generally be validated in libcudf.
+If pylibcudf tests uncover a libcudf bug, a suitable libcudf test should be added to cover this case rather than relying solely on pylibcudf testing.
+
+pylibcudf's ``conftest.py`` contains some standard parametrized dtype fixture lists that may in turn be used to parametrize other fixtures.
+Fixtures allocating data should leverage these dtype lists wherever possible to simplify testing across the matrix of important types.
+Where appropriate, new fixture lists may be added.
+
+To run tests as efficiently as possible, the test suite should make generous use of fixtures.
+The simplest general structure to follow is for pyarrow array/table/scalar fixtures to be parametrized by one of the dtype list.
+Then, a corresponding pylibcudf fixture may be created using a simple `from_arrow` call.
+This approach ensures consistent global coverage across types for various tests.
+
+In general, pylibcudf tests should prefer validating against a corresponding pyarrow implementation rather than hardcoding data.
+If there is no pyarrow implementation, another alternative is to write a pure Python implementation that loops over the values
+of the Table/Column, if a scalar Python equivalent of the pylibcudf implementation exists (this is especially relevant for string methods).
+
+This approach is more resilient to changes to input data, particularly given the fixture strategy outlined above.
+Standard tools for comparing between pylibcudf and pyarrow types are provided in the utils module.
+
+Here is an example demonstrating the above points:
+
+```python
+import pyarrow as pa
+import pyarrow.compute as pc
+import pytest
+from cudf._lib import pylibcudf as plc
+from utils import assert_column_eq
+
+# The pa_dtype fixture is defined in conftest.py.
+@pytest.fixture(scope="module")
+def pa_column(pa_dtype):
+    pa.array([1, 2, 3])
+
+
+@pytest.fixture(scope="module")
+def column(pa_column):
+    return plc.interop.from_arrow(pa_column)
+
+
+def test_foo(pa_column, column):
+    index = 1
+    result = plc.foo(column)
+    expected = pa.foo(pa_column)
+
+    assert_column_eq(result, expected)
+```
+
+Some guidelines on what should be tested:
+- Tests SHOULD comprehensively cover the API, including all possible combinations of arguments required to ensure good test coverage.
+- pylibcudf SHOULD NOT attempt to stress test large data sizes, and SHOULD instead defer to libcudf tests.
+  - Exception: In special cases where constructing suitable large tests is difficult in C++ (such as creating suitable input data for I/O testing), tests may be added to pylibcudf instead.
+- Nullable data should always be tested.
+- Expected exceptions should be tested. Tests should be written from the user's perspective in mind, and if the API is not currently throwing the appropriate exception it should be updated.
+  - Important note: If the exception should be produced by libcudf, the underlying libcudf API should be updated to throw the desired exception in C++. Such changes may require consultation with libcudf devs in nontrivial cases. [This issue](https://github.com/rapidsai/cudf/issues/12885) provides an overview and an indication of acceptable exception types that should cover most use cases. In rare cases a new C++ exception may need to be introduced in [`error.hpp`](https://github.com/rapidsai/cudf/blob/branch-24.04/cpp/include/cudf/utilities/error.hpp). If so, this exception will also need to be mapped to a suitable Python exception in `exception_handler.pxd`.
+
+Some guidelines on how best to use pytests.
+- By default, fixtures producing device data containers should be of module scope and treated as immutable by tests. Allocating data on the GPU is expensive and slows tests. Almost all pylibcudf operations are out of place operations, so module-scoped fixtures should not typically be problematic to work with. Session-scoped fixtures would also work, but they are harder to reason about since they live in a different module, and if they need to change for any reason they could affect an arbitrarily large number of tests. Module scope is a good balance.
+- Where necessary, mutable fixtures should be named as such (e.g. `mutable_col`) and be of function scope. If possible, they can be implemented as simply making a copy of a corresponding module-scope immutable fixture to avoid duplicating the generation logic.
+
+Tests should be organized corresponding to pylibcudf modules, i.e. one test module for each pylibcudf module.
+
+The following sections of the cuDF Python testing guide also generally apply to pylibcudf unless superseded by any statements above:
+- [](#test_parametrization)
+- [](#xfailing_tests)
+- [](#testing_warnings)
 
 ## Miscellaneous Notes
 
@@ -176,3 +243,8 @@ cpdef ColumnOrTable empty_like(ColumnOrTable input)
 
 [Cython supports specializing the contents of fused-type functions based on the argument types](https://cython.readthedocs.io/en/latest/src/userguide/fusedtypes.html#type-checking-specializations), so any type-specific logic may be encoded using the appropriate conditionals.
 See the pylibcudf source for examples of how to implement such functions.
+
+In the event that libcudf provides multiple overloads for the same function with differing numbers of arguments, specify the maximum number of arguments in the Cython definition,
+and set arguments not shared between overloads to `None`. If a user tries to pass in an unsupported argument for a specific overload type, you should raise `ValueError`.
+
+Finally, consider making an libcudf issue if you think this inconsistency can be addressed on the libcudf side.

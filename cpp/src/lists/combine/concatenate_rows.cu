@@ -22,10 +22,12 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
@@ -75,7 +77,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                                          concatenate_null_policy null_policy,
                                          device_span<size_type const> row_null_counts,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   // outgoing offsets.
   auto offsets = cudf::make_fixed_width_column(
@@ -194,7 +196,7 @@ rmm::device_uvector<size_type> generate_null_counts(table_device_view const& inp
 std::unique_ptr<column> concatenate_rows(table_view const& input,
                                          concatenate_null_policy null_policy,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(input.num_columns() > 0, "The input table must have at least one column.");
 
@@ -203,12 +205,11 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
     std::all_of(input.begin(),
                 input.end(),
                 [](column_view const& col) { return col.type().id() == cudf::type_id::LIST; }),
-    "All columns of the input table must be of lists column type.");
-  CUDF_EXPECTS(
-    std::all_of(std::next(input.begin()),
-                input.end(),
-                [a = *input.begin()](column_view const& b) { return column_types_equal(a, b); }),
-    "The types of entries in the input columns must be the same.");
+    "All columns of the input table must be of list column type.",
+    cudf::data_type_error);
+  CUDF_EXPECTS(cudf::all_have_same_types(input.begin(), input.end()),
+               "The types of entries in the input columns must be the same.",
+               cudf::data_type_error);
 
   auto const num_rows = input.num_rows();
   auto const num_cols = input.num_columns();
@@ -314,7 +315,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
 std::unique_ptr<column> concatenate_rows(table_view const& input,
                                          concatenate_null_policy null_policy,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::concatenate_rows(input, null_policy, stream, mr);

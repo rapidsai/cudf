@@ -36,6 +36,7 @@
 #include <nvtext/tokenize.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cub/cub.cuh>
 #include <cuco/static_map.cuh>
@@ -85,9 +86,9 @@ struct vocab_equal {
     return lhs == rhs;  // all rows are expected to be unique
   }
   // used by find
-  __device__ bool operator()(cudf::size_type lhs, cudf::string_view const& rhs) const noexcept
+  __device__ bool operator()(cudf::string_view const& lhs, cudf::size_type rhs) const noexcept
   {
-    return d_strings.element<cudf::string_view>(lhs) == rhs;
+    return d_strings.element<cudf::string_view>(rhs) == lhs;
   }
 };
 
@@ -99,7 +100,7 @@ using vocabulary_map_type = cuco::static_map<cudf::size_type,
                                              cuda::thread_scope_device,
                                              vocab_equal,
                                              probe_scheme,
-                                             cudf::detail::cuco_allocator,
+                                             cudf::detail::cuco_allocator<char>,
                                              cuco_storage>;
 }  // namespace
 }  // namespace detail
@@ -134,7 +135,7 @@ struct key_pair {
 
 tokenize_vocabulary::tokenize_vocabulary(cudf::strings_column_view const& input,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(not input.is_empty(), "vocabulary must not be empty");
   CUDF_EXPECTS(not input.has_nulls(), "vocabulary must not have nulls");
@@ -151,7 +152,7 @@ tokenize_vocabulary::tokenize_vocabulary(cudf::strings_column_view const& input,
     detail::probe_scheme{detail::vocab_hasher{*d_vocabulary}},
     cuco::thread_scope_device,
     detail::cuco_storage{},
-    cudf::detail::cuco_allocator{stream},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value());
 
   // the row index is the token id (value for each key in the map)
@@ -165,7 +166,7 @@ tokenize_vocabulary::~tokenize_vocabulary() { delete _impl; }
 
 std::unique_ptr<tokenize_vocabulary> load_vocabulary(cudf::strings_column_view const& input,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource* mr)
+                                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return std::make_unique<tokenize_vocabulary>(input, stream, mr);
@@ -239,10 +240,10 @@ CUDF_KERNEL void token_counts_fn(cudf::column_device_view const d_strings,
     return;
   }
 
-  auto const offsets =
-    d_strings.child(cudf::strings_column_view::offsets_column_index).data<cudf::size_type>();
-  auto const offset      = offsets[str_idx + d_strings.offset()] - offsets[d_strings.offset()];
-  auto const chars_begin = d_strings.data<char>() + offsets[d_strings.offset()];
+  auto const offsets     = d_strings.child(cudf::strings_column_view::offsets_column_index);
+  auto const offsets_itr = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+  auto const offset = offsets_itr[str_idx + d_strings.offset()] - offsets_itr[d_strings.offset()];
+  auto const chars_begin = d_strings.data<char>() + offsets_itr[d_strings.offset()];
 
   auto const begin        = d_str.data();
   auto const end          = begin + d_str.size_bytes();
@@ -358,7 +359,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
                                                        cudf::string_scalar const& delimiter,
                                                        cudf::size_type default_id,
                                                        rmm::cuda_stream_view stream,
-                                                       rmm::mr::device_memory_resource* mr)
+                                                       rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
@@ -467,7 +468,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
                                                        cudf::string_scalar const& delimiter,
                                                        cudf::size_type default_id,
                                                        rmm::cuda_stream_view stream,
-                                                       rmm::mr::device_memory_resource* mr)
+                                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::tokenize_with_vocabulary(input, vocabulary, delimiter, default_id, stream, mr);

@@ -9,18 +9,19 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+from pylibcudf.libcudf.aggregation cimport rank_method
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.search cimport lower_bound, upper_bound
+from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.types cimport null_order, order as cpp_order
+
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.aggregation cimport rank_method
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.search cimport lower_bound, upper_bound
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport null_order, order as cpp_order
 from cudf._lib.utils cimport (
     columns_from_pylibcudf_table,
     table_view_from_columns,
 )
 
-from cudf._lib import pylibcudf
+import pylibcudf
 
 
 @acquire_spill_lock()

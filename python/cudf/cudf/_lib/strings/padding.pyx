@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -6,15 +6,19 @@ from libcpp.utility cimport move
 
 from cudf.core.buffer import acquire_spill_lock
 
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.types cimport size_type
+
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.types cimport size_type
 
 from enum import IntEnum
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.strings.padding cimport pad as cpp_pad, zfill as cpp_zfill
-from cudf._lib.cpp.strings.side_type cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.strings.padding cimport (
+    pad as cpp_pad,
+    zfill as cpp_zfill,
+)
+from pylibcudf.libcudf.strings.side_type cimport (
     side_type,
     underlying_type_t_side_type,
 )

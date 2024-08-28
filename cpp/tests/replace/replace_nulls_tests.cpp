@@ -58,7 +58,7 @@ TEST_F(ReplaceErrorTest, TypeMismatch)
   cudf::test::fixed_width_column_wrapper<float> values_to_replace_column{
     {10, 11, 12, 13, 14, 15, 16, 17}};
 
-  EXPECT_THROW(cudf::replace_nulls(input_column, values_to_replace_column), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input_column, values_to_replace_column), cudf::data_type_error);
 }
 
 // Error: column type mismatch
@@ -68,7 +68,7 @@ TEST_F(ReplaceErrorTest, TypeMismatchScalar)
                                                                {0, 0, 1, 1, 1, 1, 1, 1}};
   cudf::numeric_scalar<float> replacement(1);
 
-  EXPECT_THROW(cudf::replace_nulls(input_column, replacement), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input_column, replacement), cudf::data_type_error);
 }
 
 struct ReplaceNullsStringsTest : public cudf::test::BaseFixture {};
@@ -659,14 +659,14 @@ TEST_F(ReplaceDictionaryTest, ReplaceNullsError)
   cudf::test::fixed_width_column_wrapper<int64_t> replacement_w({1, 2, 3, 4});
   auto replacement = cudf::dictionary::encode(replacement_w);
 
-  EXPECT_THROW(cudf::replace_nulls(input->view(), replacement->view()), cudf::logic_error);
-  EXPECT_THROW(cudf::replace_nulls(input->view(), cudf::string_scalar("x")), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input->view(), replacement->view()), cudf::data_type_error);
+  EXPECT_THROW(cudf::replace_nulls(input->view(), cudf::string_scalar("x")), cudf::data_type_error);
 
   cudf::test::fixed_width_column_wrapper<int64_t> input_one_w({1}, {0});
   auto input_one  = cudf::dictionary::encode(input_one_w);
   auto dict_input = cudf::dictionary_column_view(input_one->view());
   auto dict_repl  = cudf::dictionary_column_view(replacement->view());
-  EXPECT_THROW(cudf::replace_nulls(input->view(), replacement->view()), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input->view(), replacement->view()), cudf::data_type_error);
 }
 
 TEST_F(ReplaceDictionaryTest, ReplaceNullsEmpty)
@@ -674,7 +674,7 @@ TEST_F(ReplaceDictionaryTest, ReplaceNullsEmpty)
   cudf::test::fixed_width_column_wrapper<int64_t> input_empty_w({});
   auto input_empty = cudf::dictionary::encode(input_empty_w);
   auto result      = cudf::replace_nulls(input_empty->view(), input_empty->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), input_empty->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), input_empty->view());
 }
 
 TEST_F(ReplaceDictionaryTest, ReplaceNullsNoNulls)

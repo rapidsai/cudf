@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,14 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace tdigest {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace tdigest::detail {
 
 /**
  * @brief Generate a tdigest column from a grouped, sorted set of numeric input values.
@@ -70,7 +71,7 @@ std::unique_ptr<column> group_tdigest(column_view const& values,
                                       size_type num_groups,
                                       int max_centroids,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                      rmm::device_async_resource_ref mr);
 
 /**
  * @brief Merges tdigests within the same group to generate a new tdigest.
@@ -113,7 +114,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& values,
                                             size_type num_groups,
                                             int max_centroids,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr);
+                                            rmm::device_async_resource_ref mr);
 
 /**
  * @brief Create a tdigest column from its constituent components.
@@ -139,7 +140,7 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
                                             std::unique_ptr<column>&& min_values,
                                             std::unique_ptr<column>&& max_values,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr);
+                                            rmm::device_async_resource_ref mr);
 
 /**
  * @brief Create an empty tdigest column.
@@ -151,8 +152,9 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
  *
  * @returns An empty tdigest column.
  */
+CUDF_EXPORT
 std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr);
+                                                  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Create an empty tdigest scalar.
@@ -165,7 +167,7 @@ std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
  * @returns An empty tdigest scalar.
  */
 std::unique_ptr<scalar> make_empty_tdigest_scalar(rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr);
+                                                  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Generate a tdigest scalar from a set of numeric input values.
@@ -199,7 +201,7 @@ std::unique_ptr<scalar> make_empty_tdigest_scalar(rmm::cuda_stream_view stream,
 std::unique_ptr<scalar> reduce_tdigest(column_view const& values,
                                        int max_centroids,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr);
+                                       rmm::device_async_resource_ref mr);
 
 /**
  * @brief Merges multiple tdigest columns to generate a new tdigest scalar.
@@ -233,8 +235,7 @@ std::unique_ptr<scalar> reduce_tdigest(column_view const& values,
 std::unique_ptr<scalar> reduce_merge_tdigest(column_view const& input,
                                              int max_centroids,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr);
+                                             rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace tdigest
-}  // namespace cudf
+}  // namespace tdigest::detail
+}  // namespace CUDF_EXPORT cudf

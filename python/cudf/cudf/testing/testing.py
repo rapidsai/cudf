@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
+import warnings
+
 import cupy as cp
 import numpy as np
 import pandas as pd
+from pandas import testing as tm
 
 import cudf
 from cudf._lib.unary import is_nan
-from cudf.api.types import (
-    _is_categorical_dtype,
-    is_numeric_dtype,
-    is_string_dtype,
-)
+from cudf.api.types import is_numeric_dtype, is_string_dtype
 from cudf.core.missing import NA, NaT
 
 
@@ -86,7 +85,7 @@ def _check_types(
     if (
         exact
         and not isinstance(left, cudf.MultiIndex)
-        and _is_categorical_dtype(left)
+        and isinstance(left.dtype, cudf.CategoricalDtype)
     ):
         if left.dtype != right.dtype:
             raise_assert_detail(
@@ -144,8 +143,8 @@ def assert_column_equal(
     """
     if check_dtype is True:
         if (
-            _is_categorical_dtype(left)
-            and _is_categorical_dtype(right)
+            isinstance(left.dtype, cudf.CategoricalDtype)
+            and isinstance(right.dtype, cudf.CategoricalDtype)
             and not check_categorical
         ):
             pass
@@ -159,12 +158,12 @@ def assert_column_equal(
             return True
 
     if check_datetimelike_compat:
-        if np.issubdtype(left.dtype, np.datetime64):
+        if left.dtype.kind == "M":
             right = right.astype(left.dtype)
-        elif np.issubdtype(right.dtype, np.datetime64):
+        elif right.dtype.kind == "M":
             left = left.astype(right.dtype)
 
-        if np.issubdtype(left.dtype, np.datetime64):
+        if left.dtype.kind == "M":
             if not left.equals(right):
                 raise AssertionError(
                     f"[datetimelike_compat=True] {left.values} "
@@ -173,7 +172,9 @@ def assert_column_equal(
             return
 
     if check_exact and check_categorical:
-        if _is_categorical_dtype(left) and _is_categorical_dtype(right):
+        if isinstance(left.dtype, cudf.CategoricalDtype) and isinstance(
+            right.dtype, cudf.CategoricalDtype
+        ):
             left_cat = left.categories
             right_cat = right.categories
 
@@ -207,8 +208,8 @@ def assert_column_equal(
 
     if (
         not check_dtype
-        and _is_categorical_dtype(left)
-        and _is_categorical_dtype(right)
+        and isinstance(left.dtype, cudf.CategoricalDtype)
+        and isinstance(right.dtype, cudf.CategoricalDtype)
     ):
         left = left.astype(left.categories.dtype)
         right = right.astype(right.categories.dtype)
@@ -258,7 +259,9 @@ def assert_column_equal(
                 raise e
             else:
                 columns_equal = False
-            if _is_categorical_dtype(left) and _is_categorical_dtype(right):
+            if isinstance(left.dtype, cudf.CategoricalDtype) and isinstance(
+                right.dtype, cudf.CategoricalDtype
+            ):
                 left = left.astype(left.categories.dtype)
                 right = right.astype(right.categories.dtype)
     if not columns_equal:
@@ -395,8 +398,12 @@ def assert_index_equal(
             )
 
         for level in range(left.nlevels):
-            llevel = cudf.Index(left._columns[level], name=left.names[level])
-            rlevel = cudf.Index(right._columns[level], name=right.names[level])
+            llevel = cudf.Index._from_column(
+                left._columns[level], name=left.names[level]
+            )
+            rlevel = cudf.Index._from_column(
+                right._columns[level], name=right.names[level]
+            )
             mul_obj = f"MultiIndex level [{level}]"
             assert_index_equal(
                 llevel,
@@ -708,3 +715,98 @@ def assert_frame_equal(
             atol=atol,
             obj=f'Column name="{col}"',
         )
+
+
+def assert_eq(left, right, **kwargs):
+    """Assert that two cudf-like things are equivalent
+
+    Parameters
+    ----------
+    left
+        Object to compare
+    right
+        Object to compare
+    kwargs
+        Keyword arguments to control behaviour of comparisons. See
+        :func:`assert_frame_equal`, :func:`assert_series_equal`, and
+        :func:`assert_index_equal`.
+
+    Notes
+    -----
+    This equality test works for pandas/cudf dataframes/series/indexes/scalars
+    in the same way, and so makes it easier to perform parametrized testing
+    without switching between assert_frame_equal/assert_series_equal/...
+    functions.
+
+    Raises
+    ------
+    AssertionError
+        If the two objects do not compare equal.
+    """
+    # dtypes that we support but Pandas doesn't will convert to
+    # `object`. Check equality before that happens:
+    if kwargs.get("check_dtype", True):
+        if hasattr(left, "dtype") and hasattr(right, "dtype"):
+            if isinstance(
+                left.dtype, cudf.core.dtypes._BaseDtype
+            ) and not isinstance(
+                left.dtype, cudf.CategoricalDtype
+            ):  # leave categorical comparison to Pandas
+                assert_eq(left.dtype, right.dtype)
+
+    if hasattr(left, "to_pandas"):
+        left = left.to_pandas()
+    if hasattr(right, "to_pandas"):
+        right = right.to_pandas()
+    if isinstance(left, cp.ndarray):
+        left = cp.asnumpy(left)
+    if isinstance(right, cp.ndarray):
+        right = cp.asnumpy(right)
+
+    if isinstance(left, (pd.DataFrame, pd.Series, pd.Index)):
+        # TODO: A warning is emitted from the function
+        # pandas.testing.assert_[series, frame, index]_equal for some inputs:
+        # "DeprecationWarning: elementwise comparison failed; this will raise
+        # an error in the future."
+        # or "FutureWarning: elementwise ..."
+        # This warning comes from a call from pandas to numpy. It is ignored
+        # here because it cannot be fixed within cudf.
+        with warnings.catch_warnings():
+            warnings.simplefilter(
+                "ignore", (DeprecationWarning, FutureWarning)
+            )
+            if isinstance(left, pd.DataFrame):
+                tm.assert_frame_equal(left, right, **kwargs)
+            elif isinstance(left, pd.Series):
+                tm.assert_series_equal(left, right, **kwargs)
+            else:
+                tm.assert_index_equal(left, right, **kwargs)
+
+    elif isinstance(left, np.ndarray) and isinstance(right, np.ndarray):
+        if left.dtype.kind == "f" and right.dtype.kind == "f":
+            assert np.allclose(left, right, equal_nan=True)
+        else:
+            assert np.array_equal(left, right)
+    else:
+        # Use the overloaded __eq__ of the operands
+        if left == right:
+            return True
+        elif any(np.issubdtype(type(x), np.floating) for x in (left, right)):
+            np.testing.assert_almost_equal(left, right)
+        else:
+            np.testing.assert_equal(left, right)
+    return True
+
+
+def assert_neq(left, right, **kwargs):
+    """Assert that two cudf-like things are not equal.
+
+    Provides the negation of the meaning of :func:`assert_eq`.
+    """
+    __tracebackhide__ = True
+    try:
+        assert_eq(left, right, **kwargs)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError

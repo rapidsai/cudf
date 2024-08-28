@@ -1,5 +1,6 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
+import math
 import os
 
 import pandas as pd
@@ -12,8 +13,8 @@ from dask.utils import tmpfile
 import dask_cudf
 from dask_cudf.tests.utils import skip_dask_expr
 
-# No dask-expr support
-pytestmark = skip_dask_expr()
+# No dask-expr support for dask<2024.4.0
+pytestmark = skip_dask_expr(lt_version="2024.4.0")
 
 
 def test_read_json_backend_dispatch(tmp_path):
@@ -84,9 +85,8 @@ def test_read_json_nested(tmp_path):
         }
     )
     kwargs = dict(orient="records", lines=True)
-    with tmp_path / "data.json" as f, dask.config.set(
-        {"dataframe.convert-string": False}
-    ):
+    f = tmp_path / "data.json"
+    with dask.config.set({"dataframe.convert-string": False}):
         df.to_json(f, **kwargs)
         # Ensure engine='cudf' is tested.
         actual = dask_cudf.read_json(f, engine="cudf", **kwargs)
@@ -98,3 +98,31 @@ def test_read_json_nested(tmp_path):
         # Ensure not passing kwargs also reads the file.
         actual = dask_cudf.read_json(f)
         dd.assert_eq(actual, actual_pd)
+
+
+def test_read_json_aggregate_files(tmp_path):
+    df1 = dask.datasets.timeseries(
+        dtypes={"x": int, "y": int}, freq="120s"
+    ).reset_index(drop=True)
+    json_path = str(tmp_path / "data-*.json")
+    df1.to_json(json_path)
+
+    df2 = dask_cudf.read_json(json_path, aggregate_files=2)
+    assert df2.npartitions == math.ceil(df1.npartitions / 2)
+    dd.assert_eq(df1, df2, check_index=False)
+
+    df2 = dask_cudf.read_json(
+        json_path, aggregate_files=True, blocksize="1GiB"
+    )
+    assert df2.npartitions == 1
+    dd.assert_eq(df1, df2, check_index=False)
+
+    for include_path_column, name in [(True, "path"), ("file", "file")]:
+        df2 = dask_cudf.read_json(
+            json_path,
+            aggregate_files=2,
+            include_path_column=include_path_column,
+        )
+        assert name in df2.columns
+        assert len(df2[name].compute().unique()) == df1.npartitions
+        dd.assert_eq(df1, df2.drop(columns=[name]), check_index=False)

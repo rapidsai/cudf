@@ -27,7 +27,7 @@
  * @brief Utilities for bit and bitmask operations.
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 // @cond
 // Work around a bug in NVRTC that fails to compile assert() in constexpr
@@ -217,4 +217,4 @@ __device__ inline void clear_bit(bitmask_type* bitmask, size_type bit_index)
 }
 #endif
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

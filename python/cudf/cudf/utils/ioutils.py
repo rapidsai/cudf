@@ -4,6 +4,7 @@ import datetime
 import os
 import urllib
 import warnings
+from collections.abc import Callable
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
 
@@ -11,19 +12,11 @@ import fsspec
 import fsspec.implementations.local
 import numpy as np
 import pandas as pd
-from fsspec.core import get_fs_token_paths
-from pyarrow import PythonFile as ArrowPythonFile
-from pyarrow.lib import NativeFile
+from fsspec.core import expand_paths_if_needed, get_fs_token_paths
 
+from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
-
-try:
-    import fsspec.parquet as fsspec_parquet
-
-except ImportError:
-    fsspec_parquet = None
-
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
 _ROW_GROUP_SIZE_BYTES_DEFAULT = 128 * 1024 * 1024
@@ -86,7 +79,7 @@ Examples
 1       20  rapids
 2       30      ai
 """.format(remote_data_sources=_docstring_remote_sources)
-doc_read_avro = docfmt_partial(docstring=_docstring_read_avro)
+doc_read_avro: Callable = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
 Read a Parquet file's metadata and schema
@@ -101,11 +94,13 @@ Returns
 Total number of rows
 Number of row groups
 List of column names
+Number of columns
+List of metadata of row groups
 
 Examples
 --------
 >>> import cudf
->>> num_rows, num_row_groups, names = cudf.io.read_parquet_metadata(filename)
+>>> num_rows, num_row_groups, names, num_columns, row_group_metadata = cudf.io.read_parquet_metadata(filename)
 >>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
 >>> df = cudf.concat(df)
 >>> df
@@ -145,6 +140,9 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+filesystem : fsspec.AbstractFileSystem, default None
+    Filesystem object to use when reading the parquet data. This argument
+    should not be used at the same time as `storage_options`.
 filters : list of tuple, list of lists of tuples, default None
     If not None, specifies a filter predicate used to filter out row groups
     using statistics stored for each row group as Parquet metadata. Row groups
@@ -170,24 +168,25 @@ categorical_partitions : boolean, default True
 use_pandas_metadata : boolean, default True
     If True and dataset has custom PANDAS schema metadata, ensure that index
     columns are also loaded.
-use_python_file_object : boolean, default True
-    If True, Arrow-backed PythonFile objects will be used in place of fsspec
-    AbstractBufferedFile objects at IO time. Setting this argument to `False`
-    will require the entire file to be copied to host memory, and is highly
-    discouraged.
-open_file_options : dict, optional
-    Dictionary of key-value pairs to pass to the function used to open remote
-    files. By default, this will be `fsspec.parquet.open_parquet_file`. To
-    deactivate optimized precaching, set the "method" to `None` under the
-    "precache_options" key. Note that the `open_file_func` key can also be
-    used to specify a custom file-open function.
 bytes_per_thread : int, default None
     Determines the number of bytes to be allocated per thread to read the
     files in parallel. When there is a file of large size, we get slightly
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a python thread pool). Default allocation is
     {bytes_per_thread} bytes.
-    This parameter is functional only when `use_python_file_object=False`.
+skiprows : int, default None
+    If not None, the number of rows to skip from the start of the file.
+
+    .. note::
+       This option is not supported when the low-memory mode is on.
+nrows : int, default None
+    If not None, the total number of rows to read.
+
+    .. note:
+       This option is not supported when the low-memory mode is on.
+allow_mismatched_pq_schemas : boolean, default False
+    If True, enables reading (matching) columns specified in `columns` and `filters`
+    options from the input files with otherwise mismatched schemas.
 
 Returns
 -------
@@ -245,7 +244,8 @@ partition_file_name : str, optional, default None
     File name to use for partitioned datasets. Different partitions
     will be written to different directories, but all files will
     have this name.  If nothing is specified, a random uuid4 hex string
-    will be used for each file.
+    will be used for each file. This parameter is only supported by 'cudf'
+    engine, and will be ignored by other engines.
 partition_offsets : list, optional, default None
     Offsets to partition the dataframe by. Should be used when path is list
     of str. Should be a list of integers of size ``len(path) + 1``
@@ -275,6 +275,10 @@ max_page_size_bytes: integer or None, default None
 max_page_size_rows: integer or None, default None
     Maximum number of rows of each page of the output.
     If None, 20000 will be used.
+max_dictionary_size: integer or None, default None
+    Maximum size of the dictionary page for each output column chunk. Dictionary
+    encoding for column chunks that exceeds this limit will be disabled.
+    If None, 1048576 (1MB) will be used.
 storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
@@ -289,8 +293,8 @@ return_metadata : bool, default False
     ``return_metadata=True`` instead of specifying ``metadata_file_path``
 use_dictionary : bool, default True
     When ``False``, prevents the use of dictionary encoding for Parquet page
-    data. When ``True``, dictionary encoding is preferred when not disabled due
-    to dictionary size constraints.
+    data. When ``True``, dictionary encoding is preferred subject to
+    ``max_dictionary_size`` constraints.
 header_version : {{'1.0', '2.0'}}, default "1.0"
     Controls whether to use version 1.0 or version 2.0 page headers when
     encoding. Version 1.0 is more portable, but version 2.0 enables the
@@ -299,6 +303,28 @@ force_nullable_schema : bool, default False.
     If True, writes all columns as `null` in schema.
     If False, columns are written as `null` if they contain null values,
     otherwise as `not null`.
+skip_compression : set, optional, default None
+    If a column name is present in the set, that column will not be compressed,
+    regardless of the ``compression`` setting.
+column_encoding : dict, optional, default None
+    Sets the page encoding to use on a per-column basis. The key is a column
+    name, and the value is one of: 'PLAIN', 'DICTIONARY', 'DELTA_BINARY_PACKED',
+    'DELTA_LENGTH_BYTE_ARRAY', 'DELTA_BYTE_ARRAY', 'BYTE_STREAM_SPLIT', or
+    'USE_DEFAULT'.
+column_type_length : dict, optional, default None
+    Specifies the width in bytes of ``FIXED_LEN_BYTE_ARRAY`` column elements.
+    The key is a column name and the value is an integer. The named column
+    will be output as unannotated binary (i.e. the column will behave as if
+    ``output_as_binary`` was set).
+output_as_binary : set, optional, default None
+    If a column name is present in the set, that column will be output as
+    unannotated binary, rather than the default 'UTF-8'.
+store_schema : bool, default False
+    If ``True``, writes arrow schema to Parquet file footer's key-value
+    metadata section to faithfully round-trip ``duration`` types with arrow.
+    This cannot be used with ``int96_timestamps`` enabled as int96 timestamps
+    are deprecated in arrow. Also, all decimal32 and decimal64 columns will be
+    converted to decimal128 as arrow only supports decimal128 and decimal256 types.
 **kwargs
     Additional parameters will be passed to execution engines other
     than ``cudf``.
@@ -437,10 +463,6 @@ num_rows : int, default None
     This parameter is deprecated.
 use_index : bool, default True
     If True, use row index if available for faster seeking.
-use_python_file_object : boolean, default True
-    If True, Arrow-backed PythonFile objects will be used in place of fsspec
-    AbstractBufferedFile objects at IO time. This option is likely to improve
-    performance when making small reads from larger ORC files.
 storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
@@ -454,7 +476,6 @@ bytes_per_thread : int, default None
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a python thread pool). Default allocation is
     {bytes_per_thread} bytes.
-    This parameter is functional only when `use_python_file_object=False`.
 
 Returns
 -------
@@ -543,7 +564,7 @@ path_or_buf : list, str, path object, or file-like object
     function or `StringIO`). Multiple inputs may be provided as a list. If a
     list is specified each list entry may be of a different input type as long
     as each input is of a valid type and all input JSON schema(s) match.
-engine : {{ 'auto', 'cudf', 'cudf_legacy', 'pandas' }}, default 'auto'
+engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the engine will be
     automatically selected based on the other parameters. See notes below.
 orient : string
@@ -690,7 +711,6 @@ keep_quotes : bool, default False
 
        This parameter is only supported with ``engine='cudf'``.
 
-    This parameter is only supported in ``cudf`` engine.
     If `True`, any string values are read literally (and wrapped in an
     additional set of quotes).
     If `False` string values are parsed into Python strings.
@@ -701,7 +721,27 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+mixed_types_as_string : bool, default False
 
+    .. admonition:: GPU-accelerated feature
+
+       This parameter is only supported with ``engine='cudf'``.
+
+    If True, mixed type columns are returned as string columns.
+    If `False` parsing mixed type columns will thrown an error.
+prune_columns : bool, default False
+
+    .. admonition:: GPU-accelerated feature
+
+       This parameter is only supported with ``engine='cudf'``.
+
+    If True, only return those columns mentioned in the dtype argument.
+    If `False` dtype argument is used a type inference suggestion.
+on_bad_lines : {'error', 'recover'}, default 'error'
+    Specifies what to do upon encountering a bad line. Allowed values are :
+
+    - ``'error'``, raise an Exception when a bad line is encountered.
+    - ``'recover'``, fills the row with <NA> when a bad line is encountered.
 Returns
 -------
 result : Series or DataFrame, depending on the value of `typ`.
@@ -763,7 +803,7 @@ Using the `dtype` argument to specify type casting:
     k1   k2
 0  1.0  [1]
 """  # noqa: E501
-doc_read_json = docfmt_partial(docstring=_docstring_read_json)
+doc_read_json: Callable = docfmt_partial(docstring=_docstring_read_json)
 
 _docstring_to_json = """
 Convert the cuDF object to a JSON string.
@@ -833,7 +873,7 @@ See Also
 --------
 cudf.read_json
 """
-doc_to_json = docfmt_partial(docstring=_docstring_to_json)
+doc_to_json: Callable = docfmt_partial(docstring=_docstring_to_json)
 
 _docstring_read_hdf = """
 Read from the store, close it if we opened it.
@@ -886,7 +926,7 @@ See Also
 --------
 cudf.DataFrame.to_hdf : Write a HDF file from a DataFrame.
 """
-doc_read_hdf = docfmt_partial(docstring=_docstring_read_hdf)
+doc_read_hdf: Callable = docfmt_partial(docstring=_docstring_read_hdf)
 
 _docstring_to_hdf = """
 Write the contained data to an HDF5 file using HDFStore.
@@ -958,7 +998,7 @@ cudf.read_hdf : Read from HDF file.
 cudf.DataFrame.to_parquet : Write a DataFrame to the binary parquet format.
 cudf.DataFrame.to_feather : Write out feather-format for DataFrames.
 """
-doc_to_hdf = docfmt_partial(docstring=_docstring_to_hdf)
+doc_to_hdf: Callable = docfmt_partial(docstring=_docstring_to_hdf)
 
 _docstring_read_feather = """
 Load an feather object from the file path, returning a DataFrame.
@@ -1138,10 +1178,6 @@ byte_range : list or tuple, default None
     size to zero to read all data after the offset location. Reads the row
     that starts before or at the end of the range, even if it ends after
     the end of the range.
-use_python_file_object : boolean, default True
-    If True, Arrow-backed PythonFile objects will be used in place of fsspec
-    AbstractBufferedFile objects at IO time. This option is likely to improve
-    performance when making small reads from larger CSV files.
 storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
@@ -1155,7 +1191,6 @@ bytes_per_thread : int, default None
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a python thread pool). Default allocation is
     {bytes_per_thread} bytes.
-    This parameter is functional only when `use_python_file_object=False`.
 Returns
 -------
 GPU ``DataFrame`` object.
@@ -1361,30 +1396,25 @@ Returns
 result : Series
 
 """
-doc_read_text = docfmt_partial(docstring=_docstring_text_datasource)
+doc_read_text: Callable = docfmt_partial(docstring=_docstring_text_datasource)
 
 
 _docstring_get_reader_filepath_or_buffer = """
 Return either a filepath string to data, or a memory buffer of data.
 If filepath, then the source filepath is expanded to user's environment.
 If buffer, then data is returned in-memory as bytes or a ByteIO object.
+This function is designed to process multiple data sources of the same
+type at once. If path_or_data is a list, the output will also be a list.
 
 Parameters
 ----------
-path_or_data : str, file-like object, bytes, ByteIO
-    Path to data or the data itself.
-compression : str
-    Type of compression algorithm for the content
+path_or_data : str, file-like object, bytes, ByteIO, list
+    Path to data or the data itself. Pass in a list to process multiple
+    sources of the same type at once.
 mode : str
     Mode in which file is opened
 iotypes : (), default (BytesIO)
     Object type to exclude from file-like check
-use_python_file_object : boolean, default False
-    If True, Arrow-backed PythonFile objects will be used in place
-    of fsspec AbstractBufferedFile objects.
-open_file_options : dict, optional
-    Optional dictionary of keyword arguments to pass to
-    `_open_remote_files` (used for remote storage only).
 allow_raw_text_input : boolean, default False
     If True, this indicates the input `path_or_data` could be a raw text
     input and will not check for its existence in the filesystem. If False,
@@ -1405,15 +1435,15 @@ bytes_per_thread : int, default None
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a Python thread pool). Default allocation is
     {bytes_per_thread} bytes.
-    This parameter is functional only when `use_python_file_object=False`.
+expand_dir_pattern : str, default None
+    Glob pattern to use when expanding directories into file paths
+    (e.g. "*.json"). If this parameter is not specified, directories
+    will not be expanded.
 
 Returns
 -------
-filepath_or_buffer : str, bytes, BytesIO, list
-    Filepath string or in-memory buffer of data or a
-    list of Filepath strings or in-memory buffers of data.
-compression : str
-    Type of compression algorithm for the content
+List[str, bytes, BytesIO]
+    List of filepath strings or in-memory data buffers.
     """.format(bytes_per_thread=_BYTES_PER_THREAD_DEFAULT)
 
 
@@ -1470,29 +1500,15 @@ def _is_local_filesystem(fs):
     return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
 
 
-def ensure_single_filepath_or_buffer(path_or_data, storage_options=None):
-    """Return False if `path_or_data` resolves to multiple filepaths or
-    buffers.
+def _select_single_source(sources: list, caller: str):
+    """Select the first element from a list of sources.
+    Raise an error if sources contains multiple elements
     """
-    path_or_data = stringify_pathlike(path_or_data)
-    if isinstance(path_or_data, str):
-        path_or_data = os.path.expanduser(path_or_data)
-        try:
-            fs, _, paths = get_fs_token_paths(
-                path_or_data, mode="rb", storage_options=storage_options
-            )
-        except ValueError as e:
-            if str(e).startswith("Protocol not known"):
-                return True
-            else:
-                raise e
-
-        if len(paths) > 1:
-            return False
-    elif isinstance(path_or_data, (list, tuple)) and len(path_or_data) > 1:
-        return False
-
-    return True
+    if len(sources) > 1:
+        raise ValueError(
+            f"{caller} does not support multiple sources, got: {sources}"
+        )
+    return sources[0]
 
 
 def is_directory(path_or_data, storage_options=None):
@@ -1515,11 +1531,18 @@ def is_directory(path_or_data, storage_options=None):
     return False
 
 
-def _get_filesystem_and_paths(path_or_data, storage_options):
+def _get_filesystem_and_paths(
+    path_or_data,
+    storage_options,
+    *,
+    filesystem=None,
+):
     # Returns a filesystem object and the filesystem-normalized
     # paths. If `path_or_data` does not correspond to a path or
     # list of paths (or if the protocol is not supported), the
     # return will be `None` for the fs and `[]` for the paths.
+    # If a filesystem object is already available, it can be
+    # passed with the `filesystem` argument.
 
     fs = None
     return_paths = path_or_data
@@ -1536,187 +1559,163 @@ def _get_filesystem_and_paths(path_or_data, storage_options):
         else:
             path_or_data = [path_or_data]
 
-        try:
-            fs, _, fs_paths = get_fs_token_paths(
-                path_or_data, mode="rb", storage_options=storage_options
-            )
-            return_paths = fs_paths
-        except ValueError as e:
-            if str(e).startswith("Protocol not known"):
-                return None, []
-            else:
-                raise e
+        if filesystem is None:
+            try:
+                fs, _, fs_paths = get_fs_token_paths(
+                    path_or_data, mode="rb", storage_options=storage_options
+                )
+                return_paths = fs_paths
+            except ValueError as e:
+                if str(e).startswith("Protocol not known"):
+                    return None, []
+                else:
+                    raise e
+        else:
+            if not isinstance(filesystem, fsspec.AbstractFileSystem):
+                raise ValueError(
+                    f"Expected fsspec.AbstractFileSystem. Got {filesystem}"
+                )
+
+            if storage_options:
+                raise ValueError(
+                    f"Cannot specify storage_options when an explicit "
+                    f"filesystem object is specified. Got: {storage_options}"
+                )
+
+            fs = filesystem
+            return_paths = [
+                fs._strip_protocol(u)
+                for u in expand_paths_if_needed(
+                    path_or_data, "rb", 1, fs, None
+                )
+            ]
 
     return fs, return_paths
 
 
-def _set_context(obj, stack):
-    # Helper function to place open file on context stack
-    if stack is None:
-        return obj
-    return stack.enter_context(obj)
-
-
-def _open_remote_files(
-    paths,
-    fs,
-    context_stack=None,
-    open_file_func=None,
-    precache_options=None,
-    **kwargs,
-):
-    """Return a list of open file-like objects given
-    a list of remote file paths.
-
-    Parameters
-    ----------
-    paths : list(str)
-        List of file-path strings.
-    fs : fsspec.AbstractFileSystem
-        Fsspec file-system object.
-    context_stack : contextlib.ExitStack, Optional
-        Context manager to use for open files.
-    open_file_func : Callable, Optional
-        Call-back function to use for opening. If this argument
-        is specified, all other arguments will be ignored.
-    precache_options : dict, optional
-        Dictionary of key-word arguments to pass to use for
-        precaching. Unless the input contains ``{"method": None}``,
-        ``fsspec.parquet.open_parquet_file`` will be used for remote
-        storage.
-    **kwargs :
-        Key-word arguments to be passed to format-specific
-        open functions.
-    """
-
-    # Just use call-back function if one was specified
-    if open_file_func is not None:
-        return [
-            _set_context(open_file_func(path, **kwargs), context_stack)
-            for path in paths
-        ]
-
-    # Check if the "precache" option is supported.
-    # In the future, fsspec should do this check for us
-    precache_options = (precache_options or {}).copy()
-    precache = precache_options.pop("method", None)
-    if precache not in ("parquet", None):
-        raise ValueError(f"{precache} not a supported `precache` option.")
-
-    # Check that "parts" caching (used for all format-aware file handling)
-    # is supported by the installed fsspec/s3fs version
-    if precache == "parquet" and not fsspec_parquet:
-        warnings.warn(
-            f"This version of fsspec ({fsspec.__version__}) does "
-            f"not support parquet-optimized precaching. Please upgrade "
-            f"to the latest fsspec version for better performance."
-        )
-        precache = None
-
-    if precache == "parquet":
-        # Use fsspec.parquet module.
-        # TODO: Use `cat_ranges` to collect "known"
-        # parts for all files at once.
-        row_groups = precache_options.pop("row_groups", None) or (
-            [None] * len(paths)
-        )
-        return [
-            ArrowPythonFile(
-                _set_context(
-                    fsspec_parquet.open_parquet_file(
-                        path,
-                        fs=fs,
-                        row_groups=rgs,
-                        **precache_options,
-                        **kwargs,
-                    ),
-                    context_stack,
-                )
-            )
-            for path, rgs in zip(paths, row_groups)
-        ]
-
-    # Avoid top-level pyarrow.fs import.
-    # Importing pyarrow.fs initializes a S3 SDK with a finalizer
-    # that runs atexit. In some circumstances it appears this
-    # runs a call into a logging system that is already shutdown.
-    # To avoid this, we only import this subsystem if it is
-    # really needed.
-    # See https://github.com/aws/aws-sdk-cpp/issues/2681
-    from pyarrow.fs import FSSpecHandler, PyFileSystem
-
-    # Default open - Use pyarrow filesystem API
-    pa_fs = PyFileSystem(FSSpecHandler(fs))
-    return [
-        _set_context(pa_fs.open_input_file(fpath), context_stack)
-        for fpath in paths
-    ]
+def _maybe_expand_directories(paths, glob_pattern, fs):
+    # Expand directory paths using a glob pattern.
+    # This is a no-op if either glob_pattern or fs are None
+    if fs is None or glob_pattern is None:
+        return paths
+    expanded_paths = []
+    for path in paths:
+        if fs.isdir(path):
+            expanded_paths.extend(fs.glob(fs.sep.join([path, glob_pattern])))
+        else:
+            expanded_paths.append(path)
+    return expanded_paths
 
 
 @doc_get_reader_filepath_or_buffer()
 def get_reader_filepath_or_buffer(
     path_or_data,
-    compression,
+    *,
     mode="rb",
     fs=None,
-    iotypes=(BytesIO, NativeFile),
-    use_python_file_object=False,
-    open_file_options=None,
+    iotypes=(BytesIO,),
     allow_raw_text_input=False,
     storage_options=None,
     bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
     warn_on_raw_text_input=None,
     warn_meta=None,
+    expand_dir_pattern=None,
 ):
     """{docstring}"""
 
-    path_or_data = stringify_pathlike(path_or_data)
+    # Convert path_or_data to a list of input data sources
+    input_sources = [
+        stringify_pathlike(source)
+        for source in (
+            path_or_data if is_list_like(path_or_data) else [path_or_data]
+        )
+    ]
+    if not input_sources:
+        raise ValueError("Empty input source list: {input_sources}.")
 
-    if isinstance(path_or_data, str):
-        # Get a filesystem object if one isn't already available
-        paths = [path_or_data]
+    filepaths_or_buffers = []
+    string_paths = [isinstance(source, str) for source in input_sources]
+    if any(string_paths):
+        # Sources are all strings. Thes strings are typically
+        # file paths, but they may also be raw text strings.
+
+        # Don't allow a mix of source types
+        if not all(string_paths):
+            raise ValueError("Invalid input source list: {input_sources}.")
+
+        # Make sure we define a filesystem (if possible)
+        paths = input_sources
+        raw_text_input = False
         if fs is None:
-            fs, paths = _get_filesystem_and_paths(
-                path_or_data, storage_options
-            )
-            if fs is None:
-                if warn_on_raw_text_input:
-                    # Do not remove until pandas 3.0 support is added.
-                    assert (
-                        PANDAS_LT_300
-                    ), "Need to drop after pandas-3.0 support is added."
-                    warnings.warn(
-                        f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
-                        "deprecated and will be removed in a future version. "
-                        "To read from a literal string, wrap it in a "
-                        "'StringIO' object.",
-                        FutureWarning,
-                    )
-                return path_or_data, compression
+            fs, paths = _get_filesystem_and_paths(paths, storage_options)
+
+        # Expand directories (if necessary)
+        paths = _maybe_expand_directories(paths, expand_dir_pattern, fs)
 
         if _is_local_filesystem(fs):
             # Doing this as `read_json` accepts a json string
             # path_or_data need not be a filepath like string
+
+            # helper for checking if raw text looks like a json filename
+            compression_extensions = [
+                ".tar",
+                ".tar.gz",
+                ".tar.bz2",
+                ".tar.xz",
+                ".gz",
+                ".bz2",
+                ".zip",
+                ".xz",
+                ".zst",
+                "",
+            ]
+
             if len(paths):
                 if fs.exists(paths[0]):
-                    path_or_data = paths if len(paths) > 1 else paths[0]
-                elif not allow_raw_text_input:
+                    filepaths_or_buffers = paths
+
+                # raise FileNotFound if path looks like json
+                # following pandas
+                # see
+                # https://github.com/pandas-dev/pandas/pull/46718/files#diff-472ce5fe087e67387942e1e1c409a5bc58dde9eb8a2db6877f1a45ae4974f694R724-R729
+                elif not allow_raw_text_input or paths[0].lower().endswith(
+                    tuple(f".json{c}" for c in compression_extensions)
+                ):
                     raise FileNotFoundError(
-                        f"{path_or_data} could not be resolved to any files"
+                        f"{input_sources} could not be resolved to any files"
                     )
-                elif warn_on_raw_text_input:
-                    # Do not remove until pandas 3.0 support is added.
-                    assert (
-                        PANDAS_LT_300
-                    ), "Need to drop after pandas-3.0 support is added."
-                    warnings.warn(
-                        f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
-                        "deprecated and will be removed in a future version. "
-                        "To read from a literal string, wrap it in a "
-                        "'StringIO' object.",
-                        FutureWarning,
+                else:
+                    raw_text_input = True
+            else:
+                raw_text_input = True
+
+        elif fs is not None:
+            # TODO: We can use cat_ranges and/or parquet-aware logic
+            # to copy all remote data into host memory at once here.
+            # The current solution iterates over files, and copies
+            # ALL data from each file (even when we are performing
+            # partial IO, and don't need the entire file)
+            if len(paths) == 0:
+                raise FileNotFoundError(
+                    f"{input_sources} could not be resolved to any files"
+                )
+            filepaths_or_buffers = [
+                BytesIO(
+                    _fsspec_data_transfer(
+                        fpath,
+                        fs=fs,
+                        mode=mode,
+                        bytes_per_thread=bytes_per_thread,
                     )
-            elif warn_on_raw_text_input:
+                )
+                for fpath in paths
+            ]
+        else:
+            raw_text_input = True
+
+        if raw_text_input:
+            filepaths_or_buffers = input_sources
+            if warn_on_raw_text_input:
                 # Do not remove until pandas 3.0 support is added.
                 assert (
                     PANDAS_LT_300
@@ -1729,45 +1728,25 @@ def get_reader_filepath_or_buffer(
                     FutureWarning,
                 )
 
-        else:
-            if len(paths) == 0:
-                raise FileNotFoundError(
-                    f"{path_or_data} could not be resolved to any files"
-                )
-            if use_python_file_object:
-                path_or_data = _open_remote_files(
-                    paths,
-                    fs,
-                    **(open_file_options or {}),
-                )
-            else:
-                path_or_data = [
+    else:
+        # Sources are already buffers or file-like objects
+        for source in input_sources:
+            if not isinstance(source, iotypes) and is_file_like(source):
+                if isinstance(source, TextIOWrapper):
+                    source = source.buffer
+                filepaths_or_buffers.append(
                     BytesIO(
                         _fsspec_data_transfer(
-                            fpath,
-                            fs=fs,
+                            source,
                             mode=mode,
                             bytes_per_thread=bytes_per_thread,
                         )
                     )
-                    for fpath in paths
-                ]
-            if len(path_or_data) == 1:
-                path_or_data = path_or_data[0]
-
-    elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
-        if isinstance(path_or_data, TextIOWrapper):
-            path_or_data = path_or_data.buffer
-        if use_python_file_object:
-            path_or_data = ArrowPythonFile(path_or_data)
-        else:
-            path_or_data = BytesIO(
-                _fsspec_data_transfer(
-                    path_or_data, mode=mode, bytes_per_thread=bytes_per_thread
                 )
-            )
+            else:
+                filepaths_or_buffers.append(source)
 
-    return path_or_data, compression
+    return filepaths_or_buffers
 
 
 def get_writer_filepath_or_buffer(path_or_data, mode, storage_options=None):

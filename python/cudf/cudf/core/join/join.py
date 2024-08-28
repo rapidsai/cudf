@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any, ClassVar, List, Optional
+from typing import Any, ClassVar
 
 import cudf
 from cudf import _lib as libcudf
@@ -272,8 +272,8 @@ class Merge:
                 lcol_casted = lcol_casted.astype("category")
                 rcol_casted = rcol_casted.astype("category")
 
-            left_key.set(self.lhs, lcol_casted, validate=False)
-            right_key.set(self.rhs, rcol_casted, validate=False)
+            left_key.set(self.lhs, lcol_casted)
+            right_key.set(self.rhs, rcol_casted)
 
         left_rows, right_rows = self._gather_maps(
             left_join_cols, right_join_cols
@@ -329,7 +329,6 @@ class Merge:
                     lkey.set(
                         left_result,
                         lkey.get(left_result).fillna(rkey.get(right_result)),
-                        validate=False,
                     )
 
         # All columns from the left table make it into the output. Non-key
@@ -370,13 +369,13 @@ class Merge:
         else:
             multiindex_columns = False
 
-        index: Optional[cudf.BaseIndex]
+        index: cudf.BaseIndex | None
         if self._using_right_index:
             # right_index and left_on
-            index = left_result._index
+            index = left_result.index
         elif self._using_left_index:
             # left_index and right_on
-            index = right_result._index
+            index = right_result.index
         else:
             index = None
 
@@ -398,9 +397,9 @@ class Merge:
         # This is taken care of by using a stable sort here, and (in
         # pandas-compat mode) reordering the gather maps before
         # producing the input result.
-        by: List[Any] = []
+        by: list[Any] = []
         if self._using_left_index and self._using_right_index:
-            by.extend(result._index._data.columns)
+            by.extend(result.index._data.columns)
         if not self._using_left_index:
             by.extend([result._data[col.name] for col in self._left_keys])
         if not self._using_right_index:
@@ -408,8 +407,8 @@ class Merge:
         if by:
             keep_index = self._using_left_index or self._using_right_index
             if keep_index:
-                to_sort = [*result._index._columns, *result._columns]
-                index_names = result._index.names
+                to_sort = [*result.index._columns, *result._columns]
+                index_names = result.index.names
             else:
                 to_sort = [*result._columns]
                 index_names = None
@@ -547,4 +546,4 @@ class MergeSemi(Merge):
 
     def _merge_results(self, lhs: cudf.DataFrame, rhs: cudf.DataFrame):
         # semi-join result includes only lhs columns
-        return lhs._data, lhs._index
+        return lhs._data, lhs.index

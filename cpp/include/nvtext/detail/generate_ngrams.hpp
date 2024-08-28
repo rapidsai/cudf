@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,20 +18,21 @@
 #include <nvtext/generate_ngrams.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
-namespace nvtext {
+namespace CUDF_EXPORT nvtext {
 namespace detail {
 
 /**
  * @copydoc hash_character_ngrams(cudf::strings_column_view const&,
- * cudf::size_type, rmm::mr::device_memory_resource*)
+ * cudf::size_type, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for allocating/copying device memory and launching kernels
  */
 std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view const& strings,
                                                     cudf::size_type ngrams,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr);
+                                                    rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace nvtext
+}  // namespace CUDF_EXPORT nvtext

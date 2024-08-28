@@ -7,10 +7,9 @@ from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.hash cimport (
+cimport pylibcudf.libcudf.types as libcudf_types
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.hash cimport (
     md5,
     murmurhash3_x86_32,
     sha1,
@@ -20,9 +19,13 @@ from cudf._lib.cpp.hash cimport (
     sha512,
     xxhash_64,
 )
-from cudf._lib.cpp.partitioning cimport hash_partition as cpp_hash_partition
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
+from pylibcudf.libcudf.partitioning cimport (
+    hash_partition as cpp_hash_partition,
+)
+from pylibcudf.libcudf.table.table cimport table
+from pylibcudf.libcudf.table.table_view cimport table_view
+
+from cudf._lib.column cimport Column
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 

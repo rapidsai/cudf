@@ -55,6 +55,8 @@ Typically, exception cases require specific assertions or other special logic, s
 The main exception to this rule is tests based on comparison to pandas.
 Such tests may test exceptional cases alongside more typical cases since the logic is generally identical.
 
+(test_parametrization)=
+
 ### Parametrization: custom fixtures and `pytest.mark.parametrize`
 
 When it comes to parametrizing tests written with `pytest`,
@@ -140,6 +142,8 @@ def test_odds():
 
 Other approaches are also possible, and the best solution should be discussed on a case-by-case basis during PR review.
 
+(xfailing_tests)=
+
 ### Tests with expected failures (`xfail`s)
 
 In some circumstances it makes sense to mark a test as _expected_ to
@@ -217,6 +221,8 @@ def test_sum_lt_6(request, v1, v2):
 This way, when the bug is fixed, the test suite will fail at this
 point (and we will remember to update the test).
 
+
+(testing_warnings)=
 
 ### Testing code that throws warnings
 

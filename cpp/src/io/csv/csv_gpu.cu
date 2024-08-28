@@ -351,9 +351,19 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         if (dtypes[actual_col].id() == cudf::type_id::STRING) {
           auto end = next_delimiter;
           if (not options.keepquotes) {
-            if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
-              ++field_start;
-              --end;
+            if (not options.detect_whitespace_around_quotes) {
+              if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
+                ++field_start;
+                --end;
+              }
+            } else {
+              // If the string is quoted, whitespace around the quotes get removed as well
+              auto const trimmed_field = trim_whitespaces(field_start, end);
+              if ((*trimmed_field.first == options.quotechar) &&
+                  (*(trimmed_field.second - 1) == options.quotechar)) {
+                field_start = trimmed_field.first + 1;
+                end         = trimmed_field.second - 1;
+              }
             }
           }
           auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
@@ -784,7 +794,7 @@ device_span<uint64_t> __host__ remove_blank_rows(cudf::io::parse_options_view co
   return row_offsets.subspan(0, new_end - row_offsets.begin());
 }
 
-std::vector<column_type_histogram> detect_column_types(
+cudf::detail::host_vector<column_type_histogram> detect_column_types(
   cudf::io::parse_options_view const& options,
   device_span<char const> const data,
   device_span<column_parse::flags const> const column_flags,
@@ -802,7 +812,7 @@ std::vector<column_type_histogram> detect_column_types(
   data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);
 
-  return detail::make_std_vector_sync(d_stats, stream);
+  return detail::make_host_vector_sync(d_stats, stream);
 }
 
 void decode_row_column_data(cudf::io::parse_options_view const& options,

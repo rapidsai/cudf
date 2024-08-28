@@ -27,6 +27,7 @@
 #include "io/utilities/parsing_utils.cuh"
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/csv.hpp>
@@ -39,6 +40,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -565,7 +567,7 @@ void infer_column_types(parse_options const& parse_opts,
 }
 
 std::vector<column_buffer> decode_data(parse_options const& parse_opts,
-                                       std::vector<column_parse::flags> const& column_flags,
+                                       host_span<column_parse::flags const> column_flags,
                                        std::vector<std::string> const& column_names,
                                        device_span<char const> data,
                                        device_span<uint64_t const> row_offsets,
@@ -574,7 +576,7 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
                                        int32_t num_actual_columns,
                                        int32_t num_active_columns,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<column_buffer> out_buffers;
@@ -590,8 +592,8 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
     }
   }
 
-  thrust::host_vector<void*> h_data(num_active_columns);
-  thrust::host_vector<bitmask_type*> h_valid(num_active_columns);
+  auto h_data  = cudf::detail::make_host_vector<void*>(num_active_columns, stream);
+  auto h_valid = cudf::detail::make_host_vector<bitmask_type*>(num_active_columns, stream);
 
   for (int i = 0; i < num_active_columns; ++i) {
     h_data[i]  = out_buffers[i].data();
@@ -612,7 +614,7 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
     d_valid_counts,
     stream);
 
-  auto const h_valid_counts = cudf::detail::make_std_vector_sync(d_valid_counts, stream);
+  auto const h_valid_counts = cudf::detail::make_host_vector_sync(d_valid_counts, stream);
   for (int i = 0; i < num_active_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
   }
@@ -620,14 +622,16 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
   return out_buffers;
 }
 
-std::vector<data_type> determine_column_types(csv_reader_options const& reader_opts,
-                                              parse_options const& parse_opts,
-                                              host_span<std::string const> column_names,
-                                              device_span<char const> data,
-                                              device_span<uint64_t const> row_offsets,
-                                              int32_t num_records,
-                                              host_span<column_parse::flags> column_flags,
-                                              rmm::cuda_stream_view stream)
+cudf::detail::host_vector<data_type> determine_column_types(
+  csv_reader_options const& reader_opts,
+  parse_options const& parse_opts,
+  host_span<std::string const> column_names,
+  device_span<char const> data,
+  device_span<uint64_t const> row_offsets,
+  int32_t num_records,
+  host_span<column_parse::flags> column_flags,
+  cudf::size_type num_active_columns,
+  rmm::cuda_stream_view stream)
 {
   std::vector<data_type> column_types(column_flags.size());
 
@@ -651,7 +655,8 @@ std::vector<data_type> determine_column_types(csv_reader_options const& reader_o
                      stream);
 
   // compact column_types to only include active columns
-  std::vector<data_type> active_col_types;
+  auto active_col_types =
+    cudf::detail::make_empty_host_vector<data_type>(num_active_columns, stream);
   std::copy_if(column_types.cbegin(),
                column_types.cend(),
                std::back_inserter(active_col_types),
@@ -667,7 +672,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
                              csv_reader_options const& reader_opts,
                              parse_options const& parse_opts,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   std::vector<char> header;
 
@@ -695,8 +700,10 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
   auto const num_actual_columns = static_cast<int32_t>(column_names.size());
   auto num_active_columns       = num_actual_columns;
-  auto column_flags             = std::vector<column_parse::flags>(
-    num_actual_columns, column_parse::enabled | column_parse::inferred);
+  auto column_flags =
+    cudf::detail::make_host_vector<column_parse::flags>(num_actual_columns, stream);
+  std::fill(
+    column_flags.begin(), column_flags.end(), column_parse::enabled | column_parse::inferred);
 
   // User did not pass column names to override names in the file
   // Process names from the file to remove empty and duplicated strings
@@ -840,8 +847,15 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
   // Exclude the end-of-data row from number of rows with actual data
   auto const num_records  = std::max(row_offsets.size(), 1ul) - 1;
-  auto const column_types = determine_column_types(
-    reader_opts, parse_opts, column_names, data, row_offsets, num_records, column_flags, stream);
+  auto const column_types = determine_column_types(reader_opts,
+                                                   parse_opts,
+                                                   column_names,
+                                                   data,
+                                                   row_offsets,
+                                                   num_records,
+                                                   column_flags,
+                                                   num_active_columns,
+                                                   stream);
 
   auto metadata    = table_metadata{};
   auto out_columns = std::vector<std::unique_ptr<cudf::column>>();
@@ -950,8 +964,10 @@ parse_options make_parse_options(csv_reader_options const& reader_opts,
   parse_opts.terminator = reader_opts.get_lineterminator();
 
   if (reader_opts.get_quotechar() != '\0' && reader_opts.get_quoting() != quote_style::NONE) {
-    parse_opts.quotechar   = reader_opts.get_quotechar();
-    parse_opts.keepquotes  = false;
+    parse_opts.quotechar  = reader_opts.get_quotechar();
+    parse_opts.keepquotes = false;
+    parse_opts.detect_whitespace_around_quotes =
+      reader_opts.is_enabled_detect_whitespace_around_quotes();
     parse_opts.doublequote = reader_opts.is_enabled_doublequote();
   } else {
     parse_opts.quotechar   = '\0';
@@ -995,7 +1011,7 @@ parse_options make_parse_options(csv_reader_options const& reader_opts,
 table_with_metadata read_csv(std::unique_ptr<cudf::io::datasource>&& source,
                              csv_reader_options const& options,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   auto parse_options = make_parse_options(options, stream);
 

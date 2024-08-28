@@ -43,7 +43,7 @@ requirements:
     {% endif %}
     - cuda-version ={{ cuda_version }}
     - ninja
-    - sysroot_{{ target_platform }} {{ sysroot_version }}
+    - {{ stdlib("c") }}
   host:
     - librmm ={{ minor_version }}
     - libkvikio ={{ minor_version }}
@@ -64,14 +64,11 @@ requirements:
     {% endif %}
     - cuda-version ={{ cuda_version }}
     - nvcomp {{ nvcomp_version }}
-    - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
     - fmt {{ fmt_version }}
+    - flatbuffers {{ flatbuffers_version }}
     - spdlog {{ spdlog_version }}
-    - benchmark {{ gbench_version }}
-    - gtest {{ gtest_version }}
-    - gmock {{ gtest_version }}
     - zlib {{ zlib_version }}
 
 outputs:
@@ -94,7 +91,6 @@ outputs:
         - cmake {{ cmake_version }}
       host:
         - cuda-version ={{ cuda_version }}
-        - libarrow {{ libarrow_version }}
       run:
         - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
         {% if cuda_major == "11" %}
@@ -108,8 +104,6 @@ outputs:
         - librmm ={{ minor_version }}
         - libkvikio ={{ minor_version }}
         - dlpack {{ dlpack_version }}
-        - gtest {{ gtest_version }}
-        - gmock {{ gtest_version }}
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so
@@ -175,7 +169,7 @@ outputs:
         {% endif %}
         - cuda-version ={{ cuda_version }}
         - ninja
-        - sysroot_{{ target_platform }} {{ sysroot_version }}
+        - {{ stdlib("c") }}
       host:
         - {{ pin_subpackage('libcudf', exact=True) }}
         {% if cuda_major == "11" %}
@@ -195,7 +189,7 @@ outputs:
       license: Apache-2.0
       license_family: APACHE
       license_file: LICENSE
-      summary: libcudf_example library
+      summary: libcudf example executables
   - name: libcudf-tests
     version: {{ version }}
     script: install_libcudf_tests.sh
@@ -221,9 +215,6 @@ outputs:
         {% else %}
         - libcurand-dev
         {% endif %}
-        - benchmark {{ gbench_version }}
-        - gtest {{ gtest_version }}
-        - gmock {{ gtest_version }}
       run:
         - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
         - {{ pin_subpackage('libcudf', exact=True) }}
@@ -233,9 +224,6 @@ outputs:
         {% else %}
         - libcurand
         {% endif %}
-        - benchmark {{ gbench_version }}
-        - gtest {{ gtest_version }}
-        - gmock {{ gtest_version }}
     about:
       home: https://rapids.ai/
       license: Apache-2.0

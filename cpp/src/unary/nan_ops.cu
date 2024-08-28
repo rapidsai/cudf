@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace detail {
@@ -33,7 +34,7 @@ struct nan_dispatcher {
     cudf::column_view const& input,
     Predicate predicate,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+    rmm::device_async_resource_ref mr)
   {
     auto input_device_view = column_device_view::create(input, stream);
 
@@ -61,7 +62,7 @@ struct nan_dispatcher {
     cudf::column_view const& input,
     Predicate predicate,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+    rmm::device_async_resource_ref mr)
   {
     CUDF_FAIL("NAN is not supported in a Non-floating point type column");
   }
@@ -69,7 +70,7 @@ struct nan_dispatcher {
 
 std::unique_ptr<column> is_nan(cudf::column_view const& input,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   auto predicate = [] __device__(auto element_validity_pair) {
     return element_validity_pair.second and std::isnan(element_validity_pair.first);
@@ -80,7 +81,7 @@ std::unique_ptr<column> is_nan(cudf::column_view const& input,
 
 std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   auto predicate = [] __device__(auto element_validity_pair) {
     return !element_validity_pair.second or !std::isnan(element_validity_pair.first);
@@ -93,7 +94,7 @@ std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
 
 std::unique_ptr<column> is_nan(cudf::column_view const& input,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::is_nan(input, stream, mr);
@@ -101,7 +102,7 @@ std::unique_ptr<column> is_nan(cudf::column_view const& input,
 
 std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::is_not_nan(input, stream, mr);

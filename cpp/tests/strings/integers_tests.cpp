@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -294,7 +294,7 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   std::iota(h_integers.begin(), h_integers.end(), -(TypeParam)(h_integers.size() / 2));
   h_integers.push_back(std::numeric_limits<TypeParam>::min());
   h_integers.push_back(std::numeric_limits<TypeParam>::max());
-  auto d_integers = cudf::detail::make_device_uvector_sync(
+  auto const d_integers = cudf::detail::make_device_uvector_sync(
     h_integers, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto integers      = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                             (cudf::size_type)d_integers.size());
@@ -308,8 +308,6 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   // convert to strings
   auto results_strings = cudf::strings::from_integers(integers->view());
 
-  // copy back to host
-  h_integers = cudf::detail::make_host_vector_sync(d_integers, cudf::get_default_stream());
   std::vector<std::string> h_strings;
   for (auto itr = h_integers.begin(); itr != h_integers.end(); ++itr)
     h_strings.push_back(std::to_string(*itr));
@@ -352,11 +350,11 @@ TEST_F(StringsConvertTest, HexToInteger)
 
   {
     std::vector<int32_t> h_expected;
-    for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr) {
-      if (*itr == nullptr)
+    for (auto& h_string : h_strings) {
+      if (h_string == nullptr)
         h_expected.push_back(0);
       else
-        h_expected.push_back(static_cast<int>(std::stol(std::string(*itr), 0, 16)));
+        h_expected.push_back(static_cast<int>(std::stol(std::string(h_string), nullptr, 16)));
     }
 
     auto results = cudf::strings::hex_to_integers(cudf::strings_column_view(strings),
@@ -369,11 +367,11 @@ TEST_F(StringsConvertTest, HexToInteger)
   }
   {
     std::vector<int64_t> h_expected;
-    for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr) {
-      if (*itr == nullptr)
+    for (auto& h_string : h_strings) {
+      if (h_string == nullptr)
         h_expected.push_back(0);
       else
-        h_expected.push_back(std::stol(std::string(*itr), 0, 16));
+        h_expected.push_back(std::stol(std::string(h_string), nullptr, 16));
     }
 
     auto results = cudf::strings::hex_to_integers(cudf::strings_column_view(strings),
@@ -404,8 +402,9 @@ TEST_F(StringsConvertTest, IsHex)
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::fixed_width_column_wrapper<bool> expected({0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0},
-                                                        {1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> expected(
+    {0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0},
+    {true, true, false, true, true, true, true, true, true, true, true, true});
   auto results = cudf::strings::is_hex(cudf::strings_column_view(strings));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
@@ -447,11 +446,12 @@ TYPED_TEST(StringsIntegerConvertTest, IntegerToHex)
 TEST_F(StringsConvertTest, IntegerToHexWithNull)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> integers(
-    {123456, -1, 0, 0, 12, 12345, 123456789, -123456789}, {1, 1, 1, 0, 1, 1, 1, 1});
+    {123456, -1, 0, 0, 12, 12345, 123456789, -123456789},
+    {true, true, true, false, true, true, true, true});
 
   cudf::test::strings_column_wrapper expected(
     {"01E240", "FFFFFFFF", "00", "", "0C", "3039", "075BCD15", "F8A432EB"},
-    {1, 1, 1, 0, 1, 1, 1, 1});
+    {true, true, true, false, true, true, true, true});
 
   auto results = cudf::strings::integers_to_hex(integers);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);

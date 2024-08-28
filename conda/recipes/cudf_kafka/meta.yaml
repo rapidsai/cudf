@@ -53,15 +53,15 @@ requirements:
     - {{ compiler('cuda') }}
     {% endif %}
     - cuda-version ={{ cuda_version }}
-    - sysroot_{{ target_platform }} {{ sysroot_version }}
+    - {{ stdlib("c") }}
   host:
     - python
     - cython >=3.0.3
     - cuda-version ={{ cuda_version }}
-    - cudf ={{ version }}
+    - pylibcudf ={{ version }}
     - libcudf_kafka ={{ version }}
-    - scikit-build-core >=0.7.0
-    - setuptools
+    - rapids-build-backend >=0.3.0,<0.4.0.dev0
+    - scikit-build-core >=0.10.0
     {% if cuda_major != "11" %}
     - cuda-cudart-dev
     {% endif %}
@@ -69,7 +69,7 @@ requirements:
     - python
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
     - libcudf_kafka ={{ version }}
-    - cudf ={{ version }}
+    - pylibcudf ={{ version }}
     {% if cuda_major != "11" %}
     - cuda-cudart
     {% endif %}

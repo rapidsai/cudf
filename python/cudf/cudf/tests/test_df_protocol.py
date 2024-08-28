@@ -1,6 +1,7 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
-from typing import Any, Tuple
+from typing import Any
 
 import cupy as cp
 import pandas as pd
@@ -19,7 +20,7 @@ from cudf.core.df_protocol import (
     from_dataframe,
     protocol_dtype_to_cupy_dtype,
 )
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 @pytest.fixture(
@@ -64,7 +65,7 @@ def assert_validity_equal(protocol_buffer, cudf_buffer, size, null, valid):
         raise NotImplementedError()
 
 
-def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
+def assert_buffer_equal(buffer_and_dtype: tuple[_CuDFBuffer, Any], cudfcol):
     buf, dtype = buffer_and_dtype
     device_id = cp.asarray(cudfcol.data).device.id
     assert buf.__dlpack_device__() == (2, device_id)
@@ -77,7 +78,7 @@ def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
     # FIXME: In gh-10202 some minimal fixes were added to unblock CI. But
     # currently only non-null values are compared, null positions are
     # unchecked.
-    non_null_idxs = ~cudf.Series(cudfcol).isna()
+    non_null_idxs = cudfcol.notnull()
     assert_eq(
         col_from_buf.apply_boolean_mask(non_null_idxs),
         cudfcol.apply_boolean_mask(non_null_idxs),
@@ -85,8 +86,8 @@ def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
     array_from_dlpack = cp.from_dlpack(buf.__dlpack__()).get()
     col_array = cp.asarray(cudfcol.data_array_view(mode="read")).get()
     assert_eq(
-        array_from_dlpack[non_null_idxs.to_numpy()].flatten(),
-        col_array[non_null_idxs.to_numpy()].flatten(),
+        array_from_dlpack[non_null_idxs.values_host].flatten(),
+        col_array[non_null_idxs.values_host].flatten(),
     )
 
 

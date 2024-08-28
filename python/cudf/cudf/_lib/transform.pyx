@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from numba.np import numpy_support
 
@@ -15,17 +15,23 @@ from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
+cimport pylibcudf.libcudf.transform as libcudf_transform
+from pylibcudf cimport transform as plc_transform
+from pylibcudf.expressions cimport Expression
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.expressions cimport expression
+from pylibcudf.libcudf.table.table cimport table
+from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.types cimport (
+    bitmask_type,
+    data_type,
+    size_type,
+    type_id,
+)
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
-cimport cudf._lib.cpp.transform as libcudf_transform
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.expressions cimport expression
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
-from cudf._lib.expressions cimport Expression
 from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.utils cimport (
     columns_from_unique_ptr,
@@ -77,18 +83,10 @@ def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
 
 @acquire_spill_lock()
 def nans_to_nulls(Column input):
-    cdef column_view c_input = input.view()
-    cdef pair[unique_ptr[device_buffer], size_type] c_output
-    cdef unique_ptr[device_buffer] c_buffer
-
-    with nogil:
-        c_output = move(libcudf_transform.nans_to_nulls(c_input))
-        c_buffer = move(c_output.first)
-
-    if c_output.second == 0:
-        return None
-
-    return as_buffer(DeviceBuffer.c_from_unique_ptr(move(c_buffer)))
+    (mask, _) = plc_transform.nans_to_nulls(
+        input.to_pylibcudf(mode="read")
+    )
+    return as_buffer(mask)
 
 
 @acquire_spill_lock()

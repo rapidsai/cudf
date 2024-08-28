@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,23 +19,26 @@
 extern "C" {
 
 JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_PackedColumnMetadata_createMetadataDirectBuffer(
-    JNIEnv *env, jclass, jlong j_metadata_ptr) {
+  JNIEnv* env, jclass, jlong j_metadata_ptr)
+{
   JNI_NULL_CHECK(env, j_metadata_ptr, "metadata is null", nullptr);
   try {
-    auto metadata = reinterpret_cast<std::vector<uint8_t> *>(j_metadata_ptr);
-    return env->NewDirectByteBuffer(const_cast<uint8_t *>(metadata->data()), metadata->size());
+    auto metadata = reinterpret_cast<std::vector<uint8_t>*>(j_metadata_ptr);
+    return env->NewDirectByteBuffer(const_cast<uint8_t*>(metadata->data()), metadata->size());
   }
   CATCH_STD(env, nullptr);
 }
 
-JNIEXPORT void JNICALL
-Java_ai_rapids_cudf_PackedColumnMetadata_closeMetadata(JNIEnv *env, jclass, jlong j_metadata_ptr) {
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_PackedColumnMetadata_closeMetadata(JNIEnv* env,
+                                                                              jclass,
+                                                                              jlong j_metadata_ptr)
+{
   JNI_NULL_CHECK(env, j_metadata_ptr, "metadata is null", );
   try {
-    auto metadata = reinterpret_cast<std::vector<uint8_t> *>(j_metadata_ptr);
+    auto metadata = reinterpret_cast<std::vector<uint8_t>*>(j_metadata_ptr);
     delete metadata;
   }
   CATCH_STD(env, );
 }
 
-} // extern "C"
+}  // extern "C"

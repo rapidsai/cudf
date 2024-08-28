@@ -50,6 +50,8 @@ CUDF_KERNEL void test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
 // calls.
 TEST(StreamCheck, FailedKernel)
 {
+  if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { GTEST_SKIP(); }
+
   rmm::cuda_stream stream;
   int a;
   test_kernel<<<0, 0, 0, stream.value()>>>(&a);
@@ -61,6 +63,8 @@ TEST(StreamCheck, FailedKernel)
 
 TEST(StreamCheck, CatchFailedKernel)
 {
+  if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { GTEST_SKIP(); }
+
   rmm::cuda_stream stream;
   int a;
   test_kernel<<<0, 0, 0, stream.value()>>>(&a);
@@ -128,17 +132,7 @@ TEST(DebugAssert, cudf_assert_true)
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
-  auto const cmd_opts    = parse_cudf_test_opts(argc, argv);
-  auto const stream_mode = cmd_opts["stream_mode"].as<std::string>();
-  if ((stream_mode == "new_cudf_default") || (stream_mode == "new_testing_default")) {
-    auto resource                      = rmm::mr::get_current_device_resource();
-    auto const stream_error_mode       = cmd_opts["stream_error_mode"].as<std::string>();
-    auto const error_on_invalid_stream = (stream_error_mode == "error");
-    auto const check_default_stream    = (stream_mode == "new_cudf_default");
-    auto adaptor                       = make_stream_checking_resource_adaptor(
-      resource, error_on_invalid_stream, check_default_stream);
-    rmm::mr::set_current_device_resource(&adaptor);
-    return RUN_ALL_TESTS();
-  }
+  auto const cmd_opts = parse_cudf_test_opts(argc, argv);
+  auto adaptor        = make_stream_mode_adaptor(cmd_opts);
   return RUN_ALL_TESTS();
 }

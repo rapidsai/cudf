@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,9 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 //! Strings column APIs
 namespace strings {
@@ -47,7 +48,7 @@ namespace strings {
  */
 std::unique_ptr<column> count_characters(
   strings_column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column containing byte lengths
@@ -65,7 +66,7 @@ std::unique_ptr<column> count_characters(
  */
 std::unique_ptr<column> count_bytes(
   strings_column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a numeric column with code point values (integers) for each
@@ -85,9 +86,9 @@ std::unique_ptr<column> count_bytes(
  */
 std::unique_ptr<column> code_points(
   strings_column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of strings_apis group
 
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

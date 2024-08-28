@@ -21,6 +21,8 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/string_view.cuh>
 
+#include <rmm/resource_ref.hpp>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -58,18 +60,15 @@ struct count_fn {
 
 std::unique_ptr<column> count_matches(column_device_view const& d_strings,
                                       reprog_device& d_prog,
-                                      size_type output_size,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
-  assert(output_size >= d_strings.size() and "Unexpected output size");
-
   auto results = make_numeric_column(
-    data_type{type_to_id<size_type>()}, output_size, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, d_strings.size(), mask_state::UNALLOCATED, stream, mr);
 
-  if (d_strings.size() == 0) return results;
+  if (d_strings.size() == 0) { return results; }
 
-  auto d_results = results->mutable_view().data<int32_t>();
+  auto d_results = results->mutable_view().data<cudf::size_type>();
 
   launch_transform_kernel(count_fn{d_strings}, d_prog, d_results, d_strings.size(), stream);
 

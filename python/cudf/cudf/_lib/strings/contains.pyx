@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libc.stdint cimport uint32_t
@@ -9,19 +9,22 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
-from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from cudf._lib.cpp.strings.contains cimport (
-    contains_re as cpp_contains_re,
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from pylibcudf.libcudf.strings.contains cimport (
     count_re as cpp_count_re,
     like as cpp_like,
     matches_re as cpp_matches_re,
 )
-from cudf._lib.cpp.strings.regex_flags cimport regex_flags
-from cudf._lib.cpp.strings.regex_program cimport regex_program
+from pylibcudf.libcudf.strings.regex_flags cimport regex_flags
+from pylibcudf.libcudf.strings.regex_program cimport regex_program
+
+from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
+
+from pylibcudf.strings import contains
+from pylibcudf.strings.regex_program import RegexProgram
 
 
 @acquire_spill_lock()
@@ -30,21 +33,10 @@ def contains_re(Column source_strings, object reg_ex, uint32_t flags):
     Returns a Column of boolean values with True for `source_strings`
     that contain regular expression `reg_ex`.
     """
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = source_strings.view()
-
-    cdef string reg_ex_string = <string>str(reg_ex).encode()
-    cdef regex_flags c_flags = <regex_flags>flags
-    cdef unique_ptr[regex_program] c_prog
-
-    with nogil:
-        c_prog = move(regex_program.create(reg_ex_string, c_flags))
-        c_result = move(cpp_contains_re(
-            source_view,
-            dereference(c_prog)
-        ))
-
-    return Column.from_unique_ptr(move(c_result))
+    prog = RegexProgram.create(str(reg_ex), flags)
+    return Column.from_pylibcudf(
+        contains.contains_re(source_strings.to_pylibcudf(mode="read"), prog)
+    )
 
 
 @acquire_spill_lock()

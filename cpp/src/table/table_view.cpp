@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,12 +50,6 @@ auto concatenate_column_views(std::vector<ViewType> const& views)
     concat_cols.insert(concat_cols.end(), view.begin(), view.end());
   }
   return concat_cols;
-}
-
-template <typename ColumnView>
-ColumnView const& table_view_base<ColumnView>::column(size_type column_index) const
-{
-  return _columns.at(column_index);
 }
 
 // Explicit instantiation for a table of `column_view`s
@@ -145,28 +139,19 @@ bool has_nested_nullable_columns(table_view const& input)
   });
 }
 
-bool have_same_types(table_view const& lhs, table_view const& rhs)
+namespace detail {
+
+template <typename TableView>
+bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
 {
   return std::equal(lhs.begin(),
                     lhs.end(),
                     rhs.begin(),
                     rhs.end(),
                     [](column_view const& lcol, column_view const& rcol) {
-                      return cudf::column_types_equal(lcol, rcol);
+                      return cudf::is_relationally_comparable(lcol.type()) and
+                             cudf::have_same_types(lcol, rcol);
                     });
-}
-
-namespace detail {
-
-template <typename TableView>
-bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
-{
-  return std::all_of(thrust::counting_iterator<size_type>(0),
-                     thrust::counting_iterator<size_type>(lhs.num_columns()),
-                     [lhs, rhs](auto const i) {
-                       return lhs.column(i).type() == rhs.column(i).type() and
-                              cudf::is_relationally_comparable(lhs.column(i).type());
-                     });
 }
 
 // Explicit template instantiation for a table of immutable views
@@ -181,6 +166,7 @@ bool has_nested_columns(table_view const& table)
   return std::any_of(
     table.begin(), table.end(), [](column_view const& col) { return is_nested(col.type()); });
 }
-
 }  // namespace detail
+
+bool has_nested_columns(table_view const& table) { return detail::has_nested_columns(table); }
 }  // namespace cudf

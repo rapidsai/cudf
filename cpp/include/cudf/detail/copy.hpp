@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,11 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <initializer_list>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @brief Constructs a zero-copy `column_view`/`mutable_column_view` of the
@@ -123,7 +124,7 @@ std::vector<table_view> split(table_view const& input,
 
 /**
  * @copydoc cudf::shift(column_view const&,size_type,scalar const&,
- * rmm::mr::device_memory_resource*)
+ * rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -131,7 +132,7 @@ std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
 /**
  * @brief Performs segmented shifts for specified values.
@@ -171,11 +172,11 @@ std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
                                         size_type offset,
                                         scalar const& fill_value,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr);
+                                        rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::allocate_like(column_view const&, size_type, mask_allocation_policy,
- * rmm::mr::device_memory_resource*)
+ * rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -183,11 +184,11 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                       size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                      rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::copy_if_else( column_view const&, column_view const&,
- * column_view const&, rmm::mr::device_memory_resource*)
+ * column_view const&, rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -195,11 +196,11 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr);
+                                     rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::copy_if_else( scalar const&, column_view const&,
- * column_view const&, rmm::mr::device_memory_resource*)
+ * column_view const&, rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -207,11 +208,11 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr);
+                                     rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::copy_if_else( column_view const&, scalar const&,
- * column_view const&, rmm::mr::device_memory_resource*)
+ * column_view const&, rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -219,11 +220,11 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr);
+                                     rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::copy_if_else( scalar const&, scalar const&,
- * column_view const&, rmm::mr::device_memory_resource*)
+ * column_view const&, rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -231,7 +232,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr);
+                                     rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::sample
@@ -243,7 +244,7 @@ std::unique_ptr<table> sample(table_view const& input,
                               sample_with_replacement replacement,
                               int64_t const seed,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::get_element
@@ -253,7 +254,7 @@ std::unique_ptr<table> sample(table_view const& input,
 std::unique_ptr<scalar> get_element(column_view const& input,
                                     size_type index,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr);
+                                    rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::has_nonempty_nulls
@@ -276,7 +277,7 @@ bool may_have_nonempty_nulls(column_view const& input, rmm::cuda_stream_view str
  */
 std::unique_ptr<column> purge_nonempty_nulls(column_view const& input,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr);
+                                             rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -24,6 +24,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <type_traits>
@@ -35,7 +36,7 @@
  * @brief Class definition for cudf::column
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief A container of nullable device data as a column of elements.
@@ -63,8 +64,8 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   column(column const& other,
-         rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-         rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+         rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+         rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Move the contents from `other` to create a new column.
@@ -141,8 +142,8 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   explicit column(column_view view,
-                  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Returns the column's logical element type
@@ -331,4 +332,4 @@ class column {
 };
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,8 +41,8 @@ struct PackUnpackTest : public cudf::test::BaseFixture {
 
 TEST_F(PackUnpackTest, SingleColumnFixedWidth)
 {
-  cudf::test::fixed_width_column_wrapper<int64_t> col1({1, 2, 3, 4, 5, 6, 7},
-                                                       {1, 1, 1, 0, 1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int64_t> col1(
+    {1, 2, 3, 4, 5, 6, 7}, {true, true, true, false, true, false, true});
 
   this->run_test({col1});
 }
@@ -56,20 +56,22 @@ TEST_F(PackUnpackTest, SingleColumnFixedWidthNonNullable)
 
 TEST_F(PackUnpackTest, MultiColumnFixedWidth)
 {
-  cudf::test::fixed_width_column_wrapper<int16_t> col1({1, 2, 3, 4, 5, 6, 7},
-                                                       {1, 1, 1, 0, 1, 0, 1});
-  cudf::test::fixed_width_column_wrapper<float> col2({7, 8, 6, 5, 4, 3, 2}, {1, 0, 1, 1, 1, 1, 1});
-  cudf::test::fixed_width_column_wrapper<double> col3({8, 4, 2, 0, 7, 1, 3}, {0, 1, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<int16_t> col1(
+    {1, 2, 3, 4, 5, 6, 7}, {true, true, true, false, true, false, true});
+  cudf::test::fixed_width_column_wrapper<float> col2({7, 8, 6, 5, 4, 3, 2},
+                                                     {true, false, true, true, true, true, true});
+  cudf::test::fixed_width_column_wrapper<double> col3({8, 4, 2, 0, 7, 1, 3},
+                                                      {false, true, true, true, true, true, true});
 
   this->run_test({col1, col2, col3});
 }
 
 TEST_F(PackUnpackTest, MultiColumnWithStrings)
 {
-  cudf::test::fixed_width_column_wrapper<int16_t> col1({1, 2, 3, 4, 5, 6, 7},
-                                                       {1, 1, 1, 0, 1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int16_t> col1(
+    {1, 2, 3, 4, 5, 6, 7}, {true, true, true, false, true, false, true});
   cudf::test::strings_column_wrapper col2({"Lorem", "ipsum", "dolor", "sit", "amet", "ort", "ral"},
-                                          {1, 0, 1, 1, 1, 0, 1});
+                                          {true, false, true, true, true, false, true});
   cudf::test::strings_column_wrapper col3({"", "this", "is", "a", "column", "of", "strings"});
 
   this->run_test({col1, col2, col3});
@@ -164,7 +166,7 @@ std::vector<std::unique_ptr<cudf::column>> generate_structs(bool include_validit
 
   // 2. Numeric "ages" column.
   std::vector<int> ages{5, 10, 15, 20, 25, 30, 100, 101, 102};
-  std::vector<bool> ages_validity = {1, 1, 1, 1, 0, 1, 0, 0, 1};
+  std::vector<bool> ages_validity = {true, true, true, true, false, true, false, false, true};
   auto ages_column =
     include_validity
       ? cudf::test::fixed_width_column_wrapper<int>(ages.begin(), ages.end(), ages_validity.begin())
@@ -172,7 +174,7 @@ std::vector<std::unique_ptr<cudf::column>> generate_structs(bool include_validit
 
   // 3. Boolean "is_human" column.
   std::vector<bool> is_human{true, true, false, false, false, false, true, true, true};
-  std::vector<bool> is_human_validity{1, 1, 1, 0, 1, 1, 1, 1, 0};
+  std::vector<bool> is_human_validity{true, true, true, false, true, true, true, true, false};
   auto is_human_col =
     include_validity
       ? cudf::test::fixed_width_column_wrapper<bool>(
@@ -180,7 +182,8 @@ std::vector<std::unique_ptr<cudf::column>> generate_structs(bool include_validit
       : cudf::test::fixed_width_column_wrapper<bool>(is_human.begin(), is_human.end());
 
   // Assemble struct column.
-  auto const struct_validity = std::vector<bool>{1, 1, 1, 1, 1, 0, 0, 1, 0};
+  auto const struct_validity =
+    std::vector<bool>{true, true, true, true, true, false, false, true, false};
   auto struct_column =
     include_validity
       ? cudf::test::structs_column_wrapper({names_column, ages_column, is_human_col},
@@ -201,13 +204,13 @@ std::vector<std::unique_ptr<cudf::column>> generate_struct_of_list()
 
   // 2. Numeric "ages" column.
   std::vector<int> ages{5, 10, 15, 20, 25, 30, 100, 101, 102};
-  std::vector<bool> ages_validity = {1, 1, 1, 1, 0, 1, 0, 0, 1};
+  std::vector<bool> ages_validity = {true, true, true, true, false, true, false, false, true};
   auto ages_column =
     cudf::test::fixed_width_column_wrapper<int>(ages.begin(), ages.end(), ages_validity.begin());
 
   // 3. List column
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
-  std::vector<bool> list_validity{1, 1, 1, 1, 1, 0, 1, 0, 1};
+  std::vector<bool> list_validity{true, true, true, true, true, false, true, false, true};
   cudf::test::lists_column_wrapper<cudf::string_view> list(
     {{{"abc", "d", "edf"}, {"jjj"}},
      {{"dgaer", "-7"}, LCW{}},
@@ -221,7 +224,8 @@ std::vector<std::unique_ptr<cudf::column>> generate_struct_of_list()
     list_validity.begin());
 
   // Assemble struct column.
-  auto const struct_validity = std::vector<bool>{1, 1, 1, 1, 1, 0, 0, 1, 0};
+  auto const struct_validity =
+    std::vector<bool>{true, true, true, true, true, false, false, true, false};
   auto struct_column =
     cudf::test::structs_column_wrapper({names_column, ages_column, list}, struct_validity.begin());
 
@@ -253,17 +257,47 @@ std::vector<std::unique_ptr<cudf::column>> generate_list_of_struct()
 
   // 2. Numeric "ages" column.
   std::vector<int> ages{5, 10, 15, 20, 25, 30, 100, 101, 102, -1, -2, -3, -4, -5, -6, -7};
-  std::vector<bool> ages_validity = {1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1};
+  std::vector<bool> ages_validity = {true,
+                                     true,
+                                     true,
+                                     true,
+                                     false,
+                                     true,
+                                     false,
+                                     false,
+                                     true,
+                                     false,
+                                     false,
+                                     false,
+                                     false,
+                                     true,
+                                     true,
+                                     true};
   auto ages_column =
     cudf::test::fixed_width_column_wrapper<int>(ages.begin(), ages.end(), ages_validity.begin());
 
   // Assemble struct column.
-  auto const struct_validity = std::vector<bool>{1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1};
+  auto const struct_validity = std::vector<bool>{true,
+                                                 true,
+                                                 true,
+                                                 true,
+                                                 true,
+                                                 false,
+                                                 false,
+                                                 true,
+                                                 false,
+                                                 true,
+                                                 true,
+                                                 true,
+                                                 true,
+                                                 true,
+                                                 true,
+                                                 true};
   auto struct_column =
     cudf::test::structs_column_wrapper({names_column, ages_column}, struct_validity.begin());
 
   // 3. List column
-  std::vector<bool> list_validity{1, 1, 1, 1, 1, 0, 1, 0, 1};
+  std::vector<bool> list_validity{true, true, true, true, true, false, true, false, true};
 
   cudf::test::fixed_width_column_wrapper<int> offsets{0, 1, 4, 5, 7, 7, 10, 13, 14, 16};
   auto [null_mask, null_count] =
@@ -479,19 +513,21 @@ TEST_F(PackUnpackTest, NestedSliced)
   // struct
   {
     cudf::test::fixed_width_column_wrapper<int> a{0, 1, 2, 3, 4, 5, 6, 7};
-    cudf::test::fixed_width_column_wrapper<float> b{{0, -1, -2, -3, -4, -5, -6, -7},
-                                                    {1, 1, 1, 0, 0, 0, 0, 1}};
+    cudf::test::fixed_width_column_wrapper<float> b{
+      {0, -1, -2, -3, -4, -5, -6, -7}, {true, true, true, false, false, false, false, true}};
     cudf::test::strings_column_wrapper c{{"abc", "def", "ghi", "jkl", "mno", "", "st", "uvwx"},
-                                         {0, 0, 1, 1, 1, 1, 1, 1}};
-    std::vector<bool> list_validity{1, 0, 1, 0, 1, 0, 1, 1};
+                                         {false, false, true, true, true, true, true, true}};
+    std::vector<bool> list_validity{true, false, true, false, true, false, true, true};
     cudf::test::lists_column_wrapper<int16_t> d{
       {{0, 1}, {2, 3, 4}, {5, 6}, {7}, {8, 9, 10}, {11, 12}, {}, {15, 16, 17}},
       list_validity.begin()};
     cudf::test::fixed_width_column_wrapper<int> _a{10, 20, 30, 40, 50, 60, 70, 80};
     cudf::test::fixed_width_column_wrapper<float> _b{-10, -20, -30, -40, -50, -60, -70, -80};
     cudf::test::strings_column_wrapper _c{"aa", "", "ccc", "dddd", "eeeee", "f", "gg", "hhh"};
-    cudf::test::structs_column_wrapper e({_a, _b, _c}, {1, 1, 1, 0, 1, 1, 1, 0});
-    cudf::test::structs_column_wrapper s({a, b, c, d, e}, {1, 1, 0, 1, 1, 1, 1, 1});
+    cudf::test::structs_column_wrapper e({_a, _b, _c},
+                                         {true, true, true, false, true, true, true, false});
+    cudf::test::structs_column_wrapper s({a, b, c, d, e},
+                                         {true, true, false, true, true, true, true, true});
 
     auto split = cudf::split(s, {2, 5});
 
@@ -537,6 +573,8 @@ TEST_F(PackUnpackTest, SlicedEmpty)
 
   cudf::table_view t({a, b, c, d});
 
-  auto sliced = cudf::split(t, {0});
-  this->run_test(sliced[0]);
+  auto sliced   = cudf::split(t, {0});
+  auto packed   = cudf::pack(t);
+  auto unpacked = cudf::unpack(packed);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(t, unpacked);
 }

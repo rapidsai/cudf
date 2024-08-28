@@ -10,20 +10,14 @@ cuda_compiler:
 cuda11_compiler:
   - nvcc
 
-sysroot_version:
+c_stdlib:
+  - sysroot
+
+c_stdlib_version:
   - "2.17"
 
 cmake_version:
-  - ">=3.26.4"
-
-gbench_version:
-  - "==1.8.0"
-
-gtest_version:
-  - ">=1.13.0"
-
-libarrow_version:
-  - "==14.0.2"
+  - ">=3.26.4,!=3.30.0"
 
 dlpack_version:
   - ">=0.8,<1.0"
@@ -33,6 +27,9 @@ librdkafka_version:
 
 fmt_version:
   - ">=10.1.1,<11"
+
+flatbuffers_version:
+  - "=24.3.25"
 
 spdlog_version:
   - ">=1.12.0,<1.13"

@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+from __future__ import annotations
 
 import inspect
 from functools import partial
@@ -439,10 +440,6 @@ def test_proxy_binop():
     assert Bar() + Foo() == "sum"
     assert FooProxy() + BarProxy() == "sum"
     assert BarProxy() + FooProxy() == "sum"
-    assert FooProxy() + Bar() == "sum"
-    assert Bar() + FooProxy() == "sum"
-    assert Foo() + BarProxy() == "sum"
-    assert BarProxy() + Foo() == "sum"
 
 
 def test_slow_attr_still_proxy():

@@ -16,16 +16,18 @@
 
 #include "file_io_utilities.hpp"
 
-#include "io/utilities/config_utils.hpp"
+#include "getenv_or.hpp"
 
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/io/config_utils.hpp>
 
 #include <rmm/device_buffer.hpp>
 
 #include <dlfcn.h>
-#include <errno.h>
-#include <string.h>
 
+#include <cerrno>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <numeric>
@@ -33,6 +35,14 @@
 namespace cudf {
 namespace io {
 namespace detail {
+
+void force_init_cuda_context()
+{
+  // Workaround for https://github.com/rapidsai/cudf/issues/14140, where cuFileDriverOpen errors
+  // out if no CUDA calls have been made before it. This is a no-op if the CUDA context is already
+  // initialized.
+  cudaFree(nullptr);
+}
 
 [[noreturn]] void throw_on_file_open_failure(std::string const& filepath, bool is_create)
 {
@@ -90,7 +100,7 @@ class cufile_shim {
   decltype(cuFileDriverClose)* driver_close = nullptr;
 
   std::unique_ptr<cudf::logic_error> init_error;
-  auto is_valid() const noexcept { return init_error == nullptr; }
+  [[nodiscard]] auto is_valid() const noexcept { return init_error == nullptr; }
 
  public:
   cufile_shim(cufile_shim const&)            = delete;
@@ -213,7 +223,6 @@ cufile_input_impl::cufile_input_impl(std::string const& filepath)
     // The benefit from multithreaded read plateaus around 16 threads
     pool(getenv_or("LIBCUDF_CUFILE_THREAD_COUNT", 16))
 {
-  pool.sleep_duration = 10;
 }
 
 namespace {
@@ -222,14 +231,15 @@ template <typename DataT,
           typename F,
           typename ResultT = std::invoke_result_t<F, DataT*, size_t, size_t>>
 std::vector<std::future<ResultT>> make_sliced_tasks(
-  F function, DataT* ptr, size_t offset, size_t size, cudf::detail::thread_pool& pool)
+  F function, DataT* ptr, size_t offset, size_t size, BS::thread_pool& pool)
 {
   constexpr size_t default_max_slice_size = 4 * 1024 * 1024;
   static auto const max_slice_size = getenv_or("LIBCUDF_CUFILE_SLICE_SIZE", default_max_slice_size);
   auto const slices                = make_file_io_slices(size, max_slice_size);
   std::vector<std::future<ResultT>> slice_tasks;
   std::transform(slices.cbegin(), slices.cend(), std::back_inserter(slice_tasks), [&](auto& slice) {
-    return pool.submit(function, ptr + slice.offset, slice.size, offset + slice.offset);
+    return pool.submit_task(
+      [&] { return function(ptr + slice.offset, slice.size, offset + slice.offset); });
   });
   return slice_tasks;
 }

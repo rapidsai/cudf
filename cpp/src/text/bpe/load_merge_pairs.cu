@@ -28,6 +28,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 
@@ -42,16 +43,16 @@ namespace {
 std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   cudf::column_device_view const& input, rmm::cuda_stream_view stream)
 {
-  auto merge_pairs_map =
-    std::make_unique<merge_pairs_map_type>(static_cast<size_t>(input.size()),
-                                           cuco::empty_key{-1},
-                                           cuco::empty_value{-1},
-                                           bpe_equal{input},
-                                           bpe_probe_scheme{bpe_hasher{input}},
-                                           cuco::thread_scope_device,
-                                           cuco_storage{},
-                                           cudf::detail::cuco_allocator{stream},
-                                           stream.value());
+  auto merge_pairs_map = std::make_unique<merge_pairs_map_type>(
+    static_cast<size_t>(input.size()),
+    cuco::empty_key{-1},
+    cuco::empty_value{-1},
+    bpe_equal{input},
+    bpe_probe_scheme{bpe_hasher{input}},
+    cuco::thread_scope_device,
+    cuco_storage{},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream.value());
 
   auto iter = cudf::detail::make_counting_transform_iterator(
     0,
@@ -66,15 +67,16 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
 std::unique_ptr<detail::mp_table_map_type> initialize_mp_table_map(
   cudf::column_device_view const& input, rmm::cuda_stream_view stream)
 {
-  auto mp_table_map = std::make_unique<mp_table_map_type>(static_cast<size_t>(input.size()),
-                                                          cuco::empty_key{-1},
-                                                          cuco::empty_value{-1},
-                                                          mp_equal{input},
-                                                          mp_probe_scheme{mp_hasher{input}},
-                                                          cuco::thread_scope_device,
-                                                          cuco_storage{},
-                                                          cudf::detail::cuco_allocator{stream},
-                                                          stream.value());
+  auto mp_table_map = std::make_unique<mp_table_map_type>(
+    static_cast<size_t>(input.size()),
+    cuco::empty_key{-1},
+    cuco::empty_value{-1},
+    mp_equal{input},
+    mp_probe_scheme{mp_hasher{input}},
+    cuco::thread_scope_device,
+    cuco_storage{},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream.value());
 
   auto iter = cudf::detail::make_counting_transform_iterator(
     0,
@@ -99,7 +101,7 @@ std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_im
 std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_impl(
   cudf::strings_column_view const& input,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto pairs   = cudf::strings::split_record(input, cudf::string_scalar(" "), 1, stream, mr);
   auto content = pairs->release();
@@ -110,7 +112,7 @@ std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_im
 
 std::unique_ptr<bpe_merge_pairs> load_merge_pairs(cudf::strings_column_view const& merge_pairs,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!merge_pairs.is_empty(), "Merge pairs must not be empty");
   CUDF_EXPECTS(!merge_pairs.has_nulls(), "Merge pairs may not contain nulls");
@@ -121,7 +123,7 @@ std::unique_ptr<bpe_merge_pairs> load_merge_pairs(cudf::strings_column_view cons
 
 std::unique_ptr<bpe_merge_pairs> load_merge_pairs(cudf::strings_column_view const& merge_pairs,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::load_merge_pairs(merge_pairs, stream, mr);
@@ -142,14 +144,14 @@ bpe_merge_pairs::bpe_merge_pairs_impl::bpe_merge_pairs_impl(
 
 bpe_merge_pairs::bpe_merge_pairs(std::unique_ptr<cudf::column>&& input,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource*)
+                                 rmm::device_async_resource_ref)
   : impl(detail::create_bpe_merge_pairs_impl(std::move(input), stream).release())
 {
 }
 
 bpe_merge_pairs::bpe_merge_pairs(cudf::strings_column_view const& input,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
   : impl(detail::create_bpe_merge_pairs_impl(input, stream, mr).release())
 {
 }

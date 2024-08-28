@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool, nullptr
@@ -6,8 +6,7 @@ from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
-
-from cudf._lib.cpp.io.datasource cimport datasource
+from pylibcudf.libcudf.io.datasource cimport datasource
 
 from cudf_kafka._lib.kafka cimport kafka_consumer
 

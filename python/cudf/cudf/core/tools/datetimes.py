@@ -1,11 +1,11 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import math
 import re
 import warnings
-from typing import Literal, Optional, Sequence, Union
+from typing import Literal, Sequence
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 import pandas.tseries.offsets as pd_offset
@@ -18,7 +18,7 @@ from cudf._lib.strings.convert.convert_integers import (
 )
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
-from cudf.core.index import as_index
+from cudf.core.index import ensure_index
 
 # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
 _unit_map = {
@@ -55,21 +55,6 @@ _unit_dtype_map = {
     "D": "datetime64[s]",
 }
 
-_offset_alias_to_code = {
-    "W": "W",
-    "D": "D",
-    "H": "h",
-    "h": "h",
-    "T": "m",
-    "min": "m",
-    "s": "s",
-    "S": "s",
-    "U": "us",
-    "us": "us",
-    "N": "ns",
-    "ns": "ns",
-}
-
 
 def to_datetime(
     arg,
@@ -77,7 +62,7 @@ def to_datetime(
     dayfirst: bool = False,
     yearfirst: bool = False,
     utc: bool = False,
-    format: Optional[str] = None,
+    format: str | None = None,
     exact: bool = True,
     unit: str = "ns",
     infer_datetime_format: bool = True,
@@ -231,25 +216,25 @@ def to_datetime(
                 + arg[unit_rev["day"]].astype("str").str.zfill(2)
             )
             format = "%Y-%m-%d"
-            col = new_series._column.as_datetime_column(
-                "datetime64[s]", format=format
-            )
-
             for u in ["h", "m", "s", "ms", "us", "ns"]:
                 value = unit_rev.get(u)
                 if value is not None and value in arg:
                     arg_col = arg._data[value]
-                    if arg_col.dtype.kind in ("f"):
-                        col = new_series._column.as_datetime_column(
-                            "datetime64[ns]", format=format
+                    if arg_col.dtype.kind == "f":
+                        col = new_series._column.strptime(
+                            cudf.dtype("datetime64[ns]"), format=format
                         )
                         break
-                    elif arg_col.dtype.kind in ("O"):
+                    elif arg_col.dtype.kind == "O":
                         if not cpp_is_integer(arg_col).all():
-                            col = new_series._column.as_datetime_column(
-                                "datetime64[ns]", format=format
+                            col = new_series._column.strptime(
+                                cudf.dtype("datetime64[ns]"), format=format
                             )
                             break
+            else:
+                col = new_series._column.strptime(
+                    cudf.dtype("datetime64[s]"), format=format
+                )
 
             times_column = None
             for u in ["h", "m", "s", "ms", "us", "ns"]:
@@ -291,7 +276,7 @@ def to_datetime(
                 format=format,
                 utc=utc,
             )
-            return cudf.Series(col, index=arg.index)
+            return cudf.Series._from_column(col, index=arg.index)
         else:
             col = _process_col(
                 col=column.as_column(arg),
@@ -302,13 +287,15 @@ def to_datetime(
                 utc=utc,
             )
             if isinstance(arg, (cudf.BaseIndex, pd.Index)):
-                return as_index(col, name=arg.name)
+                return cudf.DatetimeIndex._from_column(col, name=arg.name)
             elif isinstance(arg, (cudf.Series, pd.Series)):
-                return cudf.Series(col, index=arg.index, name=arg.name)
+                return cudf.Series._from_column(
+                    col, name=arg.name, index=ensure_index(arg.index)
+                )
             elif is_scalar(arg):
                 return col.element_indexing(0)
             else:
-                return as_index(col)
+                return cudf.Index._from_column(col)
     except Exception as e:
         if errors == "raise":
             raise e
@@ -329,12 +316,9 @@ def _process_col(
     unit: str,
     dayfirst: bool,
     infer_datetime_format: bool,
-    format: Optional[str],
+    format: str | None,
     utc: bool,
 ):
-    # Causes circular import
-    from cudf.core._internals.timezones import localize
-
     if col.dtype.kind == "f":
         if unit not in (None, "ns"):
             factor = cudf.Scalar(
@@ -352,15 +336,15 @@ def _process_col(
             col = (
                 col.astype("int")
                 .astype("str")
-                .as_datetime_column(
-                    dtype="datetime64[us]"
+                .strptime(
+                    dtype=cudf.dtype("datetime64[us]")
                     if "%f" in format
-                    else "datetime64[s]",
+                    else cudf.dtype("datetime64[s]"),
                     format=format,
                 )
             )
         else:
-            col = col.as_datetime_column(dtype="datetime64[ns]")
+            col = col.astype(dtype="datetime64[ns]")
 
     elif col.dtype.kind in "iu":
         if unit in ("D", "h", "m"):
@@ -371,11 +355,11 @@ def _process_col(
             col = col * factor
 
         if format is not None:
-            col = col.astype("str").as_datetime_column(
-                dtype=_unit_dtype_map[unit], format=format
+            col = col.astype("str").strptime(
+                dtype=cudf.dtype(_unit_dtype_map[unit]), format=format
             )
         else:
-            col = col.as_datetime_column(dtype=_unit_dtype_map[unit])
+            col = col.astype(dtype=cudf.dtype(_unit_dtype_map[unit]))
 
     elif col.dtype.kind == "O":
         if unit not in (None, "ns") or col.null_count == len(col):
@@ -402,8 +386,8 @@ def _process_col(
                     element=col.element_indexing(0),
                     dayfirst=dayfirst,
                 )
-            col = col.as_datetime_column(
-                dtype=_unit_dtype_map[unit],
+            col = col.strptime(
+                dtype=cudf.dtype(_unit_dtype_map[unit]),
                 format=format,
             )
     elif col.dtype.kind != "M":
@@ -411,7 +395,7 @@ def _process_col(
             f"dtype {col.dtype} cannot be converted to {_unit_dtype_map[unit]}"
         )
     if utc and not isinstance(col.dtype, pd.DatetimeTZDtype):
-        return localize(col, "UTC", ambiguous="NaT", nonexistent="NaT")
+        return col.tz_localize("UTC")
     return col
 
 
@@ -726,7 +710,7 @@ class DateOffset:
     @classmethod
     def _from_pandas_ticks_or_weeks(
         cls,
-        tick: Union[pd.tseries.offsets.Tick, pd.tseries.offsets.Week],
+        tick: pd.tseries.offsets.Tick | pd.tseries.offsets.Week,
     ) -> Self:
         return cls(**{cls._TICK_OR_WEEK_TO_UNITS[type(tick)]: tick.n})
 
@@ -744,7 +728,7 @@ class DateOffset:
 
 
 def _isin_datetimelike(
-    lhs: Union[column.TimeDeltaColumn, column.DatetimeColumn], values: Sequence
+    lhs: column.TimeDeltaColumn | column.DatetimeColumn, values: Sequence
 ) -> column.ColumnBase:
     """
     Check whether values are contained in the
@@ -799,9 +783,11 @@ def date_range(
     periods=None,
     freq=None,
     tz=None,
-    normalize=False,
+    normalize: bool = False,
     name=None,
-    closed=None,
+    inclusive: Literal["left", "right", "both", "neither"] = "both",
+    *,
+    unit: str | None = None,
 ):
     """Return a fixed frequency DatetimeIndex.
 
@@ -837,8 +823,13 @@ def date_range(
     name : str, default None
         Name of the resulting DatetimeIndex
 
-    closed : {None, 'left', 'right'}, optional
-        Not Supported
+    inclusive : {"left", "right", "both", "neither"}, default "both"
+        Whether to set each bound as closed or open.
+        Currently only "both" is supported
+
+    unit : str, default None
+        Specify the desired resolution of the result. Currently
+        not supported.
 
     Returns
     -------
@@ -848,7 +839,7 @@ def date_range(
     -----
     Of the four parameters `start`, `end`, `periods`, and `freq`, exactly three
     must be specified. If `freq` is omitted, the resulting DatetimeIndex will
-    have periods linearly spaced elements between start and end (closed on both
+    have periods linearly spaced elements between start and end (inclusive on both
     sides).
 
     cudf supports `freq` specified with either fixed-frequency offset
@@ -875,11 +866,15 @@ def date_range(
                 '2026-04-23 08:00:00'],
                 dtype='datetime64[ns]')
     """
-    if tz is not None:
-        raise NotImplementedError("tz is currently unsupported.")
+    if inclusive != "both":
+        raise NotImplementedError(f"{inclusive=} is currently unsupported.")
+    if unit is not None:
+        raise NotImplementedError(f"{unit=} is currently unsupported.")
+    if normalize is not False:
+        raise NotImplementedError(f"{normalize=} is currently unsupported.")
 
-    if closed is not None:
-        raise NotImplementedError("closed is currently unsupported.")
+    if freq is None and any(arg is None for arg in (start, end, periods)):
+        freq = "D"
 
     if (start, end, periods, freq).count(None) > 1:
         raise ValueError(
@@ -894,16 +889,18 @@ def date_range(
             FutureWarning,
         )
 
-    dtype = np.dtype("<M8[ns]")
+    dtype = np.dtype("datetime64[ns]")
 
     if freq is None:
         # `start`, `end`, `periods` is specified, we treat the timestamps as
         # integers and divide the number range evenly with `periods` elements.
         start = cudf.Scalar(start, dtype=dtype).value.astype("int64")
         end = cudf.Scalar(end, dtype=dtype).value.astype("int64")
-        arr = cp.linspace(start=start, stop=end, num=periods)
+        arr = np.linspace(start=start, stop=end, num=periods)
         result = cudf.core.column.as_column(arr).astype("datetime64[ns]")
-        return cudf.DatetimeIndex._from_data({name: result})
+        return cudf.DatetimeIndex._from_column(result, name=name).tz_localize(
+            tz
+        )
 
     # The code logic below assumes `freq` is defined. It is first normalized
     # into `DateOffset` for further computation with timestamps.
@@ -912,8 +909,8 @@ def date_range(
         offset = freq
     elif isinstance(freq, str):
         offset = pd.tseries.frequencies.to_offset(freq)
-        if not isinstance(offset, pd.tseries.offsets.Tick) and not isinstance(
-            offset, pd.tseries.offsets.Week
+        if not isinstance(
+            offset, (pd.tseries.offsets.Tick, pd.tseries.offsets.Week)
         ):
             raise ValueError(
                 f"Unrecognized frequency string {freq}. cuDF does "
@@ -923,7 +920,7 @@ def date_range(
     else:
         raise TypeError("`freq` must be a `str` or cudf.DateOffset object.")
 
-    if _has_mixed_freqeuency(offset):
+    if _has_fixed_frequency(offset) and _has_non_fixed_frequency(offset):
         raise NotImplementedError(
             "Mixing fixed and non-fixed frequency offset is unsupported."
         )
@@ -954,7 +951,7 @@ def date_range(
         end = cudf.Scalar(end, dtype=dtype)
         _is_increment_sequence = end >= start
 
-        periods = math.ceil(
+        periods = math.floor(
             int(end - start) / _offset_to_nanoseconds_lower_bound(offset)
         )
 
@@ -962,9 +959,10 @@ def date_range(
             # Mismatched sign between (end-start) and offset, return empty
             # column
             periods = 0
-        elif periods == 0:
-            # end == start, return exactly 1 timestamp (start)
-            periods = 1
+        else:
+            # If end == start, periods == 0 and we return exactly 1 timestamp (start).
+            # Otherwise, since inclusive="both", we ensure the end point is included.
+            periods += 1
 
     # We compute `end_estim` (the estimated upper bound of the date
     # range) below, but don't always use it.  We do this to ensure
@@ -998,10 +996,14 @@ def date_range(
         stop = end_estim.astype("int64")
         start = start.value.astype("int64")
         step = _offset_to_nanoseconds_lower_bound(offset)
-        arr = cp.arange(start=start, stop=stop, step=step, dtype="int64")
-        res = cudf.core.column.as_column(arr).astype("datetime64[ns]")
+        arr = range(int(start), int(stop), step)
+        res = cudf.core.column.as_column(arr, dtype="int64").astype(
+            "datetime64[ns]"
+        )
 
-    return cudf.DatetimeIndex._from_data({name: res}, freq=freq)
+    return cudf.DatetimeIndex._from_column(
+        res, name=name, freq=freq
+    ).tz_localize(tz)
 
 
 def _has_fixed_frequency(freq: DateOffset) -> bool:
@@ -1024,14 +1026,6 @@ def _has_non_fixed_frequency(freq: DateOffset) -> bool:
     """Utility to determine if `freq` contains non-fixed frequency offset"""
     non_fixed_frequencies = {"years", "months"}
     return len(freq.kwds.keys() & non_fixed_frequencies) > 0
-
-
-def _has_mixed_freqeuency(freq: DateOffset) -> bool:
-    """Utility to determine if `freq` contains mixed fixed and non-fixed
-    frequency offset. e.g. {months=1, days=5}
-    """
-
-    return _has_fixed_frequency(freq) and _has_non_fixed_frequency(freq)
 
 
 def _offset_to_nanoseconds_lower_bound(offset: DateOffset) -> int:
@@ -1061,23 +1055,3 @@ def _offset_to_nanoseconds_lower_bound(offset: DateOffset) -> int:
         + kwds.get("microseconds", 0) * 10**3
         + kwds.get("nanoseconds", 0)
     )
-
-
-def _to_iso_calendar(arg):
-    formats = ["%G", "%V", "%u"]
-    if not isinstance(arg, (cudf.Index, cudf.core.series.DatetimeProperties)):
-        raise AttributeError(
-            "Can only use .isocalendar accessor with series or index"
-        )
-    if isinstance(arg, cudf.Index):
-        iso_params = [
-            arg._column.as_string_column(arg._values.dtype, fmt)
-            for fmt in formats
-        ]
-        index = arg._column
-    elif isinstance(arg.series, cudf.Series):
-        iso_params = [arg.strftime(fmt) for fmt in formats]
-        index = arg.series.index
-
-    data = dict(zip(["year", "week", "day"], iso_params))
-    return cudf.DataFrame(data, index=index, dtype=np.int32)

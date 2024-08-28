@@ -22,6 +22,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/unary.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -48,9 +49,16 @@ struct type_casted_accessor {
                                         column_device_view const& col,
                                         bool is_scalar) const
   {
-    if constexpr (column_device_view::has_element_accessor<Element>() and
-                  std::is_convertible_v<Element, CastType>)
-      return static_cast<CastType>(col.element<Element>(is_scalar ? 0 : i));
+    if constexpr (column_device_view::has_element_accessor<Element>()) {
+      auto const element = col.element<Element>(is_scalar ? 0 : i);
+      if constexpr (std::is_convertible_v<Element, CastType>) {
+        return static_cast<CastType>(element);
+      } else if constexpr (is_fixed_point<Element>() && cuda::std::is_floating_point_v<CastType>) {
+        return convert_fixed_to_floating<CastType>(element);
+      } else if constexpr (is_fixed_point<CastType>() && cuda::std::is_floating_point_v<Element>) {
+        return convert_floating_to_fixed<CastType>(element, numeric::scale_type{0});
+      }
+    }
     return {};
   }
 };
@@ -69,13 +77,17 @@ struct typed_casted_writer {
     if constexpr (mutable_column_device_view::has_element_accessor<Element>() and
                   std::is_constructible_v<Element, FromType>) {
       col.element<Element>(i) = static_cast<Element>(val);
-    } else if constexpr (is_fixed_point<Element>() and
-                         (is_fixed_point<FromType>() or
-                          std::is_constructible_v<Element, FromType>)) {
-      if constexpr (is_fixed_point<FromType>())
-        col.data<Element::rep>()[i] = val.rescaled(numeric::scale_type{col.type().scale()}).value();
-      else
-        col.data<Element::rep>()[i] = Element{val, numeric::scale_type{col.type().scale()}}.value();
+    } else if constexpr (is_fixed_point<Element>()) {
+      auto const scale = numeric::scale_type{col.type().scale()};
+      if constexpr (is_fixed_point<FromType>()) {
+        col.data<Element::rep>()[i] = val.rescaled(scale).value();
+      } else if constexpr (cuda::std::is_constructible_v<Element, FromType>) {
+        col.data<Element::rep>()[i] = Element{val, scale}.value();
+      } else if constexpr (cuda::std::is_floating_point_v<FromType>) {
+        col.data<Element::rep>()[i] = convert_floating_to_fixed<Element>(val, scale).value();
+      }
+    } else if constexpr (cuda::std::is_floating_point_v<Element> and is_fixed_point<FromType>()) {
+      col.data<Element>()[i] = convert_fixed_to_floating<Element>(val);
     }
   }
 };
@@ -104,6 +116,7 @@ struct ops_wrapper {
         type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs, is_rhs_scalar);
       auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      std::is_same_v<BinaryOperator, ops::NullNotEquals> or
                       std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
                       std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
                       std::is_same_v<BinaryOperator, ops::NullMax> or
@@ -153,6 +166,7 @@ struct ops2_wrapper {
       TypeRhs y   = rhs.element<TypeRhs>(is_rhs_scalar ? 0 : i);
       auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      std::is_same_v<BinaryOperator, ops::NullNotEquals> or
                       std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
                       std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
                       std::is_same_v<BinaryOperator, ops::NullMax> or

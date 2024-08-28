@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union, overload
+from typing import Union, overload
 
 from typing_extensions import Literal
 
 import cudf
+import cudf.core.column
+import cudf.core.column_accessor
 from cudf.utils.utils import NotIterable
 
 ParentType = Union["cudf.Series", "cudf.core.index.Index"]
@@ -26,8 +28,7 @@ class ColumnMethods(NotIterable):
         inplace: Literal[True],
         expand: bool = False,
         retain_index: bool = True,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     @overload
     def _return_or_inplace(
@@ -36,8 +37,7 @@ class ColumnMethods(NotIterable):
         inplace: Literal[False],
         expand: bool = False,
         retain_index: bool = True,
-    ) -> ParentType:
-        ...
+    ) -> ParentType: ...
 
     @overload
     def _return_or_inplace(
@@ -45,8 +45,7 @@ class ColumnMethods(NotIterable):
         new_col,
         expand: bool = False,
         retain_index: bool = True,
-    ) -> ParentType:
-        ...
+    ) -> ParentType: ...
 
     @overload
     def _return_or_inplace(
@@ -55,8 +54,7 @@ class ColumnMethods(NotIterable):
         inplace: bool = False,
         expand: bool = False,
         retain_index: bool = True,
-    ) -> Optional[ParentType]:
-        ...
+    ) -> ParentType | None: ...
 
     def _return_or_inplace(
         self, new_col, inplace=False, expand=False, retain_index=True
@@ -67,8 +65,8 @@ class ColumnMethods(NotIterable):
         """
         if inplace:
             self._parent._mimic_inplace(
-                self._parent.__class__._from_data(
-                    {self._parent.name: new_col}
+                type(self._parent)._from_column(
+                    new_col, name=self._parent.name
                 ),
                 inplace=True,
             )
@@ -88,17 +86,12 @@ class ColumnMethods(NotIterable):
                         data=table, index=self._parent.index
                     )
             elif isinstance(self._parent, cudf.Series):
-                if retain_index:
-                    return cudf.Series(
-                        new_col,
-                        name=self._parent.name,
-                        index=self._parent.index,
-                    )
-                else:
-                    return cudf.Series(new_col, name=self._parent.name)
-            elif isinstance(self._parent, cudf.BaseIndex):
-                return cudf.core.index.as_index(
-                    new_col, name=self._parent.name
+                return cudf.Series._from_column(
+                    new_col,
+                    name=self._parent.name,
+                    index=self._parent.index if retain_index else None,
                 )
+            elif isinstance(self._parent, cudf.BaseIndex):
+                return cudf.Index._from_column(new_col, name=self._parent.name)
             else:
                 return self._parent._mimic_inplace(new_col, inplace=False)

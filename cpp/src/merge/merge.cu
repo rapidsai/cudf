@@ -27,17 +27,20 @@
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/strings/detail/merge.cuh>
+#include <cudf/merge.hpp>
+#include <cudf/strings/detail/merge.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
@@ -347,7 +350,7 @@ struct column_merger {
   std::unique_ptr<column> operator()(column_view const&,
                                      column_view const&,
                                      rmm::cuda_stream_view,
-                                     rmm::mr::device_memory_resource*) const
+                                     rmm::device_async_resource_ref) const
   {
     CUDF_FAIL("Unsupported type for merge.");
   }
@@ -359,7 +362,7 @@ struct column_merger {
     column_view const& lcol,
     column_view const& rcol,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const
+    rmm::device_async_resource_ref mr) const
   {
     auto lsz         = lcol.size();
     auto merged_size = lsz + rcol.size();
@@ -431,20 +434,10 @@ std::unique_ptr<column> column_merger::operator()<cudf::string_view>(
   column_view const& lcol,
   column_view const& rcol,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
+  rmm::device_async_resource_ref mr) const
 {
-  auto column = strings::detail::merge<index_type>(strings_column_view(lcol),
-                                                   strings_column_view(rcol),
-                                                   row_order_.begin(),
-                                                   row_order_.end(),
-                                                   stream,
-                                                   mr);
-  if (lcol.has_nulls() || rcol.has_nulls()) {
-    auto merged_view = column->mutable_view();
-    materialize_bitmask(
-      lcol, rcol, merged_view.null_mask(), merged_view.size(), row_order_.data(), stream);
-  }
-  return column;
+  return strings::detail::merge(
+    strings_column_view(lcol), strings_column_view(rcol), row_order_, stream, mr);
 }
 
 // specialization for dictionary
@@ -453,7 +446,7 @@ std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(
   column_view const& lcol,
   column_view const& rcol,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
+  rmm::device_async_resource_ref mr) const
 {
   auto result = cudf::dictionary::detail::merge(
     cudf::dictionary_column_view(lcol), cudf::dictionary_column_view(rcol), row_order_, stream, mr);
@@ -473,7 +466,7 @@ std::unique_ptr<column> column_merger::operator()<cudf::list_view>(
   column_view const& lcol,
   column_view const& rcol,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
+  rmm::device_async_resource_ref mr) const
 {
   std::vector<column_view> columns{lcol, rcol};
   auto concatenated_list = cudf::lists::detail::concatenate(columns, stream, mr);
@@ -501,7 +494,7 @@ std::unique_ptr<column> column_merger::operator()<cudf::struct_view>(
   column_view const& lcol,
   column_view const& rcol,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
+  rmm::device_async_resource_ref mr) const
 {
   // merge each child.
   auto const lhs = structs_column_view{lcol};
@@ -550,7 +543,7 @@ table_ptr_type merge(cudf::table_view const& left_table,
                      std::vector<cudf::order> const& column_order,
                      std::vector<cudf::null_order> const& null_precedence,
                      rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr)
+                     rmm::device_async_resource_ref mr)
 {
   // collect index columns for lhs, rhs, resp.
   //
@@ -620,7 +613,7 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
                      std::vector<cudf::order> const& column_order,
                      std::vector<cudf::null_order> const& null_precedence,
                      rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr)
+                     rmm::device_async_resource_ref mr)
 {
   if (tables_to_merge.empty()) { return std::make_unique<cudf::table>(); }
 
@@ -702,11 +695,11 @@ std::unique_ptr<cudf::table> merge(std::vector<table_view> const& tables_to_merg
                                    std::vector<cudf::size_type> const& key_cols,
                                    std::vector<cudf::order> const& column_order,
                                    std::vector<cudf::null_order> const& null_precedence,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::merge(
-    tables_to_merge, key_cols, column_order, null_precedence, cudf::get_default_stream(), mr);
+  return detail::merge(tables_to_merge, key_cols, column_order, null_precedence, stream, mr);
 }
 
 }  // namespace cudf

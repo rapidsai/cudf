@@ -7,19 +7,19 @@ import pandas as pd
 
 from libcpp.memory cimport make_shared, shared_ptr
 
-cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
+cimport pylibcudf.libcudf.types as libcudf_types
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
+
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
     underlying_type_t_order,
     underlying_type_t_sorted,
 )
 
-import cudf
-from cudf._lib import pylibcudf
+import pylibcudf
 
-size_type_dtype = np.dtype("int32")
+import cudf
 
 
 class TypeId(IntEnum):
@@ -148,6 +148,8 @@ datetime_unit_map = {
     TypeId.TIMESTAMP_NANOSECONDS: "ns",
 }
 
+size_type_dtype = LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[pylibcudf.types.SIZE_TYPE_ID]
+
 
 class Interpolation(IntEnum):
     LINEAR = (
@@ -237,6 +239,9 @@ cdef dtype_from_column_view(column_view cv):
         ]
 
 cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
+    # Note: This function is to be phased out in favor of
+    # dtype_to_pylibcudf_type which will return a pylibcudf
+    # DataType object
     cdef libcudf_types.type_id tid
     if isinstance(dtype, cudf.ListDtype):
         tid = libcudf_types.type_id.LIST

@@ -1,6 +1,8 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import warnings
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -8,18 +10,17 @@ import pandas as pd
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import strings as libstrings
-from cudf.api.types import (
-    _is_non_decimal_numeric_dtype,
-    is_datetime_dtype,
-    is_string_dtype,
-    is_timedelta_dtype,
-)
+from cudf.api.types import _is_non_decimal_numeric_dtype, is_string_dtype
 from cudf.core.column import as_column
 from cudf.core.dtypes import CategoricalDtype
+from cudf.core.index import ensure_index
 from cudf.utils.dtypes import can_convert_to_column
 
+if TYPE_CHECKING:
+    from cudf.core.column import ColumnBase
 
-def to_numeric(arg, errors="raise", downcast=None):
+
+def to_numeric(arg, errors="raise", downcast=None, dtype_backend=None):
     """
     Convert argument into numerical types.
 
@@ -47,6 +48,8 @@ def to_numeric(arg, errors="raise", downcast=None):
         Note that downcast behavior is decoupled from parsing. Errors
         encountered during downcast is raised regardless of ``errors``
         parameter.
+    dtype_backend : None
+        Not implemented.
 
     Returns
     -------
@@ -85,14 +88,17 @@ def to_numeric(arg, errors="raise", downcast=None):
     dtype: float64
 
     .. pandas-compat::
-        **cudf.to_numeric**
+        :func:`pandas.to_numeric`
 
         An important difference from pandas is that this function does not
         accept mixed numeric/non-numeric type sequences.
         For example ``[1, 'a']``. A ``TypeError`` will be raised when such
         input is received, regardless of ``errors`` parameter.
     """
-
+    if dtype_backend is not None:
+        raise NotImplementedError(
+            "dtype_backend is not currently implemented."
+        )
     if errors not in {"raise", "ignore", "coerce"}:
         raise ValueError("invalid error value specified")
     elif errors == "ignore":
@@ -114,12 +120,12 @@ def to_numeric(arg, errors="raise", downcast=None):
     col = as_column(arg)
     dtype = col.dtype
 
-    if is_datetime_dtype(dtype) or is_timedelta_dtype(dtype):
-        col = col.as_numerical_column(cudf.dtype("int64"))
+    if dtype.kind in "mM":
+        col = col.astype(cudf.dtype("int64"))
     elif isinstance(dtype, CategoricalDtype):
         cat_dtype = col.dtype.type
         if _is_non_decimal_numeric_dtype(cat_dtype):
-            col = col.as_numerical_column(cat_dtype)
+            col = col.astype(cat_dtype)
         else:
             try:
                 col = _convert_str_col(
@@ -146,8 +152,8 @@ def to_numeric(arg, errors="raise", downcast=None):
         raise ValueError("Unrecognized datatype")
 
     # str->float conversion may require lower precision
-    if col.dtype == cudf.dtype("f"):
-        col = col.as_numerical_column("d")
+    if col.dtype == cudf.dtype("float32"):
+        col = col.astype("float64")
 
     if downcast:
         if downcast == "float":
@@ -169,7 +175,9 @@ def to_numeric(arg, errors="raise", downcast=None):
                     break
 
     if isinstance(arg, (cudf.Series, pd.Series)):
-        return cudf.Series(col, index=arg.index, name=arg.name)
+        return cudf.Series._from_column(
+            col, name=arg.name, index=ensure_index(arg.index)
+        )
     else:
         if col.has_nulls():
             # To match pandas, always return a floating type filled with nan.
@@ -205,7 +213,7 @@ def _convert_str_col(col, errors, _downcast=None):
 
     is_integer = libstrings.is_integer(col)
     if is_integer.all():
-        return col.as_numerical_column(dtype=cudf.dtype("i8"))
+        return col.astype(dtype=cudf.dtype("i8"))
 
     col = _proc_inf_empty_strings(col)
 
@@ -218,9 +226,9 @@ def _convert_str_col(col, errors, _downcast=None):
                     "limited by float32 precision."
                 )
             )
-            return col.as_numerical_column(dtype=cudf.dtype("f"))
+            return col.astype(dtype=cudf.dtype("float32"))
         else:
-            return col.as_numerical_column(dtype=cudf.dtype("d"))
+            return col.astype(dtype=cudf.dtype("float64"))
     else:
         if errors == "coerce":
             col = libcudf.string_casting.stod(col)
@@ -231,25 +239,10 @@ def _convert_str_col(col, errors, _downcast=None):
             raise ValueError("Unable to convert some strings to numerics.")
 
 
-def _proc_inf_empty_strings(col):
+def _proc_inf_empty_strings(col: ColumnBase) -> ColumnBase:
     """Handles empty and infinity strings"""
     col = libstrings.to_lower(col)
-    col = _proc_empty_strings(col)
-    col = _proc_inf_strings(col)
-    return col
-
-
-def _proc_empty_strings(col):
-    """Replaces empty strings with NaN"""
-    s = cudf.Series(col)
-    s = s.where(s != "", "NaN")
-    return s._column
-
-
-def _proc_inf_strings(col):
-    """Convert "inf/infinity" strings into "Inf", the native string
-    representing infinity in libcudf
-    """
+    col = col.find_and_replace(as_column([""]), as_column(["NaN"]))
     # TODO: This can be handled by libcudf in
     # future see StringColumn.as_numerical_column
     col = libstrings.replace_multi(

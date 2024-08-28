@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,10 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/utilities/export.hpp>
 
-namespace cudf::test {
+namespace CUDF_EXPORT cudf {
+namespace test {
 
 /**
  * @brief Formats a column view as a string
@@ -44,4 +46,5 @@ std::vector<std::string> to_strings(cudf::column_view const& col);
  */
 void print(cudf::column_view const& col, std::ostream& os = std::cout);
 
-}  // namespace cudf::test
+}  // namespace test
+}  // namespace CUDF_EXPORT cudf

@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/utilities/default_stream.hpp>
+
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -87,7 +90,7 @@ bool has_nonempty_nulls(cudf::column_view const& input, rmm::cuda_stream_view st
 
 std::unique_ptr<column> purge_nonempty_nulls(column_view const& input,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   // If not compound types (LIST/STRING/STRUCT/DICTIONARY) then just copy the input into output.
   if (!cudf::is_compound(input.type())) { return std::make_unique<column>(input, stream, mr); }
@@ -132,11 +135,11 @@ bool has_nonempty_nulls(column_view const& input, rmm::cuda_stream_view stream)
 }
 
 /**
- * @copydoc cudf::purge_nonempty_nulls(column_view const&, rmm::mr::device_memory_resource*)
+ * @copydoc cudf::purge_nonempty_nulls(column_view const&, rmm::device_async_resource_ref)
  */
 std::unique_ptr<cudf::column> purge_nonempty_nulls(column_view const& input,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::device_async_resource_ref mr)
 {
   return detail::purge_nonempty_nulls(input, stream, mr);
 }

@@ -24,6 +24,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuco/static_multimap.cuh>
 
@@ -33,14 +34,11 @@
 
 // Forward declaration
 namespace cudf::experimental::row::equality {
-class preprocessed_table;
+class CUDF_EXPORT preprocessed_table;
 }
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
-
-// Forward declaration
-class cuco_allocator;
 
 constexpr int DEFAULT_JOIN_CG_SIZE = 2;
 
@@ -61,7 +59,7 @@ struct hash_join {
     cuco::static_multimap<hash_value_type,
                           cudf::size_type,
                           cuda::thread_scope_device,
-                          cudf::detail::cuco_allocator,
+                          cudf::detail::cuco_allocator<char>,
                           cuco::legacy::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
 
   hash_join()                            = delete;
@@ -105,7 +103,7 @@ struct hash_join {
   inner_join(cudf::table_view const& probe,
              std::optional<std::size_t> output_size,
              rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr) const;
+             rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::hash_join::left_join
@@ -115,7 +113,7 @@ struct hash_join {
   left_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size,
             rmm::cuda_stream_view stream,
-            rmm::mr::device_memory_resource* mr) const;
+            rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::hash_join::full_join
@@ -125,7 +123,7 @@ struct hash_join {
   full_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size,
             rmm::cuda_stream_view stream,
-            rmm::mr::device_memory_resource* mr) const;
+            rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::hash_join::inner_join_size
@@ -144,7 +142,7 @@ struct hash_join {
    */
   std::size_t full_join_size(cudf::table_view const& probe,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr) const;
+                             rmm::device_async_resource_ref mr) const;
 
  private:
   /**
@@ -169,7 +167,7 @@ struct hash_join {
                      join_kind join,
                      std::optional<std::size_t> output_size,
                      rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr) const;
+                     rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::detail::hash_join::probe_join_indices
@@ -184,7 +182,7 @@ struct hash_join {
                     join_kind join,
                     std::optional<std::size_t> output_size,
                     rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr) const;
+                    rmm::device_async_resource_ref mr) const;
 };
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

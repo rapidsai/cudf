@@ -26,6 +26,8 @@
 
 namespace cudf::io::parquet::detail {
 
+namespace cg = cooperative_groups;
+
 namespace {
 
 // # of threads we're decoding with
@@ -163,7 +165,8 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
       // For V1, the choice is an overestimate (s->dict_size), or an exact number that's
       // expensive to compute. For now we're going with the latter.
       else {
-        str_len = gpuInitStringDescriptors<true, unused_state_buf>(s, nullptr, target_pos, t);
+        str_len = gpuInitStringDescriptors<true, unused_state_buf>(
+          s, nullptr, target_pos, cg::this_thread_block());
       }
       break;
 
@@ -389,7 +392,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   // we only need to preprocess hierarchies with repetition in them (ie, hierarchies
   // containing lists anywhere within).
   compute_string_sizes =
-    compute_string_sizes && ((s->col.data_type & 7) == BYTE_ARRAY && s->dtype_len != 4);
+    compute_string_sizes && s->col.physical_type == BYTE_ARRAY && !s->col.is_strings_to_cat;
 
   // early out optimizations:
 

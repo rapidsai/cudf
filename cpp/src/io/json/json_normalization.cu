@@ -23,6 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
 
@@ -297,52 +298,60 @@ struct TransduceToNormalizedWS {
 
 namespace detail {
 
-rmm::device_uvector<SymbolT> normalize_single_quotes(rmm::device_uvector<SymbolT>&& inbuf,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource* mr)
+void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& indata,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr)
 {
-  auto parser = fst::detail::make_fst(
-    fst::detail::make_symbol_group_lut(normalize_quotes::qna_sgs),
-    fst::detail::make_transition_table(normalize_quotes::qna_state_tt),
-    fst::detail::make_translation_functor(normalize_quotes::TransduceToNormalizedQuotes{}),
-    stream);
+  static constexpr std::int32_t min_out = 0;
+  static constexpr std::int32_t max_out = 2;
+  auto parser =
+    fst::detail::make_fst(fst::detail::make_symbol_group_lut(normalize_quotes::qna_sgs),
+                          fst::detail::make_transition_table(normalize_quotes::qna_state_tt),
+                          fst::detail::make_translation_functor<SymbolT, min_out, max_out>(
+                            normalize_quotes::TransduceToNormalizedQuotes{}),
+                          stream);
 
-  rmm::device_uvector<SymbolT> outbuf(inbuf.size() * 2, stream, mr);
+  rmm::device_buffer outbuf(indata.size() * 2, stream, mr);
   rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
-  parser.Transduce(inbuf.data(),
-                   static_cast<SymbolOffsetT>(inbuf.size()),
-                   outbuf.data(),
+  parser.Transduce(reinterpret_cast<SymbolT const*>(indata.data()),
+                   static_cast<SymbolOffsetT>(indata.size()),
+                   static_cast<SymbolT*>(outbuf.data()),
                    thrust::make_discard_iterator(),
                    outbuf_size.data(),
                    normalize_quotes::start_state,
                    stream);
 
   outbuf.resize(outbuf_size.value(stream), stream);
-  return outbuf;
+  datasource::owning_buffer<rmm::device_buffer> outdata(std::move(outbuf));
+  std::swap(indata, outdata);
 }
 
-rmm::device_uvector<SymbolT> normalize_whitespace(rmm::device_uvector<SymbolT>&& inbuf,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+void normalize_whitespace(datasource::owning_buffer<rmm::device_buffer>& indata,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr)
 {
-  auto parser = fst::detail::make_fst(
-    fst::detail::make_symbol_group_lut(normalize_whitespace::wna_sgs),
-    fst::detail::make_transition_table(normalize_whitespace::wna_state_tt),
-    fst::detail::make_translation_functor(normalize_whitespace::TransduceToNormalizedWS{}),
-    stream);
+  static constexpr std::int32_t min_out = 0;
+  static constexpr std::int32_t max_out = 2;
+  auto parser =
+    fst::detail::make_fst(fst::detail::make_symbol_group_lut(normalize_whitespace::wna_sgs),
+                          fst::detail::make_transition_table(normalize_whitespace::wna_state_tt),
+                          fst::detail::make_translation_functor<SymbolT, min_out, max_out>(
+                            normalize_whitespace::TransduceToNormalizedWS{}),
+                          stream);
 
-  rmm::device_uvector<SymbolT> outbuf(inbuf.size(), stream, mr);
+  rmm::device_buffer outbuf(indata.size(), stream, mr);
   rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
-  parser.Transduce(inbuf.data(),
-                   static_cast<SymbolOffsetT>(inbuf.size()),
-                   outbuf.data(),
+  parser.Transduce(reinterpret_cast<SymbolT const*>(indata.data()),
+                   static_cast<SymbolOffsetT>(indata.size()),
+                   static_cast<SymbolT*>(outbuf.data()),
                    thrust::make_discard_iterator(),
                    outbuf_size.data(),
                    normalize_whitespace::start_state,
                    stream);
 
   outbuf.resize(outbuf_size.value(stream), stream);
-  return outbuf;
+  datasource::owning_buffer<rmm::device_buffer> outdata(std::move(outbuf));
+  std::swap(indata, outdata);
 }
 
 }  // namespace detail

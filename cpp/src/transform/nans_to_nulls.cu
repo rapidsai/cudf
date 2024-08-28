@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -37,7 +38,7 @@ struct dispatch_nan_to_null {
                    std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>>
   operator()(column_view const& input,
              rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+             rmm::device_async_resource_ref mr)
   {
     auto input_device_view_ptr = column_device_view::create(input, stream);
     auto input_device_view     = *input_device_view_ptr;
@@ -75,14 +76,14 @@ struct dispatch_nan_to_null {
                    std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>>
   operator()(column_view const& input,
              rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+             rmm::device_async_resource_ref mr)
   {
     CUDF_FAIL("Input column can't be a non-floating type");
   }
 };
 
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
-  column_view const& input, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return std::pair(std::make_unique<rmm::device_buffer>(), 0); }
 
@@ -92,10 +93,10 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
 }  // namespace detail
 
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
-  column_view const& input, rmm::mr::device_memory_resource* mr)
+  column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::nans_to_nulls(input, cudf::get_default_stream(), mr);
+  return detail::nans_to_nulls(input, stream, mr);
 }
 
 }  // namespace cudf

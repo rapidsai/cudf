@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,15 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup reorder_compact
  * @{
@@ -65,6 +67,7 @@ namespace cudf {
  * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] keep_threshold The minimum number of non-null fields in a row
  *                           required to keep the row.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return Table containing all rows of the `input` with at least @p
  * keep_threshold non-null fields in @p keys.
@@ -73,7 +76,8 @@ std::unique_ptr<table> drop_nulls(
   table_view const& input,
   std::vector<size_type> const& keys,
   cudf::size_type keep_threshold,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Filters a table to remove null elements.
@@ -97,6 +101,7 @@ std::unique_ptr<table> drop_nulls(
  *
  * @param[in] input The input `table_view` to filter
  * @param[in] keys  vector of indices representing key columns from `input`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return Table containing all rows of the `input` without nulls in the columns
  * of @p keys.
@@ -104,7 +109,8 @@ std::unique_ptr<table> drop_nulls(
 std::unique_ptr<table> drop_nulls(
   table_view const& input,
   std::vector<size_type> const& keys,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Filters a table to remove NANs with threshold count.
@@ -139,6 +145,7 @@ std::unique_ptr<table> drop_nulls(
  * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] keep_threshold The minimum number of non-NAN elements in a row
  *                           required to keep the row.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return Table containing all rows of the `input` with at least @p
  * keep_threshold non-NAN elements in @p keys.
@@ -147,7 +154,8 @@ std::unique_ptr<table> drop_nans(
   table_view const& input,
   std::vector<size_type> const& keys,
   cudf::size_type keep_threshold,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Filters a table to remove NANs.
@@ -172,6 +180,7 @@ std::unique_ptr<table> drop_nans(
  *
  * @param[in] input The input `table_view` to filter
  * @param[in] keys  vector of indices representing key columns from `input`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return Table containing all rows of the `input` without NANs in the columns
  * of @p keys.
@@ -179,7 +188,8 @@ std::unique_ptr<table> drop_nans(
 std::unique_ptr<table> drop_nans(
   table_view const& input,
   std::vector<size_type> const& keys,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Filters `input` using `boolean_mask` of boolean values as a mask.
@@ -198,6 +208,7 @@ std::unique_ptr<table> drop_nans(
  * @param[in] input The input table_view to filter
  * @param[in] boolean_mask A nullable column_view of type type_id::BOOL8 used
  * as a mask to filter the `input`.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return Table containing copy of all rows of @p input passing
  * the filter defined by @p boolean_mask.
@@ -205,7 +216,8 @@ std::unique_ptr<table> drop_nans(
 std::unique_ptr<table> apply_boolean_mask(
   table_view const& input,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
@@ -239,6 +251,7 @@ enum class duplicate_keep_option {
  * @param[in] keep            keep any, first, last, or none of the found duplicates
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
  *                            equal if null_equality::UNEQUAL
+ * @param[in] stream          CUDA stream used for device memory operations and kernel launches
  * @param[in] mr              Device memory resource used to allocate the returned table's device
  *                            memory
  *
@@ -248,8 +261,9 @@ std::unique_ptr<table> unique(
   table_view const& input,
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,
-  null_equality nulls_equal           = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality nulls_equal         = null_equality::EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create a new table without duplicate rows.
@@ -267,16 +281,18 @@ std::unique_ptr<table> unique(
  * @param keep Copy any, first, last, or none of the found duplicates
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether NaN elements should be considered as equal
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table
  * @return Table with distinct rows in an unspecified order
  */
 std::unique_ptr<table> distinct(
   table_view const& input,
   std::vector<size_type> const& keys,
-  duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
-  null_equality nulls_equal           = null_equality::EQUAL,
-  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  duplicate_keep_option keep        = duplicate_keep_option::KEEP_ANY,
+  null_equality nulls_equal         = null_equality::EQUAL,
+  nan_equality nans_equal           = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create a column of indices of all distinct rows in the input table.
@@ -294,11 +310,11 @@ std::unique_ptr<table> distinct(
  */
 std::unique_ptr<column> distinct_indices(
   table_view const& input,
-  duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
-  null_equality nulls_equal           = null_equality::EQUAL,
-  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  duplicate_keep_option keep        = duplicate_keep_option::KEEP_ANY,
+  null_equality nulls_equal         = null_equality::EQUAL,
+  nan_equality nans_equal           = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create a new table without duplicate rows, preserving input order.
@@ -319,16 +335,18 @@ std::unique_ptr<column> distinct_indices(
  * @param keep Copy any, first, last, or none of the found duplicates
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether NaN elements should be considered as equal
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned table
  * @return Table with distinct rows, preserving input order
  */
 std::unique_ptr<table> stable_distinct(
   table_view const& input,
   std::vector<size_type> const& keys,
-  duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
-  null_equality nulls_equal           = null_equality::EQUAL,
-  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  duplicate_keep_option keep        = duplicate_keep_option::KEEP_ANY,
+  null_equality nulls_equal         = null_equality::EQUAL,
+  nan_equality nans_equal           = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Count the number of consecutive groups of equivalent rows in a column.
@@ -342,12 +360,14 @@ std::unique_ptr<table> stable_distinct(
  * @param[in] input The column_view whose consecutive groups of equivalent rows will be counted
  * @param[in] null_handling flag to include or ignore `null` while counting
  * @param[in] nan_handling flag to consider `NaN==null` or not
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  *
  * @return number of consecutive groups of equivalent rows in the column
  */
 cudf::size_type unique_count(column_view const& input,
                              null_policy null_handling,
-                             nan_policy nan_handling);
+                             nan_policy nan_handling,
+                             rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Count the number of consecutive groups of equivalent rows in a table.
@@ -355,11 +375,13 @@ cudf::size_type unique_count(column_view const& input,
  * @param[in] input Table whose consecutive groups of equivalent rows will be counted
  * @param[in] nulls_equal flag to denote if null elements should be considered equal
  *            nulls are not equal if null_equality::UNEQUAL.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  *
  * @return number of consecutive groups of equivalent rows in the column
  */
 cudf::size_type unique_count(table_view const& input,
-                             null_equality nulls_equal = null_equality::EQUAL);
+                             null_equality nulls_equal    = null_equality::EQUAL,
+                             rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Count the distinct elements in the column_view.
@@ -378,12 +400,14 @@ cudf::size_type unique_count(table_view const& input,
  * @param[in] input The column_view whose distinct elements will be counted
  * @param[in] null_handling flag to include or ignore `null` while counting
  * @param[in] nan_handling flag to consider `NaN==null` or not
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  *
  * @return number of distinct rows in the table
  */
 cudf::size_type distinct_count(column_view const& input,
                                null_policy null_handling,
-                               nan_policy nan_handling);
+                               nan_policy nan_handling,
+                               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Count the distinct rows in a table.
@@ -391,11 +415,13 @@ cudf::size_type distinct_count(column_view const& input,
  * @param[in] input Table whose distinct rows will be counted
  * @param[in] nulls_equal flag to denote if null elements should be considered equal.
  *            nulls are not equal if null_equality::UNEQUAL.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  *
  * @return number of distinct rows in the table
  */
 cudf::size_type distinct_count(table_view const& input,
-                               null_equality nulls_equal = null_equality::EQUAL);
+                               null_equality nulls_equal    = null_equality::EQUAL,
+                               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /** @} */
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

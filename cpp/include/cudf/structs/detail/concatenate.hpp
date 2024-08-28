@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
-namespace cudf {
-namespace structs {
-namespace detail {
+#include <rmm/resource_ref.hpp>
+
+namespace CUDF_EXPORT cudf {
+namespace structs::detail {
 
 /**
  * @brief Returns a single column by concatenating the given vector of structs columns.
@@ -50,8 +52,7 @@ namespace detail {
  */
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr);
+                                    rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace structs
-}  // namespace cudf
+}  // namespace structs::detail
+}  // namespace CUDF_EXPORT cudf

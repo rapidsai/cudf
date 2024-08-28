@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,11 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
-namespace nvtext {
+#include <rmm/resource_ref.hpp>
+
+namespace CUDF_EXPORT nvtext {
 
 /**
  * @addtogroup nvtext_tokenize
@@ -45,8 +48,8 @@ struct bpe_merge_pairs {
    * @param mr Device memory resource used to allocate the device memory
    */
   bpe_merge_pairs(std::unique_ptr<cudf::column>&& input,
-                  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new bpe merge pairs object
@@ -56,8 +59,8 @@ struct bpe_merge_pairs {
    * @param mr Device memory resource used to allocate the device memory
    */
   bpe_merge_pairs(cudf::strings_column_view const& input,
-                  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
   ~bpe_merge_pairs();
   bpe_merge_pairs();
@@ -94,8 +97,8 @@ struct bpe_merge_pairs {
  */
 std::unique_ptr<bpe_merge_pairs> load_merge_pairs(
   cudf::strings_column_view const& merge_pairs,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Byte pair encode the input strings.
@@ -127,7 +130,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
   cudf::strings_column_view const& input,
   bpe_merge_pairs const& merges_pairs,
   cudf::string_scalar const& separator = cudf::string_scalar(" "),
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr    = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
-}  // namespace nvtext
+}  // namespace CUDF_EXPORT nvtext

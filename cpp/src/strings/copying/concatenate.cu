@@ -28,6 +28,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/advance.h>
 #include <thrust/binary_search.h>
@@ -78,7 +79,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
 
   // Compute the partition offsets and size of offset column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
-  auto input_offsets = std::vector<size_t>(views.size() + 1);
+  auto input_offsets = cudf::detail::make_host_vector<size_t>(views.size() + 1, stream);
   auto offset_it     = std::next(input_offsets.begin());
   thrust::transform(
     thrust::host, views.begin(), views.end(), offset_it, [](auto const& col) -> size_t {
@@ -203,7 +204,7 @@ CUDF_KERNEL void fused_concatenate_string_chars_kernel(column_device_view const*
 
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   // Compute output sizes
@@ -220,9 +221,6 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   CUDF_EXPECTS(offsets_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total number of strings exceeds the column size limit",
                std::overflow_error);
-  CUDF_EXPECTS(total_bytes <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "total size of strings exceeds the column size limit",
-               std::overflow_error);
 
   bool const has_nulls =
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
@@ -232,8 +230,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   auto d_new_chars = output_chars.data();
 
   // create output offsets column
-  auto offsets_column = make_numeric_column(
-    data_type{type_id::INT32}, offsets_count, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_column = create_offsets_child_column(total_bytes, offsets_count, stream, mr);
   auto itr_new_offsets =
     cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
 
@@ -268,15 +265,15 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     // Use a heuristic to guess when the fused kernel will be faster than memcpy
     if (use_fused_kernel_heuristic(has_nulls, total_bytes, columns.size())) {
       // Use single kernel launch to copy chars columns
-      constexpr size_type block_size{256};
-      cudf::detail::grid_1d config(total_bytes, block_size);
-      auto const kernel = fused_concatenate_string_chars_kernel;
-      kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-        d_views,
-        d_partition_offsets.data(),
-        static_cast<size_type>(columns.size()),
-        total_bytes,
-        d_new_chars);
+      constexpr size_t block_size{256};
+      // cudf::detail::grid_1d limited to size_type elements
+      auto const num_blocks = util::div_rounding_up_safe(total_bytes, block_size);
+      auto const kernel     = fused_concatenate_string_chars_kernel;
+      kernel<<<num_blocks, block_size, 0, stream.value()>>>(d_views,
+                                                            d_partition_offsets.data(),
+                                                            static_cast<size_type>(columns.size()),
+                                                            total_bytes,
+                                                            d_new_chars);
     } else {
       // Memcpy each input chars column (more efficient for very large strings)
       for (auto column = columns.begin(); column != columns.end(); ++column) {

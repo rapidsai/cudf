@@ -24,6 +24,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -35,7 +36,7 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
                                       size_type begin_bit,
                                       size_type end_bit,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   auto const length = end_bit - begin_bit;
   CUDF_EXPECTS(length >= 0, "begin_bit should be less than or equal to end_bit");
@@ -61,9 +62,10 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
 std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
                                       size_type begin_bit,
                                       size_type end_bit,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::mask_to_bools(bitmask, begin_bit, end_bit, cudf::get_default_stream(), mr);
+  return detail::mask_to_bools(bitmask, begin_bit, end_bit, stream, mr);
 }
 }  // namespace cudf

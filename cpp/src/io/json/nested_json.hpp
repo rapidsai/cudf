@@ -21,15 +21,20 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
+
+#include <rmm/resource_ref.hpp>
 
 #include <map>
 #include <vector>
 
 // Forward declaration of parse_options from parsing_utils.cuh
-namespace cudf::io {
+namespace cudf {
+namespace io {
+
 struct parse_options;
-}
-namespace cudf::io::json {
+
+namespace json {
 
 /**
  * @brief Struct that encapsulate all information of a columnar tree representation.
@@ -57,8 +62,8 @@ enum class stack_behavior_t : char {
   PushPopWithoutReset,
 
   /// Opening brackets and braces, [, {, push onto the stack, closing brackets and braces, ], }, pop
-  /// from the stack. Newline characters are considered delimiters and therefore reset to an empty
-  /// stack.
+  /// from the stack. Delimiter characters are passed when the stack context is constructed to
+  /// reset to an empty stack.
   ResetOnDelimiter
 };
 
@@ -172,7 +177,7 @@ struct device_json_column {
    * @param stream The CUDA stream to which kernels are dispatched
    * @param mr Optional, resource with which to allocate
    */
-  device_json_column(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  device_json_column(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
     : string_offsets(0, stream),
       string_lengths(0, stream),
       child_offsets(0, stream, mr),
@@ -196,11 +201,14 @@ namespace detail {
  * within the context of a struct, a '[' represents that it is within the context of an array, and a
  * '_' symbol that it is at the root of the JSON.
  * @param[in] stack_behavior Specifies the stack's behavior
+ * @param[in] delimiter Specifies the delimiter to use as separator for JSON lines input
  * @param[in] stream The cuda stream to dispatch GPU kernels to
  */
+CUDF_EXPORT
 void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
                        stack_behavior_t stack_behavior,
+                       SymbolT delimiter,
                        rmm::cuda_stream_view stream);
 
 /**
@@ -212,6 +220,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
  * @param stream The cuda stream to dispatch GPU kernels to
  * @return Returns the post-processed token stream
  */
+CUDF_EXPORT
 std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> process_token_stream(
   device_span<PdaTokenT const> tokens,
   device_span<SymbolOffsetT const> token_indices,
@@ -228,11 +237,12 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
  * @return A tree representation of the input JSON string as vectors of node type, parent index,
  * level, begin index, and end index in the input JSON string
  */
+CUDF_EXPORT
 tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                     device_span<SymbolOffsetT const> token_indices,
                                     bool is_strict_nested_boundaries,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr);
+                                    rmm::device_async_resource_ref mr);
 
 /**
  * @brief Traverse the tree representation of the JSON input in records orient format and populate
@@ -247,13 +257,14 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
  * @param mr Optional, resource with which to allocate
  * @return A tuple of the output column indices and the row offsets within each column for each node
  */
+CUDF_EXPORT
 std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 records_orient_tree_traversal(device_span<SymbolT const> d_input,
                               tree_meta_t const& d_tree,
                               bool is_array_of_arrays,
                               bool is_enabled_lines,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
 /**
  * @brief Searches for and selects nodes at level `row_array_children_level`. For each selected
@@ -300,14 +311,22 @@ reduce_to_column_tree(tree_meta_t& tree,
 cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
                                         rmm::cuda_stream_view stream);
 
-/** @copydoc host_parse_nested_json
+/**
+ * @brief Parses the given JSON string and generates table from the given input.
+ *
  * All processing is done in device memory.
  *
+ * @param input The JSON input
+ * @param options Parsing options specifying the parsing behaviour
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr Optional, resource with which to allocate
+ * @return The data parsed from the given JSON input
  */
+CUDF_EXPORT
 table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr);
+                                             rmm::device_async_resource_ref mr);
 
 /**
  * @brief Get the path data type of a column by path if present in input schema
@@ -317,7 +336,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
  * @return data type of the column if present
  */
 std::optional<data_type> get_path_data_type(
-  host_span<std::pair<std::string, cudf::io::json::NodeT>> path,
+  host_span<std::pair<std::string, cudf::io::json::NodeT> const> path,
   cudf::io::json_reader_options const& options);
 
 /**
@@ -335,20 +354,8 @@ struct path_from_tree {
   std::vector<path_rep> get_path(NodeIndexT this_col_id);
 };
 
-/**
- * @brief Parses the given JSON string and generates table from the given input.
- *
- * @param input The JSON input
- * @param options Parsing options specifying the parsing behaviour
- * @param stream The CUDA stream to which kernels are dispatched
- * @param mr Optional, resource with which to allocate
- * @return The data parsed from the given JSON input
- */
-table_with_metadata host_parse_nested_json(device_span<SymbolT const> input,
-                                           cudf::io::json_reader_options const& options,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr);
-
 }  // namespace detail
 
-}  // namespace cudf::io::json
+}  // namespace json
+}  // namespace io
+}  // namespace cudf

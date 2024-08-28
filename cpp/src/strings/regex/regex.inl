@@ -81,12 +81,11 @@ struct alignas(8) relist {
     return true;
   }
 
-  __device__ __forceinline__ restate get_state(int16_t idx) const
+  __device__ [[nodiscard]] __forceinline__ restate get_state(int16_t idx) const
   {
     return restate{ranges[idx * stride], inst_ids[idx * stride]};
   }
-
-  __device__ __forceinline__ int16_t get_size() const { return size; }
+  __device__ [[nodiscard]] __forceinline__ int16_t get_size() const { return size; }
 
  private:
   int16_t size{};
@@ -102,7 +101,7 @@ struct alignas(8) relist {
     mask[pos >> 3] |= uc;
   }
 
-  __device__ __forceinline__ bool readMask(int32_t pos) const
+  __device__ [[nodiscard]] __forceinline__ bool readMask(int32_t pos) const
   {
     u_char const uc = mask[pos >> 3];
     return static_cast<bool>((uc >> (pos & 7)) & 1);
@@ -217,6 +216,15 @@ __device__ __forceinline__ reprog_device reprog_device::load(reprog_device const
                                             : reinterpret_cast<reprog_device*>(buffer)[0];
 }
 
+__device__ __forceinline__ static string_view::const_iterator find_char(
+  cudf::char_utf8 chr, string_view const d_str, string_view::const_iterator itr)
+{
+  while (itr.byte_offset() < d_str.size_bytes() && *itr != chr) {
+    ++itr;
+  }
+  return itr;
+}
+
 /**
  * @brief Evaluate a specific string against regex pattern compiled to this instance.
  *
@@ -252,17 +260,17 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
       switch (jnk.starttype) {
         case BOL:
           if (pos == 0) break;
-          if (jnk.startchar != '^') { return thrust::nullopt; }
-          --pos;
+          if (jnk.startchar != '^') { return cuda::std::nullopt; }
+          --itr;
           startchar = static_cast<char_utf8>('\n');
         case CHAR: {
-          auto const fidx = dstr.find(startchar, pos);
-          if (fidx == string_view::npos) { return thrust::nullopt; }
-          pos = fidx + (jnk.starttype == BOL);
+          auto const find_itr = find_char(startchar, dstr, itr);
+          if (find_itr.byte_offset() >= dstr.size_bytes()) { return cuda::std::nullopt; }
+          itr = find_itr + (jnk.starttype == BOL);
+          pos = itr.position();
           break;
         }
       }
-      itr += (pos - itr.position());  // faster to increment position
     }
 
     if (((eos < 0) || (pos < eos)) && match == 0) {
@@ -388,7 +396,7 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
     checkstart = jnk.list1->get_size() == 0;
   } while (!last_character && (!checkstart || !match));
 
-  return match ? match_result({begin, end}) : thrust::nullopt;
+  return match ? match_result({begin, end}) : cuda::std::nullopt;
 }
 
 __device__ __forceinline__ match_result reprog_device::find(int32_t const thread_idx,

@@ -4,7 +4,8 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.types cimport dtype_to_pylibcudf_type
 
-from cudf._lib import pylibcudf
+import pylibcudf
+
 from cudf._lib.scalar import as_device_scalar
 from cudf.core.buffer import acquire_spill_lock
 
@@ -34,7 +35,7 @@ def binaryop(lhs, rhs, op, dtype):
     """
     # TODO: Shouldn't have to keep special-casing. We need to define a separate
     # pipeline for libcudf binops that don't map to Python binops.
-    if op not in {"INT_POW", "NULL_EQUALS"}:
+    if op not in {"INT_POW", "NULL_EQUALS", "NULL_NOT_EQUALS"}:
         op = op[2:-2]
     op = op.upper()
     op = _op_map.get(op, op)

@@ -4,15 +4,16 @@ from cpython cimport pycapsule
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib import pylibcudf
+import pylibcudf
 
-from cudf._lib.cpp.interop cimport (
+from pylibcudf.libcudf.interop cimport (
     DLManagedTensor,
     from_dlpack as cpp_from_dlpack,
     to_dlpack as cpp_to_dlpack,
 )
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
+from pylibcudf.libcudf.table.table cimport table
+from pylibcudf.libcudf.table.table_view cimport table_view
+
 from cudf._lib.utils cimport (
     columns_from_pylibcudf_table,
     columns_from_unique_ptr,

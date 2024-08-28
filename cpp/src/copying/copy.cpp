@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -119,10 +120,11 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                       size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
+  CUDF_EXPECTS(
+    is_fixed_width(input.type()), "Expects only fixed-width type column", cudf::data_type_error);
   mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
 
   return std::make_unique<column>(input.type(),
@@ -140,6 +142,12 @@ std::unique_ptr<column> allocate_like(column_view const& input,
 std::unique_ptr<column> empty_like(column_view const& input)
 {
   CUDF_FUNC_RANGE();
+
+  // test_dataframe.py passes an EMPTY column type here;
+  // this causes is_nested to throw an error since it uses the type-dispatcher
+  if ((input.type().id() == type_id::EMPTY) || !cudf::is_nested(input.type())) {
+    return make_empty_column(input.type());
+  }
 
   std::vector<std::unique_ptr<column>> children;
   std::transform(input.child_begin(),
@@ -176,7 +184,7 @@ std::unique_ptr<table> empty_like(table_view const& input_table)
 std::unique_ptr<column> allocate_like(column_view const& input,
                                       mask_allocation_policy mask_alloc,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::allocate_like(input, input.size(), mask_alloc, stream, mr);
@@ -186,7 +194,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                       size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::allocate_like(input, size, mask_alloc, stream, mr);

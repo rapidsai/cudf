@@ -52,11 +52,8 @@ option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
 mark_as_advanced(CUDF_BUILD_TESTUTIL)
 option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
-option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
-option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
-option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
-option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
-option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" OFF)
+option(CUDF_LARGE_STRINGS_DISABLED "Build with large string support disabled" OFF)
+mark_as_advanced(CUDF_LARGE_STRINGS_DISABLED)
 option(
   CUDF_USE_PER_THREAD_DEFAULT_STREAM
   "Build cuDF with per-thread default stream, including passing the per-thread default
@@ -79,8 +76,6 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
-option(USE_LIBARROW_FROM_PYARROW "Only use the libarrow contained in pyarrow" OFF)
-mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
 if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
@@ -98,8 +93,6 @@ message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
 message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
-message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
-message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_ENABLE_ARROW_S3}")
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
@@ -190,8 +183,8 @@ include(cmake/thirdparty/get_nvcomp.cmake)
 include(cmake/thirdparty/get_cccl.cmake)
 # find rmm
 include(cmake/thirdparty/get_rmm.cmake)
-# find arrow
-include(cmake/thirdparty/get_arrow.cmake)
+# find flatbuffers
+include(cmake/thirdparty/get_flatbuffers.cmake)
 # find dlpack
 include(cmake/thirdparty/get_dlpack.cmake)
 # find cuCollections, should come after including CCCL
@@ -210,12 +203,16 @@ include(cmake/thirdparty/get_kvikio.cmake)
 include(cmake/thirdparty/get_fmt.cmake)
 # find spdlog
 include(cmake/thirdparty/get_spdlog.cmake)
+# find nanoarrow
+include(cmake/thirdparty/get_nanoarrow.cmake)
+# find thread_pool
+include(cmake/thirdparty/get_thread_pool.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow)
   if(TARGET cufile::cuFile_interface)
     list(APPEND dependencies cuFile)
   endif()
@@ -260,6 +257,7 @@ add_library(
   src/binaryop/compiled/Mod.cu
   src/binaryop/compiled/Mul.cu
   src/binaryop/compiled/NullEquals.cu
+  src/binaryop/compiled/NullNotEquals.cu
   src/binaryop/compiled/NullLogicalAnd.cu
   src/binaryop/compiled/NullLogicalOr.cu
   src/binaryop/compiled/NullMax.cu
@@ -344,7 +342,6 @@ add_library(
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
   src/groupby/sort/sort_helper.cu
-  src/hash/hashing.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
   src/hash/murmurhash3_x64_128.cu
@@ -353,12 +350,16 @@ add_library(
   src/hash/sha256_hash.cu
   src/hash/sha384_hash.cu
   src/hash/sha512_hash.cu
-  src/hash/spark_murmurhash3_x86_32.cu
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
-  src/interop/from_arrow.cu
-  src/interop/to_arrow.cu
-  src/interop/detail/arrow_allocator.cpp
+  src/interop/arrow_utilities.cpp
+  src/interop/decimal_conversion_utilities.cu
+  src/interop/to_arrow_device.cu
+  src/interop/to_arrow_host.cu
+  src/interop/from_arrow_device.cu
+  src/interop/from_arrow_host.cu
+  src/interop/from_arrow_stream.cu
+  src/interop/to_arrow_schema.cpp
   src/io/avro/avro.cpp
   src/io/avro/avro_gpu.cu
   src/io/avro/reader_impl.cu
@@ -377,28 +378,27 @@ add_library(
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
-  src/io/json/byte_range_info.cu
   src/io/json/json_column.cu
   src/io/json/json_normalization.cu
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
   src/io/json/read_json.cu
-  src/io/json/legacy/json_gpu.cu
-  src/io/json/legacy/reader_impl.cu
   src/io/json/parser_features.cpp
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
   src/io/orc/reader_impl.cu
+  src/io/orc/reader_impl_chunking.cu
+  src/io/orc/reader_impl_decode.cu
   src/io/orc/reader_impl_helpers.cpp
-  src/io/orc/reader_impl_preprocess.cu
   src/io/orc/stats_enc.cu
   src/io/orc/stripe_data.cu
   src/io/orc/stripe_enc.cu
   src/io/orc/stripe_init.cu
   src/datetime/timezone.cpp
   src/io/orc/writer_impl.cu
+  src/io/parquet/arrow_schema_writer.cpp
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
@@ -415,6 +415,7 @@ add_library(
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu
+  src/io/parquet/writer_impl_helpers.cpp
   src/io/parquet/decode_fixed.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
@@ -423,14 +424,14 @@ add_library(
   src/io/text/bgzip_data_chunk_source.cu
   src/io/text/bgzip_utils.cpp
   src/io/text/multibyte_split.cu
-  src/io/utilities/arrow_io_source.cpp
+  src/io/utilities/base64_utilities.cpp
   src/io/utilities/column_buffer.cpp
+  src/io/utilities/column_buffer_strings.cu
   src/io/utilities/config_utils.cpp
   src/io/utilities/data_casting.cu
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
   src/io/utilities/file_io_utilities.cpp
-  src/io/utilities/parsing_utils.cu
   src/io/utilities/row_selection.cpp
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
@@ -450,7 +451,6 @@ add_library(
   src/join/mixed_join_semi.cu
   src/join/mixed_join_size_kernel.cu
   src/join/mixed_join_size_kernel_nulls.cu
-  src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
@@ -495,6 +495,7 @@ add_library(
   src/reductions/product.cu
   src/reductions/reductions.cpp
   src/reductions/scan/rank_scan.cu
+  src/reductions/scan/ewm.cu
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
@@ -584,6 +585,7 @@ add_library(
   src/strings/filling/fill.cu
   src/strings/filter_chars.cu
   src/strings/like.cu
+  src/strings/merge/merge.cu
   src/strings/padding.cu
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp
@@ -653,9 +655,13 @@ add_library(
   src/unary/math_ops.cu
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
+  src/utilities/cuda.cpp
+  src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
+  src/utilities/host_memory.cpp
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
+  src/utilities/prefetch.cpp
   src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
@@ -691,8 +697,10 @@ set_target_properties(
              CXX_STANDARD_REQUIRED ON
              # For std:: support of __int128_t. Can be removed once using cuda::std
              CXX_EXTENSIONS ON
+             CXX_VISIBILITY_PRESET hidden
              CUDA_STANDARD 17
              CUDA_STANDARD_REQUIRED ON
+             CUDA_VISIBILITY_PRESET hidden
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
 )
@@ -735,6 +743,8 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+          "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
+          "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -769,6 +779,11 @@ if(NOT USE_NVTX)
   target_compile_definitions(cudf PUBLIC NVTX_DISABLE)
 endif()
 
+# Disable large strings support
+if(CUDF_LARGE_STRINGS_DISABLED)
+  target_compile_definitions(cudf PRIVATE CUDF_LARGE_STRINGS_DISABLED)
+endif()
+
 # Define RMM logging level
 target_compile_definitions(cudf PRIVATE "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL")
 
@@ -781,9 +796,9 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
-          $<TARGET_NAME_IF_EXISTS:cuFile_interface>
+  PUBLIC CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
+          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
 )
 
 # Add Conda library, and include paths if specified
@@ -843,14 +858,12 @@ if(CUDF_BUILD_TESTUTIL)
 
   add_library(cudf::cudftest_default_stream ALIAS cudftest_default_stream)
 
-  # Needs to be static so that we support usage of static builds of gtest which doesn't compile with
-  # fPIC enabled and therefore can't be embedded into shared libraries.
   add_library(
-    cudftestutil STATIC
+    cudftestutil SHARED
     tests/io/metadata_utilities.cpp
-    tests/utilities/base_fixture.cpp
     tests/utilities/column_utilities.cu
     tests/utilities/debug_utilities.cu
+    tests/utilities/random_seed.cpp
     tests/utilities/table_utilities.cu
     tests/utilities/tdigest_utilities.cu
   )
@@ -862,8 +875,10 @@ if(CUDF_BUILD_TESTUTIL)
                # set target compile options
                CXX_STANDARD 17
                CXX_STANDARD_REQUIRED ON
+               CXX_VISIBILITY_PRESET hidden
                CUDA_STANDARD 17
                CUDA_STANDARD_REQUIRED ON
+               CUDA_VISIBILITY_PRESET hidden
                POSITION_INDEPENDENT_CODE ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
   )
@@ -875,8 +890,8 @@ if(CUDF_BUILD_TESTUTIL)
 
   target_link_libraries(
     cudftestutil
-    PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf cudftest_default_stream
-    PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+    PUBLIC Threads::Threads cudf cudftest_default_stream
+    PRIVATE GTest::gmock GTest::gtest $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
   target_include_directories(
@@ -906,6 +921,11 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     add_library(
       ${_tgt} SHARED src/utilities/stacktrace.cpp tests/utilities/identify_stream_usage.cpp
     )
+    if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
+      target_compile_definitions(
+        ${_tgt} PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM
+      )
+    endif()
 
     set_target_properties(
       ${_tgt}
@@ -955,7 +975,7 @@ endif()
 if(CUDF_BUILD_BENCHMARKS)
   # Find or install GoogleBench
   include(${rapids-cmake-dir}/cpm/gbench.cmake)
-  rapids_cpm_gbench()
+  rapids_cpm_gbench(BUILD_STATIC)
 
   # Find or install nvbench
   include(cmake/thirdparty/get_nvbench.cmake)
@@ -1025,37 +1045,12 @@ following IMPORTED GLOBAL  targets:
     ]=]
 )
 
-if(CUDF_ENABLE_ARROW_PARQUET)
-  string(
-    APPEND
-    install_code_string
-    [=[
-  if(NOT Parquet_DIR)
-    set(Parquet_DIR "${Arrow_DIR}")
-  endif()
-  set(ArrowDataset_DIR "${Arrow_DIR}")
-  find_dependency(ArrowDataset)
-  ]=]
-  )
-endif()
-
-string(
-  APPEND
-  install_code_string
-  [=[
-if(testing IN_LIST cudf_FIND_COMPONENTS)
-  enable_language(CUDA)
-endif()
-]=]
-)
-
 rapids_export(
   INSTALL cudf
   EXPORT_SET cudf-exports ${_components_export_string}
   GLOBAL_TARGETS cudf cudftestutil
   NAMESPACE cudf::
   DOCUMENTATION doc_string
-  FINAL_CODE_BLOCK install_code_string
 )
 
 # ##################################################################################################

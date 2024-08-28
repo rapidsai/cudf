@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +17,18 @@
 
 #include <cudf/binaryop.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 //! Inner interfaces and implementations
 namespace detail {
 
 /**
  * @copydoc cudf::binary_operation(column_view const&, column_view const&,
- * std::string const&, data_type, rmm::mr::device_memory_resource *)
+ * std::string const&, data_type, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -35,11 +37,11 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          std::string const& ptx,
                                          data_type output_type,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr);
+                                         rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::binary_operation(scalar const&, column_view const&, binary_operator,
- * data_type, rmm::mr::device_memory_resource *)
+ * data_type, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -48,11 +50,11 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr);
+                                         rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::binary_operation(column_view const&, scalar const&, binary_operator,
- * data_type, rmm::mr::device_memory_resource *)
+ * data_type, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -61,11 +63,11 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr);
+                                         rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::binary_operation(column_view const&, column_view const&,
- * binary_operator, data_type, rmm::mr::device_memory_resource *)
+ * binary_operator, data_type, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -74,6 +76,6 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr);
+                                         rmm::device_async_resource_ref mr);
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

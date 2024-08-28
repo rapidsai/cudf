@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,13 @@
 
 #include <cudf/io/avro.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace avro {
+namespace CUDF_EXPORT cudf {
+namespace io::detail::avro {
 
 /**
  * @brief Reads the entire dataset.
@@ -39,9 +39,7 @@ namespace avro {
 table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
                               avro_reader_options const& options,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
-}  // namespace avro
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace io::detail::avro
+}  // namespace CUDF_EXPORT cudf

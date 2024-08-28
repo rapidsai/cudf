@@ -21,12 +21,15 @@
 
 #include <cudf/column/column_factories.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 namespace cudf {
 namespace detail {
 
 /**
  * @copydoc
- * sorted_order(table_view&,std::vector<order>,std::vector<null_order>,rmm::mr::device_memory_resource*)
+ * sorted_order(table_view&,std::vector<order>,std::vector<null_order>,rmm::device_async_resource_ref
+ * )
  *
  * @tparam stable Whether to use stable sort
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -36,7 +39,7 @@ std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   if (input.num_rows() == 0 or input.num_columns() == 0) {
     return cudf::make_numeric_column(

@@ -31,6 +31,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/pair.h>
 
@@ -78,7 +79,7 @@ std::unique_ptr<column> findall_util(column_device_view const& d_strings,
                                      int64_t total_matches,
                                      size_type const* d_offsets,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<string_index_pair> indices(total_matches, stream);
 
@@ -94,7 +95,7 @@ std::unique_ptr<column> findall_util(column_device_view const& d_strings,
 std::unique_ptr<column> findall(strings_column_view const& input,
                                 regex_program const& prog,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   auto const strings_count = input.size();
   auto const d_strings     = column_device_view::create(input.parent(), stream);
@@ -103,7 +104,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   // Create lists offsets column
-  auto const sizes              = count_matches(*d_strings, *d_prog, strings_count, stream, mr);
+  auto const sizes              = count_matches(*d_strings, *d_prog, stream, mr);
   auto [offsets, total_matches] = cudf::detail::make_offsets_child_column(
     sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr);
   auto const d_offsets = offsets->view().data<size_type>();
@@ -128,7 +129,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
 std::unique_ptr<column> findall(strings_column_view const& input,
                                 regex_program const& prog,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::findall(input, prog, stream, mr);

@@ -31,6 +31,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
@@ -55,13 +56,14 @@ struct replace_multi_regex_fn {
   device_span<reprog_device const> progs;  // array of regex progs
   found_range* d_found_ranges;             // working array matched (begin,end) values
   column_device_view const d_repls;        // replacement strings
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -90,7 +92,7 @@ struct replace_multi_regex_fn {
         }
         reprog_device prog = progs[ptn_idx];
 
-        auto const result = !prog.is_empty() ? prog.find(idx, d_str, itr) : thrust::nullopt;
+        auto const result = !prog.is_empty() ? prog.find(idx, d_str, itr) : cuda::std::nullopt;
         d_ranges[ptn_idx] =
           result ? found_range{result->first, result->second} : found_range{nchars, nchars};
       }
@@ -128,7 +130,7 @@ struct replace_multi_regex_fn {
                      d_str.size_bytes() - last_pos.byte_offset(),
                      out_ptr);
     } else {
-      d_offsets[idx] = nbytes;
+      d_sizes[idx] = nbytes;
     }
   }
 };
@@ -140,7 +142,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
                                    strings_column_view const& replacements,
                                    regex_flags const flags,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   if (patterns.empty()) {  // if no patterns; just return a copy
@@ -169,7 +171,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
   auto d_buffer          = rmm::device_buffer(buffer_size, stream);
 
   // copy all the reprog_device instances to a device memory array
-  std::vector<reprog_device> progs;
+  auto progs = cudf::detail::make_empty_host_vector<reprog_device>(h_progs.size(), stream);
   std::transform(h_progs.begin(),
                  h_progs.end(),
                  std::back_inserter(progs),
@@ -207,7 +209,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    strings_column_view const& replacements,
                                    regex_flags const flags,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::replace_re(strings, patterns, replacements, flags, stream, mr);

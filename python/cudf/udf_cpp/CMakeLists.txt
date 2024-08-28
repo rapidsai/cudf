@@ -26,8 +26,8 @@ rapids_find_package(
   INSTALL_EXPORT_SET udf-exports
 )
 
-include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
-rapids_cpm_libcudacxx(BUILD_EXPORT_SET udf-exports INSTALL_EXPORT_SET udf-exports)
+include(${rapids-cmake-dir}/cpm/cccl.cmake)
+rapids_cpm_cccl(BUILD_EXPORT_SET udf-exports INSTALL_EXPORT_SET udf-exports)
 
 add_library(cudf_strings_udf SHARED strings/src/strings/udf/udf_apis.cu)
 target_include_directories(
@@ -60,7 +60,7 @@ set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
 
 # always build a default PTX file in case RAPIDS_NO_INITIALIZE is set and the device cc can't be
 # safely queried through a context
-list(INSERT CMAKE_CUDA_ARCHITECTURES 0 "60")
+list(INSERT CMAKE_CUDA_ARCHITECTURES 0 "70")
 
 list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-real" "")
 list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-virtual" "")

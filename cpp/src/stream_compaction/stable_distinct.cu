@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/uninitialized_fill.h>
@@ -34,7 +36,7 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
                                        null_equality nulls_equal,
                                        nan_equality nans_equal,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   if (input.num_rows() == 0 or input.num_columns() == 0 or keys.empty()) {
     return empty_like(input);
@@ -77,11 +79,11 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
                                        duplicate_keep_option keep,
                                        null_equality nulls_equal,
                                        nan_equality nans_equal,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::stable_distinct(
-    input, keys, keep, nulls_equal, nans_equal, cudf::get_default_stream(), mr);
+  return detail::stable_distinct(input, keys, keep, nulls_equal, nans_equal, stream, mr);
 }
 
 }  // namespace cudf

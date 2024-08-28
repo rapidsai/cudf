@@ -9,7 +9,6 @@ import pandas as pd
 
 import cudf
 from cudf._lib import json as libjson
-from cudf.api.types import is_list_like
 from cudf.utils import ioutils
 from cudf.utils.dtypes import _maybe_convert_to_default_type
 
@@ -26,6 +25,8 @@ def read_json(
     keep_quotes=False,
     storage_options=None,
     mixed_types_as_string=False,
+    prune_columns=False,
+    on_bad_lines="error",
     *args,
     **kwargs,
 ):
@@ -38,25 +39,6 @@ def read_json(
             f"or a bool, or None. Got {type(dtype)}"
         )
 
-    if engine == "cudf_experimental":
-        raise ValueError(
-            "engine='cudf_experimental' support has been removed, "
-            "use `engine='cudf'`"
-        )
-
-    if engine == "cudf_legacy":
-        # TODO: Deprecated in 23.02, please
-        # give some time until(more than couple of
-        # releases from now) `cudf_legacy`
-        # support can be removed completely.
-        warnings.warn(
-            "engine='cudf_legacy' is a deprecated engine."
-            "This will be removed in a future release."
-            "Please switch to using engine='cudf'.",
-            FutureWarning,
-        )
-    if engine == "cudf_legacy" and not lines:
-        raise ValueError(f"{engine} engine only supports JSON Lines format")
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
     if engine != "cudf" and keep_quotes:
@@ -64,7 +46,7 @@ def read_json(
             "keep_quotes='True' is supported only with engine='cudf'"
         )
 
-    if engine == "cudf_legacy" or engine == "cudf":
+    if engine == "cudf":
         if dtype is None:
             dtype = True
 
@@ -79,47 +61,26 @@ def read_json(
                 f"following positional arguments: {list(args)}"
             )
 
-        # Multiple sources are passed as a list. If a single source is passed,
-        # wrap it in a list for unified processing downstream.
-        if not is_list_like(path_or_buf):
-            path_or_buf = [path_or_buf]
-
-        filepaths_or_buffers = []
-        for source in path_or_buf:
-            if ioutils.is_directory(
-                path_or_data=source, storage_options=storage_options
-            ):
-                fs = ioutils._ensure_filesystem(
-                    passed_filesystem=None,
-                    path=source,
-                    storage_options=storage_options,
-                )
-                source = ioutils.stringify_pathlike(source)
-                source = fs.sep.join([source, "*.json"])
-
-            tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-                path_or_data=source,
-                compression=compression,
-                iotypes=(BytesIO, StringIO),
-                allow_raw_text_input=True,
-                storage_options=storage_options,
-                warn_on_raw_text_input=True,
-                warn_meta=("json", "read_json"),
-            )
-            if isinstance(tmp_source, list):
-                filepaths_or_buffers.extend(tmp_source)
-            else:
-                filepaths_or_buffers.append(tmp_source)
+        filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
+            path_or_buf,
+            iotypes=(BytesIO, StringIO),
+            allow_raw_text_input=True,
+            storage_options=storage_options,
+            warn_on_raw_text_input=True,
+            warn_meta=("json", "read_json"),
+            expand_dir_pattern="*.json",
+        )
 
         df = libjson.read_json(
-            filepaths_or_buffers,
-            dtype,
-            lines,
-            compression,
-            byte_range,
-            engine == "cudf_legacy",
-            keep_quotes,
-            mixed_types_as_string,
+            filepaths_or_buffers=filepaths_or_buffers,
+            dtype=dtype,
+            lines=lines,
+            compression=compression,
+            byte_range=byte_range,
+            keep_quotes=keep_quotes,
+            mixed_types_as_string=mixed_types_as_string,
+            prune_columns=prune_columns,
+            on_bad_lines=on_bad_lines,
         )
     else:
         warnings.warn(
@@ -127,25 +88,18 @@ def read_json(
             "be GPU accelerated in the future"
         )
 
-        if not ioutils.ensure_single_filepath_or_buffer(
+        filepath_or_buffer = ioutils.get_reader_filepath_or_buffer(
             path_or_data=path_or_buf,
-            storage_options=storage_options,
-        ):
-            raise NotImplementedError(
-                "`read_json` does not yet support reading "
-                "multiple files via pandas"
-            )
-
-        path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=path_or_buf,
-            compression=compression,
             iotypes=(BytesIO, StringIO),
             allow_raw_text_input=True,
             storage_options=storage_options,
         )
+        filepath_or_buffer = ioutils._select_single_source(
+            filepath_or_buffer, "read_json (via pandas)"
+        )
 
         pd_value = pd.read_json(
-            path_or_buf,
+            filepath_or_buffer,
             lines=lines,
             dtype=dtype,
             compression=compression,
@@ -163,10 +117,9 @@ def read_json(
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
         specified_dtypes = {} if dtype is True else dtype
-        df_dtypes = df._dtypes
         unspecified_dtypes = {
-            name: df_dtypes[name]
-            for name in df._column_names
+            name: dtype
+            for name, dtype in df._dtypes
             if name not in specified_dtypes
         }
         default_dtypes = {}

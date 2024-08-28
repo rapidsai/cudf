@@ -16,53 +16,57 @@
 
 #include "reader_impl_helpers.hpp"
 
+#include "compact_protocol_reader.hpp"
+#include "io/parquet/parquet.hpp"
+#include "io/utilities/base64_utilities.hpp"
 #include "io/utilities/row_selection.hpp"
+#include "ipc/Message_generated.h"
+#include "ipc/Schema_generated.h"
 
+#include <cudf/detail/utilities/logger.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
+
+#include <functional>
 #include <numeric>
 #include <regex>
 
 namespace cudf::io::parquet::detail {
 
+namespace flatbuf = cudf::io::parquet::flatbuf;
+
 namespace {
 
-ConvertedType logical_type_to_converted_type(thrust::optional<LogicalType> const& logical)
+cuda::std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
 {
-  if (not logical.has_value()) { return UNKNOWN; }
-  switch (logical->type) {
-    case LogicalType::STRING: return UTF8;
-    case LogicalType::MAP: return MAP;
-    case LogicalType::LIST: return LIST;
-    case LogicalType::ENUM: return ENUM;
-    case LogicalType::DECIMAL: return DECIMAL;  // TODO use decimal scale/precision
-    case LogicalType::DATE: return DATE;
-    case LogicalType::TIME:
-      if (logical->is_time_millis()) {
-        return TIME_MILLIS;
-      } else if (logical->is_time_micros()) {
-        return TIME_MICROS;
-      }
-      break;
-    case LogicalType::TIMESTAMP:
-      if (logical->is_timestamp_millis()) {
-        return TIMESTAMP_MILLIS;
-      } else if (logical->is_timestamp_micros()) {
-        return TIMESTAMP_MICROS;
-      }
-      break;
-    case LogicalType::INTEGER:
-      switch (logical->bit_width()) {
-        case 8: return logical->is_signed() ? INT_8 : UINT_8;
-        case 16: return logical->is_signed() ? INT_16 : UINT_16;
-        case 32: return logical->is_signed() ? INT_32 : UINT_32;
-        case 64: return logical->is_signed() ? INT_64 : UINT_64;
-        default: break;
-      }
-    case LogicalType::UNKNOWN: return NA;
-    case LogicalType::JSON: return JSON;
-    case LogicalType::BSON: return BSON;
-    default: break;
+  if (schema.converted_type.has_value()) {
+    switch (schema.converted_type.value()) {
+      case ENUM:  // treat ENUM as UTF8 string
+      case UTF8: return LogicalType{LogicalType::STRING};
+      case MAP: return LogicalType{LogicalType::MAP};
+      case LIST: return LogicalType{LogicalType::LIST};
+      case DECIMAL: return LogicalType{DecimalType{schema.decimal_scale, schema.decimal_precision}};
+      case DATE: return LogicalType{LogicalType::DATE};
+      case TIME_MILLIS: return LogicalType{TimeType{true, {TimeUnit::MILLIS}}};
+      case TIME_MICROS: return LogicalType{TimeType{true, {TimeUnit::MICROS}}};
+      case TIMESTAMP_MILLIS: return LogicalType{TimestampType{true, {TimeUnit::MILLIS}}};
+      case TIMESTAMP_MICROS: return LogicalType{TimestampType{true, {TimeUnit::MICROS}}};
+      case UINT_8: return LogicalType{IntType{8, false}};
+      case UINT_16: return LogicalType{IntType{16, false}};
+      case UINT_32: return LogicalType{IntType{32, false}};
+      case UINT_64: return LogicalType{IntType{64, false}};
+      case INT_8: return LogicalType{IntType{8, true}};
+      case INT_16: return LogicalType{IntType{16, true}};
+      case INT_32: return LogicalType{IntType{32, true}};
+      case INT_64: return LogicalType{IntType{64, true}};
+      case JSON: return LogicalType{LogicalType::JSON};
+      case BSON: return LogicalType{LogicalType::BSON};
+      case INTERVAL:  // there is no logical type for INTERVAL yet
+      default: return LogicalType{LogicalType::UNDEFINED};
+    }
   }
-  return UNKNOWN;
+  return cuda::std::nullopt;
 }
 
 }  // namespace
@@ -74,76 +78,101 @@ type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
                    type_id timestamp_type_id)
 {
-  auto const physical       = schema.type;
-  auto const logical_type   = schema.logical_type;
-  auto converted_type       = schema.converted_type;
-  int32_t decimal_precision = schema.decimal_precision;
+  auto const physical_type = schema.type;
+  auto const arrow_type    = schema.arrow_type;
+  auto logical_type        = schema.logical_type;
 
-  // FIXME(ets): this should just use logical type to deduce the type_id. then fall back to
-  // converted_type if logical_type isn't set
-  // Logical type used for actual data interpretation; the legacy converted type
-  // is superseded by 'logical' type whenever available.
-  auto const inferred_converted_type = logical_type_to_converted_type(logical_type);
-  if (inferred_converted_type != UNKNOWN) { converted_type = inferred_converted_type; }
-  if (inferred_converted_type == DECIMAL) { decimal_precision = schema.logical_type->precision(); }
-
-  switch (converted_type.value_or(UNKNOWN)) {
-    case UINT_8: return type_id::UINT8;
-    case INT_8: return type_id::INT8;
-    case UINT_16: return type_id::UINT16;
-    case INT_16: return type_id::INT16;
-    case UINT_32: return type_id::UINT32;
-    case UINT_64: return type_id::UINT64;
-    case DATE: return type_id::TIMESTAMP_DAYS;
-    case TIME_MILLIS: return type_id::DURATION_MILLISECONDS;
-    case TIME_MICROS: return type_id::DURATION_MICROSECONDS;
-    case TIMESTAMP_MILLIS:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::TIMESTAMP_MILLISECONDS;
-    case TIMESTAMP_MICROS:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::TIMESTAMP_MICROSECONDS;
-    case DECIMAL:
-      if (physical == INT32) { return type_id::DECIMAL32; }
-      if (physical == INT64) { return type_id::DECIMAL64; }
-      if (physical == FIXED_LEN_BYTE_ARRAY) {
-        if (schema.type_length <= static_cast<int32_t>(sizeof(int32_t))) {
-          return type_id::DECIMAL32;
-        }
-        if (schema.type_length <= static_cast<int32_t>(sizeof(int64_t))) {
-          return type_id::DECIMAL64;
-        }
-        if (schema.type_length <= static_cast<int32_t>(sizeof(__int128_t))) {
-          return type_id::DECIMAL128;
-        }
-      }
-      if (physical == BYTE_ARRAY) {
-        CUDF_EXPECTS(decimal_precision <= MAX_DECIMAL128_PRECISION, "Invalid decimal precision");
-        if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
-          return type_id::DECIMAL32;
-        } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
-          return type_id::DECIMAL64;
-        } else {
-          return type_id::DECIMAL128;
-        }
-      }
-      CUDF_FAIL("Invalid representation of decimal type");
-      break;
-
-    // maps are just List<Struct<>>.
-    case MAP:
-    case LIST: return type_id::LIST;
-    case NA: return type_id::STRING;
-    // return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
-    default: break;
+  // sanity check, but not worth failing over
+  if (schema.converted_type.has_value() and not logical_type.has_value()) {
+    CUDF_LOG_WARN("ConvertedType is specified but not LogicalType");
+    logical_type = converted_to_logical_type(schema);
   }
 
-  if (inferred_converted_type == UNKNOWN and physical == INT64 and logical_type.has_value()) {
-    if (logical_type->is_timestamp_nanos()) {
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::TIMESTAMP_NANOSECONDS;
-    } else if (logical_type->is_time_nanos()) {
-      return type_id::DURATION_NANOSECONDS;
+  // check if have set the type through arrow schema?
+  if (arrow_type.has_value()) {
+    // is it duration type? i.e. phyical_type == INT64 and no logical/converted types
+    if (physical_type == Type::INT64 and not logical_type.has_value()) {
+      return arrow_type.value();
+    }
+    // should warn but not fail.
+    CUDF_LOG_WARN("Indeterminable arrow type encountered");
+  }
+
+  if (logical_type.has_value()) {
+    switch (logical_type->type) {
+      case LogicalType::INTEGER: {
+        auto const is_signed = logical_type->is_signed();
+        switch (logical_type->bit_width()) {
+          case 8: return is_signed ? type_id::INT8 : type_id::UINT8;
+          case 16: return is_signed ? type_id::INT16 : type_id::UINT16;
+          case 32: return is_signed ? type_id::INT32 : type_id::UINT32;
+          case 64: return is_signed ? type_id::INT64 : type_id::UINT64;
+          default: CUDF_FAIL("Invalid integer bitwidth");
+        }
+      } break;
+
+      case LogicalType::DATE: return type_id::TIMESTAMP_DAYS;
+
+      case LogicalType::TIME:
+        if (logical_type->is_time_millis()) {
+          return type_id::DURATION_MILLISECONDS;
+        } else if (logical_type->is_time_micros()) {
+          return type_id::DURATION_MICROSECONDS;
+        } else if (logical_type->is_time_nanos()) {
+          return type_id::DURATION_NANOSECONDS;
+        }
+        break;
+
+      case LogicalType::TIMESTAMP:
+        if (timestamp_type_id != type_id::EMPTY) {
+          return timestamp_type_id;
+        } else if (logical_type->is_timestamp_millis()) {
+          return type_id::TIMESTAMP_MILLISECONDS;
+        } else if (logical_type->is_timestamp_micros()) {
+          return type_id::TIMESTAMP_MICROSECONDS;
+        } else if (logical_type->is_timestamp_nanos()) {
+          return type_id::TIMESTAMP_NANOSECONDS;
+        }
+
+      case LogicalType::DECIMAL: {
+        int32_t const decimal_precision = logical_type->precision();
+        if (physical_type == INT32) {
+          return type_id::DECIMAL32;
+        } else if (physical_type == INT64) {
+          return type_id::DECIMAL64;
+        } else if (physical_type == FIXED_LEN_BYTE_ARRAY) {
+          if (schema.type_length <= static_cast<int32_t>(sizeof(int32_t))) {
+            return type_id::DECIMAL32;
+          } else if (schema.type_length <= static_cast<int32_t>(sizeof(int64_t))) {
+            return type_id::DECIMAL64;
+          } else if (schema.type_length <= static_cast<int32_t>(sizeof(__int128_t))) {
+            return type_id::DECIMAL128;
+          }
+        } else if (physical_type == BYTE_ARRAY) {
+          CUDF_EXPECTS(decimal_precision <= MAX_DECIMAL128_PRECISION, "Invalid decimal precision");
+          if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
+            return type_id::DECIMAL32;
+          } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
+            return type_id::DECIMAL64;
+          } else {
+            return type_id::DECIMAL128;
+          }
+        } else {
+          CUDF_FAIL("Invalid representation of decimal type");
+        }
+      } break;
+
+      // maps are just List<Struct<>>.
+      case LogicalType::MAP:
+      case LogicalType::LIST: return type_id::LIST;
+
+      // All null column that can't have its type deduced.
+      // Note: originally LogicalType::UNKNOWN was converted to ConvertedType::NA, and
+      // NA then became type_id::STRING, but with the following TODO:
+      // return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
+      case LogicalType::UNKNOWN: return type_id::STRING;
+
+      default: break;
     }
   }
 
@@ -152,16 +181,17 @@ type_id to_type_id(SchemaElement const& schema,
 
   // Physical storage type supported by Parquet; controls the on-disk storage
   // format in combination with the encoding type.
-  switch (physical) {
+  switch (physical_type) {
     case BOOLEAN: return type_id::BOOL8;
     case INT32: return type_id::INT32;
     case INT64: return type_id::INT64;
     case FLOAT: return type_id::FLOAT32;
     case DOUBLE: return type_id::FLOAT64;
     case BYTE_ARRAY:
-    case FIXED_LEN_BYTE_ARRAY:
-      // Can be mapped to INT32 (32-bit hash) or STRING
-      return strings_to_categorical ? type_id::INT32 : type_id::STRING;
+      // strings can be mapped to a 32-bit hash
+      if (strings_to_categorical) { return type_id::INT32; }
+      [[fallthrough]];
+    case FIXED_LEN_BYTE_ARRAY: return type_id::STRING;
     case INT96:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_NANOSECONDS;
@@ -199,7 +229,6 @@ void metadata::sanitize_schema()
   // This code attempts to make this less messy for the code that follows.
 
   std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
-    if (schema_idx < 0) { return; }
     auto& schema_elem = schema[schema_idx];
     if (schema_idx != 0 && schema_elem.type == UNDEFINED_TYPE) {
       auto const parent_type = schema[schema_elem.parent_idx].converted_type;
@@ -208,6 +237,7 @@ void metadata::sanitize_schema()
         // This is a list of structs, so we need to mark this as a list, but also
         // add a struct child and move this element's children to the struct
         schema_elem.converted_type  = LIST;
+        schema_elem.logical_type    = LogicalType::LIST;
         schema_elem.repetition_type = OPTIONAL;
         auto const struct_node_idx  = static_cast<size_type>(schema.size());
 
@@ -216,7 +246,7 @@ void metadata::sanitize_schema()
         struct_elem.repetition_type = REQUIRED;
         struct_elem.num_children    = schema_elem.num_children;
         struct_elem.type            = UNDEFINED_TYPE;
-        struct_elem.converted_type  = UNKNOWN;
+        struct_elem.converted_type  = cuda::std::nullopt;
 
         // swap children
         struct_elem.children_idx = std::move(schema_elem.children_idx);
@@ -236,6 +266,11 @@ void metadata::sanitize_schema()
         // add our struct
         schema.push_back(struct_elem);
       }
+    }
+
+    // convert ConvertedType to LogicalType for older files
+    if (schema_elem.converted_type.has_value() and not schema_elem.logical_type.has_value()) {
+      schema_elem.logical_type = converted_to_logical_type(schema_elem);
     }
 
     for (auto& child_idx : schema_elem.children_idx) {
@@ -343,6 +378,17 @@ aggregate_reader_metadata::collect_keyval_metadata() const
                  });
 
   return kv_maps;
+}
+
+std::vector<std::unordered_map<int32_t, int32_t>> aggregate_reader_metadata::init_schema_idx_maps(
+  bool const has_cols_from_mismatched_srcs) const
+{
+  // Only initialize if more than 1 data sources and has select columns from mismatched data sources
+  if (has_cols_from_mismatched_srcs and per_file_metadata.size() > 1) {
+    return std::vector<std::unordered_map<int32_t, int32_t>>{per_file_metadata.size() - 1};
+  }
+
+  return {};
 }
 
 int64_t aggregate_reader_metadata::calc_num_rows() const
@@ -504,13 +550,18 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
 }
 
 aggregate_reader_metadata::aggregate_reader_metadata(
-  host_span<std::unique_ptr<datasource> const> sources)
+  host_span<std::unique_ptr<datasource> const> sources,
+  bool use_arrow_schema,
+  bool has_cols_from_mismatched_srcs)
   : per_file_metadata(metadatas_from_sources(sources)),
     keyval_maps(collect_keyval_metadata()),
+    schema_idx_maps(init_schema_idx_maps(has_cols_from_mismatched_srcs)),
     num_rows(calc_num_rows()),
     num_row_groups(calc_num_row_groups())
 {
-  if (per_file_metadata.size() > 0) {
+  // Validate that all sources have the same schema unless we are reading select columns
+  // from mismatched sources, in which case, we will only check the projected columns later.
+  if (per_file_metadata.size() > 1 and not has_cols_from_mismatched_srcs) {
     auto const& first_meta = per_file_metadata.front();
     auto const num_cols =
       first_meta.row_groups.size() > 0 ? first_meta.row_groups.front().columns.size() : 0;
@@ -525,6 +576,300 @@ aggregate_reader_metadata::aggregate_reader_metadata(
       CUDF_EXPECTS(schema == pfm.schema, "All sources must have the same schema");
     }
   }
+
+  // Collect and apply arrow:schema from Parquet's key value metadata section
+  if (use_arrow_schema) { apply_arrow_schema(); }
+
+  // Erase ARROW_SCHEMA_KEY from the output pfm if exists
+  std::for_each(
+    keyval_maps.begin(), keyval_maps.end(), [](auto& pfm) { pfm.erase(ARROW_SCHEMA_KEY); });
+}
+
+arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
+{
+  // Check the key_value metadata for arrow schema, decode and walk it
+  // Function to convert from flatbuf::duration type to cudf::type_id
+  auto const duration_from_flatbuffer = [](flatbuf::Duration const* duration) {
+    // TODO: we only need this for arrow::DurationType for now. Else, we can take in a
+    // void ptr and typecast it to the corresponding type based on the type_id.
+    auto fb_unit = duration->unit();
+    switch (fb_unit) {
+      case flatbuf::TimeUnit::TimeUnit_SECOND:
+        return cudf::data_type{cudf::type_id::DURATION_SECONDS};
+      case flatbuf::TimeUnit::TimeUnit_MILLISECOND:
+        return cudf::data_type{cudf::type_id::DURATION_MILLISECONDS};
+      case flatbuf::TimeUnit::TimeUnit_MICROSECOND:
+        return cudf::data_type{cudf::type_id::DURATION_MICROSECONDS};
+      case flatbuf::TimeUnit::TimeUnit_NANOSECOND:
+        return cudf::data_type{cudf::type_id::DURATION_NANOSECONDS};
+      default: return cudf::data_type{};
+    }
+  };
+
+  // variable that tracks if an arrow_type specific column is seen
+  // in the walk
+  bool arrow_type_col_seen = false;
+
+  // Lambda function to walk a field and its children in DFS manner and
+  // return boolean walk success status
+  std::function<bool(flatbuf::Field const* const, arrow_schema_data_types&)> walk_field =
+    [&walk_field, &duration_from_flatbuffer, &arrow_type_col_seen](
+      flatbuf::Field const* const field, arrow_schema_data_types& schema_elem) {
+      // DFS: recursively walk over the children first
+      auto const field_children = field->children();
+
+      if (field_children != nullptr) {
+        auto schema_children = std::vector<arrow_schema_data_types>(field->children()->size());
+
+        if (not std::all_of(
+              thrust::make_counting_iterator(0),
+              thrust::make_counting_iterator(static_cast<int32_t>(field_children->size())),
+              [&](auto const& idx) {
+                return walk_field((*field_children)[idx], schema_children[idx]);
+              })) {
+          return false;
+        }
+        // arrow and parquet schemas are structured slightly differently for list type fields. list
+        // type fields in arrow are structured as: "field:list<element>" vs structured as:
+        // "field:list.element" in Parquet. To handle this, whenever we encounter a list type field,
+        // we add a dummy node "field.list" to the end of current children and move the current
+        // children (".element") to it.
+        switch (field->type_type()) {
+          case flatbuf::Type::Type_List:
+          case flatbuf::Type::Type_LargeList:
+          case flatbuf::Type::Type_FixedSizeList:
+            schema_elem.children.emplace_back(arrow_schema_data_types{std::move(schema_children)});
+            break;
+          default: schema_elem.children = std::move(schema_children); break;
+        }
+      }
+
+      // Walk the field itself
+      if (field->type_type() == flatbuf::Type::Type_Duration) {
+        auto type_data = field->type_as_Duration();
+        if (type_data != nullptr) {
+          auto name = field->name() ? field->name()->str() : "";
+          // set the schema_elem type to duration type
+          schema_elem.type = duration_from_flatbuffer(type_data);
+          arrow_type_col_seen |= (schema_elem.type.id() != type_id::EMPTY);
+        } else {
+          CUDF_LOG_ERROR("Parquet reader encountered an invalid type_data pointer.",
+                         "arrow:schema not processed.");
+          return false;
+        }
+      }
+      return true;
+    };
+
+  auto const it = keyval_maps[0].find(ARROW_SCHEMA_KEY);
+  if (it == keyval_maps[0].end()) { return {}; }
+
+  // Decode the base64 encoded ipc message string
+  // Note: Store the output from base64_decode in the lvalue here and then pass
+  // it to decode_ipc_message. Directly passing rvalue from base64_decode to
+  // decode_ipc_message can lead to unintended nullptr dereferences.
+  auto const decoded_message = cudf::io::detail::base64_decode(it->second);
+
+  // Decode the ipc message to get an optional string_view of the ipc:Message flatbuffer
+  auto const metadata_buf = decode_ipc_message(decoded_message);
+
+  // Check if the string_view exists
+  if (not metadata_buf.has_value()) {
+    // No need to re-log error here as already logged inside decode_ipc_message
+    return {};
+  }
+
+  // Check if the decoded Message flatbuffer is valid
+  if (flatbuf::GetMessage(metadata_buf.value().data()) == nullptr) {
+    CUDF_LOG_ERROR("Parquet reader encountered an invalid ipc:Message flatbuffer pointer.",
+                   "arrow:schema not processed.");
+    return {};
+  }
+
+  // Check if the Message flatbuffer has a valid arrow:schema in its header
+  if (flatbuf::GetMessage(metadata_buf.value().data())->header_as_Schema() == nullptr) {
+    CUDF_LOG_ERROR("Parquet reader encountered an invalid arrow:schema flatbuffer pointer.",
+                   "arrow:schema not processed.");
+    return {};
+  }
+
+  // Get the vector of fields from arrow:schema flatbuffer object
+  auto const fields =
+    flatbuf::GetMessage(metadata_buf.value().data())->header_as_Schema()->fields();
+  if (fields == nullptr) {
+    CUDF_LOG_ERROR("Parquet reader encountered an invalid fields pointer.",
+                   "arrow:schema not processed.");
+    return {};
+  }
+
+  // arrow schema structure to return
+  arrow_schema_data_types schema;
+
+  // Recursively walk the arrow schema and set cudf::data_type for all duration columns
+  if (fields->size() > 0) {
+    schema.children = std::vector<arrow_schema_data_types>(fields->size());
+
+    if (not std::all_of(
+          thrust::make_counting_iterator(0),
+          thrust::make_counting_iterator(static_cast<int32_t>(fields->size())),
+          [&](auto const& idx) { return walk_field((*fields)[idx], schema.children[idx]); })) {
+      return {};
+    }
+
+    // if no arrow type column seen, return nullopt.
+    if (not arrow_type_col_seen) { return {}; }
+  }
+
+  return schema;
+}
+
+void aggregate_reader_metadata::apply_arrow_schema()
+{
+  // Collect the arrow schema from the key value section of Parquet metadata
+  auto arrow_schema_root = collect_arrow_schema();
+
+  // Check if empty arrow schema collected
+  if (arrow_schema_root.type.id() == type_id::EMPTY and arrow_schema_root.children.size() == 0) {
+    return;
+  }
+
+  // Function to verify equal num_children at each level in Parquet and arrow schemas.
+  std::function<bool(arrow_schema_data_types const&, int const)> validate_schemas =
+    [&](arrow_schema_data_types const& arrow_schema, int const schema_idx) {
+      auto& pq_schema_elem = per_file_metadata[0].schema[schema_idx];
+
+      // ensure equal number of children first to avoid any segfaults in children
+      if (pq_schema_elem.num_children == static_cast<int32_t>(arrow_schema.children.size())) {
+        // true if and only if true for all children as well
+        return std::all_of(thrust::make_zip_iterator(thrust::make_tuple(
+                             arrow_schema.children.begin(), pq_schema_elem.children_idx.begin())),
+                           thrust::make_zip_iterator(thrust::make_tuple(
+                             arrow_schema.children.end(), pq_schema_elem.children_idx.end())),
+                           [&](auto const& elem) {
+                             return validate_schemas(thrust::get<0>(elem), thrust::get<1>(elem));
+                           });
+      } else {
+        return false;
+      }
+    };
+
+  // Function to co-walk arrow and parquet schemas
+  std::function<void(arrow_schema_data_types const&, int const)> co_walk_schemas =
+    [&](arrow_schema_data_types const& arrow_schema, int const schema_idx) {
+      auto& pq_schema_elem = per_file_metadata[0].schema[schema_idx];
+      std::for_each(
+        thrust::make_zip_iterator(
+          thrust::make_tuple(arrow_schema.children.begin(), pq_schema_elem.children_idx.begin())),
+        thrust::make_zip_iterator(
+          thrust::make_tuple(arrow_schema.children.end(), pq_schema_elem.children_idx.end())),
+        [&](auto const& elem) { co_walk_schemas(thrust::get<0>(elem), thrust::get<1>(elem)); });
+
+      // true for DurationType columns only for now.
+      if (arrow_schema.type.id() != type_id::EMPTY) {
+        pq_schema_elem.arrow_type = arrow_schema.type.id();
+      }
+    };
+
+  // Get Parquet schema root
+  auto pq_schema_root = get_schema(0);
+
+  // verify equal number of children for both schemas at root level
+  if (pq_schema_root.num_children != static_cast<int32_t>(arrow_schema_root.children.size())) {
+    CUDF_LOG_ERROR("Parquet reader encountered a mismatch between Parquet and arrow schema.",
+                   "arrow:schema not processed.");
+    return;
+  }
+
+  // zip iterator to validate and co-walk the two schemas
+  auto schemas = thrust::make_zip_iterator(
+    thrust::make_tuple(arrow_schema_root.children.begin(), pq_schema_root.children_idx.begin()));
+
+  // Verify equal number of children at all sub-levels
+  if (not std::all_of(schemas, schemas + pq_schema_root.num_children, [&](auto const& elem) {
+        return validate_schemas(thrust::get<0>(elem), thrust::get<1>(elem));
+      })) {
+    CUDF_LOG_ERROR("Parquet reader encountered a mismatch between Parquet and arrow schema.",
+                   "arrow:schema not processed.");
+    return;
+  }
+
+  // All good, now co-walk schemas
+  std::for_each(schemas, schemas + pq_schema_root.num_children, [&](auto const& elem) {
+    co_walk_schemas(thrust::get<0>(elem), thrust::get<1>(elem));
+  });
+}
+
+std::optional<std::string_view> aggregate_reader_metadata::decode_ipc_message(
+  std::string_view const serialized_message) const
+{
+  // message buffer
+  auto message_buf = serialized_message.data();
+  // current message (buffer) size
+  auto message_size = static_cast<int32_t>(serialized_message.size());
+
+  // Lambda function to read and return 4 bytes as int32_t from the ipc message buffer and update
+  // buffer pointer and size
+  auto read_int32_from_ipc_message = [&]() {
+    int32_t bytes;
+    std::memcpy(&bytes, message_buf, sizeof(int32_t));
+    // Offset the message buf and reduce remaining size
+    message_buf += sizeof(int32_t);
+    message_size -= sizeof(int32_t);
+    return bytes;
+  };
+
+  // Check for empty message
+  if (message_size == 0) {
+    CUDF_LOG_ERROR("Parquet reader encountered zero length arrow:schema.",
+                   "arrow:schema not processed.");
+    return std::nullopt;
+  }
+
+  // Check for improper message size.
+  if (message_size < MESSAGE_DECODER_NEXT_REQUIRED_SIZE_INITIAL) {
+    CUDF_LOG_ERROR("Parquet reader encountered unexpected arrow:schema message length.",
+                   "arrow:schema not processed.");
+    return std::nullopt;
+  }
+
+  // Get the first 4 bytes (continuation) of the ipc message
+  // and check if it matches the expected token
+  if (read_int32_from_ipc_message() != IPC_CONTINUATION_TOKEN) {
+    CUDF_LOG_ERROR("Parquet reader encountered unexpected IPC continuation token.",
+                   "arrow:schema not processed.");
+    return std::nullopt;
+  }
+
+  // Check for improper message size after the continuation bytes.
+  if (message_size < MESSAGE_DECODER_NEXT_REQUIRED_SIZE_METADATA_LENGTH) {
+    CUDF_LOG_ERROR("Parquet reader encountered unexpected arrow:schema message length.",
+                   "arrow:schema not processed.");
+    return std::nullopt;
+  }
+
+  // Get the next 4 bytes (metadata_len) of the ipc message
+  // and check if invalid metadata length read
+  auto const metadata_len = read_int32_from_ipc_message();
+
+  // Check if the read metadata (header) length is > zero
+  if (metadata_len <= 0) {
+    CUDF_LOG_ERROR("Parquet reader encountered unexpected metadata length.",
+                   "arrow:schema not processed.");
+    return std::nullopt;
+  }
+
+  // Check if the remaining message size is smaller than the expected metadata length
+  // TODO: Since the arrow:schema message doesn't have a body,
+  // the following check may be made tighter from < to ==
+  if (message_size < metadata_len) {
+    CUDF_LOG_ERROR("Parquet reader encountered unexpected arrow:schema message length.",
+                   "arrow:schema not processed.");
+    return std::nullopt;
+  }
+
+  // All good, return the current message_buf as string_view
+  return std::string_view{message_buf,
+                          static_cast<std::basic_string_view<char>::size_type>(message_size)};
 }
 
 RowGroup const& aggregate_reader_metadata::get_row_group(size_type row_group_index,
@@ -539,13 +884,44 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
                                                                           size_type src_idx,
                                                                           int schema_idx) const
 {
+  // schema_idx_maps will only have > 0 size when we are reading matching column projection from
+  // mismatched Parquet sources.
+  if (src_idx and not schema_idx_maps.empty()) {
+    auto const& schema_idx_map = schema_idx_maps[src_idx - 1];
+    CUDF_EXPECTS(schema_idx_map.find(schema_idx) != schema_idx_map.end(),
+                 "Unmapped schema index encountered in the specified source tree",
+                 std::range_error);
+    schema_idx = schema_idx_map.at(schema_idx);
+  }
+
   auto col =
     std::find_if(per_file_metadata[src_idx].row_groups[row_group_index].columns.begin(),
                  per_file_metadata[src_idx].row_groups[row_group_index].columns.end(),
                  [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
   CUDF_EXPECTS(col != std::end(per_file_metadata[src_idx].row_groups[row_group_index].columns),
-               "Found no metadata for schema index");
+               "Found no metadata for schema index",
+               std::range_error);
   return col->meta_data;
+}
+
+std::vector<std::unordered_map<std::string, int64_t>>
+aggregate_reader_metadata::get_rowgroup_metadata() const
+{
+  std::vector<std::unordered_map<std::string, int64_t>> rg_metadata;
+
+  std::for_each(
+    per_file_metadata.cbegin(), per_file_metadata.cend(), [&rg_metadata](auto const& pfm) {
+      std::transform(pfm.row_groups.cbegin(),
+                     pfm.row_groups.cend(),
+                     std::back_inserter(rg_metadata),
+                     [](auto const& rg) {
+                       std::unordered_map<std::string, int64_t> rg_meta_map;
+                       rg_meta_map["num_rows"]        = rg.num_rows;
+                       rg_meta_map["total_byte_size"] = rg.total_byte_size;
+                       return rg_meta_map;
+                     });
+    });
+  return rg_metadata;
 }
 
 std::string aggregate_reader_metadata::get_pandas_index() const
@@ -596,19 +972,21 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   return names;
 }
 
-std::tuple<int64_t, size_type, std::vector<row_group_info>>
+std::tuple<int64_t, size_type, std::vector<row_group_info>, std::vector<size_t>>
 aggregate_reader_metadata::select_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
   std::optional<size_type> const& num_rows_opt,
   host_span<data_type const> output_dtypes,
+  host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
   std::optional<std::vector<std::vector<size_type>>> filtered_row_group_indices;
+  // if filter is not empty, then gather row groups to read after predicate pushdown
   if (filter.has_value()) {
-    filtered_row_group_indices =
-      filter_row_groups(row_group_indices, output_dtypes, filter.value(), stream);
+    filtered_row_group_indices = filter_row_groups(
+      row_group_indices, output_dtypes, output_column_schemas, filter.value(), stream);
     if (filtered_row_group_indices.has_value()) {
       row_group_indices =
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
@@ -619,8 +997,14 @@ aggregate_reader_metadata::select_row_groups(
     if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
     auto const from_opts = cudf::io::detail::skip_rows_num_rows_from_options(
       skip_rows_opt, num_rows_opt, get_num_rows());
-    return std::pair{static_cast<int64_t>(from_opts.first), from_opts.second};
+    CUDF_EXPECTS(from_opts.second <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+                 "Number of reading rows exceeds cudf's column size limit.");
+    return std::pair{static_cast<int64_t>(from_opts.first),
+                     static_cast<size_type>(from_opts.second)};
   }();
+
+  // Get number of rows in each data source
+  std::vector<size_t> num_rows_per_source(per_file_metadata.size(), 0);
 
   if (!row_group_indices.empty()) {
     CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
@@ -635,48 +1019,68 @@ aggregate_reader_metadata::select_row_groups(
         selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
         // if page-level indexes are present, then collect extra chunk and page info.
         column_info_for_row_group(selection.back(), 0);
-        rows_to_read += get_row_group(rowgroup_idx, src_idx).num_rows;
+        auto const rows_this_rg = get_row_group(rowgroup_idx, src_idx).num_rows;
+        rows_to_read += rows_this_rg;
+        num_rows_per_source[src_idx] += rows_this_rg;
       }
     }
   } else {
     size_type count = 0;
     for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
       auto const& fmd = per_file_metadata[src_idx];
-      for (size_t rg_idx = 0; rg_idx < fmd.row_groups.size(); ++rg_idx) {
+      for (size_t rg_idx = 0;
+           rg_idx < fmd.row_groups.size() and count < rows_to_skip + rows_to_read;
+           ++rg_idx) {
         auto const& rg             = fmd.row_groups[rg_idx];
         auto const chunk_start_row = count;
         count += rg.num_rows;
         if (count > rows_to_skip || count == 0) {
+          // start row of this row group adjusted with rows_to_skip
+          num_rows_per_source[src_idx] += count;
+          num_rows_per_source[src_idx] -=
+            (chunk_start_row <= rows_to_skip) ? rows_to_skip : chunk_start_row;
+
+          // We need the unadjusted start index of this row group to correctly initialize
+          // ColumnChunkDesc for this row group in create_global_chunk_info() and calculate
+          // the row offset for the first pass in compute_input_passes().
           selection.emplace_back(rg_idx, chunk_start_row, src_idx);
-          // if page-level indexes are present, then collect extra chunk and page info.
+
+          // If page-level indexes are present, then collect extra chunk and page info.
+          // The page indexes rely on absolute row numbers, not adjusted for skip_rows.
           column_info_for_row_group(selection.back(), chunk_start_row);
         }
-        if (count >= rows_to_skip + rows_to_read) { break; }
+        // Adjust the number of rows for the last source file.
+        if (count >= rows_to_skip + rows_to_read) {
+          num_rows_per_source[src_idx] -= count - rows_to_skip - rows_to_read;
+        }
       }
     }
   }
 
-  return {rows_to_skip, rows_to_read, std::move(selection)};
+  return {rows_to_skip, rows_to_read, std::move(selection), std::move(num_rows_per_source)};
 }
 
 std::tuple<std::vector<input_column_info>,
            std::vector<cudf::io::detail::inline_column_buffer>,
            std::vector<size_type>>
-aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>> const& use_names,
-                                          bool include_index,
-                                          bool strings_to_categorical,
-                                          type_id timestamp_type_id) const
+aggregate_reader_metadata::select_columns(
+  std::optional<std::vector<std::string>> const& use_names,
+  std::optional<std::vector<std::string>> const& filter_columns_names,
+  bool include_index,
+  bool strings_to_categorical,
+  type_id timestamp_type_id)
 {
-  auto find_schema_child = [&](SchemaElement const& schema_elem, std::string const& name) {
-    auto const& col_schema_idx =
-      std::find_if(schema_elem.children_idx.cbegin(),
-                   schema_elem.children_idx.cend(),
-                   [&](size_t col_schema_idx) { return get_schema(col_schema_idx).name == name; });
+  auto const find_schema_child =
+    [&](SchemaElement const& schema_elem, std::string const& name, int const pfm_idx = 0) {
+      auto const& col_schema_idx = std::find_if(
+        schema_elem.children_idx.cbegin(),
+        schema_elem.children_idx.cend(),
+        [&](size_t col_schema_idx) { return get_schema(col_schema_idx, pfm_idx).name == name; });
 
-    return (col_schema_idx != schema_elem.children_idx.end())
-             ? static_cast<size_type>(*col_schema_idx)
-             : -1;
-  };
+      return (col_schema_idx != schema_elem.children_idx.end())
+               ? static_cast<size_type>(*col_schema_idx)
+               : -1;
+    };
 
   std::vector<cudf::io::detail::inline_column_buffer> output_columns;
   std::vector<input_column_info> input_columns;
@@ -691,7 +1095,6 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
                        int schema_idx,
                        std::vector<cudf::io::detail::inline_column_buffer>& out_col_array,
                        bool has_list_parent) {
-      if (schema_idx < 0) { return false; }
       auto const& schema_elem = get_schema(schema_idx);
 
       // if schema_elem is a stub then it does not exist in the column_name_info and column_buffer
@@ -699,7 +1102,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
       if (schema_elem.is_stub()) {
         // is this legit?
         CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
-        auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
+        auto const child_col_name_info = col_name_info ? &col_name_info->children[0] : nullptr;
         return build_column(
           child_col_name_info, schema_elem.children_idx[0], out_col_array, has_list_parent);
       }
@@ -731,12 +1134,11 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
                                         has_list_parent || col_type == type_id::LIST);
         }
       } else {
-        for (size_t idx = 0; idx < col_name_info->children.size(); idx++) {
-          path_is_valid |=
-            build_column(&col_name_info->children[idx],
-                         find_schema_child(schema_elem, col_name_info->children[idx].name),
-                         output_col.children,
-                         has_list_parent || col_type == type_id::LIST);
+        for (const auto& idx : col_name_info->children) {
+          path_is_valid |= build_column(&idx,
+                                        find_schema_child(schema_elem, idx.name),
+                                        output_col.children,
+                                        has_list_parent || col_type == type_id::LIST);
         }
       }
 
@@ -744,7 +1146,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
       // data stored) so add me to the list.
       if (schema_elem.num_children == 0) {
         input_column_info& input_col = input_columns.emplace_back(
-          input_column_info{schema_idx, schema_elem.name, schema_elem.max_repetition_level > 0});
+          schema_idx, schema_elem.name, schema_elem.max_repetition_level > 0);
 
         // set up child output column for one-level encoding list
         if (one_level_list) {
@@ -778,6 +1180,97 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
 
       nesting.pop_back();
       return path_is_valid;
+    };
+
+  // Compares two schema elements to be equal except their number of children
+  auto const equal_to_except_num_children = [](SchemaElement const& lhs, SchemaElement const& rhs) {
+    return lhs.type == rhs.type and lhs.converted_type == rhs.converted_type and
+           lhs.type_length == rhs.type_length and lhs.repetition_type == rhs.repetition_type and
+           lhs.name == rhs.name and lhs.decimal_scale == rhs.decimal_scale and
+           lhs.decimal_precision == rhs.decimal_precision and lhs.field_id == rhs.field_id;
+  };
+
+  // Maps a projected column's schema_idx in the zeroth per_file_metadata (source) to the
+  // corresponding schema_idx in pfm_idx'th per_file_metadata (destination). The projected
+  // column's path must match across sources, else an appropriate exception is thrown.
+  std::function<void(column_name_info const*, int const, int const, int const)> map_column =
+    [&](column_name_info const* col_name_info,
+        int const src_schema_idx,
+        int const dst_schema_idx,
+        int const pfm_idx) {
+      auto const& src_schema_elem = get_schema(src_schema_idx);
+      auto const& dst_schema_elem = get_schema(dst_schema_idx, pfm_idx);
+
+      // Check the schema elements to be equal except their number of children as we only care about
+      // the specific column paths in the schema trees. Raise an invalid_argument error if the
+      // schema elements don't match.
+      CUDF_EXPECTS(equal_to_except_num_children(src_schema_elem, dst_schema_elem),
+                   "Encountered mismatching SchemaElement properties for a column in "
+                   "the selected path",
+                   std::invalid_argument);
+
+      // If src_schema_elem is a stub, it does not exist in the column_name_info and column_buffer
+      // hierarchy. So continue on with mapping.
+      if (src_schema_elem.is_stub()) {
+        // Check if dst_schema_elem is also a stub i.e. has num_children == 1 that we didn't
+        // previously check. Raise an invalid_argument error if dst_schema_elem is not a stub.
+        CUDF_EXPECTS(dst_schema_elem.is_stub(),
+                     "Encountered mismatching schemas for stub.",
+                     std::invalid_argument);
+        auto const child_col_name_info = col_name_info ? &col_name_info->children[0] : nullptr;
+        return map_column(child_col_name_info,
+                          src_schema_elem.children_idx[0],
+                          dst_schema_elem.children_idx[0],
+                          pfm_idx);
+      }
+
+      // The path ends here. If this is a list/struct col (has children), then map all its children
+      // which must be identical.
+      if (col_name_info == nullptr or col_name_info->children.empty()) {
+        // Check the number of children to be equal to be mapped. An out_of_range error if the
+        // number of children isn't equal.
+        CUDF_EXPECTS(src_schema_elem.num_children == dst_schema_elem.num_children,
+                     "Encountered mismatching number of children for a "
+                     "column in the selected path",
+                     std::out_of_range);
+
+        std::for_each(thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(src_schema_elem.num_children),
+                      [&](auto const child_idx) {
+                        map_column(nullptr,
+                                   src_schema_elem.children_idx[child_idx],
+                                   dst_schema_elem.children_idx[child_idx],
+                                   pfm_idx);
+                      });
+      }
+      // The path goes further down to specific child(ren) of this column so map only those
+      // children.
+      else {
+        std::for_each(
+          col_name_info->children.cbegin(),
+          col_name_info->children.cend(),
+          [&](auto const& child_col_name_info) {
+            // Ensure that each named child column exists in the destination schema tree for the
+            // paths to align up. An out_of_range error otherwise.
+            CUDF_EXPECTS(
+              find_schema_child(dst_schema_elem, child_col_name_info.name, pfm_idx) != -1,
+              "Encountered mismatching schema tree depths across data sources",
+              std::out_of_range);
+            map_column(&child_col_name_info,
+                       find_schema_child(src_schema_elem, child_col_name_info.name),
+                       find_schema_child(dst_schema_elem, child_col_name_info.name, pfm_idx),
+                       pfm_idx);
+          });
+      }
+
+      // We're at a leaf and this is an input column (one with actual data stored) so map it.
+      if (src_schema_elem.num_children == 0) {
+        // Get the schema_idx_map for this data source (pfm)
+        auto& schema_idx_map = schema_idx_maps[pfm_idx - 1];
+
+        // Map the schema index from 0th tree (src) to the one in the current (dst) tree.
+        schema_idx_map[src_schema_idx] = dst_schema_idx;
+      }
     };
 
   std::vector<int> output_column_schemas;
@@ -830,13 +1323,18 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
 
     // Find which of the selected paths are valid and get their schema index
     std::vector<path_info> valid_selected_paths;
-    for (auto const& selected_path : *use_names) {
-      auto found_path =
-        std::find_if(all_paths.begin(), all_paths.end(), [&](path_info& valid_path) {
-          return valid_path.full_path == selected_path;
-        });
-      if (found_path != all_paths.end()) {
-        valid_selected_paths.push_back({selected_path, found_path->schema_idx});
+    // vector reference pushback (*use_names). If filter names passed.
+    std::vector<std::reference_wrapper<std::vector<std::string> const>> column_names{
+      *use_names, *filter_columns_names};
+    for (auto const& used_column_names : column_names) {
+      for (auto const& selected_path : used_column_names.get()) {
+        auto found_path =
+          std::find_if(all_paths.begin(), all_paths.end(), [&](path_info& valid_path) {
+            return valid_path.full_path == selected_path;
+          });
+        if (found_path != all_paths.end()) {
+          valid_selected_paths.push_back({selected_path, found_path->schema_idx});
+        }
       }
     }
 
@@ -890,10 +1388,9 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
      */
     for (auto const& path : use_names3) {
       auto array_to_find_in = &selected_columns;
-      for (size_t depth = 0; depth < path.size(); ++depth) {
+      for (auto const& name_to_find : path) {
         // Check if the path exists in our selected_columns and if not, add it.
-        auto const& name_to_find = path[depth];
-        auto found_col           = std::find_if(
+        auto found_col = std::find_if(
           array_to_find_in->begin(),
           array_to_find_in->end(),
           [&name_to_find](column_name_info const& col) { return col.name == name_to_find; });
@@ -909,7 +1406,28 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
     for (auto& col : selected_columns) {
       auto const& top_level_col_schema_idx = find_schema_child(root, col.name);
       bool valid_column = build_column(&col, top_level_col_schema_idx, output_columns, false);
-      if (valid_column) output_column_schemas.push_back(top_level_col_schema_idx);
+      if (valid_column) {
+        output_column_schemas.push_back(top_level_col_schema_idx);
+
+        // Map the column's schema_idx across the rest of the data sources if required.
+        if (per_file_metadata.size() > 1 and not schema_idx_maps.empty()) {
+          std::for_each(thrust::make_counting_iterator(static_cast<size_t>(1)),
+                        thrust::make_counting_iterator(per_file_metadata.size()),
+                        [&](auto const pfm_idx) {
+                          auto const& dst_root = get_schema(0, pfm_idx);
+                          // Ensure that each top level column exists in the destination schema
+                          // tree. An out_of_range error is thrown otherwise.
+                          CUDF_EXPECTS(
+                            find_schema_child(dst_root, col.name, pfm_idx) != -1,
+                            "Encountered mismatching schema tree depths across data sources",
+                            std::out_of_range);
+                          map_column(&col,
+                                     top_level_col_schema_idx,
+                                     find_schema_child(dst_root, col.name, pfm_idx),
+                                     pfm_idx);
+                        });
+        }
+      }
     }
   }
 

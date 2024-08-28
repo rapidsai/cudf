@@ -21,29 +21,34 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <string>
 #include <vector>
 
-namespace cudf::io {
+namespace CUDF_EXPORT cudf {
+namespace io {
 
 // Forward declaration
-class orc_reader_options;
-class orc_writer_options;
-class chunked_orc_writer_options;
+class CUDF_EXPORT orc_reader_options;
+class CUDF_EXPORT orc_writer_options;
+class CUDF_EXPORT chunked_orc_writer_options;
 
 namespace orc::detail {
+
+// Forward declaration of the internal reader class
+class reader_impl;
 
 /**
  * @brief Class to read ORC dataset data into columns.
  */
 class reader {
  private:
-  class impl;
-  std::unique_ptr<impl> _impl;
+  std::unique_ptr<reader_impl> _impl;
 
  public:
   /**
@@ -57,7 +62,7 @@ class reader {
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   orc_reader_options const& options,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  rmm::device_async_resource_ref mr);
 
   /**
    * @brief Destructor explicitly declared to avoid inlining in header
@@ -67,10 +72,63 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
-   * @param options Settings for controlling reading behavior
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(orc_reader_options const& options);
+  table_with_metadata read();
+};
+
+/**
+ * @brief The reader class that supports iterative reading from an array of data sources.
+ */
+class chunked_reader {
+ private:
+  std::unique_ptr<reader_impl> _impl;
+
+ public:
+  /**
+   * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader(std::size_t, std::size_t, size_type,
+   * orc_reader_options const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
+   *
+   * @param sources Input `datasource` objects to read the dataset from
+   */
+  explicit chunked_reader(std::size_t chunk_read_limit,
+                          std::size_t pass_read_limit,
+                          size_type output_row_granularity,
+                          std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                          orc_reader_options const& options,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr);
+  /**
+   * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader(std::size_t, std::size_t,
+   * orc_reader_options const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
+   *
+   * @param sources Input `datasource` objects to read the dataset from
+   */
+  explicit chunked_reader(std::size_t chunk_read_limit,
+                          std::size_t pass_read_limit,
+                          std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                          orc_reader_options const& options,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr);
+
+  /**
+   * @brief Destructor explicitly-declared to avoid inlined in header.
+   *
+   * Since the declaration of the internal `_impl` object does not exist in this header, this
+   * destructor needs to be defined in a separate source file which can access to that object's
+   * declaration.
+   */
+  ~chunked_reader();
+
+  /**
+   * @copydoc cudf::io::chunked_orc_reader::has_next
+   */
+  [[nodiscard]] bool has_next() const;
+
+  /**
+   * @copydoc cudf::io::chunked_orc_reader::read_chunk
+   */
+  [[nodiscard]] table_with_metadata read_chunk() const;
 };
 
 /**
@@ -124,14 +182,8 @@ class writer {
    * @brief Finishes the chunked/streamed write process.
    */
   void close();
-
-  /**
-   * @brief Skip work done in `close()`; should be called if `write()` failed.
-   *
-   * Calling skip_close() prevents the writer from writing the (invalid) file footer and the
-   * postscript.
-   */
-  void skip_close();
 };
+
 }  // namespace orc::detail
-}  // namespace cudf::io
+}  // namespace io
+}  // namespace CUDF_EXPORT cudf

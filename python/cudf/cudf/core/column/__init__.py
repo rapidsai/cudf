@@ -4,12 +4,10 @@
 isort: skip_file
 """
 
-
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
     ColumnBase,
     as_column,
-    build_categorical_column,
     build_column,
     column_empty,
     column_empty_like,

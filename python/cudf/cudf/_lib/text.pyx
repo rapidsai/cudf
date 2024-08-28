@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from io import TextIOBase
 
@@ -8,9 +8,8 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
-from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.io.text cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.io.text cimport (
     byte_range_info,
     data_chunk_source,
     make_source,
@@ -19,6 +18,8 @@ from cudf._lib.cpp.io.text cimport (
     multibyte_split,
     parse_options,
 )
+
+from cudf._lib.column cimport Column
 
 
 def read_text(object filepaths_or_buffers,

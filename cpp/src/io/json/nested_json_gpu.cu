@@ -36,6 +36,7 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/device_vector.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -130,12 +131,13 @@ constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NU
  * @brief Function object to map (input_symbol,stack_context) tuples to a symbol group.
  */
 struct SymbolPairToSymbolGroupId {
+  SymbolT delimiter = '\n';
   CUDF_HOST_DEVICE SymbolGroupT operator()(thrust::tuple<SymbolT, StackSymbolT> symbol) const
   {
     auto const input_symbol = thrust::get<0>(symbol);
     auto const stack_symbol = thrust::get<1>(symbol);
     return static_cast<SymbolGroupT>(
-      input_symbol == '\n'
+      input_symbol == delimiter
         ? dfa_symbol_group_id::DELIMITER
         : (stack_symbol == '_' ? dfa_symbol_group_id::ROOT : dfa_symbol_group_id::OTHER));
   }
@@ -243,7 +245,7 @@ struct TransduceToken {
                                                 RelativeOffsetT const relative_offset,
                                                 SymbolT const read_symbol) const
   {
-    const bool is_end_of_invalid_line =
+    bool const is_end_of_invalid_line =
       (state_id == static_cast<StateT>(TT_INV) &&
        match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER));
 
@@ -263,15 +265,15 @@ struct TransduceToken {
     // Number of tokens emitted on invalid lines
     constexpr int32_t num_inv_tokens = 2;
 
-    const bool is_delimiter = match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER);
+    bool const is_delimiter = match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER);
 
     // If state is either invalid or we're entering an invalid state, we discard tokens
-    const bool is_part_of_invalid_line =
+    bool const is_part_of_invalid_line =
       (match_id != static_cast<SymbolGroupT>(dfa_symbol_group_id::ERROR) &&
        state_id == static_cast<StateT>(TT_VLD));
 
     // Indicates whether we transition from an invalid line to a potentially valid line
-    const bool is_end_of_invalid_line = (state_id == static_cast<StateT>(TT_INV) && is_delimiter);
+    bool const is_end_of_invalid_line = (state_id == static_cast<StateT>(TT_INV) && is_delimiter);
 
     int32_t const emit_count =
       is_end_of_invalid_line ? num_inv_tokens : (is_part_of_invalid_line && !is_delimiter ? 1 : 0);
@@ -330,7 +332,7 @@ enum class dfa_symbol_group_id : uint8_t {
   CLOSING_BRACKET,   ///< Closing bracket SG: ]
   QUOTE_CHAR,        ///< Quote character SG: "
   ESCAPE_CHAR,       ///< Escape character SG: '\'
-  NEWLINE_CHAR,      ///< Newline character SG: '\n'
+  DELIMITER_CHAR,    ///< Delimiter character SG
   OTHER_SYMBOLS,     ///< SG implicitly matching all other characters
   NUM_SYMBOL_GROUPS  ///< Total number of symbol groups
 };
@@ -338,42 +340,64 @@ enum class dfa_symbol_group_id : uint8_t {
 constexpr auto TT_NUM_STATES     = static_cast<StateT>(dfa_states::TT_NUM_STATES);
 constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
 
-// The i-th string representing all the characters of a symbol group
-std::array<std::string, NUM_SYMBOL_GROUPS - 1> const symbol_groups{
-  {{"{"}, {"["}, {"}"}, {"]"}, {"\""}, {"\\"}, {"\n"}}};
-
-// Transition table for the default JSON and JSON lines formats
-std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const transition_table{
-  {/* IN_STATE          {       [       }       ]       "       \      \n    OTHER */
-   /* TT_OOS    */ {{TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS, TT_OOS}},
-   /* TT_STR    */ {{TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_ESC, TT_STR, TT_STR}},
-   /* TT_ESC    */ {{TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR}}}};
-
-// Transition table for the JSON lines format that recovers from invalid JSON lines
-std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const
-  resetting_transition_table{
-    {/* IN_STATE          {       [       }       ]       "       \      \n    OTHER */
-     /* TT_OOS    */ {{TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS, TT_OOS}},
-     /* TT_STR    */ {{TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_ESC, TT_OOS, TT_STR}},
-     /* TT_ESC    */ {{TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_STR}}}};
-
-// Translation table for the default JSON and JSON lines formats
-std::array<std::array<std::vector<char>, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const translation_table{
-  {/* IN_STATE         {      [      }      ]      "      \     \n    OTHER */
-   /* TT_OOS    */ {{{'{'}, {'['}, {'}'}, {']'}, {}, {}, {}, {}}},
-   /* TT_STR    */ {{{}, {}, {}, {}, {}, {}, {}, {}}},
-   /* TT_ESC    */ {{{}, {}, {}, {}, {}, {}, {}, {}}}}};
-
-// Translation table for the JSON lines format that recovers from invalid JSON lines
-std::array<std::array<std::vector<char>, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const
-  resetting_translation_table{
-    {/* IN_STATE         {      [      }      ]      "      \     \n    OTHER */
-     /* TT_OOS    */ {{{'{'}, {'['}, {'}'}, {']'}, {}, {}, {'\n'}, {}}},
-     /* TT_STR    */ {{{}, {}, {}, {}, {}, {}, {'\n'}, {}}},
-     /* TT_ESC    */ {{{}, {}, {}, {}, {}, {}, {'\n'}, {}}}}};
-
 // The DFA's starting state
 constexpr auto start_state = static_cast<StateT>(TT_OOS);
+
+template <typename SymbolT>
+auto get_sgid_lut(SymbolT delim)
+{
+  // The i-th string representing all the characters of a symbol group
+  std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> symbol_groups{
+    {{'{'}, {'['}, {'}'}, {']'}, {'"'}, {'\\'}, {delim}}};
+
+  return symbol_groups;
+}
+
+auto get_transition_table(stack_behavior_t stack_behavior)
+{
+  // Transition table for the default JSON and JSON lines formats
+  std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const transition_table{
+    {/* IN_STATE          {       [       }       ]       "       \      \n    OTHER */
+     /* TT_OOS    */ {{TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS, TT_OOS}},
+     /* TT_STR    */ {{TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_ESC, TT_STR, TT_STR}},
+     /* TT_ESC    */ {{TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR}}}};
+
+  // Transition table for the JSON lines format that recovers from invalid JSON lines
+  std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const
+    resetting_transition_table{
+      {/* IN_STATE          {       [       }       ]       "       \      \n    OTHER */
+       /* TT_OOS    */ {{TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS, TT_OOS}},
+       /* TT_STR    */ {{TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_ESC, TT_OOS, TT_STR}},
+       /* TT_ESC    */ {{TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_STR}}}};
+
+  // Transition table specialized on the choice of whether to reset on newlines
+  return (stack_behavior == stack_behavior_t::ResetOnDelimiter) ? resetting_transition_table
+                                                                : transition_table;
+}
+
+auto get_translation_table(stack_behavior_t stack_behavior)
+{
+  // Translation table for the default JSON and JSON lines formats
+  std::array<std::array<std::vector<char>, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const
+    translation_table{
+      {/* IN_STATE         {      [      }      ]      "      \     <delim>    OTHER */
+       /* TT_OOS    */ {{{'{'}, {'['}, {'}'}, {']'}, {}, {}, {}, {}}},
+       /* TT_STR    */ {{{}, {}, {}, {}, {}, {}, {}, {}}},
+       /* TT_ESC    */ {{{}, {}, {}, {}, {}, {}, {}, {}}}}};
+
+  // Translation table for the JSON lines format that recovers from invalid JSON lines
+  std::array<std::array<std::vector<char>, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const
+    resetting_translation_table{
+      {/* IN_STATE         {      [      }      ]      "      \     <delim>    OTHER */
+       /* TT_OOS    */ {{{'{'}, {'['}, {'}'}, {']'}, {}, {}, {'\n'}, {}}},
+       /* TT_STR    */ {{{}, {}, {}, {}, {}, {}, {'\n'}, {}}},
+       /* TT_ESC    */ {{{}, {}, {}, {}, {}, {}, {'\n'}, {}}}}};
+
+  // Translation table specialized on the choice of whether to reset on newlines
+  return stack_behavior == stack_behavior_t::ResetOnDelimiter ? resetting_translation_table
+                                                              : translation_table;
+}
+
 }  // namespace to_stack_op
 
 // JSON tokenizer pushdown automaton
@@ -571,6 +595,7 @@ static __constant__ PdaSymbolGroupIdT tos_sg_to_pda_sgid[] = {
  * visibly pushdown automaton (DVPA)
  */
 struct PdaSymbolToSymbolGroupId {
+  SymbolT delimiter = '\n';
   template <typename SymbolT, typename StackSymbolT>
   __device__ __forceinline__ PdaSymbolGroupIdT
   operator()(thrust::tuple<SymbolT, StackSymbolT> symbol_pair) const
@@ -592,8 +617,15 @@ struct PdaSymbolToSymbolGroupId {
     // The relative symbol group id of the current input symbol
     constexpr auto pda_sgid_lookup_size =
       static_cast<int32_t>(sizeof(tos_sg_to_pda_sgid) / sizeof(tos_sg_to_pda_sgid[0]));
+    // We map the delimiter character to LINE_BREAK symbol group id, and the newline character
+    // to OTHER. Note that delimiter cannot be any of opening(closing) brace, bracket, quote,
+    // escape, comma, colon or whitespace characters.
+    auto const symbol_position =
+      symbol == delimiter
+        ? static_cast<int32_t>('\n')
+        : (symbol == '\n' ? static_cast<int32_t>(delimiter) : static_cast<int32_t>(symbol));
     PdaSymbolGroupIdT symbol_gid =
-      tos_sg_to_pda_sgid[min(static_cast<int32_t>(symbol), pda_sgid_lookup_size - 1)];
+      tos_sg_to_pda_sgid[min(symbol_position, pda_sgid_lookup_size - 1)];
     return stack_idx * static_cast<PdaSymbolGroupIdT>(symbol_group_id::NUM_PDA_INPUT_SGS) +
            symbol_gid;
   }
@@ -1397,6 +1429,7 @@ namespace detail {
 void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
                        stack_behavior_t stack_behavior,
+                       SymbolT delimiter,
                        rmm::cuda_stream_view stream)
 {
   check_input_size(json_in.size());
@@ -1422,20 +1455,14 @@ void get_stack_context(device_span<SymbolT const> json_in,
   constexpr auto max_translation_table_size =
     to_stack_op::NUM_SYMBOL_GROUPS * to_stack_op::TT_NUM_STATES;
 
-  // Transition table specialized on the choice of whether to reset on newlines
-  const auto transition_table = (stack_behavior == stack_behavior_t::ResetOnDelimiter)
-                                  ? to_stack_op::resetting_transition_table
-                                  : to_stack_op::transition_table;
-
-  // Translation table specialized on the choice of whether to reset on newlines
-  const auto translation_table = (stack_behavior == stack_behavior_t::ResetOnDelimiter)
-                                   ? to_stack_op::resetting_translation_table
-                                   : to_stack_op::translation_table;
-
-  auto json_to_stack_ops_fst = fst::detail::make_fst(
-    fst::detail::make_symbol_group_lut(to_stack_op::symbol_groups),
-    fst::detail::make_transition_table(transition_table),
-    fst::detail::make_translation_table<max_translation_table_size>(translation_table),
+  static constexpr auto min_translated_out = 0;
+  static constexpr auto max_translated_out = 1;
+  auto json_to_stack_ops_fst               = fst::detail::make_fst(
+    fst::detail::make_symbol_group_lut(to_stack_op::get_sgid_lut(delimiter)),
+    fst::detail::make_transition_table(to_stack_op::get_transition_table(stack_behavior)),
+    fst::detail::
+      make_translation_table<max_translation_table_size, min_translated_out, max_translated_out>(
+        to_stack_op::get_translation_table(stack_behavior)),
     stream);
 
   // "Search" for relevant occurrence of brackets and braces that indicate the beginning/end
@@ -1483,11 +1510,12 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   // Instantiate FST for post-processing the token stream to remove all tokens that belong to an
   // invalid JSON line
   token_filter::UnwrapTokenFromSymbolOp sgid_op{};
-  auto filter_fst =
-    fst::detail::make_fst(fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
-                          fst::detail::make_transition_table(token_filter::transition_table),
-                          fst::detail::make_translation_functor(token_filter::TransduceToken{}),
-                          stream);
+  using symbol_t  = thrust::tuple<PdaTokenT, SymbolOffsetT>;
+  auto filter_fst = fst::detail::make_fst(
+    fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
+    fst::detail::make_transition_table(token_filter::transition_table),
+    fst::detail::make_translation_functor<symbol_t, 0, 2>(token_filter::TransduceToken{}),
+    stream);
 
   auto const mr = rmm::mr::get_current_device_resource();
   rmm::device_scalar<SymbolOffsetT> d_num_selected_tokens(stream, mr);
@@ -1531,23 +1559,23 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   device_span<SymbolT const> json_in,
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   check_input_size(json_in.size());
 
   // Range of encapsulating function that parses to internal columnar data representation
   CUDF_FUNC_RANGE();
 
-  auto const new_line_delimited_json = options.is_enabled_lines();
+  auto const delimited_json = options.is_enabled_lines();
+  auto const delimiter      = options.get_delimiter();
 
-  // (!new_line_delimited_json)                         => JSON
-  // (new_line_delimited_json and recover_from_error)   => JSON_LINES_RECOVER
-  // (new_line_delimited_json and !recover_from_error)  => JSON_LINES
-  auto format = new_line_delimited_json
-                  ? (options.recovery_mode() == json_recovery_mode_t::RECOVER_WITH_NULL
-                       ? tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER
-                       : tokenizer_pda::json_format_cfg_t::JSON_LINES)
-                  : tokenizer_pda::json_format_cfg_t::JSON;
+  // (!delimited_json)                         => JSON
+  // (delimited_json and recover_from_error)   => JSON_LINES_RECOVER
+  // (delimited_json and !recover_from_error)  => JSON_LINES
+  auto format = delimited_json ? (options.recovery_mode() == json_recovery_mode_t::RECOVER_WITH_NULL
+                                    ? tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER
+                                    : tokenizer_pda::json_format_cfg_t::JSON_LINES)
+                               : tokenizer_pda::json_format_cfg_t::JSON;
 
   // Prepare for PDA transducer pass, merging input symbols with stack symbols
   auto const recover_from_error = (format == tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER);
@@ -1558,7 +1586,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   // Identify what is the stack context for each input character (JSON-root, struct, or list)
   auto const stack_behavior =
     recover_from_error ? stack_behavior_t::ResetOnDelimiter : stack_behavior_t::PushPopWithoutReset;
-  get_stack_context(json_in, stack_symbols.data(), stack_behavior, stream);
+  get_stack_context(json_in, stack_symbols.data(), stack_behavior, delimiter, stream);
 
   // Input to the full pushdown automaton finite-state transducer, where a input symbol comprises
   // the combination of a character from the JSON input together with the stack context for that
@@ -1572,9 +1600,10 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   if (recover_from_error) {
     auto fix_stack_of_excess_chars = fst::detail::make_fst(
       fst::detail::make_symbol_group_lookup_op(
-        fix_stack_of_excess_chars::SymbolPairToSymbolGroupId{}),
+        fix_stack_of_excess_chars::SymbolPairToSymbolGroupId{delimiter}),
       fst::detail::make_transition_table(fix_stack_of_excess_chars::transition_table),
-      fst::detail::make_translation_functor(fix_stack_of_excess_chars::TransduceInputOp{}),
+      fst::detail::make_translation_functor<StackSymbolT, 1, 1>(
+        fix_stack_of_excess_chars::TransduceInputOp{}),
       stream);
     fix_stack_of_excess_chars.Transduce(zip_in,
                                         static_cast<SymbolOffsetT>(json_in.size()),
@@ -1583,15 +1612,19 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
                                         thrust::make_discard_iterator(),
                                         fix_stack_of_excess_chars::start_state,
                                         stream);
+
+    // Make sure memory of the FST's lookup tables isn't freed before the FST completes
+    stream.synchronize();
   }
 
   constexpr auto max_translation_table_size =
     tokenizer_pda::NUM_PDA_SGIDS *
     static_cast<tokenizer_pda::StateT>(tokenizer_pda::pda_state_t::PD_NUM_STATES);
+
   auto json_to_tokens_fst = fst::detail::make_fst(
-    fst::detail::make_symbol_group_lookup_op(tokenizer_pda::PdaSymbolToSymbolGroupId{}),
+    fst::detail::make_symbol_group_lookup_op(tokenizer_pda::PdaSymbolToSymbolGroupId{delimiter}),
     fst::detail::make_transition_table(tokenizer_pda::get_transition_table(format)),
-    fst::detail::make_translation_table<max_translation_table_size>(
+    fst::detail::make_translation_table<max_translation_table_size, 0, 3>(
       tokenizer_pda::get_translation_table(recover_from_error)),
     stream);
 
@@ -1661,7 +1694,7 @@ void make_json_column(json_column& root_column,
                       cudf::io::json_reader_options const& options,
                       bool include_quote_char,
                       rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr)
+                      rmm::device_async_resource_ref mr)
 {
   // Range of encapsulating function that parses to internal columnar data representation
   CUDF_FUNC_RANGE();
@@ -1670,10 +1703,8 @@ void make_json_column(json_column& root_column,
   auto const [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
 
   // Copy the JSON tokens to the host
-  thrust::host_vector<PdaTokenT> tokens =
-    cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
-  thrust::host_vector<SymbolOffsetT> token_indices_gpu =
-    cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
+  auto tokens            = cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
+  auto token_indices_gpu = cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
 
   // Make sure tokens have been copied to the host
   stream.synchronize();
@@ -2061,7 +2092,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   cudf::io::json_reader_options const& options,
   std::optional<schema_element> schema,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   // Range of orchestrating/encapsulating function
   CUDF_FUNC_RANGE();
@@ -2214,131 +2245,6 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   }
 
   return {};
-}
-
-table_with_metadata host_parse_nested_json(device_span<SymbolT const> d_input,
-                                           cudf::io::json_reader_options const& options,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
-{
-  // Range of orchestrating/encapsulating function
-  CUDF_FUNC_RANGE();
-
-  auto const h_input = cudf::detail::make_std_vector_async(d_input, stream);
-
-  auto const new_line_delimited_json = options.is_enabled_lines();
-
-  // Get internal JSON column
-  json_column root_column{};
-  std::stack<tree_node> data_path{};
-
-  constexpr uint32_t row_offset_zero            = 0;
-  constexpr uint32_t token_begin_offset_zero    = 0;
-  constexpr uint32_t token_end_offset_zero      = 0;
-  constexpr uint32_t node_init_child_count_zero = 0;
-
-  // Whether the tokenizer stage should keep quote characters for string values
-  // If the tokenizer keeps the quote characters, they may be stripped during type casting
-  constexpr bool include_quote_chars = true;
-
-  // We initialize the very root node and root column, which represent the JSON document being
-  // parsed. That root node is a list node and that root column is a list column. The column has the
-  // root node as its only row. The values parsed from the JSON input will be treated as follows:
-  // (1) For JSON lines: we expect to find a list of JSON values that all
-  // will be inserted into this root list column. (2) For regular JSON: we expect to have only a
-  // single value (list, struct, string, number, literal) that will be inserted into this root
-  // column.
-  root_column.append_row(
-    row_offset_zero, json_col_t::ListColumn, token_begin_offset_zero, token_end_offset_zero, 1);
-
-  // Push the root node onto the stack for the data path
-  data_path.push({&root_column, row_offset_zero, nullptr, node_init_child_count_zero});
-
-  make_json_column(
-    root_column, data_path, h_input, d_input, options, include_quote_chars, stream, mr);
-
-  // data_root refers to the root column of the data represented by the given JSON string
-  auto const& data_root =
-    new_line_delimited_json ? root_column : root_column.child_columns.begin()->second;
-
-  // Zero row entries
-  if (data_root.type == json_col_t::ListColumn && data_root.child_columns.empty()) {
-    return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{})};
-  }
-
-  // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
-  auto constexpr single_child_col_count = 1;
-  CUDF_EXPECTS(data_root.type == json_col_t::ListColumn and
-                 data_root.child_columns.size() == single_child_col_count and
-                 data_root.child_columns.begin()->second.type == json_col_t::StructColumn,
-               "Currently the nested JSON parser only supports an array of (nested) objects");
-
-  // Slice off the root list column, which has only a single row that contains all the structs
-  auto const& root_struct_col = data_root.child_columns.begin()->second;
-
-  // Initialize meta data to be populated while recursing through the tree of columns
-  std::vector<std::unique_ptr<column>> out_columns;
-  std::vector<column_name_info> out_column_names;
-
-  // Iterate over the struct's child columns and convert to cudf column
-  size_type column_index = 0;
-  for (auto const& col_name : root_struct_col.column_order) {
-    auto const& json_col = root_struct_col.child_columns.find(col_name)->second;
-    // Insert this columns name into the schema
-    out_column_names.emplace_back(col_name);
-
-    std::optional<schema_element> child_schema_element = std::visit(
-      cudf::detail::visitor_overload{
-        [column_index](std::vector<data_type> const& user_dtypes) -> std::optional<schema_element> {
-          auto ret = (static_cast<std::size_t>(column_index) < user_dtypes.size())
-                       ? std::optional<schema_element>{{user_dtypes[column_index]}}
-                       : std::optional<schema_element>{};
-#ifdef NJP_DEBUG_PRINT
-          std::cout << "Column by index: #" << column_index << ", type id: "
-                    << (ret.has_value() ? std::to_string(static_cast<int>(ret->type.id())) : "n/a")
-                    << ", with " << (ret.has_value() ? ret->child_types.size() : 0) << " children"
-                    << "\n";
-#endif
-          return ret;
-        },
-        [col_name](
-          std::map<std::string, data_type> const& user_dtypes) -> std::optional<schema_element> {
-          auto ret = (user_dtypes.find(col_name) != std::end(user_dtypes))
-                       ? std::optional<schema_element>{{user_dtypes.find(col_name)->second}}
-                       : std::optional<schema_element>{};
-#ifdef NJP_DEBUG_PRINT
-          std::cout << "Column by flat name: '" << col_name << "', type id: "
-                    << (ret.has_value() ? std::to_string(static_cast<int>(ret->type.id())) : "n/a")
-                    << ", with " << (ret.has_value() ? ret->child_types.size() : 0) << " children"
-                    << "\n";
-#endif
-          return ret;
-        },
-        [col_name](std::map<std::string, schema_element> const& user_dtypes)
-          -> std::optional<schema_element> {
-          auto ret = (user_dtypes.find(col_name) != std::end(user_dtypes))
-                       ? user_dtypes.find(col_name)->second
-                       : std::optional<schema_element>{};
-#ifdef NJP_DEBUG_PRINT
-          std::cout << "Column by nested name: #" << col_name << ", type id: "
-                    << (ret.has_value() ? std::to_string(static_cast<int>(ret->type.id())) : "n/a")
-                    << ", with " << (ret.has_value() ? ret->child_types.size() : 0) << " children"
-                    << "\n";
-#endif
-          return ret;
-        }},
-      options.get_dtypes());
-
-    // Get this JSON column's cudf column and schema info
-    auto [cudf_col, col_name_info] =
-      json_column_to_cudf_column(json_col, d_input, options, child_schema_element, stream, mr);
-    out_column_names.back().children = std::move(col_name_info);
-    out_columns.emplace_back(std::move(cudf_col));
-
-    column_index++;
-  }
-
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {out_column_names}};
 }
 
 }  // namespace detail

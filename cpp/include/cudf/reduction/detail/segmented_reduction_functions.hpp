@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,14 +20,15 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <optional>
 
-namespace cudf {
-namespace reduction {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace reduction::detail {
 
 /**
  * @brief Compute sum of each segment in the input column
@@ -57,7 +58,7 @@ std::unique_ptr<column> segmented_sum(column_view const& col,
                                       null_policy null_handling,
                                       std::optional<std::reference_wrapper<scalar const>> init,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                      rmm::device_async_resource_ref mr);
 
 /**
  * @brief Computes product of each segment in the input column
@@ -87,7 +88,7 @@ std::unique_ptr<column> segmented_product(column_view const& col,
                                           null_policy null_handling,
                                           std::optional<std::reference_wrapper<scalar const>> init,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr);
+                                          rmm::device_async_resource_ref mr);
 
 /**
  * @brief Compute minimum of each segment in the input column
@@ -116,7 +117,7 @@ std::unique_ptr<column> segmented_min(column_view const& col,
                                       null_policy null_handling,
                                       std::optional<std::reference_wrapper<scalar const>> init,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                      rmm::device_async_resource_ref mr);
 
 /**
  * @brief Compute maximum of each segment in the input column
@@ -145,7 +146,7 @@ std::unique_ptr<column> segmented_max(column_view const& col,
                                       null_policy null_handling,
                                       std::optional<std::reference_wrapper<scalar const>> init,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                      rmm::device_async_resource_ref mr);
 
 /**
  * @brief Compute if any of the values in the segment are true when typecasted to bool
@@ -175,7 +176,7 @@ std::unique_ptr<column> segmented_any(column_view const& col,
                                       null_policy null_handling,
                                       std::optional<std::reference_wrapper<scalar const>> init,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                      rmm::device_async_resource_ref mr);
 
 /**
  * @brief Compute if all of the values in the segment are true when typecasted to bool
@@ -205,7 +206,7 @@ std::unique_ptr<column> segmented_all(column_view const& col,
                                       null_policy null_handling,
                                       std::optional<std::reference_wrapper<scalar const>> init,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                      rmm::device_async_resource_ref mr);
 
 /**
  * @brief Computes mean of elements of segments in the input column
@@ -233,7 +234,7 @@ std::unique_ptr<column> segmented_mean(column_view const& col,
                                        data_type const output_dtype,
                                        null_policy null_handling,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr);
+                                       rmm::device_async_resource_ref mr);
 
 /**
  * @brief Computes sum of squares of elements of segments in the input column
@@ -261,7 +262,7 @@ std::unique_ptr<column> segmented_sum_of_squares(column_view const& col,
                                                  data_type const output_dtype,
                                                  null_policy null_handling,
                                                  rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource* mr);
+                                                 rmm::device_async_resource_ref mr);
 
 /**
  * @brief Computes the standard deviation of elements of segments in the input column
@@ -292,7 +293,7 @@ std::unique_ptr<column> segmented_standard_deviation(column_view const& col,
                                                      null_policy null_handling,
                                                      size_type ddof,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource* mr);
+                                                     rmm::device_async_resource_ref mr);
 
 /**
  * @brief Computes the variance of elements of segments in the input column
@@ -323,7 +324,7 @@ std::unique_ptr<column> segmented_variance(column_view const& col,
                                            null_policy null_handling,
                                            size_type ddof,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr);
+                                           rmm::device_async_resource_ref mr);
 
 /**
  * @brief Counts the number of unique values within each segment of a column
@@ -351,8 +352,7 @@ std::unique_ptr<column> segmented_nunique(column_view const& col,
                                           device_span<size_type const> offsets,
                                           null_policy null_handling,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr);
+                                          rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace reduction
-}  // namespace cudf
+}  // namespace reduction::detail
+}  // namespace CUDF_EXPORT cudf

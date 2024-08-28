@@ -25,8 +25,8 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/csv.hpp>
+#include <cudf/io/datasource.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -938,7 +938,7 @@ TEST_F(CsvReaderTest, Strings)
     outfile << names[0] << ',' << names[1] << '\n';
     outfile << "10,abc def ghi" << '\n';
     outfile << "20,\"jkl mno pqr\"" << '\n';
-    outfile << "30,stu \"\"vwx\"\" yz" << '\n';
+    outfile << R"(30,stu ""vwx"" yz)" << '\n';
   }
 
   cudf::io::csv_reader_options in_opts =
@@ -996,7 +996,7 @@ TEST_F(CsvReaderTest, StringsQuotesIgnored)
     std::ofstream outfile(filepath, std::ofstream::out);
     outfile << names[0] << ',' << names[1] << '\n';
     outfile << "10,\"abcdef ghi\"" << '\n';
-    outfile << "20,\"jkl \"\"mno\"\" pqr\"" << '\n';
+    outfile << R"(20,"jkl ""mno"" pqr")" << '\n';
     outfile << "30,stu \"vwx\" yz" << '\n';
   }
 
@@ -1016,6 +1016,47 @@ TEST_F(CsvReaderTest, StringsQuotesIgnored)
   expect_column_data_equal(
     std::vector<std::string>{"\"abcdef ghi\"", "\"jkl \"\"mno\"\" pqr\"", "stu \"vwx\" yz"},
     view.column(1));
+}
+
+TEST_F(CsvReaderTest, StringsQuotesWhitespace)
+{
+  std::vector<std::string> names{"line", "verse"};
+
+  auto filepath = temp_env->get_temp_dir() + "StringsQuotesIgnored.csv";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << names[0] << ',' << names[1] << '\n';
+    outfile << "A,a" << '\n';              // unquoted no whitespace
+    outfile << "    B,b" << '\n';          // unquoted leading whitespace
+    outfile << "C    ,c" << '\n';          // unquoted trailing whitespace
+    outfile << "    D    ,d" << '\n';      // unquoted leading and trailing whitespace
+    outfile << "\"E\",e" << '\n';          // quoted no whitespace
+    outfile << "\"F\"    ,f" << '\n';      // quoted trailing whitespace
+    outfile << "    \"G\",g" << '\n';      // quoted leading whitespace
+    outfile << "    \"H\"    ,h" << '\n';  // quoted leading and trailing whitespace
+    outfile << "    \"    I    \"    ,i"
+            << '\n';  // quoted leading and trailing whitespace with spaces inside quotes
+  }
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+      .names(names)
+      .dtypes(std::vector<data_type>{dtype<cudf::string_view>(), dtype<cudf::string_view>()})
+      .quoting(cudf::io::quote_style::ALL)
+      .doublequote(false)
+      .detect_whitespace_around_quotes(true);
+  auto result = cudf::io::read_csv(in_opts);
+
+  auto const view = result.tbl->view();
+  ASSERT_EQ(2, view.num_columns());
+  ASSERT_EQ(type_id::STRING, view.column(0).type().id());
+  ASSERT_EQ(type_id::STRING, view.column(1).type().id());
+
+  expect_column_data_equal(
+    std::vector<std::string>{"A", "    B", "C    ", "    D    ", "E", "F", "G", "H", "    I    "},
+    view.column(0));
+  expect_column_data_equal(std::vector<std::string>{"a", "b", "c", "d", "e", "f", "g", "h", "i"},
+                           view.column(1));
 }
 
 TEST_F(CsvReaderTest, SkiprowsNrows)
@@ -1154,30 +1195,6 @@ TEST_F(CsvReaderTest, HeaderOnlyFile)
   auto const view = result.tbl->view();
   EXPECT_EQ(0, view.num_rows());
   EXPECT_EQ(3, view.num_columns());
-}
-
-TEST_F(CsvReaderTest, ArrowFileSource)
-{
-  auto filepath = temp_env->get_temp_dir() + "ArrowFileSource.csv";
-  {
-    std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << "A\n9\n8\n7\n6\n5\n4\n3\n2\n";
-  }
-
-  std::shared_ptr<arrow::io::ReadableFile> infile;
-  ASSERT_TRUE(arrow::io::ReadableFile::Open(filepath).Value(&infile).ok());
-
-  auto arrow_source = cudf::io::arrow_io_source{infile};
-  cudf::io::csv_reader_options in_opts =
-    cudf::io::csv_reader_options::builder(cudf::io::source_info{&arrow_source})
-      .dtypes({dtype<int8_t>()});
-  auto result = cudf::io::read_csv(in_opts);
-
-  auto const view = result.tbl->view();
-  EXPECT_EQ(1, view.num_columns());
-  ASSERT_EQ(type_id::INT8, view.column(0).type().id());
-
-  expect_column_data_equal(std::vector<int8_t>{9, 8, 7, 6, 5, 4, 3, 2}, view.column(0));
 }
 
 TEST_F(CsvReaderTest, InvalidFloatingPoint)

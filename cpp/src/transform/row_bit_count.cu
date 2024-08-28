@@ -25,16 +25,18 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/optional>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/optional.h>
 #include <thrust/tabulate.h>
 
 namespace cudf {
@@ -157,9 +159,9 @@ void flatten_hierarchy(ColIter begin,
                        std::vector<column_info>& info,
                        hierarchy_info& h_info,
                        rmm::cuda_stream_view stream,
-                       size_type cur_depth                = 0,
-                       size_type cur_branch_depth         = 0,
-                       thrust::optional<int> parent_index = {});
+                       size_type cur_depth                   = 0,
+                       size_type cur_branch_depth            = 0,
+                       cuda::std::optional<int> parent_index = {});
 
 /**
  * @brief Type-dispatched functor called by flatten_hierarchy.
@@ -175,7 +177,7 @@ struct flatten_functor {
                   rmm::cuda_stream_view,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  thrust::optional<int>)
+                  cuda::std::optional<int>)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -192,7 +194,7 @@ struct flatten_functor {
                   rmm::cuda_stream_view,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  thrust::optional<int>)
+                  cuda::std::optional<int>)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -208,7 +210,7 @@ struct flatten_functor {
                   rmm::cuda_stream_view stream,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  thrust::optional<int> parent_index)
+                  cuda::std::optional<int> parent_index)
   {
     // track branch depth as we reach this list and after we pass it
     auto const branch_depth_start = cur_branch_depth;
@@ -241,7 +243,7 @@ struct flatten_functor {
                   rmm::cuda_stream_view stream,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  thrust::optional<int>)
+                  cuda::std::optional<int>)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -282,7 +284,7 @@ void flatten_hierarchy(ColIter begin,
                        rmm::cuda_stream_view stream,
                        size_type cur_depth,
                        size_type cur_branch_depth,
-                       thrust::optional<int> parent_index)
+                       cuda::std::optional<int> parent_index)
 {
   std::for_each(begin, end, [&](column_view const& col) {
     cudf::type_dispatcher(col.type(),
@@ -477,7 +479,7 @@ CUDF_KERNEL void compute_segment_sizes(device_span<column_device_view const> col
 std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
                                                 size_type segment_length,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   // If there is no rows, segment_length will not be checked.
   if (t.num_rows() <= 0) { return cudf::make_empty_column(type_id::INT32); }
@@ -557,25 +559,28 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
 
 std::unique_ptr<column> row_bit_count(table_view const& t,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
-  return segmented_row_bit_count(t, 1, stream, mr);
+  return detail::segmented_row_bit_count(t, 1, stream, mr);
 }
 
 }  // namespace detail
 
 std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
                                                 size_type segment_length,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_row_bit_count(t, segment_length, cudf::get_default_stream(), mr);
+  return detail::segmented_row_bit_count(t, segment_length, stream, mr);
 }
 
-std::unique_ptr<column> row_bit_count(table_view const& t, rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> row_bit_count(table_view const& t,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::row_bit_count(t, cudf::get_default_stream(), mr);
+  return detail::row_bit_count(t, stream, mr);
 }
 
 }  // namespace cudf

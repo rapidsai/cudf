@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,12 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup column_quantiles
  * @{
@@ -56,10 +58,10 @@ namespace cudf {
 std::unique_ptr<column> quantile(
   column_view const& input,
   std::vector<double> const& q,
-  interpolation interp                = interpolation::LINEAR,
-  column_view const& ordered_indices  = {},
-  bool exact                          = true,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  interpolation interp               = interpolation::LINEAR,
+  column_view const& ordered_indices = {},
+  bool exact                         = true,
+  rmm::device_async_resource_ref mr  = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the rows of the input corresponding to the requested quantiles.
@@ -98,7 +100,7 @@ std::unique_ptr<table> quantiles(
   cudf::sorted is_input_sorted                   = sorted::NO,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr              = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Calculate approximate percentiles on an input tdigest column.
@@ -125,7 +127,7 @@ std::unique_ptr<table> quantiles(
 std::unique_ptr<column> percentile_approx(
   tdigest::tdigest_column_view const& input,
   column_view const& percentiles,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

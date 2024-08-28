@@ -7,11 +7,11 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 
+import pylibcudf
 import rmm
 
 import cudf
 import cudf._lib as libcudf
-from cudf._lib import pylibcudf
 from cudf.core.buffer import (
     Buffer,
     ExposureTrackedBuffer,
@@ -39,22 +39,18 @@ from cudf._lib.types cimport (
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf._lib.types import dtype_from_pylibcudf_column
 
-# TODO: We currently need this for "casting" empty pylibcudf columns in
-# from_pylibcudf by instead creating an empty numeric column. We will be able
-# to remove this once column factories are exposed to pylibcudf.
-
-cimport cudf._lib.cpp.copying as cpp_copying
-cimport cudf._lib.cpp.types as libcudf_types
-cimport cudf._lib.cpp.unary as libcudf_unary
-from cudf._lib cimport pylibcudf
-from cudf._lib.cpp.column.column cimport column, column_contents
-from cudf._lib.cpp.column.column_factories cimport (
+cimport pylibcudf.libcudf.copying as cpp_copying
+cimport pylibcudf.libcudf.types as libcudf_types
+cimport pylibcudf.libcudf.unary as libcudf_unary
+from pylibcudf.libcudf.column.column cimport column, column_contents
+from pylibcudf.libcudf.column.column_factories cimport (
     make_column_from_scalar as cpp_make_column_from_scalar,
     make_numeric_column,
 )
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.null_mask cimport null_count as cpp_null_count
-from cudf._lib.cpp.scalar.scalar cimport scalar
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
+from pylibcudf.libcudf.scalar.scalar cimport scalar
+
 from cudf._lib.scalar cimport DeviceScalar
 
 
@@ -90,8 +86,10 @@ cdef class Column:
         object mask=None,
         int offset=0,
         object null_count=None,
-        object children=()
+        tuple children=()
     ):
+        if size < 0:
+            raise ValueError("size must be >=0")
         self._size = size
         self._distinct_count = {}
         self._dtype = dtype
@@ -206,11 +204,13 @@ cdef class Column:
 
     def _clear_cache(self):
         self._distinct_count = {}
-        try:
-            del self.memory_usage
-        except AttributeError:
-            # `self.memory_usage` was never called before, So ignore.
-            pass
+        attrs = ("memory_usage", "is_monotonic_increasing", "is_monotonic_decreasing")
+        for attr in attrs:
+            try:
+                delattr(self, attr)
+            except AttributeError:
+                # attr was not called yet, so ignore.
+                pass
         self._null_count = None
 
     def set_mask(self, value):
@@ -297,11 +297,11 @@ cdef class Column:
                 dtypes = [
                     base_child.dtype for base_child in self.base_children
                 ]
-                self._children = [
+                self._children = tuple(
                     child._with_type_metadata(dtype) for child, dtype in zip(
                         children, dtypes
                     )
-                ]
+                )
         return self._children
 
     def set_base_children(self, value):
@@ -623,22 +623,17 @@ cdef class Column:
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
-        cdef libcudf_types.data_type new_dtype
         if col.type().id() == pylibcudf.TypeId.TIMESTAMP_DAYS:
             col = pylibcudf.unary.cast(
                 col, pylibcudf.DataType(pylibcudf.TypeId.TIMESTAMP_SECONDS)
             )
         elif col.type().id() == pylibcudf.TypeId.EMPTY:
-            new_dtype = libcudf_types.data_type(libcudf_types.type_id.INT8)
-            # TODO: This function call is what requires cimporting pylibcudf.
-            # We can remove the cimport once we can directly do
-            # pylibcudf.column_factories.make_numeric_column or equivalent.
-            col = pylibcudf.Column.from_libcudf(
-                move(
-                    make_numeric_column(
-                        new_dtype, col.size(), libcudf_types.mask_state.ALL_NULL
-                        )
-                    )
+            new_dtype = pylibcudf.DataType(pylibcudf.TypeId.INT8)
+
+            col = pylibcudf.column_factories.make_numeric_column(
+                new_dtype,
+                col.size(),
+                pylibcudf.column_factories.MaskState.ALL_NULL
             )
 
         dtype = dtype_from_pylibcudf_column(col)

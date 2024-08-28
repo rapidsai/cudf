@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,10 @@
 #include <cudf/types.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
-namespace cudf::lists {
+namespace CUDF_EXPORT cudf {
+namespace lists {
 /**
  * @addtogroup set_operations
  * @{
@@ -52,17 +54,17 @@ namespace cudf::lists {
  * @param nulls_equal Flag to specify whether null elements should be considered as equal, default
  *        to be `UNEQUAL` which means only non-null elements are checked for overlapping
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
- * @param mr Device memory resource used to allocate the returned object
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned object
  * @return A column of type BOOL containing the check results
  */
 std::unique_ptr<column> have_overlap(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
-  null_equality nulls_equal           = null_equality::EQUAL,
-  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality nulls_equal         = null_equality::EQUAL,
+  nan_equality nans_equal           = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create a lists column of distinct elements common to two input lists columns.
@@ -96,10 +98,10 @@ std::unique_ptr<column> have_overlap(
 std::unique_ptr<column> intersect_distinct(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
-  null_equality nulls_equal           = null_equality::EQUAL,
-  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality nulls_equal         = null_equality::EQUAL,
+  nan_equality nans_equal           = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create a lists column of distinct elements found in either of two input lists columns.
@@ -133,10 +135,10 @@ std::unique_ptr<column> intersect_distinct(
 std::unique_ptr<column> union_distinct(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
-  null_equality nulls_equal           = null_equality::EQUAL,
-  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality nulls_equal         = null_equality::EQUAL,
+  nan_equality nans_equal           = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create a lists column of distinct elements found only in the left input column.
@@ -170,10 +172,11 @@ std::unique_ptr<column> union_distinct(
 std::unique_ptr<column> difference_distinct(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
-  null_equality nulls_equal           = null_equality::EQUAL,
-  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality nulls_equal         = null_equality::EQUAL,
+  nan_equality nans_equal           = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
-}  // namespace cudf::lists
+}  // namespace lists
+}  // namespace CUDF_EXPORT cudf

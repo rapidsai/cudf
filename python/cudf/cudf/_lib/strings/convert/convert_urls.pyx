@@ -1,17 +1,18 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 from cudf.core.buffer import acquire_spill_lock
 
-from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.strings.convert.convert_urls cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.strings.convert.convert_urls cimport (
     url_decode as cpp_url_decode,
     url_encode as cpp_url_encode,
 )
+
+from cudf._lib.column cimport Column
 
 
 @acquire_spill_lock()

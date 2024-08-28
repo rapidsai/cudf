@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <string>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 /**
  * @addtogroup strings_convert
@@ -88,8 +89,8 @@ std::unique_ptr<column> to_timestamps(
   strings_column_view const& input,
   data_type timestamp_type,
   std::string_view format,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Verifies the given strings column can be parsed to timestamps using the provided format
@@ -135,8 +136,8 @@ std::unique_ptr<column> to_timestamps(
 std::unique_ptr<column> is_timestamp(
   strings_column_view const& input,
   std::string_view format,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new strings column converting a timestamp column into
@@ -246,12 +247,12 @@ std::unique_ptr<column> is_timestamp(
  */
 std::unique_ptr<column> from_timestamps(
   column_view const& timestamps,
-  std::string_view format             = "%Y-%m-%dT%H:%M:%SZ",
-  strings_column_view const& names    = strings_column_view(column_view{
+  std::string_view format           = "%Y-%m-%dT%H:%M:%SZ",
+  strings_column_view const& names  = strings_column_view(column_view{
     data_type{type_id::STRING}, 0, nullptr, nullptr, 0}),
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

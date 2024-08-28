@@ -71,15 +71,14 @@ for a minimal build of libcudf without using conda are also listed below.
 
 Compilers:
 
-* `gcc` version 9.3+
-* `nvcc` version 11.5+
-* `cmake` version 3.26.4+
+* `gcc` version 11.4+
+* `nvcc` version 11.8+
+* `cmake` version 3.29.6+
 
-CUDA/GPU:
+CUDA/GPU Runtime:
 
-* CUDA 11.5+
-* NVIDIA driver 450.80.02+
-* Volta architecture or better (Compute Capability >=7.0)
+* CUDA 11.4+
+* Volta architecture or better ([Compute Capability](https://docs.nvidia.com/deploy/cuda-compatibility/) >=7.0)
 
 You can obtain CUDA from
 [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
@@ -105,7 +104,7 @@ Instructions for a minimal build environment without conda are included below.
 # create the conda environment (assuming in base `cudf` directory)
 # note: RAPIDS currently doesn't support `channel_priority: strict`;
 # use `channel_priority: flexible` instead
-conda env create --name cudf_dev --file conda/environments/all_cuda-118_arch-x86_64.yaml
+conda env create --name cudf_dev --file conda/environments/all_cuda-125_arch-x86_64.yaml
 # activate the environment
 conda activate cudf_dev
 ```
@@ -160,6 +159,8 @@ To build all libraries and tests, with Python packages in development mode, simp
 ```bash
 ./build.sh --pydevelop libcudf libcudf_kafka cudf dask_cudf cudf_kafka custreamz
 ```
+
+- **Note**: if Cython files (`*.pyx` or `*.pxd`) have changed, the Python build must be rerun.
 
 To run the C++ tests, run
 

@@ -1,18 +1,14 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 import warnings
 
 import pyarrow as pa
-from fsspec.utils import stringify_path
 
 import cudf
 from cudf._lib import orc as liborc
 from cudf.api.types import is_list_like
 from cudf.utils import ioutils
-from cudf.utils.metadata import (  # type: ignore
-    orc_column_statistics_pb2 as cs_pb2,
-)
 
 
 def _make_empty_df(filepath_or_buffer, columns):
@@ -173,45 +169,41 @@ def read_orc_statistics(
     files_statistics = []
     stripes_statistics = []
     for source in filepaths_or_buffers:
-        path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source, compression=None, **kwargs
+        path_or_buf = ioutils.get_reader_filepath_or_buffer(
+            path_or_data=source, **kwargs
         )
-        if compression is not None:
-            ValueError("URL content-encoding decompression is not supported")
-
-        # Read in statistics and unpack
+        path_or_buf = ioutils._select_single_source(
+            path_or_buf, "read_orc_statistics"
+        )
         (
             column_names,
-            raw_file_statistics,
-            raw_stripes_statistics,
-        ) = liborc.read_raw_orc_statistics(path_or_buf)
+            parsed_file_statistics,
+            parsed_stripes_statistics,
+        ) = liborc.read_parsed_orc_statistics(path_or_buf)
 
         # Parse column names
         column_names = [
             column_name.decode("utf-8") for column_name in column_names
         ]
 
-        # Parse statistics
-        cs = cs_pb2.ColumnStatistics()
-
+        # Parse file statistics
         file_statistics = {
-            column_names[i]: _parse_column_statistics(cs, raw_file_stats)
-            for i, raw_file_stats in enumerate(raw_file_statistics)
-            if columns is None or column_names[i] in columns
+            column_name: column_stats
+            for column_name, column_stats in zip(
+                column_names, parsed_file_statistics
+            )
+            if columns is None or column_name in columns
         }
-        if any(
-            not parsed_statistics
-            for parsed_statistics in file_statistics.values()
-        ):
-            continue
-        else:
-            files_statistics.append(file_statistics)
+        files_statistics.append(file_statistics)
 
-        for raw_stripe_statistics in raw_stripes_statistics:
+        # Parse stripe statistics
+        for parsed_stripe_statistics in parsed_stripes_statistics:
             stripe_statistics = {
-                column_names[i]: _parse_column_statistics(cs, raw_file_stats)
-                for i, raw_file_stats in enumerate(raw_stripe_statistics)
-                if columns is None or column_names[i] in columns
+                column_name: column_stats
+                for column_name, column_stats in zip(
+                    column_names, parsed_stripe_statistics
+                )
+                if columns is None or column_name in columns
             }
             if any(
                 not parsed_statistics
@@ -290,7 +282,6 @@ def read_orc(
     num_rows=None,
     use_index=True,
     timestamp_type=None,
-    use_python_file_object=True,
     storage_options=None,
     bytes_per_thread=None,
 ):
@@ -329,34 +320,12 @@ def read_orc(
                 "A list of stripes must be provided for each input source"
             )
 
-    filepaths_or_buffers = []
-    for source in filepath_or_buffer:
-        if ioutils.is_directory(
-            path_or_data=source, storage_options=storage_options
-        ):
-            fs = ioutils._ensure_filesystem(
-                passed_filesystem=None,
-                path=source,
-                storage_options=storage_options,
-            )
-            source = stringify_path(source)
-            source = fs.sep.join([source, "*.orc"])
-
-        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            use_python_file_object=use_python_file_object,
-            storage_options=storage_options,
-            bytes_per_thread=bytes_per_thread,
-        )
-        if compression is not None:
-            raise ValueError(
-                "URL content-encoding decompression is not supported"
-            )
-        if isinstance(tmp_source, list):
-            filepaths_or_buffers.extend(tmp_source)
-        else:
-            filepaths_or_buffers.append(tmp_source)
+    filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
+        path_or_data=filepath_or_buffer,
+        storage_options=storage_options,
+        bytes_per_thread=bytes_per_thread,
+        expand_dir_pattern="*.orc",
+    )
 
     if filters is not None:
         selected_stripes = _filter_stripes(

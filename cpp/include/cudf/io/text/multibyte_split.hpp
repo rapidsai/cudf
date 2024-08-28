@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,19 @@
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <optional>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 namespace text {
+/**
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
 
 /**
  * @brief Parsing options for multibyte_split.
@@ -78,6 +84,7 @@ struct parse_options {
  * @param source The source string
  * @param delimiter UTF-8 encoded string for which to find offsets in the source
  * @param options the parsing options to use (including byte range)
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Memory resource to use for the device memory allocation
  * @return The strings found by splitting the source by the delimiter within the relevant byte
  * range.
@@ -85,19 +92,12 @@ struct parse_options {
 std::unique_ptr<cudf::column> multibyte_split(
   data_chunk_source const& source,
   std::string const& delimiter,
-  parse_options options               = {},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  parse_options options             = {},
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<cudf::column> multibyte_split(
-  data_chunk_source const& source,
-  std::string const& delimiter,
-  std::optional<byte_range_info> byte_range,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-std::unique_ptr<cudf::column> multibyte_split(data_chunk_source const& source,
-                                              std::string const& delimiter,
-                                              rmm::mr::device_memory_resource* mr);
+/** @} */  // end of group
 
 }  // namespace text
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

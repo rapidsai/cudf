@@ -8,7 +8,7 @@ import numpy as np
 import pyarrow as pa
 
 import cudf
-from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
+from cudf.api.types import is_scalar
 from cudf.core.dtypes import ListDtype, StructDtype
 from cudf.core.missing import NA, NaT
 from cudf.core.mixins import BinaryOperand
@@ -223,6 +223,9 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
 
         if dtype is None:
             if not valid:
+                if value is NaT:
+                    value = value.to_numpy()
+
                 if isinstance(value, (np.datetime64, np.timedelta64)):
                     unit, _ = np.datetime_data(value)
                     if unit == "generic":
@@ -242,11 +245,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
             dtype = cudf.dtype(dtype)
 
         if not valid:
-            value = (
-                NaT
-                if is_datetime64_dtype(dtype) or is_timedelta64_dtype(dtype)
-                else NA
-            )
+            value = NaT if dtype.kind in "mM" else NA
 
         return value, dtype
 

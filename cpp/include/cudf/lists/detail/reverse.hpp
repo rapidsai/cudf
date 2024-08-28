@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,12 @@
 #pragma once
 
 #include <cudf/lists/reverse.hpp>
+#include <cudf/utilities/export.hpp>
 
-namespace cudf::lists::detail {
+#include <rmm/resource_ref.hpp>
+
+namespace CUDF_EXPORT cudf {
+namespace lists::detail {
 
 /**
  * @copydoc cudf::lists::reverse
@@ -25,6 +29,7 @@ namespace cudf::lists::detail {
  */
 std::unique_ptr<column> reverse(lists_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr);
+                                rmm::device_async_resource_ref mr);
 
-}  // namespace cudf::lists::detail
+}  // namespace lists::detail
+}  // namespace CUDF_EXPORT cudf

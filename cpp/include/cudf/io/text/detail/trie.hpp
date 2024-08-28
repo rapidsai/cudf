@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,10 +18,12 @@
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/detail/multistate.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <algorithm>
 #include <queue>
@@ -29,7 +31,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 namespace text {
 namespace detail {
@@ -165,7 +167,7 @@ struct trie {
    */
   static trie create(std::string const& pattern,
                      rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr)
+                     rmm::device_async_resource_ref mr)
 
   {
     return create(std::vector<std::string>{pattern}, stream, mr);
@@ -181,7 +183,7 @@ struct trie {
    */
   static trie create(std::vector<std::string> const& patterns,
                      rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr)
+                     rmm::device_async_resource_ref mr)
   {
     std::vector<char> tokens;
     std::vector<uint8_t> transitions;
@@ -222,11 +224,11 @@ struct trie {
 
     match_length.emplace_back(0);
 
-    std::vector<trie_node> trie_nodes;
     auto token_counts = std::unordered_map<cudf::size_type, int32_t>();
+    auto trie_nodes   = cudf::detail::make_empty_host_vector<trie_node>(tokens.size(), stream);
 
     for (uint32_t i = 0; i < tokens.size(); i++) {
-      trie_nodes.emplace_back(trie_node{tokens[i], match_length[i], transitions[i]});
+      trie_nodes.push_back(trie_node{tokens[i], match_length[i], transitions[i]});
       token_counts[tokens[i]]++;
     }
 
@@ -247,4 +249,4 @@ struct trie {
 }  // namespace detail
 }  // namespace text
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

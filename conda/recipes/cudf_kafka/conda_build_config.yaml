@@ -4,11 +4,14 @@ c_compiler_version:
 cxx_compiler_version:
   - 11
 
-sysroot_version:
+c_stdlib:
+  - sysroot
+
+c_stdlib_version:
   - "2.17"
 
 cmake_version:
-  - ">=3.26.4"
+  - ">=3.26.4,!=3.30.0"
 
 cuda_compiler:
   - cuda-nvcc

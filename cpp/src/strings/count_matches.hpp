@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/column/column.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 
@@ -36,16 +37,14 @@ class reprog_device;
  *
  * @param d_strings Device view of the input strings column.
  * @param d_prog Regex instance to evaluate on each string.
- * @param output_size Number of rows for the output column.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Integer column of match counts
  */
 std::unique_ptr<column> count_matches(column_device_view const& d_strings,
                                       reprog_device& d_prog,
-                                      size_type output_size,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                      rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace strings

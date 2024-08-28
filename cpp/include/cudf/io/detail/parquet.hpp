@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,19 +24,22 @@
 #include <cudf/io/parquet_metadata.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <string>
 #include <vector>
 
-namespace cudf::io {
+namespace CUDF_EXPORT cudf {
+namespace io {
 
 // Forward declaration
-class parquet_reader_options;
-class parquet_writer_options;
-class chunked_parquet_writer_options;
+class CUDF_EXPORT parquet_reader_options;
+class CUDF_EXPORT parquet_writer_options;
+class CUDF_EXPORT chunked_parquet_writer_options;
 
 namespace parquet::detail {
 
@@ -65,7 +68,7 @@ class reader {
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   parquet_reader_options const& options,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  rmm::device_async_resource_ref mr);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -75,11 +78,9 @@ class reader {
   /**
    * @brief Reads the dataset as per given options.
    *
-   * @param options Settings for controlling reading behavior
-   *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(parquet_reader_options const& options);
+  table_with_metadata read();
 };
 
 /**
@@ -101,6 +102,13 @@ class chunked_reader : private reader {
    *    // Process chunk
    *  } while (reader.has_next());
    *
+   * // Alternatively
+   *
+   *  while (reader.has_next()) {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  }
+   *
    * ```
    *
    * If `chunk_read_limit == 0` (i.e., no output limit), and `pass_read_limit == 0` (no input
@@ -110,7 +118,7 @@ class chunked_reader : private reader {
    * The chunk_read_limit parameter controls the size of the output chunks produces.  If the user
    * specifies 100 MB of data, the reader will attempt to return chunks containing tables that have
    * a total bytes size (over all columns) of 100 MB or less.  This is a soft limit and the code
-   * will not fail if it cannot satisfy the limit.  It will make a best-effort atttempt only.
+   * will not fail if it cannot satisfy the limit.  It will make a best-effort attempt only.
    *
    * The pass_read_limit parameter controls how much temporary memory is used in the process of
    * decoding the file.  The primary contributor to this memory usage is the uncompressed size of
@@ -145,7 +153,7 @@ class chunked_reader : private reader {
                           std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                           parquet_reader_options const& options,
                           rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr);
+                          rmm::device_async_resource_ref mr);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header.
@@ -154,7 +162,7 @@ class chunked_reader : private reader {
    * destructor needs to be defined in a separate source file which can access to that object's
    * declaration.
    */
-  ~chunked_reader();
+  ~chunked_reader() override;
 
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next
@@ -251,4 +259,5 @@ class writer {
  */
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources);
 }  // namespace parquet::detail
-}  // namespace cudf::io
+}  // namespace io
+}  // namespace CUDF_EXPORT cudf

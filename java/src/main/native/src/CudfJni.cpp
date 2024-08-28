@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,27 +14,28 @@
  * limitations under the License.
  */
 
-#include <sstream>
+#include "cudf_jni_apis.hpp"
 
 #include <cudf/copying.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 
-#include "cudf_jni_apis.hpp"
+#include <sstream>
 
 namespace {
 
 // handles detaching a thread from the JVM when the thread terminates
 class jvm_detach_on_destruct {
-public:
-  explicit jvm_detach_on_destruct(JavaVM *jvm) : jvm{jvm} {}
+ public:
+  explicit jvm_detach_on_destruct(JavaVM* jvm) : jvm{jvm} {}
 
   ~jvm_detach_on_destruct() { jvm->DetachCurrentThread(); }
 
-private:
-  JavaVM *jvm;
+ private:
+  JavaVM* jvm;
 };
 
-} // anonymous namespace
+}  // anonymous namespace
 
 namespace cudf {
 namespace jni {
@@ -49,74 +50,70 @@ static jclass Host_memory_buffer_jclass;
 static jfieldID Host_buffer_address;
 static jfieldID Host_buffer_length;
 
-#define HOST_MEMORY_BUFFER_CLASS "ai/rapids/cudf/HostMemoryBuffer"
+#define HOST_MEMORY_BUFFER_CLASS          "ai/rapids/cudf/HostMemoryBuffer"
 #define HOST_MEMORY_BUFFER_SIG(param_sig) "(" param_sig ")L" HOST_MEMORY_BUFFER_CLASS ";"
 
-static bool cache_host_memory_buffer_jni(JNIEnv *env) {
+static bool cache_host_memory_buffer_jni(JNIEnv* env)
+{
   jclass cls = env->FindClass(HOST_MEMORY_BUFFER_CLASS);
-  if (cls == nullptr) {
-    return false;
-  }
+  if (cls == nullptr) { return false; }
 
   Host_buffer_address = env->GetFieldID(cls, "address", "J");
-  if (Host_buffer_address == nullptr) {
-    return false;
-  }
+  if (Host_buffer_address == nullptr) { return false; }
 
   Host_buffer_length = env->GetFieldID(cls, "length", "J");
-  if (Host_buffer_length == nullptr) {
-    return false;
-  }
+  if (Host_buffer_length == nullptr) { return false; }
 
   // Convert local reference to global so it cannot be garbage collected.
   Host_memory_buffer_jclass = static_cast<jclass>(env->NewGlobalRef(cls));
-  if (Host_memory_buffer_jclass == nullptr) {
-    return false;
-  }
+  if (Host_memory_buffer_jclass == nullptr) { return false; }
   return true;
 }
 
-static void release_host_memory_buffer_jni(JNIEnv *env) {
+static void release_host_memory_buffer_jni(JNIEnv* env)
+{
   Host_memory_buffer_jclass = del_global_ref(env, Host_memory_buffer_jclass);
 }
 
-jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned,
-                             jobject host_memory_allocator) {
+jobject allocate_host_buffer(JNIEnv* env,
+                             jlong amount,
+                             jboolean prefer_pinned,
+                             jobject host_memory_allocator)
+{
   auto const host_memory_allocator_class = env->GetObjectClass(host_memory_allocator);
   auto const allocateMethodId =
-      env->GetMethodID(host_memory_allocator_class, "allocate", HOST_MEMORY_BUFFER_SIG("JZ"));
+    env->GetMethodID(host_memory_allocator_class, "allocate", HOST_MEMORY_BUFFER_SIG("JZ"));
   jobject ret =
-      env->CallObjectMethod(host_memory_allocator, allocateMethodId, amount, prefer_pinned);
+    env->CallObjectMethod(host_memory_allocator, allocateMethodId, amount, prefer_pinned);
 
-  if (env->ExceptionCheck()) {
-    throw std::runtime_error("allocateHostBuffer threw an exception");
-  }
+  if (env->ExceptionCheck()) { throw std::runtime_error("allocateHostBuffer threw an exception"); }
   return ret;
 }
 
-jlong get_host_buffer_address(JNIEnv *env, jobject buffer) {
+jlong get_host_buffer_address(JNIEnv* env, jobject buffer)
+{
   return env->GetLongField(buffer, Host_buffer_address);
 }
 
-jlong get_host_buffer_length(JNIEnv *env, jobject buffer) {
+jlong get_host_buffer_length(JNIEnv* env, jobject buffer)
+{
   return env->GetLongField(buffer, Host_buffer_length);
 }
 
 // Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread
 // needs to be attached, the thread will automatically detach when the thread terminates.
-JNIEnv *get_jni_env(JavaVM *jvm) {
-  JNIEnv *env = nullptr;
-  jint rc = jvm->GetEnv(reinterpret_cast<void **>(&env), MINIMUM_JNI_VERSION);
-  if (rc == JNI_OK) {
-    return env;
-  }
+JNIEnv* get_jni_env(JavaVM* jvm)
+{
+  JNIEnv* env = nullptr;
+  jint rc     = jvm->GetEnv(reinterpret_cast<void**>(&env), MINIMUM_JNI_VERSION);
+  if (rc == JNI_OK) { return env; }
   if (rc == JNI_EDETACHED) {
     JavaVMAttachArgs attach_args;
     attach_args.version = MINIMUM_JNI_VERSION;
-    attach_args.name = const_cast<char *>("cudf thread");
-    attach_args.group = NULL;
+    attach_args.name    = const_cast<char*>("cudf thread");
+    attach_args.group   = NULL;
 
-    if (jvm->AttachCurrentThreadAsDaemon(reinterpret_cast<void **>(&env), &attach_args) == JNI_OK) {
+    if (jvm->AttachCurrentThreadAsDaemon(reinterpret_cast<void**>(&env), &attach_args) == JNI_OK) {
       // use thread_local object to detach the thread from the JVM when thread terminates.
       thread_local jvm_detach_on_destruct detacher(jvm);
     } else {
@@ -129,14 +126,15 @@ JNIEnv *get_jni_env(JavaVM *jvm) {
   throw std::runtime_error("error detecting thread attach state with JVM");
 }
 
-} // namespace jni
-} // namespace cudf
+}  // namespace jni
+}  // namespace cudf
 
 extern "C" {
 
-JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
-  JNIEnv *env;
-  if (vm->GetEnv(reinterpret_cast<void **>(&env), cudf::jni::MINIMUM_JNI_VERSION) != JNI_OK) {
+JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*)
+{
+  JNIEnv* env;
+  if (vm->GetEnv(reinterpret_cast<void**>(&env), cudf::jni::MINIMUM_JNI_VERSION) != JNI_OK) {
     return JNI_ERR;
   }
 
@@ -186,9 +184,10 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
   return cudf::jni::MINIMUM_JNI_VERSION;
 }
 
-JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *) {
-  JNIEnv *env = nullptr;
-  if (vm->GetEnv(reinterpret_cast<void **>(&env), cudf::jni::MINIMUM_JNI_VERSION) != JNI_OK) {
+JNIEXPORT void JNI_OnUnload(JavaVM* vm, void*)
+{
+  JNIEnv* env = nullptr;
+  if (vm->GetEnv(reinterpret_cast<void**>(&env), cudf::jni::MINIMUM_JNI_VERSION) != JNI_OK) {
     return;
   }
 
@@ -198,8 +197,33 @@ JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *) {
   cudf::jni::release_host_memory_buffer_jni(env);
 }
 
-JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Cuda_isPtdsEnabled(JNIEnv *env, jclass) {
+JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Cuda_isPtdsEnabled(JNIEnv* env, jclass)
+{
   return cudf::jni::is_ptds_enabled;
 }
 
-} // extern "C"
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_setKernelPinnedCopyThreshold(JNIEnv* env,
+                                                                             jclass clazz,
+                                                                             jlong jthreshold)
+{
+  try {
+    cudf::jni::auto_set_device(env);
+    auto threshold = static_cast<std::size_t>(jthreshold);
+    cudf::set_kernel_pinned_copy_threshold(threshold);
+  }
+  CATCH_STD(env, )
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_setPinnedAllocationThreshold(JNIEnv* env,
+                                                                             jclass clazz,
+                                                                             jlong jthreshold)
+{
+  try {
+    cudf::jni::auto_set_device(env);
+    auto threshold = static_cast<std::size_t>(jthreshold);
+    cudf::set_allocate_host_as_pinned_threshold(threshold);
+  }
+  CATCH_STD(env, )
+}
+
+}  // extern "C"

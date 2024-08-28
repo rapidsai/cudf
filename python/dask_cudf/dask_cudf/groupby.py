@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 from functools import wraps
-from typing import Set
 
 import numpy as np
 import pandas as pd
@@ -15,7 +15,8 @@ from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
 from dask.utils import funcname
 
 import cudf
-from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
+from cudf.core.groupby.groupby import _deprecate_collect
+from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
 from dask_cudf.sorting import _deprecate_shuffle_kwarg
 
@@ -28,7 +29,7 @@ OPTIMIZED_AGGS = (
     "sum",
     "min",
     "max",
-    "collect",
+    list,
     "first",
     "last",
 )
@@ -55,13 +56,13 @@ def _check_groupby_optimized(func):
 
 
 class CudfDataFrameGroupBy(DataFrameGroupBy):
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def __init__(self, *args, sort=None, **kwargs):
         self.sep = kwargs.pop("sep", "___")
         self.as_index = kwargs.pop("as_index", True)
         super().__init__(*args, sort=sort, **kwargs)
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def __getitem__(self, key):
         if isinstance(key, list):
             g = CudfDataFrameGroupBy(
@@ -83,7 +84,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         g._meta = g._meta[key]
         return g
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def _make_groupby_method_aggs(self, agg_name):
         """Create aggs dictionary for aggregation methods"""
 
@@ -91,7 +92,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             return {c: agg_name for c in self.obj.columns if c not in self.by}
         return {c: agg_name for c in self.obj.columns if c != self.by}
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def count(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -101,7 +102,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             split_out,
         )
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def mean(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -111,7 +112,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             split_out,
         )
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def std(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -121,7 +122,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             split_out,
         )
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def var(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -131,7 +132,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             split_out,
         )
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def sum(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -141,7 +142,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             split_out,
         )
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def min(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -151,7 +152,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             split_out,
         )
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def max(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -161,17 +162,18 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             split_out,
         )
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def collect(self, split_every=None, split_out=1):
+        _deprecate_collect()
         return _make_groupby_agg_call(
             self,
-            self._make_groupby_method_aggs("collect"),
+            self._make_groupby_method_aggs(list),
             split_every,
             split_out,
         )
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def first(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -181,7 +183,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             split_out,
         )
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def last(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -192,7 +194,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         )
 
     @_deprecate_shuffle_kwarg
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def aggregate(
         self, arg, split_every=None, split_out=1, shuffle_method=None
     ):
@@ -229,13 +231,13 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
 
 
 class CudfSeriesGroupBy(SeriesGroupBy):
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def __init__(self, *args, sort=None, **kwargs):
         self.sep = kwargs.pop("sep", "___")
         self.as_index = kwargs.pop("as_index", True)
         super().__init__(*args, sort=sort, **kwargs)
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def count(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -245,7 +247,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             split_out,
         )[self._slice]
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def mean(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -255,7 +257,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             split_out,
         )[self._slice]
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def std(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -265,7 +267,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             split_out,
         )[self._slice]
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def var(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -275,7 +277,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             split_out,
         )[self._slice]
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def sum(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -285,7 +287,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             split_out,
         )[self._slice]
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def min(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -295,7 +297,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             split_out,
         )[self._slice]
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def max(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -305,17 +307,18 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             split_out,
         )[self._slice]
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def collect(self, split_every=None, split_out=1):
+        _deprecate_collect()
         return _make_groupby_agg_call(
             self,
-            {self._slice: "collect"},
+            {self._slice: list},
             split_every,
             split_out,
         )[self._slice]
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def first(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -325,7 +328,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             split_out,
         )[self._slice]
 
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     @_check_groupby_optimized
     def last(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
@@ -336,7 +339,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )[self._slice]
 
     @_deprecate_shuffle_kwarg
-    @_dask_cudf_nvtx_annotate
+    @_dask_cudf_performance_tracking
     def aggregate(
         self, arg, split_every=None, split_out=1, shuffle_method=None
     ):
@@ -426,7 +429,7 @@ def _shuffle_aggregate(
     return result
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def groupby_agg(
     ddf,
     gb_cols,
@@ -472,7 +475,7 @@ def groupby_agg(
 
     This aggregation algorithm only supports the following options
 
-    * "collect"
+    * "list"
     * "count"
     * "first"
     * "last"
@@ -638,7 +641,7 @@ def groupby_agg(
     )
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _make_groupby_agg_call(
     gb, aggs, split_every, split_out, shuffle_method=None
 ):
@@ -660,15 +663,15 @@ def _make_groupby_agg_call(
     )
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _redirect_aggs(arg):
     """Redirect aggregations to their corresponding name in cuDF"""
     redirects = {
         sum: "sum",
         max: "max",
         min: "min",
-        list: "collect",
-        "list": "collect",
+        "collect": list,
+        "list": list,
     }
     if isinstance(arg, dict):
         new_arg = dict()
@@ -687,12 +690,12 @@ def _redirect_aggs(arg):
     return redirects.get(arg, arg)
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _aggs_optimized(arg, supported: set):
     """Check that aggregations in `arg` are a subset of `supported`"""
     if isinstance(arg, (list, dict)):
         if isinstance(arg, dict):
-            _global_set: Set[str] = set()
+            _global_set: set[str] = set()
             for col in arg:
                 if isinstance(arg[col], list):
                     _global_set = _global_set.union(set(arg[col]))
@@ -704,12 +707,12 @@ def _aggs_optimized(arg, supported: set):
             _global_set = set(arg)
 
         return bool(_global_set.issubset(supported))
-    elif isinstance(arg, str):
+    elif isinstance(arg, (str, type)):
         return arg in supported
     return False
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _groupby_optimized(gb):
     """Check that groupby input can use dask-cudf optimized codepath"""
     return isinstance(gb.obj, DaskDataFrame) and (
@@ -727,7 +730,7 @@ def _make_name(col_name, sep="_"):
     return sep.join(name for name in col_name if name != "")
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _groupby_partition_agg(df, gb_cols, aggs, columns, dropna, sort, sep):
     """Initial partition-level aggregation task.
 
@@ -765,7 +768,7 @@ def _groupby_partition_agg(df, gb_cols, aggs, columns, dropna, sort, sep):
     return gb[sorted(output_columns)]
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _tree_node_agg(df, gb_cols, dropna, sort, sep):
     """Node in groupby-aggregation reduction tree.
 
@@ -783,6 +786,8 @@ def _tree_node_agg(df, gb_cols, dropna, sort, sep):
         agg = col.split(sep)[-1]
         if agg in ("count", "sum"):
             agg_dict[col] = ["sum"]
+        elif agg == "list":
+            agg_dict[col] = [list]
         elif agg in OPTIMIZED_AGGS:
             agg_dict[col] = [agg]
         else:
@@ -802,7 +807,7 @@ def _tree_node_agg(df, gb_cols, dropna, sort, sep):
     return gb[sorted(output_columns)]
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _var_agg(df, col, count_name, sum_name, pow2_sum_name, ddof=1):
     """Calculate variance (given count, sum, and sum-squared columns)."""
 
@@ -824,7 +829,7 @@ def _var_agg(df, col, count_name, sum_name, pow2_sum_name, ddof=1):
     return var
 
 
-@_dask_cudf_nvtx_annotate
+@_dask_cudf_performance_tracking
 def _finalize_gb_agg(
     gb_in,
     gb_cols,
@@ -873,8 +878,8 @@ def _finalize_gb_agg(
                 gb.drop(columns=[sum_name], inplace=True)
             if "count" not in agg_list:
                 gb.drop(columns=[count_name], inplace=True)
-        if "collect" in agg_list:
-            collect_name = _make_name((col, "collect"), sep=sep)
+        if list in agg_list:
+            collect_name = _make_name((col, "list"), sep=sep)
             gb[collect_name] = gb[collect_name].list.concat()
 
     # Ensure sorted keys if `sort=True`

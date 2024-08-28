@@ -9,7 +9,8 @@ import dask
 from dask import dataframe as dd
 
 from cudf import DataFrame, Series, date_range
-from cudf.testing._utils import assert_eq, does_not_raise
+from cudf.testing import assert_eq
+from cudf.testing._utils import does_not_raise
 
 import dask_cudf
 from dask_cudf.tests.utils import xfail_dask_expr
@@ -111,7 +112,7 @@ def test_categorical_accessor_initialization2(data):
         dsr.cat
 
 
-@xfail_dask_expr("TODO: Unexplained dask-expr failure")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 @pytest.mark.parametrize("data", [data_cat_1()])
 def test_categorical_basic(data):
     cat = data.copy()
@@ -203,7 +204,6 @@ def test_categorical_compare_unordered(data):
         dsr < dsr
 
 
-@xfail_dask_expr("TODO: Unexplained dask-expr failure")
 @pytest.mark.parametrize("data", [data_cat_3()])
 def test_categorical_compare_ordered(data):
     cat1 = data[0].copy()
@@ -274,7 +274,6 @@ def test_categorical_categories():
     )
 
 
-@xfail_dask_expr("TODO: Unexplained dask-expr failure")
 def test_categorical_as_known():
     df = dask_cudf.from_cudf(DataFrame({"col_1": [0, 1, 2, 3]}), npartitions=2)
     df["col_1"] = df["col_1"].astype("category")
@@ -283,7 +282,19 @@ def test_categorical_as_known():
     pdf = dd.from_pandas(pd.DataFrame({"col_1": [0, 1, 2, 3]}), npartitions=2)
     pdf["col_1"] = pdf["col_1"].astype("category")
     expected = pdf["col_1"].cat.as_known()
-    dd.assert_eq(expected, actual)
+
+    # Note: Categories may be ordered differently in
+    # cudf and pandas. Therefore, we need to compare
+    # the global set of categories (before and after
+    # calling `compute`), then we need to check that
+    # the initial order of rows was preserved.
+    assert set(expected.cat.categories) == set(
+        actual.cat.categories.values_host
+    )
+    assert set(expected.compute().cat.categories) == set(
+        actual.compute().cat.categories.values_host
+    )
+    dd.assert_eq(expected, actual.astype(expected.dtype))
 
 
 def test_str_slice():
@@ -533,7 +544,7 @@ def test_struct_explode(data):
 
 
 def test_tz_localize():
-    data = Series(date_range("2000-04-01", "2000-04-03", freq="H"))
+    data = Series(date_range("2000-04-01", "2000-04-03", freq="h"))
     expect = data.dt.tz_localize(
         "US/Eastern", ambiguous="NaT", nonexistent="NaT"
     )
@@ -550,8 +561,8 @@ def test_tz_localize():
 @pytest.mark.parametrize(
     "data",
     [
-        date_range("2000-04-01", "2000-04-03", freq="H").tz_localize("UTC"),
-        date_range("2000-04-01", "2000-04-03", freq="H").tz_localize(
+        date_range("2000-04-01", "2000-04-03", freq="h").tz_localize("UTC"),
+        date_range("2000-04-01", "2000-04-03", freq="h").tz_localize(
             "US/Eastern"
         ),
     ],

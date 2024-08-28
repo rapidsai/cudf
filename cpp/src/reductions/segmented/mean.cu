@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/reduction/detail/segmented_reduction_functions.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace reduction {
@@ -29,7 +30,7 @@ std::unique_ptr<cudf::column> segmented_mean(column_view const& col,
                                              cudf::data_type const output_dtype,
                                              null_policy null_handling,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   using reducer            = compound::detail::compound_segmented_dispatcher<op::mean>;
   constexpr size_type ddof = 1;  // ddof for mean calculation

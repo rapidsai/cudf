@@ -78,6 +78,9 @@ CMakeFiles/
 Debug
 build/
 cpp/build/
+cpp/examples/*/install/
+cpp/examples/*/build/
+cpp/examples/tpch/datagen/datafusion
 cpp/include/cudf/ipc_generated/*.h
 cpp/thirdparty/googletest/
 
@@ -160,9 +163,6 @@ ENV/
 # Dask
 dask-worker-space/
 
-# protobuf
-**/*_pb2.py
-
 # Sphinx docs & build artifacts
 docs/cudf/source/api_docs/generated/*
 docs/cudf/source/user_guide/api_docs/api/*
@@ -178,3 +178,7 @@ jupyter_execute
 # clang tooling
 compile_commands.json
 .clangd/
+
+# pytest artifacts
+rmm_log.txt
+python/cudf/cudf_pandas_tests/data/rmm_log.txt

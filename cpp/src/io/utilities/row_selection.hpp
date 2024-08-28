@@ -21,7 +21,8 @@
 #include <optional>
 #include <utility>
 
-namespace cudf::io::detail {
+namespace CUDF_EXPORT cudf {
+namespace io::detail {
 
 /**
  * @brief Adjusts the input skip_rows and num_rows options to the actual number of rows to
@@ -34,7 +35,9 @@ namespace cudf::io::detail {
  *
  * @throw std::overflow_exception The requested number of rows exceeds the column size limit
  */
-std::pair<int64_t, size_type> skip_rows_num_rows_from_options(
-  int64_t skip_rows, std::optional<size_type> const& num_rows, int64_t num_source_rows);
+std::pair<int64_t, int64_t> skip_rows_num_rows_from_options(int64_t skip_rows,
+                                                            std::optional<int64_t> const& num_rows,
+                                                            int64_t num_source_rows);
 
-}  // namespace cudf::io::detail
+}  // namespace io::detail
+}  // namespace CUDF_EXPORT cudf

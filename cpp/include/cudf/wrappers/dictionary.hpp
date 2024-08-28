@@ -27,7 +27,7 @@
  * @brief Concrete type definition for dictionary columns.
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup dictionary_classes
  * @{
@@ -87,7 +87,7 @@ struct dictionary_wrapper {
    *
    * @return The value of this dictionary wrapper
    */
-  CUDF_HOST_DEVICE inline value_type value() const { return _value; }
+  CUDF_HOST_DEVICE [[nodiscard]] inline value_type value() const { return _value; }
 
   /**
    * @brief Returns the maximum value of the value type.
@@ -217,4 +217,4 @@ CUDF_HOST_DEVICE inline bool operator>(dictionary_wrapper<Integer> const& lhs,
 using dictionary32 = dictionary_wrapper<int32_t>;  ///< 32-bit integer indexed dictionary wrapper
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

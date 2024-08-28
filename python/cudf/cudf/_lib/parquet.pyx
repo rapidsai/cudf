@@ -18,11 +18,11 @@ from cython.operator cimport dereference
 
 from cudf.api.types import is_list_like
 
-from cudf._lib.utils cimport data_from_unique_ptr
+from cudf._lib.utils cimport _data_from_columns, data_from_pylibcudf_io
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
-from libc.stdint cimport uint8_t
+from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
@@ -31,34 +31,39 @@ from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-cimport cudf._lib.cpp.io.data_sink as cudf_io_data_sink
-cimport cudf._lib.cpp.io.types as cudf_io_types
-cimport cudf._lib.cpp.types as cudf_types
-from cudf._lib.column cimport Column
-from cudf._lib.cpp.expressions cimport expression
-from cudf._lib.cpp.io.parquet cimport (
+cimport pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
+cimport pylibcudf.libcudf.io.types as cudf_io_types
+from pylibcudf.expressions cimport Expression
+from pylibcudf.io.parquet cimport ChunkedParquetReader
+from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_writer_options,
     merge_row_group_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
-    parquet_reader_options,
-    parquet_reader_options_builder,
     parquet_writer_options,
-    read_parquet as parquet_reader,
     write_parquet as parquet_writer,
 )
-from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport data_type, size_type
-from cudf._lib.expressions cimport Expression
-from cudf._lib.io.datasource cimport NativeFileDatasource
+from pylibcudf.libcudf.io.parquet_metadata cimport (
+    parquet_metadata,
+    read_parquet_metadata as parquet_metadata_reader,
+)
+from pylibcudf.libcudf.io.types cimport (
+    column_in_metadata,
+    table_input_metadata,
+)
+from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.types cimport size_type
+
+from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport (
+    add_df_col_struct_names,
     make_sinks_info,
     make_source_info,
-    update_struct_field_names,
 )
 from cudf._lib.utils cimport table_view_from_table
 
-from pyarrow.lib import NativeFile
+import pylibcudf as plc
+
+from pylibcudf cimport Table
 
 from cudf.utils.ioutils import _ROW_GROUP_SIZE_BYTES_DEFAULT
 
@@ -119,105 +124,39 @@ def _parse_metadata(meta):
     return file_is_range_index, file_index_cols, file_column_dtype
 
 
-cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
-                   use_pandas_metadata=True,
-                   Expression filters=None):
-    """
-    Cython function to call into libcudf API, see `read_parquet`.
+cdef object _process_metadata(object df,
+                              list names,
+                              dict child_names,
+                              list per_file_user_data,
+                              object row_groups,
+                              object filepaths_or_buffers,
+                              bool allow_range_index,
+                              bool use_pandas_metadata,
+                              size_type nrows=-1,
+                              int64_t skip_rows=0,
+                              ):
 
-    filters, if not None, should be an Expression that evaluates to a
-    boolean predicate as a function of columns being read.
-
-    See Also
-    --------
-    cudf.io.parquet.read_parquet
-    cudf.io.parquet.to_parquet
-    """
-
-    # Convert NativeFile buffers to NativeFileDatasource,
-    # but save original buffers in case we need to use
-    # pyarrow for metadata processing
-    # (See: https://github.com/rapidsai/cudf/issues/9599)
-    pa_buffers = []
-    for i, datasource in enumerate(filepaths_or_buffers):
-        if isinstance(datasource, NativeFile):
-            pa_buffers.append(datasource)
-            filepaths_or_buffers[i] = NativeFileDatasource(datasource)
-
-    cdef cudf_io_types.source_info source = make_source_info(
-        filepaths_or_buffers)
-
-    cdef bool cpp_use_pandas_metadata = use_pandas_metadata
-
-    cdef vector[vector[size_type]] cpp_row_groups
-    cdef data_type cpp_timestamp_type = cudf_types.data_type(
-        cudf_types.type_id.EMPTY
-    )
-    if row_groups is not None:
-        cpp_row_groups = row_groups
-
-    # Setup parquet reader arguments
-    cdef parquet_reader_options args
-    cdef parquet_reader_options_builder builder
-    builder = (
-        parquet_reader_options.builder(source)
-        .row_groups(cpp_row_groups)
-        .use_pandas_metadata(cpp_use_pandas_metadata)
-        .timestamp_type(cpp_timestamp_type)
-    )
-    if filters is not None:
-        builder = builder.filter(<expression &>dereference(filters.c_obj.get()))
-
-    args = move(builder.build())
-    cdef vector[string] cpp_columns
-    allow_range_index = True
-    if columns is not None:
-        cpp_columns.reserve(len(columns))
-        allow_range_index = len(columns) > 0
-        for col in columns:
-            cpp_columns.push_back(str(col).encode())
-        args.set_columns(cpp_columns)
-    # Filters don't handle the range index correctly
-    allow_range_index &= filters is None
-
-    # Read Parquet
-    cdef cudf_io_types.table_with_metadata c_result
-
-    with nogil:
-        c_result = move(parquet_reader(args))
-
-    names = [info.name.decode() for info in c_result.metadata.schema_info]
-
-    # Access the Parquet per_file_user_data to find the index
+    add_df_col_struct_names(df, child_names)
     index_col = None
-    cdef vector[unordered_map[string, string]] per_file_user_data = \
-        c_result.metadata.per_file_user_data
-
+    is_range_index = True
     column_index_type = None
     index_col_names = None
-    is_range_index = True
+    meta = None
     for single_file in per_file_user_data:
+        if b'pandas' not in single_file:
+            continue
         json_str = single_file[b'pandas'].decode('utf-8')
-        meta = None
-        if json_str != "":
-            meta = json.loads(json_str)
-            file_is_range_index, index_col, column_index_type = _parse_metadata(meta)
-            is_range_index &= file_is_range_index
+        meta = json.loads(json_str)
+        file_is_range_index, index_col, column_index_type = _parse_metadata(meta)
+        is_range_index &= file_is_range_index
 
-            if not file_is_range_index and index_col is not None \
-                    and index_col_names is None:
-                index_col_names = {}
-                for idx_col in index_col:
-                    for c in meta['columns']:
-                        if c['field_name'] == idx_col:
-                            index_col_names[idx_col] = c['name']
-
-    df = cudf.DataFrame._from_data(*data_from_unique_ptr(
-        move(c_result.tbl),
-        column_names=names
-    ))
-
-    update_struct_field_names(df, c_result.metadata.schema_info)
+        if not file_is_range_index and index_col is not None \
+                and index_col_names is None:
+            index_col_names = {}
+            for idx_col in index_col:
+                for c in meta['columns']:
+                    if c['field_name'] == idx_col:
+                        index_col_names[idx_col] = c['name']
 
     if meta is not None:
         # Book keep each column metadata as the order
@@ -256,9 +195,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     pa.parquet.read_metadata(
                         # Pyarrow cannot read directly from bytes
                         io.BytesIO(s) if isinstance(s, bytes) else s
-                    ) for s in (
-                        pa_buffers or filepaths_or_buffers
-                    )
+                    ) for s in filepaths_or_buffers
                 ]
 
                 filtered_idx = []
@@ -282,11 +219,15 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                 if len(filtered_idx) > 0:
                     idx = cudf.concat(filtered_idx)
                 else:
-                    idx = cudf.Index(cudf.core.column.column_empty(0))
+                    idx = cudf.Index._from_column(cudf.core.column.column_empty(0))
             else:
+                start = range_index_meta["start"] + skip_rows
+                stop = range_index_meta["stop"]
+                if nrows != -1:
+                    stop = start + nrows
                 idx = cudf.RangeIndex(
-                    start=range_index_meta['start'],
-                    stop=range_index_meta['stop'],
+                    start=start,
+                    stop=stop,
                     step=range_index_meta['step'],
                     name=range_index_meta['name']
                 )
@@ -296,7 +237,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             index_data = df[index_col]
             actual_index_names = list(index_col_names.values())
             if len(index_data._data) == 1:
-                idx = cudf.Index(
+                idx = cudf.Index._from_column(
                     index_data._data.columns[0],
                     name=actual_index_names[0]
                 )
@@ -311,10 +252,181 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             if use_pandas_metadata:
                 df.index.names = index_col
 
-    # Set column dtype for empty types.
     if len(df._data.names) == 0 and column_index_type is not None:
         df._data.label_dtype = cudf.dtype(column_index_type)
+
     return df
+
+
+def read_parquet_chunked(
+    filepaths_or_buffers,
+    columns=None,
+    row_groups=None,
+    use_pandas_metadata=True,
+    size_t chunk_read_limit=0,
+    size_t pass_read_limit=1024000000,
+    size_type nrows=-1,
+    int64_t skip_rows=0,
+    allow_mismatched_pq_schemas=False
+):
+    # Note: If this function ever takes accepts filters
+    # allow_range_index needs to be False when a filter is passed
+    # (see read_parquet)
+    allow_range_index = columns is not None and len(columns) != 0
+
+    reader = ChunkedParquetReader(
+        plc.io.SourceInfo(filepaths_or_buffers),
+        columns,
+        row_groups,
+        use_pandas_metadata=use_pandas_metadata,
+        chunk_read_limit=chunk_read_limit,
+        pass_read_limit=pass_read_limit,
+        skip_rows=skip_rows,
+        nrows=nrows,
+        allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
+    )
+
+    tbl_w_meta = reader.read_chunk()
+    column_names = tbl_w_meta.column_names(include_children=False)
+    child_names = tbl_w_meta.child_names
+    per_file_user_data = tbl_w_meta.per_file_user_data
+    concatenated_columns = tbl_w_meta.tbl.columns()
+
+    # save memory
+    del tbl_w_meta
+
+    cdef Table tbl
+    while reader.has_next():
+        tbl = reader.read_chunk().tbl
+
+        for i in range(tbl.num_columns()):
+            concatenated_columns[i] = plc.concatenate.concatenate(
+                [concatenated_columns[i], tbl._columns[i]]
+            )
+            # Drop residual columns to save memory
+            tbl._columns[i] = None
+
+    df = cudf.DataFrame._from_data(
+        *_data_from_columns(
+            columns=[Column.from_pylibcudf(plc) for plc in concatenated_columns],
+            column_names=column_names,
+            index_names=None
+        )
+    )
+    df = _process_metadata(df, column_names, child_names,
+                           per_file_user_data, row_groups,
+                           filepaths_or_buffers,
+                           allow_range_index, use_pandas_metadata,
+                           nrows=nrows, skip_rows=skip_rows)
+    return df
+
+
+cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
+                   use_pandas_metadata=True,
+                   Expression filters=None,
+                   size_type nrows=-1,
+                   int64_t skip_rows=0,
+                   allow_mismatched_pq_schemas=False):
+    """
+    Cython function to call into libcudf API, see `read_parquet`.
+
+    filters, if not None, should be an Expression that evaluates to a
+    boolean predicate as a function of columns being read.
+
+    See Also
+    --------
+    cudf.io.parquet.read_parquet
+    cudf.io.parquet.to_parquet
+    """
+
+    allow_range_index = True
+    if columns is not None and len(columns) == 0 or filters:
+        allow_range_index = False
+
+    # Read Parquet
+
+    tbl_w_meta = plc.io.parquet.read_parquet(
+        plc.io.SourceInfo(filepaths_or_buffers),
+        columns,
+        row_groups,
+        filters,
+        convert_strings_to_categories = False,
+        use_pandas_metadata = use_pandas_metadata,
+        skip_rows = skip_rows,
+        nrows = nrows,
+        allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
+    )
+
+    df = cudf.DataFrame._from_data(
+        *data_from_pylibcudf_io(tbl_w_meta)
+    )
+
+    df = _process_metadata(df, tbl_w_meta.column_names(include_children=False),
+                           tbl_w_meta.child_names, tbl_w_meta.per_file_user_data,
+                           row_groups, filepaths_or_buffers,
+                           allow_range_index, use_pandas_metadata,
+                           nrows=nrows, skip_rows=skip_rows)
+    return df
+
+cpdef read_parquet_metadata(filepaths_or_buffers):
+    """
+    Cython function to call into libcudf API, see `read_parquet_metadata`.
+
+    See Also
+    --------
+    cudf.io.parquet.read_parquet
+    cudf.io.parquet.to_parquet
+    """
+    cdef cudf_io_types.source_info source = make_source_info(filepaths_or_buffers)
+
+    args = move(source)
+
+    cdef parquet_metadata c_result
+
+    # Read Parquet metadata
+    with nogil:
+        c_result = move(parquet_metadata_reader(args))
+
+    # access and return results
+    num_rows = c_result.num_rows()
+    num_rowgroups = c_result.num_rowgroups()
+
+    # extract row group metadata and sanitize keys
+    row_group_metadata = [{k.decode(): v for k, v in metadata}
+                          for metadata in c_result.rowgroup_metadata()]
+
+    # read all column names including index column, if any
+    col_names = [info.name().decode() for info in c_result.schema().root().children()]
+
+    # access the Parquet file_footer to find the index
+    index_col = None
+    cdef unordered_map[string, string] file_footer = c_result.metadata()
+
+    # get index column name(s)
+    index_col_names = None
+    json_str = file_footer[b'pandas'].decode('utf-8')
+    meta = None
+    if json_str != "":
+        meta = json.loads(json_str)
+        file_is_range_index, index_col, _ = _parse_metadata(meta)
+        if not file_is_range_index and index_col is not None \
+                and index_col_names is None:
+            index_col_names = {}
+            for idx_col in index_col:
+                for c in meta['columns']:
+                    if c['field_name'] == idx_col:
+                        index_col_names[idx_col] = c['name']
+
+    # remove the index column from the list of column names
+    # only if index_col_names is not None
+    if index_col_names is not None:
+        col_names = [name for name in col_names if name not in index_col_names]
+
+    # num_columns = length of list(col_names)
+    num_columns = len(col_names)
+
+    # return the metadata
+    return num_rows, num_rowgroups, col_names, num_columns, row_group_metadata
 
 
 @acquire_spill_lock()
@@ -330,10 +442,16 @@ def write_parquet(
     object row_group_size_rows=None,
     object max_page_size_bytes=None,
     object max_page_size_rows=None,
+    object max_dictionary_size=None,
     object partitions_info=None,
     object force_nullable_schema=False,
     header_version="1.0",
     use_dictionary=True,
+    object skip_compression=None,
+    object column_encoding=None,
+    object column_type_length=None,
+    object output_as_binary=None,
+    write_arrow_schema=False,
 ):
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -384,7 +502,12 @@ def write_parquet(
         _set_col_metadata(
             table[name]._column,
             tbl_meta.column_metadata[i],
-            force_nullable_schema
+            force_nullable_schema,
+            None,
+            skip_compression,
+            column_encoding,
+            column_type_length,
+            output_as_binary
         )
 
     cdef map[string, string] tmp_user_data
@@ -408,8 +531,8 @@ def write_parquet(
             "Valid values are '1.0' and '2.0'"
         )
 
-    dict_policy = (
-        cudf_io_types.dictionary_policy.ALWAYS
+    cdef cudf_io_types.dictionary_policy dict_policy = (
+        cudf_io_types.dictionary_policy.ADAPTIVE
         if use_dictionary
         else cudf_io_types.dictionary_policy.NEVER
     )
@@ -433,6 +556,7 @@ def write_parquet(
         .write_v2_headers(header_version == "2.0")
         .dictionary_policy(dict_policy)
         .utc_timestamps(False)
+        .write_arrow_schema(write_arrow_schema)
         .build()
     )
     if partitions_info is not None:
@@ -459,6 +583,8 @@ def write_parquet(
         args.set_max_page_size_bytes(max_page_size_bytes)
     if max_page_size_rows is not None:
         args.set_max_page_size_rows(max_page_size_rows)
+    if max_dictionary_size is not None:
+        args.set_max_dictionary_size(max_dictionary_size)
 
     with nogil:
         out_metadata_c = move(parquet_writer(args))
@@ -502,7 +628,17 @@ cdef class ParquetWriter:
     max_page_size_rows: int, default 20000
         Maximum number of rows of each page of the output.
         By default, 20000 will be used.
-
+    max_dictionary_size: int, default 1048576
+        Maximum size of the dictionary page for each output column chunk. Dictionary
+        encoding for column chunks that exceeds this limit will be disabled.
+        By default, 1048576 (1MB) will be used.
+    use_dictionary : bool, default True
+        If ``True``, enable dictionary encoding for Parquet page data
+        subject to ``max_dictionary_size`` constraints.
+        If ``False``, disable dictionary encoding for Parquet page data.
+    store_schema : bool, default False
+        If ``True``, enable computing and writing arrow schema to Parquet
+        file footer's key-value metadata section for faithful round-tripping.
     See Also
     --------
     cudf.io.parquet.write_parquet
@@ -519,13 +655,19 @@ cdef class ParquetWriter:
     cdef size_type row_group_size_rows
     cdef size_t max_page_size_bytes
     cdef size_type max_page_size_rows
+    cdef size_t max_dictionary_size
+    cdef cudf_io_types.dictionary_policy dict_policy
+    cdef bool write_arrow_schema
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
                   object compression="snappy", str statistics="ROWGROUP",
                   int row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
                   int row_group_size_rows=1000000,
                   int max_page_size_bytes=524288,
-                  int max_page_size_rows=20000):
+                  int max_page_size_rows=20000,
+                  int max_dictionary_size=1048576,
+                  bool use_dictionary=True,
+                  bool store_schema=False):
         filepaths_or_buffers = (
             list(filepath_or_buffer)
             if is_list_like(filepath_or_buffer)
@@ -540,6 +682,13 @@ cdef class ParquetWriter:
         self.row_group_size_rows = row_group_size_rows
         self.max_page_size_bytes = max_page_size_bytes
         self.max_page_size_rows = max_page_size_rows
+        self.max_dictionary_size = max_dictionary_size
+        self.dict_policy = (
+            cudf_io_types.dictionary_policy.ADAPTIVE
+            if use_dictionary
+            else cudf_io_types.dictionary_policy.NEVER
+        )
+        self.write_arrow_schema = store_schema
 
     def write_table(self, table, object partitions_info=None):
         """ Writes a single table to the file """
@@ -657,8 +806,11 @@ cdef class ParquetWriter:
                 .row_group_size_rows(self.row_group_size_rows)
                 .max_page_size_bytes(self.max_page_size_bytes)
                 .max_page_size_rows(self.max_page_size_rows)
+                .max_dictionary_size(self.max_dictionary_size)
+                .write_arrow_schema(self.write_arrow_schema)
                 .build()
             )
+            args.set_dictionary_policy(self.dict_policy)
             self.writer.reset(new cpp_parquet_chunked_writer(args))
         self.initialized = True
 
@@ -715,15 +867,61 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
         raise ValueError("Unsupported `compression` type")
 
 
+cdef cudf_io_types.column_encoding _get_encoding_type(object encoding):
+    if encoding is None:
+        return cudf_io_types.column_encoding.USE_DEFAULT
+
+    enc = str(encoding).upper()
+    if enc == "PLAIN":
+        return cudf_io_types.column_encoding.PLAIN
+    elif enc == "DICTIONARY":
+        return cudf_io_types.column_encoding.DICTIONARY
+    elif enc == "DELTA_BINARY_PACKED":
+        return cudf_io_types.column_encoding.DELTA_BINARY_PACKED
+    elif enc == "DELTA_LENGTH_BYTE_ARRAY":
+        return cudf_io_types.column_encoding.DELTA_LENGTH_BYTE_ARRAY
+    elif enc == "DELTA_BYTE_ARRAY":
+        return cudf_io_types.column_encoding.DELTA_BYTE_ARRAY
+    elif enc == "BYTE_STREAM_SPLIT":
+        return cudf_io_types.column_encoding.BYTE_STREAM_SPLIT
+    elif enc == "USE_DEFAULT":
+        return cudf_io_types.column_encoding.USE_DEFAULT
+    else:
+        raise ValueError("Unsupported `column_encoding` type")
+
+
 cdef _set_col_metadata(
     Column col,
     column_in_metadata& col_meta,
     bool force_nullable_schema=False,
+    str path=None,
+    object skip_compression=None,
+    object column_encoding=None,
+    object column_type_length=None,
+    object output_as_binary=None,
 ):
+    need_path = (skip_compression is not None or column_encoding is not None or
+                 column_type_length is not None or output_as_binary is not None)
+    name = col_meta.get_name().decode('UTF-8') if need_path else None
+    full_path = path + "." + name if path is not None else name
+
     if force_nullable_schema:
         # Only set nullability if `force_nullable_schema`
         # is true.
         col_meta.set_nullability(True)
+
+    if skip_compression is not None and full_path in skip_compression:
+        col_meta.set_skip_compression(True)
+
+    if column_encoding is not None and full_path in column_encoding:
+        col_meta.set_encoding(_get_encoding_type(column_encoding[full_path]))
+
+    if column_type_length is not None and full_path in column_type_length:
+        col_meta.set_output_as_binary(True)
+        col_meta.set_type_length(column_type_length[full_path])
+
+    if output_as_binary is not None and full_path in output_as_binary:
+        col_meta.set_output_as_binary(True)
 
     if isinstance(col.dtype, cudf.StructDtype):
         for i, (child_col, name) in enumerate(
@@ -733,13 +931,26 @@ cdef _set_col_metadata(
             _set_col_metadata(
                 child_col,
                 col_meta.child(i),
-                force_nullable_schema
+                force_nullable_schema,
+                full_path,
+                skip_compression,
+                column_encoding,
+                column_type_length,
+                output_as_binary
             )
     elif isinstance(col.dtype, cudf.ListDtype):
+        if full_path is not None:
+            full_path = full_path + ".list"
+            col_meta.child(1).set_name("element".encode())
         _set_col_metadata(
             col.children[1],
             col_meta.child(1),
-            force_nullable_schema
+            force_nullable_schema,
+            full_path,
+            skip_compression,
+            column_encoding,
+            column_type_length,
+            output_as_binary
         )
     elif isinstance(col.dtype, cudf.core.dtypes.DecimalDtype):
         col_meta.set_decimal_precision(col.dtype.precision)

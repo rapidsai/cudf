@@ -13,9 +13,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 import pickle
 import warnings
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -23,14 +25,15 @@ import pandas as pd
 import cudf
 import cudf._lib.labeling
 import cudf.core.index
-from cudf._typing import DataFrameOrSeries
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
     GroupBy,
     SeriesGroupBy,
     _Grouping,
 )
-from cudf.core.tools.datetimes import _offset_alias_to_code, _unit_dtype_map
+
+if TYPE_CHECKING:
+    from cudf._typing import DataFrameOrSeries
 
 
 class _Resampler(GroupBy):
@@ -40,8 +43,10 @@ class _Resampler(GroupBy):
         by = _ResampleGrouping(obj, by)
         super().__init__(obj, by=by)
 
-    def agg(self, func):
-        result = super().agg(func)
+    def agg(self, func, *args, engine=None, engine_kwargs=None, **kwargs):
+        result = super().agg(
+            func, *args, engine=engine, engine_kwargs=engine_kwargs, **kwargs
+        )
         if len(self.grouping.bin_labels) != len(result):
             index = cudf.core.index.Index(
                 self.grouping.bin_labels, name=self.grouping.names[0]
@@ -140,7 +145,9 @@ class _ResampleGrouping(_Grouping):
     def keys(self):
         index = super().keys
         if self._freq is not None and isinstance(index, cudf.DatetimeIndex):
-            return cudf.DatetimeIndex._from_data(index._data, freq=self._freq)
+            return cudf.DatetimeIndex._from_column(
+                index._column, name=index.name, freq=self._freq
+            )
         return index
 
     def serialize(self):
@@ -247,47 +254,46 @@ class _ResampleGrouping(_Grouping):
         # column to have the same dtype, so we compute a `result_type`
         # and cast them both to that type.
         try:
-            result_type = np.dtype(
-                _unit_dtype_map[_offset_alias_to_code[offset.name]]
-            )
-        except KeyError:
+            result_type = np.dtype(f"datetime64[{offset.rule_code}]")
+            # TODO: Ideally, we can avoid one cast by having `date_range`
+            # generate timestamps of a given dtype.  Currently, it can
+            # only generate timestamps with 'ns' precision
+            cast_key_column = key_column.astype(result_type)
+            cast_bin_labels = bin_labels.astype(result_type)
+        except TypeError:
             # unsupported resolution (we don't support resolutions >s)
             # fall back to using datetime64[s]
             result_type = np.dtype("datetime64[s]")
-
-        # TODO: Ideally, we can avoid one cast by having `date_range`
-        # generate timestamps of a given dtype.  Currently, it can
-        # only generate timestamps with 'ns' precision
-        key_column = key_column.astype(result_type)
-        bin_labels = bin_labels.astype(result_type)
+            cast_key_column = key_column.astype(result_type)
+            cast_bin_labels = bin_labels.astype(result_type)
 
         # bin the key column:
         bin_numbers = cudf._lib.labeling.label_bins(
-            key_column,
-            left_edges=bin_labels[:-1]._column,
+            cast_key_column,
+            left_edges=cast_bin_labels[:-1]._column,
             left_inclusive=(closed == "left"),
-            right_edges=bin_labels[1:]._column,
+            right_edges=cast_bin_labels[1:]._column,
             right_inclusive=(closed == "right"),
         )
 
         if label == "right":
-            bin_labels = bin_labels[1:]
+            cast_bin_labels = cast_bin_labels[1:]
         else:
-            bin_labels = bin_labels[:-1]
+            cast_bin_labels = cast_bin_labels[:-1]
 
         # if we have more labels than bins, remove the extras labels:
         nbins = bin_numbers.max() + 1
-        if len(bin_labels) > nbins:
-            bin_labels = bin_labels[:nbins]
+        if len(cast_bin_labels) > nbins:
+            cast_bin_labels = cast_bin_labels[:nbins]
 
-        bin_labels.name = self.names[0]
-        self.bin_labels = bin_labels
+        cast_bin_labels.name = self.names[0]
+        self.bin_labels = cast_bin_labels
 
         # replace self._key_columns with the binned key column:
         self._key_columns = [
-            bin_labels._gather(bin_numbers, check_bounds=False)._column.astype(
-                result_type
-            )
+            cast_bin_labels._gather(
+                bin_numbers, check_bounds=False
+            )._column.astype(result_type)
         ]
 
 

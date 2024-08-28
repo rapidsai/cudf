@@ -78,10 +78,9 @@ struct orc_table_view {
  * Provides a container-like interface to iterate over rowgroup indices.
  */
 struct stripe_rowgroups {
-  uint32_t id;     // stripe id
-  uint32_t first;  // first rowgroup in the stripe
-  uint32_t size;   // number of rowgroups in the stripe
-  stripe_rowgroups(uint32_t id, uint32_t first, uint32_t size) : id{id}, first{first}, size{size} {}
+  size_type id;     // stripe id
+  size_type first;  // first rowgroup in the stripe
+  size_type size;   // number of rowgroups in the stripe
   [[nodiscard]] auto cbegin() const { return thrust::make_counting_iterator(first); }
   [[nodiscard]] auto cend() const { return thrust::make_counting_iterator(first + size); }
 };
@@ -91,8 +90,9 @@ struct stripe_rowgroups {
  */
 struct encoder_decimal_info {
   std::map<uint32_t, rmm::device_uvector<uint32_t>>
-    elem_sizes;                                        ///< Column index -> per-element size map
-  std::map<uint32_t, std::vector<uint32_t>> rg_sizes;  ///< Column index -> per-rowgroup size map
+    elem_sizes;  ///< Column index -> per-element size map
+  std::map<uint32_t, cudf::detail::host_vector<uint32_t>>
+    rg_sizes;  ///< Column index -> per-rowgroup size map
 };
 
 /**
@@ -125,7 +125,7 @@ class orc_streams {
  */
 struct file_segmentation {
   hostdevice_2dvector<rowgroup_rows> rowgroups;
-  std::vector<stripe_rowgroups> stripes;
+  cudf::detail::host_vector<stripe_rowgroups> stripes;
 
   auto num_rowgroups() const noexcept { return rowgroups.size().first; }
   auto num_stripes() const noexcept { return stripes.size(); }
@@ -227,6 +227,14 @@ struct encoded_footer_statistics {
   std::vector<ColStatsBlob> file_level;
 };
 
+enum class writer_state {
+  NO_DATA_WRITTEN,  // No table data has been written to the sink; if the writer is closed or
+                    // destroyed in this state, it should not write the footer.
+  DATA_WRITTEN,     // At least one table has been written to the sink; when the writer is closed,
+                    // it should write the footer.
+  CLOSED            // Writer has been closed; no further writes are allowed.
+};
+
 /**
  * @brief Implementation for ORC writer
  */
@@ -267,11 +275,6 @@ class writer::impl {
   ~impl();
 
   /**
-   * @brief Begins the chunked/streamed write process.
-   */
-  void init_state();
-
-  /**
    * @brief Writes a single subtable as part of a larger ORC file/table write.
    *
    * @param table The table information to be written
@@ -282,11 +285,6 @@ class writer::impl {
    * @brief Finishes the chunked/streamed write process.
    */
   void close();
-
-  /**
-   * @brief Skip writing the footer when closing/deleting the writer.
-   */
-  void skip_close() { _closed = true; }
 
  private:
   /**
@@ -363,7 +361,7 @@ class writer::impl {
   Footer _footer;
   Metadata _orc_meta;
   persisted_statistics _persisted_stripe_statistics;  // Statistics data saved between calls.
-  bool _closed = false;  // To track if the output has been written to sink.
+  writer_state _state = writer_state::NO_DATA_WRITTEN;
 };
 
 }  // namespace cudf::io::orc::detail

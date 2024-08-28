@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,15 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/transform.h>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @brief Creates a column of `type_id::BOOL8` elements by applying a predicate to every element
@@ -50,7 +52,7 @@ std::unique_ptr<column> true_if(InputIterator begin,
                                 size_type size,
                                 Predicate p,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   auto output =
     make_numeric_column(data_type(type_id::BOOL8), size, mask_state::UNALLOCATED, stream, mr);
@@ -68,14 +70,14 @@ std::unique_ptr<column> true_if(InputIterator begin,
 std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
                                               cudf::unary_operator op,
                                               rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr);
+                                              rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::is_valid
  */
 std::unique_ptr<cudf::column> is_valid(cudf::column_view const& input,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr);
+                                       rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::cast
@@ -83,21 +85,21 @@ std::unique_ptr<cudf::column> is_valid(cudf::column_view const& input,
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr);
+                             rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::is_nan
  */
 std::unique_ptr<column> is_nan(cudf::column_view const& input,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr);
+                               rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::is_not_nan
  */
 std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr);
+                                   rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
