@@ -28,7 +28,7 @@ main() {
 
     for lib in ${LIBS//,/ }; do
         lib=$(echo "$lib" | tr -d '""')
-        echo "Running tests for $lib"
+        echo "Running tests for library $lib"
 
         CUDA_MAJOR=$(if [ "$lib" = "tensorflow" ]; then echo "11"; else echo "12"; fi)
 
