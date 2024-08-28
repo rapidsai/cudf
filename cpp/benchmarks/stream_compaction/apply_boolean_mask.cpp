@@ -31,7 +31,7 @@ void calculate_bandwidth(nvbench::state& state)
   auto const n_cols       = static_cast<cudf::size_type>(state.get_int64("columns"));
   auto const percent_true = static_cast<cudf::size_type>(state.get_int64("hits"));
 
-  float const fraction              = percent_true / 100.f;
+  double const fraction             = percent_true / 100.0;
   cudf::size_type const output_size = fraction * n_rows;
   int64_t const mask_size = sizeof(bool) * n_rows + cudf::bitmask_allocation_size_bytes(n_rows);
   int64_t const validity_bytes_in =
@@ -61,7 +61,7 @@ void apply_boolean_mask_benchmark(nvbench::state& state, nvbench::type_list<Data
   auto const percent_true = static_cast<cudf::size_type>(state.get_int64("hits"));
 
   auto const input_type = cudf::type_to_id<DataType>();
-  data_profile profile  = data_profile_builder().cardinality(0).null_probability(0.).distribution(
+  data_profile profile  = data_profile_builder().cardinality(0).no_validity().distribution(
     input_type, distribution_id::UNIFORM, 0, 20);
 
   auto source_table =
@@ -82,8 +82,6 @@ void apply_boolean_mask_benchmark(nvbench::state& state, nvbench::type_list<Data
   set_throughputs(state);
 }
 
-// using data_type = nvbench::type_list<int8_t, int16_t, int32_t, int64_t, double,
-// cudf::string_view>;
 using data_type = nvbench::type_list<int32_t, int64_t, double, cudf::string_view>;
 NVBENCH_BENCH_TYPES(apply_boolean_mask_benchmark, NVBENCH_TYPE_AXES(data_type))
   .set_name("apply_boolean_mask")
