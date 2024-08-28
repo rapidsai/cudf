@@ -115,7 +115,6 @@ ignore = [
   # tryceratops
   "TRY003", # Avoid specifying long messages outside the exception class
   # pyupgrade
-  "UP035",  # Import from `collections.abc` instead: `Callable`
   "UP038",  # Use `X | Y` in `isinstance` call instead of `(X, Y)`
   # Lints below are turned off because of conflicts with the ruff
   # formatter

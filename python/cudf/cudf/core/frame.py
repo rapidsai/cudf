@@ -6,7 +6,7 @@ import operator
 import pickle
 import warnings
 from collections import abc
-from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping
+from typing import TYPE_CHECKING, Any, Literal, MutableMapping
 
 # TODO: The `numpy` import is needed for typing purposes during doc builds
 # only, need to figure out why the `np` alias is insufficient then remove.
@@ -403,7 +403,7 @@ class Frame(BinaryOperand, Scannable):
     @_performance_tracking
     def _to_array(
         self,
-        get_array: Callable,
+        get_array: abc.Callable,
         module: ModuleType,
         copy: bool,
         dtype: Dtype | None = None,

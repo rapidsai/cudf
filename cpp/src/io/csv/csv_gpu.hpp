@@ -199,7 +199,7 @@ device_span<uint64_t> remove_blank_rows(cudf::io::parse_options_view const& opti
  *
  * @return stats Histogram of each dtypes' occurrence for each column
  */
-std::vector<column_type_histogram> detect_column_types(
+cudf::detail::host_vector<column_type_histogram> detect_column_types(
   cudf::io::parse_options_view const& options,
   device_span<char const> data,
   device_span<column_parse::flags const> column_flags,

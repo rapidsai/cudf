@@ -10,7 +10,7 @@ import warnings
 from collections import defaultdict
 from contextlib import ExitStack
 from functools import partial, reduce
-from typing import Callable
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import numpy as np
@@ -24,6 +24,10 @@ from cudf.core.column import as_column, column_empty
 from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 BYTE_SIZES = {
     "kb": 1000,
