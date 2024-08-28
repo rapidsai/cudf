@@ -32,9 +32,6 @@ endif()
 
 unset(cudf_FOUND)
 
-# For wheels, this should always be true
-set(USE_LIBARROW_FROM_PYARROW ON)
-
 # Find Python early so that later commands can use it
 find_package(Python 3.10 REQUIRED COMPONENTS Interpreter)
 
@@ -46,13 +43,11 @@ set(CUDA_STATIC_RUNTIME ON)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
-include(../pylibcudf/cmake/Modules/LinkPyarrowHeaders.cmake)
-
 add_subdirectory(../../cpp cudf-cpp)
 
 # Ensure other libraries needed by libcudf.so get installed alongside it.
 include(cmake/Modules/WheelHelpers.cmake)
 install_aliased_imported_targets(
-  TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp
-  DESTINATION ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+  TARGETS cudf nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp DESTINATION
+  ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
 )
