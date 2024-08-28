@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import itertools
+import signal
 import string
 from collections import abc
 from contextlib import contextmanager
@@ -368,3 +369,23 @@ def sv_to_udf_str_testing_lowering(context, builder, sig, args):
     return cast_string_view_to_udf_string(
         context, builder, sig.args[0], sig.return_type, args[0]
     )
+
+
+class cudf_timeout:
+    """
+    Context manager to raise a TimeoutError after a specified number of seconds.
+    """
+
+    def __init__(self, seconds, *, timeout_message=""):
+        self.seconds = int(seconds)
+        self.timeout_message = timeout_message
+
+    def _timeout_handler(self, signum, frame):
+        raise TimeoutError(self.timeout_message)
+
+    def __enter__(self):
+        signal.signal(signal.SIGALRM, self._timeout_handler)
+        signal.alarm(self.seconds)
+
+    def __exit__(self, type, value, traceback):
+        signal.alarm(0)

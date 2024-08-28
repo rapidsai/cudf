@@ -6,7 +6,7 @@ import itertools
 import sys
 from collections import abc
 from functools import cached_property, reduce
-from typing import TYPE_CHECKING, Any, Callable, Mapping
+from typing import TYPE_CHECKING, Any, Mapping, cast
 
 import numpy as np
 import pandas as pd
@@ -35,7 +35,7 @@ class _NestedGetItemDict(dict):
     """
 
     @classmethod
-    def from_zip(cls, data):
+    def from_zip(cls, data: abc.Iterator):
         """Create from zip, specialized factory for nesting."""
         obj = cls()
         for key, value in data:
@@ -91,12 +91,12 @@ class ColumnAccessor(abc.MutableMapping):
         column length and data.values() are all Columns
     """
 
-    _data: dict[Any, ColumnBase]
-    _level_names: tuple[Any, ...]
+    _data: dict[abc.Hashable, ColumnBase]
+    _level_names: tuple[abc.Hashable, ...]
 
     def __init__(
         self,
-        data: abc.MutableMapping[Any, ColumnBase] | Self,
+        data: abc.MutableMapping[abc.Hashable, ColumnBase] | Self,
         multiindex: bool = False,
         level_names=None,
         rangeindex: bool = False,
@@ -141,16 +141,16 @@ class ColumnAccessor(abc.MutableMapping):
                 f"data must be a ColumnAccessor or MutableMapping, not {type(data).__name__}"
             )
 
-    def __iter__(self):
+    def __iter__(self) -> abc.Iterator:
         return iter(self._data)
 
-    def __getitem__(self, key: Any) -> ColumnBase:
+    def __getitem__(self, key: abc.Hashable) -> ColumnBase:
         return self._data[key]
 
-    def __setitem__(self, key: Any, value: ColumnBase) -> None:
+    def __setitem__(self, key: abc.Hashable, value: ColumnBase) -> None:
         self.set_by_label(key, value)
 
-    def __delitem__(self, key: Any) -> None:
+    def __delitem__(self, key: abc.Hashable) -> None:
         old_ncols = len(self._data)
         del self._data[key]
         new_ncols = len(self._data)
@@ -186,7 +186,7 @@ class ColumnAccessor(abc.MutableMapping):
             Whether to verify column length and type.
         """
         if sys.version_info.major >= 3 and sys.version_info.minor >= 10:
-            data = zip(self.names, columns, strict=True)
+            data = zip(self.names, columns, strict=True)  # type: ignore[call-overload]
         else:
             columns = list(columns)
             if len(columns) != len(self.names):
@@ -205,7 +205,7 @@ class ColumnAccessor(abc.MutableMapping):
         )
 
     @property
-    def level_names(self) -> tuple[Any, ...]:
+    def level_names(self) -> tuple[abc.Hashable, ...]:
         if self._level_names is None or len(self._level_names) == 0:
             return tuple((None,) * max(1, self.nlevels))
         else:
@@ -221,7 +221,7 @@ class ColumnAccessor(abc.MutableMapping):
             return len(next(iter(self.keys())))
 
     @property
-    def name(self) -> Any:
+    def name(self) -> abc.Hashable:
         return self.level_names[-1]
 
     @cached_property
@@ -232,7 +232,7 @@ class ColumnAccessor(abc.MutableMapping):
             return len(next(iter(self.values())))
 
     @cached_property
-    def names(self) -> tuple[Any, ...]:
+    def names(self) -> tuple[abc.Hashable, ...]:
         return tuple(self.keys())
 
     @cached_property
@@ -291,7 +291,7 @@ class ColumnAccessor(abc.MutableMapping):
                     )
                 elif cudf.api.types.infer_dtype(self.names) == "integer":
                     if len(self.names) == 1:
-                        start = self.names[0]
+                        start = cast(int, self.names[0])
                         return pd.RangeIndex(
                             start=start, stop=start + 1, step=1, name=self.name
                         )
@@ -299,7 +299,9 @@ class ColumnAccessor(abc.MutableMapping):
                     if len(uniques) == 1 and uniques[0] != 0:
                         diff = uniques[0]
                         new_range = range(
-                            self.names[0], self.names[-1] + diff, diff
+                            cast(int, self.names[0]),
+                            cast(int, self.names[-1]) + diff,
+                            diff,
                         )
                         return pd.RangeIndex(new_range, name=self.name)
             result = pd.Index(
@@ -310,7 +312,9 @@ class ColumnAccessor(abc.MutableMapping):
             )
         return result
 
-    def insert(self, name: Any, value: ColumnBase, loc: int = -1) -> None:
+    def insert(
+        self, name: abc.Hashable, value: ColumnBase, loc: int = -1
+    ) -> None:
         """
         Insert column into the ColumnAccessor at the specified location.
 
@@ -457,7 +461,7 @@ class ColumnAccessor(abc.MutableMapping):
             verify=False,
         )
 
-    def swaplevel(self, i=-2, j=-1) -> Self:
+    def swaplevel(self, i: abc.Hashable = -2, j: abc.Hashable = -1) -> Self:
         """
         Swap level i with level j.
         Calling this method does not change the ordering of the values.
@@ -486,7 +490,7 @@ class ColumnAccessor(abc.MutableMapping):
 
         # swap old keys for i and j
         for n, row in enumerate(self.names):
-            new_keys[n][i], new_keys[n][j] = row[j], row[i]
+            new_keys[n][i], new_keys[n][j] = row[j], row[i]  # type: ignore[call-overload, index]
             new_dict.update({row: tuple(new_keys[n])})
 
         # TODO: Change to deep=False when copy-on-write is default
@@ -494,10 +498,10 @@ class ColumnAccessor(abc.MutableMapping):
 
         # swap level_names for i and j
         new_names = list(self.level_names)
-        new_names[i], new_names[j] = new_names[j], new_names[i]
+        new_names[i], new_names[j] = new_names[j], new_names[i]  # type: ignore[call-overload]
 
         return type(self)(
-            new_data,
+            new_data,  # type: ignore[arg-type]
             multiindex=self.multiindex,
             level_names=new_names,
             rangeindex=self.rangeindex,
@@ -505,7 +509,7 @@ class ColumnAccessor(abc.MutableMapping):
             verify=False,
         )
 
-    def set_by_label(self, key: Any, value: ColumnBase) -> None:
+    def set_by_label(self, key: abc.Hashable, value: ColumnBase) -> None:
         """
         Add (or modify) column by name.
 
@@ -555,7 +559,7 @@ class ColumnAccessor(abc.MutableMapping):
             verify=False,
         )
 
-    def _select_by_label_grouped(self, key: Any) -> Self:
+    def _select_by_label_grouped(self, key: abc.Hashable) -> Self:
         result = self._grouped_data[key]
         if isinstance(result, column.ColumnBase):
             # self._grouped_data[key] = self._data[key] so skip validation
@@ -606,8 +610,12 @@ class ColumnAccessor(abc.MutableMapping):
         )
 
     def _select_by_label_with_wildcard(self, key: tuple) -> Self:
-        key = self._pad_key(key, slice(None))
-        data = {k: self._data[k] for k in self.names if _keys_equal(k, key)}
+        pad_key = self._pad_key(key, slice(None))
+        data = {
+            k: self._data[k]
+            for k in self.names
+            if _keys_equal(k, pad_key)  # type: ignore[arg-type]
+        }
         return type(self)(
             data,
             multiindex=self.multiindex,
@@ -616,7 +624,9 @@ class ColumnAccessor(abc.MutableMapping):
             verify=False,
         )
 
-    def _pad_key(self, key: Any, pad_value="") -> Any:
+    def _pad_key(
+        self, key: abc.Hashable, pad_value: str | slice = ""
+    ) -> abc.Hashable:
         """
         Pad the provided key to a length equal to the number
         of levels.
@@ -628,7 +638,9 @@ class ColumnAccessor(abc.MutableMapping):
         return key + (pad_value,) * (self.nlevels - len(key))
 
     def rename_levels(
-        self, mapper: Mapping[Any, Any] | Callable, level: int | None = None
+        self,
+        mapper: Mapping[abc.Hashable, abc.Hashable] | abc.Callable,
+        level: int | None = None,
     ) -> Self:
         """
         Rename the specified levels of the given ColumnAccessor
@@ -701,14 +713,14 @@ class ColumnAccessor(abc.MutableMapping):
             verify=False,
         )
 
-    def droplevel(self, level) -> None:
+    def droplevel(self, level: int) -> None:
         # drop the nth level
         if level < 0:
             level += self.nlevels
 
         old_ncols = len(self._data)
         self._data = {
-            _remove_key_level(key, level): value
+            _remove_key_level(key, level): value  # type: ignore[arg-type]
             for key, value in self._data.items()
         }
         new_ncols = len(self._data)
@@ -722,7 +734,7 @@ class ColumnAccessor(abc.MutableMapping):
         self._clear_cache(old_ncols, new_ncols)
 
 
-def _keys_equal(target: Any, key: Any) -> bool:
+def _keys_equal(target: abc.Hashable, key: abc.Iterable) -> bool:
     """
     Compare `key` to `target`.
 
@@ -740,7 +752,7 @@ def _keys_equal(target: Any, key: Any) -> bool:
     return True
 
 
-def _remove_key_level(key: Any, level: int) -> Any:
+def _remove_key_level(key: tuple, level: int) -> abc.Hashable:
     """
     Remove a level from key. If detupleize is True, and if only a
     single level remains, convert the tuple to a scalar.
@@ -751,7 +763,9 @@ def _remove_key_level(key: Any, level: int) -> Any:
     return result
 
 
-def _get_level(x, nlevels, level_names):
+def _get_level(
+    x: abc.Hashable, nlevels: int, level_names: tuple[abc.Hashable, ...]
+) -> abc.Hashable:
     """Get the level index from a level number or name.
 
     If given an integer, this function will handle wraparound for

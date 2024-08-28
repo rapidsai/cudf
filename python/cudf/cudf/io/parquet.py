@@ -10,7 +10,7 @@ import warnings
 from collections import defaultdict
 from contextlib import ExitStack
 from functools import partial, reduce
-from typing import Callable
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import numpy as np
@@ -23,6 +23,10 @@ from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 BYTE_SIZES = {
     "kb": 1000,
@@ -329,39 +333,12 @@ def write_to_dataset(
 @_performance_tracking
 def read_parquet_metadata(filepath_or_buffer):
     """{docstring}"""
-    # Multiple sources are passed as a list. If a single source is passed,
-    # wrap it in a list for unified processing downstream.
-    if not is_list_like(filepath_or_buffer):
-        filepath_or_buffer = [filepath_or_buffer]
-
-    # Start by trying to construct a filesystem object
-    fs, paths = ioutils._get_filesystem_and_paths(
-        path_or_data=filepath_or_buffer, storage_options=None
-    )
-
-    # Check if filepath or buffer
-    filepath_or_buffer = paths if paths else filepath_or_buffer
 
     # List of filepaths or buffers
-    filepaths_or_buffers = []
-
-    for source in filepath_or_buffer:
-        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            fs=fs,
-            storage_options=None,
-            bytes_per_thread=None,
-        )
-
-        if compression is not None:
-            raise ValueError(
-                "URL content-encoding decompression is not supported"
-            )
-        if isinstance(tmp_source, list):
-            filepath_or_buffer.extend(tmp_source)
-        else:
-            filepaths_or_buffers.append(tmp_source)
+    filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
+        path_or_data=filepath_or_buffer,
+        bytes_per_thread=None,
+    )
 
     return libparquet.read_parquet_metadata(filepaths_or_buffers)
 
@@ -527,6 +504,7 @@ def read_parquet(
     engine="cudf",
     columns=None,
     storage_options=None,
+    filesystem=None,
     filters=None,
     row_groups=None,
     use_pandas_metadata=True,
@@ -567,7 +545,9 @@ def read_parquet(
     # Start by trying construct a filesystem object, so we
     # can apply filters on remote file-systems
     fs, paths = ioutils._get_filesystem_and_paths(
-        path_or_data=filepath_or_buffer, storage_options=storage_options
+        path_or_data=filepath_or_buffer,
+        storage_options=storage_options,
+        filesystem=filesystem,
     )
 
     # Normalize and validate filters
@@ -595,24 +575,12 @@ def read_parquet(
         )
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
-    filepaths_or_buffers = []
-    for source in filepath_or_buffer:
-        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            fs=fs,
-            storage_options=storage_options,
-            bytes_per_thread=bytes_per_thread,
-        )
-
-        if compression is not None:
-            raise ValueError(
-                "URL content-encoding decompression is not supported"
-            )
-        if isinstance(tmp_source, list):
-            filepath_or_buffer.extend(tmp_source)
-        else:
-            filepaths_or_buffers.append(tmp_source)
+    filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
+        path_or_data=filepath_or_buffer,
+        fs=fs,
+        storage_options=storage_options,
+        bytes_per_thread=bytes_per_thread,
+    )
 
     # Warn user if they are not using cudf for IO
     # (There is a good chance this was not the intention)

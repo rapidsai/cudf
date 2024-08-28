@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, Callable, Sequence, cast
+from typing import TYPE_CHECKING, Any, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -28,6 +28,8 @@ from cudf.utils.dtypes import (
 from .numerical_base import NumericalBaseColumn
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
@@ -142,7 +144,7 @@ class NumericalColumn(NumericalBaseColumn):
         """
 
         # Normalize value to scalar/column
-        device_value = (
+        device_value: cudf.Scalar | ColumnBase = (
             cudf.Scalar(
                 value,
                 dtype=self.dtype
@@ -552,7 +554,7 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> cudf.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
-            cudf_obj = cudf.Scalar(fill_value)
+            cudf_obj: cudf.Scalar | ColumnBase = cudf.Scalar(fill_value)
             if not as_column(cudf_obj).can_cast_safely(self.dtype):
                 raise TypeError(
                     f"Cannot safely cast non-equivalent "
