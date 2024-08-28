@@ -37,7 +37,7 @@ target_include_directories(
 
 add_library(
   tpch_data_generator STATIC
-  common/tpch_data_generator/tpch_datagen.cpp common/tpch_data_generator/table_helpers.cpp
+  common/tpch_data_generator/tpch_data_generator.cpp common/tpch_data_generator/table_helpers.cpp
   common/tpch_data_generator/random_column_generator.cu
 )
 target_compile_features(tpch_data_generator PUBLIC cxx_std_17 cuda_std_17)
