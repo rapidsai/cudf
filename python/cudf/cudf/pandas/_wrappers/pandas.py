@@ -61,6 +61,12 @@ from pandas.core.resample import (  # isort: skip
     TimeGrouper as pd_TimeGrouper,
 )
 
+try:
+    from IPython import get_ipython
+
+    ipython_shell = get_ipython()
+except ImportError:
+    ipython_shell = None
 
 cudf.set_option("mode.pandas_compatible", True)
 
@@ -208,6 +214,12 @@ def _DataFrame__dir__(self):
     ]
 
 
+def ignore_ipython_canary_check(self, **kwargs):
+    raise AttributeError(
+        "_ipython_canary_method_should_not_exist_ doesn't exist"
+    )
+
+
 DataFrame = make_final_proxy_type(
     "DataFrame",
     cudf.DataFrame,
@@ -220,8 +232,24 @@ DataFrame = make_final_proxy_type(
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
         "_accessors": set(),
+        "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
     },
 )
+
+
+def custom_repr_html(obj):
+    # This custom method is need to register a html format
+    # for ipython
+    return _fast_slow_function_call(
+        lambda obj: obj._repr_html_(),
+        obj,
+    )[0]
+
+
+if ipython_shell:
+    # See: https://ipython.readthedocs.io/en/stable/config/integrating.html#formatters-for-third-party-types
+    html_formatter = ipython_shell.display_formatter.formatters["text/html"]
+    html_formatter.for_type(DataFrame, custom_repr_html)
 
 
 Series = make_final_proxy_type(
