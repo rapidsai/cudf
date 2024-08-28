@@ -516,8 +516,7 @@ void launch_compute_aggregates(int grid_size,
                                cudf::aggregation::Kind const* aggs,
                                rmm::cuda_stream_view stream)
 {
-  auto compute_aggregates_fn_ptr = compute_aggregates;
-  size_t d_shmem_size            = find_shmem_size(compute_aggregates_fn_ptr, grid_size, num_sms);
+  size_t d_shmem_size = find_shmem_size(compute_aggregates, grid_size, num_sms);
   // For each aggregation, need two pointers to arrays in shmem
   // One where the aggregation is performed, one indicating the validity of the aggregation
   auto shmem_agg_pointer_size =
@@ -540,15 +539,13 @@ void launch_compute_aggregates(int grid_size,
  * @brief Computes all aggregations from `requests` that require a single pass
  * over the data and stores the results in `sparse_results`
  */
-template <typename SetType, typename KeyEqual, typename RowHasher>
+template <typename SetType>
 rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   cudf::table_view const& keys,
   cudf::host_span<cudf::groupby::aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   SetType& global_set,
-  rmm::cuda_stream_view stream,
-  KeyEqual d_key_equal,
-  RowHasher d_row_hash)
+  rmm::cuda_stream_view stream)
 {
   // GROUPBY_SHM_MAX_ELEMENTS with 0.7 occupancy
   auto constexpr shared_set_capacity =
@@ -568,12 +565,9 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
 
   auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
-  int num_sms                         = find_num_sms();
-  auto compute_mapping_indices_fn_ptr = compute_mapping_indices<shared_set_ref_type,
-                                                                decltype(global_set_ref),
-                                                                KeyEqual,
-                                                                RowHasher,
-                                                                decltype(window_extent)>;
+  int num_sms = find_num_sms();
+  auto compute_mapping_indices_fn_ptr =
+    compute_mapping_indices<shared_set_ref_type, decltype(global_set_ref), decltype(window_extent)>;
   auto const grid_size = find_grid_size(compute_mapping_indices_fn_ptr, num_input_rows, num_sms);
   // 'local_mapping_index' maps from the global row index of the input table to the row index of
   // the local pre-aggregate table
@@ -588,8 +582,6 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
     <<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream>>>(global_set_ref,
                                                    num_input_rows,
                                                    window_extent,
-                                                   d_key_equal,
-                                                   d_row_hash,
                                                    local_mapping_index.data(),
                                                    global_mapping_index.data(),
                                                    block_cardinality.data(),
@@ -729,8 +721,7 @@ std::unique_ptr<table> groupby(table_view const& keys,
       stream.value()};
 
     // Compute all single pass aggs first
-    auto gather_map = compute_single_pass_aggs(
-      keys, requests, &sparse_results, set, stream, d_key_equal, d_row_hash);
+    auto gather_map = compute_single_pass_aggs(keys, requests, &sparse_results, set, stream);
 
     // Compact all results from sparse_results and insert into cache
     sparse_to_dense_results(keys,

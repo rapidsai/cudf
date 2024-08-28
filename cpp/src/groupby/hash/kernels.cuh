@@ -246,16 +246,10 @@ __device__ void find_global_mapping(cudf::size_type cur_idx,
  * updating `global_set` or setting `global_mapping_index`. Else, we insert the unique keys found to
  * the global hash set, and save the row index of the global sparse table in `global_mapping_index`.
  */
-template <class SetRef,
-          typename GlobalSetType,
-          typename KeyEqual,
-          typename RowHasher,
-          class WindowExtent>
+template <class SetRef, typename GlobalSetType, class WindowExtent>
 CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
                                          cudf::size_type num_input_rows,
                                          WindowExtent window_extent,
-                                         KeyEqual d_key_equal,
-                                         RowHasher d_row_hash,
                                          cudf::size_type* local_mapping_index,
                                          cudf::size_type* global_mapping_index,
                                          cudf::size_type* block_cardinality,
@@ -267,8 +261,8 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
   __shared__ typename SetRef::window_type windows[window_extent.value()];
   auto storage     = SetRef::storage_ref_type(window_extent, windows);
   auto shared_set  = SetRef(cuco::empty_key<cudf::size_type>{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-                           d_key_equal,
-                           probing_scheme_type{d_row_hash},
+                           global_set.key_eq(),
+                           probing_scheme_type{global_set.hash_function()},
                             {},
                            storage);
   auto const block = cooperative_groups::this_thread_block();
