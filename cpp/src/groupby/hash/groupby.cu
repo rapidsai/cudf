@@ -472,22 +472,13 @@ auto create_sparse_results_table(cudf::table_view const& flattened_values,
   return sparse_table;
 }
 
-int find_num_sms()
-{
-  int dev_id{-1};
-  CUDF_CUDA_TRY(cudaGetDevice(&dev_id));
-  int num_sms{-1};
-  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
-  return num_sms;
-}
-
 template <typename FuncType>
-int find_grid_size(FuncType func, cudf::size_type num_input_rows, int num_sms)
+int find_grid_size(FuncType func, cudf::size_type num_input_rows)
 {
   int max_active_blocks{-1};
   CUDF_CUDA_TRY(
     cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_active_blocks, func, GROUPBY_BLOCK_SIZE, 0));
-  auto max_grid_size       = max_active_blocks * num_sms;
+  auto max_grid_size       = max_active_blocks * cudf::detail::num_multiprocessors();
   int needed_active_blocks = cudf::util::div_rounding_up_safe(num_input_rows, GROUPBY_BLOCK_SIZE);
   return std::min(max_grid_size, needed_active_blocks);
 }
@@ -495,9 +486,10 @@ int find_grid_size(FuncType func, cudf::size_type num_input_rows, int num_sms)
 size_t get_previous_multiple_of_8(size_t number) { return number / 8 * 8; }
 
 template <typename FuncType>
-size_t find_shmem_size(FuncType func, int grid_size, int num_sms)
+size_t find_shmem_size(FuncType func, int grid_size)
 {
-  auto active_blocks_per_sm = cudf::util::div_rounding_up_safe(grid_size, num_sms);
+  auto active_blocks_per_sm =
+    cudf::util::div_rounding_up_safe(grid_size, cudf::detail::num_multiprocessors());
 
   size_t dynamic_smem_size;
   CUDF_CUDA_TRY(cudaOccupancyAvailableDynamicSMemPerBlock(
@@ -506,7 +498,6 @@ size_t find_shmem_size(FuncType func, int grid_size, int num_sms)
 }
 
 void launch_compute_aggregates(int grid_size,
-                               int num_sms,
                                cudf::size_type* local_mapping_index,
                                cudf::size_type* global_mapping_index,
                                cudf::size_type* block_cardinality,
@@ -516,7 +507,7 @@ void launch_compute_aggregates(int grid_size,
                                cudf::aggregation::Kind const* aggs,
                                rmm::cuda_stream_view stream)
 {
-  size_t d_shmem_size = find_shmem_size(compute_aggregates, grid_size, num_sms);
+  size_t d_shmem_size = find_shmem_size(compute_aggregates, grid_size);
   // For each aggregation, need two pointers to arrays in shmem
   // One where the aggregation is performed, one indicating the validity of the aggregation
   auto shmem_agg_pointer_size =
@@ -565,10 +556,10 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
 
   auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
-  int num_sms = find_num_sms();
   auto compute_mapping_indices_fn_ptr =
     compute_mapping_indices<shared_set_ref_type, decltype(global_set_ref), decltype(window_extent)>;
-  auto const grid_size = find_grid_size(compute_mapping_indices_fn_ptr, num_input_rows, num_sms);
+  auto const grid_size = find_grid_size(
+    compute_mapping_indices_fn_ptr, num_input_rows, cudf::detail::num_multiprocessors());
   // 'local_mapping_index' maps from the global row index of the input table to the row index of
   // the local pre-aggregate table
   rmm::device_uvector<cudf::size_type> local_mapping_index(num_input_rows, stream);
@@ -609,7 +600,6 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   auto d_values = table_device_view::create(flattened_values, stream);
 
   launch_compute_aggregates(grid_size,
-                            num_sms,
                             local_mapping_index.data(),
                             global_mapping_index.data(),
                             block_cardinality.data(),
