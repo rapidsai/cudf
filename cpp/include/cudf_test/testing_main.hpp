@@ -161,7 +161,7 @@ inline auto make_memory_resource_adaptor(cxxopts::ParseResult const& cmd_opts)
 {
   auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();
   auto resource       = cudf::test::create_memory_resource(rmm_mode);
-  rmm::mr::set_current_device_resource(resource.get());
+  cudf::set_current_device_resource(resource.get());
   return resource;
 }
 
@@ -186,7 +186,7 @@ inline auto make_stream_mode_adaptor(cxxopts::ParseResult const& cmd_opts)
   auto adaptor                       = cudf::test::stream_checking_resource_adaptor(
     resource, error_on_invalid_stream, check_default_stream);
   if ((stream_mode == "new_cudf_default") || (stream_mode == "new_testing_default")) {
-    rmm::mr::set_current_device_resource(&adaptor);
+    cudf::set_current_device_resource(&adaptor);
   }
   return adaptor;
 }

@@ -28,7 +28,6 @@
 #include <rmm/mr/device/logging_resource_adaptor.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 
@@ -1002,7 +1001,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCurrentDeviceResourceInternal(
   try {
     cudf::jni::auto_set_device(env);
     auto mr = reinterpret_cast<rmm::mr::device_memory_resource*>(new_handle);
-    rmm::mr::set_current_device_resource(mr);
+    cudf::set_current_device_resource(mr);
   }
   CATCH_STD(env, )
 }

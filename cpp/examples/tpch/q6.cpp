@@ -65,7 +65,7 @@ int main(int argc, char const** argv)
 
   // Use a memory pool
   auto resource = create_memory_resource(args.memory_resource_type);
-  rmm::mr::set_current_device_resource(resource.get());
+  cudf::set_current_device_resource(resource.get());
 
   cudf::examples::timer timer;
 
