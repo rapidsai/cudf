@@ -499,12 +499,12 @@ size_t compute_shared_memory_size(Kernel kernel, int grid_size)
 }
 
 void compute_aggregations(int grid_size,
+                          cudf::size_type num_input_rows,
                           cudf::size_type* local_mapping_index,
                           cudf::size_type* global_mapping_index,
                           cudf::size_type* block_cardinality,
                           cudf::table_device_view input_values,
                           cudf::mutable_table_device_view output_values,
-                          cudf::size_type num_input_rows,
                           cudf::aggregation::Kind const* aggs,
                           rmm::cuda_stream_view stream)
 {
@@ -516,12 +516,12 @@ void compute_aggregations(int grid_size,
   // The rest of shmem is utilized for the actual arrays in shmem
   auto shmem_agg_size = shmem_size - shmem_agg_pointer_size * 2;
   compute_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, shmem_size, stream>>>(
+    num_input_rows,
     local_mapping_index,
     global_mapping_index,
     block_cardinality,
     input_values,
     output_values,
-    num_input_rows,
     aggs,
     shmem_agg_size,
     shmem_agg_pointer_size);
@@ -600,12 +600,12 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   auto d_values = table_device_view::create(flattened_values, stream);
 
   compute_aggregations(grid_size,
+                       num_input_rows,
                        local_mapping_index.data(),
                        global_mapping_index.data(),
                        block_cardinality.data(),
                        *d_values,
                        *d_sparse_table,
-                       num_input_rows,
                        d_aggs.data(),
                        stream);
 

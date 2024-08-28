@@ -132,42 +132,47 @@ __device__ void compute_final_aggregates(int col_start,
 
 /* Takes the local_mapping_index and global_mapping_index to compute
  * pre (shared) and final (global) aggregates*/
-CUDF_KERNEL void compute_aggs_kernel(cudf::size_type* local_mapping_index,
+CUDF_KERNEL void compute_aggs_kernel(cudf::size_type num_rows,
+                                     cudf::size_type* local_mapping_index,
                                      cudf::size_type* global_mapping_index,
                                      cudf::size_type* block_cardinality,
                                      cudf::table_device_view input_values,
                                      cudf::mutable_table_device_view output_values,
-                                     cudf::size_type num_input_rows,
                                      cudf::aggregation::Kind const* aggs,
                                      int total_agg_size,
                                      int pointer_size)
 {
-  cudf::size_type cardinality = block_cardinality[blockIdx.x];
+  auto const block       = cooperative_groups::this_thread_block();
+  auto const cardinality = block_cardinality[block.group_index().x];
   if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD) { return; }
-  int num_input_cols = output_values.num_columns();
+
+  auto const num_cols = output_values.num_columns();
+
+  __shared__ int col_start;
+  __shared__ int col_end;
   extern __shared__ std::byte shared_set_aggregates[];
   std::byte** s_aggregates_pointer =
     reinterpret_cast<std::byte**>(shared_set_aggregates + total_agg_size);
   bool** s_aggregates_valid_pointer =
     reinterpret_cast<bool**>(shared_set_aggregates + total_agg_size + pointer_size);
-  __shared__ int col_start;
-  __shared__ int col_end;
-  if (threadIdx.x == 0) {
+
+  if (block.thread_rank() == 0) {
     col_start = 0;
     col_end   = 0;
   }
-  __syncthreads();
-  while (col_end < num_input_cols) {
+  block.sync();
+
+  while (col_end < num_cols) {
     calculate_columns_to_aggregate(col_start,
                                    col_end,
                                    output_values,
-                                   num_input_cols,
+                                   num_cols,
                                    s_aggregates_pointer,
                                    s_aggregates_valid_pointer,
                                    shared_set_aggregates,
                                    cardinality,
                                    total_agg_size);
-    __syncthreads();
+    block.sync();
     initialize_shared_memory_aggregates(col_start,
                                         col_end,
                                         output_values,
@@ -175,16 +180,16 @@ CUDF_KERNEL void compute_aggs_kernel(cudf::size_type* local_mapping_index,
                                         s_aggregates_valid_pointer,
                                         cardinality,
                                         aggs);
-    __syncthreads();
+    block.sync();
     compute_pre_aggregrates(col_start,
                             col_end,
                             input_values,
-                            num_input_rows,
+                            num_rows,
                             local_mapping_index,
                             s_aggregates_pointer,
                             s_aggregates_valid_pointer,
                             aggs);
-    __syncthreads();
+    block.sync();
     compute_final_aggregates(col_start,
                              col_end,
                              input_values,
@@ -194,7 +199,7 @@ CUDF_KERNEL void compute_aggs_kernel(cudf::size_type* local_mapping_index,
                              s_aggregates_pointer,
                              s_aggregates_valid_pointer,
                              aggs);
-    __syncthreads();
+    block.sync();
   }
 }
 
