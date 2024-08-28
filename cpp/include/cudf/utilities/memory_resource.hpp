@@ -101,19 +101,19 @@ inline device_memory_resource* set_current_device_resource(device_memory_resourc
  * @param mr The new device memory resource reference.
  * @return The previous device memory resource reference.
  */
-inline device_async_resource_ref set_current_device_resource_ref(device_async_resource_ref mr)
+/*inline device_async_resource_ref set_current_device_resource_ref(device_async_resource_ref mr)
 {
   return rmm::mr::set_current_device_resource_ref(mr);
-}
+}*/
 
 /**
  * @brief Reset the current device memory resource reference to the initial resource.
  *
  * @return The previous device memory resource reference.
  */
-inline device_async_resource_ref reset_current_device_resource_ref()
+/*inline device_async_resource_ref reset_current_device_resource_ref()
 {
   return rmm::mr::reset_current_device_resource_ref();
-}
+}*/
 
 }  // namespace cudf
