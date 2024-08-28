@@ -15,7 +15,7 @@ from cudf import _lib as libcudf
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
-from cudf.api.types import is_integer_dtype, is_scalar
+from cudf.api.types import is_scalar
 from cudf.core.buffer import as_buffer
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import (
@@ -31,13 +31,37 @@ from .numerical_base import NumericalBaseColumn
 
 if TYPE_CHECKING:
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
+    from cudf.core.buffer import Buffer
 
 
 class DecimalBaseColumn(NumericalBaseColumn):
     """Base column for decimal32, decimal64 or decimal128 columns"""
 
-    dtype: DecimalDtype
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
+
+    def __init__(
+        self,
+        data: Buffer,
+        size: int,
+        dtype: DecimalDtype,
+        mask: Buffer | None = None,
+        offset: int = 0,
+        null_count: int | None = None,
+        children: tuple = (),
+    ):
+        if not isinstance(size, int):
+            raise ValueError("Must specify an integer size")
+        if not isinstance(dtype, DecimalDtype):
+            raise ValueError(f"{dtype=} must be a DecimalDtype instance")
+        super().__init__(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
+        )
 
     @property
     def __cuda_array_interface__(self):
@@ -62,9 +86,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return self
         return libcudf.unary.cast(self, dtype)
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
+    def as_string_column(self) -> cudf.core.column.StringColumn:
         if len(self) > 0:
             return cpp_from_decimal(self)
         else:
@@ -113,9 +135,15 @@ class DecimalBaseColumn(NumericalBaseColumn):
         # are computed outside of libcudf
         if op in {"__add__", "__sub__", "__mul__", "__div__"}:
             output_type = _get_decimal_type(lhs.dtype, rhs.dtype, op)
+            lhs = lhs.astype(
+                type(output_type)(lhs.dtype.precision, lhs.dtype.scale)
+            )
+            rhs = rhs.astype(
+                type(output_type)(rhs.dtype.precision, rhs.dtype.scale)
+            )
             result = libcudf.binaryop.binaryop(lhs, rhs, op, output_type)
-            # TODO:  Why is this necessary? Why isn't the result's
-            # precision already set correctly based on output_type?
+            # libcudf doesn't support precision, so result.dtype doesn't
+            # maintain output_type.precision
             result.dtype.precision = output_type.precision
         elif op in {
             "__eq__",
@@ -152,12 +180,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def normalize_binop_value(self, other):
         if isinstance(other, ColumnBase):
             if isinstance(other, cudf.core.column.NumericalColumn):
-                if not is_integer_dtype(other.dtype):
+                if other.dtype.kind not in "iu":
                     raise TypeError(
                         "Decimal columns only support binary operations with "
                         "integer numerical columns."
                     )
-                other = other.as_decimal_column(
+                other = other.astype(
                     self.dtype.__class__(self.dtype.__class__.MAX_PRECISION, 0)
                 )
             elif not isinstance(other, DecimalBaseColumn):
@@ -207,7 +235,27 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
 
 class Decimal32Column(DecimalBaseColumn):
-    dtype: Decimal32Dtype
+    def __init__(
+        self,
+        data: Buffer,
+        size: int,
+        dtype: Decimal32Dtype,
+        mask: Buffer | None = None,
+        offset: int = 0,
+        null_count: int | None = None,
+        children: tuple = (),
+    ):
+        if not isinstance(dtype, Decimal32Dtype):
+            raise ValueError(f"{dtype=} must be a Decimal32Dtype instance")
+        super().__init__(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
+        )
 
     @classmethod
     def from_arrow(cls, data: pa.Array):
@@ -268,7 +316,27 @@ class Decimal32Column(DecimalBaseColumn):
 
 
 class Decimal128Column(DecimalBaseColumn):
-    dtype: Decimal128Dtype
+    def __init__(
+        self,
+        data: Buffer,
+        size: int,
+        dtype: Decimal128Dtype,
+        mask: Buffer | None = None,
+        offset: int = 0,
+        null_count: int | None = None,
+        children: tuple = (),
+    ):
+        if not isinstance(dtype, Decimal128Dtype):
+            raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
+        super().__init__(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
+        )
 
     @classmethod
     def from_arrow(cls, data: pa.Array):
@@ -289,7 +357,27 @@ class Decimal128Column(DecimalBaseColumn):
 
 
 class Decimal64Column(DecimalBaseColumn):
-    dtype: Decimal64Dtype
+    def __init__(
+        self,
+        data: Buffer,
+        size: int,
+        dtype: Decimal64Dtype,
+        mask: Buffer | None = None,
+        offset: int = 0,
+        null_count: int | None = None,
+        children: tuple = (),
+    ):
+        if not isinstance(dtype, Decimal64Dtype):
+            raise ValueError(f"{dtype=} must be a Decimal64Dtype instance")
+        super().__init__(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
+        )
 
     def __setitem__(self, key, value):
         if isinstance(value, np.integer):
@@ -348,7 +436,11 @@ class Decimal64Column(DecimalBaseColumn):
         return self
 
 
-def _get_decimal_type(lhs_dtype, rhs_dtype, op):
+def _get_decimal_type(
+    lhs_dtype: DecimalDtype,
+    rhs_dtype: DecimalDtype,
+    op: str,
+) -> DecimalDtype:
     """
     Returns the resulting decimal type after calculating
     precision & scale when performing the binary operation
@@ -359,6 +451,7 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
 
     # This should at some point be hooked up to libcudf's
     # binary_operation_fixed_point_scale
+    # Note: libcudf decimal types don't have a concept of precision
 
     p1, p2 = lhs_dtype.precision, rhs_dtype.precision
     s1, s2 = lhs_dtype.scale, rhs_dtype.scale

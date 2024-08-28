@@ -41,7 +41,7 @@ std::unique_ptr<cudf::column> self_comparison(cudf::table_view input,
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), input.num_rows(), cudf::mask_state::UNALLOCATED);
 
-  if (cudf::detail::has_nested_columns(input)) {
+  if (cudf::has_nested_columns(input)) {
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(input.num_rows()),

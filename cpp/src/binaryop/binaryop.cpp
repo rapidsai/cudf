@@ -41,7 +41,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-#include <thrust/optional.h>
+#include <cuda/std/optional>
 
 #include <jit_preprocessed_files/binaryop/jit/kernel.cu.jit.hpp>
 
@@ -49,6 +49,11 @@
 
 namespace cudf {
 namespace binops {
+
+bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op)
+{
+  return cudf::binops::compiled::is_supported_operation(out, lhs, rhs, op);
+}
 
 /**
  * @brief Computes output valid mask for op between a column and a scalar
@@ -168,7 +173,7 @@ template <typename Lhs, typename Rhs>
 void fixed_point_binary_operation_validation(binary_operator op,
                                              Lhs lhs,
                                              Rhs rhs,
-                                             thrust::optional<cudf::data_type> output_type = {})
+                                             cuda::std::optional<cudf::data_type> output_type = {})
 {
   CUDF_EXPECTS((is_fixed_point(lhs) or is_fixed_point(rhs)),
                "One of the inputs must have fixed_point data_type.");
@@ -194,7 +199,7 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
                                          rmm::device_async_resource_ref mr)
 {
   if constexpr (std::is_same_v<LhsType, column_view> and std::is_same_v<RhsType, column_view>)
-    CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
+    CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match", std::invalid_argument);
 
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING and
       output_type.id() == type_id::STRING and

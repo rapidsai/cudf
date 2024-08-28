@@ -38,7 +38,7 @@ namespace flatbuf = cudf::io::parquet::flatbuf;
 
 namespace {
 
-thrust::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
+cuda::std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
 {
   if (schema.converted_type.has_value()) {
     switch (schema.converted_type.value()) {
@@ -66,7 +66,7 @@ thrust::optional<LogicalType> converted_to_logical_type(SchemaElement const& sch
       default: return LogicalType{LogicalType::UNDEFINED};
     }
   }
-  return thrust::nullopt;
+  return cuda::std::nullopt;
 }
 
 }  // namespace
@@ -246,7 +246,7 @@ void metadata::sanitize_schema()
         struct_elem.repetition_type = REQUIRED;
         struct_elem.num_children    = schema_elem.num_children;
         struct_elem.type            = UNDEFINED_TYPE;
-        struct_elem.converted_type  = thrust::nullopt;
+        struct_elem.converted_type  = cuda::std::nullopt;
 
         // swap children
         struct_elem.children_idx = std::move(schema_elem.children_idx);
@@ -564,14 +564,14 @@ aggregate_reader_metadata::aggregate_reader_metadata(
   // Collect and apply arrow:schema from Parquet's key value metadata section
   if (use_arrow_schema) { apply_arrow_schema(); }
 
-  // Erase "ARROW:schema" from the output pfm if exists
+  // Erase ARROW_SCHEMA_KEY from the output pfm if exists
   std::for_each(
-    keyval_maps.begin(), keyval_maps.end(), [](auto& pfm) { pfm.erase("ARROW:schema"); });
+    keyval_maps.begin(), keyval_maps.end(), [](auto& pfm) { pfm.erase(ARROW_SCHEMA_KEY); });
 }
 
 arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
 {
-  // Check the key_value metadata for ARROW:schema, decode and walk it
+  // Check the key_value metadata for arrow schema, decode and walk it
   // Function to convert from flatbuf::duration type to cudf::type_id
   auto const duration_from_flatbuffer = [](flatbuf::Duration const* duration) {
     // TODO: we only need this for arrow::DurationType for now. Else, we can take in a
@@ -645,9 +645,7 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
       return true;
     };
 
-  // TODO: Should we check if any file has the "ARROW:schema" key
-  // Or if all files have the same "ARROW:schema"?
-  auto const it = keyval_maps[0].find("ARROW:schema");
+  auto const it = keyval_maps[0].find(ARROW_SCHEMA_KEY);
   if (it == keyval_maps[0].end()) { return {}; }
 
   // Decode the base64 encoded ipc message string
@@ -788,11 +786,6 @@ void aggregate_reader_metadata::apply_arrow_schema()
 std::optional<std::string_view> aggregate_reader_metadata::decode_ipc_message(
   std::string_view const serialized_message) const
 {
-  // Constants copied from arrow source and renamed to match the case
-  constexpr int32_t MESSAGE_DECODER_NEXT_REQUIRED_SIZE_INITIAL         = sizeof(int32_t);
-  constexpr int32_t MESSAGE_DECODER_NEXT_REQUIRED_SIZE_METADATA_LENGTH = sizeof(int32_t);
-  constexpr int32_t IPC_CONTINUATION_TOKEN                             = -1;
-
   // message buffer
   auto message_buf = serialized_message.data();
   // current message (buffer) size
@@ -952,7 +945,7 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   return names;
 }
 
-std::tuple<int64_t, size_type, std::vector<row_group_info>>
+std::tuple<int64_t, size_type, std::vector<row_group_info>, std::vector<size_t>>
 aggregate_reader_metadata::select_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
@@ -983,6 +976,9 @@ aggregate_reader_metadata::select_row_groups(
                      static_cast<size_type>(from_opts.second)};
   }();
 
+  // Get number of rows in each data source
+  std::vector<size_t> num_rows_per_source(per_file_metadata.size(), 0);
+
   if (!row_group_indices.empty()) {
     CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
                  "Must specify row groups for each source");
@@ -996,28 +992,45 @@ aggregate_reader_metadata::select_row_groups(
         selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
         // if page-level indexes are present, then collect extra chunk and page info.
         column_info_for_row_group(selection.back(), 0);
-        rows_to_read += get_row_group(rowgroup_idx, src_idx).num_rows;
+        auto const rows_this_rg = get_row_group(rowgroup_idx, src_idx).num_rows;
+        rows_to_read += rows_this_rg;
+        num_rows_per_source[src_idx] += rows_this_rg;
       }
     }
   } else {
     size_type count = 0;
     for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
       auto const& fmd = per_file_metadata[src_idx];
-      for (size_t rg_idx = 0; rg_idx < fmd.row_groups.size(); ++rg_idx) {
+      for (size_t rg_idx = 0;
+           rg_idx < fmd.row_groups.size() and count < rows_to_skip + rows_to_read;
+           ++rg_idx) {
         auto const& rg             = fmd.row_groups[rg_idx];
         auto const chunk_start_row = count;
         count += rg.num_rows;
         if (count > rows_to_skip || count == 0) {
+          // start row of this row group adjusted with rows_to_skip
+          num_rows_per_source[src_idx] += count;
+          num_rows_per_source[src_idx] -=
+            (chunk_start_row <= rows_to_skip) ? rows_to_skip : chunk_start_row;
+
+          // We need the unadjusted start index of this row group to correctly initialize
+          // ColumnChunkDesc for this row group in create_global_chunk_info() and calculate
+          // the row offset for the first pass in compute_input_passes().
           selection.emplace_back(rg_idx, chunk_start_row, src_idx);
-          // if page-level indexes are present, then collect extra chunk and page info.
+
+          // If page-level indexes are present, then collect extra chunk and page info.
+          // The page indexes rely on absolute row numbers, not adjusted for skip_rows.
           column_info_for_row_group(selection.back(), chunk_start_row);
         }
-        if (count >= rows_to_skip + rows_to_read) { break; }
+        // Adjust the number of rows for the last source file.
+        if (count >= rows_to_skip + rows_to_read) {
+          num_rows_per_source[src_idx] -= count - rows_to_skip - rows_to_read;
+        }
       }
     }
   }
 
-  return {rows_to_skip, rows_to_read, std::move(selection)};
+  return {rows_to_skip, rows_to_read, std::move(selection), std::move(num_rows_per_source)};
 }
 
 std::tuple<std::vector<input_column_info>,

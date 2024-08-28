@@ -22,7 +22,7 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 /**
  * @addtogroup strings_replace
@@ -122,7 +122,7 @@ std::unique_ptr<column> replace_slice(
  * If a target string is found, it is replaced by the corresponding entry in the repls column.
  * All occurrences found in each string are replaced.
  *
- * This does not use regex to match targets in the string.
+ * This does not use regex to match targets in the string. Empty string targets are ignored.
  *
  * Null string entries will return null output string entries.
  *
@@ -160,18 +160,6 @@ std::unique_ptr<column> replace_multiple(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
-/**
- * @copydoc cudf::strings::replace_multiple
- *
- * @deprecated since 24.08
- */
-[[deprecated]] std::unique_ptr<column> replace(
-  strings_column_view const& input,
-  strings_column_view const& targets,
-  strings_column_view const& repls,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
-
 /** @} */  // end of doxygen group
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

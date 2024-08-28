@@ -20,7 +20,6 @@
 #include <cudf/detail/interop.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
-#include <cudf/interop/detail/arrow.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
@@ -120,7 +119,11 @@ int dispatch_to_arrow_type::operator()<cudf::string_view>(column_view input,
                                                           column_metadata const&,
                                                           ArrowSchema* out)
 {
-  return ArrowSchemaSetType(out, NANOARROW_TYPE_STRING);
+  return ((input.num_children() == 0 ||
+           input.child(cudf::strings_column_view::offsets_column_index).type().id() ==
+             type_id::INT32))
+           ? ArrowSchemaSetType(out, NANOARROW_TYPE_STRING)
+           : ArrowSchemaSetType(out, NANOARROW_TYPE_LARGE_STRING);
 }
 
 // these forward declarations are needed due to the recursive calls to them
@@ -167,8 +170,9 @@ int dispatch_to_arrow_type::operator()<cudf::list_view>(column_view input,
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(out, NANOARROW_TYPE_LIST));
   auto child = input.child(cudf::lists_column_view::child_column_index);
   ArrowSchemaInit(out->children[0]);
-  auto child_meta =
-    metadata.children_meta.empty() ? column_metadata{"element"} : metadata.children_meta[0];
+  auto child_meta = metadata.children_meta.empty()
+                      ? column_metadata{"element"}
+                      : metadata.children_meta[cudf::lists_column_view::child_column_index];
 
   out->flags = input.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetName(out->children[0], child_meta.name.c_str()));

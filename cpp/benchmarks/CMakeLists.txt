@@ -40,8 +40,13 @@ target_include_directories(
 
 # Use an OBJECT library so we only compile these helper source files only once
 add_library(
-  cudf_benchmark_common OBJECT "${CUDF_SOURCE_DIR}/tests/utilities/random_seed.cpp"
-                               synchronization/synchronization.cpp io/cuio_common.cpp
+  cudf_benchmark_common OBJECT
+  "${CUDF_SOURCE_DIR}/tests/utilities/random_seed.cpp"
+  synchronization/synchronization.cpp
+  io/cuio_common.cpp
+  common/table_utilities.cpp
+  common/benchmark_utilities.cpp
+  common/nvbench_utilities.cpp
 )
 target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env>)
 add_custom_command(
@@ -157,6 +162,7 @@ ConfigureNVBench(
   stream_compaction/distinct.cpp
   stream_compaction/distinct_count.cpp
   stream_compaction/stable_distinct.cpp
+  stream_compaction/stream_compaction_common.cpp
   stream_compaction/unique.cpp
   stream_compaction/unique_count.cpp
 )
@@ -201,12 +207,16 @@ ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher.cu)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
-ConfigureBench(
-  REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/minmax.cpp
-  reduction/reduce.cpp reduction/scan.cpp
-)
 ConfigureNVBench(
-  REDUCTION_NVBENCH reduction/rank.cpp reduction/scan_structs.cpp reduction/segmented_reduce.cpp
+  REDUCTION_NVBENCH
+  reduction/anyall.cpp
+  reduction/dictionary.cpp
+  reduction/minmax.cpp
+  reduction/rank.cpp
+  reduction/reduce.cpp
+  reduction/scan.cpp
+  reduction/scan_structs.cpp
+  reduction/segmented_reduce.cpp
 )
 
 # ##################################################################################################
@@ -226,8 +236,8 @@ ConfigureBench(
 )
 
 ConfigureNVBench(
-  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_nunique.cpp groupby/group_rank.cpp
-  groupby/group_struct_keys.cpp
+  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_max_multithreaded.cpp
+  groupby/group_nunique.cpp groupby/group_rank.cpp groupby/group_struct_keys.cpp
 )
 
 # ##################################################################################################
@@ -315,7 +325,6 @@ ConfigureBench(
   string/filter.cpp
   string/repeat_strings.cpp
   string/replace.cpp
-  string/slice.cpp
   string/translate.cpp
   string/url_decode.cu
 )
@@ -336,6 +345,7 @@ ConfigureNVBench(
   string/like.cpp
   string/replace_re.cpp
   string/reverse.cpp
+  string/slice.cpp
   string/split.cpp
   string/split_re.cpp
 )
@@ -347,6 +357,11 @@ ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
 ConfigureNVBench(JSON_READER_OPTION_NVBENCH io/json/json_reader_option.cpp)
 ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
+
+# ##################################################################################################
+# * multi buffer memset benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(BATCHED_MEMSET_BENCH io/utilities/batched_memset_bench.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------

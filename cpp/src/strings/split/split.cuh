@@ -142,7 +142,7 @@ struct base_split_tokenizer {
 
     // max_tokens already included in token counts
     if (d_tokens.size() == 1) {
-      d_tokens[0] = string_index_pair{d_str.data(), d_str.size_bytes()};
+      d_tokens[0] = string_index_pair{(d_str.empty() ? "" : d_str.data()), d_str.size_bytes()};
       return;
     }
 
@@ -362,13 +362,15 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
 
   // count the number of delimiters in the entire column
   rmm::device_scalar<int64_t> d_count(0, stream);
-  constexpr int64_t block_size         = 512;
-  constexpr size_type bytes_per_thread = 4;
-  auto const num_blocks                = util::div_rounding_up_safe(
-    util::div_rounding_up_safe(chars_bytes, static_cast<int64_t>(bytes_per_thread)), block_size);
-  count_delimiters_kernel<Tokenizer, block_size, bytes_per_thread>
-    <<<num_blocks, block_size, 0, stream.value()>>>(
-      tokenizer, d_offsets, chars_bytes, d_count.data());
+  if (chars_bytes > 0) {
+    constexpr int64_t block_size         = 512;
+    constexpr size_type bytes_per_thread = 4;
+    auto const num_blocks                = util::div_rounding_up_safe(
+      util::div_rounding_up_safe(chars_bytes, static_cast<int64_t>(bytes_per_thread)), block_size);
+    count_delimiters_kernel<Tokenizer, block_size, bytes_per_thread>
+      <<<num_blocks, block_size, 0, stream.value()>>>(
+        tokenizer, d_offsets, chars_bytes, d_count.data());
+  }
 
   // Create a vector of every delimiter position in the chars column.
   // These may include overlapping or otherwise out-of-bounds delimiters which

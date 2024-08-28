@@ -10,7 +10,7 @@ import warnings
 from collections import defaultdict
 from contextlib import ExitStack
 from functools import partial, reduce
-from typing import Callable
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import numpy as np
@@ -23,6 +23,10 @@ from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 BYTE_SIZES = {
     "kb": 1000,
@@ -73,6 +77,7 @@ def _write_parquet(
     column_encoding=None,
     column_type_length=None,
     output_as_binary=None,
+    write_arrow_schema=True,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -110,6 +115,7 @@ def _write_parquet(
         "column_encoding": column_encoding,
         "column_type_length": column_type_length,
         "output_as_binary": output_as_binary,
+        "write_arrow_schema": write_arrow_schema,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -154,6 +160,7 @@ def write_to_dataset(
     column_encoding=None,
     column_type_length=None,
     output_as_binary=None,
+    store_schema=False,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -242,6 +249,9 @@ def write_to_dataset(
     output_as_binary : set, optional, default None
         If a column name is present in the set, that column will be output as
         unannotated binary, rather than the default 'UTF-8'.
+    store_schema : bool, default False
+        If ``True``, enable computing and writing arrow schema to Parquet
+        file footer's key-value metadata section for faithful round-tripping.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
@@ -285,6 +295,7 @@ def write_to_dataset(
             column_encoding=column_encoding,
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
+            store_schema=store_schema,
         )
 
     else:
@@ -312,6 +323,7 @@ def write_to_dataset(
             column_encoding=column_encoding,
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
+            store_schema=store_schema,
         )
 
     return metadata
@@ -321,41 +333,12 @@ def write_to_dataset(
 @_performance_tracking
 def read_parquet_metadata(filepath_or_buffer):
     """{docstring}"""
-    # Multiple sources are passed as a list. If a single source is passed,
-    # wrap it in a list for unified processing downstream.
-    if not is_list_like(filepath_or_buffer):
-        filepath_or_buffer = [filepath_or_buffer]
-
-    # Start by trying to construct a filesystem object
-    fs, paths = ioutils._get_filesystem_and_paths(
-        path_or_data=filepath_or_buffer, storage_options=None
-    )
-
-    # Check if filepath or buffer
-    filepath_or_buffer = paths if paths else filepath_or_buffer
 
     # List of filepaths or buffers
-    filepaths_or_buffers = []
-
-    for source in filepath_or_buffer:
-        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            fs=fs,
-            use_python_file_object=True,
-            open_file_options=None,
-            storage_options=None,
-            bytes_per_thread=None,
-        )
-
-        if compression is not None:
-            raise ValueError(
-                "URL content-encoding decompression is not supported"
-            )
-        if isinstance(tmp_source, list):
-            filepath_or_buffer.extend(tmp_source)
-        else:
-            filepaths_or_buffers.append(tmp_source)
+    filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
+        path_or_data=filepath_or_buffer,
+        bytes_per_thread=None,
+    )
 
     return libparquet.read_parquet_metadata(filepaths_or_buffers)
 
@@ -521,14 +504,15 @@ def read_parquet(
     engine="cudf",
     columns=None,
     storage_options=None,
+    filesystem=None,
     filters=None,
     row_groups=None,
     use_pandas_metadata=True,
-    use_python_file_object=True,
     categorical_partitions=True,
-    open_file_options=None,
     bytes_per_thread=None,
     dataset_kwargs=None,
+    nrows=None,
+    skip_rows=None,
     *args,
     **kwargs,
 ):
@@ -537,16 +521,6 @@ def read_parquet(
         raise ValueError(
             f"Only supported engines are {{'cudf', 'pyarrow'}}, got {engine=}"
         )
-    # Do not allow the user to set file-opening options
-    # when `use_python_file_object=False` is specified
-    if use_python_file_object is False:
-        if open_file_options:
-            raise ValueError(
-                "open_file_options is not currently supported when "
-                "use_python_file_object is set to False."
-            )
-        open_file_options = {}
-
     if bytes_per_thread is None:
         bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
 
@@ -571,7 +545,9 @@ def read_parquet(
     # Start by trying construct a filesystem object, so we
     # can apply filters on remote file-systems
     fs, paths = ioutils._get_filesystem_and_paths(
-        path_or_data=filepath_or_buffer, storage_options=storage_options
+        path_or_data=filepath_or_buffer,
+        storage_options=storage_options,
+        filesystem=filesystem,
     )
 
     # Normalize and validate filters
@@ -599,33 +575,12 @@ def read_parquet(
         )
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
-    filepaths_or_buffers = []
-    if use_python_file_object:
-        open_file_options = _default_open_file_options(
-            open_file_options=open_file_options,
-            columns=columns,
-            row_groups=row_groups,
-            fs=fs,
-        )
-    for source in filepath_or_buffer:
-        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            fs=fs,
-            use_python_file_object=use_python_file_object,
-            open_file_options=open_file_options,
-            storage_options=storage_options,
-            bytes_per_thread=bytes_per_thread,
-        )
-
-        if compression is not None:
-            raise ValueError(
-                "URL content-encoding decompression is not supported"
-            )
-        if isinstance(tmp_source, list):
-            filepath_or_buffer.extend(tmp_source)
-        else:
-            filepaths_or_buffers.append(tmp_source)
+    filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
+        path_or_data=filepath_or_buffer,
+        fs=fs,
+        storage_options=storage_options,
+        bytes_per_thread=bytes_per_thread,
+    )
 
     # Warn user if they are not using cudf for IO
     # (There is a good chance this was not the intention)
@@ -664,9 +619,10 @@ def read_parquet(
         partition_keys=partition_keys,
         partition_categories=partition_categories,
         dataset_kwargs=dataset_kwargs,
+        nrows=nrows,
+        skip_rows=skip_rows,
         **kwargs,
     )
-
     # Apply filters row-wise (if any are defined), and return
     df = _apply_post_filters(df, filters)
     if projected_columns:
@@ -793,6 +749,8 @@ def _parquet_to_frame(
     partition_keys=None,
     partition_categories=None,
     dataset_kwargs=None,
+    nrows=None,
+    skip_rows=None,
     **kwargs,
 ):
     # If this is not a partitioned read, only need
@@ -800,9 +758,16 @@ def _parquet_to_frame(
     if not partition_keys:
         return _read_parquet(
             paths_or_buffers,
+            nrows=nrows,
+            skip_rows=skip_rows,
             *args,
             row_groups=row_groups,
             **kwargs,
+        )
+
+    if nrows is not None or skip_rows is not None:
+        raise NotImplementedError(
+            "nrows/skip_rows is not supported when reading a partitioned parquet dataset"
         )
 
     partition_meta = None
@@ -892,6 +857,8 @@ def _read_parquet(
     columns=None,
     row_groups=None,
     use_pandas_metadata=None,
+    nrows=None,
+    skip_rows=None,
     *args,
     **kwargs,
 ):
@@ -908,19 +875,27 @@ def _read_parquet(
                 "cudf engine doesn't support the "
                 f"following positional arguments: {list(args)}"
             )
-        if cudf.get_option("mode.pandas_compatible"):
-            return libparquet.ParquetReader(
+        if cudf.get_option("io.parquet.low_memory"):
+            return libparquet.read_parquet_chunked(
                 filepaths_or_buffers,
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
-            ).read()
+                nrows=nrows if nrows is not None else -1,
+                skip_rows=skip_rows if skip_rows is not None else 0,
+            )
         else:
+            if nrows is None:
+                nrows = -1
+            if skip_rows is None:
+                skip_rows = 0
             return libparquet.read_parquet(
                 filepaths_or_buffers,
                 columns=columns,
                 row_groups=row_groups,
                 use_pandas_metadata=use_pandas_metadata,
+                nrows=nrows,
+                skip_rows=skip_rows,
             )
     else:
         if (
@@ -968,6 +943,7 @@ def to_parquet(
     column_encoding=None,
     column_type_length=None,
     output_as_binary=None,
+    store_schema=False,
     *args,
     **kwargs,
 ):
@@ -1023,6 +999,7 @@ def to_parquet(
                 column_encoding=column_encoding,
                 column_type_length=column_type_length,
                 output_as_binary=output_as_binary,
+                store_schema=store_schema,
             )
 
         partition_info = (
@@ -1055,6 +1032,7 @@ def to_parquet(
             column_encoding=column_encoding,
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
+            write_arrow_schema=store_schema,
         )
 
     else:
@@ -1522,44 +1500,6 @@ class ParquetDatasetWriter:
 
     def __exit__(self, *args):
         self.close()
-
-
-def _default_open_file_options(
-    open_file_options, columns, row_groups, fs=None
-):
-    """
-    Set default fields in open_file_options.
-
-    Copies and updates `open_file_options` to
-    include column and row-group information
-    under the "precache_options" key. By default,
-    we set "method" to "parquet", but precaching
-    will be disabled if the user chooses `method=None`
-
-    Parameters
-    ----------
-    open_file_options : dict or None
-    columns : list
-    row_groups : list
-    fs : fsspec.AbstractFileSystem, Optional
-    """
-    if fs and ioutils._is_local_filesystem(fs):
-        # Quick return for local fs
-        return open_file_options or {}
-    # Assume remote storage if `fs` was not specified
-    open_file_options = (open_file_options or {}).copy()
-    precache_options = open_file_options.pop("precache_options", {}).copy()
-    if precache_options.get("method", "parquet") == "parquet":
-        precache_options.update(
-            {
-                "method": "parquet",
-                "engine": precache_options.get("engine", "pyarrow"),
-                "columns": columns,
-                "row_groups": row_groups,
-            }
-        )
-    open_file_options["precache_options"] = precache_options
-    return open_file_options
 
 
 def _hive_dirname(name, val):

@@ -33,16 +33,16 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 //! IO interfaces
 namespace io {
 class data_sink;
 class datasource;
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
 
 //! cuDF interfaces
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 //! IO interfaces
 namespace io {
 /**
@@ -54,7 +54,7 @@ namespace io {
 /**
  * @brief Compression algorithms
  */
-enum class compression_type {
+enum class compression_type : int32_t {
   NONE,    ///< No compression
   AUTO,    ///< Automatically detect or select compression format
   SNAPPY,  ///< Snappy format, using byte-oriented LZ77
@@ -72,7 +72,7 @@ enum class compression_type {
 /**
  * @brief Data source or destination types
  */
-enum class io_type {
+enum class io_type : int32_t {
   FILEPATH,          ///< Input/output is a file path
   HOST_BUFFER,       ///< Input/output is a buffer in host memory
   DEVICE_BUFFER,     ///< Input/output is a buffer in device memory
@@ -83,7 +83,7 @@ enum class io_type {
 /**
  * @brief Behavior when handling quotations in field data
  */
-enum class quote_style {
+enum class quote_style : int32_t {
   MINIMAL,     ///< Quote only fields which contain special characters
   ALL,         ///< Quote all fields
   NONNUMERIC,  ///< Quote all non-numeric fields
@@ -93,7 +93,7 @@ enum class quote_style {
 /**
  * @brief Column statistics granularity type for parquet/orc writers
  */
-enum statistics_freq {
+enum statistics_freq : int32_t {
   STATISTICS_NONE     = 0,  ///< No column statistics
   STATISTICS_ROWGROUP = 1,  ///< Per-Rowgroup column statistics
   STATISTICS_PAGE     = 2,  ///< Per-page column statistics
@@ -103,7 +103,7 @@ enum statistics_freq {
 /**
  * @brief Valid encodings for use with `column_in_metadata::set_encoding()`
  */
-enum class column_encoding {
+enum class column_encoding : int32_t {
   // Common encodings:
   USE_DEFAULT = -1,  ///< No encoding has been requested, use default encoding
   DICTIONARY,        ///< Use dictionary encoding
@@ -222,7 +222,7 @@ class writer_compression_statistics {
 /**
  * @brief Control use of dictionary encoding for parquet writer
  */
-enum dictionary_policy {
+enum dictionary_policy : int32_t {
   NEVER    = 0,  ///< Never use dictionary encoding
   ADAPTIVE = 1,  ///< Use dictionary when it will not impact compression
   ALWAYS   = 2   ///< Use dictionary regardless of impact on compression
@@ -277,6 +277,9 @@ struct column_name_info {
 struct table_metadata {
   std::vector<column_name_info>
     schema_info;  //!< Detailed name information for the entire output hierarchy
+  std::vector<size_t> num_rows_per_source;  //!< Number of rows read from each data source.
+                                            //!< Currently only computed for Parquet readers if no
+                                            //!< AST filters being used. Empty vector otherwise.
   std::map<std::string, std::string> user_data;  //!< Format-dependent metadata of the first input
                                                  //!< file as key-values pairs (deprecated)
   std::vector<std::unordered_map<std::string, std::string>>
@@ -1086,4 +1089,4 @@ class reader_column_schema {
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

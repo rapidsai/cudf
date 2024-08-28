@@ -188,9 +188,6 @@ def cut(
         # adjust bin edges decimal precision
         int_label_bins = np.around(bins, precision)
 
-    # the inputs is a column of the values in the array x
-    input_arr = as_column(x)
-
     # checking for the correct inclusivity values
     if right:
         closed = "right"
@@ -242,6 +239,9 @@ def cut(
                 labels if len(set(labels)) == len(labels) else None
             )
 
+    # the inputs is a column of the values in the array x
+    input_arr = as_column(x)
+
     if isinstance(bins, pd.IntervalIndex):
         # get the left and right edges of the bins as columns
         # we cannot typecast an IntervalIndex, so we need to
@@ -292,7 +292,7 @@ def cut(
     )
 
     # we return a categorical index, as we don't have a Categorical method
-    categorical_index = cudf.CategoricalIndex._from_data({None: col})
+    categorical_index = cudf.CategoricalIndex._from_column(col)
 
     if isinstance(orig_x, (pd.Series, cudf.Series)):
         # if we have a series input we return a series output

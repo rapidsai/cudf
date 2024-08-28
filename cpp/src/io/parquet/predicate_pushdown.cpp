@@ -141,11 +141,11 @@ struct stats_caster {
       // Local struct to hold host columns
       struct host_column {
         // using thrust::host_vector because std::vector<bool> uses bitmap instead of byte per bool.
-        thrust::host_vector<T> val;
+        cudf::detail::host_vector<T> val;
         std::vector<bitmask_type> null_mask;
         cudf::size_type null_count = 0;
-        host_column(size_type total_row_groups)
-          : val(total_row_groups),
+        host_column(size_type total_row_groups, rmm::cuda_stream_view stream)
+          : val{cudf::detail::make_host_vector<T>(total_row_groups, stream)},
             null_mask(
               cudf::util::div_rounding_up_safe<size_type>(
                 cudf::bitmask_allocation_size_bytes(total_row_groups), sizeof(bitmask_type)),
@@ -154,7 +154,7 @@ struct stats_caster {
         }
 
         void set_index(size_type index,
-                       thrust::optional<std::vector<uint8_t>> const& binary_value,
+                       cuda::std::optional<std::vector<uint8_t>> const& binary_value,
                        Type const type)
         {
           if (binary_value.has_value()) {
@@ -170,8 +170,14 @@ struct stats_caster {
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
         {
-          std::vector<char> chars{};
-          std::vector<cudf::size_type> offsets(1, 0);
+          auto const total_char_count = std::accumulate(
+            host_strings.begin(), host_strings.end(), 0, [](auto sum, auto const& str) {
+              return sum + str.size_bytes();
+            });
+          auto chars = cudf::detail::make_empty_host_vector<char>(total_char_count, stream);
+          auto offsets =
+            cudf::detail::make_empty_host_vector<cudf::size_type>(host_strings.size() + 1, stream);
+          offsets.push_back(0);
           for (auto const& str : host_strings) {
             auto tmp =
               str.empty() ? std::string_view{} : std::string_view(str.data(), str.size_bytes());
@@ -206,8 +212,8 @@ struct stats_caster {
             null_count);
         }
       };  // local struct host_column
-      host_column min(total_row_groups);
-      host_column max(total_row_groups);
+      host_column min(total_row_groups, stream);
+      host_column max(total_row_groups, stream);
       size_type stats_idx = 0;
       for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
         for (auto const rg_idx : row_group_indices[src_idx]) {
@@ -230,8 +236,8 @@ struct stats_caster {
             max.set_index(stats_idx, max_value, colchunk.meta_data.type);
           } else {
             // Marking it null, if column present in row group
-            min.set_index(stats_idx, thrust::nullopt, {});
-            max.set_index(stats_idx, thrust::nullopt, {});
+            min.set_index(stats_idx, cuda::std::nullopt, {});
+            max.set_index(stats_idx, cuda::std::nullopt, {});
           }
           stats_idx++;
         }
@@ -462,7 +468,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   auto validity_it = cudf::detail::make_counting_transform_iterator(
     0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
 
-  auto is_row_group_required = cudf::detail::make_std_vector_sync(
+  auto const is_row_group_required = cudf::detail::make_host_vector_sync(
     device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()), stream);
 
   // Return only filtered row groups based on predicate
