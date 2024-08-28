@@ -42,6 +42,13 @@ std::unique_ptr<cudf::column> generate_random_string_column(
 /**
  * @brief Generate a column of random numbers
  *
+ * Example:
+ *
+ * lower = 10
+ * upper = 15
+ * num_rows = 10
+ * result = ["10", "11", "14", "14", "13", "12", "11", "11", "12", "14"]
+ *
  * @param lower The lower bound of the random numbers
  * @param upper The upper bound of the random numbers
  * @param num_rows The number of rows in the column
@@ -59,6 +66,12 @@ std::unique_ptr<cudf::column> generate_random_numeric_column(
 /**
  * @brief Generate a primary key column
  *
+ * Example:
+ *
+ * start = 1
+ * num_rows = 10
+ * result = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+ *
  * @param start The starting value of the primary key
  * @param num_rows The number of rows in the column
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -72,6 +85,12 @@ std::unique_ptr<cudf::column> generate_primary_key_column(
 
 /**
  * @brief Generate a column where all the rows have the same string value
+ *
+ * Example:
+ *
+ * value = "abc"
+ * num_rows = 5
+ * result = ["abc", "abc", "abc", "abc", "abc"]
  *
  * @param value The string value to fill the column with
  * @param num_rows The number of rows in the column
@@ -87,6 +106,12 @@ std::unique_ptr<cudf::column> generate_repeat_string_column(
 /**
  * @brief Generate a column by randomly choosing from set of strings
  *
+ * Example:
+ *
+ * set = {"s1", "s2", "s3"}
+ * num_rows = 10
+ * result = ["s1", "s2", "s2", "s1", "s3", "s3", "s3", "s2", "s1", "s1"]
+ *
  * @param set The set of strings to choose from
  * @param num_rows The number of rows in the column
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -101,7 +126,15 @@ std::unique_ptr<cudf::column> generate_random_string_column_from_set(
 /**
  * @brief Generate a column consisting of a repeating sequence of integers
  *
- * @param limit The upper limit of the repeating sequence
+ * Example:
+ *
+ * seq_length = 3
+ * zero_indexed = false
+ * num_rows = 10
+ * result = [1, 2, 3, 1, 2, 3, 1, 2, 3, 1]
+ *
+ * @param seq_length The length of the repeating sequence
+ * @param zero_indexed Whether the sequence is zero or one indexed
  * @param num_rows The number of rows in the column
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
