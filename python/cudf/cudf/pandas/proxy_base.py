@@ -2,19 +2,22 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import cupy as cp
 import numpy as np
-
-numpy_asarray = np.asarray
 
 
 class ProxyNDarrayBase(np.ndarray):
-    def __new__(cls, input_array, *args, **kwargs):
-        obj = super().__new__(
-            cls, shape=input_array.shape, dtype=input_array.dtype
-        )
-        view = numpy_asarray(obj, dtype=input_array.dtype).view(cls)
-
-        return view
+    def __new__(cls, arr):
+        if isinstance(arr, cp.ndarray):
+            obj = np.asarray(arr.get(), dtype=arr.dtype).view(cls)
+            return obj
+        elif isinstance(arr, np.ndarray):
+            obj = np.asarray(arr, dtype=arr.dtype).view(cls)
+            return obj
+        else:
+            raise TypeError(
+                "Unsupported array type. Must be numpy.ndarray or cupy.ndarray"
+            )
 
     def __array_finalize__(self, obj):
         if obj is None:

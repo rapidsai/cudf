@@ -6,11 +6,11 @@ from __future__ import annotations
 
 import cupy
 import cupy._core.flags
-import numba
 import numpy
 from packaging import version
 
 from ..fast_slow_proxy import (
+    _fast_slow_function_call,
     _FastSlowAttribute,
     is_proxy_object,
     make_final_proxy_type,
@@ -108,74 +108,21 @@ def wrap_ndarray(cls, arr: cupy.ndarray | numpy.ndarray, constructor):
         return super(cls, cls)._fsproxy_wrap(arr, constructor)
 
 
-numpy_asarray = numpy.asarray
-
-
-def asarray(a, dtype=None, order=None, *, device=None, copy=None, like=None):
-    if is_proxy_object(a):
-        return numpy_asarray(
-            a._fsproxy_slow, dtype, order, device=device, copy=copy, like=like
-        )
-    return numpy_asarray(a, dtype, order, device=device, copy=copy, like=like)
-
-
-numpy.asarray = asarray
-numpy.asarray.__doc__ = numpy_asarray.__doc__
-numpy.asarray.__module__ = numpy_asarray.__module__
-
-numpy_dot = numpy.dot
-
-
-def dot(a, b, out=None):
-    if is_proxy_object(a) and is_proxy_object(b):
-        return numpy_dot(a._fsproxy_slow, b._fsproxy_slow, out=out)
-    elif is_proxy_object(a):
-        return numpy_dot(a._fsproxy_slow, b, out=out)
-    elif is_proxy_object(b):
-        return numpy_dot(a, b._fsproxy_slow, out=out)
-    return numpy_dot(a, b, out=out)
-
-
-numpy.dot = dot
-numpy.dot.__doc__ = numpy_dot.__doc__
-numpy.dot.__module__ = numpy_dot.__module__
-
-
-def convert_args_to_slow(inputs):
-    new_inputs = []
-    for x in inputs:
-        if isinstance(x, ProxyNDarrayBase):
-            if hasattr(x._fsproxy_wrapped, "get"):
-                new_inputs.append(numpy.asarray(x._fsproxy_wrapped.get()))
-            else:
-                new_inputs.append(numpy.asarray(x._fsproxy_wrapped))
-        else:
-            new_inputs.append(x)
-    inputs = tuple(new_inputs)
-    return inputs
-
-
-def convert_args_to_fast(inputs):
-    new_inputs = []
-    for x in inputs:
-        if isinstance(x, ProxyNDarrayBase):
-            new_inputs.append(cupy.asarray(x._fsproxy_wrapped))
-        else:
-            new_inputs.append(x)
-    inputs = tuple(new_inputs)
-    return inputs
-
-
 def ndarray__array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-    if isinstance(
-        ufunc, (numpy.ufunc, numpy.vectorize, numba.np.ufunc.dufunc.DUFunc)
+    result, _ = _fast_slow_function_call(
+        getattr(ufunc, method),
+        *inputs,
+        **kwargs,
+    )
+    if isinstance(result, tuple):
+        if is_proxy_object(result[0]) and isinstance(
+            result[0]._fsproxy_wrapped, numpy.ndarray
+        ):
+            return tuple([numpy.asarray(x) for x in result])
+    elif is_proxy_object(result) and isinstance(
+        result._fsproxy_wrapped, numpy.ndarray
     ):
-        inputs = convert_args_to_slow(inputs)
-    elif isinstance(ufunc, (cupy.ufunc, cupy.vectorize)):
-        inputs = convert_args_to_fast(inputs)
-    else:
-        raise TypeError(f"Unrecognized ufunc of type {type(ufunc)}")
-    result = getattr(ufunc, method)(*inputs, **kwargs)
+        return numpy.asarray(result)
     return result
 
 
