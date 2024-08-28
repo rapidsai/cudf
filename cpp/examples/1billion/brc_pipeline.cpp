@@ -114,10 +114,11 @@ int main(int argc, char const** argv)
   std::cout << "chunks:  " << divider << std::endl;
   std::cout << "threads: " << thread_count << std::endl;
 
-  auto const mr_name = std::string("pool");  // "cuda"
+  auto const mr_name = std::string("pool");
   auto resource      = create_memory_resource(mr_name);
-  auto smr = rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
-  rmm::mr::set_current_device_resource(&smr);
+  auto stats_mr =
+    rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
+  rmm::mr::set_current_device_resource(&stats_mr);
   auto stream = cudf::get_default_stream();
 
   std::filesystem::path p = input_file;
@@ -148,14 +149,15 @@ int main(int argc, char const** argv)
     t.join();
   }
 
-  // in case some APIs are still running on the default stream
+  // in case some kernels are still running on the default stream
   stream.synchronize();
 
   // combine each thread's agg data into a single vector
   std::vector<result_t> agg_data(divider);
   auto begin = agg_data.begin();
   for (auto& c : chunk_results) {
-    std::transform(c.begin(), c.end(), begin, [](auto&& d) { return std::move(d); });
+    // std::transform(c.begin(), c.end(), begin, [](auto&& d) { return std::move(d); });
+    std::move(c.begin(), c.end(), begin);
     begin += c.size();
   }
 
@@ -166,7 +168,7 @@ int main(int argc, char const** argv)
   elapsed_t elapsed = std::chrono::steady_clock::now() - start;
   std::cout << "number of keys: " << results->num_rows() << std::endl;
   std::cout << "process time: " << elapsed.count() << " seconds\n";
-  std::cout << "peak memory: " << (smr.get_bytes_counter().peak / 1048576.0) << " MB\n";
+  std::cout << "peak memory: " << (stats_mr.get_bytes_counter().peak / 1048576.0) << " MB\n";
 
   return 0;
 }

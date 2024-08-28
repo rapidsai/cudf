@@ -66,10 +66,11 @@ int main(int argc, char const** argv)
   std::cout << "input:   " << input_file << std::endl;
   std::cout << "chunks:  " << divider << std::endl;
 
-  auto const mr_name = std::string("pool");  // "cuda"
+  auto const mr_name = std::string("pool");
   auto resource      = create_memory_resource(mr_name);
-  auto smr = rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
-  rmm::mr::set_current_device_resource(&smr);
+  auto stats_mr =
+    rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
+  rmm::mr::set_current_device_resource(&stats_mr);
   auto stream = cudf::get_default_stream();
 
   std::filesystem::path p = input_file;
@@ -110,7 +111,7 @@ int main(int argc, char const** argv)
   elapsed_t elapsed = std::chrono::steady_clock::now() - start;
   std::cout << "number of keys = " << results->num_rows() << std::endl;
   std::cout << "process time: " << elapsed.count() << " seconds\n";
-  std::cout << "peak memory: " << (smr.get_bytes_counter().peak / 1048576.0) << " MB\n";
+  std::cout << "peak memory: " << (stats_mr.get_bytes_counter().peak / 1048576.0) << " MB\n";
 
   return 0;
 }
