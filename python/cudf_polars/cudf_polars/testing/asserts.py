@@ -199,7 +199,11 @@ def assert_collect_raises(
     except polars_except:
         pass
     except Exception as e:
-        raise AssertionError(f"Polars CPU did not raise {polars_except}") from e
+        raise AssertionError(
+            f"CPU execution RAISED {type(e)}, EXPECTED {polars_except}"
+        ) from e
+    else:
+        raise AssertionError(f"CPU execution DID NOT RAISE {polars_except}")
 
     engine = GPUEngine(raise_on_fail=True)
     try:
@@ -207,4 +211,8 @@ def assert_collect_raises(
     except cudf_except:
         pass
     except Exception as e:
-        raise AssertionError(f"GPU did not raise {cudf_except}") from e
+        raise AssertionError(
+            f"GPU execution RAISED {type(e)}, EXPECTED {polars_except}"
+        ) from e
+    else:
+        raise AssertionError(f"GPU execution DID NOT RAISE {polars_except}")
