@@ -168,15 +168,15 @@ std::unique_ptr<cudf::table> generate_orders_independent(double scale_factor,
                                                   0,
                                                   stream,
                                                   mr);
-    auto const o_orderkey_view =
+    auto const sort_result =
       cudf::sort_by_key(o_orderkey_unsorted->view(),
                         cudf::table_view({o_orderkey_unsorted->view().column(0)}),
                         {},
                         {},
                         stream,
-                        mr)
-        ->get_column(0);
-    return std::make_unique<cudf::column>(o_orderkey_view);
+                        mr);
+    auto sort_result_columns = sort_result->release();
+    return std::move(sort_result_columns[0]);
   }();
 
   // Generate the `o_custkey` column
