@@ -64,6 +64,7 @@ dependencies:
 - pandas>=2.0,<2.2.3dev0
 - pandoc
 - pre-commit
+- pyarrow>=14.0.0
 - pydata-sphinx-theme!=0.14.2
 - pynvjitlink>=0.0.0a0
 - pytest-benchmark
