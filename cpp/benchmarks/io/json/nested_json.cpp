@@ -170,7 +170,7 @@ void BM_NESTED_JSON(nvbench::state& state)
       cudf::device_span<char const>{input->data(), static_cast<size_t>(input->size())},
       default_options,
       cudf::get_default_stream(),
-      cudf::get_current_device_resource_ref() _ref());
+      cudf::get_current_device_resource_ref());
   });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
