@@ -724,6 +724,9 @@ class StringFunction(Expr):
             pl_expr.StringFunction.Slice,
             pl_expr.StringFunction.Strptime,
             pl_expr.StringFunction.StartsWith,
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
             pl_expr.StringFunction.Uppercase,
         ):
             raise NotImplementedError(f"String function {self.name}")
@@ -778,6 +781,15 @@ class StringFunction(Expr):
                 raise NotImplementedError("Strptime format is required")
             if not exact:
                 raise NotImplementedError("Strptime does not support exact=False")
+        elif self.name in {
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+        }:
+            if not isinstance(self.children[1], Literal):
+                raise NotImplementedError(
+                    "strip operations only support scalar patterns"
+                )
 
     def do_evaluate(
         self,
@@ -836,6 +848,22 @@ class StringFunction(Expr):
                     plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
                 )
             )
+        elif self.name in {
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+        }:
+            column, chars = (
+                c.evaluate(df, context=context, mapping=mapping) for c in self.children
+            )
+            if self.name == pl_expr.StringFunction.StripCharsStart:
+                side = plc.strings.SideType.LEFT
+            elif self.name == pl_expr.StringFunction.StripCharsEnd:
+                side = plc.strings.SideType.RIGHT
+            else:
+                side = plc.strings.SideType.BOTH
+            return Column(plc.strings.strip.strip(column.obj, side, chars.obj_scalar))
+
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
@@ -960,6 +988,29 @@ class UnaryFunction(Expr):
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
+    _OP_MAPPING: ClassVar[dict[str, plc.unary.UnaryOperator]] = {
+        "sin": plc.unary.UnaryOperator.SIN,
+        "cos": plc.unary.UnaryOperator.COS,
+        "tan": plc.unary.UnaryOperator.TAN,
+        "arcsin": plc.unary.UnaryOperator.ARCSIN,
+        "arccos": plc.unary.UnaryOperator.ARCCOS,
+        "arctan": plc.unary.UnaryOperator.ARCTAN,
+        "sinh": plc.unary.UnaryOperator.SINH,
+        "cosh": plc.unary.UnaryOperator.COSH,
+        "tanh": plc.unary.UnaryOperator.TANH,
+        "arcsinh": plc.unary.UnaryOperator.ARCSINH,
+        "arccosh": plc.unary.UnaryOperator.ARCCOSH,
+        "arctanh": plc.unary.UnaryOperator.ARCTANH,
+        "exp": plc.unary.UnaryOperator.EXP,
+        "log": plc.unary.UnaryOperator.LOG,
+        "sqrt": plc.unary.UnaryOperator.SQRT,
+        "cbrt": plc.unary.UnaryOperator.CBRT,
+        "ceil": plc.unary.UnaryOperator.CEIL,
+        "floor": plc.unary.UnaryOperator.FLOOR,
+        "abs": plc.unary.UnaryOperator.ABS,
+        "bit_invert": plc.unary.UnaryOperator.BIT_INVERT,
+        "not": plc.unary.UnaryOperator.NOT,
+    }
     _supported_misc_fns = frozenset(
         {
             "drop_nulls",
@@ -968,6 +1019,7 @@ class UnaryFunction(Expr):
             "round",
             "set_sorted",
             "unique",
+            "pow",
         }
     )
     _supported_cum_aggs = frozenset(
@@ -978,7 +1030,9 @@ class UnaryFunction(Expr):
             "cum_sum",
         }
     )
-    _supported_fns = frozenset(_supported_misc_fns.union(_supported_cum_aggs))
+    _supported_fns = frozenset().union(
+        _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
+    )
 
     def __init__(
         self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -987,6 +1041,7 @@ class UnaryFunction(Expr):
         self.name = name
         self.options = options
         self.children = children
+
         if self.name not in UnaryFunction._supported_fns:
             raise NotImplementedError(f"Unary function {name=}")
         if self.name in UnaryFunction._supported_cum_aggs:
@@ -1099,36 +1154,59 @@ class UnaryFunction(Expr):
                 )
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
             return Column(plc.replace.replace_nulls(column.obj, arg))
+        elif self.name == "pow":
+            (base, exponent) = (
+                c.evaluate(df, context=context, mapping=mapping) for c in self.children
+            )
+            base_obj = (
+                base.obj_scalar
+                if (base.is_scalar and not exponent.is_scalar)
+                else base.obj
+            )
+            exponent_obj = exponent.obj_scalar if exponent.is_scalar else exponent.obj
+            return Column(
+                plc.binaryop.binary_operation(
+                    base_obj, exponent_obj, plc.binaryop.BinaryOperator.POW, self.dtype
+                )
+            )
+        elif self.name in self._OP_MAPPING:
+            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            if column.obj.type().id() != self.dtype.id():
+                arg = plc.unary.cast(column.obj, self.dtype)
+            else:
+                arg = column.obj
+            return Column(plc.unary.unary_operation(arg, self._OP_MAPPING[self.name]))
         elif self.name in UnaryFunction._supported_cum_aggs:
             column = self.children[0].evaluate(df, context=context, mapping=mapping)
             plc_col = column.obj
             col_type = column.obj.type()
             # cum_sum casts
-            # INT8, UInt8, Int16, UInt16 -> Int64 for overflow prevention
-            _cum_sum_cast_cond = self.name == "cum_sum" and col_type.id() in {
-                plc.types.TypeId.INT8,
-                plc.types.TypeId.UINT8,
-                plc.types.TypeId.INT16,
-                plc.types.TypeId.UINT16,
-            }
+            # Int8, UInt8, Int16, UInt16 -> Int64 for overflow prevention
+            # Bool -> UInt32
             # cum_prod casts integer dtypes < int64 and bool to int64
-            # note: bool counted in is_integral
-            # xref https://github.com/pola-rs/polars/blob/3dda47e578e0b50a5bb7c459ebee6c5c76d41c75/crates/polars-ops/src/series/ops/cum_agg.rs#L141-L142
-            _cum_prod_cast_cond = (
+            # See:
+            # https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/cum_agg.rs
+            if (
+                self.name == "cum_sum"
+                and col_type.id()
+                in {
+                    plc.types.TypeId.INT8,
+                    plc.types.TypeId.UINT8,
+                    plc.types.TypeId.INT16,
+                    plc.types.TypeId.UINT16,
+                }
+            ) or (
                 self.name == "cum_prod"
                 and plc.traits.is_integral(col_type)
                 and plc.types.size_of(col_type) <= 4
-            )
-            if _cum_sum_cast_cond or _cum_prod_cast_cond:
+            ):
                 plc_col = plc.unary.cast(
                     plc_col, plc.types.DataType(plc.types.TypeId.INT64)
                 )
-            if (
+            elif (
                 self.name == "cum_sum"
                 and column.obj.type().id() == plc.types.TypeId.BOOL8
             ):
-                # polars cum_sum bools by casting to uint32 first
-                # https://github.com/pola-rs/polars/blob/3dda47e578e0b50a5bb7c459ebee6c5c76d41c75/crates/polars-ops/src/series/ops/cum_agg.rs#L146-L149
                 plc_col = plc.unary.cast(
                     plc_col, plc.types.DataType(plc.types.TypeId.UINT32)
                 )

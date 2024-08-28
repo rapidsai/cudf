@@ -387,6 +387,24 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
     name, *options = node.function_data
     options = tuple(options)
     if isinstance(name, pl_expr.StringFunction):
+        if name in {
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+        }:
+            column, chars = (translate_expr(visitor, n=n) for n in node.input)
+            if isinstance(chars, expr.Literal):
+                if chars.value == pa.scalar(""):
+                    # No-op in polars, but libcudf uses empty string
+                    # as signifier to remove whitespace.
+                    return column
+                elif chars.value == pa.scalar(None):
+                    # Polars uses None to mean "strip all whitespace"
+                    chars = expr.Literal(
+                        column.dtype,
+                        pa.scalar("", type=plc.interop.to_arrow(column.dtype)),
+                    )
+            return expr.StringFunction(dtype, name, options, column, chars)
         return expr.StringFunction(
             dtype,
             name,

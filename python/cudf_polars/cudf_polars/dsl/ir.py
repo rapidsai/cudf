@@ -537,8 +537,6 @@ class GroupBy(IR):
 
     def __post_init__(self) -> None:
         """Check whether all the aggregations are implemented."""
-        if self.options.rolling is None and self.maintain_order:
-            raise NotImplementedError("Maintaining order in groupby")
         if self.options.rolling:
             raise NotImplementedError(
                 "rolling window/groupby"
@@ -593,7 +591,32 @@ class GroupBy(IR):
         results = [
             req.evaluate(result_subs, mapping=mapping) for req in self.agg_requests
         ]
-        return DataFrame(broadcast(*result_keys, *results)).slice(self.options.slice)
+        broadcasted = broadcast(*result_keys, *results)
+        result_keys = broadcasted[: len(result_keys)]
+        results = broadcasted[len(result_keys) :]
+        # Handle order preservation of groups
+        # like cudf classic does
+        # https://github.com/rapidsai/cudf/blob/5780c4d8fb5afac2e04988a2ff5531f94c22d3a3/python/cudf/cudf/core/groupby/groupby.py#L723-L743
+        if self.maintain_order and not sorted:
+            left = plc.stream_compaction.stable_distinct(
+                plc.Table([k.obj for k in keys]),
+                list(range(group_keys.num_columns())),
+                plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+                plc.types.NullEquality.EQUAL,
+                plc.types.NanEquality.ALL_EQUAL,
+            )
+            right = plc.Table([key.obj for key in result_keys])
+            _, indices = plc.join.left_join(left, right, plc.types.NullEquality.EQUAL)
+            ordered_table = plc.copying.gather(
+                plc.Table([col.obj for col in broadcasted]),
+                indices,
+                plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+            )
+            broadcasted = [
+                NamedColumn(reordered, b.name)
+                for reordered, b in zip(ordered_table.columns(), broadcasted)
+            ]
+        return DataFrame(broadcasted).slice(self.options.slice)
 
 
 @dataclasses.dataclass
