@@ -20,7 +20,8 @@ from pyarrow import dataset as ds
 import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
-from cudf.core.column import as_column, build_categorical_column, column_empty
+from cudf.core.column import as_column, column_empty
+from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
 
@@ -811,12 +812,17 @@ def _parquet_to_frame(
                     partition_categories[name].index(value),
                     length=_len,
                 )
-                dfs[-1][name] = build_categorical_column(
-                    categories=partition_categories[name],
-                    codes=codes,
+                codes = as_unsigned_codes(
+                    len(partition_categories[name]), codes
+                )
+                dfs[-1][name] = CategoricalColumn(
+                    data=None,
                     size=codes.size,
+                    dtype=cudf.CategoricalDtype(
+                        categories=partition_categories[name], ordered=False
+                    ),
                     offset=codes.offset,
-                    ordered=False,
+                    children=(codes,),
                 )
             else:
                 # Not building categorical columns, so
