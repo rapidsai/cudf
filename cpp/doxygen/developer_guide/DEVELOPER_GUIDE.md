@@ -233,7 +233,7 @@ All memory resource parameters should be defaulted to use the return value of
 Memory resources are passed via resource ref parameters. A resource ref is a memory resource wrapper
 that enables consumers to specify properties of resources that they expect. These are defined
 in the `cuda::mr` namespace of libcu++, but RMM provides some convenience aliases in
-`rmm/resource_ref.hpp` and libcudf provides its own (identical) aliases in 
+`rmm/resource_ref.hpp` and libcudf provides its own (identical) aliases in
 `cudf/utilities/memory_resource.hpp`.
  - `cudf::device_resource_ref` accepts a memory resource that provides synchronous allocation
     of device-accessible memory.
