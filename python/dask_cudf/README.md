@@ -1,4 +1,4 @@
-# <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;Dask cuDF - A GPU Backend for Dask DataFrame</div>
+# <div align="left"><img src="../../img/rapids_logo.png" width="90px"/>&nbsp;Dask cuDF - A GPU Backend for Dask DataFrame</div>
 
 Dask cuDF (a.k.a. dask-cudf or `dask_cudf`) is an extension library for [Dask DataFrame](https://docs.dask.org/en/stable/dataframe.html). When installed, Dask cuDF is automatically registered as the `"cudf"` [dataframe backend](https://docs.dask.org/en/stable/how-to/selecting-the-collection-backend.html) for Dask DataFrame.
 
@@ -70,7 +70,7 @@ df = dd.read_parquet("/my/parquet/dataset/")
 result = df.sort_values('B')['A']
 ```
 
-Unoptimzed expression graph (`df.pprint()`):
+Unoptimized expression graph (`df.pprint()`):
 ```
 Projection: columns='A'
   SortValues: by=['B'] shuffle_method='tasks' options={}
@@ -105,18 +105,21 @@ from distributed import Client
 client = Client(
     LocalCUDACluster(
         CUDA_VISIBLE_DEVICES="0,1",  # Use two workers (on devices 0 and 1)
-        rmm_pool_size=0.9,  # Use memory pool for faster allocations
+        rmm_pool_size=0.9,  # Use 90% of GPU memory as a pool for faster allocations
         enable_cudf_spill=True,  # Improve device memory stability
         local_directory="/fast/scratch/",  # Use fast local storage for spilling
     )
 )
 
 df = dd.read_parquet("/my/parquet/dataset/")
-result = df.sort_values('B')['A']
-result.compute()  # This will use the cluster defined above
+agg = df.groupby('B').sum()
+agg.compute()  # This will use the cluster defined above
 ```
 
-Please see the [Dask CUDA](https://docs.rapids.ai/api/dask-cuda/stable/) documentation for more information (including [best practices](https://docs.rapids.ai/api/dask-cuda/stable/examples/best-practices/)).
+> [!NOTE]
+> This example uses `compute` to materialize a concrete `cudf.DataFrame` object in local memory. Never call `compute` on a large collection that cannot fit comfortably in the memory of a single GPU! See Dask's [documentation on managing computation](https://distributed.dask.org/en/stable/manage-computation.html) for more details.
+
+Please see the [Dask CUDA](https://docs.rapids.ai/api/dask-cuda/stable/) documentation for more information about deploying GPU-aware clusters (including [best practices](https://docs.rapids.ai/api/dask-cuda/stable/examples/best-practices/)).
 
 ## Install
 
