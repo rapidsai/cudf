@@ -32,6 +32,7 @@
 #include <cudf/detail/groupby.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
@@ -558,8 +559,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
 
   auto compute_mapping_indices_fn_ptr =
     compute_mapping_indices<shared_set_ref_type, decltype(global_set_ref), decltype(window_extent)>;
-  auto const grid_size = find_grid_size(
-    compute_mapping_indices_fn_ptr, num_input_rows, cudf::detail::num_multiprocessors());
+  auto const grid_size = find_grid_size(compute_mapping_indices_fn_ptr, num_input_rows);
   // 'local_mapping_index' maps from the global row index of the input table to the row index of
   // the local pre-aggregate table
   rmm::device_uvector<cudf::size_type> local_mapping_index(num_input_rows, stream);
