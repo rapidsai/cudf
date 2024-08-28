@@ -37,6 +37,7 @@ dependencies:
 - hypothesis
 - identify>=2.5.20
 - ipython
+- jupyter_client
 - libcufile-dev=1.4.0.31
 - libcufile=1.4.0.31
 - libcurand-dev=10.3.0.86
@@ -48,6 +49,8 @@ dependencies:
 - moto>=4.0.8
 - msgpack-python
 - myst-nb
+- nbconvert
+- nbformat
 - nbsphinx
 - ninja
 - notebook
@@ -57,6 +60,7 @@ dependencies:
 - nvcc_linux-64=11.8
 - nvcomp==3.0.6
 - nvtx>=0.2.1
+- openpyxl
 - packaging
 - pandas
 - pandas>=2.0,<2.2.3dev0
