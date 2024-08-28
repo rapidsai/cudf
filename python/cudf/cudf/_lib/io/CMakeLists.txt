@@ -19,5 +19,3 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX io_ ASSOCIATED_TARGETS cudf
 )
-
-link_to_pyarrow_headers("${RAPIDS_CYTHON_CREATED_TARGETS}")
