@@ -17,7 +17,6 @@ runtest_gold() {
     -v \
     --continue-on-collection-errors \
     --cache-clear \
-    --junitxml="${RAPIDS_TESTS_DIR}/junit-${lib}-gold.xml" \
     --numprocesses=${NUM_PROCESSES} \
     --dist=worksteal \
     ${TEST_DIR}/test_${lib}*.py \
@@ -33,7 +32,6 @@ runtest_cudf_pandas() {
     -v \
     --continue-on-collection-errors \
     --cache-clear \
-    --junitxml="${RAPIDS_TESTS_DIR}/junit-${lib}-cudf-pandas.xml" \
     --numprocesses=${NUM_PROCESSES} \
     --dist=worksteal \
     ${TEST_DIR}/test_${lib}*.py \
@@ -55,7 +53,6 @@ main() {
     -v \
     --continue-on-collection-errors \
     --cache-clear \
-    --junitxml="${RAPIDS_TESTS_DIR}/junit-${lib}-assertion.xml" \
     --numprocesses=${NUM_PROCESSES} \
     --dist=worksteal \
     ${TEST_DIR}/test_${lib}*.py \

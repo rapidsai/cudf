@@ -48,10 +48,6 @@ main() {
         conda activate test
         set -u
 
-        RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
-
-        mkdir -p "${RAPIDS_TESTS_DIR}"
-
         repo_root=$(git rev-parse --show-toplevel)
         TEST_DIR=${repo_root}/python/cudf/cudf_pandas_tests/third_party_integration_tests/tests
 
@@ -76,7 +72,7 @@ main() {
             fi
         done
 
-        RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR} TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} ci/cudf_pandas_scripts/third-party-integration/ci_run_library_tests.sh ${lib}
+        TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} ci/cudf_pandas_scripts/third-party-integration/ci_run_library_tests.sh ${lib}
 
         rapids-logger "Test script exiting with value: ${EXITCODE}"
     done
