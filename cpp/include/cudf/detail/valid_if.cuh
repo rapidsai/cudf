@@ -188,5 +188,47 @@ CUDF_KERNEL void valid_if_n_kernel(InputIterator1 begin1,
   }
 }
 
+template <typename InputIterator, typename Predicate>
+std::pair<std::vector<rmm::device_buffer>, std::vector<size_type>> valid_if_n_kernel(std::vector<InputIterator> strings,
+                                                  std::vector<int64_t> sizes,
+                                                  Predicate p,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr)
+{
+  rmm::device_uvector<size_type> valid_counts(strings.size(), stream);
+
+  rmm::device_uvector<rmm::device_buffer> null_masks(strings.size(), stream);
+
+  thrust::transform(
+    sizes.begin(),
+    sizes.end(),
+    null_masks.begin(),
+    [stream, mr] __device__ (auto & size) {
+      return cudf::create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
+    }
+  );
+  constexpr size_type block_size{256};
+  grid_1d grid{strings.size(), block_size};
+  valid_if_n_kernel<block_size><<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>
+  (strings.begin(), InputIterator2 begin2, p, static_cast<bitmask_type*>(null_masks.data()),  strings.size(),  8, valid_counts.data());
+
+  std::vector<size_type> host_valid_counts = make_std_vector_async(valid_counts, stream);
+
+  std::vector<size_type> host_null_masks = make_std_vector_async(null_masks, stream);
+  
+  std::vector<size_type> null_counts(strings.size());
+
+  std::transform(
+    thrust::make_zip_iterator(thrust::make_tuple(host_valid_counts.begin(), sizes.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(host_valid_counts.end(), sizes.end())),
+    null_counts.begin(),
+    [] (auto & elem) {
+      return thrust::get<1>(elem) - thrust::get<0>(elem);
+    }
+  )
+
+  return std::pair(host_null_masks, null_counts);
+}
+
 }  // namespace detail
 }  // namespace cudf

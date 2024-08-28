@@ -39,10 +39,101 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
   rmm::device_async_resource_ref mr)
 {
   std::vector<std::unique_ptr<column>> output;
-  std::vector<std::unique_ptr<column>> offsets;
+  std::vector<std::unique_ptr<column>>> offset_columns;
+  std::vector<size_type> total_bytes;
+  std::vector<size_type> strings_sizes;
+  std::vector<thrust::transform_iterator<size_type> offsets_transformer_itr;
   std::vector<int64_t> chars_sizes;
   std::vector<rmm::device_buffer> null_masks;
   std::vector<size_type> null_counts;
+
+  std::transform(
+    strings_batch.begin(),
+    strings_batch.end(),
+    std::back_inserter(strings_sizes),
+    [] (auto &strings) {
+      return thrust::distance(strings.begin(), strings.end());
+    }
+  );
+
+  std::transform(
+    strings_batch.begin(),
+    strings_batch.end(),
+    std::back_inserter(offsets_transformer_itr),
+    [stream, mr] (auto &strings) {
+      size_type strings_count = thrust::distance(strings.begin(), strings.end());
+      auto offsets_transformer =
+        cuda::proclaim_return_type<size_type>([] __device__(string_index_pair item) -> size_type {
+          return (item.first != nullptr ? static_cast<size_type>(item.second) : size_type{0});
+        });
+      return thrust::make_transform_iterator(strings.begin(), offsets_transformer);
+    }
+  );
+
+  [offset_columns, total_bytes] = cudf::strings::detail::make_offsets_child_column_batch(
+    offsets_transformer_itr, strings_sizes, stream, mr);
+
+  
+
+  // create null mask
+  auto validator = [] __device__(string_index_pair const item) { return item.first != nullptr; };
+  [] = cudf::detail::valid_if_n_kernel(strings_batch, sizes, validator, stream, mr);
+  auto const null_count = new_nulls.second;
+  auto null_mask =
+    (null_count > 0) ? std::move(new_nulls.first) : rmm::device_buffer{0, stream, mr};
+
+
+  // build chars column
+  std::transform(
+    thrust::make_zip_iterator(thrust::make_tuple(offset_columns.begin(), total_bytes.begin(), strings_sizes.begin(), strings_batch.begin(), nu))
+
+    std::back_inserter(output),
+    [] (auto &elem) {
+      auto strings_count = thrust::get<2>(elem)
+      auto bytes = thrust::get<1>(elem)
+      auto null_count = thrust::get<4>(elem)
+      auto begin = thrust::get<3>(elem)
+      auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(thrust::get<0>(elem)->view());
+      auto chars_data = [d_offsets, bytes = bytes, begin, strings_count, null_count, stream, mr] {
+      auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
+      // use a character-parallel kernel for long string lengths
+      if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
+        auto const str_begin = thrust::make_transform_iterator(
+          begin, cuda::proclaim_return_type<string_view>([] __device__(auto ip) {
+            return string_view{ip.first, ip.second};
+          }));
+
+        return gather_chars(str_begin,
+                            thrust::make_counting_iterator<size_type>(0),
+                            thrust::make_counting_iterator<size_type>(strings_count),
+                            d_offsets,
+                            bytes,
+                            stream,
+                            mr);
+      } else {
+        // this approach is 2-3x faster for a large number of smaller string lengths
+        auto chars_data = rmm::device_uvector<char>(bytes, stream, mr);
+        auto d_chars    = chars_data.data();
+        auto copy_chars = [d_chars] __device__(auto item) {
+          string_index_pair const str = thrust::get<0>(item);
+          int64_t const offset        = thrust::get<1>(item);
+          if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
+        };
+        thrust::for_each_n(rmm::exec_policy(stream),
+                          thrust::make_zip_iterator(thrust::make_tuple(begin, d_offsets)),
+                          strings_count,
+                          copy_chars);
+        return chars_data;
+      }
+    }();
+
+    return make_strings_column(strings_count,
+                              std::move(offsets_column),
+                              chars_data.release(),
+                              null_count,
+                              std::move(null_mask));
+    }
+  )
 
   return output;
 }
