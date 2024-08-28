@@ -6,25 +6,11 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.callback import execute_with_cudf
 from cudf_polars.dsl import expr
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.callback import execute_with_cudf
-
-
-# Note: quantile is tested separately (since it takes another argument)
-@pytest.fixture(params=sorted(expr.Agg._SUPPORTED - {"quantile"}))
-def agg(request):
-    return request.param
-
-
-@pytest.fixture(params=[pl.Int32, pl.Float32, pl.Int16])
-def dtype(request):
-    return request.param
-
 
 
 @pytest.fixture(
@@ -136,11 +122,7 @@ def test_quantile(df, q, interp):
 def test_quantile_invalid_q(df):
     expr = pl.col("a").quantile(pl.col("a"))
     q = df.select(expr)
-    with pytest.raises(
-        pl.exceptions.ComputeError,
-        match="cudf-polars only supports expressions that evaluate to a scalar as the quantile argument",
-    ):
-        q.collect(post_opt_callback=execute_with_cudf)
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize(
