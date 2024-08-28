@@ -136,6 +136,10 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
+              cuda: "11"
+            packages:
+              - cuda-version=11.8
+          - matrix:
               cuda: "11.8"
             packages:
               - cuda-version=11.8
@@ -149,6 +153,10 @@ dependencies:
               - cuda-version=12.2
           - matrix:
               cuda: "12.5"
+            packages:
+              - cuda-version=12.5
+          - matrix:
+              cuda: "12"
             packages:
               - cuda-version=12.5
   py_version:
