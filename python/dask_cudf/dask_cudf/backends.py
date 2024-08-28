@@ -744,7 +744,12 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             or isinstance(filesystem, str)
             and filesystem.lower() in ("arrow", "pyarrow")
         ):
-            from dask_cudf.expr._expr import CudfReadParquetPyarrowFS
+            # TODO: Switch to proper CudfReadParquetPyarrowFS when
+            # strange error is resolved: `KeyError: 'distributed'`
+            # from dask_cudf.expr._expr import CudfReadParquetPyarrowFS
+            from dask_expr.io.parquet import (
+                ReadParquetPyarrowFS as CudfReadParquetPyarrowFS,
+            )
 
             if metadata_task_size is not None:
                 raise NotImplementedError(
