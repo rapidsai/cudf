@@ -3264,7 +3264,7 @@ def interval_range(
     freq=None,
     name=None,
     closed="right",
-) -> "IntervalIndex":
+) -> IntervalIndex:
     """
     Returns a fixed frequency IntervalIndex.
 
@@ -3361,6 +3361,16 @@ def interval_range(
     )
     left_col = bin_edges.slice(0, len(bin_edges) - 1)
     right_col = bin_edges.slice(1, len(bin_edges))
+    # For indexing, children should both have 0 offset
+    right_col = type(right_col)(
+        data=right_col.data,
+        dtype=right_col.dtype,
+        size=right_col.size,
+        mask=right_col.mask,
+        offset=0,
+        null_count=right_col.null_count,
+        children=right_col.children,
+    )
 
     if len(right_col) == 0 or len(left_col) == 0:
         dtype = IntervalDtype("int64", closed)
