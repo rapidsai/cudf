@@ -748,13 +748,7 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             # (See: https://github.com/dask/dask/issues/11352)
             import distributed  # noqa: F401
 
-            # TODO: Switch to proper CudfReadParquetPyarrowFS when
-            # strange error is resolved: `KeyError: 'distributed'`
             from dask_cudf.expr._expr import CudfReadParquetPyarrowFS
-
-            # from dask_expr.io.parquet import (
-            #     ReadParquetPyarrowFS as CudfReadParquetPyarrowFS,
-            # )
 
             if metadata_task_size is not None:
                 raise NotImplementedError(
