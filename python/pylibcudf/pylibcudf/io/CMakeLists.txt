@@ -20,8 +20,3 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_io_ ASSOCIATED_TARGETS cudf
 )
-
-set(targets_using_arrow_headers pylibcudf_io_avro pylibcudf_io_csv pylibcudf_io_datasource
-                                pylibcudf_io_json pylibcudf_io_parquet pylibcudf_io_types
-)
-link_to_pyarrow_headers("${targets_using_arrow_headers}")

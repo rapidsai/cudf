@@ -36,7 +36,6 @@ include(rapids-cython-core)
 
 rapids_cython_init()
 
-include(cmake/Modules/LinkPyarrowHeaders.cmake)
 add_subdirectory(pylibcudf)
 
 if(DEFINED cython_lib_dir)
