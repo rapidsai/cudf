@@ -64,6 +64,8 @@ class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
 
         dataset_info = super()._dataset_info
         meta_pd = dataset_info["base_meta"]
+        if isinstance(meta_pd, cudf.DataFrame):
+            return dataset_info
 
         # Convert to cudf
         # (drop unsupported timezone information)
