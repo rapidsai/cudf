@@ -142,7 +142,7 @@ class NumericalColumn(NumericalBaseColumn):
         """
 
         # Normalize value to scalar/column
-        device_value = (
+        device_value: cudf.Scalar | ColumnBase = (
             cudf.Scalar(
                 value,
                 dtype=self.dtype
@@ -552,7 +552,7 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> cudf.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
-            cudf_obj = cudf.Scalar(fill_value)
+            cudf_obj: cudf.Scalar | ColumnBase = cudf.Scalar(fill_value)
             if not as_column(cudf_obj).can_cast_safely(self.dtype):
                 raise TypeError(
                     f"Cannot safely cast non-equivalent "
