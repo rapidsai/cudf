@@ -22,8 +22,46 @@
 
 namespace cudf {
 
+/**
+ * @brief Alias for a `cuda::mr::resource_ref` with the property
+ * `cuda::mr::device_accessible`.
+ */
+using device_resource_ref = rmm::device_resource_ref;
+
+/**
+ * @brief Alias for a `cuda::mr::async_resource_ref` with the property
+ * `cuda::mr::device_accessible`.
+ */
 using device_async_resource_ref = rmm::device_async_resource_ref;
-using device_memory_resource    = rmm::mr::device_memory_resource;
+
+/**
+ * @brief Alias for a `cuda::mr::resource_ref` with the property
+ * `cuda::mr::host_accessible`.
+ */
+using host_resource_ref = rmm::host_resource_ref;
+
+/**
+ * @brief Alias for a `cuda::mr::async_resource_ref` with the property
+ * `cuda::mr::host_accessible`.
+ */
+using host_async_resource_ref = rmm::host_async_resource_ref;
+
+/**
+ * @brief Alias for a `cuda::mr::resource_ref` with the properties
+ * `cuda::mr::host_accessible` and `cuda::mr::device_accessible`.
+ */
+using host_device_resource_ref = rmm::host_device_resource_ref;
+
+/**
+ * @brief Alias for a `cuda::mr::async_resource_ref` with the properties
+ * `cuda::mr::host_accessible` and `cuda::mr::device_accessible`.
+ */
+using host_device_async_resource_ref = rmm::host_device_async_resource_ref;
+
+/**
+ * @brief Alias for a `rmm::mr::device_memory_resource`.
+ */
+using device_memory_resource = rmm::mr::device_memory_resource;
 
 /**
  * @brief Get the current device memory resource.
