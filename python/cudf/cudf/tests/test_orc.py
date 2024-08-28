@@ -184,8 +184,6 @@ def test_orc_read_statistics(datadir):
         pytest.skip(".orc file is not found: %s" % e)
 
     # Check numberOfValues
-    # assert_eq(file_statistics[0]["int1"]["number_of_values"], 11_000)
-    print(file_statistics[0])
     assert_eq(file_statistics[0]["int1"].number_of_values, 11_000)
     assert_eq(
         file_statistics[0]["int1"].number_of_values,

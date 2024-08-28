@@ -1873,7 +1873,6 @@ def _apply_filter_bool_eq(val, col_stats):
 
 
 def _apply_filter_not_eq(val, col_stats):
-    print(col_stats)
     return ("minimum" in col_stats and val < col_stats["minimum"]) or (
         "maximum" in col_stats and val > col_stats["maximum"]
     )
