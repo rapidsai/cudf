@@ -515,10 +515,6 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
     )
 
 
-@pytest.mark.skipif(
-    version.parse(pa.__version__) < version.parse("1.0.1"),
-    reason="pyarrow 1.0.0 needed for various operators and operand types",
-)
 @pytest.mark.parametrize(
     "predicate,expected_len",
     [
@@ -2393,6 +2389,10 @@ def test_parquet_writer_list_large_mixed(tmpdir):
 
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_writer_list_chunked(tmpdir, store_schema):
+    if store_schema and version.parse(pa.__version__) < version.parse(
+        "15.0.0"
+    ):
+        pytest.skip("https://github.com/apache/arrow/pull/37792")
     table1 = cudf.DataFrame(
         {
             "a": list_gen(string_gen, 128, 80, 50),
@@ -2578,6 +2578,10 @@ def normalized_equals(value1, value2):
 @pytest.mark.parametrize("add_nulls", [True, False])
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_writer_statistics(tmpdir, pdf, add_nulls, store_schema):
+    if store_schema and version.parse(pa.__version__) < version.parse(
+        "15.0.0"
+    ):
+        pytest.skip("https://github.com/apache/arrow/pull/37792")
     file_path = tmpdir.join("cudf.parquet")
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category", "col_bool"])
@@ -2957,6 +2961,10 @@ def test_per_column_options_string_col(tmpdir, encoding):
     assert encoding in fmd.row_group(0).column(0).encodings
 
 
+@pytest.mark.skipif(
+    version.parse(pa.__version__) < version.parse("16.0.0"),
+    reason="https://github.com/apache/arrow/pull/39748",
+)
 @pytest.mark.parametrize(
     "num_rows",
     [200, 10000],
@@ -3557,6 +3565,10 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema(tmpdir, data):
 
 
 @pytest.mark.parametrize("index", [None, True, False])
+@pytest.mark.skipif(
+    version.parse(pa.__version__) < version.parse("15.0.0"),
+    reason="https://github.com/apache/arrow/pull/37792",
+)
 def test_parquet_writer_roundtrip_with_arrow_schema(index):
     # Ensure that the concrete and nested types are faithfully being roundtripped
     # across Parquet with arrow schema
@@ -3707,6 +3719,10 @@ def test_parquet_writer_int96_timestamps_and_arrow_schema():
     ],
 )
 @pytest.mark.parametrize("index", [None, True, False])
+@pytest.mark.skipif(
+    version.parse(pa.__version__) < version.parse("15.0.0"),
+    reason="https://github.com/apache/arrow/pull/37792",
+)
 def test_parquet_writer_roundtrip_structs_with_arrow_schema(
     tmpdir, data, index
 ):
