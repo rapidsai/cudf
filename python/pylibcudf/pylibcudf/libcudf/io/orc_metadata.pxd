@@ -1,12 +1,10 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-cimport pylibcudf.libcudf.io.types as cudf_io_types
 from libc.stdint cimport int32_t, int64_t, uint32_t, uint64_t
 from libcpp cimport bool
 from libcpp.optional cimport optional
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-
 from pylibcudf.libcudf.io cimport types as cudf_io_types
 from pylibcudf.variant cimport monostate, variant
 

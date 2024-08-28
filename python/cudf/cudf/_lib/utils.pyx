@@ -322,10 +322,10 @@ cdef data_from_pylibcudf_io(tbl_with_meta, column_names=None, index_names=None):
     into a dict of columns and an Index (cuDF format)
     """
     if column_names is None:
-        column_names = tbl_with_meta.column_names
+        column_names = tbl_with_meta.column_names(include_children=False)
     return _data_from_columns(
         columns=[Column.from_pylibcudf(plc) for plc in tbl_with_meta.columns],
-        column_names=tbl_with_meta.column_names(include_children=False),
+        column_names=column_names,
         index_names=index_names
     )
 

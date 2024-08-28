@@ -1,7 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from libcpp.memory cimport shared_ptr
-
 from pylibcudf.libcudf.io.datasource cimport datasource
 
 
