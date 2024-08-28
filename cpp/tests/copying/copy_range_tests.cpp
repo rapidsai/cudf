@@ -232,6 +232,16 @@ TEST_F(CopyRangeTestFixture, CopyWithNullsString)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected);
 }
 
+TEST_F(CopyRangeTestFixture, CopyWithTargetNullsString)
+{
+  auto target =
+    cudf::test::strings_column_wrapper({"a", "b", "", "d", "", "é"}, {1, 1, 0, 1, 1, 1});
+  auto source   = cudf::test::strings_column_wrapper({"A", "B", "C", "D", "E", "F"});
+  auto result   = cudf::copy_range(source, target, 1, 5, 1);
+  auto expected = cudf::test::strings_column_wrapper({"a", "B", "C", "D", "E", "é"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+}
+
 TEST_F(CopyRangeTestFixture, CopyNoNullsString)
 {
   cudf::size_type size{100};

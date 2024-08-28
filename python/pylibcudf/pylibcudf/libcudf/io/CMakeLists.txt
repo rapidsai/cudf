@@ -21,6 +21,3 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" ASSOCIATED_TARGETS cudf MODULE_PREFIX cpp_io_
 )
-
-set(targets_using_arrow_headers cpp_io_json cpp_io_types)
-link_to_pyarrow_headers("${targets_using_arrow_headers}")
