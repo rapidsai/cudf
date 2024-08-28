@@ -132,15 +132,15 @@ __device__ void compute_final_aggregates(int col_start,
 
 /* Takes the local_mapping_index and global_mapping_index to compute
  * pre (shared) and final (global) aggregates*/
-CUDF_KERNEL void compute_aggregates(cudf::size_type* local_mapping_index,
-                                    cudf::size_type* global_mapping_index,
-                                    cudf::size_type* block_cardinality,
-                                    cudf::table_device_view input_values,
-                                    cudf::mutable_table_device_view output_values,
-                                    cudf::size_type num_input_rows,
-                                    cudf::aggregation::Kind const* aggs,
-                                    int total_agg_size,
-                                    int pointer_size)
+CUDF_KERNEL void compute_aggs_kernel(cudf::size_type* local_mapping_index,
+                                     cudf::size_type* global_mapping_index,
+                                     cudf::size_type* block_cardinality,
+                                     cudf::table_device_view input_values,
+                                     cudf::mutable_table_device_view output_values,
+                                     cudf::size_type num_input_rows,
+                                     cudf::aggregation::Kind const* aggs,
+                                     int total_agg_size,
+                                     int pointer_size)
 {
   cudf::size_type cardinality = block_cardinality[blockIdx.x];
   if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD) { return; }
