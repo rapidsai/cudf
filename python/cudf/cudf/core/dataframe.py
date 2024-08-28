@@ -13,8 +13,8 @@ import sys
 import textwrap
 import warnings
 from collections import abc, defaultdict
-from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping, cast
+from collections.abc import Callable, Iterator
+from typing import TYPE_CHECKING, Any, Literal, MutableMapping, cast
 
 import cupy
 import numba
