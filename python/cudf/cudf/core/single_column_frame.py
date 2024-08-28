@@ -350,7 +350,6 @@ class SingleColumnFrame(Frame, NotIterable):
     def where(self, cond, other=None, inplace=False):
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
-            _make_categorical_like,
         )
 
         if isinstance(other, cudf.DataFrame):
@@ -366,14 +365,12 @@ class SingleColumnFrame(Frame, NotIterable):
         if not cudf.api.types.is_scalar(other):
             other = cudf.core.column.as_column(other)
 
-        self_column = self._column
         input_col, other = _check_and_cast_columns_with_other(
-            source_col=self_column, other=other, inplace=inplace
+            source_col=self._column, other=other, inplace=inplace
         )
 
         result = cudf._lib.copying.copy_if_else(input_col, other, cond)
-
-        return _make_categorical_like(result, self_column)
+        return result._with_type_metadata(self.dtype)
 
     @_performance_tracking
     def transpose(self):

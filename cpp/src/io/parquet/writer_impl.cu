@@ -2230,20 +2230,20 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     bool need_sync{false};
 
     // need to fetch the histogram data from the device
-    std::vector<uint32_t> h_def_histogram;
-    std::vector<uint32_t> h_rep_histogram;
-    if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-      if (def_histogram_bfr_size > 0) {
-        h_def_histogram =
-          std::move(cudf::detail::make_std_vector_async(def_level_histogram, stream));
+    auto const h_def_histogram = [&]() {
+      if (stats_granularity == statistics_freq::STATISTICS_COLUMN && def_histogram_bfr_size > 0) {
         need_sync = true;
+        return cudf::detail::make_host_vector_async(def_level_histogram, stream);
       }
-      if (rep_histogram_bfr_size > 0) {
-        h_rep_histogram =
-          std::move(cudf::detail::make_std_vector_async(rep_level_histogram, stream));
+      return cudf::detail::make_host_vector<uint32_t>(0, stream);
+    }();
+    auto const h_rep_histogram = [&]() {
+      if (stats_granularity == statistics_freq::STATISTICS_COLUMN && rep_histogram_bfr_size > 0) {
         need_sync = true;
+        return cudf::detail::make_host_vector_async(rep_level_histogram, stream);
       }
-    }
+      return cudf::detail::make_host_vector<uint32_t>(0, stream);
+    }();
 
     for (int r = 0; r < num_rowgroups; r++) {
       int p           = rg_to_part[r];
@@ -2265,7 +2265,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         update_chunk_encoding_stats(column_chunk_meta, ck, write_v2_headers);
 
         if (ck.ck_stat_size != 0) {
-          std::vector<uint8_t> const stats_blob = cudf::detail::make_std_vector_sync(
+          auto const stats_blob = cudf::detail::make_host_vector_sync(
             device_span<uint8_t const>(dev_bfr, ck.ck_stat_size), stream);
           CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
           cp.read(&column_chunk_meta.statistics);

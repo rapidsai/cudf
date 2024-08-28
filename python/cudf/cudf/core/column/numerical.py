@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, Callable, Sequence, cast
+from typing import TYPE_CHECKING, Any, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -28,6 +28,8 @@ from cudf.utils.dtypes import (
 from .numerical_base import NumericalBaseColumn
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
@@ -649,22 +651,20 @@ class NumericalColumn(NumericalBaseColumn):
 
         return False
 
-    def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
+    def _with_type_metadata(self: Self, dtype: Dtype) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
-            return column.build_categorical_column(
-                categories=dtype.categories._values,
-                codes=cudf.core.column.NumericalColumn(
-                    self.base_data,  # type: ignore[arg-type]
-                    self.size,
-                    dtype=self.dtype,
-                ),
-                mask=self.base_mask,
-                ordered=dtype.ordered,
+            codes = cudf.core.column.categorical.as_unsigned_codes(
+                len(dtype.categories), self
+            )
+            return cudf.core.column.CategoricalColumn(
+                data=None,
                 size=self.size,
+                dtype=dtype,
+                mask=self.base_mask,
                 offset=self.offset,
                 null_count=self.null_count,
+                children=(codes,),
             )
-
         return self
 
     def to_pandas(

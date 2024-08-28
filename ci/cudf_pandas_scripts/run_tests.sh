@@ -72,6 +72,9 @@ else
         "$(echo ./dist/pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
 fi
 
+python -m pip install ipykernel
+python -m ipykernel install --user --name python3
+
 python -m pytest -p cudf.pandas \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
@@ -86,7 +89,7 @@ IFS=',' read -r -a versions <<< "$output"
 
 for version in "${versions[@]}"; do
     echo "Installing pandas version: ${version}"
-    python -m pip install "pandas==${version}"
+    python -m pip install "numpy>=1.23,<2.0a0" "pandas==${version}"
     python -m pytest -p cudf.pandas \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
