@@ -457,7 +457,7 @@ def test_concat_mixed_input():
                 pd.Series([1, 2, 3.0, 1.2], name="abc"),
                 pd.DataFrame({"a": [1, 2]}),
             ],
-            marks=pytest.mark.xfail(
+            marks=pytest.mark.skipif(
                 not PANDAS_GE_220,
                 reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
@@ -469,7 +469,7 @@ def test_concat_mixed_input():
                 ),
                 pd.DataFrame({"a": [1, 2]}),
             ],
-            marks=pytest.mark.xfail(
+            marks=pytest.mark.skipif(
                 not PANDAS_GE_220,
                 reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
@@ -481,7 +481,7 @@ def test_concat_mixed_input():
                 ),
                 pd.DataFrame({"a": [1, 2]}, index=["a", "b"]),
             ],
-            marks=pytest.mark.xfail(
+            marks=pytest.mark.skipif(
                 not PANDAS_GE_220,
                 reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
@@ -498,7 +498,7 @@ def test_concat_mixed_input():
                     index=["a", "b", "c", "d", "e", "f"],
                 ),
             ],
-            marks=pytest.mark.xfail(
+            marks=pytest.mark.skipif(
                 not PANDAS_GE_220,
                 reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
@@ -516,7 +516,7 @@ def test_concat_mixed_input():
                 ),
             ]
             * 7,
-            marks=pytest.mark.xfail(
+            marks=pytest.mark.skipif(
                 not PANDAS_GE_220,
                 reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),

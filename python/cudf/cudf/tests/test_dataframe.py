@@ -3567,14 +3567,8 @@ def test_dataframe_empty_sort_index():
 def test_dataframe_sort_index(
     request, index, axis, ascending, inplace, ignore_index, na_position
 ):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_220
-            and axis in (1, "columns")
-            and ignore_index,
-            reason="Bug fixed in pandas-2.2",
-        )
-    )
+    if not PANDAS_GE_220 and axis in (1, "columns") and ignore_index:
+        pytest.skip(reason="Bug fixed in pandas-2.2")
 
     pdf = pd.DataFrame(
         {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]},

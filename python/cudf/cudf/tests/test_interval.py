@@ -169,9 +169,9 @@ def test_interval_index_unique():
 
 @pytest.mark.parametrize("box", [pd.Series, pd.IntervalIndex])
 @pytest.mark.parametrize("tz", ["US/Eastern", None])
-@pytest.mark.xfail(
+@pytest.mark.skipif(
     condition=not PANDAS_GE_220,
-    reason="TODO: Remove this once pandas<2.2 support is removed",
+    reason="ME frequency new in pandas 2.2",
 )
 def test_interval_with_datetime(tz, box):
     dti = pd.date_range(

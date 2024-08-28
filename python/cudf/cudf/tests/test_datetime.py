@@ -1662,15 +1662,9 @@ def test_date_range_raise_overflow():
         "B",
     ],
 )
-def test_date_range_raise_unsupported(request, freqstr_unsupported):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                not PANDAS_GE_220 and freqstr_unsupported.endswith("E")
-            ),
-            reason="YE, etc. support was added in pandas 2.2",
-        )
-    )
+def test_date_range_raise_unsupported(freqstr_unsupported):
+    if not PANDAS_GE_220 and freqstr_unsupported.endswith("E"):
+        pytest.skip(reason="YE, etc. support was added in pandas 2.2")
 
     s, e = "2001-01-01", "2008-01-31"
     pd.date_range(start=s, end=e, freq=freqstr_unsupported)

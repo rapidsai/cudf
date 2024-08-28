@@ -1785,24 +1785,20 @@ def test_datetime_dateoffset_binaryop(
             reason="https://github.com/pandas-dev/pandas/issues/57448",
         )
     )
-    request.applymarker(
-        pytest.mark.xfail(
-            not PANDAS_GE_220
-            and dtype in {"datetime64[ms]", "datetime64[s]"}
-            and frequency in ("microseconds", "nanoseconds")
-            and n_periods != 0,
-            reason="https://github.com/pandas-dev/pandas/pull/55595",
-        )
-    )
-    request.applymarker(
-        pytest.mark.xfail(
-            not PANDAS_GE_220
-            and dtype == "datetime64[us]"
-            and frequency == "nanoseconds"
-            and n_periods != 0,
-            reason="https://github.com/pandas-dev/pandas/pull/55595",
-        )
-    )
+    if (
+        not PANDAS_GE_220
+        and dtype in {"datetime64[ms]", "datetime64[s]"}
+        and frequency in ("microseconds", "nanoseconds")
+        and n_periods != 0
+    ):
+        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
+    if (
+        not PANDAS_GE_220
+        and dtype == "datetime64[us]"
+        and frequency == "nanoseconds"
+        and n_periods != 0
+    ):
+        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
 
     date_col = [
         f"2000-01-01 00:00:{components}",
@@ -1897,26 +1893,22 @@ def test_datetime_dateoffset_binaryop_multiple(request, date_col, kwargs, op):
     ],
 )
 def test_datetime_dateoffset_binaryop_reflected(
-    request, n_periods, frequency, dtype, components
+    n_periods, frequency, dtype, components
 ):
-    request.applymarker(
-        pytest.mark.xfail(
-            not PANDAS_GE_220
-            and dtype in {"datetime64[ms]", "datetime64[s]"}
-            and frequency in ("microseconds", "nanoseconds")
-            and n_periods != 0,
-            reason="https://github.com/pandas-dev/pandas/pull/55595",
-        )
-    )
-    request.applymarker(
-        pytest.mark.xfail(
-            not PANDAS_GE_220
-            and dtype == "datetime64[us]"
-            and frequency == "nanoseconds"
-            and n_periods != 0,
-            reason="https://github.com/pandas-dev/pandas/pull/55595",
-        )
-    )
+    if (
+        not PANDAS_GE_220
+        and dtype in {"datetime64[ms]", "datetime64[s]"}
+        and frequency in ("microseconds", "nanoseconds")
+        and n_periods != 0
+    ):
+        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
+    if (
+        not PANDAS_GE_220
+        and dtype == "datetime64[us]"
+        and frequency == "nanoseconds"
+        and n_periods != 0
+    ):
+        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
 
     date_col = [
         f"2000-01-01 00:00:{components}",

@@ -20,7 +20,7 @@ from dask_cudf.tests.utils import _make_random_frame
     ],
 )
 @pytest.mark.parametrize("has_na", [True, False])
-@pytest.mark.xfail(
+@pytest.mark.skipif(
     not PANDAS_GE_210,
     reason="DataFrame.map requires pandas>=2.1.0",
 )
