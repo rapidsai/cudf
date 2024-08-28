@@ -741,14 +741,15 @@ generate_orders_lineitem_part(double scale_factor,
   auto l_extendedprice = [&]() {
     auto const left = cudf::table_view(
       {lineitem_partial->get_column(2).view(), lineitem_partial->get_column(5).view()});
-    auto const right  = cudf::table_view({part->get_column(0).view(), part->get_column(7).view()});
-    auto joined_table = perform_left_join(left, right, {0}, {0}, stream, mr);
-    auto const l_quantity = joined_table->get_column(1);
+    auto const right = cudf::table_view({part->get_column(0).view(), part->get_column(7).view()});
+    auto const joined_table   = perform_left_join(left, right, {0}, {0}, stream, mr);
+    auto joined_table_columns = joined_table->release();
+    auto const l_quantity     = std::move(joined_table_columns[1]);
     auto const l_quantity_fp =
-      cudf::cast(l_quantity.view(), cudf::data_type{cudf::type_id::FLOAT64});
-    auto const p_retailprice = joined_table->get_column(3);
+      cudf::cast(l_quantity->view(), cudf::data_type{cudf::type_id::FLOAT64});
+    auto const p_retailprice = std::move(joined_table_columns[3]);
     auto const col           = cudf::binary_operation(l_quantity_fp->view(),
-                                            p_retailprice.view(),
+                                            p_retailprice->view(),
                                             cudf::binary_operator::MUL,
                                             cudf::data_type{cudf::type_id::FLOAT64},
                                             stream,
