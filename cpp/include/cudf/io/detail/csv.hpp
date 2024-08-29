@@ -17,14 +17,13 @@
 #pragma once
 
 #include <cudf/io/csv.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace csv {
+namespace CUDF_EXPORT cudf {
+namespace io::detail::csv {
 
 /**
  * @brief Reads the entire dataset.
@@ -49,16 +48,12 @@ table_with_metadata read_csv(std::unique_ptr<cudf::io::datasource>&& source,
  * @param column_names Column names for the output CSV
  * @param options Settings for controlling behavior
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource to use for device memory allocation
  */
 void write_csv(data_sink* sink,
                table_view const& table,
                host_span<std::string const> column_names,
                csv_writer_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::device_async_resource_ref mr);
+               rmm::cuda_stream_view stream);
 
-}  // namespace csv
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace io::detail::csv
+}  // namespace CUDF_EXPORT cudf

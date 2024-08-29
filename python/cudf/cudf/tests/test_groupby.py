@@ -28,11 +28,11 @@ from cudf.core._compat import (
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.core.udf.utils import UDFError, precompiled
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
     TIMEDELTA_TYPES,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
 )
@@ -3885,3 +3885,28 @@ def test_group_by_raises_category_error(op):
 
     with pytest.raises(TypeError):
         df.groupby(df.a).agg(op)
+
+
+def test_ngroups():
+    pdf = pd.DataFrame({"a": [1, 1, 3], "b": range(3)})
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    pgb = pdf.groupby("a")
+    ggb = gdf.groupby("a")
+    assert pgb.ngroups == ggb.ngroups
+    assert len(pgb) == len(ggb)
+
+
+def test_ndim():
+    pdf = pd.DataFrame({"a": [1, 1, 3], "b": range(3)})
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    pgb = pdf.groupby("a")
+    ggb = gdf.groupby("a")
+    assert pgb.ndim == ggb.ndim
+
+    pser = pd.Series(range(3))
+    gser = cudf.Series.from_pandas(pser)
+    pgb = pser.groupby([0, 0, 1])
+    ggb = gser.groupby(cudf.Series([0, 0, 1]))
+    assert pgb.ndim == ggb.ndim

@@ -40,20 +40,14 @@ struct compute_element_size {
   size_type source_begin;
   size_type target_begin;
   size_type target_end;
-  bool source_has_nulls;
-  bool target_has_nulls;
 
   __device__ cudf::size_type operator()(cudf::size_type idx)
   {
     if (idx >= target_begin && idx < target_end) {
       auto const str_idx = source_begin + (idx - target_begin);
-      return source_has_nulls && d_source.is_null_nocheck(str_idx)
-               ? 0
-               : d_source.element<string_view>(str_idx).size_bytes();
+      return d_source.is_null(str_idx) ? 0 : d_source.element<string_view>(str_idx).size_bytes();
     } else {
-      return target_has_nulls && d_target.is_null_nocheck(idx)
-               ? 0
-               : d_target.element<string_view>(idx).size_bytes();
+      return d_target.is_null(idx) ? 0 : d_target.element<string_view>(idx).size_bytes();
     }
   }
 };
@@ -97,20 +91,9 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
       mr);
   }();
 
-  auto [check_source, check_target] = [target, null_count = null_count] {
-    // check validities for both source & target
-    if (target.has_nulls()) { return std::make_pair(true, true); }
-    // check validities for source only
-    if (null_count > 0) { return std::make_pair(true, false); }
-    // no need to check validities
-    return std::make_pair(false, false);
-  }();
-
   // create offsets
   auto sizes_begin = cudf::detail::make_counting_transform_iterator(
-    0,
-    compute_element_size{
-      d_source, d_target, source_begin, target_begin, target_end, check_source, check_target});
+    0, compute_element_size{d_source, d_target, source_begin, target_begin, target_end});
   auto [offsets_column, chars_bytes] = cudf::strings::detail::make_offsets_child_column(
     sizes_begin, sizes_begin + target.size(), stream, mr);
   auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());

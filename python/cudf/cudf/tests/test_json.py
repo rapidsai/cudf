@@ -14,11 +14,11 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
-    assert_eq,
     expect_warning_if,
 )
 
@@ -1077,8 +1077,13 @@ def test_json_dtypes_nested_data():
     )
 
     pdf = pd.read_json(
-        StringIO(expected_json_str), orient="records", lines=True
+        StringIO(expected_json_str),
+        orient="records",
+        lines=True,
     )
+
+    assert_eq(df, pdf)
+
     pdf.columns = pdf.columns.astype("str")
     pa_table_pdf = pa.Table.from_pandas(
         pdf, schema=df.to_arrow().schema, safe=False
@@ -1392,3 +1397,50 @@ def test_json_nested_mixed_types_error(jsonl_string):
             orient="records",
             lines=True,
         )
+
+
+@pytest.mark.parametrize("on_bad_lines", ["error", "recover", "abc"])
+def test_json_reader_on_bad_lines(on_bad_lines):
+    json_input = StringIO(
+        '{"a":1,"b":10}\n{"a":2,"b":11}\nabc\n{"a":3,"b":12}\n'
+    )
+    if on_bad_lines == "error":
+        with pytest.raises(RuntimeError):
+            cudf.read_json(
+                json_input,
+                lines=True,
+                orient="records",
+                on_bad_lines=on_bad_lines,
+            )
+    elif on_bad_lines == "recover":
+        actual = cudf.read_json(
+            json_input, lines=True, orient="records", on_bad_lines=on_bad_lines
+        )
+        expected = cudf.DataFrame(
+            {"a": [1, 2, None, 3], "b": [10, 11, None, 12]}
+        )
+        assert_eq(actual, expected)
+    else:
+        with pytest.raises(TypeError):
+            cudf.read_json(
+                json_input,
+                lines=True,
+                orient="records",
+                on_bad_lines=on_bad_lines,
+            )
+
+
+def test_chunked_json_reader():
+    df = cudf.DataFrame(
+        {
+            "a": ["aaaa"] * 9_00_00_00,
+            "b": list(range(0, 9_00_00_00)),
+        }
+    )
+    buf = BytesIO()
+    df.to_json(buf, lines=True, orient="records", engine="cudf")
+    buf.seek(0)
+    df = df.to_pandas()
+    with cudf.option_context("io.json.low_memory", True):
+        gdf = cudf.read_json(buf, lines=True)
+    assert_eq(df, gdf)

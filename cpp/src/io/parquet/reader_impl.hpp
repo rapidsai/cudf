@@ -262,11 +262,13 @@ class reader::impl {
    * @brief Finalize the output table by adding empty columns for the non-selected columns in
    * schema.
    *
+   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param out_metadata The output table metadata
    * @param out_columns The columns for building the output table
    * @return The output table along with columns' metadata
    */
-  table_with_metadata finalize_output(table_metadata& out_metadata,
+  table_with_metadata finalize_output(read_mode mode,
+                                      table_metadata& out_metadata,
                                       std::vector<std::unique_ptr<column>>& out_columns);
 
   /**
@@ -336,10 +338,35 @@ class reader::impl {
              : true;
   }
 
+  /**
+   * @brief Check if this is the first output chunk
+   *
+   * @return True if this is the first output chunk
+   */
   [[nodiscard]] bool is_first_output_chunk() const
   {
     return _file_itm_data._output_chunk_count == 0;
   }
+
+  /**
+   * @brief Check if number of rows per source should be included in output metadata.
+   *
+   * @return True if AST filter is not present
+   */
+  [[nodiscard]] bool include_output_num_rows_per_source() const
+  {
+    return not _expr_conv.get_converted_expr().has_value();
+  }
+
+  /**
+   * @brief Calculate the number of rows read from each source in the output chunk
+   *
+   * @param chunk_start_row The offset of the first row in the output chunk
+   * @param chunk_num_rows The number of rows in the the output chunk
+   * @return Vector of number of rows from each respective data source in the output chunk
+   */
+  [[nodiscard]] std::vector<size_t> calculate_output_num_rows_per_source(size_t chunk_start_row,
+                                                                         size_t chunk_num_rows);
 
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr{rmm::mr::get_current_device_resource()};
@@ -387,7 +414,7 @@ class reader::impl {
 
   // chunked reading happens in 2 parts:
   //
-  // At the top level, the entire file is divided up into "passes" omn which we try and limit the
+  // At the top level, the entire file is divided up into "passes" on which we try and limit the
   // total amount of temporary memory (compressed data, decompressed data) in use
   // via _input_pass_read_limit.
   //

@@ -24,8 +24,9 @@
 
 #include <functional>
 #include <numeric>
+#include <utility>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 // Visitor pattern
@@ -75,6 +76,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
                                                           class nth_element_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class row_number_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class ewma_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class rank_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(
@@ -140,6 +143,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class correlation_aggregation const& agg);
   virtual void visit(class tdigest_aggregation const& agg);
   virtual void visit(class merge_tdigest_aggregation const& agg);
+  virtual void visit(class ewma_aggregation const& agg);
 };
 
 /**
@@ -510,7 +514,7 @@ class quantile_aggregation final : public groupby_aggregation, public reduce_agg
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  private:
-  size_t hash_impl() const
+  [[nodiscard]] size_t hash_impl() const
   {
     return std::hash<int>{}(static_cast<int>(_interpolation)) ^
            std::accumulate(
@@ -596,7 +600,10 @@ class nunique_aggregation final : public groupby_aggregation,
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  private:
-  size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_null_handling)); }
+  [[nodiscard]] size_t hash_impl() const
+  {
+    return std::hash<int>{}(static_cast<int>(_null_handling));
+  }
 };
 
 /**
@@ -638,7 +645,7 @@ class nth_element_aggregation final : public groupby_aggregation,
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  private:
-  size_t hash_impl() const
+  [[nodiscard]] size_t hash_impl() const
   {
     return std::hash<size_type>{}(_n) ^ std::hash<int>{}(static_cast<int>(_null_handling));
   }
@@ -660,6 +667,40 @@ class row_number_aggregation final : public rolling_aggregation {
   {
     return collector.visit(col_type, *this);
   }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived class for specifying an ewma aggregation
+ */
+class ewma_aggregation final : public scan_aggregation {
+ public:
+  double const center_of_mass;
+  cudf::ewm_history history;
+
+  ewma_aggregation(double const center_of_mass, cudf::ewm_history history)
+    : aggregation{EWMA}, center_of_mass{center_of_mass}, history{history}
+  {
+  }
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<ewma_aggregation>(*this);
+  }
+
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+
+  bool is_equal(aggregation const& _other) const override
+  {
+    if (!this->aggregation::is_equal(_other)) { return false; }
+    auto const& other = dynamic_cast<ewma_aggregation const&>(_other);
+    return this->center_of_mass == other.center_of_mass and this->history == other.history;
+  }
+
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
@@ -763,7 +804,10 @@ class collect_list_aggregation final : public rolling_aggregation,
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  private:
-  size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_null_handling)); }
+  [[nodiscard]] size_t hash_impl() const
+  {
+    return std::hash<int>{}(static_cast<int>(_null_handling));
+  }
 };
 
 /**
@@ -813,7 +857,7 @@ class collect_set_aggregation final : public rolling_aggregation,
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  protected:
-  size_t hash_impl() const
+  [[nodiscard]] size_t hash_impl() const
   {
     return std::hash<int>{}(static_cast<int>(_null_handling) ^ static_cast<int>(_nulls_equal) ^
                             static_cast<int>(_nans_equal));
@@ -866,10 +910,10 @@ class lead_lag_aggregation final : public rolling_aggregation {
 class udf_aggregation final : public rolling_aggregation {
  public:
   udf_aggregation(aggregation::Kind type,
-                  std::string const& user_defined_aggregator,
+                  std::string user_defined_aggregator,
                   data_type output_type)
     : aggregation{type},
-      _source{user_defined_aggregator},
+      _source{std::move(user_defined_aggregator)},
       _operator_name{(type == aggregation::PTX) ? "rolling_udf_ptx" : "rolling_udf_cuda"},
       _function_name{"rolling_udf"},
       _output_type{output_type}
@@ -973,7 +1017,7 @@ class merge_sets_aggregation final : public groupby_aggregation, public reduce_a
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  protected:
-  size_t hash_impl() const
+  [[nodiscard]] size_t hash_impl() const
   {
     return std::hash<int>{}(static_cast<int>(_nulls_equal) ^ static_cast<int>(_nans_equal));
   }
@@ -1046,7 +1090,7 @@ class covariance_aggregation final : public groupby_aggregation {
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  protected:
-  size_t hash_impl() const
+  [[nodiscard]] size_t hash_impl() const
   {
     return std::hash<size_type>{}(_min_periods) ^ std::hash<size_type>{}(_ddof);
   }
@@ -1088,7 +1132,7 @@ class correlation_aggregation final : public groupby_aggregation {
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  protected:
-  size_t hash_impl() const
+  [[nodiscard]] size_t hash_impl() const
   {
     return std::hash<int>{}(static_cast<int>(_type)) ^ std::hash<size_type>{}(_min_periods);
   }
@@ -1329,6 +1373,11 @@ struct target_type_impl<Source, aggregation::ROW_NUMBER> {
   using type = size_type;
 };
 
+template <typename Source>
+struct target_type_impl<Source, aggregation::EWMA> {
+  using type = double;
+};
+
 // Always use size_type accumulator for RANK
 template <typename Source>
 struct target_type_impl<Source, aggregation::RANK> {
@@ -1529,6 +1578,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::TDIGEST>(std::forward<Ts>(args)...);
     case aggregation::MERGE_TDIGEST:
       return f.template operator()<aggregation::MERGE_TDIGEST>(std::forward<Ts>(args)...);
+    case aggregation::EWMA:
+      return f.template operator()<aggregation::EWMA>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
@@ -1623,4 +1674,4 @@ constexpr inline bool is_valid_aggregation()
 bool is_valid_aggregation(data_type source, aggregation::Kind k);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

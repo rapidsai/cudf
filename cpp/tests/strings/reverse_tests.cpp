@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,17 +29,19 @@ struct StringsReverseTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsReverseTest, Reverse)
 {
-  auto input = cudf::test::strings_column_wrapper(
-    {"abcdef", "12345", "", "", "aébé", "A é Z", "X", "é"}, {1, 1, 1, 0, 1, 1, 1, 1});
-  auto results  = cudf::strings::reverse(cudf::strings_column_view(input));
-  auto expected = cudf::test::strings_column_wrapper(
-    {"fedcba", "54321", "", "", "ébéa", "Z é A", "X", "é"}, {1, 1, 1, 0, 1, 1, 1, 1});
+  auto input =
+    cudf::test::strings_column_wrapper({"abcdef", "12345", "", "", "aébé", "A é Z", "X", "é"},
+                                       {true, true, true, false, true, true, true, true});
+  auto results = cudf::strings::reverse(cudf::strings_column_view(input));
+  auto expected =
+    cudf::test::strings_column_wrapper({"fedcba", "54321", "", "", "ébéa", "Z é A", "X", "é"},
+                                       {true, true, true, false, true, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 
   auto sliced = cudf::slice(input, {1, 7}).front();
   results     = cudf::strings::reverse(cudf::strings_column_view(sliced));
-  expected =
-    cudf::test::strings_column_wrapper({"54321", "", "", "ébéa", "Z é A", "X"}, {1, 1, 0, 1, 1, 1});
+  expected    = cudf::test::strings_column_wrapper({"54321", "", "", "ébéa", "Z é A", "X"},
+                                                   {true, true, false, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 

@@ -79,11 +79,11 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
                                        duplicate_keep_option keep,
                                        null_equality nulls_equal,
                                        nan_equality nans_equal,
+                                       rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::stable_distinct(
-    input, keys, keep, nulls_equal, nans_equal, cudf::get_default_stream(), mr);
+  return detail::stable_distinct(input, keys, keep, nulls_equal, nans_equal, stream, mr);
 }
 
 }  // namespace cudf

@@ -4,7 +4,7 @@ from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
 
-from cudf._lib import pylibcudf
+import pylibcudf
 
 
 @acquire_spill_lock()

@@ -208,7 +208,7 @@ class output_builder {
                  size_type max_growth,
                  rmm::cuda_stream_view stream,
                  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
-    : _size{0}, _max_write_size{max_write_size}, _max_growth{max_growth}
+    : _max_write_size{max_write_size}, _max_growth{max_growth}
   {
     CUDF_EXPECTS(max_write_size > 0, "Internal error");
     _chunks.emplace_back(0, stream, mr);
@@ -349,7 +349,7 @@ class output_builder {
     return device_span<T>{vector.data() + vector.size(), vector.capacity() - vector.size()};
   }
 
-  size_type _size;
+  size_type _size{0};
   size_type _max_write_size;
   size_type _max_growth;
   std::vector<rmm::device_uvector<T>> _chunks;

@@ -10,9 +10,8 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 
-from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.null_mask cimport (
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.null_mask cimport (
     bitmask_allocation_size_bytes as cpp_bitmask_allocation_size_bytes,
     bitmask_and as cpp_bitmask_and,
     bitmask_or as cpp_bitmask_or,
@@ -20,8 +19,10 @@ from cudf._lib.pylibcudf.libcudf.null_mask cimport (
     create_null_mask as cpp_create_null_mask,
     underlying_type_t_mask_state,
 )
-from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
-from cudf._lib.pylibcudf.libcudf.types cimport mask_state, size_type
+from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.types cimport mask_state, size_type
+
+from cudf._lib.column cimport Column
 from cudf._lib.utils cimport table_view_from_columns
 
 

@@ -27,6 +27,7 @@
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/merge.hpp>
 #include <cudf/strings/detail/merge.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
@@ -694,11 +695,11 @@ std::unique_ptr<cudf::table> merge(std::vector<table_view> const& tables_to_merg
                                    std::vector<cudf::size_type> const& key_cols,
                                    std::vector<cudf::order> const& column_order,
                                    std::vector<cudf::null_order> const& null_precedence,
+                                   rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::merge(
-    tables_to_merge, key_cols, column_order, null_precedence, cudf::get_default_stream(), mr);
+  return detail::merge(tables_to_merge, key_cols, column_order, null_precedence, stream, mr);
 }
 
 }  // namespace cudf

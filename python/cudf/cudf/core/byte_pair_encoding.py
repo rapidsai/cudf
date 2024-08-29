@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ class BytePairEncoder:
     def __init__(self, merges_pair: "cudf.Series"):
         self.merge_pairs = cpp_merge_pairs(merges_pair._column)
 
-    def __call__(self, text, separator: str = " "):
+    def __call__(self, text, separator: str = " ") -> cudf.Series:
         """
 
         Parameters
@@ -56,4 +56,4 @@ class BytePairEncoder:
         sep = cudf.Scalar(separator, dtype="str")
         result = cpp_byte_pair_encoding(text._column, self.merge_pairs, sep)
 
-        return cudf.Series(result)
+        return cudf.Series._from_column(result)

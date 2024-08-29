@@ -25,7 +25,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace nvtext {
+namespace CUDF_EXPORT nvtext {
 namespace detail {
 
 /**
@@ -47,4 +47,4 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace nvtext
+}  // namespace CUDF_EXPORT nvtext

@@ -4,37 +4,12 @@
     "CCCL" : {
       "patches" : [
         {
-          "file" : "cccl/bug_fixes.diff",
-          "issue" : "CCCL installs header-search.cmake files in nondeterministic order and has a typo in checking target creation that leads to duplicates",
-          "fixed_in" : "2.3"
-        },
-        {
-          "file" : "cccl/hide_kernels.diff",
-          "issue" : "Mark all cub and thrust kernels with hidden visibility [https://github.com/nvidia/cccl/pulls/443]",
-          "fixed_in" : "2.3"
-        },
-        {
-          "file" : "cccl/revert_pr_211.diff",
-          "issue" : "thrust::copy introduced a change in behavior that causes failures with cudaErrorInvalidValue.",
-          "fixed_in" : ""
-        },
-        {
-          "file" : "${current_json_dir}/revert_pr_211_cccl_2.5.0.diff",
-          "issue" : "thrust::copy introduced a change in behavior that causes failures with cudaErrorInvalidValue.",
-          "fixed_in" : ""
-        },
-        {
-          "file": "cccl/kernel_pointer_hiding.diff",
-          "issue": "Hide APIs that accept kernel pointers [https://github.com/NVIDIA/cccl/pull/1395]",
-          "fixed_in": "2.4"
+          "file" : "${current_json_dir}/cccl_symbol_visibility.diff",
+          "issue" : "Correct symbol visibility issues in libcudacxx [https://github.com/NVIDIA/cccl/pull/1832/]",
+          "fixed_in" : "2.6"
         },
         {
           "file" : "${current_json_dir}/thrust_disable_64bit_dispatching.diff",
-          "issue" : "Remove 64bit dispatching as not needed by libcudf and results in compiling twice as many kernels [https://github.com/rapidsai/cudf/pull/11437]",
-          "fixed_in" : ""
-        },
-        {
-          "file" : "${current_json_dir}/thrust_disable_64bit_dispatching_cccl_2.5.0.diff",
           "issue" : "Remove 64bit dispatching as not needed by libcudf and results in compiling twice as many kernels [https://github.com/rapidsai/cudf/pull/11437]",
           "fixed_in" : ""
         },
@@ -44,17 +19,7 @@
           "fixed_in" : ""
         },
         {
-          "file" : "${current_json_dir}/thrust_faster_sort_compile_times_cccl_2.5.0.diff",
-          "issue" : "Improve Thrust sort compile times by not unrolling loops for inlined comparators [https://github.com/rapidsai/cudf/pull/10577]",
-          "fixed_in" : ""
-        },
-        {
           "file" : "${current_json_dir}/thrust_faster_scan_compile_times.diff",
-          "issue" : "Improve Thrust scan compile times by reducing the number of kernels generated [https://github.com/rapidsai/cudf/pull/8183]",
-          "fixed_in" : ""
-        },
-        {
-          "file" : "${current_json_dir}/thrust_faster_scan_compile_times_cccl_2.5.0.diff",
           "issue" : "Improve Thrust scan compile times by reducing the number of kernels generated [https://github.com/rapidsai/cudf/pull/8183]",
           "fixed_in" : ""
         }

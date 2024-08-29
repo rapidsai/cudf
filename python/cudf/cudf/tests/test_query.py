@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 
 import datetime
@@ -11,7 +11,7 @@ import pytest
 
 import cudf
 from cudf import DataFrame
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 from cudf.utils import queryutils
 
 _params_query_parser = []

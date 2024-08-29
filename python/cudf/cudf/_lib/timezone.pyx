@@ -5,10 +5,11 @@ from libcpp.optional cimport make_optional
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
-from cudf._lib.pylibcudf.libcudf.io.timezone cimport (
+from pylibcudf.libcudf.io.timezone cimport (
     make_timezone_transition_table as cpp_make_timezone_transition_table,
 )
-from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from pylibcudf.libcudf.table.table cimport table
+
 from cudf._lib.utils cimport columns_from_unique_ptr
 
 

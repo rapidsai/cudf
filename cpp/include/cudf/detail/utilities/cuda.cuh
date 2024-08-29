@@ -41,8 +41,8 @@ static constexpr size_type warp_size{32};
  */
 class grid_1d {
  public:
-  int const num_threads_per_block;
-  int const num_blocks;
+  thread_index_type const num_threads_per_block;
+  thread_index_type const num_blocks;
   /**
    * @param overall_num_elements The number of elements the kernel needs to
    * handle/process, in its main, one-dimensional/linear input (e.g. one or more
@@ -55,9 +55,9 @@ class grid_1d {
    * than a single element; this affects the number of threads the grid must
    * contain
    */
-  grid_1d(cudf::size_type overall_num_elements,
-          cudf::size_type num_threads_per_block,
-          cudf::size_type elements_per_thread = 1)
+  grid_1d(thread_index_type overall_num_elements,
+          thread_index_type num_threads_per_block,
+          thread_index_type elements_per_thread = 1)
     : num_threads_per_block(num_threads_per_block),
       num_blocks(util::div_rounding_up_safe(overall_num_elements,
                                             elements_per_thread * num_threads_per_block))
@@ -187,35 +187,6 @@ __device__ T single_lane_block_sum_reduce(T lane_value)
   // kernel.
   __syncthreads();
   return result;
-}
-
-/**
- * @brief Get the number of elements that can be processed per thread.
- *
- * @param[in] kernel The kernel for which the elements per thread needs to be assessed
- * @param[in] total_size Number of elements
- * @param[in] block_size Expected block size
- *
- * @return cudf::size_type Elements per thread that can be processed for given specification.
- */
-template <typename Kernel>
-cudf::size_type elements_per_thread(Kernel kernel,
-                                    cudf::size_type total_size,
-                                    cudf::size_type block_size,
-                                    cudf::size_type max_per_thread = 32)
-{
-  CUDF_FUNC_RANGE();
-
-  // calculate theoretical occupancy
-  int max_blocks = 0;
-  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, block_size, 0));
-
-  int device = 0;
-  CUDF_CUDA_TRY(cudaGetDevice(&device));
-  int num_sms = 0;
-  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
-  int per_thread = total_size / (max_blocks * num_sms * block_size);
-  return std::clamp(per_thread, 1, max_per_thread);
 }
 
 /**

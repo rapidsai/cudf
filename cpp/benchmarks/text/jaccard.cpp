@@ -59,6 +59,6 @@ static void bench_jaccard(nvbench::state& state)
 
 NVBENCH_BENCH(bench_jaccard)
   .set_name("jaccard")
-  .add_int64_axis("num_rows", {1024, 4096, 8192, 16364, 32768, 262144})
-  .add_int64_axis("row_width", {128, 512, 2048})
+  .add_int64_axis("num_rows", {32768, 131072, 262144})
+  .add_int64_axis("row_width", {128, 512, 1024, 2048})
   .add_int64_axis("substring_width", {5, 10});

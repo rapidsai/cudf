@@ -48,3 +48,7 @@ def xfail_dask_expr(reason=_default_reason, lt_version=None):
     else:
         xfail = QUERY_PLANNING_ON
     return pytest.mark.xfail(xfail, reason=reason)
+
+
+def require_dask_expr(reason="requires dask-expr"):
+    return pytest.mark.skipif(not QUERY_PLANNING_ON, reason=reason)

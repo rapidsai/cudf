@@ -170,7 +170,7 @@ class hostdevice_span {
    * @param count The number of elements in the subspan
    * @return A subspan of the sequence, of requested count and offset
    */
-  constexpr hostdevice_span<T> subspan(size_t offset, size_t count) const noexcept
+  [[nodiscard]] constexpr hostdevice_span<T> subspan(size_t offset, size_t count) const noexcept
   {
     return hostdevice_span<T>(_host_data + offset, _device_data + offset, count);
   }

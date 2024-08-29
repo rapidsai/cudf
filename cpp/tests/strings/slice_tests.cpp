@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,8 +62,8 @@ TEST_P(Parameters, Substring)
   auto results        = cudf::strings::slice_strings(strings_column, start);
 
   std::vector<std::string> h_expected;
-  for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr)
-    h_expected.push_back((*itr).substr(start));
+  for (auto& h_string : h_strings)
+    h_expected.push_back(h_string.substr(start));
 
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
@@ -277,7 +277,7 @@ TEST_F(StringsSliceTest, Error)
   auto indexes = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2});
   EXPECT_THROW(cudf::strings::slice_strings(strings_view, indexes, indexes), cudf::logic_error);
 
-  auto indexes_null = cudf::test::fixed_width_column_wrapper<int32_t>({1}, {0});
+  auto indexes_null = cudf::test::fixed_width_column_wrapper<int32_t>({1}, {false});
   EXPECT_THROW(cudf::strings::slice_strings(strings_view, indexes_null, indexes_null),
                cudf::logic_error);
 

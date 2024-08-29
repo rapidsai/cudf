@@ -87,7 +87,7 @@ void orc_read_common(cudf::size_type num_rows_to_read,
 
 }  // namespace
 
-template <data_type DataType, cudf::io::io_type IOType>
+template <data_type DataType, io_type IOType>
 void BM_orc_read_data(nvbench::state& state,
                       nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IOType>>)
 {
@@ -112,7 +112,7 @@ void BM_orc_read_data(nvbench::state& state,
   orc_read_common<false>(num_rows_written, source_sink, state);
 }
 
-template <cudf::io::io_type IOType, cudf::io::compression_type Compression, bool chunked_read>
+template <io_type IOType, cudf::io::compression_type Compression, bool chunked_read>
 void orc_read_io_compression(nvbench::state& state)
 {
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
@@ -150,7 +150,7 @@ void orc_read_io_compression(nvbench::state& state)
   orc_read_common<chunked_read>(num_rows_written, source_sink, state);
 }
 
-template <cudf::io::io_type IOType, cudf::io::compression_type Compression>
+template <io_type IOType, cudf::io::compression_type Compression>
 void BM_orc_read_io_compression(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<IOType>, nvbench::enum_type<Compression>>)
@@ -163,7 +163,7 @@ void BM_orc_chunked_read_io_compression(nvbench::state& state,
                                         nvbench::type_list<nvbench::enum_type<Compression>>)
 {
   // Only run benchmark using HOST_BUFFER IO.
-  return orc_read_io_compression<cudf::io::io_type::HOST_BUFFER, Compression, true>(state);
+  return orc_read_io_compression<io_type::HOST_BUFFER, Compression, true>(state);
 }
 
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL_SIGNED,
@@ -174,16 +174,14 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL_SIGNED,
                                             data_type::LIST,
                                             data_type::STRUCT>;
 
-using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
-                                        cudf::io::io_type::HOST_BUFFER,
-                                        cudf::io::io_type::DEVICE_BUFFER>;
+using io_list =
+  nvbench::enum_type_list<io_type::FILEPATH, io_type::HOST_BUFFER, io_type::DEVICE_BUFFER>;
 
 using compression_list =
   nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
 
 NVBENCH_BENCH_TYPES(BM_orc_read_data,
-                    NVBENCH_TYPE_AXES(d_type_list,
-                                      nvbench::enum_type_list<cudf::io::io_type::DEVICE_BUFFER>))
+                    NVBENCH_TYPE_AXES(d_type_list, nvbench::enum_type_list<io_type::DEVICE_BUFFER>))
   .set_name("orc_read_decode")
   .set_type_axes_names({"data_type", "io"})
   .set_min_samples(4)

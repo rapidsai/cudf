@@ -19,13 +19,14 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/file_utilities.hpp>
 
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace test {
 
 /**
@@ -66,7 +67,7 @@ class BaseFixtureWithParam : public ::testing::TestWithParam<T> {
    * all tests inheriting from this fixture
    * @return pointer to memory resource
    */
-  rmm::device_async_resource_ref mr() const { return _mr; }
+  [[nodiscard]] rmm::device_async_resource_ref mr() const { return _mr; }
 };
 
 /**
@@ -99,4 +100,4 @@ class TempDirTestEnvironment : public ::testing::Environment {
 };
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

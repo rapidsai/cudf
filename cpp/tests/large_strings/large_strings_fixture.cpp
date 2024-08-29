@@ -41,7 +41,7 @@ class LargeStringsData {
     _data[std::string(name)] = std::move(data);
   }
 
-  cudf::table_view get_table(std::string_view name) const
+  [[nodiscard]] cudf::table_view get_table(std::string_view name) const
   {
     std::string key{name};
     return _data.find(key) != _data.end() ? _data.at(key)->view() : cudf::table_view{};
@@ -54,13 +54,16 @@ class LargeStringsData {
     _data[std::string(name)] = std::make_unique<cudf::table>(std::move(cols));
   }
 
-  cudf::column_view get_column(std::string_view name) const
+  [[nodiscard]] cudf::column_view get_column(std::string_view name) const
   {
     std::string key{name};
     return _data.find(key) != _data.end() ? _data.at(key)->view().column(0) : cudf::column_view{};
   }
 
-  bool has_key(std::string_view name) const { return _data.find(std::string(name)) != _data.end(); }
+  [[nodiscard]] bool has_key(std::string_view name) const
+  {
+    return _data.find(std::string(name)) != _data.end();
+  }
 
  protected:
   std::map<std::string, DataPointer> _data;
@@ -90,6 +93,17 @@ cudf::column_view StringsLargeTest::long_column()
     auto itr = thrust::constant_iterator<std::string_view>(
       "abcdefghijklmnopqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXY");                // 50 bytes
     auto input = cudf::test::strings_column_wrapper(itr, itr + 5'000'000);  // 250MB
+    g_ls_data->add_column(name, input.release());
+  }
+  return g_ls_data->get_column(name);
+}
+
+cudf::column_view StringsLargeTest::very_long_column()
+{
+  std::string name("long2");
+  if (!g_ls_data->has_key(name)) {
+    auto itr   = thrust::constant_iterator<std::string_view>("12345");
+    auto input = cudf::test::strings_column_wrapper(itr, itr + 30'000'000);
     g_ls_data->add_column(name, input.release());
   }
   return g_ls_data->get_column(name);

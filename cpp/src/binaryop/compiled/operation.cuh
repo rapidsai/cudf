@@ -173,8 +173,8 @@ struct PMod {
   __device__ inline auto operator()(TypeLhs x, TypeRhs y)
   {
     using common_t = std::common_type_t<TypeLhs, TypeRhs>;
-    common_t xconv = static_cast<common_t>(x);
-    common_t yconv = static_cast<common_t>(y);
+    auto xconv     = static_cast<common_t>(x);
+    auto yconv     = static_cast<common_t>(y);
     auto rem       = xconv % yconv;
     if constexpr (std::is_signed_v<decltype(rem)>)
       if (rem < 0) rem = (rem + yconv) % yconv;
@@ -188,8 +188,8 @@ struct PMod {
   __device__ inline auto operator()(TypeLhs x, TypeRhs y)
   {
     using common_t = std::common_type_t<TypeLhs, TypeRhs>;
-    common_t xconv = static_cast<common_t>(x);
-    common_t yconv = static_cast<common_t>(y);
+    auto xconv     = static_cast<common_t>(x);
+    auto yconv     = static_cast<common_t>(y);
     auto rem       = std::fmod(xconv, yconv);
     if (rem < 0) rem = std::fmod(rem + yconv, yconv);
     return rem;

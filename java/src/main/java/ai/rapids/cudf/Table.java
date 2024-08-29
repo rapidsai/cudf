@@ -1084,7 +1084,12 @@ public final class Table implements AutoCloseable {
         // The types don't match so just return the input unchanged...
         return DidViewChange.no();
       } else {
-        String[] foundNames = children.getNames();
+        String[] foundNames;
+        if (children == null) {
+          foundNames = new String[0];
+        } else {
+          foundNames = children.getNames();
+        }
         HashMap<String, Integer> indices = new HashMap<>();
         for (int i = 0; i < foundNames.length; i++) {
           indices.put(foundNames[i], i);
@@ -1101,8 +1106,9 @@ public final class Table implements AutoCloseable {
           for (int i = 0; i < columns.length; i++) {
             String neededColumnName = neededNames[i];
             Integer index = indices.get(neededColumnName);
+            Schema childSchema = schema.getChild(i);
             if (index != null) {
-              if (schema.getChild(i).isStructOrHasStructDescendant()) {
+              if (childSchema.isStructOrHasStructDescendant()) {
                 ColumnView child = cv.getChildColumnView(index);
                 boolean shouldCloseChild = true;
                 try {
@@ -1131,8 +1137,23 @@ public final class Table implements AutoCloseable {
               }
             } else {
               somethingChanged = true;
-              try (Scalar s = Scalar.fromNull(types[i])) {
-                columns[i] = ColumnVector.fromScalar(s, (int) cv.getRowCount());
+              if (types[i] == DType.LIST) {
+                try (Scalar s = Scalar.listFromNull(childSchema.getChild(0).asHostDataType())) {
+                  columns[i] = ColumnVector.fromScalar(s, (int) cv.getRowCount());
+                }
+              } else if (types[i] == DType.STRUCT) {
+                int numStructChildren = childSchema.getNumChildren();
+                HostColumnVector.DataType[] structChildren = new HostColumnVector.DataType[numStructChildren];
+                for (int structChildIndex = 0; structChildIndex < numStructChildren; structChildIndex++) {
+                  structChildren[structChildIndex] = childSchema.getChild(structChildIndex).asHostDataType();
+                }
+                try (Scalar s = Scalar.structFromNull(structChildren)) {
+                  columns[i] = ColumnVector.fromScalar(s, (int) cv.getRowCount());
+                }
+              } else {
+                try (Scalar s = Scalar.fromNull(types[i])) {
+                  columns[i] = ColumnVector.fromScalar(s, (int) cv.getRowCount());
+                }
               }
             }
           }

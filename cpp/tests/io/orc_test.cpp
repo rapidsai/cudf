@@ -54,9 +54,9 @@ using int32_col   = column_wrapper<int32_t>;
 using int64_col   = column_wrapper<int64_t>;
 using float32_col = column_wrapper<float>;
 using float64_col = column_wrapper<double>;
-using dec32_col   = column_wrapper<numeric::decimal32>;
-using dec64_col   = column_wrapper<numeric::decimal64>;
-using dec128_col  = column_wrapper<numeric::decimal128>;
+using dec32_col   = cudf::test::fixed_point_column_wrapper<numeric::decimal32::rep>;
+using dec64_col   = cudf::test::fixed_point_column_wrapper<numeric::decimal64::rep>;
+using dec128_col  = cudf::test::fixed_point_column_wrapper<numeric::decimal128::rep>;
 using struct_col  = cudf::test::structs_column_wrapper;
 template <typename T>
 using list_col = cudf::test::lists_column_wrapper<T>;
@@ -355,12 +355,6 @@ TEST_F(OrcWriterTest, MultiColumn)
   auto col4_data = random_values<float>(num_rows);
   auto col5_data = random_values<double>(num_rows);
   auto col6_vals = random_values<int64_t>(num_rows);
-  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal128{col6_vals[i], numeric::scale_type{12}};
-  });
-  auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal128{col6_vals[i], numeric::scale_type{-12}};
-  });
 
   bool_col col0(col0_data.begin(), col0_data.end());
   int8_col col1(col1_data.begin(), col1_data.end());
@@ -368,8 +362,8 @@ TEST_F(OrcWriterTest, MultiColumn)
   int32_col col3(col3_data.begin(), col3_data.end());
   float32_col col4(col4_data.begin(), col4_data.end());
   float64_col col5(col5_data.begin(), col5_data.end());
-  dec128_col col6(col6_data, col6_data + num_rows);
-  dec128_col col7(col7_data, col7_data + num_rows);
+  dec128_col col6{col6_vals.begin(), col6_vals.end(), numeric::scale_type{12}};
+  dec128_col col7{col6_vals.begin(), col6_vals.end(), numeric::scale_type{-12}};
 
   list_col<int64_t> col8{
     {9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}, {}, {-1, -2}};
@@ -416,9 +410,6 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   auto col4_data = random_values<float>(num_rows);
   auto col5_data = random_values<double>(num_rows);
   auto col6_vals = random_values<int32_t>(num_rows);
-  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal64{col6_vals[i], numeric::scale_type{2}};
-  });
   auto col0_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
   auto col1_mask =
@@ -438,7 +429,7 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   int32_col col3{col3_data.begin(), col3_data.end(), col3_mask};
   float32_col col4{col4_data.begin(), col4_data.end(), col4_mask};
   float64_col col5{col5_data.begin(), col5_data.end(), col5_mask};
-  dec64_col col6{col6_data, col6_data + num_rows, col6_mask};
+  dec64_col col6{col6_vals.begin(), col6_vals.end(), col6_mask, numeric::scale_type{2}};
   list_col<int32_t> col7{
     {{9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}, {}, {-1, -2}},
     col0_mask};
@@ -541,14 +532,11 @@ TEST_F(OrcWriterTest, SlicedTable)
   auto seq_col0  = random_values<int32_t>(num_rows);
   auto seq_col2  = random_values<float>(num_rows);
   auto vals_col3 = random_values<int32_t>(num_rows);
-  auto seq_col3  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal64{vals_col3[i], numeric::scale_type{2}};
-  });
 
   int32_col col0(seq_col0.begin(), seq_col0.end());
   str_col col1(strings.begin(), strings.end());
   float32_col col2(seq_col2.begin(), seq_col2.end());
-  dec64_col col3(seq_col3, seq_col3 + num_rows);
+  dec64_col col3{vals_col3.begin(), vals_col3.end(), numeric::scale_type{2}};
 
   list_col<int64_t> col4{
     {9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}};
@@ -1213,11 +1201,8 @@ TEST_P(OrcWriterTestDecimal, Decimal64)
 
   // Using int16_t because scale causes values to overflow if they already require 32 bits
   auto const vals = random_values<int32_t>(num_rows);
-  auto data       = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal64{vals[i], numeric::scale_type{scale}};
-  });
   auto mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 7 == 0; });
-  dec64_col col{data, data + num_rows, mask};
+  dec64_col col{vals.begin(), vals.end(), mask, numeric::scale_type{scale}};
   cudf::table_view tbl({static_cast<cudf::column_view>(col)});
 
   auto filepath = temp_env->get_temp_filepath("Decimal64.orc");
@@ -1244,11 +1229,8 @@ TEST_F(OrcWriterTest, Decimal32)
 
   // Using int16_t because scale causes values to overflow if they already require 32 bits
   auto const vals = random_values<int16_t>(num_rows);
-  auto data       = cudf::detail::make_counting_transform_iterator(0, [&vals](auto i) {
-    return numeric::decimal32{vals[i], numeric::scale_type{2}};
-  });
   auto mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 13; });
-  dec32_col col{data, data + num_rows, mask};
+  dec32_col col{vals.begin(), vals.end(), mask, numeric::scale_type{2}};
   cudf::table_view expected({col});
 
   auto filepath = temp_env->get_temp_filepath("Decimal32.orc");
@@ -1527,12 +1509,9 @@ TEST_F(OrcReaderTest, DecimalOptions)
 {
   constexpr auto num_rows = 10;
   auto col_vals           = random_values<int64_t>(num_rows);
-  auto col_data           = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal128{col_vals[i], numeric::scale_type{2}};
-  });
   auto mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 == 0; });
 
-  dec128_col col{col_data, col_data + num_rows, mask};
+  dec128_col col{col_vals.begin(), col_vals.end(), mask, numeric::scale_type{2}};
   table_view expected({col});
 
   cudf::io::table_input_metadata expected_metadata(expected);
@@ -1555,15 +1534,9 @@ TEST_F(OrcWriterTest, DecimalOptionsNested)
 {
   auto const num_rows = 100;
 
-  auto dec_vals  = random_values<int32_t>(num_rows);
-  auto dec1_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal64{dec_vals[i], numeric::scale_type{2}};
-  });
-  auto dec2_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal128{dec_vals[i], numeric::scale_type{2}};
-  });
-  dec64_col dec1_col(dec1_data, dec1_data + num_rows);
-  dec128_col dec2_col(dec2_data, dec2_data + num_rows);
+  auto dec_vals = random_values<int32_t>(num_rows);
+  dec64_col dec1_col{dec_vals.begin(), dec_vals.end(), numeric::scale_type{2}};
+  dec128_col dec2_col{dec_vals.begin(), dec_vals.end(), numeric::scale_type{2}};
   auto child_struct_col = cudf::test::structs_column_wrapper{dec1_col, dec2_col};
 
   auto int_vals = random_values<int32_t>(num_rows);
@@ -1974,7 +1947,7 @@ TEST_F(OrcStatisticsTest, Empty)
   int32_col col0{};
   float64_col col1{};
   str_col col2{};
-  dec64_col col3{};
+  dec64_col col3{{}, numeric::scale_type{0}};
   column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> col4;
   bool_col col5{};
   table_view expected({col0, col1, col2, col3, col4, col5});
@@ -2140,7 +2113,7 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
   EXPECT_EQ(metadata.num_stripes(), total_rows / 1'000'000);
 
   constexpr auto num_rows_to_read = 1'000'000;
-  const auto num_rows_to_skip     = metadata.num_rows() - num_rows_to_read;
+  auto const num_rows_to_skip     = metadata.num_rows() - num_rows_to_read;
 
   // Read the last million rows
   cudf::io::orc_reader_options skip_opts =
@@ -2148,9 +2121,9 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
       cudf::io::source_info{out_buffer.data(), out_buffer.size()})
       .use_index(false)
       .skip_rows(num_rows_to_skip);
-  const auto got_with_skip = cudf::io::read_orc(skip_opts).tbl;
+  auto const got_with_skip = cudf::io::read_orc(skip_opts).tbl;
 
-  const auto sequence_start = num_rows_to_skip % num_rows;
+  auto const sequence_start = num_rows_to_skip % num_rows;
   column_wrapper<int8_t, typename decltype(sequence)::value_type> skipped_col(
     sequence + sequence_start, sequence + sequence_start + num_rows_to_read, no_nulls());
   table_view expected({skipped_col});
@@ -2163,7 +2136,7 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
       cudf::io::source_info{out_buffer.data(), out_buffer.size()})
       .use_index(false)
       .stripes({{metadata.num_stripes() - 1}});
-  const auto got_with_stripe_selection = cudf::io::read_orc(stripe_opts).tbl;
+  auto const got_with_stripe_selection = cudf::io::read_orc(stripe_opts).tbl;
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_with_stripe_selection->view());
 }

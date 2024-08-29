@@ -71,7 +71,7 @@ def to_dlpack(cudf_obj):
     if isinstance(cudf_obj, (cudf.DataFrame, cudf.Series, cudf.BaseIndex)):
         gdf = cudf_obj
     elif isinstance(cudf_obj, ColumnBase):
-        gdf = cudf.Series._from_data({None: cudf_obj})
+        gdf = cudf.Series._from_column(cudf_obj)
     else:
         raise TypeError(
             f"Input of type {type(cudf_obj)} cannot be converted "

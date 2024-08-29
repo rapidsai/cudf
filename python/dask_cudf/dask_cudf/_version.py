@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,9 +15,19 @@
 import importlib.resources
 
 __version__ = (
-    importlib.resources.files("dask_cudf")
+    importlib.resources.files(__package__)
     .joinpath("VERSION")
     .read_text()
     .strip()
 )
-__git_commit__ = ""
+try:
+    __git_commit__ = (
+        importlib.resources.files(__package__)
+        .joinpath("GIT_COMMIT")
+        .read_text()
+        .strip()
+    )
+except FileNotFoundError:
+    __git_commit__ = ""
+
+__all__ = ["__git_commit__", "__version__"]

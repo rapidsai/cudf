@@ -99,28 +99,28 @@ TEST_F(StringsCaseTest, Capitalize)
 {
   cudf::test::strings_column_wrapper strings(
     {"SȺȺnich xyZ", "Examples aBc", "thesé", "", "ARE\tTHE", "tést\tstrings", ""},
-    {1, 1, 1, 0, 1, 1, 1});
+    {true, true, true, false, true, true, true});
   auto strings_view = cudf::strings_column_view(strings);
 
   {
     auto results = cudf::strings::capitalize(strings_view);
     cudf::test::strings_column_wrapper expected(
       {"Sⱥⱥnich xyz", "Examples abc", "Thesé", "", "Are\tthe", "Tést\tstrings", ""},
-      {1, 1, 1, 0, 1, 1, 1});
+      {true, true, true, false, true, true, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::capitalize(strings_view, std::string(" "));
     cudf::test::strings_column_wrapper expected(
       {"Sⱥⱥnich Xyz", "Examples Abc", "Thesé", "", "Are\tthe", "Tést\tstrings", ""},
-      {1, 1, 1, 0, 1, 1, 1});
+      {true, true, true, false, true, true, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::capitalize(strings_view, std::string(" \t"));
     cudf::test::strings_column_wrapper expected(
       {"Sⱥⱥnich Xyz", "Examples Abc", "Thesé", "", "Are\tThe", "Tést\tStrings", ""},
-      {1, 1, 1, 0, 1, 1, 1});
+      {true, true, true, false, true, true, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
@@ -129,47 +129,49 @@ TEST_F(StringsCaseTest, Title)
 {
   cudf::test::strings_column_wrapper input(
     {"SȺȺnich", "Examples aBc", "thesé", "", "ARE THE", "tést strings", "", "n2viDIA corp"},
-    {1, 1, 1, 0, 1, 1, 1, 1});
+    {true, true, true, false, true, true, true, true});
   auto strings_view = cudf::strings_column_view(input);
 
   auto results = cudf::strings::title(strings_view);
 
   cudf::test::strings_column_wrapper expected(
     {"Sⱥⱥnich", "Examples Abc", "Thesé", "", "Are The", "Tést Strings", "", "N2Vidia Corp"},
-    {1, 1, 1, 0, 1, 1, 1, 1});
+    {true, true, true, false, true, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results = cudf::strings::title(strings_view, cudf::strings::string_character_types::ALPHANUM);
 
   cudf::test::strings_column_wrapper expected2(
     {"Sⱥⱥnich", "Examples Abc", "Thesé", "", "Are The", "Tést Strings", "", "N2vidia Corp"},
-    {1, 1, 1, 0, 1, 1, 1, 1});
+    {true, true, true, false, true, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
 }
 
 TEST_F(StringsCaseTest, IsTitle)
 {
-  cudf::test::strings_column_wrapper input({"Sⱥⱥnich",
-                                            "Examples Abc",
-                                            "Thesé Strings",
-                                            "",
-                                            "Are The",
-                                            "Tést strings",
-                                            "",
-                                            "N2Vidia Corp",
-                                            "SNAKE",
-                                            "!Abc",
-                                            " Eagle",
-                                            "A Test",
-                                            "12345",
-                                            "Alpha Not Upper Or Lower: ƻC",
-                                            "one More"},
-                                           {1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::strings_column_wrapper input(
+    {"Sⱥⱥnich",
+     "Examples Abc",
+     "Thesé Strings",
+     "",
+     "Are The",
+     "Tést strings",
+     "",
+     "N2Vidia Corp",
+     "SNAKE",
+     "!Abc",
+     " Eagle",
+     "A Test",
+     "12345",
+     "Alpha Not Upper Or Lower: ƻC",
+     "one More"},
+    {true, true, true, false, true, true, true, true, true, true, true, true, true, true, true});
 
   auto results = cudf::strings::is_title(cudf::strings_column_view(input));
 
   cudf::test::fixed_width_column_wrapper<bool> expected(
-    {1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0}, {1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+    {1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0},
+    {true, true, true, false, true, true, true, true, true, true, true, true, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

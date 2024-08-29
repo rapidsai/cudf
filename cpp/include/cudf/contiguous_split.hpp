@@ -18,13 +18,14 @@
 
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup copy_split
@@ -124,8 +125,14 @@ std::vector<packed_table> contiguous_split(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 namespace detail {
+
+/**
+ * @brief A helper struct containing the state of contiguous_split, whether the caller
+ * is using the single-pass contiguous_split or chunked_pack.
+ *
+ */
 struct contiguous_split_state;
-};
+}  // namespace detail
 
 /**
  * @brief Perform a chunked "pack" operation of the input `table_view` using a user provided
@@ -338,4 +345,4 @@ table_view unpack(packed_columns const& input);
 table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data);
 
 /** @} */
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

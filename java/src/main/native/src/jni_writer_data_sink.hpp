@@ -61,7 +61,7 @@ class jni_writer_data_sink final : public cudf::io::data_sink {
   {
     JNIEnv* env           = cudf::jni::get_jni_env(jvm);
     long left_to_copy     = static_cast<long>(size);
-    const char* copy_from = static_cast<const char*>(data);
+    char const* copy_from = static_cast<char const*>(data);
     while (left_to_copy > 0) {
       long buffer_amount_available = current_buffer_len - current_buffer_written;
       if (buffer_amount_available <= 0) {
@@ -87,7 +87,7 @@ class jni_writer_data_sink final : public cudf::io::data_sink {
   {
     JNIEnv* env           = cudf::jni::get_jni_env(jvm);
     long left_to_copy     = static_cast<long>(size);
-    const char* copy_from = static_cast<const char*>(gpu_data);
+    char const* copy_from = static_cast<char const*>(gpu_data);
     while (left_to_copy > 0) {
       long buffer_amount_available = current_buffer_len - current_buffer_written;
       if (buffer_amount_available <= 0) {

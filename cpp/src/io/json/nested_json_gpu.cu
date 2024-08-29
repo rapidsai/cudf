@@ -245,7 +245,7 @@ struct TransduceToken {
                                                 RelativeOffsetT const relative_offset,
                                                 SymbolT const read_symbol) const
   {
-    const bool is_end_of_invalid_line =
+    bool const is_end_of_invalid_line =
       (state_id == static_cast<StateT>(TT_INV) &&
        match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER));
 
@@ -265,15 +265,15 @@ struct TransduceToken {
     // Number of tokens emitted on invalid lines
     constexpr int32_t num_inv_tokens = 2;
 
-    const bool is_delimiter = match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER);
+    bool const is_delimiter = match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER);
 
     // If state is either invalid or we're entering an invalid state, we discard tokens
-    const bool is_part_of_invalid_line =
+    bool const is_part_of_invalid_line =
       (match_id != static_cast<SymbolGroupT>(dfa_symbol_group_id::ERROR) &&
        state_id == static_cast<StateT>(TT_VLD));
 
     // Indicates whether we transition from an invalid line to a potentially valid line
-    const bool is_end_of_invalid_line = (state_id == static_cast<StateT>(TT_INV) && is_delimiter);
+    bool const is_end_of_invalid_line = (state_id == static_cast<StateT>(TT_INV) && is_delimiter);
 
     int32_t const emit_count =
       is_end_of_invalid_line ? num_inv_tokens : (is_part_of_invalid_line && !is_delimiter ? 1 : 0);
@@ -1455,11 +1455,14 @@ void get_stack_context(device_span<SymbolT const> json_in,
   constexpr auto max_translation_table_size =
     to_stack_op::NUM_SYMBOL_GROUPS * to_stack_op::TT_NUM_STATES;
 
-  auto json_to_stack_ops_fst = fst::detail::make_fst(
+  static constexpr auto min_translated_out = 0;
+  static constexpr auto max_translated_out = 1;
+  auto json_to_stack_ops_fst               = fst::detail::make_fst(
     fst::detail::make_symbol_group_lut(to_stack_op::get_sgid_lut(delimiter)),
     fst::detail::make_transition_table(to_stack_op::get_transition_table(stack_behavior)),
-    fst::detail::make_translation_table<max_translation_table_size>(
-      to_stack_op::get_translation_table(stack_behavior)),
+    fst::detail::
+      make_translation_table<max_translation_table_size, min_translated_out, max_translated_out>(
+        to_stack_op::get_translation_table(stack_behavior)),
     stream);
 
   // "Search" for relevant occurrence of brackets and braces that indicate the beginning/end
@@ -1507,11 +1510,12 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   // Instantiate FST for post-processing the token stream to remove all tokens that belong to an
   // invalid JSON line
   token_filter::UnwrapTokenFromSymbolOp sgid_op{};
-  auto filter_fst =
-    fst::detail::make_fst(fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
-                          fst::detail::make_transition_table(token_filter::transition_table),
-                          fst::detail::make_translation_functor(token_filter::TransduceToken{}),
-                          stream);
+  using symbol_t  = thrust::tuple<PdaTokenT, SymbolOffsetT>;
+  auto filter_fst = fst::detail::make_fst(
+    fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
+    fst::detail::make_transition_table(token_filter::transition_table),
+    fst::detail::make_translation_functor<symbol_t, 0, 2>(token_filter::TransduceToken{}),
+    stream);
 
   auto const mr = rmm::mr::get_current_device_resource();
   rmm::device_scalar<SymbolOffsetT> d_num_selected_tokens(stream, mr);
@@ -1598,7 +1602,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
       fst::detail::make_symbol_group_lookup_op(
         fix_stack_of_excess_chars::SymbolPairToSymbolGroupId{delimiter}),
       fst::detail::make_transition_table(fix_stack_of_excess_chars::transition_table),
-      fst::detail::make_translation_functor(fix_stack_of_excess_chars::TransduceInputOp{}),
+      fst::detail::make_translation_functor<StackSymbolT, 1, 1>(
+        fix_stack_of_excess_chars::TransduceInputOp{}),
       stream);
     fix_stack_of_excess_chars.Transduce(zip_in,
                                         static_cast<SymbolOffsetT>(json_in.size()),
@@ -1619,7 +1624,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   auto json_to_tokens_fst = fst::detail::make_fst(
     fst::detail::make_symbol_group_lookup_op(tokenizer_pda::PdaSymbolToSymbolGroupId{delimiter}),
     fst::detail::make_transition_table(tokenizer_pda::get_transition_table(format)),
-    fst::detail::make_translation_table<max_translation_table_size>(
+    fst::detail::make_translation_table<max_translation_table_size, 0, 3>(
       tokenizer_pda::get_translation_table(recover_from_error)),
     stream);
 
@@ -1698,10 +1703,8 @@ void make_json_column(json_column& root_column,
   auto const [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
 
   // Copy the JSON tokens to the host
-  thrust::host_vector<PdaTokenT> tokens =
-    cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
-  thrust::host_vector<SymbolOffsetT> token_indices_gpu =
-    cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
+  auto tokens            = cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
+  auto token_indices_gpu = cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
 
   // Make sure tokens have been copied to the host
   stream.synchronize();
@@ -2242,131 +2245,6 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   }
 
   return {};
-}
-
-table_with_metadata host_parse_nested_json(device_span<SymbolT const> d_input,
-                                           cudf::io::json_reader_options const& options,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
-{
-  // Range of orchestrating/encapsulating function
-  CUDF_FUNC_RANGE();
-
-  auto const h_input = cudf::detail::make_std_vector_async(d_input, stream);
-
-  auto const new_line_delimited_json = options.is_enabled_lines();
-
-  // Get internal JSON column
-  json_column root_column{};
-  std::stack<tree_node> data_path{};
-
-  constexpr uint32_t row_offset_zero            = 0;
-  constexpr uint32_t token_begin_offset_zero    = 0;
-  constexpr uint32_t token_end_offset_zero      = 0;
-  constexpr uint32_t node_init_child_count_zero = 0;
-
-  // Whether the tokenizer stage should keep quote characters for string values
-  // If the tokenizer keeps the quote characters, they may be stripped during type casting
-  constexpr bool include_quote_chars = true;
-
-  // We initialize the very root node and root column, which represent the JSON document being
-  // parsed. That root node is a list node and that root column is a list column. The column has the
-  // root node as its only row. The values parsed from the JSON input will be treated as follows:
-  // (1) For JSON lines: we expect to find a list of JSON values that all
-  // will be inserted into this root list column. (2) For regular JSON: we expect to have only a
-  // single value (list, struct, string, number, literal) that will be inserted into this root
-  // column.
-  root_column.append_row(
-    row_offset_zero, json_col_t::ListColumn, token_begin_offset_zero, token_end_offset_zero, 1);
-
-  // Push the root node onto the stack for the data path
-  data_path.push({&root_column, row_offset_zero, nullptr, node_init_child_count_zero});
-
-  make_json_column(
-    root_column, data_path, h_input, d_input, options, include_quote_chars, stream, mr);
-
-  // data_root refers to the root column of the data represented by the given JSON string
-  auto const& data_root =
-    new_line_delimited_json ? root_column : root_column.child_columns.begin()->second;
-
-  // Zero row entries
-  if (data_root.type == json_col_t::ListColumn && data_root.child_columns.empty()) {
-    return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{})};
-  }
-
-  // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
-  auto constexpr single_child_col_count = 1;
-  CUDF_EXPECTS(data_root.type == json_col_t::ListColumn and
-                 data_root.child_columns.size() == single_child_col_count and
-                 data_root.child_columns.begin()->second.type == json_col_t::StructColumn,
-               "Currently the nested JSON parser only supports an array of (nested) objects");
-
-  // Slice off the root list column, which has only a single row that contains all the structs
-  auto const& root_struct_col = data_root.child_columns.begin()->second;
-
-  // Initialize meta data to be populated while recursing through the tree of columns
-  std::vector<std::unique_ptr<column>> out_columns;
-  std::vector<column_name_info> out_column_names;
-
-  // Iterate over the struct's child columns and convert to cudf column
-  size_type column_index = 0;
-  for (auto const& col_name : root_struct_col.column_order) {
-    auto const& json_col = root_struct_col.child_columns.find(col_name)->second;
-    // Insert this columns name into the schema
-    out_column_names.emplace_back(col_name);
-
-    std::optional<schema_element> child_schema_element = std::visit(
-      cudf::detail::visitor_overload{
-        [column_index](std::vector<data_type> const& user_dtypes) -> std::optional<schema_element> {
-          auto ret = (static_cast<std::size_t>(column_index) < user_dtypes.size())
-                       ? std::optional<schema_element>{{user_dtypes[column_index]}}
-                       : std::optional<schema_element>{};
-#ifdef NJP_DEBUG_PRINT
-          std::cout << "Column by index: #" << column_index << ", type id: "
-                    << (ret.has_value() ? std::to_string(static_cast<int>(ret->type.id())) : "n/a")
-                    << ", with " << (ret.has_value() ? ret->child_types.size() : 0) << " children"
-                    << "\n";
-#endif
-          return ret;
-        },
-        [col_name](
-          std::map<std::string, data_type> const& user_dtypes) -> std::optional<schema_element> {
-          auto ret = (user_dtypes.find(col_name) != std::end(user_dtypes))
-                       ? std::optional<schema_element>{{user_dtypes.find(col_name)->second}}
-                       : std::optional<schema_element>{};
-#ifdef NJP_DEBUG_PRINT
-          std::cout << "Column by flat name: '" << col_name << "', type id: "
-                    << (ret.has_value() ? std::to_string(static_cast<int>(ret->type.id())) : "n/a")
-                    << ", with " << (ret.has_value() ? ret->child_types.size() : 0) << " children"
-                    << "\n";
-#endif
-          return ret;
-        },
-        [col_name](std::map<std::string, schema_element> const& user_dtypes)
-          -> std::optional<schema_element> {
-          auto ret = (user_dtypes.find(col_name) != std::end(user_dtypes))
-                       ? user_dtypes.find(col_name)->second
-                       : std::optional<schema_element>{};
-#ifdef NJP_DEBUG_PRINT
-          std::cout << "Column by nested name: #" << col_name << ", type id: "
-                    << (ret.has_value() ? std::to_string(static_cast<int>(ret->type.id())) : "n/a")
-                    << ", with " << (ret.has_value() ? ret->child_types.size() : 0) << " children"
-                    << "\n";
-#endif
-          return ret;
-        }},
-      options.get_dtypes());
-
-    // Get this JSON column's cudf column and schema info
-    auto [cudf_col, col_name_info] =
-      json_column_to_cudf_column(json_col, d_input, options, child_schema_element, stream, mr);
-    out_column_names.back().children = std::move(col_name_info);
-    out_columns.emplace_back(std::move(cudf_col));
-
-    column_index++;
-  }
-
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {out_column_names}};
 }
 
 }  // namespace detail

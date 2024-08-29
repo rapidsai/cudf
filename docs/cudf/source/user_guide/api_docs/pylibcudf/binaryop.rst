@@ -2,5 +2,5 @@
 binaryop
 ========
 
-.. automodule:: cudf._lib.pylibcudf.binaryop
+.. automodule:: pylibcudf.binaryop
    :members:

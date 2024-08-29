@@ -23,7 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace nvtext {
+namespace CUDF_EXPORT nvtext {
 namespace detail {
 /**
  * @copydoc nvtext::tokenize(strings_column_view const&,string_scalar
@@ -70,4 +70,4 @@ std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& stri
                                            rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace nvtext
+}  // namespace CUDF_EXPORT nvtext

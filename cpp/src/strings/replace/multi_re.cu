@@ -92,7 +92,7 @@ struct replace_multi_regex_fn {
         }
         reprog_device prog = progs[ptn_idx];
 
-        auto const result = !prog.is_empty() ? prog.find(idx, d_str, itr) : thrust::nullopt;
+        auto const result = !prog.is_empty() ? prog.find(idx, d_str, itr) : cuda::std::nullopt;
         d_ranges[ptn_idx] =
           result ? found_range{result->first, result->second} : found_range{nchars, nchars};
       }
@@ -171,7 +171,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
   auto d_buffer          = rmm::device_buffer(buffer_size, stream);
 
   // copy all the reprog_device instances to a device memory array
-  std::vector<reprog_device> progs;
+  auto progs = cudf::detail::make_empty_host_vector<reprog_device>(h_progs.size(), stream);
   std::transform(h_progs.begin(),
                  h_progs.end(),
                  std::back_inserter(progs),

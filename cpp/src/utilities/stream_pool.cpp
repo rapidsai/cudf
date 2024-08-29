@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -101,7 +101,7 @@ class debug_cuda_stream_pool : public cuda_stream_pool {
     return std::vector<rmm::cuda_stream_view>(count, cudf::get_default_stream());
   }
 
-  std::size_t get_stream_pool_size() const override { return 1UL; }
+  [[nodiscard]] std::size_t get_stream_pool_size() const override { return 1UL; }
 };
 
 cuda_stream_pool* create_global_cuda_stream_pool()

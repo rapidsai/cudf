@@ -15,9 +15,8 @@ import pytest
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.io.orc import ORCWriter
-from cudf.testing import assert_frame_equal
+from cudf.testing import assert_eq, assert_frame_equal
 from cudf.testing._utils import (
-    assert_eq,
     expect_warning_if,
     gen_rand_series,
     supported_numpy_dtypes,

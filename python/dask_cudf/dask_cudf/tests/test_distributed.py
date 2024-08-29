@@ -9,7 +9,7 @@ from dask.distributed import Client
 from distributed.utils_test import cleanup, loop, loop_in_thread  # noqa: F401
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 import dask_cudf
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Mapping, Optional
+from typing import Literal, Mapping
 
 from typing_extensions import Self
 
@@ -27,7 +27,7 @@ class ExposureTrackedBuffer(Buffer):
         self,
         owner: BufferOwner,
         offset: int = 0,
-        size: Optional[int] = None,
+        size: int | None = None,
     ) -> None:
         super().__init__(owner=owner, offset=offset, size=size)
         self.owner._slices.add(self)

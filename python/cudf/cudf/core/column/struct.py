@@ -2,17 +2,22 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf._typing import Dtype
 from cudf.core.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
 from cudf.core.missing import NA
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
+
+    from cudf._typing import Dtype
+    from cudf.core.buffer import Buffer
 
 
 class StructColumn(ColumnBase):
@@ -21,10 +26,39 @@ class StructColumn(ColumnBase):
 
     Every column has n children, where n is
     the number of fields in the Struct Dtype.
-
     """
 
-    dtype: StructDtype
+    def __init__(
+        self,
+        data: None,
+        size: int,
+        dtype: StructDtype,
+        mask: Buffer | None = None,
+        offset: int = 0,
+        null_count: int | None = None,
+        children: tuple[ColumnBase, ...] = (),
+    ):
+        if data is not None:
+            raise ValueError("data must be None.")
+        dtype = self._validate_dtype_instance(dtype)
+        super().__init__(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
+        )
+
+    @staticmethod
+    def _validate_dtype_instance(dtype: StructDtype) -> StructDtype:
+        # IntervalDtype is a subclass of StructDtype, so compare types exactly
+        if type(dtype) is not StructDtype:
+            raise ValueError(
+                f"{type(dtype).__name__} must be a StructDtype exactly."
+            )
+        return dtype
 
     @property
     def base_size(self):
@@ -33,7 +67,7 @@ class StructColumn(ColumnBase):
         else:
             return self.size + self.offset
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         children = [
             pa.nulls(len(child))
             if len(child) == child.null_count
@@ -48,7 +82,7 @@ class StructColumn(ColumnBase):
             }
         )
 
-        if self.nullable:
+        if self.mask is not None:
             buffers = (pa.py_buffer(self.mask.memoryview()),)
         else:
             buffers = (None,)
@@ -60,28 +94,18 @@ class StructColumn(ColumnBase):
     def to_pandas(
         self,
         *,
-        index: Optional[pd.Index] = None,
         nullable: bool = False,
         arrow_type: bool = False,
-    ) -> pd.Series:
+    ) -> pd.Index:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
-        elif nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-        pa_array = self.to_arrow()
-        if arrow_type:
-            return pd.Series(
-                pd.arrays.ArrowExtensionArray(pa_array), index=index
-            )
+        if arrow_type or nullable:
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
-            return pd.Series(pa_array.tolist(), dtype="object", index=index)
+            return pd.Index(self.to_arrow().tolist(), dtype="object")
 
     @cached_property
-    def memory_usage(self):
+    def memory_usage(self) -> int:
         n = 0
         if self.nullable:
             n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
@@ -107,7 +131,7 @@ class StructColumn(ColumnBase):
             value = cudf.Scalar(value, self.dtype)
         super().__setitem__(key, value)
 
-    def copy(self, deep=True):
+    def copy(self, deep: bool = True) -> Self:
         # Since struct columns are immutable, both deep and
         # shallow copies share the underlying device data and mask.
         result = super().copy(deep=False)
@@ -115,15 +139,15 @@ class StructColumn(ColumnBase):
             result = result._rename_fields(self.dtype.fields.keys())
         return result
 
-    def _rename_fields(self, names):
+    def _rename_fields(self, names) -> Self:
         """
         Return a StructColumn with the same field values as this StructColumn,
         but with the field names equal to `names`.
         """
-        dtype = cudf.core.dtypes.StructDtype(
+        dtype = StructDtype(
             {name: col.dtype for name, col in zip(names, self.children)}
         )
-        return StructColumn(
+        return StructColumn(  # type: ignore[return-value]
             data=None,
             size=self.size,
             dtype=dtype,

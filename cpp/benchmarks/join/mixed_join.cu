@@ -25,8 +25,7 @@ void nvbench_mixed_inner_join(nvbench::state& state,
                  cudf::table_view const& left_conditional_input,
                  cudf::table_view const& right_conditional_input,
                  cudf::ast::operation binary_pred,
-                 cudf::null_equality compare_nulls,
-                 rmm::cuda_stream_view stream) {
+                 cudf::null_equality compare_nulls) {
     return cudf::mixed_inner_join(left_equality_input,
                                   right_equality_input,
                                   left_conditional_input,
@@ -47,8 +46,7 @@ void nvbench_mixed_left_join(nvbench::state& state,
                  cudf::table_view const& left_conditional_input,
                  cudf::table_view const& right_conditional_input,
                  cudf::ast::operation binary_pred,
-                 cudf::null_equality compare_nulls,
-                 rmm::cuda_stream_view stream) {
+                 cudf::null_equality compare_nulls) {
     return cudf::mixed_left_join(left_equality_input,
                                  right_equality_input,
                                  left_conditional_input,
@@ -69,8 +67,7 @@ void nvbench_mixed_full_join(nvbench::state& state,
                  cudf::table_view const& left_conditional_input,
                  cudf::table_view const& right_conditional_input,
                  cudf::ast::operation binary_pred,
-                 cudf::null_equality compare_nulls,
-                 rmm::cuda_stream_view stream) {
+                 cudf::null_equality compare_nulls) {
     return cudf::mixed_full_join(left_equality_input,
                                  right_equality_input,
                                  left_conditional_input,
@@ -91,8 +88,7 @@ void nvbench_mixed_left_semi_join(nvbench::state& state,
                  cudf::table_view const& left_conditional_input,
                  cudf::table_view const& right_conditional_input,
                  cudf::ast::operation binary_pred,
-                 cudf::null_equality compare_nulls,
-                 rmm::cuda_stream_view stream) {
+                 cudf::null_equality compare_nulls) {
     return cudf::mixed_left_semi_join(left_equality_input,
                                       right_equality_input,
                                       left_conditional_input,
@@ -113,8 +109,7 @@ void nvbench_mixed_left_anti_join(nvbench::state& state,
                  cudf::table_view const& left_conditional_input,
                  cudf::table_view const& right_conditional_input,
                  cudf::ast::operation binary_pred,
-                 cudf::null_equality compare_nulls,
-                 rmm::cuda_stream_view stream) {
+                 cudf::null_equality compare_nulls) {
     return cudf::mixed_left_anti_join(left_equality_input,
                                       right_equality_input,
                                       left_conditional_input,

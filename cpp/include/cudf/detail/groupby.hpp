@@ -25,10 +25,8 @@
 #include <memory>
 #include <utility>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
-namespace hash {
+namespace CUDF_EXPORT cudf {
+namespace groupby::detail::hash {
 /**
  * @brief Indicates if a set of aggregation requests can be satisfied with a
  * hash-based groupby implementation.
@@ -47,8 +45,5 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   null_policy include_null_keys,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
-}  // namespace hash
-
-}  // namespace detail
-}  // namespace groupby
-}  // namespace cudf
+}  // namespace groupby::detail::hash
+}  // namespace CUDF_EXPORT cudf

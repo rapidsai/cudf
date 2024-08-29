@@ -15,7 +15,6 @@
  */
 
 #include "stream_compaction_common.cuh"
-#include "stream_compaction_common.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -120,10 +119,11 @@ std::unique_ptr<table> unique(table_view const& input,
                               std::vector<size_type> const& keys,
                               duplicate_keep_option const keep,
                               null_equality nulls_equal,
+                              rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::unique(input, keys, keep, nulls_equal, cudf::get_default_stream(), mr);
+  return detail::unique(input, keys, keep, nulls_equal, stream, mr);
 }
 
 }  // namespace cudf

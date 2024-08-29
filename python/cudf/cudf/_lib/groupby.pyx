@@ -18,10 +18,11 @@ from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 from cudf._lib.scalar import as_device_scalar
 
-from cudf._lib.pylibcudf.libcudf.replace cimport replace_policy
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.replace cimport replace_policy
+from pylibcudf.libcudf.scalar.scalar cimport scalar
 
-from cudf._lib import pylibcudf
+import pylibcudf
+
 from cudf._lib.aggregation import make_aggregation
 
 # The sets below define the possible aggregations that can be performed on

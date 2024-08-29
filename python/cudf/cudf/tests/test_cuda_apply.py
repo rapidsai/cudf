@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 """
 Test method that apply GPU kernel to a frame.
@@ -9,7 +9,7 @@ import pytest
 from numba import cuda
 
 from cudf import DataFrame
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 @pytest.mark.parametrize("nelem", [1, 2, 64, 128, 129])

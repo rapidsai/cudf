@@ -2,5 +2,5 @@
 types
 =====
 
-.. automodule:: cudf._lib.pylibcudf.types
+.. automodule:: pylibcudf.types
    :members:

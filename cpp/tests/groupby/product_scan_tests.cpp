@@ -127,7 +127,7 @@ TYPED_TEST(groupby_product_scan_test, null_keys_and_values)
   using result_wrapper = typename TestFixture::result_wrapper;
 
   // clang-format off
-  key_wrapper keys(  {1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4}, {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+  key_wrapper keys(  {1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4}, {true, true, true, true, true, true, true, false, true, true, true});
   value_wrapper vals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4}, {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
   //                         { 1, 1, 1, 2, 2,  2,  2, 3, *, 3, 4};

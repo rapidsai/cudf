@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -7,7 +7,8 @@ import pytest
 
 import cudf
 from cudf.core.dtypes import StructDtype
-from cudf.testing._utils import DATETIME_TYPES, TIMEDELTA_TYPES, assert_eq
+from cudf.testing import assert_eq
+from cudf.testing._utils import DATETIME_TYPES, TIMEDELTA_TYPES
 
 
 @pytest.mark.parametrize(

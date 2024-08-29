@@ -17,7 +17,7 @@ import warnings
 from abc import abstractmethod
 from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
-from typing import Any, ContextManager, Dict, NamedTuple, Tuple
+from typing import Any, ContextManager, NamedTuple
 
 from typing_extensions import Self
 
@@ -377,7 +377,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
     attempts to call the fast version first).
     """
 
-    _denylist: Tuple[str]
+    _denylist: tuple[str]
     _use_fast_lib: bool
     _use_fast_lib_lock: threading.RLock
     _module_cache_prefix: str = "_slow_lib_"
@@ -519,7 +519,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
     def getattr_real_or_wrapped(
         name: str,
         *,
-        real: Dict[str, Any],
+        real: dict[str, Any],
         wrapped_objs,
         loader: ModuleAccelerator,
     ) -> Any:

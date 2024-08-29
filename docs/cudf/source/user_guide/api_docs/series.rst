@@ -138,6 +138,7 @@ Computations / descriptive stats
    Series.describe
    Series.diff
    Series.digitize
+   Series.ewm
    Series.factorize
    Series.kurt
    Series.max

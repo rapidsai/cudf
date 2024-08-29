@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "rolling/jit/operation-udf.hpp"
 
 #include <cudf/types.hpp>
-
-#pragma once
 
 struct rolling_udf_ptx {
   template <typename OutType, typename InType>

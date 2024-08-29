@@ -15,8 +15,10 @@
  */
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -27,10 +29,40 @@
 #include <algorithm>
 #include <exception>
 #include <numeric>
+#include <string>
 #include <vector>
 
 namespace cudf {
 namespace detail {
+namespace {
+
+template <typename ColumnView>
+void prefetch_col_data(ColumnView& col, void const* data_ptr, std::string_view key) noexcept
+{
+  if (cudf::experimental::prefetch::detail::prefetch_config::instance().get(key)) {
+    if (cudf::is_fixed_width(col.type())) {
+      cudf::experimental::prefetch::detail::prefetch_noexcept(
+        key, data_ptr, col.size() * size_of(col.type()), cudf::get_default_stream());
+    } else if (col.type().id() == type_id::STRING) {
+      strings_column_view scv{col};
+      if (data_ptr == nullptr) {
+        // Do not call chars_size if the data_ptr is nullptr.
+        return;
+      }
+      cudf::experimental::prefetch::detail::prefetch_noexcept(
+        key,
+        data_ptr,
+        scv.chars_size(cudf::get_default_stream()) * sizeof(char),
+        cudf::get_default_stream());
+    } else {
+      std::cout << key << ": Unsupported type: " << static_cast<int32_t>(col.type().id())
+                << std::endl;
+    }
+  }
+}
+
+}  // namespace
+
 column_view_base::column_view_base(data_type type,
                                    size_type size,
                                    void const* data,
@@ -126,6 +158,7 @@ bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs)
 {
   return shallow_equivalent_impl(lhs, rhs);
 }
+
 }  // namespace detail
 
 // Immutable view constructor
@@ -173,6 +206,18 @@ mutable_column_view::operator column_view() const
   std::vector<column_view> child_views(num_children());
   std::copy(std::cbegin(mutable_children), std::cend(mutable_children), std::begin(child_views));
   return column_view{_type, _size, _data, _null_mask, _null_count, _offset, std::move(child_views)};
+}
+
+void const* column_view::get_data() const noexcept
+{
+  detail::prefetch_col_data(*this, _data, "column_view::get_data");
+  return _data;
+}
+
+void const* mutable_column_view::get_data() const noexcept
+{
+  detail::prefetch_col_data(*this, _data, "mutable_column_view::get_data");
+  return _data;
 }
 
 size_type count_descendants(column_view parent)

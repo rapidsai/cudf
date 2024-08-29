@@ -135,9 +135,14 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
         input.size(), output_type, stream, mr);
     }
 
-    auto col_content     = std::make_unique<column>(input, stream, mr)->release();
-    auto const num_chars = col_content.data->size();
-    auto uint8_col       = std::make_unique<column>(
+    auto const num_chars = strings_column_view(input).chars_size(stream);
+    CUDF_EXPECTS(num_chars < static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+                 "Cannot convert strings column to lists column due to size_type limit",
+                 std::overflow_error);
+
+    auto col_content = std::make_unique<column>(input, stream, mr)->release();
+
+    auto uint8_col = std::make_unique<column>(
       output_type, num_chars, std::move(*(col_content.data)), rmm::device_buffer{}, 0);
 
     auto result = make_lists_column(
@@ -162,11 +167,6 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
 
 }  // namespace
 
-/**
- * @copydoc cudf::byte_cast(column_view const&, flip_endianness, rmm::device_async_resource_ref)
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
 std::unique_ptr<column> byte_cast(column_view const& input,
                                   flip_endianness endian_configuration,
                                   rmm::cuda_stream_view stream,
@@ -178,15 +178,13 @@ std::unique_ptr<column> byte_cast(column_view const& input,
 
 }  // namespace detail
 
-/**
- * @copydoc cudf::byte_cast(column_view const&, flip_endianness, rmm::device_async_resource_ref)
- */
 std::unique_ptr<column> byte_cast(column_view const& input,
                                   flip_endianness endian_configuration,
+                                  rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::byte_cast(input, endian_configuration, cudf::get_default_stream(), mr);
+  return detail::byte_cast(input, endian_configuration, stream, mr);
 }
 
 }  // namespace cudf

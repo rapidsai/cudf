@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,78 +14,84 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/benchmark_utilities.hpp>
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
+#include <benchmarks/common/nvbench_utilities.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
 
+#include <nvbench/nvbench.cuh>
+
 #include <memory>
 
-class Reduction : public cudf::benchmark {};
-
-template <typename type>
-void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::reduce_aggregation> const& agg)
+template <cudf::reduce_aggregation::Kind kind>
+static std::unique_ptr<cudf::reduce_aggregation> make_reduce_aggregation()
 {
-  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
-  auto const dtype = cudf::type_to_id<type>();
-  data_profile const profile =
-    data_profile_builder().no_validity().distribution(dtype, distribution_id::UNIFORM, 0, 100);
-  auto const input_column = create_random_column(dtype, row_count{column_size}, profile);
-
-  cudf::data_type output_dtype =
-    (agg->kind == cudf::aggregation::MEAN || agg->kind == cudf::aggregation::VARIANCE ||
-     agg->kind == cudf::aggregation::STD)
-      ? cudf::data_type{cudf::type_id::FLOAT64}
-      : input_column->type();
-
-  for (auto _ : state) {
-    cuda_event_timer timer(state, true);
-    auto result = cudf::reduce(*input_column, *agg, output_dtype);
+  switch (kind) {
+    case cudf::reduce_aggregation::MIN:
+      return cudf::make_min_aggregation<cudf::reduce_aggregation>();
+    case cudf::reduce_aggregation::SUM:
+      return cudf::make_sum_aggregation<cudf::reduce_aggregation>();
+    case cudf::reduce_aggregation::MEAN:
+      return cudf::make_mean_aggregation<cudf::reduce_aggregation>();
+    case cudf::reduce_aggregation::PRODUCT:
+      return cudf::make_product_aggregation<cudf::reduce_aggregation>();
+    case cudf::reduce_aggregation::VARIANCE:
+      return cudf::make_variance_aggregation<cudf::reduce_aggregation>();
+    case cudf::reduce_aggregation::STD:
+      return cudf::make_std_aggregation<cudf::reduce_aggregation>();
+    default: CUDF_FAIL("Unsupported reduce aggregation in this benchmark");
   }
 }
 
-#define concat(a, b, c) a##b##c
-#define get_agg(op)     concat(cudf::make_, op, _aggregation<cudf::reduce_aggregation>())
+template <typename DataType, cudf::reduce_aggregation::Kind kind>
+static void reduction(nvbench::state& state, nvbench::type_list<DataType, nvbench::enum_type<kind>>)
+{
+  auto const size = static_cast<cudf::size_type>(state.get_int64("size"));
+  if (cudf::is_chrono<DataType>() && kind != cudf::aggregation::MIN) {
+    state.skip("Skip chrono types for some aggregations");
+  }
 
-// TYPE, OP
-#define RBM_BENCHMARK_DEFINE(name, type, aggregation)             \
-  BENCHMARK_DEFINE_F(Reduction, name)(::benchmark::State & state) \
-  {                                                               \
-    BM_reduction<type>(state, get_agg(aggregation));              \
-  }                                                               \
-  BENCHMARK_REGISTER_F(Reduction, name)                           \
-    ->UseManualTime()                                             \
-    ->Arg(10000)      /* 10k */                                   \
-    ->Arg(100000)     /* 100k */                                  \
-    ->Arg(1000000)    /* 1M */                                    \
-    ->Arg(10000000)   /* 10M */                                   \
-    ->Arg(100000000); /* 100M */
+  auto const input_type = cudf::type_to_id<DataType>();
+  data_profile const profile =
+    data_profile_builder().no_validity().distribution(input_type, distribution_id::UNIFORM, 0, 100);
+  auto const input_column = create_random_column(input_type, row_count{size}, profile);
 
-#define REDUCE_BENCHMARK_DEFINE(type, aggregation) \
-  RBM_BENCHMARK_DEFINE(concat(type, _, aggregation), type, aggregation)
+  cudf::data_type output_type =
+    (kind == cudf::aggregation::MEAN || kind == cudf::aggregation::VARIANCE ||
+     kind == cudf::aggregation::STD)
+      ? cudf::data_type{cudf::type_id::FLOAT64}
+      : input_column->type();
 
-#define REDUCE_BENCHMARK_NUMERIC(aggregation)    \
-  REDUCE_BENCHMARK_DEFINE(bool, aggregation);    \
-  REDUCE_BENCHMARK_DEFINE(int8_t, aggregation);  \
-  REDUCE_BENCHMARK_DEFINE(int32_t, aggregation); \
-  REDUCE_BENCHMARK_DEFINE(int64_t, aggregation); \
-  REDUCE_BENCHMARK_DEFINE(float, aggregation);   \
-  REDUCE_BENCHMARK_DEFINE(double, aggregation);
+  auto agg = make_reduce_aggregation<kind>();
 
-REDUCE_BENCHMARK_NUMERIC(sum);
-REDUCE_BENCHMARK_DEFINE(int32_t, product);
-REDUCE_BENCHMARK_DEFINE(float, product);
-REDUCE_BENCHMARK_DEFINE(int64_t, min);
-REDUCE_BENCHMARK_DEFINE(double, min);
-using cudf::timestamp_ms;
-REDUCE_BENCHMARK_DEFINE(timestamp_ms, min);
-REDUCE_BENCHMARK_DEFINE(int8_t, mean);
-REDUCE_BENCHMARK_DEFINE(float, mean);
-REDUCE_BENCHMARK_DEFINE(int32_t, variance);
-REDUCE_BENCHMARK_DEFINE(double, variance);
-REDUCE_BENCHMARK_DEFINE(int64_t, std);
-REDUCE_BENCHMARK_DEFINE(float, std);
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.add_element_count(size);
+  state.add_global_memory_reads<DataType>(size);
+  state.add_global_memory_writes<DataType>(1);
+
+  state.exec(nvbench::exec_tag::sync, [&input_column, output_type, &agg](nvbench::launch& launch) {
+    cudf::reduce(*input_column, *agg, output_type);
+  });
+
+  set_throughputs(state);
+}
+
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_ms, "cudf::timestamp_ms", "cudf::timestamp_ms");
+
+using Types    = nvbench::type_list<int32_t, int64_t, double, cudf::timestamp_ms>;
+using AggKinds = nvbench::enum_type_list<cudf::reduce_aggregation::MIN,
+                                         cudf::reduce_aggregation::SUM,
+                                         cudf::reduce_aggregation::PRODUCT,
+                                         cudf::reduce_aggregation::VARIANCE,
+                                         cudf::reduce_aggregation::STD,
+                                         cudf::reduce_aggregation::MEAN>;
+
+NVBENCH_BENCH_TYPES(reduction, NVBENCH_TYPE_AXES(Types, AggKinds))
+  .set_name("reduction")
+  .set_type_axes_names({"DataType", "AggKinds"})
+  .add_int64_axis("size", {100'000, 1'000'000, 10'000'000, 100'000'000});

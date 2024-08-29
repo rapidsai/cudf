@@ -36,6 +36,10 @@ DASK_DATAFRAME__QUERY_PLANNING=False ./ci/run_dask_cudf_pytests.sh \
   --dist=loadscope \
   .
 
+rapids-logger "pytest cudf_kafka"
+./ci/run_cudf_kafka_pytests.sh \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-kafka.xml"
+
 rapids-logger "pytest custreamz"
 ./ci/run_custreamz_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-custreamz.xml" \

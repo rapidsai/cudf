@@ -18,6 +18,7 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 
 #include <sstream>
 
@@ -199,6 +200,30 @@ JNIEXPORT void JNI_OnUnload(JavaVM* vm, void*)
 JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Cuda_isPtdsEnabled(JNIEnv* env, jclass)
 {
   return cudf::jni::is_ptds_enabled;
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_setKernelPinnedCopyThreshold(JNIEnv* env,
+                                                                             jclass clazz,
+                                                                             jlong jthreshold)
+{
+  try {
+    cudf::jni::auto_set_device(env);
+    auto threshold = static_cast<std::size_t>(jthreshold);
+    cudf::set_kernel_pinned_copy_threshold(threshold);
+  }
+  CATCH_STD(env, )
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_setPinnedAllocationThreshold(JNIEnv* env,
+                                                                             jclass clazz,
+                                                                             jlong jthreshold)
+{
+  try {
+    cudf::jni::auto_set_device(env);
+    auto threshold = static_cast<std::size_t>(jthreshold);
+    cudf::set_allocate_host_as_pinned_threshold(threshold);
+  }
+  CATCH_STD(env, )
 }
 
 }  // extern "C"

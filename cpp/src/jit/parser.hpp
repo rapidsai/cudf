@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,14 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <map>
 #include <set>
 #include <string>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace jit {
 /**
  * @brief Parse and transform a piece of PTX code that contains the implementation
@@ -195,9 +197,9 @@ class ptx_parser {
    * function.
    * @param pointer_arg_list_ A list of the parameters that are pointers.
    */
-  ptx_parser(std::string const& ptx_,
-             std::string const& function_name_,
-             std::string const& output_arg_type_,
+  ptx_parser(std::string ptx_,
+             std::string function_name_,
+             std::string output_arg_type_,
              std::set<int> const& pointer_arg_list_);
 
   // parse the source!!!
@@ -239,4 +241,4 @@ inline std::string parse_single_function_ptx(std::string const& src,
 std::string parse_single_function_cuda(std::string const& src, std::string const& function_name);
 
 }  // namespace jit
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

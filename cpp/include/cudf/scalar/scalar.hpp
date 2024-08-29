@@ -32,7 +32,7 @@
  * @brief Class definitions for cudf::scalar
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup scalar_classes
  * @{
@@ -187,7 +187,7 @@ class fixed_width_scalar : public scalar {
    * @param stream CUDA stream used for device memory operations.
    * @return Value of the scalar
    */
-  T value(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
+  [[nodiscard]] T value(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
    * @brief Returns a raw pointer to the value in device memory.
@@ -199,7 +199,7 @@ class fixed_width_scalar : public scalar {
    * @brief Returns a const raw pointer to the value in device memory.
    * @return A const raw pointer to the value in device memory
    */
-  T const* data() const;
+  [[nodiscard]] T const* data() const;
 
  protected:
   rmm::device_scalar<T> _data;  ///< device memory containing the value
@@ -245,8 +245,8 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
   static_assert(is_numeric<T>(), "Unexpected non-numeric type.");
 
  public:
-  numeric_scalar()  = delete;
-  ~numeric_scalar() = default;
+  numeric_scalar()           = delete;
+  ~numeric_scalar() override = default;
 
   /**
    * @brief Move constructor for numeric_scalar.
@@ -393,7 +393,7 @@ class fixed_point_scalar : public scalar {
    * @param stream CUDA stream used for device memory operations.
    * @return The value of the scalar
    */
-  rep_type value(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
+  [[nodiscard]] rep_type value(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
    * @brief Get the decimal32, decimal64 or decimal128.
@@ -401,7 +401,8 @@ class fixed_point_scalar : public scalar {
    * @param stream CUDA stream used for device memory operations.
    * @return The decimal32, decimal64 or decimal128 value
    */
-  T fixed_point_value(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
+  [[nodiscard]] T fixed_point_value(
+    rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
    * @brief Explicit conversion operator to get the value of the scalar on the host.
@@ -418,7 +419,7 @@ class fixed_point_scalar : public scalar {
    * @brief Returns a const raw pointer to the value in device memory.
    * @return a const raw pointer to the value in device memory
    */
-  rep_type const* data() const;
+  [[nodiscard]] rep_type const* data() const;
 
  protected:
   rmm::device_scalar<rep_type> _data;  ///< device memory containing the value
@@ -565,8 +566,8 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
   static_assert(is_chrono<T>(), "Unexpected non-chrono type");
 
  public:
-  chrono_scalar()  = delete;
-  ~chrono_scalar() = default;
+  chrono_scalar()           = delete;
+  ~chrono_scalar() override = default;
 
   /**
    * @brief Move constructor for chrono_scalar.
@@ -893,4 +894,4 @@ class struct_scalar : public scalar {
 };
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

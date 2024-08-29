@@ -23,6 +23,7 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
@@ -30,7 +31,7 @@
 #include <memory>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_copy
@@ -913,7 +914,7 @@ bool may_have_nonempty_nulls(column_view const& input);
  *
  * @code{.pseudo}
  * auto const lists   = lists_column_wrapper<int32_t>{ {0,1}, {2,3}, {4,5} }.release();
- * cudf::detail::set_null_mask(lists->null_mask(), 1, 2, false);
+ * cudf::set_null_mask(lists->null_mask(), 1, 2, false);
  *
  * lists[1] is now null, but the lists child column still stores `{2,3}`.
  * The lists column contents will be:
@@ -929,7 +930,7 @@ bool may_have_nonempty_nulls(column_view const& input);
  *
  * @code{.pseudo}
  * auto const strings = strings_column_wrapper{ "AB", "CD", "EF" }.release();
- * cudf::detail::set_null_mask(strings->null_mask(), 1, 2, false);
+ * cudf::set_null_mask(strings->null_mask(), 1, 2, false);
  *
  * strings[1] is now null, but the strings column still stores `"CD"`.
  * The lists column contents will be:
@@ -972,4 +973,4 @@ std::unique_ptr<column> purge_nonempty_nulls(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -19,20 +19,17 @@ import pyarrow as pa
 import pytest
 from fsspec.core import get_fs_token_paths
 from packaging import version
-from pyarrow import fs as pa_fs, parquet as pq
+from pyarrow import parquet as pq
 
 import cudf
+from cudf._lib.parquet import read_parquet_chunked
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
     merge_parquet_filemetadata,
 )
-from cudf.testing import dataset_generator as dg
-from cudf.testing._utils import (
-    TIMEDELTA_TYPES,
-    assert_eq,
-    set_random_null_mask_inplace,
-)
+from cudf.testing import assert_eq, dataset_generator as dg
+from cudf.testing._utils import TIMEDELTA_TYPES, set_random_null_mask_inplace
 
 
 @contextmanager
@@ -518,10 +515,6 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
     )
 
 
-@pytest.mark.skipif(
-    version.parse(pa.__version__) < version.parse("1.0.1"),
-    reason="pyarrow 1.0.0 needed for various operators and operand types",
-)
 @pytest.mark.parametrize(
     "predicate,expected_len",
     [
@@ -708,37 +701,17 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
     assert_eq(expect, got)
 
 
-def test_parquet_reader_arrow_nativefile(parquet_path_or_buf):
-    # Check that we can read a file opened with the
-    # Arrow FileSystem interface
-    expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
-    fs, path = pa_fs.FileSystem.from_uri(parquet_path_or_buf("filepath"))
-    with fs.open_input_file(path) as fil:
-        got = cudf.read_parquet(fil)
-
-    assert_eq(expect, got)
-
-
-@pytest.mark.parametrize("use_python_file_object", [True, False])
-def test_parquet_reader_use_python_file_object(
-    parquet_path_or_buf, use_python_file_object
-):
-    # Check that the non-default `use_python_file_object=True`
-    # option works as expected
+def test_parquet_reader_file_types(parquet_path_or_buf):
     expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
     fs, _, paths = get_fs_token_paths(parquet_path_or_buf("filepath"))
 
     # Pass open fsspec file
     with fs.open(paths[0], mode="rb") as fil:
-        got1 = cudf.read_parquet(
-            fil, use_python_file_object=use_python_file_object
-        )
+        got1 = cudf.read_parquet(fil)
     assert_eq(expect, got1)
 
     # Pass path only
-    got2 = cudf.read_parquet(
-        paths[0], use_python_file_object=use_python_file_object
-    )
+    got2 = cudf.read_parquet(paths[0])
     assert_eq(expect, got2)
 
 
@@ -1620,7 +1593,11 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
     assert_eq(pdf, gdf)
 
     # Write out the gdf using the GPU accelerated writer with INT96 timestamps
-    gdf.to_parquet(gdf_fname.strpath, index=None, int96_timestamps=True)
+    gdf.to_parquet(
+        gdf_fname.strpath,
+        index=None,
+        int96_timestamps=True,
+    )
 
     assert os.path.exists(gdf_fname)
 
@@ -1792,10 +1769,11 @@ def test_parquet_write_bytes_io(simple_gdf):
     assert_eq(cudf.read_parquet(output), simple_gdf)
 
 
-def test_parquet_writer_bytes_io(simple_gdf):
+@pytest.mark.parametrize("store_schema", [True, False])
+def test_parquet_writer_bytes_io(simple_gdf, store_schema):
     output = BytesIO()
 
-    writer = ParquetWriter(output)
+    writer = ParquetWriter(output, store_schema=store_schema)
     writer.write_table(simple_gdf)
     writer.write_table(simple_gdf)
     writer.close()
@@ -1973,6 +1951,25 @@ def test_parquet_partitioned(tmpdir_factory, cols, filename):
                 assert fn == filename
 
 
+@pytest.mark.parametrize("kwargs", [{"nrows": 1}, {"skip_rows": 1}])
+def test_parquet_partitioned_notimplemented(tmpdir_factory, kwargs):
+    # Checks that write_to_dataset is wrapping to_parquet
+    # as expected
+    pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
+    size = 100
+    pdf = pd.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="int64"),
+            "b": np.random.choice(list("abcd"), size=size),
+            "c": np.random.choice(np.arange(4), size=size),
+        }
+    )
+    pdf.to_parquet(pdf_dir, index=False, partition_cols=["b"])
+
+    with pytest.raises(NotImplementedError):
+        cudf.read_parquet(pdf_dir, **kwargs)
+
+
 @pytest.mark.parametrize("return_meta", [True, False])
 def test_parquet_writer_chunked_partitioned(tmpdir_factory, return_meta):
     pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
@@ -2127,7 +2124,8 @@ def test_parquet_writer_chunked_partitioned_context(tmpdir_factory):
 
 
 @pytest.mark.parametrize("cols", [None, ["b"]])
-def test_parquet_write_to_dataset(tmpdir_factory, cols):
+@pytest.mark.parametrize("store_schema", [True, False])
+def test_parquet_write_to_dataset(tmpdir_factory, cols, store_schema):
     dir1 = tmpdir_factory.mktemp("dir1")
     dir2 = tmpdir_factory.mktemp("dir2")
     if cols is None:
@@ -2143,7 +2141,7 @@ def test_parquet_write_to_dataset(tmpdir_factory, cols):
             "b": np.random.choice(np.arange(4), size=size),
         }
     )
-    gdf.to_parquet(dir1, partition_cols=cols)
+    gdf.to_parquet(dir1, partition_cols=cols, store_schema=store_schema)
     cudf.io.write_to_dataset(gdf, dir2, partition_cols=cols)
 
     # Read back with cudf
@@ -2159,7 +2157,7 @@ def test_parquet_write_to_dataset(tmpdir_factory, cols):
         }
     )
     with pytest.raises(ValueError):
-        gdf.to_parquet(dir1, partition_cols=cols)
+        gdf.to_parquet(dir1, partition_cols=cols, store_schema=store_schema)
 
 
 @pytest.mark.parametrize(
@@ -2389,7 +2387,12 @@ def test_parquet_writer_list_large_mixed(tmpdir):
     assert_eq(expect, got)
 
 
-def test_parquet_writer_list_chunked(tmpdir):
+@pytest.mark.parametrize("store_schema", [True, False])
+def test_parquet_writer_list_chunked(tmpdir, store_schema):
+    if store_schema and version.parse(pa.__version__) < version.parse(
+        "15.0.0"
+    ):
+        pytest.skip("https://github.com/apache/arrow/pull/37792")
     table1 = cudf.DataFrame(
         {
             "a": list_gen(string_gen, 128, 80, 50),
@@ -2410,7 +2413,7 @@ def test_parquet_writer_list_chunked(tmpdir):
     expect = cudf.concat([table1, table2])
     expect = expect.reset_index(drop=True)
 
-    writer = ParquetWriter(fname)
+    writer = ParquetWriter(fname, store_schema=store_schema)
     writer.write_table(table1)
     writer.write_table(table2)
     writer.close()
@@ -2545,6 +2548,10 @@ def normalized_equals(value1, value2):
         value1 = None
     if value2 is pd.NA or value2 is pd.NaT:
         value2 = None
+    if isinstance(value1, np.datetime64):
+        value1 = pd.Timestamp(value1).to_pydatetime()
+    if isinstance(value2, np.datetime64):
+        value2 = pd.Timestamp(value2).to_pydatetime()
     if isinstance(value1, pd.Timestamp):
         value1 = value1.to_pydatetime()
     if isinstance(value2, pd.Timestamp):
@@ -2553,6 +2560,9 @@ def normalized_equals(value1, value2):
         value1 = value1.replace(tzinfo=None)
     if isinstance(value2, datetime.datetime):
         value2 = value2.replace(tzinfo=None)
+    if isinstance(value1, pd.Timedelta):
+        unit = "ms" if value1.unit == "s" else value1.unit
+        value2 = pd.Timedelta(value2, unit=unit)
 
     # if one is datetime then both values are datetimes now
     if isinstance(value1, datetime.datetime):
@@ -2566,7 +2576,12 @@ def normalized_equals(value1, value2):
 
 
 @pytest.mark.parametrize("add_nulls", [True, False])
-def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
+@pytest.mark.parametrize("store_schema", [True, False])
+def test_parquet_writer_statistics(tmpdir, pdf, add_nulls, store_schema):
+    if store_schema and version.parse(pa.__version__) < version.parse(
+        "15.0.0"
+    ):
+        pytest.skip("https://github.com/apache/arrow/pull/37792")
     file_path = tmpdir.join("cudf.parquet")
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category", "col_bool"])
@@ -2583,7 +2598,7 @@ def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
     if add_nulls:
         for col in gdf:
             set_random_null_mask_inplace(gdf[col])
-    gdf.to_parquet(file_path, index=False)
+    gdf.to_parquet(file_path, index=False, store_schema=store_schema)
 
     # Read back from pyarrow
     pq_file = pq.ParquetFile(file_path)
@@ -2946,6 +2961,65 @@ def test_per_column_options_string_col(tmpdir, encoding):
     assert encoding in fmd.row_group(0).column(0).encodings
 
 
+@pytest.mark.skipif(
+    version.parse(pa.__version__) < version.parse("16.0.0"),
+    reason="https://github.com/apache/arrow/pull/39748",
+)
+@pytest.mark.parametrize(
+    "num_rows",
+    [200, 10000],
+)
+def test_parquet_bss_round_trip(tmpdir, num_rows):
+    def flba(i):
+        hasher = hashlib.sha256()
+        hasher.update(i.to_bytes(4, "little"))
+        return hasher.digest()
+
+    # use pyarrow to write table of types that support BYTE_STREAM_SPLIT encoding
+    rows_per_rowgroup = 5000
+    fixed_data = pa.array(
+        [flba(i) for i in range(num_rows)], type=pa.binary(32)
+    )
+    i32_data = pa.array(list(range(num_rows)), type=pa.int32())
+    i64_data = pa.array(list(range(num_rows)), type=pa.int64())
+    f32_data = pa.array([float(i) for i in range(num_rows)], type=pa.float32())
+    f64_data = pa.array([float(i) for i in range(num_rows)], type=pa.float64())
+    padf = pa.Table.from_arrays(
+        [fixed_data, i32_data, i64_data, f32_data, f64_data],
+        names=["flba", "i32", "i64", "f32", "f64"],
+    )
+    padf_fname = tmpdir.join("padf.parquet")
+    pq.write_table(
+        padf,
+        padf_fname,
+        column_encoding="BYTE_STREAM_SPLIT",
+        use_dictionary=False,
+        row_group_size=rows_per_rowgroup,
+    )
+
+    # round trip data with cudf
+    cdf = cudf.read_parquet(padf_fname)
+    cdf_fname = tmpdir.join("cdf.parquet")
+    cdf.to_parquet(
+        cdf_fname,
+        column_type_length={"flba": 32},
+        column_encoding={
+            "flba": "BYTE_STREAM_SPLIT",
+            "i32": "BYTE_STREAM_SPLIT",
+            "i64": "BYTE_STREAM_SPLIT",
+            "f32": "BYTE_STREAM_SPLIT",
+            "f64": "BYTE_STREAM_SPLIT",
+        },
+        row_group_size_rows=rows_per_rowgroup,
+    )
+
+    # now read back in with pyarrow to test it was written properly by cudf
+    padf2 = pq.read_table(padf_fname)
+    padf3 = pq.read_table(cdf_fname)
+    assert_eq(padf2, padf3)
+    assert_eq(padf2.schema[0].type, padf3.schema[0].type)
+
+
 def test_parquet_reader_rle_boolean(datadir):
     fname = datadir / "rle_boolean_encoding.parquet"
 
@@ -3153,7 +3227,8 @@ def test_parquet_writer_zstd():
         assert_eq(expected, got)
 
 
-def test_parquet_writer_time_delta_physical_type():
+@pytest.mark.parametrize("store_schema", [True, False])
+def test_parquet_writer_time_delta_physical_type(store_schema):
     df = cudf.DataFrame(
         {
             "s": cudf.Series([1], dtype="timedelta64[s]"),
@@ -3165,22 +3240,35 @@ def test_parquet_writer_time_delta_physical_type():
         }
     )
     buffer = BytesIO()
-    df.to_parquet(buffer)
+    df.to_parquet(buffer, store_schema=store_schema)
 
     got = pd.read_parquet(buffer)
-    expected = pd.DataFrame(
-        {
-            "s": ["00:00:01"],
-            "ms": ["00:00:00.002000"],
-            "us": ["00:00:00.000003"],
-            "ns": ["00:00:00.000004"],
-        },
-        dtype="str",
-    )
+
+    if store_schema:
+        expected = pd.DataFrame(
+            {
+                "s": ["0 days 00:00:01"],
+                "ms": ["0 days 00:00:00.002000"],
+                "us": ["0 days 00:00:00.000003"],
+                "ns": ["0 days 00:00:00.000004"],
+            },
+            dtype="str",
+        )
+    else:
+        expected = pd.DataFrame(
+            {
+                "s": ["00:00:01"],
+                "ms": ["00:00:00.002000"],
+                "us": ["00:00:00.000003"],
+                "ns": ["00:00:00.000004"],
+            },
+            dtype="str",
+        )
     assert_eq(got.astype("str"), expected)
 
 
-def test_parquet_roundtrip_time_delta():
+@pytest.mark.parametrize("store_schema", [True, False])
+def test_parquet_roundtrip_time_delta(store_schema):
     num_rows = 12345
     df = cudf.DataFrame(
         {
@@ -3203,10 +3291,11 @@ def test_parquet_roundtrip_time_delta():
         }
     )
     buffer = BytesIO()
-    df.to_parquet(buffer)
-    # TODO: Remove `check_dtype` once following issue is fixed in arrow:
-    # https://github.com/apache/arrow/issues/33321
+    df.to_parquet(buffer, store_schema=store_schema)
+    # `check_dtype` cannot be removed here as timedelta64[s] will change to `timedelta[ms]`
     assert_eq(df, cudf.read_parquet(buffer), check_dtype=False)
+    if store_schema:
+        assert_eq(df, pd.read_parquet(buffer))
 
 
 def test_parquet_reader_malformed_file(datadir):
@@ -3368,35 +3457,87 @@ def test_parquet_reader_roundtrip_with_arrow_schema():
     # Check results for reader with schema
     assert_eq(expected, got)
 
+    # Reset buffer
+    buffer = BytesIO()
 
-def test_parquet_reader_roundtrip_structs_with_arrow_schema():
-    # Ensure that the structs with duration types are faithfully being
-    # roundtripped across Parquet with arrow schema
-    pdf = pd.DataFrame(
-        {
-            "struct": {
-                "payload": {
-                    "Domain": {
-                        "Name": "abc",
-                        "Id": {"Name": "host", "Value": "127.0.0.8"},
-                        "Duration": datetime.timedelta(minutes=12),
-                    },
-                    "StreamId": "12345678",
-                    "Duration": datetime.timedelta(minutes=4),
-                    "Offset": None,
-                    "Resource": [
-                        {
-                            "Name": "ZoneName",
-                            "Value": "RAPIDS",
-                            "Duration": datetime.timedelta(seconds=1),
-                        }
-                    ],
+    # Write to buffer with cudf
+    expected.to_parquet(buffer, store_schema=True)
+
+    # Read parquet with arrow schema
+    got = cudf.read_parquet(buffer)
+    # Convert to cudf table for an apple to apple comparison
+    expected = cudf.from_pandas(pdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # struct
+        [
+            {"a": 1, "b": 2},
+            {"a": 10, "b": 20},
+            {"a": None, "b": 22},
+            {"a": None, "b": None},
+            {"a": 15, "b": None},
+        ],
+        # struct-of-list
+        [
+            {"a": 1, "b": 2, "c": [1, 2, 3]},
+            {"a": 10, "b": 20, "c": [4, 5]},
+            {"a": None, "b": 22, "c": [6]},
+            {"a": None, "b": None, "c": None},
+            {"a": 15, "b": None, "c": [-1, -2]},
+            None,
+            {"a": 100, "b": 200, "c": [-10, None, -20]},
+        ],
+        # list-of-struct
+        [
+            [{"a": 1, "b": 2}, {"a": 2, "b": 3}, {"a": 4, "b": 5}],
+            None,
+            [{"a": 10, "b": 20}],
+            [{"a": 100, "b": 200}, {"a": None, "b": 300}, None],
+        ],
+        # struct-of-struct
+        [
+            {"a": 1, "b": {"inner_a": 10, "inner_b": 20}, "c": 2},
+            {"a": 3, "b": {"inner_a": 30, "inner_b": 40}, "c": 4},
+            {"a": 5, "b": {"inner_a": 50, "inner_b": None}, "c": 6},
+            {"a": 7, "b": None, "c": 8},
+            {"a": None, "b": {"inner_a": None, "inner_b": None}, "c": None},
+            None,
+            {"a": None, "b": {"inner_a": None, "inner_b": 100}, "c": 10},
+        ],
+        # struct-with-mixed-types
+        [
+            {
+                "struct": {
+                    "payload": {
+                        "Domain": {
+                            "Name": "abc",
+                            "Id": {"Name": "host", "Value": "127.0.0.8"},
+                            "Duration": datetime.timedelta(minutes=12),
+                        },
+                        "StreamId": "12345678",
+                        "Duration": datetime.timedelta(minutes=4),
+                        "Offset": None,
+                        "Resource": [
+                            {
+                                "Name": "ZoneName",
+                                "Value": "RAPIDS",
+                                "Duration": datetime.timedelta(seconds=1),
+                            }
+                        ],
+                    }
                 }
             }
-        }
-    )
+        ],
+    ],
+)
+def test_parquet_reader_roundtrip_structs_with_arrow_schema(tmpdir, data):
+    # Ensure that the structs with duration types are faithfully being
+    # roundtripped across Parquet with arrow schema
+    pdf = pd.DataFrame({"struct": pd.Series(data)})
 
-    # Reset the buffer and write parquet with arrow
     buffer = BytesIO()
     pdf.to_parquet(buffer, engine="pyarrow")
 
@@ -3407,3 +3548,512 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema():
 
     # Check results
     assert_eq(expected, got)
+
+    # Reset buffer
+    buffer = BytesIO()
+
+    # Write to buffer with cudf
+    expected.to_parquet(buffer, store_schema=True)
+
+    # Read parquet with arrow schema
+    got = cudf.read_parquet(buffer)
+    # Convert to cudf table for an apple to apple comparison
+    expected = cudf.from_pandas(pdf)
+
+    # Check results
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("index", [None, True, False])
+@pytest.mark.skipif(
+    version.parse(pa.__version__) < version.parse("15.0.0"),
+    reason="https://github.com/apache/arrow/pull/37792",
+)
+def test_parquet_writer_roundtrip_with_arrow_schema(index):
+    # Ensure that the concrete and nested types are faithfully being roundtripped
+    # across Parquet with arrow schema
+    expected = cudf.DataFrame(
+        {
+            "s": cudf.Series([None, None, None], dtype="timedelta64[s]"),
+            "us": cudf.Series([None, 3456, None], dtype="timedelta64[us]"),
+            "duration_list": list(
+                [
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        datetime.timedelta(minutes=7),
+                    ],
+                    [
+                        None,
+                        None,
+                    ],
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        None,
+                    ],
+                ]
+            ),
+            "int64": cudf.Series([-1234, 123, 4123], dtype="int64"),
+            "uint32": cudf.Series([1234, 123, 4123], dtype="uint32"),
+            "list": list([[1, 2], [1, 2], [1, 2]]),
+            "bool": cudf.Series([True, None, False], dtype=bool),
+            "fixed32": cudf.Series([0.00, 1.0, None]).astype(
+                cudf.Decimal32Dtype(7, 2)
+            ),
+            "fixed64": cudf.Series([0.00, 1.0, None]).astype(
+                cudf.Decimal64Dtype(7, 2)
+            ),
+            "fixed128": cudf.Series([0.00, 1.0, None]).astype(
+                cudf.Decimal128Dtype(7, 2)
+            ),
+            "datetime": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
+            "map": cudf.Series(["cat", "dog", "lion"]).map(
+                {"cat": "kitten", "dog": "puppy", "lion": "cub"}
+            ),
+        }
+    )
+
+    # Write to Parquet with arrow schema for faithful roundtrip
+    buffer = BytesIO()
+    expected.to_parquet(buffer, store_schema=True, index=index)
+
+    # Convert decimal types to d128
+    expected = expected.astype({"fixed32": cudf.Decimal128Dtype(9, 2)})
+    expected = expected.astype({"fixed64": cudf.Decimal128Dtype(18, 2)})
+
+    # Read parquet with pyarrow, pandas and cudf readers
+    got = cudf.DataFrame.from_arrow(pq.read_table(buffer))
+    got2 = cudf.DataFrame.from_pandas(pd.read_parquet(buffer))
+    got3 = cudf.read_parquet(buffer)
+
+    # drop the index column for comparison: __index_level_0__
+    if index:
+        got.drop(columns="__index_level_0__", inplace=True)
+        got2.drop(columns="__index_level_0__", inplace=True)
+
+    # Check results
+    assert_eq(expected, got)
+    assert_eq(expected, got2)
+    assert_eq(expected, got3)
+
+
+def test_parquet_writer_int96_timestamps_and_arrow_schema():
+    df = cudf.DataFrame(
+        {
+            "timestamp": cudf.Series(
+                [1234, 123, 4123], dtype="datetime64[ms]"
+            ),
+        }
+    )
+
+    # Output buffer
+    buffer = BytesIO()
+
+    # Writing out parquet with both INT96 timestamps and arrow_schema
+    # enabled should throw an exception.
+    with pytest.raises(RuntimeError):
+        df.to_parquet(buffer, int96_timestamps=True, store_schema=True)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # struct
+        [
+            {"a": 1, "b": 2},
+            {"a": 10, "b": 20},
+            {"a": None, "b": 22},
+            {"a": None, "b": None},
+            {"a": 15, "b": None},
+        ],
+        # struct-of-list
+        [
+            {"a": 1, "b": 2, "c": [1, 2, 3]},
+            {"a": 10, "b": 20, "c": [4, 5]},
+            {"a": None, "b": 22, "c": [6]},
+            {"a": None, "b": None, "c": None},
+            {"a": 15, "b": None, "c": [-1, -2]},
+            None,
+            {"a": 100, "b": 200, "c": [-10, None, -20]},
+        ],
+        # list-of-struct
+        [
+            [{"a": 1, "b": 2}, {"a": 2, "b": 3}, {"a": 4, "b": 5}],
+            None,
+            [{"a": 10, "b": 20}],
+            [{"a": 100, "b": 200}, {"a": None, "b": 300}, None],
+        ],
+        # struct-of-struct
+        [
+            {"a": 1, "b": {"inner_a": 10, "inner_b": 20}, "c": 2},
+            {"a": 3, "b": {"inner_a": 30, "inner_b": 40}, "c": 4},
+            {"a": 5, "b": {"inner_a": 50, "inner_b": None}, "c": 6},
+            {"a": 7, "b": None, "c": 8},
+            {"a": None, "b": {"inner_a": None, "inner_b": None}, "c": None},
+            None,
+            {"a": None, "b": {"inner_a": None, "inner_b": 100}, "c": 10},
+        ],
+        # struct-with-mixed-types
+        [
+            {
+                "struct": {
+                    "payload": {
+                        "Domain": {
+                            "Name": "abc",
+                            "Id": {"Name": "host", "Value": "127.0.0.8"},
+                            "Duration": datetime.timedelta(minutes=12),
+                        },
+                        "StreamId": "12345678",
+                        "Duration": datetime.timedelta(minutes=4),
+                        "Offset": None,
+                        "Resource": [
+                            {
+                                "Name": "ZoneName",
+                                "Value": "RAPIDS",
+                                "Duration": datetime.timedelta(seconds=1),
+                            }
+                        ],
+                    }
+                }
+            }
+        ],
+    ],
+)
+@pytest.mark.parametrize("index", [None, True, False])
+@pytest.mark.skipif(
+    version.parse(pa.__version__) < version.parse("15.0.0"),
+    reason="https://github.com/apache/arrow/pull/37792",
+)
+def test_parquet_writer_roundtrip_structs_with_arrow_schema(
+    tmpdir, data, index
+):
+    # Ensure that the structs are faithfully being roundtripped across
+    # Parquet with arrow schema
+    pa_expected = pa.Table.from_pydict({"struct": data})
+
+    expected = cudf.DataFrame.from_arrow(pa_expected)
+
+    # Write expected data frame to Parquet with arrow schema
+    buffer = BytesIO()
+    expected.to_parquet(buffer, store_schema=True, index=index)
+
+    # Read Parquet with pyarrow
+    pa_got = pq.read_table(buffer)
+
+    # drop the index column for comparison: __index_level_0__
+    if index:
+        pa_got = pa_got.drop(columns="__index_level_0__")
+
+    # Check results
+    assert_eq(pa_expected, pa_got)
+
+    # Convert to cuDF table and also read Parquet with cuDF reader
+    got = cudf.DataFrame.from_arrow(pa_got)
+    got2 = cudf.read_parquet(buffer)
+
+    # Check results
+    assert_eq(expected, got)
+    assert_eq(expected, got2)
+
+
+@pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
+@pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
+@pytest.mark.parametrize("use_pandas_metadata", [True, False])
+@pytest.mark.parametrize("row_groups", [[[0]], None, [[0, 1]]])
+def test_parquet_chunked_reader(
+    chunk_read_limit, pass_read_limit, use_pandas_metadata, row_groups
+):
+    df = pd.DataFrame(
+        {"a": [1, 2, 3, 4] * 1000000, "b": ["av", "qw", "hi", "xyz"] * 1000000}
+    )
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+    actual = read_parquet_chunked(
+        [buffer],
+        chunk_read_limit=chunk_read_limit,
+        pass_read_limit=pass_read_limit,
+        use_pandas_metadata=use_pandas_metadata,
+        row_groups=row_groups,
+    )
+    expected = cudf.read_parquet(
+        buffer, use_pandas_metadata=use_pandas_metadata, row_groups=row_groups
+    )
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "nrows,skip_rows",
+    [
+        (0, 0),
+        (1000, 0),
+        (0, 1000),
+        (1000, 10000),
+    ],
+)
+def test_parquet_reader_nrows_skiprows(nrows, skip_rows):
+    df = pd.DataFrame(
+        {"a": [1, 2, 3, 4] * 100000, "b": ["av", "qw", "hi", "xyz"] * 100000}
+    )
+    expected = df[skip_rows : skip_rows + nrows]
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+    got = cudf.read_parquet(buffer, nrows=nrows, skip_rows=skip_rows)
+    assert_eq(expected, got)
+
+
+def test_parquet_reader_pandas_compatibility():
+    df = pd.DataFrame(
+        {"a": [1, 2, 3, 4] * 10000, "b": ["av", "qw", "hi", "xyz"] * 10000}
+    )
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+    with cudf.option_context("io.parquet.low_memory", True):
+        expected = cudf.read_parquet(buffer)
+    assert_eq(expected, df)
+
+
+@pytest.mark.parametrize("store_schema", [True, False])
+def test_parquet_reader_with_mismatched_tables(store_schema):
+    # cuDF tables with mixed types
+    df1 = cudf.DataFrame(
+        {
+            "i32": cudf.Series([None, None, None], dtype="int32"),
+            "i64": cudf.Series([1234, None, 123], dtype="int64"),
+            "list": list([[1, 2], [None, 4], [5, 6]]),
+            "time": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
+            "str": ["vfd", None, "ghu"],
+            "d_list": list(
+                [
+                    [pd.Timedelta(minutes=1), pd.Timedelta(minutes=2)],
+                    [None, pd.Timedelta(minutes=3)],
+                    [pd.Timedelta(minutes=8), None],
+                ]
+            ),
+        }
+    )
+
+    df2 = cudf.DataFrame(
+        {
+            "str": ["abc", "def", None],
+            "i64": cudf.Series([None, 65, 98], dtype="int64"),
+            "times": cudf.Series([1234, None, 4123], dtype="datetime64[us]"),
+            "list": list([[7, 8], [9, 10], [None, 12]]),
+            "d_list": list(
+                [
+                    [pd.Timedelta(minutes=4), None],
+                    [None, None],
+                    [pd.Timedelta(minutes=6), None],
+                ]
+            ),
+        }
+    )
+
+    # IO buffers
+    buf1 = BytesIO()
+    buf2 = BytesIO()
+
+    # Write Parquet with and without arrow schema
+    df1.to_parquet(buf1, store_schema=store_schema)
+    df2.to_parquet(buf2, store_schema=store_schema)
+
+    # Read mismatched Parquet files
+    got = cudf.read_parquet(
+        [buf1, buf2],
+        columns=["list", "d_list", "str"],
+        filters=[("i64", ">", 20)],
+        allow_mismatched_pq_schemas=True,
+    )
+
+    # Construct the expected table
+    expected = cudf.concat(
+        [
+            df1[df1["i64"] > 20][["list", "d_list", "str"]],
+            df2[df2["i64"] > 20][["list", "d_list", "str"]],
+        ]
+    ).reset_index(drop=True)
+
+    # Read with chunked reader (filter columns not supported)
+    got_chunked = read_parquet_chunked(
+        [buf1, buf2],
+        columns=["list", "d_list", "str"],
+        chunk_read_limit=240,
+        pass_read_limit=240,
+        allow_mismatched_pq_schemas=True,
+    )
+
+    # Construct the expected table without filter columns
+    expected_chunked = cudf.concat(
+        [df1[["list", "d_list", "str"]], df2[["list", "d_list", "str"]]]
+    ).reset_index(drop=True)
+
+    # Check results
+    assert_eq(expected, got)
+    assert_eq(expected_chunked, got_chunked)
+
+
+def test_parquet_reader_with_mismatched_structs():
+    data1 = [
+        {
+            "a": 1,
+            "b": {
+                "inner_a": 10,
+                "inner_b": {"inner_inner_b": 1, "inner_inner_a": 2},
+            },
+            "c": 2,
+        },
+        {
+            "a": 3,
+            "b": {"inner_a": 30, "inner_b": {"inner_inner_a": 210}},
+            "c": 4,
+        },
+        {"a": 5, "b": {"inner_a": 50, "inner_b": None}, "c": 6},
+        {"a": 7, "b": None, "c": 8},
+        {"a": None, "b": {"inner_a": None, "inner_b": None}, "c": None},
+        None,
+        {
+            "a": None,
+            "b": {
+                "inner_a": None,
+                "inner_b": {"inner_inner_b": None, "inner_inner_a": 10},
+            },
+            "c": 10,
+        },
+    ]
+
+    data2 = [
+        {"a": 1, "b": {"inner_b": {"inner_inner_a": None}}},
+        {"a": 3, "b": {"inner_b": {"inner_inner_a": 1}}},
+        {"a": 5, "b": {"inner_b": None}},
+        {"a": 7, "b": {"inner_b": {"inner_inner_b": 1, "inner_inner_a": 0}}},
+        {"a": None, "b": {"inner_b": None}},
+        None,
+        {"a": None, "b": {"inner_b": {"inner_inner_a": 1}}},
+    ]
+
+    # cuDF tables from struct data
+    df1 = cudf.DataFrame.from_arrow(pa.Table.from_pydict({"struct": data1}))
+    df2 = cudf.DataFrame.from_arrow(pa.Table.from_pydict({"struct": data2}))
+
+    # Buffers
+    buf1 = BytesIO()
+    buf2 = BytesIO()
+
+    # Write to parquet
+    df1.to_parquet(buf1)
+    df2.to_parquet(buf2)
+
+    # Read the struct.b.inner_b.inner_inner_a column from parquet
+    got = cudf.read_parquet(
+        [buf1, buf2],
+        columns=["struct.b.inner_b.inner_inner_a"],
+        allow_mismatched_pq_schemas=True,
+    )
+    got = (
+        cudf.Series(got["struct"])
+        .struct.field("b")
+        .struct.field("inner_b")
+        .struct.field("inner_inner_a")
+    )
+
+    # Read with chunked reader
+    got_chunked = read_parquet_chunked(
+        [buf1, buf2],
+        columns=["struct.b.inner_b.inner_inner_a"],
+        chunk_read_limit=240,
+        pass_read_limit=240,
+        allow_mismatched_pq_schemas=True,
+    )
+    got_chunked = (
+        cudf.Series(got_chunked["struct"])
+        .struct.field("b")
+        .struct.field("inner_b")
+        .struct.field("inner_inner_a")
+    )
+
+    # Construct the expected series
+    expected = cudf.concat(
+        [
+            cudf.Series(df1["struct"])
+            .struct.field("b")
+            .struct.field("inner_b")
+            .struct.field("inner_inner_a"),
+            cudf.Series(df2["struct"])
+            .struct.field("b")
+            .struct.field("inner_b")
+            .struct.field("inner_inner_a"),
+        ]
+    ).reset_index(drop=True)
+
+    # Check results
+    assert_eq(expected, got)
+    assert_eq(expected, got_chunked)
+
+
+def test_parquet_reader_with_mismatched_schemas_error():
+    df1 = cudf.DataFrame(
+        {
+            "millis": cudf.Series([123, 3454, 123], dtype="timedelta64[ms]"),
+            "i64": cudf.Series([123, 3454, 123], dtype="int64"),
+            "i32": cudf.Series([123, 3454, 123], dtype="int32"),
+        }
+    )
+    df2 = cudf.DataFrame(
+        {
+            "i64": cudf.Series([123, 3454, 123], dtype="int64"),
+            "millis": cudf.Series([123, 3454, 123], dtype="timedelta64[ms]"),
+        }
+    )
+
+    buf1 = BytesIO()
+    buf2 = BytesIO()
+
+    df1.to_parquet(buf1, store_schema=True)
+    df2.to_parquet(buf2, store_schema=False)
+
+    with pytest.raises(
+        ValueError,
+        match="Encountered mismatching SchemaElement properties for a column in the selected path",
+    ):
+        cudf.read_parquet(
+            [buf1, buf2], columns=["millis"], allow_mismatched_pq_schemas=True
+        )
+
+    data1 = [
+        {"a": 1, "b": {"inner_a": 1, "inner_b": 6}},
+        {"a": 3, "b": {"inner_a": None, "inner_b": 2}},
+    ]
+    data2 = [
+        {"b": {"inner_a": 1}, "c": "str"},
+        {"b": {"inner_a": None}, "c": None},
+    ]
+
+    # cuDF tables from struct data
+    df1 = cudf.DataFrame.from_arrow(pa.Table.from_pydict({"struct": data1}))
+    df2 = cudf.DataFrame.from_arrow(pa.Table.from_pydict({"struct": data2}))
+
+    # Buffers
+    buf1 = BytesIO()
+    buf2 = BytesIO()
+
+    # Write to parquet
+    df1.to_parquet(buf1)
+    df2.to_parquet(buf2)
+
+    with pytest.raises(
+        IndexError,
+        match="Encountered mismatching number of children for a column in the selected path",
+    ):
+        cudf.read_parquet(
+            [buf1, buf2],
+            columns=["struct.b"],
+            allow_mismatched_pq_schemas=True,
+        )
+
+    with pytest.raises(
+        IndexError,
+        match="Encountered mismatching schema tree depths across data sources",
+    ):
+        cudf.read_parquet(
+            [buf1, buf2],
+            columns=["struct.b.inner_b"],
+            allow_mismatched_pq_schemas=True,
+        )

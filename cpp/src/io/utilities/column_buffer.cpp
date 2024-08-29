@@ -33,7 +33,7 @@
 
 namespace cudf::io::detail {
 
-void gather_column_buffer::allocate_strings_data(rmm::cuda_stream_view stream)
+void gather_column_buffer::allocate_strings_data(bool memset_data, rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(type.id() == type_id::STRING, "allocate_strings_data called for non-string column");
   // The contents of _strings will never be directly returned to the user.
@@ -56,11 +56,12 @@ std::unique_ptr<column> gather_column_buffer::make_string_column_impl(rmm::cuda_
   return make_strings_column(*_strings, stream, _mr);
 }
 
-void cudf::io::detail::inline_column_buffer::allocate_strings_data(rmm::cuda_stream_view stream)
+void cudf::io::detail::inline_column_buffer::allocate_strings_data(bool memset_data,
+                                                                   rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(type.id() == type_id::STRING, "allocate_strings_data called for non-string column");
   // size + 1 for final offset. _string_data will be initialized later.
-  _data = create_data(data_type{type_id::INT32}, size + 1, stream, _mr);
+  _data = create_data(data_type{type_to_id<size_type>()}, size + 1, memset_data, stream, _mr);
 }
 
 void cudf::io::detail::inline_column_buffer::create_string_data(size_t num_bytes,
@@ -93,6 +94,7 @@ void copy_buffer_data(string_policy const& buff, string_policy& new_buff)
 template <class string_policy>
 void column_buffer_base<string_policy>::create_with_mask(size_type _size,
                                                          cudf::mask_state null_mask_state,
+                                                         bool memset_data,
                                                          rmm::cuda_stream_view stream,
                                                          rmm::device_async_resource_ref mr)
 {
@@ -100,16 +102,20 @@ void column_buffer_base<string_policy>::create_with_mask(size_type _size,
   _mr  = mr;
 
   switch (type.id()) {
-    case type_id::STRING: static_cast<string_policy*>(this)->allocate_strings_data(stream); break;
+    case type_id::STRING:
+      static_cast<string_policy*>(this)->allocate_strings_data(memset_data, stream);
+      break;
 
     // list columns store a buffer of int32's as offsets to represent
     // their individual rows
-    case type_id::LIST: _data = create_data(data_type{type_id::INT32}, size, stream, _mr); break;
+    case type_id::LIST:
+      _data = create_data(data_type{type_to_id<size_type>()}, size, memset_data, stream, _mr);
+      break;
 
     // struct columns store no data themselves.  just validity and children.
     case type_id::STRUCT: break;
 
-    default: _data = create_data(type, size, stream, _mr); break;
+    default: _data = create_data(type, size, memset_data, stream, _mr); break;
   }
   if (is_nullable) {
     _null_mask =
@@ -119,10 +125,19 @@ void column_buffer_base<string_policy>::create_with_mask(size_type _size,
 
 template <class string_policy>
 void column_buffer_base<string_policy>::create(size_type _size,
+                                               bool memset_data,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
-  create_with_mask(_size, mask_state::ALL_NULL, stream, mr);
+  create_with_mask(_size, mask_state::ALL_NULL, memset_data, stream, mr);
+}
+
+template <class string_policy>
+void column_buffer_base<string_policy>::create(size_type _size,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
+{
+  create_with_mask(_size, mask_state::ALL_NULL, true, stream, mr);
 }
 
 template <class string_policy>
@@ -171,9 +186,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
   switch (buffer.type.id()) {
     case type_id::STRING:
       if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
-        if (schema_info != nullptr) {
-          schema_info->children.push_back(column_name_info{"offsets"});
-        }
+        if (schema_info != nullptr) { schema_info->children.emplace_back("offsets"); }
 
         // make_strings_column allocates new memory, it does not simply move
         // from the inputs, so we need to pass it the memory resource given to
@@ -191,12 +204,16 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
         auto data      = col_content.data.release();
         auto char_size = data->size();
 
+        CUDF_EXPECTS(char_size < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+                     "Cannot convert strings column to lists column due to size_type limit",
+                     std::overflow_error);
+
         auto uint8_col = std::make_unique<column>(
           data_type{type_id::UINT8}, char_size, std::move(*data), rmm::device_buffer{}, 0);
 
         if (schema_info != nullptr) {
-          schema_info->children.push_back(column_name_info{"offsets"});
-          schema_info->children.push_back(column_name_info{"binary"});
+          schema_info->children.emplace_back("offsets");
+          schema_info->children.emplace_back("binary");
           // cuDF type will be list<UINT8>, but remember it was originally binary data
           schema_info->is_binary = true;
           if (schema.has_value() and schema->get_type_length() > 0) {
@@ -220,8 +237,8 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
 
       column_name_info* child_info = nullptr;
       if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{""});
+        schema_info->children.emplace_back("offsets");
+        schema_info->children.emplace_back("");
         child_info = &schema_info->children.back();
       }
 
@@ -252,7 +269,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
       for (size_t i = 0; i < buffer.children.size(); ++i) {
         column_name_info* child_info = nullptr;
         if (schema_info != nullptr) {
-          schema_info->children.push_back(column_name_info{""});
+          schema_info->children.emplace_back("");
           child_info = &schema_info->children.back();
         }
 
@@ -302,8 +319,8 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
 
       column_name_info* child_info = nullptr;
       if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{""});
+        schema_info->children.emplace_back("offsets");
+        schema_info->children.emplace_back("");
         child_info = &schema_info->children.back();
       }
 
@@ -326,7 +343,7 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
                      [&](auto& col) {
                        column_name_info* child_info = nullptr;
                        if (schema_info != nullptr) {
-                         schema_info->children.push_back(column_name_info{""});
+                         schema_info->children.emplace_back("");
                          child_info = &schema_info->children.back();
                        }
                        return cudf::io::detail::empty_like<string_policy>(

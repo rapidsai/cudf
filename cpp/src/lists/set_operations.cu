@@ -26,6 +26,7 @@
 #include <cudf/lists/detail/combine.hpp>
 #include <cudf/lists/detail/set_operations.hpp>
 #include <cudf/lists/detail/stream_compaction.hpp>
+#include <cudf/lists/set_operations.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>

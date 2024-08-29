@@ -17,11 +17,11 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.errors import MixedTypeError
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     SERIES_OR_INDEX_NAMES,
     TIMEDELTA_TYPES,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
     gen_rand,
@@ -1054,6 +1054,18 @@ def test_fillna_with_nan(data, nan_as_null, fill_value):
     assert_eq(expected, actual)
 
 
+def test_fillna_categorical_with_non_categorical_raises():
+    ser = cudf.Series([1, None], dtype="category")
+    with pytest.raises(TypeError):
+        ser.fillna(cudf.Series([1, 2]))
+
+
+def test_fillna_categorical_with_different_categories_raises():
+    ser = cudf.Series([1, None], dtype="category")
+    with pytest.raises(TypeError):
+        ser.fillna(cudf.Series([1, 2]), dtype="category")
+
+
 def test_series_mask_mixed_dtypes_error():
     s = cudf.Series(["a", "b", "c"])
     with pytest.raises(
@@ -2029,7 +2041,7 @@ def test_series_ordered_dedup():
     sr = cudf.Series(np.random.randint(0, 100, 1000))
     # pandas unique() preserves order
     expect = pd.Series(sr.to_pandas().unique())
-    got = cudf.Series(sr._column.unique())
+    got = cudf.Series._from_column(sr._column.unique())
     assert_eq(expect.values, got.values)
 
 
@@ -2103,8 +2115,9 @@ def test_series_hasnans(data):
     ],
 )
 @pytest.mark.parametrize("keep", ["first", "last", False])
-def test_series_duplicated(data, index, keep):
-    gs = cudf.Series(data, index=index)
+@pytest.mark.parametrize("name", [None, "a"])
+def test_series_duplicated(data, index, keep, name):
+    gs = cudf.Series(data, index=index, name=name)
     ps = gs.to_pandas()
 
     assert_eq(gs.duplicated(keep=keep), ps.duplicated(keep=keep))
@@ -2275,6 +2288,13 @@ def test_series_rename(initial_name, name):
     expected = psr.rename(name)
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("index", [lambda x: x * 2, {1: 2}])
+def test_rename_index_not_supported(index):
+    ser = cudf.Series(range(2))
+    with pytest.raises(NotImplementedError):
+        ser.rename(index=index)
 
 
 @pytest.mark.parametrize(
@@ -2685,7 +2705,9 @@ def test_series_duplicate_index_reindex():
 def test_list_category_like_maintains_dtype():
     dtype = cudf.CategoricalDtype(categories=[1, 2, 3, 4], ordered=True)
     data = [1, 2, 3]
-    result = cudf.Series(cudf.core.column.as_column(data, dtype=dtype))
+    result = cudf.Series._from_column(
+        cudf.core.column.as_column(data, dtype=dtype)
+    )
     expected = pd.Series(data, dtype=dtype.to_pandas())
     assert_eq(result, expected)
 
@@ -2693,7 +2715,9 @@ def test_list_category_like_maintains_dtype():
 def test_list_interval_like_maintains_dtype():
     dtype = cudf.IntervalDtype(subtype=np.int8)
     data = [pd.Interval(1, 2)]
-    result = cudf.Series(cudf.core.column.as_column(data, dtype=dtype))
+    result = cudf.Series._from_column(
+        cudf.core.column.as_column(data, dtype=dtype)
+    )
     expected = pd.Series(data, dtype=dtype.to_pandas())
     assert_eq(result, expected)
 
@@ -2737,10 +2761,11 @@ def test_series_dtype_astypes(data):
     assert_eq(result, expected)
 
 
-def test_series_from_large_string():
-    pa_large_string_array = pa.array(["a", "b", "c"]).cast(pa.large_string())
-    got = cudf.Series(pa_large_string_array)
-    expected = pd.Series(pa_large_string_array)
+@pytest.mark.parametrize("pa_type", [pa.string, pa.large_string])
+def test_series_from_large_string(pa_type):
+    pa_string_array = pa.array(["a", "b", "c"]).cast(pa_type())
+    got = cudf.Series(pa_string_array)
+    expected = pd.Series(pa_string_array)
 
     assert_eq(expected, got)
 
@@ -2835,3 +2860,65 @@ def test_timedelta_series_init(data):
     actual = cudf.Series(scalar)
 
     assert_eq(expected, actual)
+
+
+def test_series_from_series_index_no_shallow_copy():
+    ser1 = cudf.Series(range(3), index=list("abc"))
+    ser2 = cudf.Series(ser1)
+    assert ser1.index is ser2.index
+
+
+@pytest.mark.parametrize("value", [1, 1.1])
+def test_nans_to_nulls_noop_copies_column(value):
+    ser1 = cudf.Series([value])
+    ser2 = ser1.nans_to_nulls()
+    assert ser1._column is not ser2._column
+
+
+@pytest.mark.parametrize("dropna", [False, True])
+def test_nunique_all_null(dropna):
+    data = [None, None]
+    pd_ser = pd.Series(data)
+    cudf_ser = cudf.Series(data)
+    result = pd_ser.nunique(dropna=dropna)
+    expected = cudf_ser.nunique(dropna=dropna)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "type1",
+    [
+        "category",
+        "interval[int64, right]",
+        "int64",
+        "float64",
+        "str",
+        "datetime64[ns]",
+        "timedelta64[ns]",
+    ],
+)
+@pytest.mark.parametrize(
+    "type2",
+    [
+        "category",
+        "interval[int64, right]",
+        "int64",
+        "float64",
+        "str",
+        "datetime64[ns]",
+        "timedelta64[ns]",
+    ],
+)
+@pytest.mark.parametrize(
+    "as_dtype", [lambda x: x, cudf.dtype], ids=["string", "object"]
+)
+@pytest.mark.parametrize("copy", [True, False])
+def test_empty_astype_always_castable(type1, type2, as_dtype, copy):
+    ser = cudf.Series([], dtype=as_dtype(type1))
+    result = ser.astype(as_dtype(type2), copy=copy)
+    expected = cudf.Series([], dtype=as_dtype(type2))
+    assert_eq(result, expected)
+    if not copy and cudf.dtype(type1) == cudf.dtype(type2):
+        assert ser._column is result._column
+    else:
+        assert ser._column is not result._column

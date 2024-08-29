@@ -61,10 +61,13 @@
 // altered: applying clang-format for libcudf on this file.
 
 // altered: include required headers
+#include <cudf/utilities/export.hpp>
+
 #include <string>
 
 // altered: use cudf namespaces
-namespace cudf::io::detail {
+namespace CUDF_EXPORT cudf {
+namespace io::detail {
 
 /**
  * @brief Encodes input string to base64 and returns it
@@ -84,4 +87,5 @@ std::string base64_encode(std::string_view string_to_encode);
  */
 std::string base64_decode(std::string_view encoded_string);
 
-}  // namespace cudf::io::detail
+}  // namespace io::detail
+}  // namespace CUDF_EXPORT cudf

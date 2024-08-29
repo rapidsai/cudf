@@ -20,9 +20,8 @@
 
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace lists {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace lists::detail {
 
 /**
  * @copydoc cudf::lists::index_of(cudf::lists_column_view const&,
@@ -71,6 +70,5 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
                                  cudf::column_view const& search_keys,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr);
-}  // namespace detail
-}  // namespace lists
-}  // namespace cudf
+}  // namespace lists::detail
+}  // namespace CUDF_EXPORT cudf

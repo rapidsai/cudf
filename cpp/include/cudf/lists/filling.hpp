@@ -25,7 +25,8 @@
 
 #include <memory>
 
-namespace cudf::lists {
+namespace CUDF_EXPORT cudf {
+namespace lists {
 /**
  * @addtogroup lists_filling
  * @{
@@ -113,4 +114,5 @@ std::unique_ptr<column> sequences(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
-}  // namespace cudf::lists
+}  // namespace lists
+}  // namespace CUDF_EXPORT cudf

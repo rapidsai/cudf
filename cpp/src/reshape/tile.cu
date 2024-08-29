@@ -19,6 +19,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/reshape.hpp>
+#include <cudf/reshape.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -63,10 +64,11 @@ std::unique_ptr<table> tile(table_view const& in,
 
 std::unique_ptr<table> tile(table_view const& in,
                             size_type count,
+                            rmm::cuda_stream_view stream,
                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::tile(in, count, cudf::get_default_stream(), mr);
+  return detail::tile(in, count, stream, mr);
 }
 
 }  // namespace cudf

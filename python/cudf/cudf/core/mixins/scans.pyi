@@ -1,9 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-from typing import Set
-
 class Scannable:
-    _SUPPORTED_SCANS: Set
+    _SUPPORTED_SCANS: set
 
     def cumsum(self): ...
     def cumprod(self): ...

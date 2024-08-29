@@ -24,9 +24,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace lists {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace lists::detail {
 
 /**
  * @brief Returns a single column by concatenating the given vector of
@@ -48,6 +47,5 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace lists
-}  // namespace cudf
+}  // namespace lists::detail
+}  // namespace CUDF_EXPORT cudf

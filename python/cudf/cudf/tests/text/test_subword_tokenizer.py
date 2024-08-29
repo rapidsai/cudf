@@ -7,7 +7,7 @@ import pytest
 
 import cudf
 from cudf.core.subword_tokenizer import SubwordTokenizer
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 @pytest.fixture(scope="module")

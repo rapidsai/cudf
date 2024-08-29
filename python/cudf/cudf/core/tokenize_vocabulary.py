@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -22,7 +22,9 @@ class TokenizeVocabulary:
     def __init__(self, vocabulary: "cudf.Series"):
         self.vocabulary = cpp_tokenize_vocabulary(vocabulary._column)
 
-    def tokenize(self, text, delimiter: str = "", default_id: int = -1):
+    def tokenize(
+        self, text, delimiter: str = "", default_id: int = -1
+    ) -> cudf.Series:
         """
         Parameters
         ----------
@@ -45,4 +47,4 @@ class TokenizeVocabulary:
             text._column, self.vocabulary, delim, default_id
         )
 
-        return cudf.Series(result)
+        return cudf.Series._from_column(result)

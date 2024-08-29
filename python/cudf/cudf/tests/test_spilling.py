@@ -1,4 +1,5 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import contextlib
 import importlib
@@ -7,7 +8,6 @@ import time
 import warnings
 import weakref
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Tuple
 
 import cupy
 import numpy as np
@@ -39,7 +39,7 @@ from cudf.core.buffer.spillable_buffer import (
     SpillableBufferOwner,
     SpillLock,
 )
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 if get_global_manager() is not None:
     pytest.skip(
@@ -107,7 +107,7 @@ def single_column_df_base_data(df: cudf.DataFrame) -> SpillableBuffer:
 gen_df_data_nbytes = single_column_df()._data._data["a"].data.nbytes
 
 
-def spilled_and_unspilled(manager: SpillManager) -> Tuple[int, int]:
+def spilled_and_unspilled(manager: SpillManager) -> tuple[int, int]:
     """Get bytes spilled and unspilled known by the manager"""
     spilled = sum(buf.size for buf in manager.buffers() if buf.is_spilled)
     unspilled = sum(
@@ -661,7 +661,7 @@ def test_statistics(manager: SpillManager):
 def test_statistics_expose(manager: SpillManager):
     assert len(manager.statistics.spill_totals) == 0
 
-    buffers: List[SpillableBuffer] = [
+    buffers: list[SpillableBuffer] = [
         as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
         for _ in range(10)
     ]
@@ -687,7 +687,7 @@ def test_statistics_expose(manager: SpillManager):
     assert stat.spilled_nbytes == 0
 
     # Create and spill 10 new buffers
-    buffers: List[SpillableBuffer] = [
+    buffers: list[SpillableBuffer] = [
         as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
         for _ in range(10)
     ]

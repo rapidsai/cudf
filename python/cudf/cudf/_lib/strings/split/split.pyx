@@ -7,13 +7,12 @@ from libcpp.utility cimport move
 
 from cudf.core.buffer import acquire_spill_lock
 
-from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
-from cudf._lib.pylibcudf.libcudf.strings.regex_flags cimport regex_flags
-from cudf._lib.pylibcudf.libcudf.strings.regex_program cimport regex_program
-from cudf._lib.pylibcudf.libcudf.strings.split.split cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from pylibcudf.libcudf.strings.regex_flags cimport regex_flags
+from pylibcudf.libcudf.strings.regex_program cimport regex_program
+from pylibcudf.libcudf.strings.split.split cimport (
     rsplit as cpp_rsplit,
     rsplit_re as cpp_rsplit_re,
     rsplit_record as cpp_rsplit_record,
@@ -23,8 +22,10 @@ from cudf._lib.pylibcudf.libcudf.strings.split.split cimport (
     split_record as cpp_split_record,
     split_record_re as cpp_split_record_re,
 )
-from cudf._lib.pylibcudf.libcudf.table.table cimport table
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.table.table cimport table
+from pylibcudf.libcudf.types cimport size_type
+
+from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport data_from_unique_ptr
 

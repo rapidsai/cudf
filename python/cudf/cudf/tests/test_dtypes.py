@@ -17,7 +17,7 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 from cudf.utils.dtypes import np_to_pa_dtype
 
 
@@ -341,7 +341,6 @@ def test_dtype(in_dtype, expect):
         np.complex128,
         complex,
         "S",
-        "a",
         "V",
         "float16",
         np.float16,

@@ -1,5 +1,7 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
-from typing import Any, Dict
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
+
+from typing import Any
 
 import numba
 from numba import cuda, types
@@ -124,7 +126,7 @@ class GroupModel(models.StructModel):
         super().__init__(dmm, fe_type, members)
 
 
-call_cuda_functions: Dict[Any, Any] = {}
+call_cuda_functions: dict[Any, Any] = {}
 
 
 def _register_cuda_binary_reduction_caller(funcname, lty, rty, retty):

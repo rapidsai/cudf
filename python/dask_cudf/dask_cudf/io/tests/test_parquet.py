@@ -596,3 +596,22 @@ def test_parquet_read_filter_and_project(tmpdir):
     # Check result
     expected = df[(df.a == 5) & (df.c > 20)][columns].reset_index(drop=True)
     dd.assert_eq(got, expected)
+
+
+def test_timezone_column(tmpdir):
+    path = str(tmpdir.join("test.parquet"))
+    pdf = pd.DataFrame(
+        {
+            "time": pd.to_datetime(
+                ["1996-01-02", "1996-12-01"],
+                utc=True,
+            ),
+            "x": [1, 2],
+        }
+    )
+    pdf.to_parquet(path)
+
+    # Check that `cudf` and `dask_cudf` results match
+    got = dask_cudf.read_parquet(path)
+    expect = cudf.read_parquet(path)
+    dd.assert_eq(got, expect)

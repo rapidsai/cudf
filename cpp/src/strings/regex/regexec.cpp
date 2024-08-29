@@ -55,12 +55,12 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   // compute size of each section
   auto insts_size    = insts_count * sizeof(_insts[0]);
   auto startids_size = starts_count * sizeof(_startinst_ids[0]);
-  auto classes_size  = std::transform_reduce(
-    h_prog.classes_data(),
-    h_prog.classes_data() + h_prog.classes_count(),
-    classes_count * sizeof(_classes[0]),
-    std::plus<std::size_t>{},
-    [&h_prog](auto& cls) { return cls.literals.size() * sizeof(reclass_range); });
+  auto classes_size =
+    std::transform_reduce(h_prog.classes_data(),
+                          h_prog.classes_data() + h_prog.classes_count(),
+                          classes_count * sizeof(_classes[0]),
+                          std::plus<std::size_t>{},
+                          [](auto& cls) { return cls.literals.size() * sizeof(reclass_range); });
   // make sure each section is aligned for the subsequent section's data type
   auto const memsize = cudf::util::round_up_safe(insts_size, sizeof(_startinst_ids[0])) +
                        cudf::util::round_up_safe(startids_size, sizeof(_classes[0])) +
@@ -73,7 +73,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   auto d_ptr    = reinterpret_cast<u_char*>(d_buffer->data());  // running device pointer
 
   // create our device object; this is managed separately and returned to the caller
-  reprog_device* d_prog = new reprog_device(h_prog);
+  auto* d_prog = new reprog_device(h_prog);
 
   // copy the instructions array first (fixed-sized structs)
   memcpy(h_ptr, h_prog.insts_data(), insts_size);

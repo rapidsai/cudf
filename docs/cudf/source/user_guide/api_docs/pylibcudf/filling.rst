@@ -2,5 +2,5 @@
 filling
 ========
 
-.. automodule:: cudf._lib.pylibcudf.filling
+.. automodule:: pylibcudf.filling
    :members:

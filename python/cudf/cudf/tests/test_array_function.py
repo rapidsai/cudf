@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 # To determine if NEP18 is available in the current version of NumPy we simply
@@ -108,7 +108,7 @@ def test_array_func_missing_cudf_dataframe(pd_df, func):
     ],
 )
 def test_array_func_cudf_index(np_ar, func):
-    cudf_index = cudf.core.index.as_index(cudf.Series(np_ar))
+    cudf_index = cudf.Index(cudf.Series(np_ar))
     expect = func(np_ar)
     got = func(cudf_index)
     if np.isscalar(expect):
@@ -128,7 +128,7 @@ def test_array_func_cudf_index(np_ar, func):
     ],
 )
 def test_array_func_missing_cudf_index(np_ar, func):
-    cudf_index = cudf.core.index.as_index(cudf.Series(np_ar))
+    cudf_index = cudf.Index(cudf.Series(np_ar))
     with pytest.raises(TypeError):
         func(cudf_index)
 

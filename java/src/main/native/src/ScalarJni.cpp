@@ -180,8 +180,8 @@ Java_ai_rapids_cudf_Scalar_getChildrenFromStructScalar(JNIEnv* env, jclass, jlon
   JNI_NULL_CHECK(env, scalar_handle, "scalar handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    const auto s                  = reinterpret_cast<cudf::struct_scalar*>(scalar_handle);
-    const cudf::table_view& table = s->view();
+    auto const s                  = reinterpret_cast<cudf::struct_scalar*>(scalar_handle);
+    cudf::table_view const& table = s->view();
     cudf::jni::native_jpointerArray<cudf::column_view> column_handles(env, table.num_columns());
     for (int i = 0; i < table.num_columns(); i++) {
       column_handles[i] = new cudf::column_view(table.column(i));

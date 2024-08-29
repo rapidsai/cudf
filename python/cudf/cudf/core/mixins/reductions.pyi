@@ -1,9 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-from typing import Set
-
 class Reducible:
-    _SUPPORTED_REDUCTIONS: Set
+    _SUPPORTED_REDUCTIONS: set
 
     def sum(self): ...
     def product(self): ...

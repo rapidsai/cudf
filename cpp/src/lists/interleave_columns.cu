@@ -166,8 +166,6 @@ struct compute_string_sizes_and_interleave_lists_fn {
       lists_col.child(lists_column_view::offsets_column_index).template data<size_type>() +
       lists_col.offset();
     auto const& str_col = lists_col.child(lists_column_view::child_column_index);
-    auto const str_offsets =
-      str_col.child(strings_column_view::offsets_column_index).template data<size_type>();
 
     // The range of indices of the strings within the source list.
     auto const start_str_idx = list_offsets[list_id];
@@ -181,13 +179,13 @@ struct compute_string_sizes_and_interleave_lists_fn {
     size_type write_idx = dst_list_offsets[idx];
 
     for (auto read_idx = start_str_idx; read_idx < end_str_idx; ++read_idx, ++write_idx) {
-      auto const offset        = str_offsets[read_idx];
-      auto const size          = str_offsets[read_idx + 1] - offset;
-      string_index_pair result = {nullptr, size};
-      if (str_col.is_valid(read_idx)) {
-        result.first = size > 0 ? str_col.template head<char>() + offset : "";
+      if (str_col.is_null(read_idx)) {
+        indices[write_idx] = string_index_pair{nullptr, 0};
+        continue;
       }
-      indices[write_idx] = result;
+      auto const d_str   = str_col.element<string_view>(read_idx);
+      indices[write_idx] = d_str.empty() ? string_index_pair{"", 0}
+                                         : string_index_pair{d_str.data(), d_str.size_bytes()};
     }
   }
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,8 +111,9 @@ TYPED_TEST(groupby_max_test, null_keys_and_values)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, cudf::aggregation::MAX>;
 
-  cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                                 {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<K> keys(
+    {1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+    {true, true, true, true, true, true, true, false, true, true, true});
   cudf::test::fixed_width_column_wrapper<V> vals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
                                                  {1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0});
 
@@ -168,20 +169,24 @@ TEST_F(groupby_max_string_test, max_sorted_strings)
     {"",   "",   "",   "",   "",   "",   "06", "06", "06", "06", "10", "10", "10", "10", "14", "14",
      "14", "14", "18", "18", "18", "18", "22", "22", "22", "22", "26", "26", "26", "26", "30", "30",
      "30", "30", "34", "34", "34", "34", "38", "38", "38", "38", "42", "42", "42", "42"},
-    {0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+    {false, false, false, false, false, false, true, true, true, true, true, true,
+     true,  true,  true,  true,  true,  true,  true, true, true, true, true, true,
+     true,  true,  true,  true,  true,  true,  true, true, true, true, true, true,
+     true,  true,  true,  true,  true,  true,  true, true, true, true});
   cudf::test::strings_column_wrapper vals(
     {"", "", "",   "", "", "", "06", "", "", "", "10", "", "", "", "14", "",
      "", "", "18", "", "", "", "22", "", "", "", "26", "", "", "", "30", "",
      "", "", "34", "", "", "", "38", "", "", "", "42", "", "", ""},
-    {0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1,
-     0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0});
+    {false, false, false, false, false, false, true, false, false, false, true, false,
+     false, false, true,  false, false, false, true, false, false, false, true, false,
+     false, false, true,  false, false, false, true, false, false, false, true, false,
+     false, false, true,  false, false, false, true, false, false, false});
   cudf::test::strings_column_wrapper expect_keys(
     {"06", "10", "14", "18", "22", "26", "30", "34", "38", "42", ""},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+    {true, true, true, true, true, true, true, true, true, true, false});
   cudf::test::strings_column_wrapper expect_vals(
     {"06", "10", "14", "18", "22", "26", "30", "34", "38", "42", ""},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+    {true, true, true, true, true, true, true, true, true, true, false});
 
   // cudf::test::fixed_width_column_wrapper<size_type> expect_argmax(
   // {6, 10, 14, 18, 22, 26, 30, 34, 38, 42, -1},
@@ -537,7 +542,7 @@ TYPED_TEST(groupby_max_floating_point_test, values_with_nan)
   auto const vals = floats_col{nan, nan};
 
   std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
+  requests.emplace_back();
   requests[0].values = vals;
   requests[0].aggregations.emplace_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
 

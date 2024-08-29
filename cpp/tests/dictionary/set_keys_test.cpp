@@ -57,22 +57,24 @@ TEST_F(DictionarySetKeysTest, FloatKeys)
   auto result = cudf::dictionary::set_keys(dictionary->view(), new_keys);
 
   cudf::test::fixed_width_column_wrapper<float> expected{{4.25, 7.125, 0.5, 0., 7.125, 0.5},
-                                                         {1, 1, 1, 0, 1, 1}};
+                                                         {true, true, true, false, true, true}};
   auto decoded = cudf::dictionary::decode(result->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, expected);
 }
 
 TEST_F(DictionarySetKeysTest, WithNulls)
 {
-  cudf::test::fixed_width_column_wrapper<int64_t> input{{444, 0, 333, 111, 222, 222, 222, 444, 0},
-                                                        {1, 1, 1, 1, 1, 0, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int64_t> input{
+    {444, 0, 333, 111, 222, 222, 222, 444, 0},
+    {true, true, true, true, true, false, true, true, true}};
   auto dictionary = cudf::dictionary::encode(input);
 
   cudf::test::fixed_width_column_wrapper<int64_t> new_keys{0, 222, 333, 444};
   auto result = cudf::dictionary::set_keys(dictionary->view(), new_keys);
 
   cudf::test::fixed_width_column_wrapper<int64_t> expected{
-    {444, 0, 333, 111, 222, 222, 222, 444, 0}, {1, 1, 1, 0, 1, 0, 1, 1, 1}};
+    {444, 0, 333, 111, 222, 222, 222, 444, 0},
+    {true, true, true, false, true, false, true, true, true}};
   auto decoded = cudf::dictionary::decode(result->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, expected);
 }
@@ -84,7 +86,7 @@ TEST_F(DictionarySetKeysTest, Errors)
 
   cudf::test::fixed_width_column_wrapper<float> new_keys{1.0, 2.0, 3.0};
   EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), new_keys), cudf::data_type_error);
-  cudf::test::fixed_width_column_wrapper<int64_t> null_keys{{1, 2, 3}, {1, 0, 1}};
+  cudf::test::fixed_width_column_wrapper<int64_t> null_keys{{1, 2, 3}, {true, false, true}};
   EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), null_keys), cudf::logic_error);
 }
 

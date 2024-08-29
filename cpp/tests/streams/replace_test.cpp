@@ -27,21 +27,24 @@ class ReplaceTest : public cudf::test::BaseFixture {};
 
 TEST_F(ReplaceTest, ReplaceNullsColumn)
 {
-  cudf::test::fixed_width_column_wrapper<int> input({{0, 0, 0, 0, 0}, {0, 0, 1, 1, 1}});
+  cudf::test::fixed_width_column_wrapper<int> input(
+    {{0, 0, 0, 0, 0}, {false, false, true, true, true}});
   cudf::test::fixed_width_column_wrapper<int> replacement({1, 1, 1, 1, 1});
   cudf::replace_nulls(input, replacement, cudf::test::get_default_stream());
 }
 
 TEST_F(ReplaceTest, ReplaceNullsScalar)
 {
-  cudf::test::fixed_width_column_wrapper<int> input({{0, 0, 0, 0, 0}, {0, 0, 1, 1, 1}});
+  cudf::test::fixed_width_column_wrapper<int> input(
+    {{0, 0, 0, 0, 0}, {false, false, true, true, true}});
   auto replacement = cudf::numeric_scalar<int>(1, true, cudf::test::get_default_stream());
   cudf::replace_nulls(input, replacement, cudf::test::get_default_stream());
 }
 
 TEST_F(ReplaceTest, ReplaceNullsPolicy)
 {
-  cudf::test::fixed_width_column_wrapper<int> input({{0, 0, 0, 0, 0}, {0, 0, 1, 1, 1}});
+  cudf::test::fixed_width_column_wrapper<int> input(
+    {{0, 0, 0, 0, 0}, {false, false, true, true, true}});
   cudf::replace_nulls(input, cudf::replace_policy::FOLLOWING, cudf::test::get_default_stream());
 }
 

@@ -37,6 +37,8 @@ void nvbench_rank_lists(nvbench::state& state, nvbench::type_list<nvbench::enum_
                cudf::order::ASCENDING,
                null_frequency ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE,
                cudf::null_order::AFTER,
+               false,
+               cudf::get_default_stream(),
                rmm::mr::get_current_device_resource());
   });
 }

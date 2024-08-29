@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,8 @@ struct IsElementValidTest : public cudf::test::BaseFixture {};
 
 TEST_F(IsElementValidTest, IsElementValidBasic)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col({1, 1, 1, 1, 1}, {1, 0, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> col({1, 1, 1, 1, 1},
+                                                      {true, false, false, false, true});
   EXPECT_TRUE(cudf::detail::is_element_valid_sync(col, 0, cudf::get_default_stream()));
   EXPECT_FALSE(cudf::detail::is_element_valid_sync(col, 1, cudf::get_default_stream()));
   EXPECT_FALSE(cudf::detail::is_element_valid_sync(col, 2, cudf::get_default_stream()));
@@ -51,7 +52,8 @@ TEST_F(IsElementValidTest, IsElementValidLarge)
 
 TEST_F(IsElementValidTest, IsElementValidOffset)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col({1, 1, 1, 1, 1}, {1, 0, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> col({1, 1, 1, 1, 1},
+                                                      {true, false, false, false, true});
   {
     auto offset_col = cudf::slice(col, {1, 5}).front();
     EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 0, cudf::get_default_stream()));

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@
 #include <cudf_test/file_utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
@@ -86,8 +85,7 @@ static cudf::string_scalar create_random_input(int32_t num_chars,
 
   // extract the chars from the returned strings column.
   auto input_column_contents = input_column->release();
-  auto chars_column_contents = input_column_contents.children[1]->release();
-  auto chars_buffer          = chars_column_contents.data.release();
+  auto chars_buffer          = input_column_contents.data.release();
 
   // turn the chars in to a string scalar.
   return cudf::string_scalar(std::move(*chars_buffer));
@@ -132,9 +130,10 @@ static void bench_multibyte_split(nvbench::state& state,
 
   auto const delim_factor = static_cast<double>(delim_percent) / 100;
   std::unique_ptr<cudf::io::datasource> datasource;
-  auto device_input      = create_random_input(file_size_approx, delim_factor, 0.05, delim);
-  auto host_input        = std::vector<char>{};
-  auto host_pinned_input = cudf::detail::pinned_host_vector<char>{};
+  auto device_input = create_random_input(file_size_approx, delim_factor, 0.05, delim);
+  auto host_input   = std::vector<char>{};
+  auto host_pinned_input =
+    cudf::detail::make_pinned_vector_async<char>(0, cudf::get_default_stream());
 
   if (source_type != data_chunk_source_type::device &&
       source_type != data_chunk_source_type::host_pinned) {
@@ -218,7 +217,7 @@ NVBENCH_BENCH_TYPES(bench_multibyte_split,
 NVBENCH_BENCH_TYPES(bench_multibyte_split, NVBENCH_TYPE_AXES(source_type_list))
   .set_name("multibyte_split_source")
   .set_min_samples(4)
-  .add_int64_axis("strip_delimiters", {1})
+  .add_int64_axis("strip_delimiters", {0, 1})
   .add_int64_axis("delim_size", {1})
   .add_int64_axis("delim_percent", {1})
   .add_int64_power_of_two_axis("size_approx", {15, 30})

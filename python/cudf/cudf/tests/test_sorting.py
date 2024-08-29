@@ -10,10 +10,10 @@ import pytest
 from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.column import NumericalColumn
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
 )
@@ -107,7 +107,8 @@ def test_series_argsort(nelem, dtype, asc):
     if asc:
         expected = np.argsort(sr.to_numpy(), kind="mergesort")
     else:
-        expected = np.argsort(sr.to_numpy() * -1, kind="mergesort")
+        # -1 multiply works around missing desc sort (may promote to float64)
+        expected = np.argsort(sr.to_numpy() * np.int8(-1), kind="mergesort")
     np.testing.assert_array_equal(expected, res.to_numpy())
 
 
@@ -404,3 +405,23 @@ def test_dataframe_scatter_by_map_empty():
     df = DataFrame({"a": [], "b": []}, dtype="float64")
     scattered = df.scatter_by_map(df["a"])
     assert len(scattered) == 0
+
+
+def test_sort_values_by_index_level():
+    df = pd.DataFrame({"a": [1, 3, 2]}, index=pd.Index([1, 3, 2], name="b"))
+    cudf_df = DataFrame.from_pandas(df)
+    result = cudf_df.sort_values("b")
+    expected = df.sort_values("b")
+    assert_eq(result, expected)
+
+
+def test_sort_values_by_ambiguous():
+    df = pd.DataFrame({"a": [1, 3, 2]}, index=pd.Index([1, 3, 2], name="a"))
+    cudf_df = DataFrame.from_pandas(df)
+
+    assert_exceptions_equal(
+        lfunc=df.sort_values,
+        rfunc=cudf_df.sort_values,
+        lfunc_args_and_kwargs=(["a"], {}),
+        rfunc_args_and_kwargs=(["a"], {}),
+    )

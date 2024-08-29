@@ -5,17 +5,16 @@ from collections import abc
 from io import BytesIO, StringIO
 
 import numpy as np
-from pyarrow.lib import NativeFile
 
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.utils import ioutils
 from cudf.utils.dtypes import _maybe_convert_to_default_type
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 @ioutils.doc_read_csv()
 def read_csv(
     filepath_or_buffer,
@@ -50,7 +49,6 @@ def read_csv(
     comment=None,
     delim_whitespace=False,
     byte_range=None,
-    use_python_file_object=True,
     storage_options=None,
     bytes_per_thread=None,
 ):
@@ -63,31 +61,17 @@ def read_csv(
             FutureWarning,
         )
 
-    if use_python_file_object and bytes_per_thread is not None:
-        raise ValueError(
-            "bytes_per_thread is only supported when "
-            "`use_python_file_object=False`"
-        )
-
     if bytes_per_thread is None:
         bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
 
-    is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
+    filepath_or_buffer = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
-        storage_options=storage_options,
-    )
-    if not is_single_filepath_or_buffer:
-        raise NotImplementedError(
-            "`read_csv` does not yet support reading multiple files"
-        )
-
-    filepath_or_buffer, compression = ioutils.get_reader_filepath_or_buffer(
-        path_or_data=filepath_or_buffer,
-        compression=compression,
-        iotypes=(BytesIO, StringIO, NativeFile),
-        use_python_file_object=use_python_file_object,
+        iotypes=(BytesIO, StringIO),
         storage_options=storage_options,
         bytes_per_thread=bytes_per_thread,
+    )
+    filepath_or_buffer = ioutils._select_single_source(
+        filepath_or_buffer, "read_csv"
     )
 
     if na_values is not None and is_scalar(na_values):
@@ -132,10 +116,9 @@ def read_csv(
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
         specified_dtypes = {} if dtype is None else dtype
-        df_dtypes = df._dtypes
         unspecified_dtypes = {
-            name: df_dtypes[name]
-            for name in df._column_names
+            name: dtype
+            for name, dtype in df._dtypes
             if name not in specified_dtypes
         }
         default_dtypes = {}
@@ -152,7 +135,7 @@ def read_csv(
     return df
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 @ioutils.doc_to_csv()
 def to_csv(
     df,

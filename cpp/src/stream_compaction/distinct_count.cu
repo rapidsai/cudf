@@ -15,16 +15,17 @@
  */
 
 #include "stream_compaction_common.cuh"
-#include "stream_compaction_common.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
@@ -140,14 +141,15 @@ cudf::size_type distinct_count(table_view const& keys,
 
   auto const comparator_helper = [&](auto const row_equal) {
     using hasher_type = decltype(hash_key);
-    auto key_set      = cuco::static_set{cuco::extent{compute_hash_table_size(num_rows)},
-                                    cuco::empty_key<cudf::size_type>{-1},
-                                    row_equal,
-                                    cuco::linear_probing<1, hasher_type>{hash_key},
-                                         {},
-                                         {},
-                                    cudf::detail::cuco_allocator{stream},
-                                    stream.value()};
+    auto key_set      = cuco::static_set{
+      cuco::extent{compute_hash_table_size(num_rows)},
+      cuco::empty_key<cudf::size_type>{-1},
+      row_equal,
+      cuco::linear_probing<1, hasher_type>{hash_key},
+           {},
+           {},
+      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+      stream.value()};
 
     auto const iter = thrust::counting_iterator<cudf::size_type>(0);
     // when nulls are equal, we skip hashing any row that has a null
@@ -187,7 +189,11 @@ cudf::size_type distinct_count(column_view const& input,
                                nan_policy nan_handling,
                                rmm::cuda_stream_view stream)
 {
-  if (0 == input.size() or input.null_count() == input.size()) { return 0; }
+  if (0 == input.size()) { return 0; }
+
+  if (input.null_count() == input.size()) {
+    return static_cast<size_type>(null_handling == null_policy::INCLUDE);
+  }
 
   auto count = detail::distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
 
@@ -212,15 +218,18 @@ cudf::size_type distinct_count(column_view const& input,
 
 cudf::size_type distinct_count(column_view const& input,
                                null_policy null_handling,
-                               nan_policy nan_handling)
+                               nan_policy nan_handling,
+                               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct_count(input, null_handling, nan_handling, cudf::get_default_stream());
+  return detail::distinct_count(input, null_handling, nan_handling, stream);
 }
 
-cudf::size_type distinct_count(table_view const& input, null_equality nulls_equal)
+cudf::size_type distinct_count(table_view const& input,
+                               null_equality nulls_equal,
+                               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct_count(input, nulls_equal, cudf::get_default_stream());
+  return detail::distinct_count(input, nulls_equal, stream);
 }
 }  // namespace cudf

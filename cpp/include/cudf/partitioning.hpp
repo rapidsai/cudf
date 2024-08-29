@@ -18,6 +18,7 @@
 
 #include <cudf/hashing.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -26,7 +27,7 @@
 #include <memory>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup reorder_partition
  * @{
@@ -254,4 +255,4 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robi
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -16,7 +16,6 @@
 
 #include "groupby/common/utils.hpp"
 #include "groupby/hash/groupby_kernels.cuh"
-#include "hash/concurrent_unordered_map.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
@@ -554,7 +553,8 @@ std::unique_ptr<table> groupby(table_view const& keys,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
 {
-  auto const num_keys            = keys.num_rows();
+  // convert to int64_t to avoid potential overflow with large `keys`
+  auto const num_keys            = static_cast<int64_t>(keys.num_rows());
   auto const null_keys_are_equal = null_equality::EQUAL;
   auto const has_null            = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
 
@@ -568,15 +568,16 @@ std::unique_ptr<table> groupby(table_view const& keys,
   cudf::detail::result_cache sparse_results(requests.size());
 
   auto const comparator_helper = [&](auto const d_key_equal) {
-    auto const set = cuco::static_set{num_keys,
-                                      0.5,  // desired load factor
-                                      cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-                                      d_key_equal,
-                                      probing_scheme_type{d_row_hash},
-                                      cuco::thread_scope_device,
-                                      cuco::storage<1>{},
-                                      cudf::detail::cuco_allocator{stream},
-                                      stream.value()};
+    auto const set = cuco::static_set{
+      num_keys,
+      0.5,  // desired load factor
+      cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+      d_key_equal,
+      probing_scheme_type{d_row_hash},
+      cuco::thread_scope_device,
+      cuco::storage<1>{},
+      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+      stream.value()};
 
     // Compute all single pass aggs first
     compute_single_pass_aggs(keys,

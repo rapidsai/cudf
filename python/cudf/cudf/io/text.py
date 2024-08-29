@@ -1,14 +1,14 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from io import BytesIO, StringIO
 
 import cudf
 from cudf._lib import text as libtext
 from cudf.utils import ioutils
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 @ioutils.doc_read_text()
 def read_text(
     filepath_or_buffer,
@@ -24,11 +24,13 @@ def read_text(
     if delimiter is None:
         raise ValueError("delimiter needs to be provided")
 
-    filepath_or_buffer, _ = ioutils.get_reader_filepath_or_buffer(
+    filepath_or_buffer = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
-        compression=None,
         iotypes=(BytesIO, StringIO),
         storage_options=storage_options,
+    )
+    filepath_or_buffer = ioutils._select_single_source(
+        filepath_or_buffer, "read_text"
     )
 
     return cudf.Series._from_data(

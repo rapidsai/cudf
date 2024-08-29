@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,7 +74,8 @@ template <typename T>
 struct Rank : public cudf::test::BaseFixture {
   cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8, 5}};
   cudf::test::fixed_width_column_wrapper<T> col2{{5, 4, 3, 5, 8, 5}, {1, 1, 0, 1, 1, 1}};
-  cudf::test::strings_column_wrapper col3{{"d", "e", "a", "d", "k", "d"}, {1, 1, 1, 1, 1, 1}};
+  cudf::test::strings_column_wrapper col3{{"d", "e", "a", "d", "k", "d"},
+                                          {true, true, true, true, true, true}};
 
   void run_all_tests(cudf::rank_method method,
                      input_arg_t input_arg,
@@ -116,10 +117,10 @@ TYPED_TEST(Rank, first_asc_keep)
 {
   // ASCENDING
   cudf::test::fixed_width_column_wrapper<cudf::size_type> col1_rank{{3, 2, 1, 4, 6, 5}};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{{2, 1, -1, 3, 5, 4},
-                                                                    {1, 1, 0, 1, 1, 1}};  // KEEP
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{{2, 5, 1, 3, 6, 4},
-                                                                    {1, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{
+    {2, 1, -1, 3, 5, 4}, {true, true, false, true, true, true}};  // KEEP
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{
+    {2, 5, 1, 3, 6, 4}, {true, true, true, true, true, true}};
   this->run_all_tests(cudf::rank_method::FIRST, asc_keep, col1_rank, col2_rank, col3_rank);
 }
 
@@ -145,10 +146,10 @@ TYPED_TEST(Rank, first_desc_keep)
 {
   // DESCENDING
   cudf::test::fixed_width_column_wrapper<cudf::size_type> col1_rank{{2, 5, 6, 3, 1, 4}};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{{2, 5, -1, 3, 1, 4},
-                                                                    {1, 1, 0, 1, 1, 1}};  // KEEP
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{{3, 2, 6, 4, 1, 5},
-                                                                    {1, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{
+    {2, 5, -1, 3, 1, 4}, {true, true, false, true, true, true}};  // KEEP
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{
+    {3, 2, 6, 4, 1, 5}, {true, true, true, true, true, true}};
   this->run_all_tests(cudf::rank_method::FIRST, desc_keep, col1_rank, col2_rank, col3_rank);
 }
 
@@ -173,10 +174,10 @@ TYPED_TEST(Rank, first_desc_bottom)
 TYPED_TEST(Rank, dense_asc_keep)
 {
   cudf::test::fixed_width_column_wrapper<cudf::size_type> col1_rank{{3, 2, 1, 3, 4, 3}};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{{2, 1, -1, 2, 3, 2},
-                                                                    {1, 1, 0, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{{2, 3, 1, 2, 4, 2},
-                                                                    {1, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{
+    {2, 1, -1, 2, 3, 2}, {true, true, false, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{
+    {2, 3, 1, 2, 4, 2}, {true, true, true, true, true, true}};
   this->run_all_tests(cudf::rank_method::DENSE, asc_keep, col1_rank, col2_rank, col3_rank);
 }
 
@@ -199,10 +200,10 @@ TYPED_TEST(Rank, dense_asc_bottom)
 TYPED_TEST(Rank, dense_desc_keep)
 {
   cudf::test::fixed_width_column_wrapper<cudf::size_type> col1_rank{{2, 3, 4, 2, 1, 2}};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{{2, 3, -1, 2, 1, 2},
-                                                                    {1, 1, 0, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{{3, 2, 4, 3, 1, 3},
-                                                                    {1, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{
+    {2, 3, -1, 2, 1, 2}, {true, true, false, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{
+    {3, 2, 4, 3, 1, 3}, {true, true, true, true, true, true}};
   this->run_all_tests(cudf::rank_method::DENSE, desc_keep, col1_rank, col2_rank, col3_rank);
 }
 
@@ -225,10 +226,10 @@ TYPED_TEST(Rank, dense_desc_bottom)
 TYPED_TEST(Rank, min_asc_keep)
 {
   cudf::test::fixed_width_column_wrapper<cudf::size_type> col1_rank{{3, 2, 1, 3, 6, 3}};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{{2, 1, -1, 2, 5, 2},
-                                                                    {1, 1, 0, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{{2, 5, 1, 2, 6, 2},
-                                                                    {1, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{
+    {2, 1, -1, 2, 5, 2}, {true, true, false, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{
+    {2, 5, 1, 2, 6, 2}, {true, true, true, true, true, true}};
   this->run_all_tests(cudf::rank_method::MIN, asc_keep, col1_rank, col2_rank, col3_rank);
 }
 
@@ -251,10 +252,10 @@ TYPED_TEST(Rank, min_asc_bottom)
 TYPED_TEST(Rank, min_desc_keep)
 {
   cudf::test::fixed_width_column_wrapper<cudf::size_type> col1_rank{{2, 5, 6, 2, 1, 2}};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{{2, 5, -1, 2, 1, 2},
-                                                                    {1, 1, 0, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{{3, 2, 6, 3, 1, 3},
-                                                                    {1, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{
+    {2, 5, -1, 2, 1, 2}, {true, true, false, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{
+    {3, 2, 6, 3, 1, 3}, {true, true, true, true, true, true}};
   this->run_all_tests(cudf::rank_method::MIN, desc_keep, col1_rank, col2_rank, col3_rank);
 }
 
@@ -277,10 +278,10 @@ TYPED_TEST(Rank, min_desc_bottom)
 TYPED_TEST(Rank, max_asc_keep)
 {
   cudf::test::fixed_width_column_wrapper<cudf::size_type> col1_rank{{5, 2, 1, 5, 6, 5}};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{{4, 1, -1, 4, 5, 4},
-                                                                    {1, 1, 0, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{{4, 5, 1, 4, 6, 4},
-                                                                    {1, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{
+    {4, 1, -1, 4, 5, 4}, {true, true, false, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{
+    {4, 5, 1, 4, 6, 4}, {true, true, true, true, true, true}};
   this->run_all_tests(cudf::rank_method::MAX, asc_keep, col1_rank, col2_rank, col3_rank);
 }
 
@@ -303,10 +304,10 @@ TYPED_TEST(Rank, max_asc_bottom)
 TYPED_TEST(Rank, max_desc_keep)
 {
   cudf::test::fixed_width_column_wrapper<cudf::size_type> col1_rank{{4, 5, 6, 4, 1, 4}};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{{4, 5, -1, 4, 1, 4},
-                                                                    {1, 1, 0, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{{5, 2, 6, 5, 1, 5},
-                                                                    {1, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col2_rank{
+    {4, 5, -1, 4, 1, 4}, {true, true, false, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col3_rank{
+    {5, 2, 6, 5, 1, 5}, {true, true, true, true, true, true}};
   this->run_all_tests(cudf::rank_method::MAX, desc_keep, col1_rank, col2_rank, col3_rank);
 }
 
@@ -329,8 +330,10 @@ TYPED_TEST(Rank, max_desc_bottom)
 TYPED_TEST(Rank, average_asc_keep)
 {
   cudf::test::fixed_width_column_wrapper<double> col1_rank{{4, 2, 1, 4, 6, 4}};
-  cudf::test::fixed_width_column_wrapper<double> col2_rank{{3, 1, -1, 3, 5, 3}, {1, 1, 0, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<double> col3_rank{{3, 5, 1, 3, 6, 3}, {1, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<double> col2_rank{{3, 1, -1, 3, 5, 3},
+                                                           {true, true, false, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<double> col3_rank{{3, 5, 1, 3, 6, 3},
+                                                           {true, true, true, true, true, true}};
   this->run_all_tests(cudf::rank_method::AVERAGE, asc_keep, col1_rank, col2_rank, col3_rank);
 }
 
@@ -353,8 +356,10 @@ TYPED_TEST(Rank, average_asc_bottom)
 TYPED_TEST(Rank, average_desc_keep)
 {
   cudf::test::fixed_width_column_wrapper<double> col1_rank{{3, 5, 6, 3, 1, 3}};
-  cudf::test::fixed_width_column_wrapper<double> col2_rank{{3, 5, -1, 3, 1, 3}, {1, 1, 0, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<double> col3_rank{{4, 2, 6, 4, 1, 4}, {1, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<double> col2_rank{{3, 5, -1, 3, 1, 3},
+                                                           {true, true, false, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<double> col3_rank{{4, 2, 6, 4, 1, 4},
+                                                           {true, true, true, true, true, true}};
   this->run_all_tests(cudf::rank_method::AVERAGE, desc_keep, col1_rank, col2_rank, col3_rank);
 }
 
@@ -379,9 +384,9 @@ TYPED_TEST(Rank, dense_asc_keep_pct)
 {
   cudf::test::fixed_width_column_wrapper<double> col1_rank{{0.75, 0.5, 0.25, 0.75, 1., 0.75}};
   cudf::test::fixed_width_column_wrapper<double> col2_rank{
-    {2.0 / 3.0, 1.0 / 3.0, -1., 2.0 / 3.0, 1., 2.0 / 3.0}, {1, 1, 0, 1, 1, 1}};
+    {2.0 / 3.0, 1.0 / 3.0, -1., 2.0 / 3.0, 1., 2.0 / 3.0}, {true, true, false, true, true, true}};
   cudf::test::fixed_width_column_wrapper<double> col3_rank{{0.5, 0.75, 0.25, 0.5, 1., 0.5},
-                                                           {1, 1, 1, 1, 1, 1}};
+                                                           {true, true, true, true, true, true}};
   this->run_all_tests(cudf::rank_method::DENSE, asc_keep, col1_rank, col2_rank, col3_rank, true);
 }
 
@@ -406,9 +411,9 @@ TYPED_TEST(Rank, min_desc_keep_pct)
   cudf::test::fixed_width_column_wrapper<double> col1_rank{
     {1.0 / 3.0, 5.0 / 6.0, 1., 1.0 / 3.0, 1.0 / 6.0, 1.0 / 3.0}};
   cudf::test::fixed_width_column_wrapper<double> col2_rank{{0.4, 1., -1., 0.4, 0.2, 0.4},
-                                                           {1, 1, 0, 1, 1, 1}};
+                                                           {true, true, false, true, true, true}};
   cudf::test::fixed_width_column_wrapper<double> col3_rank{
-    {0.5, 1.0 / 3.0, 1., 0.5, 1.0 / 6.0, 0.5}, {1, 1, 1, 1, 1, 1}};
+    {0.5, 1.0 / 3.0, 1., 0.5, 1.0 / 6.0, 0.5}, {true, true, true, true, true, true}};
   this->run_all_tests(cudf::rank_method::MIN, desc_keep, col1_rank, col2_rank, col3_rank, true);
 }
 
@@ -494,7 +499,7 @@ struct RankListAndStruct : public cudf::test::BaseFixture {
     7 |   {null, 0}|
       +------------+
     */
-    std::vector<bool>                           struct_valids{1, 1, 0, 1, 0, 1, 1, 1};
+    std::vector<bool>                           struct_valids{true, true, false, true, false, true, true, true};
     auto col1       = cudf::test::fixed_width_column_wrapper<T>{{ 0,  1,  9, -1,  9, -1, -1, -1}, {1, 1, 1, 0, 1, 0, 0, 0}};
     auto col2       = cudf::test::fixed_width_column_wrapper<T>{{-1, -1,  9, -1,  9, -1,  1,  0}, {0, 0, 1, 0, 1, 0, 1, 1}};
     auto struct_col = cudf::test::structs_column_wrapper{{col1, col2}, struct_valids}.release();

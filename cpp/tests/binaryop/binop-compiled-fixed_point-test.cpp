@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -380,7 +380,7 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpEqualSimpleScale0Null)
 
   auto const col1     = fp_wrapper<RepType>{{1, 2, 3, 4}, {1, 1, 1, 1}, scale_type{0}};
   auto const col2     = fp_wrapper<RepType>{{1, 2, 3, 4}, {0, 0, 0, 0}, scale_type{0}};
-  auto const expected = wrapper<bool>{{0, 1, 0, 1}, {0, 0, 0, 0}};
+  auto const expected = wrapper<bool>{{0, 1, 0, 1}, {false, false, false, false}};
 
   auto const result = cudf::binary_operation(
     col1, col2, cudf::binary_operator::EQUAL, cudf::data_type{cudf::type_id::BOOL8});
@@ -396,7 +396,7 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpEqualSimpleScale2Null)
 
   auto const col1     = fp_wrapper<RepType>{{1, 2, 3, 4}, {1, 1, 1, 1}, scale_type{-2}};
   auto const col2     = fp_wrapper<RepType>{{1, 2, 3, 4}, {0, 0, 0, 0}, scale_type{0}};
-  auto const expected = wrapper<bool>{{0, 1, 0, 1}, {0, 0, 0, 0}};
+  auto const expected = wrapper<bool>{{0, 1, 0, 1}, {false, false, false, false}};
 
   auto const result = cudf::binary_operation(
     col1, col2, cudf::binary_operator::EQUAL, cudf::data_type{cudf::type_id::BOOL8});
@@ -495,7 +495,7 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpNullEqualsSimple)
 
   auto const col1     = fp_wrapper<RepType>{{400, 300, 300, 100}, {1, 1, 1, 0}, scale_type{-2}};
   auto const col2     = fp_wrapper<RepType>{{40, 200, 20, 400}, {1, 0, 1, 0}, scale_type{-1}};
-  auto const expected = wrapper<bool>{{1, 0, 0, 1}, {1, 1, 1, 1}};
+  auto const expected = wrapper<bool>{{1, 0, 0, 1}, {true, true, true, true}};
 
   auto const result = cudf::binary_operation(
     col1, col2, cudf::binary_operator::NULL_EQUALS, cudf::data_type{cudf::type_id::BOOL8});
@@ -842,4 +842,62 @@ TYPED_TEST(FixedPointTest_64_128_Reps, FixedPoint_64_128_ComparisonTests)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(g->view(), falses);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(h->view(), falses);
   }
+}
+
+template <typename ResultType>
+void test_fixed_floating(cudf::binary_operator op,
+                         double floating_value,
+                         int decimal_value,
+                         int decimal_scale,
+                         ResultType expected)
+{
+  auto const scale       = numeric::scale_type{decimal_scale};
+  auto const result_type = cudf::data_type(cudf::type_to_id<ResultType>());
+  auto const nullable =
+    (op == cudf::binary_operator::NULL_EQUALS || op == cudf::binary_operator::NULL_NOT_EQUALS ||
+     op == cudf::binary_operator::NULL_MIN || op == cudf::binary_operator::NULL_MAX);
+
+  cudf::test::fixed_width_column_wrapper<double> floating_col({floating_value});
+  cudf::test::fixed_point_column_wrapper<int> decimal_col({decimal_value}, scale);
+
+  auto result = binary_operation(floating_col, decimal_col, op, result_type);
+
+  if constexpr (cudf::is_fixed_point<ResultType>()) {
+    using wrapper_type      = cudf::test::fixed_point_column_wrapper<typename ResultType::rep>;
+    auto const expected_col = nullable ? wrapper_type({expected.value()}, {true}, expected.scale())
+                                       : wrapper_type({expected.value()}, expected.scale());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col, *result.get());
+  } else {
+    using wrapper_type = cudf::test::fixed_width_column_wrapper<ResultType>;
+    auto const expected_col =
+      nullable ? wrapper_type({expected}, {true}) : wrapper_type({expected});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col, *result.get());
+  }
+}
+
+TYPED_TEST(FixedPointCompiledTest, FixedPointWithFloating)
+{
+  using namespace numeric;
+
+  // BOOLEAN
+  test_fixed_floating(cudf::binary_operator::EQUAL, 1.0, 10, -1, true);
+  test_fixed_floating(cudf::binary_operator::NOT_EQUAL, 1.0, 10, -1, false);
+  test_fixed_floating(cudf::binary_operator::LESS, 2.0, 10, -1, false);
+  test_fixed_floating(cudf::binary_operator::GREATER, 2.0, 10, -1, true);
+  test_fixed_floating(cudf::binary_operator::LESS_EQUAL, 2.0, 20, -1, true);
+  test_fixed_floating(cudf::binary_operator::GREATER_EQUAL, 2.0, 30, -1, false);
+  test_fixed_floating(cudf::binary_operator::NULL_EQUALS, 1.0, 10, -1, true);
+  test_fixed_floating(cudf::binary_operator::NULL_NOT_EQUALS, 1.0, 10, -1, false);
+
+  // PRIMARY ARITHMETIC
+  auto const decimal_result = numeric::decimal32(4, numeric::scale_type{0});
+  test_fixed_floating(cudf::binary_operator::ADD, 1.0, 30, -1, decimal_result);
+  test_fixed_floating(cudf::binary_operator::SUB, 6.0, 20, -1, decimal_result);
+  test_fixed_floating(cudf::binary_operator::MUL, 2.0, 20, -1, decimal_result);
+  test_fixed_floating(cudf::binary_operator::DIV, 8.0, 2, 0, decimal_result);
+  test_fixed_floating(cudf::binary_operator::MOD, 9.0, 50, -1, decimal_result);
+
+  // OTHER ARITHMETIC
+  test_fixed_floating(cudf::binary_operator::NULL_MAX, 4.0, 20, -1, decimal_result);
+  test_fixed_floating(cudf::binary_operator::NULL_MIN, 4.0, 200, -1, decimal_result);
 }

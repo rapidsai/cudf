@@ -1,0 +1,104 @@
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+
+{% set version = environ['RAPIDS_PACKAGE_VERSION'].lstrip('v') %}
+{% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
+{% set py_version = environ['CONDA_PY'] %}
+{% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
+{% set cuda_major = cuda_version.split('.')[0] %}
+{% set date_string = environ['RAPIDS_DATE_STRING'] %}
+
+package:
+  name: pylibcudf
+  version: {{ version }}
+
+source:
+  path: ../../..
+
+build:
+  number: {{ GIT_DESCRIBE_NUMBER }}
+  string: cuda{{ cuda_major }}_py{{ py_version }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  script_env:
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
+    - AWS_SESSION_TOKEN
+    - CMAKE_C_COMPILER_LAUNCHER
+    - CMAKE_CUDA_COMPILER_LAUNCHER
+    - CMAKE_CXX_COMPILER_LAUNCHER
+    - CMAKE_GENERATOR
+    - PARALLEL_LEVEL
+    - SCCACHE_BUCKET
+    - SCCACHE_IDLE_TIMEOUT
+    - SCCACHE_REGION
+    - SCCACHE_S3_KEY_PREFIX=pylibcudf-aarch64 # [aarch64]
+    - SCCACHE_S3_KEY_PREFIX=pylibcudf-linux64 # [linux64]
+    - SCCACHE_S3_USE_SSL
+    - SCCACHE_S3_NO_CREDENTIALS
+  ignore_run_exports:
+    # libcudf's run_exports pinning is looser than we would like
+    - libcudf
+  ignore_run_exports_from:
+    {% if cuda_major == "11" %}
+    - {{ compiler('cuda11') }}
+    {% else %}
+    - {{ compiler('cuda') }}
+    - cuda-cudart-dev
+    - libcufile-dev  # [linux64]
+    {% endif %}
+
+requirements:
+  build:
+    - cmake {{ cmake_version }}
+    - ninja
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+    {% if cuda_major == "11" %}
+    - {{ compiler('cuda11') }} ={{ cuda_version }}
+    {% else %}
+    - {{ compiler('cuda') }}
+    {% endif %}
+    - cuda-version ={{ cuda_version }}
+    - {{ stdlib("c") }}
+  host:
+    - python
+    - cython >=3.0.3
+    - rapids-build-backend >=0.3.0,<0.4.0.dev0
+    - scikit-build-core >=0.10.0
+    - dlpack >=0.8,<1.0
+    - libcudf ={{ version }}
+    - rmm ={{ minor_version }}
+    {% if cuda_major == "11" %}
+    - cudatoolkit
+    {% else %}
+    - cuda-cudart-dev
+    - cuda-nvrtc
+    - libcufile-dev  # [linux64]
+    {% endif %}
+    - cuda-version ={{ cuda_version }}
+  run:
+    - python
+    - typing_extensions >=4.0.0
+    - pandas >=2.0,<2.2.3dev0
+    - numpy >=1.23,<3.0a0
+    - pyarrow>=14.0.0,<18.0.0a0
+    - {{ pin_compatible('rmm', max_pin='x.x') }}
+    - fsspec >=0.6.0
+    {% if cuda_major == "11" %}
+    - cuda-python >=11.7.1,<12.0a0
+    {% else %}
+    - cuda-python >=12.0,<13.0a0
+    {% endif %}
+    - nvtx >=0.2.1
+    - packaging
+
+test:
+  requires:
+    - cuda-version ={{ cuda_version }}
+  imports:
+    - pylibcudf
+
+about:
+  home: https://rapids.ai/
+  license: Apache-2.0
+  license_family: APACHE
+  license_file: LICENSE
+  summary: pylibcudf library

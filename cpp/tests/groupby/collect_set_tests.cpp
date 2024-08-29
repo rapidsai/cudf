@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ auto groupby_collect_set(cudf::column_view const& keys,
                          std::unique_ptr<cudf::groupby_aggregation>&& agg)
 {
   std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
+  requests.emplace_back();
   requests[0].values = values;
   requests[0].aggregations.emplace_back(std::move(agg));
 

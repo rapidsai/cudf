@@ -17,13 +17,13 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace structs {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace structs::detail {
 /**
  * @brief Scan function for struct column type
  *
@@ -41,6 +41,5 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace structs
-}  // namespace cudf
+}  // namespace structs::detail
+}  // namespace CUDF_EXPORT cudf

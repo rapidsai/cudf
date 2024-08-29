@@ -81,12 +81,11 @@ struct alignas(8) relist {
     return true;
   }
 
-  __device__ __forceinline__ restate get_state(int16_t idx) const
+  __device__ [[nodiscard]] __forceinline__ restate get_state(int16_t idx) const
   {
     return restate{ranges[idx * stride], inst_ids[idx * stride]};
   }
-
-  __device__ __forceinline__ int16_t get_size() const { return size; }
+  __device__ [[nodiscard]] __forceinline__ int16_t get_size() const { return size; }
 
  private:
   int16_t size{};
@@ -102,7 +101,7 @@ struct alignas(8) relist {
     mask[pos >> 3] |= uc;
   }
 
-  __device__ __forceinline__ bool readMask(int32_t pos) const
+  __device__ [[nodiscard]] __forceinline__ bool readMask(int32_t pos) const
   {
     u_char const uc = mask[pos >> 3];
     return static_cast<bool>((uc >> (pos & 7)) & 1);
@@ -261,12 +260,12 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
       switch (jnk.starttype) {
         case BOL:
           if (pos == 0) break;
-          if (jnk.startchar != '^') { return thrust::nullopt; }
+          if (jnk.startchar != '^') { return cuda::std::nullopt; }
           --itr;
           startchar = static_cast<char_utf8>('\n');
         case CHAR: {
           auto const find_itr = find_char(startchar, dstr, itr);
-          if (find_itr.byte_offset() >= dstr.size_bytes()) { return thrust::nullopt; }
+          if (find_itr.byte_offset() >= dstr.size_bytes()) { return cuda::std::nullopt; }
           itr = find_itr + (jnk.starttype == BOL);
           pos = itr.position();
           break;
@@ -397,7 +396,7 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
     checkstart = jnk.list1->get_size() == 0;
   } while (!last_character && (!checkstart || !match));
 
-  return match ? match_result({begin, end}) : thrust::nullopt;
+  return match ? match_result({begin, end}) : cuda::std::nullopt;
 }
 
 __device__ __forceinline__ match_result reprog_device::find(int32_t const thread_idx,

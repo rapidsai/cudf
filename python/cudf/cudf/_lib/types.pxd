@@ -3,11 +3,9 @@
 from libc.stdint cimport int32_t
 from libcpp cimport bool
 
-cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
-    lists_column_view,
-)
+cimport pylibcudf.libcudf.types as libcudf_types
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 
 ctypedef bool underlying_type_t_order
 ctypedef bool underlying_type_t_null_order

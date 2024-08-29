@@ -11,10 +11,9 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
-from cudf.testing import _utils as utils
+from cudf.testing import _utils as utils, assert_eq
 from cudf.testing._utils import (
     INTEGER_TYPES,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
 )
@@ -2362,3 +2361,21 @@ def test_sliced_categorical_as_ordered():
         name="a",
     )
     assert_eq(result, expected)
+
+
+def test_duplicate_labels_raises():
+    df = cudf.DataFrame([[1, 2]], columns=["a", "b"])
+    with pytest.raises(ValueError):
+        df[["a", "a"]]
+    with pytest.raises(ValueError):
+        df.loc[:, ["a", "a"]]
+
+
+@pytest.mark.parametrize("indexer", ["iloc", "loc"])
+@pytest.mark.parametrize("dtype", ["category", "timedelta64[ns]"])
+def test_loc_iloc_setitem_col_slice_non_cupy_types(indexer, dtype):
+    df_pd = pd.DataFrame(range(2), dtype=dtype)
+    df_cudf = cudf.DataFrame.from_pandas(df_pd)
+    getattr(df_pd, indexer)[:, 0] = getattr(df_pd, indexer)[:, 0]
+    getattr(df_cudf, indexer)[:, 0] = getattr(df_cudf, indexer)[:, 0]
+    assert_eq(df_pd, df_cudf)

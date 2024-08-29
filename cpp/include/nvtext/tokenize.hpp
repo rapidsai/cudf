@@ -18,10 +18,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/resource_ref.hpp>
 
-namespace nvtext {
+namespace CUDF_EXPORT nvtext {
 /**
  * @addtogroup nvtext_tokenize
  * @{
@@ -176,7 +177,8 @@ std::unique_ptr<cudf::column> count_tokens(
  * t is now ["h","e","l","l","o"," ","w","o","r","l","d","g","o","o","d","b","y","e"]
  * @endcode
  *
- * All null row entries are ignored and the output contains all valid rows.
+ * @throw std::invalid_argument if `input` contains nulls
+ * @throw std::overflow_error if the output would produce more than max size_type rows
  *
  * @param input Strings column to tokenize
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -308,4 +310,4 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of tokenize group
-}  // namespace nvtext
+}  // namespace CUDF_EXPORT nvtext

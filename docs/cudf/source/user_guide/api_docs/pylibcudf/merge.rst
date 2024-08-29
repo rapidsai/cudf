@@ -2,5 +2,5 @@
 merge
 =====
 
-.. automodule:: cudf._lib.pylibcudf.merge
+.. automodule:: pylibcudf.merge
    :members:

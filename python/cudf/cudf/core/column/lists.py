@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -26,31 +26,49 @@ from cudf._lib.lists import (
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
 from cudf._lib.types import size_type_dtype
-from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethods, ParentType
+from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 
+if TYPE_CHECKING:
+    from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
+    from cudf.core.buffer import Buffer
+
 
 class ListColumn(ColumnBase):
-    dtype: ListDtype
     _VALID_BINARY_OPERATIONS = {"__add__", "__radd__"}
 
     def __init__(
         self,
-        size,
-        dtype,
-        mask=None,
-        offset=0,
-        null_count=None,
-        children=(),
+        data: None,
+        size: int,
+        dtype: ListDtype,
+        mask: Buffer | None = None,
+        offset: int = 0,
+        null_count: int | None = None,
+        children: tuple[NumericalColumn, ColumnBase] = (),  # type: ignore[assignment]
     ):
+        if data is not None:
+            raise ValueError("data must be None")
+        if not isinstance(dtype, ListDtype):
+            raise ValueError("dtype must be a cudf.ListDtype")
+        if not (
+            len(children) == 2
+            and isinstance(children[0], NumericalColumn)
+            # TODO: Enforce int32_t (size_type) used in libcudf?
+            and children[0].dtype.kind == "i"
+            and isinstance(children[1], ColumnBase)
+        ):
+            raise ValueError(
+                "children must a tuple of 2 columns of (signed integer offsets, list values)"
+            )
         super().__init__(
-            None,
-            size,
-            dtype,
+            data=data,
+            size=size,
+            dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
@@ -71,10 +89,15 @@ class ListColumn(ColumnBase):
             child0_size = (
                 current_base_child.size + 1 - current_offset
             ) * current_base_child.base_children[0].dtype.itemsize
-            current_offset = current_base_child.base_children[
-                0
-            ].element_indexing(current_offset)
             n += child0_size
+            current_offset_col = current_base_child.base_children[0]
+            if not len(current_offset_col):
+                # See https://github.com/rapidsai/cudf/issues/16164 why
+                # offset column can be uninitialized
+                break
+            current_offset = current_offset_col.element_indexing(
+                current_offset
+            )
             current_base_child = current_base_child.base_children[1]
 
         n += (
@@ -124,7 +147,7 @@ class ListColumn(ColumnBase):
             raise TypeError("can only concatenate list to list")
 
     @property
-    def elements(self):
+    def elements(self) -> ColumnBase:
         """
         Column containing the elements of each list (may itself be a
         ListColumn)
@@ -132,11 +155,11 @@ class ListColumn(ColumnBase):
         return self.children[1]
 
     @property
-    def offsets(self):
+    def offsets(self) -> NumericalColumn:
         """
         Integer offsets to elements specifying each row of the ListColumn
         """
-        return self.children[0]
+        return cast(NumericalColumn, self.children[0])
 
     def to_arrow(self):
         offsets = self.offsets.to_arrow()
@@ -165,10 +188,9 @@ class ListColumn(ColumnBase):
         else:
             super().set_base_data(value)
 
-    def set_base_children(self, value: Tuple[ColumnBase, ...]):
+    def set_base_children(self, value: tuple[NumericalColumn, ColumnBase]):  # type: ignore[override]
         super().set_base_children(value)
-        _, values = value
-        self._dtype = cudf.ListDtype(element_type=values.dtype)
+        self._dtype = cudf.ListDtype(element_type=value[1].dtype)
 
     @property
     def __cuda_array_interface__(self):
@@ -189,12 +211,13 @@ class ListColumn(ColumnBase):
                 dtype.element_type
             )
             return ListColumn(
+                data=None,
                 dtype=dtype,
                 mask=self.base_mask,
                 size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=(self.base_children[0], elements),
+                children=(self.base_children[0], elements),  # type: ignore[arg-type]
             )
 
         return self
@@ -219,24 +242,28 @@ class ListColumn(ColumnBase):
         """
         data_col = column.column_empty(0)
         mask_col = []
-        offset_col = [0]
+        offset_vals = [0]
         offset = 0
 
         # Build Data, Mask & Offsets
         for data in arbitrary:
             if cudf._lib.scalar._is_null_host_scalar(data):
                 mask_col.append(False)
-                offset_col.append(offset)
+                offset_vals.append(offset)
             else:
                 mask_col.append(True)
                 data_col = data_col.append(as_column(data))
                 offset += len(data)
-                offset_col.append(offset)
+                offset_vals.append(offset)
 
-        offset_col = column.as_column(offset_col, dtype=size_type_dtype)
+        offset_col = cast(
+            NumericalColumn,
+            column.as_column(offset_vals, dtype=size_type_dtype),
+        )
 
         # Build ListColumn
         res = cls(
+            data=None,
             size=len(arbitrary),
             dtype=cudf.ListDtype(data_col.dtype),
             mask=cudf._lib.transform.bools_to_mask(as_column(mask_col)),
@@ -246,15 +273,11 @@ class ListColumn(ColumnBase):
         )
         return res
 
-    def as_string_column(
-        self, dtype: Dtype, format: str | None = None
-    ) -> "cudf.core.column.StringColumn":
+    def as_string_column(self) -> cudf.core.column.StringColumn:
         """
         Create a strings column from a list column
         """
-        lc = self._transform_leaves(
-            lambda col, dtype: col.as_string_column(dtype), dtype
-        )
+        lc = self._transform_leaves(lambda col: col.as_string_column())
 
         # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])
@@ -267,7 +290,7 @@ class ListColumn(ColumnBase):
         # as ``self``, but with the leaf column transformed
         # by applying ``func`` to it
 
-        cc: List[ListColumn] = []
+        cc: list[ListColumn] = []
         c: ColumnBase = self
 
         while isinstance(c, ListColumn):
@@ -280,37 +303,26 @@ class ListColumn(ColumnBase):
         for c in cc:
             o = c.children[0]
             lc = cudf.core.column.ListColumn(  # type: ignore
+                data=None,
                 size=c.size,
                 dtype=cudf.ListDtype(lc.dtype),
                 mask=c.mask,
                 offset=c.offset,
                 null_count=c.null_count,
-                children=(o, lc),
+                children=(o, lc),  # type: ignore[arg-type]
             )
         return lc
 
     def to_pandas(
         self,
         *,
-        index: Optional[pd.Index] = None,
         nullable: bool = False,
         arrow_type: bool = False,
-    ) -> pd.Series:
-        # Can't rely on Column.to_pandas implementation for lists.
-        # Need to perform `to_pylist` to preserve list types.
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
-        if nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-        pa_array = self.to_arrow()
-        if arrow_type:
-            return pd.Series(
-                pd.arrays.ArrowExtensionArray(pa_array), index=index
-            )
+    ) -> pd.Index:
+        if arrow_type or nullable:
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
-            return pd.Series(pa_array.tolist(), dtype="object", index=index)
+            return pd.Index(self.to_arrow().tolist(), dtype="object")
 
 
 class ListMethods(ColumnMethods):
@@ -329,8 +341,8 @@ class ListMethods(ColumnMethods):
 
     def get(
         self,
-        index: int,
-        default: Optional[Union[ScalarLike, ColumnLike]] = None,
+        index: int | ColumnLike,
+        default: ScalarLike | ColumnLike | None = None,
     ) -> ParentType:
         """
         Extract element at the given index from each list in a Series of lists.
@@ -434,7 +446,7 @@ class ListMethods(ColumnMethods):
             contains_scalar(self._column, cudf.Scalar(search_key))
         )
 
-    def index(self, search_key: Union[ScalarLike, ColumnLike]) -> ParentType:
+    def index(self, search_key: ScalarLike | ColumnLike) -> ParentType:
         """
         Returns integers representing the index of the search key for each row.
 
@@ -573,10 +585,11 @@ class ListMethods(ColumnMethods):
             raise ValueError(
                 "lists_indices and list column is of different " "size."
             )
-        if not _is_non_decimal_numeric_dtype(
-            lists_indices_col.children[1].dtype
-        ) or not np.issubdtype(
-            lists_indices_col.children[1].dtype, np.integer
+        if (
+            not _is_non_decimal_numeric_dtype(
+                lists_indices_col.children[1].dtype
+            )
+            or lists_indices_col.children[1].dtype.kind not in "iu"
         ):
             raise TypeError(
                 "lists_indices should be column of values of index types."
@@ -655,9 +668,17 @@ class ListMethods(ColumnMethods):
         dtype: list
 
         .. pandas-compat::
-            **ListMethods.sort_values**
+            `pandas.Series.list.sort_values`
 
-            The ``inplace`` and ``kind`` arguments are currently not supported.
+            This method does not exist in pandas but it can be run
+            as:
+
+            >>> import pandas as pd
+            >>> s = pd.Series([[3, 2, 1], [2, 4, 3]])
+            >>> print(s.apply(sorted))
+            0    [1, 2, 3]
+            1    [2, 3, 4]
+            dtype: object
         """
         if inplace:
             raise NotImplementedError("`inplace` not currently implemented.")

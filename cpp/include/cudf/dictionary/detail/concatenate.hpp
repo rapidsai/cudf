@@ -23,9 +23,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace dictionary {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace dictionary::detail {
 /**
  * @brief Returns a single column by vertically concatenating the given vector of
  * dictionary columns.
@@ -42,6 +41,5 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace dictionary
-}  // namespace cudf
+}  // namespace dictionary::detail
+}  // namespace CUDF_EXPORT cudf

@@ -26,7 +26,8 @@ struct DictionarySearchTest : public cudf::test::BaseFixture {};
 TEST_F(DictionarySearchTest, StringsColumn)
 {
   cudf::test::dictionary_column_wrapper<std::string> dictionary(
-    {"fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "", ""}, {1, 1, 1, 1, 1, 1, 1, 1, 0});
+    {"fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "", ""},
+    {true, true, true, true, true, true, true, true, false});
 
   auto result = cudf::dictionary::get_index(dictionary, cudf::string_scalar("ccc"));
   EXPECT_TRUE(result->is_valid());
@@ -45,7 +46,8 @@ TEST_F(DictionarySearchTest, StringsColumn)
 
 TEST_F(DictionarySearchTest, WithNulls)
 {
-  cudf::test::dictionary_column_wrapper<int64_t> dictionary({9, 8, 7, 6, 4}, {0, 1, 1, 0, 1});
+  cudf::test::dictionary_column_wrapper<int64_t> dictionary({9, 8, 7, 6, 4},
+                                                            {false, true, true, false, true});
 
   auto result = cudf::dictionary::get_index(dictionary, cudf::numeric_scalar<int64_t>(4));
   EXPECT_TRUE(result->is_valid());

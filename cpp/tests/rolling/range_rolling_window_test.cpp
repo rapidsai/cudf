@@ -34,6 +34,7 @@
 #include <src/rolling/detail/range_window_bounds.hpp>
 #include <src/rolling/detail/rolling.hpp>
 
+#include <utility>
 #include <vector>
 
 template <typename T, typename R = int32_t>
@@ -57,12 +58,12 @@ struct window_exec {
               ScalarT preceding_scalar,
               ScalarT following_scalar,
               cudf::size_type min_periods = 1)
-    : gby_column(gby),
-      oby_column(oby),
+    : gby_column(std::move(gby)),
+      oby_column(std::move(oby)),
       order(ordering),
-      agg_column(agg),
-      preceding(preceding_scalar),
-      following(following_scalar),
+      agg_column(std::move(agg)),
+      preceding(std::move(preceding_scalar)),
+      following(std::move(following_scalar)),
       min_periods(min_periods)
   {
   }
@@ -170,7 +171,7 @@ TYPED_TEST(TypedTimeRangeRollingTest, TimestampASC)
   // clang-format off
   auto gby_column  = int_col { 0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
   auto agg_column  = int_col {{0, 8, 4, 6, 2, 9, 3, 5, 1, 7},
-                              {1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
+                              {true, true, true, true, true, true, true, true, true, false}};
   auto time_column = time_col{ 1, 5, 6, 8, 9, 2, 2, 3, 4, 9};
   // clang-format on
 
@@ -252,7 +253,7 @@ TYPED_TEST(TypedTimeRangeRollingTest, TimestampDESC)
   // clang-format off
   auto gby_column  = int_col { 5, 5, 5, 5, 5, 1, 1, 1, 1, 1};
   auto agg_column  = int_col {{7, 1, 5, 3, 9, 2, 6, 4, 8, 0},
-                              {0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+                              {false, true, true, true, true, true, true, true, true, true}};
   auto time_column = time_col{ 9, 4, 3, 2, 2, 9, 8, 6, 5, 1};
   // clang-format on
 
@@ -281,7 +282,7 @@ TYPED_TEST(TypedIntegralRangeRollingTest, OrderByASC)
   // clang-format off
   auto gby_column = int_col { 0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
   auto agg_column = int_col {{0, 8, 4, 6, 2, 9, 3, 5, 1, 7},
-                             {1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
+                             {true, true, true, true, true, true, true, true, true, false}};
   auto oby_column = fwcw<T>{  1, 5, 6, 8, 9, 2, 2, 3, 4, 9};
   // clang-format on
 
@@ -304,7 +305,7 @@ TYPED_TEST(TypedIntegralRangeRollingTest, OrderByDesc)
   // clang-format off
   auto gby_column  = int_col { 5, 5, 5, 5, 5, 1, 1, 1, 1, 1};
   auto agg_column  = int_col {{7, 1, 5, 3, 9, 2, 6, 4, 8, 0},
-                              {0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+                              {false, true, true, true, true, true, true, true, true, true}};
   auto oby_column  = fwcw<T>{  9, 4, 3, 2, 2, 9, 8, 6, 5, 1};
   // clang-format on
 
@@ -418,8 +419,9 @@ TYPED_TEST(TypedRangeRollingNullsTest, CountMultiGroupOrderByASCNullsLast)
   // Aggregation column.
   auto const agg_col = cudf::test::fixed_width_column_wrapper<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   // OrderBy column.
-  auto const oby_col = cudf::test::fixed_width_column_wrapper<T>{{1, 2, 2, 1, 3, 1, 2, 3, 4, 5},
-                                                                 {1, 1, 1, 0, 0, 1, 1, 1, 0, 0}};
+  auto const oby_col = cudf::test::fixed_width_column_wrapper<T>{
+    {1, 2, 2, 1, 3, 1, 2, 3, 4, 5},
+    {true, true, true, false, false, true, true, true, false, false}};
 
   auto const output = do_count_over_window<T>(grp_col, oby_col, cudf::order::ASCENDING, agg_col);
 

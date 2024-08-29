@@ -28,7 +28,7 @@
 
 #include <initializer_list>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @brief Constructs a zero-copy `column_view`/`mutable_column_view` of the
@@ -280,4 +280,4 @@ std::unique_ptr<column> purge_nonempty_nulls(column_view const& input,
                                              rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

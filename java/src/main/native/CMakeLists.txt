@@ -210,6 +210,11 @@ target_compile_definitions(
   cudfjni PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
                  "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>"
 )
+target_link_options(cudfjni PRIVATE "-Wl,--no-undefined")
+
+set(CUDF_ENABLE_ARROW_PARQUET ON)
+include(../../../../cpp/cmake/thirdparty/get_arrow.cmake)
+target_link_libraries(cudfjni PRIVATE ${ARROW_LIBRARIES})
 
 if(USE_GDS)
   add_library(cufilejni src/CuFileJni.cpp)

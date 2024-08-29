@@ -1308,9 +1308,9 @@ TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
   int constexpr num_rows_to_read = rows_per_stripe * 5 + random_val;
 
   // Just shift the read data region back by a random offset.
-  const auto num_rows_to_skip = num_rows - num_rows_to_read - random_val;
+  auto const num_rows_to_skip = num_rows - num_rows_to_read - random_val;
 
-  const auto sequence_start = num_rows_to_skip % num_rows;
+  auto const sequence_start = num_rows_to_skip % num_rows;
   auto const skipped_col = int32s_col(it + sequence_start, it + sequence_start + num_rows_to_read);
   auto const expected    = cudf::table_view{{skipped_col}};
 

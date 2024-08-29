@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,10 +31,10 @@ namespace io {
 namespace orc {
 
 struct ProtobufWriter::ProtobufFieldWriter {
-  int struct_size;
+  int struct_size{0};
   ProtobufWriter* p;
 
-  ProtobufFieldWriter(ProtobufWriter* pbw) : struct_size(0), p(pbw) {}
+  ProtobufFieldWriter(ProtobufWriter* pbw) : p(pbw) {}
 
   /**
    * @brief Function to write a unsigned integer to the internal buffer

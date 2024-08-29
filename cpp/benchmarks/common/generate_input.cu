@@ -718,7 +718,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
 }
 
 template <typename T>
-struct clamp_down : public thrust::unary_function<T, T> {
+struct clamp_down {
   T max;
   clamp_down(T max) : max(max) {}
   __host__ __device__ T operator()(T x) const { return min(x, max); }

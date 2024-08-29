@@ -48,21 +48,22 @@ TEST_F(JaccardTest, Basic)
 
 TEST_F(JaccardTest, WithNulls)
 {
-  auto input1 =
-    cudf::test::strings_column_wrapper({"brown fox", "jumps over dog", "", ""}, {1, 1, 0, 1});
-  auto input2 =
-    cudf::test::strings_column_wrapper({"brown cat", "jumps on fox", "", ""}, {1, 1, 1, 0});
+  auto input1 = cudf::test::strings_column_wrapper({"brown fox", "jumps over dog", "", ""},
+                                                   {true, true, false, true});
+  auto input2 = cudf::test::strings_column_wrapper({"brown cat", "jumps on fox", "", ""},
+                                                   {true, true, true, false});
 
   auto view1 = cudf::strings_column_view(input1);
   auto view2 = cudf::strings_column_view(input2);
 
   auto results = nvtext::jaccard_index(view1, view2, 5);
 
-  auto expected =
-    cudf::test::fixed_width_column_wrapper<float>({0.25f, 0.200000003f, 0.f, 0.f}, {1, 1, 0, 0});
+  auto expected = cudf::test::fixed_width_column_wrapper<float>({0.25f, 0.200000003f, 0.f, 0.f},
+                                                                {true, true, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 
-  expected = cudf::test::fixed_width_column_wrapper<float>({1.0f, 1.0f, 0.f, 0.f}, {1, 1, 0, 1});
+  expected = cudf::test::fixed_width_column_wrapper<float>({1.0f, 1.0f, 0.f, 0.f},
+                                                           {true, true, false, true});
   results  = nvtext::jaccard_index(view1, view1, 7);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }

@@ -97,8 +97,9 @@ TYPED_TEST(groupby_argmax_test, null_keys_and_values)
 
   if (std::is_same_v<V, bool>) return;
 
-  cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                                 {1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<K> keys(
+    {1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+    {true, true, false, true, true, true, true, true, true, true, true});
   cudf::test::fixed_width_column_wrapper<V> vals({9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 4},
                                                  {0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0});
 

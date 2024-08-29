@@ -16,11 +16,11 @@ import pytest
 import cudf
 from cudf import concat
 from cudf.core.column.string import StringColumn
-from cudf.core.index import Index, as_index
+from cudf.core.index import Index
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    assert_eq,
     assert_exceptions_equal,
 )
 from cudf.utils import dtypes as dtypeutils
@@ -978,6 +978,22 @@ def test_string_split_re(data, pat, n, expand):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("pat", [None, "\\s+"])
+@pytest.mark.parametrize("regex", [False, True])
+@pytest.mark.parametrize("expand", [False, True])
+def test_string_split_all_empty(pat, regex, expand):
+    ps = pd.Series(["", "", "", ""], dtype="str")
+    gs = cudf.Series(["", "", "", ""], dtype="str")
+
+    expect = ps.str.split(pat=pat, expand=expand, regex=regex)
+    got = gs.str.split(pat=pat, expand=expand, regex=regex)
+
+    if isinstance(got, cudf.DataFrame):
+        assert_eq(expect, got, check_column_type=False)
+    else:
+        assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
 )
@@ -1076,7 +1092,7 @@ def test_string_index():
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = cudf.Index(
+    stringIndex = cudf.Index._from_column(
         cudf.core.column.as_column(["a", "b", "c", "d", "e"]), name="name"
     )
     pdf.index = stringIndex.to_pandas()
@@ -1500,7 +1516,7 @@ def test_strings_partition(data):
     assert_eq(ps.str.partition(","), gs.str.partition(","))
     assert_eq(ps.str.partition("-"), gs.str.partition("-"))
 
-    gi = as_index(data, name="new name")
+    gi = cudf.Index(data, name="new name")
     pi = pd.Index(data, name="new name")
     assert_eq(pi.str.partition(), gi.str.partition())
     assert_eq(pi.str.partition(","), gi.str.partition(","))
@@ -1639,7 +1655,7 @@ def test_strings_strip_tests(data, to_strip):
         ps.str.lstrip(to_strip=to_strip), gs.str.lstrip(to_strip=to_strip)
     )
 
-    gi = as_index(data)
+    gi = cudf.Index(data)
     pi = pd.Index(data)
 
     assert_eq(pi.str.strip(to_strip=to_strip), gi.str.strip(to_strip=to_strip))
@@ -1696,7 +1712,7 @@ def test_strings_filling_tests(data, width, fillchar):
         gs.str.rjust(width=width, fillchar=fillchar),
     )
 
-    gi = as_index(data)
+    gi = cudf.Index(data)
     pi = pd.Index(data)
 
     assert_eq(
@@ -1731,7 +1747,7 @@ def test_strings_zfill_tests(data, width):
 
     assert_eq(ps.str.zfill(width=width), gs.str.zfill(width=width))
 
-    gi = as_index(data)
+    gi = cudf.Index(data)
     pi = pd.Index(data)
 
     assert_eq(pi.str.zfill(width=width), gi.str.zfill(width=width))
@@ -1763,7 +1779,7 @@ def test_strings_pad_tests(data, width, side, fillchar):
         gs.str.pad(width=width, side=side, fillchar=fillchar),
     )
 
-    gi = as_index(data)
+    gi = cudf.Index(data)
     pi = pd.Index(data)
 
     assert_eq(
@@ -1807,7 +1823,7 @@ def test_string_wrap(data, width):
         ),
     )
 
-    gi = as_index(data)
+    gi = cudf.Index(data)
     pi = pd.Index(data)
 
     assert_eq(
@@ -1941,7 +1957,7 @@ def test_string_replace_with_backrefs(find, replace):
     expected = ps.str.replace(find, replace, regex=True)
     assert_eq(got, expected)
 
-    got = as_index(gs).str.replace_with_backrefs(find, replace)
+    got = cudf.Index(gs).str.replace_with_backrefs(find, replace)
     expected = pd.Index(ps).str.replace(find, replace, regex=True)
     assert_eq(got, expected)
 
@@ -2227,7 +2243,7 @@ def test_string_str_rindex(data, sub, er):
         assert_eq(ps.str.rindex(sub), gs.str.rindex(sub), check_dtype=False)
         assert_eq(
             pd.Index(ps).str.rindex(sub),
-            as_index(gs).str.rindex(sub),
+            cudf.Index(gs).str.rindex(sub),
             exact=False,
         )
 
@@ -2336,7 +2352,7 @@ def test_string_str_match(data, pat):
 
     assert_eq(ps.str.match(pat), gs.str.match(pat))
     assert_eq(
-        pd.Index(pd.Index(ps).str.match(pat)), as_index(gs).str.match(pat)
+        pd.Index(pd.Index(ps).str.match(pat)), cudf.Index(gs).str.match(pat)
     )
 
 
@@ -2363,7 +2379,7 @@ def test_string_str_translate(data):
     )
     assert_eq(
         pd.Index(ps).str.translate(str.maketrans({"a": "z"})),
-        as_index(gs).str.translate(str.maketrans({"a": "z"})),
+        cudf.Index(gs).str.translate(str.maketrans({"a": "z"})),
     )
     assert_eq(
         ps.str.translate(str.maketrans({"a": "z", "i": "$", "z": "1"})),
@@ -2373,7 +2389,7 @@ def test_string_str_translate(data):
         pd.Index(ps).str.translate(
             str.maketrans({"a": "z", "i": "$", "z": "1"})
         ),
-        as_index(gs).str.translate(
+        cudf.Index(gs).str.translate(
             str.maketrans({"a": "z", "i": "$", "z": "1"})
         ),
     )
@@ -2389,7 +2405,7 @@ def test_string_str_translate(data):
         pd.Index(ps).str.translate(
             str.maketrans({"+": "-", "-": "$", "?": "!", "B": "."})
         ),
-        as_index(gs).str.translate(
+        cudf.Index(gs).str.translate(
             str.maketrans({"+": "-", "-": "$", "?": "!", "B": "."})
         ),
     )
@@ -2672,12 +2688,14 @@ def test_string_ip4_to_int():
 
 
 def test_string_int_to_ipv4():
-    gsr = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449])
+    gsr = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449]).astype(
+        "uint32"
+    )
     expected = cudf.Series(
         ["0.0.0.0", None, "0.0.0.0", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
     )
 
-    got = cudf.Series(gsr._column.int2ip())
+    got = cudf.Series._from_column(gsr._column.int2ip())
 
     assert_eq(expected, got)
 
@@ -2718,7 +2736,7 @@ def test_string_isipv4():
 
 
 @pytest.mark.parametrize(
-    "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"int64", "uint64"}))
+    "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"uint32"}))
 )
 def test_string_int_to_ipv4_dtype_fail(dtype):
     gsr = cudf.Series([1, 2, 3, 4, 5]).astype(dtype)
@@ -2779,8 +2797,8 @@ def test_string_str_byte_count(data, expected):
     actual = sr.str.byte_count()
     assert_eq(expected, actual)
 
-    si = as_index(data)
-    expected = as_index(expected, dtype="int32")
+    si = cudf.Index(data)
+    expected = cudf.Index(expected, dtype="int32")
     actual = si.str.byte_count()
     assert_eq(expected, actual)
 
@@ -2828,8 +2846,8 @@ def test_str_isinteger(data, expected):
     actual = sr.str.isinteger()
     assert_eq(expected, actual)
 
-    sr = as_index(data)
-    expected = as_index(expected)
+    sr = cudf.Index(data)
+    expected = cudf.Index(expected)
     actual = sr.str.isinteger()
     assert_eq(expected, actual)
 
@@ -2884,8 +2902,8 @@ def test_str_isfloat(data, expected):
     actual = sr.str.isfloat()
     assert_eq(expected, actual)
 
-    sr = as_index(data)
-    expected = as_index(expected)
+    sr = cudf.Index(data)
+    expected = cudf.Index(expected)
     actual = sr.str.isfloat()
     assert_eq(expected, actual)
 

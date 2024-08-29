@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -165,7 +165,7 @@ TEST_F(StringsReplaceRegexTest, Alternation)
     {"16  6  brr  232323  1  hello  90", "123 ABC 00 2022", "abé123  4567  89xyz"});
   auto sv = cudf::strings_column_view(input);
 
-  auto pattern = std::string("(^|\\s)\\d+(\\s|$)");
+  auto pattern = std::string(R"((^|\s)\d+(\s|$))");
   auto repl    = cudf::string_scalar("_");
   auto expected =
     cudf::test::strings_column_wrapper({"__ brr __ hello _", "_ABC_2022", "abé123 _ 89xyz"});
@@ -173,7 +173,7 @@ TEST_F(StringsReplaceRegexTest, Alternation)
   auto results = cudf::strings::replace_re(sv, *prog, repl);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 
-  pattern = std::string("(\\s|^)\\d+($|\\s)");
+  pattern = std::string(R"((\s|^)\d+($|\s))");
   prog    = cudf::strings::regex_program::create(pattern);
   results = cudf::strings::replace_re(sv, *prog, repl);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);

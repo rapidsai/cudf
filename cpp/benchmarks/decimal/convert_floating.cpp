@@ -32,8 +32,6 @@ void bench_cast_decimal(nvbench::state& state, nvbench::type_list<InputType, Out
 
   static constexpr bool is_double =
     std::is_same_v<InputType, double> || std::is_same_v<OutputType, double>;
-  static constexpr bool is_32bit =
-    std::is_same_v<InputType, numeric::decimal32> || std::is_same_v<OutputType, numeric::decimal32>;
   static constexpr bool is_128bit = std::is_same_v<InputType, numeric::decimal128> ||
                                     std::is_same_v<OutputType, numeric::decimal128>;
 
@@ -66,21 +64,6 @@ void bench_cast_decimal(nvbench::state& state, nvbench::type_list<InputType, Out
   // Exclude end range of double from float test
   if (!is_double && ((exp_mode == 0) || (exp_mode == 6))) {
     state.skip("Range beyond end of float tests.");
-    return;
-  }
-
-  // The current float <--> decimal conversion algorithm is limited
-  static constexpr bool is_64bit = !is_32bit && !is_128bit;
-  if (is_32bit && (exp_mode != 3)) {
-    state.skip("Decimal32 conversion only works up to scale factors of 10^9.");
-    return;
-  }
-  if (is_64bit && ((exp_mode < 2) || (exp_mode > 4))) {
-    state.skip("Decimal64 conversion only works up to scale factors of 10^18.");
-    return;
-  }
-  if (is_128bit && ((exp_mode == 0) || (exp_mode == 6))) {
-    state.skip("Decimal128 conversion only works up to scale factors of 10^38.");
     return;
   }
 

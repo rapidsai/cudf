@@ -5,11 +5,12 @@ from libcpp.utility cimport move
 
 from cudf.core.buffer import acquire_spill_lock
 
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.strings.wrap cimport wrap as cpp_wrap
+from pylibcudf.libcudf.types cimport size_type
+
 from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.strings.wrap cimport wrap as cpp_wrap
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 
 @acquire_spill_lock()

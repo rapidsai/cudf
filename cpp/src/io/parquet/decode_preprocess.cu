@@ -26,6 +26,8 @@
 
 namespace cudf::io::parquet::detail {
 
+namespace cg = cooperative_groups;
+
 namespace {
 
 // # of threads we're decoding with
@@ -163,7 +165,8 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
       // For V1, the choice is an overestimate (s->dict_size), or an exact number that's
       // expensive to compute. For now we're going with the latter.
       else {
-        str_len = gpuInitStringDescriptors<true, unused_state_buf>(s, nullptr, target_pos, t);
+        str_len = gpuInitStringDescriptors<true, unused_state_buf>(
+          s, nullptr, target_pos, cg::this_thread_block());
       }
       break;
 

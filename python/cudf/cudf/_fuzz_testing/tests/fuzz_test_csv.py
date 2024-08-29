@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import sys
 from io import StringIO
@@ -13,7 +13,7 @@ from cudf._fuzz_testing.utils import (
     compare_content,
     run_test,
 )
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 @pythonfuzz(data_handle=CSVReader)

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from itertools import product
 
@@ -8,12 +8,8 @@ import pytest
 
 import cudf
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
-from cudf.testing._utils import (
-    INTEGER_TYPES,
-    NUMERIC_TYPES,
-    assert_eq,
-    gen_rand,
-)
+from cudf.testing import assert_eq
+from cudf.testing._utils import INTEGER_TYPES, NUMERIC_TYPES, gen_rand
 
 params_sizes = [0, 1, 2, 5]
 

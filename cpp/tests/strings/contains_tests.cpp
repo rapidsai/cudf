@@ -86,8 +86,8 @@ TEST_F(StringsContainsTests, ContainsTest)
                                     "\n",
                                     "b.\\s*\n",
                                     ".*c",
-                                    "\\d\\d:\\d\\d:\\d\\d",
-                                    "\\d\\d?:\\d\\d?:\\d\\d?",
+                                    R"(\d\d:\d\d:\d\d)",
+                                    R"(\d\d?:\d\d?:\d\d?)",
                                     "[Hh]ello [Ww]orld",
                                     "\\bworld\\b",
                                     ".*"};
@@ -282,7 +282,7 @@ TEST_F(StringsContainsTests, OctalTest)
   results  = cudf::strings::contains_re(strings_view, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
-  pattern  = std::string("[\\7][\\11][\\15]");
+  pattern  = std::string(R"([\7][\11][\15])");
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 0, 1});
   prog     = cudf::strings::regex_program::create(pattern);
   results  = cudf::strings::contains_re(strings_view, *prog);
@@ -689,11 +689,11 @@ TEST_F(StringsContainsTests, ASCII)
   auto input = cudf::test::strings_column_wrapper({"abc \t\f\r 12", "áé 　❽❽", "aZ ❽4", "XYZ　8"});
   auto view = cudf::strings_column_view(input);
 
-  std::string patterns[] = {"\\w+[\\s]+\\d+",
-                            "[^\\W]+\\s+[^\\D]+",
-                            "[\\w]+[^\\S]+[\\d]+",
-                            "[\\w]+\\s+[\\d]+",
-                            "\\w+\\s+\\d+"};
+  std::string patterns[] = {R"(\w+[\s]+\d+)",
+                            R"([^\W]+\s+[^\D]+)",
+                            R"([\w]+[^\S]+[\d]+)",
+                            R"([\w]+\s+[\d]+)",
+                            R"(\w+\s+\d+)"};
 
   for (auto ptn : patterns) {
     auto expected_contains = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 0, 0});

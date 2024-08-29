@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,9 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/prefetch.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -29,8 +31,7 @@
  * @file column_view.hpp
  * @brief column view class definitions
  */
-
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @brief A non-owning, immutable view of device data as a column of elements,
@@ -72,7 +73,7 @@ class column_view_base {
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   T const* head() const noexcept
   {
-    return static_cast<T const*>(_data);
+    return static_cast<T const*>(get_data());
   }
 
   /**
@@ -225,6 +226,17 @@ class column_view_base {
   [[nodiscard]] size_type offset() const noexcept { return _offset; }
 
  protected:
+  /**
+   * @brief Returns pointer to the base device memory allocation.
+   *
+   * The primary purpose of this function is to allow derived classes to
+   * override the fundamental properties of memory accesses without needing to
+   * change all of the different accessors for the underlying pointer.
+   *
+   * @return Typed pointer to underlying data
+   */
+  virtual void const* get_data() const noexcept { return _data; }
+
   data_type _type{type_id::EMPTY};   ///< Element type
   size_type _size{};                 ///< Number of elements
   void const* _data{};               ///< Pointer to device memory containing elements
@@ -236,7 +248,7 @@ class column_view_base {
                                      ///< Enables zero-copy slicing
 
   column_view_base()                        = default;
-  ~column_view_base()                       = default;
+  virtual ~column_view_base()               = default;
   column_view_base(column_view_base const&) = default;  ///< Copy constructor
   column_view_base(column_view_base&&)      = default;  ///< Move constructor
   /**
@@ -284,10 +296,6 @@ class column_view_base {
                    size_type offset = 0);
 };
 
-class mutable_column_view_base : public column_view_base {
- public:
- protected:
-};
 }  // namespace detail
 
 /**
@@ -323,7 +331,7 @@ class column_view : public detail::column_view_base {
 #ifdef __CUDACC__
 #pragma nv_exec_check_disable
 #endif
-  ~column_view() = default;
+  ~column_view() override = default;
 #ifdef __CUDACC__
 #pragma nv_exec_check_disable
 #endif
@@ -447,6 +455,18 @@ class column_view : public detail::column_view_base {
     return device_span<T const>(data<T>(), size());
   }
 
+ protected:
+  /**
+   * @brief Returns pointer to the base device memory allocation.
+   *
+   * The primary purpose of this function is to allow derived classes to
+   * override the fundamental properties of memory accesses without needing to
+   * change all of the different accessors for the underlying pointer.
+   *
+   * @return Typed pointer to underlying data
+   */
+  void const* get_data() const noexcept override;
+
  private:
   friend column_view bit_cast(column_view const& input, data_type type);
 
@@ -478,7 +498,7 @@ class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
 
-  ~mutable_column_view(){
+  ~mutable_column_view() override{
     // Needed so that the first instance of the implicit destructor for any TU isn't 'constructed'
     // from a host+device function marking the implicit version also as host+device
   };
@@ -572,7 +592,7 @@ class mutable_column_view : public detail::column_view_base {
   }
 
   /**
-   * @brief Return first element (accounting for offset) when underlying data is
+   * @brief Return first element (accounting for offset) after underlying data is
    * casted to the specified type.
    *
    * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
@@ -664,6 +684,18 @@ class mutable_column_view : public detail::column_view_base {
    * @return An immutable view of the mutable view's elements
    */
   operator column_view() const;
+
+ protected:
+  /**
+   * @brief Returns pointer to the base device memory allocation.
+   *
+   * The primary purpose of this function is to allow derived classes to
+   * override the fundamental properties of memory accesses without needing to
+   * change all of the different accessors for the underlying pointer.
+   *
+   * @return Typed pointer to underlying data
+   */
+  void const* get_data() const noexcept override;
 
  private:
   friend mutable_column_view bit_cast(mutable_column_view const& input, data_type type);
@@ -765,5 +797,6 @@ std::size_t shallow_hash(column_view const& input);
  * @return If `lhs` and `rhs` have equivalent shallow state
  */
 bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs);
+
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

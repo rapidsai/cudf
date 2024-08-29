@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -101,10 +101,11 @@ cudf::size_type unique_count(column_view const& input,
 
 cudf::size_type unique_count(column_view const& input,
                              null_policy null_handling,
-                             nan_policy nan_handling)
+                             nan_policy nan_handling,
+                             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::unique_count(input, null_handling, nan_handling, cudf::get_default_stream());
+  return detail::unique_count(input, null_handling, nan_handling, stream);
 }
 
 }  // namespace cudf

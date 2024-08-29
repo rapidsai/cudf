@@ -305,7 +305,7 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
       if (OpenZipArchive(&za, raw, src.size())) {
         size_t cdfh_ofs = 0;
         for (int i = 0; i < za.eocd->num_entries; i++) {
-          zip_cdfh_s const* cdfh = reinterpret_cast<zip_cdfh_s const*>(
+          auto const* cdfh = reinterpret_cast<zip_cdfh_s const*>(
             reinterpret_cast<uint8_t const*>(za.cdfh) + cdfh_ofs);
           int cdfh_len = sizeof(zip_cdfh_s) + cdfh->fname_len + cdfh->extra_len + cdfh->comment_len;
           if (cdfh_ofs + cdfh_len > za.eocd->cdir_size || cdfh->sig != 0x0201'4b50) {
@@ -314,8 +314,8 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
           }
           // For now, only accept with non-zero file sizes and DEFLATE
           if (cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0) {
-            size_t lfh_ofs       = cdfh->hdr_ofs;
-            zip_lfh_s const* lfh = reinterpret_cast<zip_lfh_s const*>(raw + lfh_ofs);
+            size_t lfh_ofs  = cdfh->hdr_ofs;
+            auto const* lfh = reinterpret_cast<zip_lfh_s const*>(raw + lfh_ofs);
             if (lfh_ofs + sizeof(zip_lfh_s) <= src.size() && lfh->sig == 0x0403'4b50 &&
                 lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src.size()) {
               if (lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0) {
@@ -340,7 +340,7 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
       [[fallthrough]];
     case compression_type::BZIP2:
       if (src.size() > 4) {
-        bz2_file_header_s const* fhdr = reinterpret_cast<bz2_file_header_s const*>(raw);
+        auto const* fhdr = reinterpret_cast<bz2_file_header_s const*>(raw);
         // Check for BZIP2 file signature "BZh1" to "BZh9"
         if (fhdr->sig[0] == 'B' && fhdr->sig[1] == 'Z' && fhdr->sig[2] == 'h' &&
             fhdr->blksz >= '1' && fhdr->blksz <= '9') {

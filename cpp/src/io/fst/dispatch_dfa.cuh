@@ -37,6 +37,11 @@ struct AgentDFAPolicy {
 
   // The number of symbols processed by each thread
   static constexpr int32_t ITEMS_PER_THREAD = _ITEMS_PER_THREAD;
+
+  // If the shared memory-backed write buffer exceeds this threshold, the FST will skip buffering
+  // the output in a write buffer and instead immediately write out to global memory, potentially
+  // resulting in non-coalesced writes
+  static constexpr std::size_t SMEM_THRESHOLD = 24 * 1024;
 };
 
 /**
@@ -49,7 +54,7 @@ struct DeviceFSMPolicy {
   struct Policy900 : cub::ChainedPolicy<900, Policy900, Policy900> {
     enum {
       BLOCK_THREADS    = 128,
-      ITEMS_PER_THREAD = 32,
+      ITEMS_PER_THREAD = 16,
     };
 
     using AgentDFAPolicy = AgentDFAPolicy<BLOCK_THREADS, ITEMS_PER_THREAD>;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -25,7 +26,7 @@
  * @brief Class definition for cudf::lists_column_view
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup lists_classes
@@ -38,6 +39,7 @@ namespace cudf {
  */
 class lists_column_view : private column_view {
  public:
+  lists_column_view() = default;
   /**
    * @brief Construct a new lists column view object from a column view.
    *
@@ -136,4 +138,4 @@ class lists_column_view : private column_view {
   }
 };
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

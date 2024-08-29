@@ -64,11 +64,11 @@ class CompactProtocolWriter {
 class CompactProtocolFieldWriter {
   CompactProtocolWriter& writer;
   size_t struct_start_pos;
-  int current_field_value;
+  int current_field_value{0};
 
  public:
   CompactProtocolFieldWriter(CompactProtocolWriter& caller)
-    : writer(caller), struct_start_pos(writer.m_buf.size()), current_field_value(0)
+    : writer(caller), struct_start_pos(writer.m_buf.size())
   {
   }
 

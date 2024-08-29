@@ -107,7 +107,7 @@ class memory_stats_logger {
  public:
   memory_stats_logger()
     : existing_mr(rmm::mr::get_current_device_resource()),
-      statistics_mr(rmm::mr::make_statistics_adaptor(existing_mr))
+      statistics_mr(rmm::mr::statistics_resource_adaptor(existing_mr))
   {
     rmm::mr::set_current_device_resource(&statistics_mr);
   }

@@ -23,7 +23,8 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf::lists {
+namespace CUDF_EXPORT cudf {
+namespace lists {
 /**
  * @addtogroup set_operations
  * @{
@@ -53,8 +54,8 @@ namespace cudf::lists {
  * @param nulls_equal Flag to specify whether null elements should be considered as equal, default
  *        to be `UNEQUAL` which means only non-null elements are checked for overlapping
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
- * @param mr Device memory resource used to allocate the returned object
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned object
  * @return A column of type BOOL containing the check results
  */
 std::unique_ptr<column> have_overlap(
@@ -177,4 +178,5 @@ std::unique_ptr<column> difference_distinct(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
-}  // namespace cudf::lists
+}  // namespace lists
+}  // namespace CUDF_EXPORT cudf

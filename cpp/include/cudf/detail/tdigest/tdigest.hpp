@@ -18,14 +18,14 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace tdigest {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace tdigest::detail {
 
 /**
  * @brief Generate a tdigest column from a grouped, sorted set of numeric input values.
@@ -152,6 +152,7 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
  *
  * @returns An empty tdigest column.
  */
+CUDF_EXPORT
 std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr);
 
@@ -236,6 +237,5 @@ std::unique_ptr<scalar> reduce_merge_tdigest(column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace tdigest
-}  // namespace cudf
+}  // namespace tdigest::detail
+}  // namespace CUDF_EXPORT cudf

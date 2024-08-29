@@ -294,7 +294,7 @@ CUDF_KERNEL void has_multibytes_kernel(char const* d_input_chars,
   auto const mb_total = block_reduce(temp_storage).Reduce(mb_count, cub::Sum());
 
   if ((lane_idx == 0) && (mb_total > 0)) {
-    cuda::atomic_ref<int64_t, cuda::thread_scope_block> ref{*d_output};
+    cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{*d_output};
     ref.fetch_add(mb_total, cuda::std::memory_order_relaxed);
   }
 }

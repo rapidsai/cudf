@@ -57,8 +57,9 @@ TYPED_TEST(OneHotEncodingTestTyped, Basic)
 
 TYPED_TEST(OneHotEncodingTestTyped, Nulls)
 {
-  auto input    = cudf::test::fixed_width_column_wrapper<int32_t>{{8, 8, 8, 9, 9}, {1, 1, 0, 1, 1}};
-  auto category = cudf::test::fixed_width_column_wrapper<int32_t>({8, 9, -1}, {1, 1, 0});
+  auto input    = cudf::test::fixed_width_column_wrapper<int32_t>{{8, 8, 8, 9, 9},
+                                                                  {true, true, false, true, true}};
+  auto category = cudf::test::fixed_width_column_wrapper<int32_t>({8, 9, -1}, {true, true, false});
 
   auto col0 = cudf::test::fixed_width_column_wrapper<bool>{1, 1, 0, 0, 0};
   auto col1 = cudf::test::fixed_width_column_wrapper<bool>{0, 0, 0, 1, 1};
@@ -164,8 +165,8 @@ TEST_F(OneHotEncodingTest, Strings)
 {
   auto input = cudf::test::strings_column_wrapper{
     {"hello", "rapidsai", "cudf", "hello", "cuspatial", "hello", "world", "!"},
-    {1, 1, 1, 1, 0, 1, 1, 0}};
-  auto category = cudf::test::strings_column_wrapper{{"hello", "world", ""}, {1, 1, 0}};
+    {true, true, true, true, false, true, true, false}};
+  auto category = cudf::test::strings_column_wrapper{{"hello", "world", ""}, {true, true, false}};
 
   auto col0 = cudf::test::fixed_width_column_wrapper<bool>{1, 0, 0, 1, 0, 1, 0, 0};
   auto col1 = cudf::test::fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 0, 1, 0};
