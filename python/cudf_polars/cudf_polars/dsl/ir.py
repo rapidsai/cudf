@@ -28,7 +28,7 @@ import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import DataFrame, NamedColumn
-from cudf_polars.utils import sorting
+from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -1072,6 +1072,7 @@ class MapFunction(IR):
             # "merge_sorted",
             "rename",
             "explode",
+            "unpivot",
         ]
     )
 
@@ -1094,6 +1095,19 @@ class MapFunction(IR):
                 set(new) & (set(self.df.schema.keys() - set(old)))
             ):
                 raise NotImplementedError("Duplicate new names in rename.")
+        elif self.name == "unpivot":
+            indices, pivotees, variable_name, value_name = self.options
+            value_name = "value" if value_name is None else value_name
+            variable_name = "variable" if variable_name is None else variable_name
+            if len(pivotees) == 0:
+                index = frozenset(indices)
+                pivotees = [name for name in self.df.schema if name not in index]
+            if not all(
+                dtypes.can_cast(self.df.schema[p], self.schema[value_name])
+                for p in pivotees
+            ):
+                raise NotImplementedError("unpivot with non-fixed-width columns.")
+            self.options = (indices, pivotees, variable_name, value_name)
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -1115,6 +1129,43 @@ class MapFunction(IR):
             return DataFrame.from_table(
                 plc.lists.explode_outer(df.table, index), df.column_names
             ).sorted_like(df, subset=subset)
+        elif self.name == "unpivot":
+            indices, pivotees, variable_name, value_name = self.options
+            npiv = len(pivotees)
+            df = self.df.evaluate(cache=cache)
+            if indices:
+                index_columns = [
+                    NamedColumn(col, name)
+                    for col, name in zip(
+                        plc.reshape.tile(df.select(indices).table, npiv).columns(),
+                        indices,
+                    )
+                ]
+            else:
+                index_columns = []
+            (variable_column,) = plc.filling.repeat(
+                plc.Table(
+                    [
+                        plc.interop.from_arrow(
+                            pa.array(
+                                pivotees,
+                                type=plc.interop.to_arrow(self.schema[variable_name]),
+                            ),
+                        )
+                    ]
+                ),
+                df.num_rows,
+            ).columns()
+            value_column = plc.concatenate.concatenate(
+                [c.astype(self.schema[value_name]) for c in df.select(pivotees).columns]
+            )
+            return DataFrame(
+                [
+                    *index_columns,
+                    NamedColumn(variable_column, variable_name),
+                    NamedColumn(value_column, value_name),
+                ]
+            )
         else:
             raise AssertionError("Should never be reached")  # pragma: no cover
 
