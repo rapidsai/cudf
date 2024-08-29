@@ -382,7 +382,7 @@ class cudf_timeout:
     def __enter__(self):
         self.start_time = time.perf_counter()
 
-    def __exit__(self):
+    def __exit__(self, *args):
         elapsed_time = int(
             time.perf_counter() - self.start_time
         )  # Calculate elapsed time
