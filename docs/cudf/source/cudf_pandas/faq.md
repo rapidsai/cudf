@@ -69,7 +69,36 @@ performance, try to use only functionality that can run entirely on GPU.
 This helps reduce the number of memory transfers needed to fallback to
 CPU.
 
-## Does it work with third-party libraries?
+## How can I improve performance of my workflow with `cudf.pandas`?
+
+Most workflows will see significant performance improvements with
+`cudf.pandas`. However, sometimes things can be slower than expected.
+First, it's important to note that GPUs are good at parallel processing
+of large amounts of data. Small data sizes may be slower on GPU than
+CPU, because of the cost of data transfers. cuDF achieves the highest
+performance on long columns of data. As a _very rough_ rule of thumb,
+`cudf.pandas` shines on workflows with more than 10,000 - 100,000 rows
+of data, depending on the algorithms, data types, and other factors.
+Datasets that are several gigabytes in size and/or have millions of
+rows are a great fit for `cudf.pandas`.
+
+Here are some more tips to improve workflow performance:
+
+- Reshape data so it is long rather than wide. This improves cuDF's
+  ability to execute in parallel on the entire GPU!
+- Avoid element-wise iteration and mutation. If you can, use pandas
+  functions to manipulate an entire column at once rather than writing
+  raw `for` loops that compute and assign.
+- If your data is really an n-dimensional array with lots of columns
+  where you aim to do lots of math (like adding matrices),
+  [CuPy](https://cupy.dev/) or [NumPy](https://numpy.org/) may be a
+  better choice than pandas or `cudf.pandas`. Array libraries are built
+  for different use cases than DataFrame libraries, and will get optimal
+  performance from using contiguous memory for multidimensional array
+  storage. Use the `.values` method to convert a DataFrame or Series to
+  an array.
+
+## Does `cudf.pandas` work with third-party libraries?
 
 `cudf.pandas` is tested with numerous popular third-party libraries.
 `cudf.pandas` will not only work but will accelerate pandas operations
@@ -97,7 +126,7 @@ common interactions with the following Python libraries:
 Please review the section on [Known Limitations](#are-there-any-known-limitations)
 for details about what is expected not to work (and why).
 
-## Can I use this with Dask or PySpark?
+## Can I use `cudf.pandas` with Dask or PySpark?
 
 `cudf.pandas` is not designed for distributed or out-of-core computing
 (OOC) workflows today. If you are looking for accelerated OOC and
