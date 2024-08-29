@@ -1456,6 +1456,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 pd_preprocess.dtype._categories = (
                     preprocess.categories.to_pandas()
                 )
+                pd_preprocess.dtype._ordered = preprocess.dtype.ordered
                 cats_repr = repr(pd_preprocess).split("\n")
                 output = "\n".join(data_repr[:-1] + cats_repr[-1:])
 
@@ -3345,31 +3346,7 @@ def interval_range(
         init=start.device_value,
         step=freq.device_value,
     )
-    left_col = bin_edges.slice(0, len(bin_edges) - 1)
-    right_col = bin_edges.slice(1, len(bin_edges))
-    # For indexing, children should both have 0 offset
-    right_col = type(right_col)(
-        data=right_col.data,
-        dtype=right_col.dtype,
-        size=right_col.size,
-        mask=right_col.mask,
-        offset=0,
-        null_count=right_col.null_count,
-        children=right_col.children,
-    )
-
-    if len(right_col) == 0 or len(left_col) == 0:
-        dtype = IntervalDtype("int64", closed)
-        data = column.column_empty_like_same_mask(left_col, dtype)
-        return IntervalIndex(data, closed=closed, name=name)
-
-    interval_col = IntervalColumn(
-        data=None,
-        dtype=IntervalDtype(left_col.dtype, closed),
-        size=len(left_col),
-        children=(left_col, right_col),
-    )
-    return IntervalIndex(interval_col, closed=closed, name=name)
+    return IntervalIndex.from_breaks(bin_edges, closed=closed, name=name)
 
 
 class IntervalIndex(Index):
@@ -3519,7 +3496,7 @@ class IntervalIndex(Index):
         left_col = breaks.slice(0, len(breaks) - 1)
         right_col = breaks.slice(1, len(breaks))
         # For indexing, children should both have 0 offset
-        right_col = column.build_column(
+        right_col = type(right_col)(
             data=right_col.data,
             dtype=right_col.dtype,
             size=right_col.size,
@@ -3535,7 +3512,7 @@ class IntervalIndex(Index):
             size=len(left_col),
             children=(left_col, right_col),
         )
-        return IntervalIndex(interval_col, name=name, closed=closed)
+        return IntervalIndex._from_column(interval_col, name=name)
 
     @classmethod
     def from_arrays(
