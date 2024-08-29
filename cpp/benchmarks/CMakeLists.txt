@@ -152,13 +152,10 @@ ConfigureBench(COPY_IF_ELSE_BENCH copying/copy_if_else.cpp)
 ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cpp)
 
 # ##################################################################################################
-# * apply_boolean_mask benchmark ------------------------------------------------------------------
-ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask.cpp)
-
-# ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   STREAM_COMPACTION_NVBENCH
+  stream_compaction/apply_boolean_mask.cpp
   stream_compaction/distinct.cpp
   stream_compaction/distinct_count.cpp
   stream_compaction/stable_distinct.cpp
@@ -325,7 +322,6 @@ ConfigureBench(
   string/filter.cpp
   string/repeat_strings.cpp
   string/replace.cpp
-  string/slice.cpp
   string/translate.cpp
   string/url_decode.cu
 )
@@ -346,6 +342,7 @@ ConfigureNVBench(
   string/like.cpp
   string/replace_re.cpp
   string/reverse.cpp
+  string/slice.cpp
   string/split.cpp
   string/split_re.cpp
 )
