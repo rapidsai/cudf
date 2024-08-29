@@ -235,16 +235,16 @@ cdef object _process_metadata(object df,
             df._index = idx
         elif set(index_col).issubset(names):
             index_data = df[index_col]
-            actual_index_names = next(iter(index_col_names.values()))
+            actual_index_names = iter(index_col_names.values())
             if index_data._num_columns == 1:
                 idx = cudf.Index._from_column(
                     index_data._columns[0],
-                    name=actual_index_names[0]
+                    name=next(actual_index_names)
                 )
             else:
                 idx = cudf.MultiIndex.from_frame(
                     index_data,
-                    names=actual_index_names
+                    names=list(actual_index_names)
                 )
             df.drop(columns=index_col, inplace=True)
             df._index = idx
