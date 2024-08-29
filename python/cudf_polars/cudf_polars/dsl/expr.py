@@ -1540,7 +1540,17 @@ class Agg(Expr):
             raise NotImplementedError("Nan propagation in groupby for min/max")
         (child,) = self.children
         ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
-        if self.request is None:
+        if self.name == "first":
+            request = plc.aggregation.nth_element(
+                0, null_handling=plc.types.NullPolicy.INCLUDE
+            )
+        elif self.name == "last":
+            request = plc.aggregation.nth_element(
+                -1, null_handling=plc.types.NullPolicy.INCLUDE
+            )
+        else:
+            request = self.request
+        if request is None:
             raise NotImplementedError(
                 f"Aggregation {self.name} in groupby"
             )  # pragma: no cover; __init__ trips first
@@ -1549,7 +1559,7 @@ class Agg(Expr):
             # Ignore nans in these groupby aggs, do this by masking
             # nans in the input
             expr = UnaryFunction(self.dtype, "mask_nans", (), expr)
-        return AggInfo([(expr, self.request, self)])
+        return AggInfo([(expr, request, self)])
 
     def _reduce(
         self, column: Column, *, request: plc.aggregation.Aggregation
