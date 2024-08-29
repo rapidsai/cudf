@@ -42,9 +42,9 @@ struct random_string_generator {
   thrust::default_random_engine engine;
   thrust::uniform_int_distribution<unsigned char> char_dist;
 
-  __host__ __device__ random_string_generator(char* c) : chars(c), char_dist(44, 122) {}
+  CUDF_HOST_DEVICE random_string_generator(char* c) : chars(c), char_dist(44, 122) {}
 
-  __host__ __device__ void operator()(thrust::tuple<int64_t, int64_t> str_begin_end)
+  __device__ void operator()(thrust::tuple<int64_t, int64_t> str_begin_end)
   {
     auto begin = thrust::get<0>(str_begin_end);
     auto end   = thrust::get<1>(str_begin_end);
@@ -65,9 +65,9 @@ struct random_number_generator {
   T lower;
   T upper;
 
-  __host__ __device__ random_number_generator(T lower, T upper) : lower(lower), upper(upper) {}
+  CUDF_HOST_DEVICE random_number_generator(T lower, T upper) : lower(lower), upper(upper) {}
 
-  __host__ __device__ T operator()(const int64_t idx) const
+  __device__ T operator()(const int64_t idx) const
   {
     if constexpr (cudf::is_integral<T>()) {
       thrust::default_random_engine engine;
