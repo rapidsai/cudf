@@ -87,6 +87,7 @@ class GPT2Tokenizer:
         mask_col = cp.full(shape=n_rows, fill_value=True)
         mask = cudf._lib.transform.bools_to_mask(as_column(mask_col))
         output_col = ListColumn(
+            data=None,
             size=n_rows,
             dtype=cudf.ListDtype(data.dtype),
             mask=mask,
@@ -95,7 +96,7 @@ class GPT2Tokenizer:
             children=(offset_col, as_column(data)),
         )
 
-        return cudf.Series(output_col).list.concat()
+        return cudf.Series._from_column(output_col).list.concat()
 
     def convert_to_encoded_str_tokens(self, text: cudf.Series) -> cudf.Series:
         """
