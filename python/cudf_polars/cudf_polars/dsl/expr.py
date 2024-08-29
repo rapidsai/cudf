@@ -841,15 +841,9 @@ class TemporalFunction(Expr):
         pl_expr.TemporalFunction.Hour: "hour",
         pl_expr.TemporalFunction.Minute: "minute",
         pl_expr.TemporalFunction.Second: "second",
-        # millisecond/microsecond/nanoseconds are implemented
-        # differently in polars, than seconds and above
-        # Instead of extracting the number of milliseconds/microseconds/nanoseconds
-        # we must get the sub-second part of the timestamp in
-        # nanoseconds and then scale appropriately
-        # TODO: this should be possible
-        # pl_expr.TemporalFunction.Millisecond: "millisecond",
-        # pl_expr.TemporalFunction.Microsecond: "microsecond",
-        # pl_expr.TemporalFunction.Nanosecond: "nanosecond",
+        pl_expr.TemporalFunction.Millisecond: "millisecond",
+        pl_expr.TemporalFunction.Microsecond: "microsecond",
+        pl_expr.TemporalFunction.Nanosecond: "nanosecond",
     }
     _supported_temporal_functions = _temporal_extraction_function_map
     _non_child = ("dtype", "name", "options")
@@ -883,6 +877,66 @@ class TemporalFunction(Expr):
         ]
         if self.name in TemporalFunction._temporal_extraction_function_map:
             (column,) = columns
+            if self.name == pl_expr.TemporalFunction.Millisecond:
+                return Column(
+                    plc.datetime.extract_datetime_component(column.obj, "millisecond")
+                )
+            if self.name == pl_expr.TemporalFunction.Microsecond:
+                milis = plc.datetime.extract_datetime_component(
+                    column.obj, "millisecond"
+                )
+                micros = plc.datetime.extract_datetime_component(
+                    column.obj, "microsecond"
+                )
+                processed_mili = plc.binaryop.binary_operation(
+                    milis,
+                    plc.interop.from_arrow(pa.scalar(1_000, type=pa.int64())),
+                    plc.binaryop.BinaryOperator.MUL,
+                    plc.types.DataType(plc.types.TypeId.INT64),
+                )
+                total_micros = plc.binaryop.binary_operation(
+                    micros,
+                    processed_mili,
+                    plc.binaryop.BinaryOperator.ADD,
+                    plc.types.DataType(plc.types.TypeId.INT64),
+                )
+                return Column(total_micros)
+            elif self.name == pl_expr.TemporalFunction.Nanosecond:
+                milis = plc.datetime.extract_datetime_component(
+                    column.obj, "millisecond"
+                )
+                micros = plc.datetime.extract_datetime_component(
+                    column.obj, "microsecond"
+                )
+                nanos = plc.datetime.extract_datetime_component(
+                    column.obj, "nanosecond"
+                )
+                processed_mili = plc.binaryop.binary_operation(
+                    milis,
+                    plc.interop.from_arrow(pa.scalar(1_000_000, type=pa.int64())),
+                    plc.binaryop.BinaryOperator.MUL,
+                    plc.types.DataType(plc.types.TypeId.INT64),
+                )
+                processed_micro = plc.binaryop.binary_operation(
+                    micros,
+                    plc.interop.from_arrow(pa.scalar(1_000, type=pa.int64())),
+                    plc.binaryop.BinaryOperator.MUL,
+                    plc.types.DataType(plc.types.TypeId.INT64),
+                )
+                total_nanos = plc.binaryop.binary_operation(
+                    nanos,
+                    processed_mili,
+                    plc.binaryop.BinaryOperator.ADD,
+                    plc.types.DataType(plc.types.TypeId.INT64),
+                )
+                total_nanos = plc.binaryop.binary_operation(
+                    total_nanos,
+                    processed_micro,
+                    plc.binaryop.BinaryOperator.ADD,
+                    plc.types.DataType(plc.types.TypeId.INT64),
+                )
+                return Column(total_nanos)
+
             return Column(
                 plc.datetime.extract_datetime_component(
                     column.obj,

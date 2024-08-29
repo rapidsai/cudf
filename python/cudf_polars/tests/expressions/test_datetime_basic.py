@@ -37,25 +37,35 @@ def test_datetime_dataframe_scan(dtype):
     assert_gpu_result_equal(query)
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
-        methodcaller("year"),
-        methodcaller("month"),
-        methodcaller("day"),
-        methodcaller("weekday"),
-        methodcaller("hour"),
-        methodcaller("minute"),
-        methodcaller("second"),
-    ],
+datetime_extract_fields = [
+    "year",
+    "month",
+    "day",
+    "weekday",
+    "hour",
+    "minute",
+    "second",
+    "millisecond",
+    "microsecond",
+    "nanosecond",
+]
+
+
+@pytest.fixture(
+    ids=datetime_extract_fields,
+    params=[methodcaller(f) for f in datetime_extract_fields],
 )
+def field(request):
+    return request.param
+
+
 def test_datetime_extract(field):
     ldf = pl.LazyFrame(
         {
             "datetimes": pl.datetime_range(
                 datetime.datetime(2020, 1, 1),
                 datetime.datetime(2021, 12, 30),
-                "3mo14h15s999ns",
+                "3mo14h15s11ms33us999ns",
                 eager=True,
             )
         }
