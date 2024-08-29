@@ -92,7 +92,7 @@ struct map_insert_fn {
       cuda::atomic_ref<size_type, SCOPE> const chunk_uniq_data_size{chunk->uniq_data_size};
 
       // Note: Adjust the following loop to use `cg::tile<map_cg_size>` if needed in the future.
-      for (thread_index_type val_idx = s_start_value_idx + t; val_idx - block_size < end_value_idx;
+      for (thread_index_type val_idx = s_start_value_idx + t; val_idx - t < end_value_idx;
            val_idx += block_size) {
         size_type is_unique      = 0;
         size_type uniq_elem_size = 0;
