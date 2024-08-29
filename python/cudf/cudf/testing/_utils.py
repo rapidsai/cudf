@@ -383,7 +383,9 @@ class cudf_timeout:
         self.start_time = time.perf_counter()
 
     def __exit__(self, *args):
-        elapsed_time = time.perf_counter() - self.start_time # Calculate elapsed time
+        elapsed_time = (
+            time.perf_counter() - self.start_time
+        )  # Calculate elapsed time
         if elapsed_time >= self.timeout:
             raise TimeoutError(
                 f"Expected to finish in {self.timeout=} seconds but took {elapsed_time=} seconds"
