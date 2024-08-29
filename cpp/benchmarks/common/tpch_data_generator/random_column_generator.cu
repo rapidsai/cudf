@@ -46,7 +46,8 @@ struct random_string_generator {
 
   __host__ __device__ void operator()(thrust::tuple<int64_t, int64_t> str_begin_end)
   {
-    auto const [begin, end] = str_begin_end;
+    auto begin = thrust::get<0>(str_begin_end);
+    auto end   = thrust::get<1>(str_begin_end);
     engine.discard(begin);
     for (auto i = begin; i < end; ++i) {
       auto ch = char_dist(engine);
