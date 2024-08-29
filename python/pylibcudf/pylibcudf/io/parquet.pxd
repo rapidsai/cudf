@@ -28,6 +28,7 @@ cpdef read_parquet(
     bool use_pandas_metadata = *,
     int64_t skip_rows = *,
     size_type nrows = *,
+    bool allow_mismatched_pq_schemas = *,
     # disabled see comment in parquet.pyx for more
     # ReaderColumnSchema reader_column_schema = *,
     # DataType timestamp_type = *
