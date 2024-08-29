@@ -4121,7 +4121,7 @@ def test_parquet_reader_mismatched_nullability(tmpdir):
     # Write tables to parquet with arrow schema for compatibility for duration column(s)
     fname1 = tmpdir.join("no-nulls.pq")
     df1.to_parquet(fname1, store_schema=True)
-    fname2 = tmpdir.join("null.pq")
+    fname2 = tmpdir.join("nulls.pq")
     df2.to_parquet(fname2, store_schema=True)
 
     # Read tables back with cudf and arrow in either order and compare
@@ -4130,4 +4130,108 @@ def test_parquet_reader_mismatched_nullability(tmpdir):
     )
     assert_eq(
         cudf.read_parquet([fname2, fname1]), pq.read_table([fname2, fname1])
+    )
+
+
+def test_parquet_reader_mismatched_nullability_structs(tmpdir):
+    data1 = [
+        {
+            "a": "a",
+            "b": {
+                "inner_a": 10,
+                "inner_b": {"inner_inner_b": 1, "inner_inner_a": 12},
+            },
+            "c": [1, 2],
+        },
+        {
+            "a": "b",
+            "b": {
+                "inner_a": 30,
+                "inner_b": {"inner_inner_b": 2, "inner_inner_a": 2},
+            },
+            "c": [3, 4],
+        },
+        {
+            "a": "c",
+            "b": {
+                "inner_a": 50,
+                "inner_b": {"inner_inner_b": 4, "inner_inner_a": 5},
+            },
+            "c": [5, 6],
+        },
+        {
+            "a": "d",
+            "b": {
+                "inner_a": 135,
+                "inner_b": {"inner_inner_b": 12, "inner_inner_a": 32},
+            },
+            "c": [7, 8],
+        },
+        {
+            "a": "e",
+            "b": {
+                "inner_a": 1,
+                "inner_b": {"inner_inner_b": 1, "inner_inner_a": 5},
+            },
+            "c": [9, 10],
+        },
+        {
+            "a": "f",
+            "b": {
+                "inner_a": 32,
+                "inner_b": {"inner_inner_b": 1, "inner_inner_a": 6},
+            },
+            "c": [11, 12],
+        },
+    ]
+
+    data2 = [
+        {
+            "a": "g",
+            "b": {
+                "inner_a": 10,
+                "inner_b": {"inner_inner_b": None, "inner_inner_a": None},
+            },
+            "c": None,
+        },
+        {
+            "a": "h",
+            "b": {
+                "inner_a": 30,
+                "inner_b": {"inner_inner_b": 1, "inner_inner_a": 2},
+            },
+            "c": [13, 14],
+        },
+        {"a": "i", "b": {"inner_a": None, "inner_b": None}, "c": [15, 16]},
+        {"a": "j", "b": None, "c": [8, 10]},
+        {"a": None, "b": {"inner_a": None, "inner_b": None}, "c": None},
+        None,
+        {
+            "a": None,
+            "b": {"inner_a": None, "inner_b": {"inner_inner_b": None}},
+            "c": [18, 19],
+        },
+        {"a": None, "b": None, "c": None},
+    ]
+
+    pa_table1 = pa.Table.from_pydict({"struct": data1})
+    df1 = cudf.DataFrame.from_arrow(pa_table1)
+
+    pa_table2 = pa.Table.from_pydict({"struct": data2})
+    df2 = cudf.DataFrame.from_arrow(pa_table2)
+
+    # Write tables to parquet
+    buf1 = BytesIO()
+    df1.to_parquet(buf1)
+    buf2 = BytesIO()
+    df2.to_parquet(buf2)
+
+    # Read tables back with cudf and compare with expected.
+    assert_eq(
+        cudf.read_parquet([buf1, buf2]),
+        cudf.concat([df1, df2]).reset_index().drop(columns=["index"]),
+    )
+    assert_eq(
+        cudf.read_parquet([buf2, buf1]),
+        cudf.concat([df2, df1]).reset_index().drop(columns=["index"]),
     )
