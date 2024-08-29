@@ -736,7 +736,10 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
         if arrow_to_pandas is not None:
             raise NotImplementedError()
         if open_file_options is not None:
-            raise NotImplementedError()
+            raise ValueError(
+                "The open_file_options argument is no longer supported "
+                "by the 'cudf' backend."
+            )
 
         if filters is not None:
             for filter in flatten(filters, container=list):

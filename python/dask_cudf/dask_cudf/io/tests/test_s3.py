@@ -127,7 +127,8 @@ def test_read_parquet_open_file_options_raises():
         )
 
 
-def test_read_parquet_filesystem(s3_base, s3so, pdf):
+@pytest.mark.parametrize("filesystem", ["arrow", "fsspec"])
+def test_read_parquet_filesystem(s3_base, s3so, pdf, filesystem):
     fname = "test_parquet_filesystem.parquet"
     bucket = "parquet"
     buffer = BytesIO()
@@ -135,20 +136,10 @@ def test_read_parquet_filesystem(s3_base, s3so, pdf):
     buffer.seek(0)
     with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
         path = f"s3://{bucket}/{fname}"
-
-        # Cannot pass filesystem="arrow"
-        with pytest.raises(ValueError):
-            dask_cudf.read_parquet(
-                path,
-                storage_options=s3so,
-                filesystem="arrow",
-            )
-
-        # Can pass filesystem="fsspec"
         df = dask_cudf.read_parquet(
             path,
             storage_options=s3so,
-            filesystem="fsspec",
+            filesystem=filesystem,
         )
         assert df.b.sum().compute() == 9
 
