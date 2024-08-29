@@ -24,11 +24,10 @@
 
 #include <rmm/resource_ref.hpp>
 
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
-
-#include <filesystem>
 
 /**
  * @brief Base test fixture for JSON reader tests
@@ -176,7 +175,7 @@ TEST_F(JsonReaderTest, ByteRange_MultiSource)
 
 TEST_F(JsonReaderTest, ByteRangeWithRealloc_MultiSource)
 {
-  std::string long_string = "haha";
+  std::string long_string     = "haha";
   std::size_t log_repetitions = 10;
   long_string.reserve(long_string.size() * log_repetitions);
   for (std::size_t i = 0; i < log_repetitions; i++) {
@@ -184,25 +183,24 @@ TEST_F(JsonReaderTest, ByteRangeWithRealloc_MultiSource)
   }
 
   auto json_string = [&long_string]() {
-    std::string json_string = R"(
+    std::string json_string   = R"(
       { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
       { "a": { "y" : 6}, "b" : [4, 5   ], "c": 12 }
       { "a": { "y" : 6}, "b" : [6      ], "c": 13 }
       { "a": { "y" : 6}, "b" : [7      ], "c": 14 })";
     std::string replace_chars = "c";
-    std::size_t pos = json_string.find(replace_chars); 
-    while (pos != std::string::npos) { 
-        // Replace the substring with the specified string 
-        json_string.replace(pos, replace_chars.size(), long_string); 
-  
-        // Find the next occurrence of the substring 
-        pos = json_string.find(replace_chars, 
-                         pos + long_string.size()); 
+    std::size_t pos           = json_string.find(replace_chars);
+    while (pos != std::string::npos) {
+      // Replace the substring with the specified string
+      json_string.replace(pos, replace_chars.size(), long_string);
+
+      // Find the next occurrence of the substring
+      pos = json_string.find(replace_chars, pos + long_string.size());
     }
     return json_string;
   }();
 
-  auto filename                 = temp_env->get_temp_dir() + "ParseInRangeIntegers.json";
+  auto filename = temp_env->get_temp_dir() + "ParseInRangeIntegers.json";
   {
     std::ofstream outfile(filename, std::ofstream::out);
     outfile << json_string;
@@ -249,19 +247,19 @@ TEST_F(JsonReaderTest, ByteRangeWithRealloc_MultiSource)
   }
 }
 
-TEST_F(JsonReaderTest, ReadFromFiles) 
+TEST_F(JsonReaderTest, ReadFromFiles)
 {
-  namespace fs = std::filesystem;
+  namespace fs        = std::filesystem;
   std::string dirpath = "/home/coder/datasets/adattagupta/redpajama_debug_2/";
   std::set<fs::path> filepaths;
-  for(auto &entry : fs::directory_iterator(dirpath))
+  for (auto& entry : fs::directory_iterator(dirpath))
     filepaths.insert(entry.path());
-  
+
   int numfiles = 27;
   std::vector<std::string> filenames;
   std::vector<uintmax_t> filesizes;
-  for(auto &filepath : filepaths) {
-    if(!numfiles) break;
+  for (auto& filepath : filepaths) {
+    if (!numfiles) break;
     filenames.push_back(filepath.string());
     filesizes.push_back(fs::file_size(filepath));
     numfiles--;
@@ -292,9 +290,9 @@ TEST_F(JsonReaderTest, ReadFromFiles)
   cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(json_lines_options);
 }
 
-TEST_F(JsonReaderTest, LolFromFiles) 
+TEST_F(JsonReaderTest, LolFromFiles)
 {
-  namespace fs = std::filesystem;
+  namespace fs         = std::filesystem;
   std::string filename = "/home/coder/cudf/datasets/lol.json";
 
   cudf::io::json_reader_options json_lines_options =

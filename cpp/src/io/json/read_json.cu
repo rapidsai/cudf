@@ -138,7 +138,7 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
   auto should_load_all_sources = !chunk_size || chunk_size >= total_source_size - chunk_offset;
   chunk_size = should_load_all_sources ? total_source_size - chunk_offset : chunk_size;
 
-  int num_subchunks_prealloced  = should_load_all_sources ? 0 : max_subchunks_prealloced;
+  int num_subchunks_prealloced        = should_load_all_sources ? 0 : max_subchunks_prealloced;
   std::size_t const size_per_subchunk = estimate_size_per_subchunk(chunk_size);
 
   // The allocation for single source compressed input is estimated by assuming a ~4:1
@@ -169,8 +169,11 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
     // Find next delimiter
     std::int64_t next_delim_pos     = -1;
     std::size_t next_subchunk_start = chunk_offset + chunk_size;
-    while(next_delim_pos < buffer_offset) {
-      for(int subchunk = 0; subchunk < num_subchunks_prealloced && next_delim_pos < buffer_offset && next_subchunk_start < total_source_size; subchunk++) {
+    while (next_delim_pos < buffer_offset) {
+      for (int subchunk = 0;
+           subchunk < num_subchunks_prealloced && next_delim_pos < buffer_offset &&
+           next_subchunk_start < total_source_size;
+           subchunk++) {
         buffer_offset += readbufspan.size();
         readbufspan    = ingest_raw_input(bufspan.last(buffer_size - buffer_offset),
                                        sources,
@@ -181,19 +184,20 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
         next_delim_pos = find_first_delimiter(readbufspan, '\n', stream) + buffer_offset;
         next_subchunk_start += size_per_subchunk;
       }
-      if(next_delim_pos < buffer_offset) {
-        if(next_subchunk_start >= total_source_size) {
-          // If we have reached the end of source list but the source does not terminate with a newline character
+      if (next_delim_pos < buffer_offset) {
+        if (next_subchunk_start >= total_source_size) {
+          // If we have reached the end of source list but the source does not terminate with a
+          // newline character
           next_delim_pos = buffer_offset + readbufspan.size();
-        }
-        else {
-          // Our buffer_size estimate is insufficient to read until the end of the line! We need to allocate more memory and try again!
+        } else {
+          // Our buffer_size estimate is insufficient to read until the end of the line! We need to
+          // allocate more memory and try again!
           num_subchunks_prealloced *= 2;
-          buffer_size =
-            reader_compression != compression_type::NONE
-              ? 2 * buffer_size
-              : std::min(total_source_size, buffer_size + num_subchunks_prealloced * size_per_subchunk) +
-                  num_extra_delimiters;
+          buffer_size = reader_compression != compression_type::NONE
+                          ? 2 * buffer_size
+                          : std::min(total_source_size,
+                                     buffer_size + num_subchunks_prealloced * size_per_subchunk) +
+                              num_extra_delimiters;
           buffer.resize(buffer_size, stream);
           bufspan = device_span<char>(reinterpret_cast<char*>(buffer.data()), buffer.size());
         }
