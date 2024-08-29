@@ -119,11 +119,6 @@ There are a few known limitations that you should be aware of:
   [value mutability](https://pandas.pydata.org/pandas-docs/stable/getting_started/overview.html#mutability-and-copying-of-data)
   of Pandas objects is not always guaranteed. You should follow the
   pandas recommendation to favor immutable operations.
-- `cudf.pandas` can't currently interface smoothly with functions that
-  interact with objects using a C API (such as the Python or NumPy C
-  API)
-  - For example, you can write `torch.tensor(df.values)` but not
-    `torch.from_numpy(df.values)`, as the latter uses the NumPy C API
 - For performance reasons, joins and join-based operations are not
   currently implemented to maintain the same row ordering as standard
   pandas
