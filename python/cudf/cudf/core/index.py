@@ -1443,7 +1443,22 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                     output[:break_idx].replace("'", "") + output[break_idx:]
                 )
             else:
-                output = repr(preprocess.to_pandas())
+                # Too many non-unique categories will cause
+                # the output to take too long. In this case, we
+                # split the categories into data and categories
+                # and generate the repr separately and
+                # merge them.
+                pd_cats = pd.Categorical(
+                    preprocess.astype(preprocess.categories.dtype).to_pandas()
+                )
+                pd_preprocess = pd.CategoricalIndex(pd_cats)
+                data_repr = repr(pd_preprocess).split("\n")
+                pd_preprocess.dtype._categories = (
+                    preprocess.categories.to_pandas()
+                )
+                pd_preprocess.dtype._ordered = preprocess.dtype.ordered
+                cats_repr = repr(pd_preprocess).split("\n")
+                output = "\n".join(data_repr[:-1] + cats_repr[-1:])
 
             output = output.replace("nan", str(cudf.NA))
         elif preprocess._values.nullable:
@@ -3065,22 +3080,8 @@ class CategoricalIndex(Index):
         name = _getdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
             data = data
-        elif isinstance(data, pd.Series) and (
-            isinstance(data.dtype, pd.CategoricalDtype)
-        ):
-            codes_data = column.as_column(data.cat.codes.values)
-            data = column.build_categorical_column(
-                categories=data.cat.categories,
-                codes=codes_data,
-                ordered=data.cat.ordered,
-            )
-        elif isinstance(data, (pd.Categorical, pd.CategoricalIndex)):
-            codes_data = column.as_column(data.codes)
-            data = column.build_categorical_column(
-                categories=data.categories,
-                codes=codes_data,
-                ordered=data.ordered,
-            )
+        elif isinstance(getattr(data, "dtype", None), pd.CategoricalDtype):
+            data = column.as_column(data)
         else:
             data = column.as_column(
                 data, dtype="category" if dtype is None else dtype
@@ -3250,7 +3251,7 @@ def interval_range(
     freq=None,
     name=None,
     closed="right",
-) -> "IntervalIndex":
+) -> IntervalIndex:
     """
     Returns a fixed frequency IntervalIndex.
 
@@ -3347,6 +3348,16 @@ def interval_range(
     )
     left_col = bin_edges.slice(0, len(bin_edges) - 1)
     right_col = bin_edges.slice(1, len(bin_edges))
+    # For indexing, children should both have 0 offset
+    right_col = type(right_col)(
+        data=right_col.data,
+        dtype=right_col.dtype,
+        size=right_col.size,
+        mask=right_col.mask,
+        offset=0,
+        null_count=right_col.null_count,
+        children=right_col.children,
+    )
 
     if len(right_col) == 0 or len(left_col) == 0:
         dtype = IntervalDtype("int64", closed)

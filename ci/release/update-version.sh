@@ -49,6 +49,7 @@ DEPENDENCIES=(
   dask-cuda
   dask-cudf
   kvikio
+  libcudf
   libkvikio
   librmm
   pylibcudf
