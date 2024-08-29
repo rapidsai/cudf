@@ -28,6 +28,8 @@
 #include <string>
 #include <vector>
 
+#include <filesystem>
+
 /**
  * @brief Base test fixture for JSON reader tests
  */
@@ -170,4 +172,137 @@ TEST_F(JsonReaderTest, ByteRange_MultiSource)
     // cannot use EQUAL due to concatenate removing null mask
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(current_reader_table.tbl->view(), result->view());
   }
+}
+
+TEST_F(JsonReaderTest, ByteRangeWithRealloc_MultiSource)
+{
+  std::string long_string = "haha";
+  std::size_t log_repetitions = 10;
+  long_string.reserve(long_string.size() * log_repetitions);
+  for (std::size_t i = 0; i < log_repetitions; i++) {
+    long_string += long_string;
+  }
+
+  auto json_string = [&long_string]() {
+    std::string json_string = R"(
+      { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
+      { "a": { "y" : 6}, "b" : [4, 5   ], "c": 12 }
+      { "a": { "y" : 6}, "b" : [6      ], "c": 13 }
+      { "a": { "y" : 6}, "b" : [7      ], "c": 14 })";
+    std::string replace_chars = "c";
+    std::size_t pos = json_string.find(replace_chars); 
+    while (pos != std::string::npos) { 
+        // Replace the substring with the specified string 
+        json_string.replace(pos, replace_chars.size(), long_string); 
+  
+        // Find the next occurrence of the substring 
+        pos = json_string.find(replace_chars, 
+                         pos + long_string.size()); 
+    }
+    return json_string;
+  }();
+
+  auto filename                 = temp_env->get_temp_dir() + "ParseInRangeIntegers.json";
+  {
+    std::ofstream outfile(filename, std::ofstream::out);
+    outfile << json_string;
+  }
+
+  constexpr int num_sources = 5;
+  std::vector<std::string> filepaths(num_sources, filename);
+
+  // Initialize parsing options (reading json lines)
+  cudf::io::json_reader_options json_lines_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filepaths})
+      .lines(true)
+      .compression(cudf::io::compression_type::NONE)
+      .recovery_mode(cudf::io::json_recovery_mode_t::FAIL);
+
+  // Read full test data via existing, nested JSON lines reader
+  cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(json_lines_options);
+
+  auto file_paths = json_lines_options.get_source().filepaths();
+  std::vector<std::unique_ptr<cudf::io::datasource>> datasources;
+  for (auto& fp : file_paths) {
+    datasources.emplace_back(cudf::io::datasource::create(fp));
+  }
+
+  // Test for different chunk sizes
+  std::vector<int> chunk_sizes{7, 10, 15, 20, 40, 50, 100, 200, 500, 1000, 2000};
+  for (auto chunk_size : chunk_sizes) {
+    auto const tables = split_byte_range_reading(datasources,
+                                                 json_lines_options,
+                                                 chunk_size,
+                                                 cudf::get_default_stream(),
+                                                 rmm::mr::get_current_device_resource());
+
+    auto table_views = std::vector<cudf::table_view>(tables.size());
+    std::transform(tables.begin(), tables.end(), table_views.begin(), [](auto& table) {
+      return table.tbl->view();
+    });
+    auto result = cudf::concatenate(table_views);
+
+    // Verify that the data read via chunked reader matches the data read via nested JSON reader
+    // cannot use EQUAL due to concatenate removing null mask
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(current_reader_table.tbl->view(), result->view());
+    break;
+  }
+}
+
+TEST_F(JsonReaderTest, ReadFromFiles) 
+{
+  namespace fs = std::filesystem;
+  std::string dirpath = "/home/coder/datasets/adattagupta/redpajama_debug_2/";
+  std::set<fs::path> filepaths;
+  for(auto &entry : fs::directory_iterator(dirpath))
+    filepaths.insert(entry.path());
+  
+  int numfiles = 27;
+  std::vector<std::string> filenames;
+  std::vector<uintmax_t> filesizes;
+  for(auto &filepath : filepaths) {
+    if(!numfiles) break;
+    filenames.push_back(filepath.string());
+    filesizes.push_back(fs::file_size(filepath));
+    numfiles--;
+  }
+
+  /*
+  filenames.erase(filenames.begin());
+  filesizes.erase(filesizes.begin());
+  */
+
+  /*
+  std::cout << "intmax = " << std::numeric_limits<int>::max() << std::endl;
+  std::cout << "files being parsed: \n";
+  uintmax_t prefsum = 0;
+  for(size_t i = 0; i < filenames.size(); i++) {
+    prefsum += filesizes[i];
+    std::cout << filenames[i] << " " << filesizes[i] << " " << prefsum << std::endl;
+  }
+  */
+
+  cudf::io::json_reader_options json_lines_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filenames})
+      .lines(true)
+      .compression(cudf::io::compression_type::NONE)
+      .recovery_mode(cudf::io::json_recovery_mode_t::FAIL);
+
+  // Read full test data via existing, nested JSON lines reader
+  cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(json_lines_options);
+}
+
+TEST_F(JsonReaderTest, LolFromFiles) 
+{
+  namespace fs = std::filesystem;
+  std::string filename = "/home/coder/cudf/datasets/lol.json";
+
+  cudf::io::json_reader_options json_lines_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filename})
+      .lines(true)
+      .compression(cudf::io::compression_type::NONE)
+      .recovery_mode(cudf::io::json_recovery_mode_t::FAIL);
+
+  // Read full test data via existing, nested JSON lines reader
+  cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(json_lines_options);
 }
