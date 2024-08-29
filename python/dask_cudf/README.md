@@ -54,8 +54,7 @@ import dask_cudf
 df = dask_cudf.read_parquet("data.parquet", ...)
 ```
 
-> [!NOTE]
-> This API is used implicitly by the Dask DataFrame API when the `"cudf"` backend is enabled. Therefore, using it directly will not provide any performance benefit over the CPU/GPU-portable `dask.dataframe` API. Also, using some parts of the explicit API are incompatible with automatic query planning (see the next section).
+This API is used implicitly by the Dask DataFrame API when the `"cudf"` backend is enabled. Therefore, using it directly will not provide any performance benefit over the CPU/GPU-portable `dask.dataframe` API. Also, using some parts of the explicit API are incompatible with automatic query planning (see the next section).
 
 See the [Dask cuDF's API documentation](https://docs.rapids.ai/api/dask-cudf/stable/) for further information.
 
@@ -63,7 +62,7 @@ See the [Dask cuDF's API documentation](https://docs.rapids.ai/api/dask-cudf/sta
 
 Dask cuDF now provides automatic query planning by default (RAPIDS 24.06+). As long as the `"dataframe.query-planning"` configuration is set to `True` (the default) when `dask.dataframe` is first imported, [Dask Expressions](https://github.com/dask/dask-expr) will be used under the hood.
 
-For example, the following user code will automatically benefit from predicate pushdown when the result is computed.
+For example, the following code will automatically benefit from predicate pushdown when the result is computed.
 
 ```python
 df = dd.read_parquet("/my/parquet/dataset/")
@@ -85,7 +84,7 @@ Projection: columns='A'
 ```
 
 > [!NOTE]
-> Dask will automatically simplify the expression graph (within `optimize`) when the result is converted to a task graph (via `compute` or `persist`). The user does not need to call `simplify` themself.
+> Dask will automatically simplify the expression graph (within `optimize`) when the result is converted to a task graph (via `compute` or `persist`). You do not need to call `simplify` yourself.
 
 
 ## Using Multiple GPUs and Multiple Nodes
