@@ -173,17 +173,7 @@ def _drop_columns(f: Frame, columns: abc.Iterable, errors: str):
 def _indices_from_labels(obj, labels):
     if not isinstance(labels, cudf.MultiIndex):
         labels = cudf.core.column.as_column(labels)
-
-        if isinstance(obj.index.dtype, cudf.CategoricalDtype):
-            labels = labels.astype("category")
-            codes = labels.codes.astype(obj.index.codes.dtype)
-            labels = cudf.core.column.build_categorical_column(
-                categories=labels.dtype.categories,
-                codes=codes,
-                ordered=labels.dtype.ordered,
-            )
-        else:
-            labels = labels.astype(obj.index.dtype)
+        labels = labels.astype(obj.index.dtype)
         idx_labels = cudf.Index._from_column(labels)
     else:
         idx_labels = labels
@@ -3198,8 +3188,10 @@ class IndexedFrame(Frame):
         """
         subset = self._preprocess_subset(subset)
 
+        name = None
         if isinstance(self, cudf.Series):
             columns = [self._column]
+            name = self.name
         else:
             columns = [self._data[n] for n in subset]
         distinct = libcudf.stream_compaction.distinct_indices(
@@ -3211,7 +3203,7 @@ class IndexedFrame(Frame):
             [as_column(True, length=len(self), dtype=bool)],
             bounds_check=False,
         )[0]
-        return cudf.Series._from_column(result, index=self.index)
+        return cudf.Series._from_column(result, index=self.index, name=name)
 
     @_performance_tracking
     def _empty_like(self, keep_index=True) -> Self:

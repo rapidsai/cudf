@@ -18,7 +18,7 @@ import itertools
 import types
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pyarrow as pa
 import pylibcudf as plc
@@ -31,7 +31,7 @@ from cudf_polars.containers import DataFrame, NamedColumn
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
     from typing import Literal
 
     from cudf_polars.typing import Schema
@@ -310,7 +310,8 @@ class Scan(IR):
                 *(
                     (piece.tbl, piece.column_names(include_children=False))
                     for piece in pieces
-                )
+                ),
+                strict=True,
             )
             df = DataFrame.from_table(
                 plc.concatenate.concatenate(list(tables)),
@@ -426,7 +427,8 @@ class DataFrameScan(IR):
             pdf = pdf.select(self.projection)
         df = DataFrame.from_polars(pdf)
         assert all(
-            c.obj.type() == dtype for c, dtype in zip(df.columns, self.schema.values())
+            c.obj.type() == dtype
+            for c, dtype in zip(df.columns, self.schema.values(), strict=True)
         )
         if self.predicate is not None:
             (mask,) = broadcast(self.predicate.evaluate(df), target_length=df.num_rows)
@@ -600,9 +602,10 @@ class GroupBy(IR):
         for i, table in enumerate(raw_tables):
             (column,) = table.columns()
             raw_columns.append(NamedColumn(column, f"tmp{i}"))
-        mapping = dict(zip(replacements, raw_columns))
+        mapping = dict(zip(replacements, raw_columns, strict=True))
         result_keys = [
-            NamedColumn(gk, k.name) for gk, k in zip(group_keys.columns(), keys)
+            NamedColumn(gk, k.name)
+            for gk, k in zip(group_keys.columns(), keys, strict=True)
         ]
         result_subs = DataFrame(raw_columns)
         results = [
@@ -752,7 +755,9 @@ class Join(IR):
             columns = plc.join.cross_join(left.table, right.table).columns()
             left_cols = [
                 NamedColumn(new, old.name).sorted_like(old)
-                for new, old in zip(columns[: left.num_columns], left.columns)
+                for new, old in zip(
+                    columns[: left.num_columns], left.columns, strict=True
+                )
             ]
             right_cols = [
                 NamedColumn(
@@ -761,7 +766,9 @@ class Join(IR):
                     if old.name not in left.column_names_set
                     else f"{old.name}{suffix}",
                 )
-                for new, old in zip(columns[left.num_columns :], right.columns)
+                for new, old in zip(
+                    columns[left.num_columns :], right.columns, strict=True
+                )
             ]
             return DataFrame([*left_cols, *right_cols])
         # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
@@ -803,6 +810,7 @@ class Join(IR):
                         for left_col, right_col in zip(
                             left.select_columns(left_on.column_names_set),
                             right.select_columns(right_on.column_names_set),
+                            strict=True,
                         )
                     )
                 )
@@ -909,7 +917,7 @@ class Distinct(IR):
         result = DataFrame(
             [
                 NamedColumn(c, old.name).sorted_like(old)
-                for c, old in zip(table.columns(), df.columns)
+                for c, old in zip(table.columns(), df.columns, strict=True)
             ]
         )
         if keys_sorted or self.stable:
@@ -974,7 +982,8 @@ class Sort(IR):
             self.null_order,
         )
         columns = [
-            NamedColumn(c, old.name) for c, old in zip(table.columns(), df.columns)
+            NamedColumn(c, old.name)
+            for c, old in zip(table.columns(), df.columns, strict=True)
         ]
         # If a sort key is in the result table, set the sortedness property
         for k, i in enumerate(keys_in_result):
@@ -1089,7 +1098,7 @@ class MapFunction(IR):
             # final tag is "swapping" which is useful for the
             # optimiser (it blocks some pushdown operations)
             old, new, _ = self.options
-            return df.rename_columns(dict(zip(old, new)))
+            return df.rename_columns(dict(zip(old, new, strict=True)))
         elif self.name == "explode":
             df = self.df.evaluate(cache=cache)
             ((to_explode,),) = self.options

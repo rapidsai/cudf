@@ -22,6 +22,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/table/table.hpp>
