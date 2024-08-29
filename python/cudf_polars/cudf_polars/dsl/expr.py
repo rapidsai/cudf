@@ -961,7 +961,7 @@ class TemporalFunction(Expr):
         self.name = name
         self.children = children
         if self.name != pl_expr.TemporalFunction.Year:
-            raise NotImplementedError(f"String function {self.name}")
+            raise NotImplementedError(f"Temporal function {self.name}")
 
     def do_evaluate(
         self,
