@@ -35,7 +35,7 @@ void calculate_bandwidth(nvbench::state& state)
   cudf::size_type const output_size = fraction * n_rows;
   int64_t const mask_size = sizeof(bool) * n_rows + cudf::bitmask_allocation_size_bytes(n_rows);
   int64_t const validity_bytes_in =
-    (fraction >= 1.0f / 32) ? cudf::bitmask_allocation_size_bytes(n_rows) : 4 * output_size;
+    (fraction >= 1.0 / 32) ? cudf::bitmask_allocation_size_bytes(n_rows) : 4 * output_size;
   int64_t const validity_bytes_out = cudf::bitmask_allocation_size_bytes(output_size);
   int64_t const column_bytes_out   = sizeof(T) * output_size;
   int64_t const column_bytes_in    = column_bytes_out;  // we only read unmasked inputs
