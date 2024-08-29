@@ -26,6 +26,7 @@ cdef parquet_reader_options _setup_parquet_reader_options(
     bool use_pandas_metadata = True,
     int64_t skip_rows = 0,
     size_type nrows = -1,
+    bool allow_mismatched_pq_schemas=False,
     # ReaderColumnSchema reader_column_schema = None,
     # DataType timestamp_type = DataType(type_id.EMPTY)
 ):
@@ -34,6 +35,7 @@ cdef parquet_reader_options _setup_parquet_reader_options(
         parquet_reader_options.builder(source_info.c_obj)
         .convert_strings_to_categories(convert_strings_to_categories)
         .use_pandas_metadata(use_pandas_metadata)
+        .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
         .use_arrow_schema(True)
         .build()
     )
@@ -80,6 +82,9 @@ cdef class ChunkedParquetReader:
     pass_read_limit : size_t, default 1024000000
         Limit on the amount of memory used for reading and decompressing data
         or 0 if there is no limit.
+    allow_mismatched_pq_schemas : bool, default False
+        Whether to read (matching) columns specified in `columns` from
+        the input files with otherwise mismatched schemas.
     """
     def __init__(
         self,
@@ -91,7 +96,8 @@ cdef class ChunkedParquetReader:
         int64_t skip_rows = 0,
         size_type nrows = -1,
         size_t chunk_read_limit=0,
-        size_t pass_read_limit=1024000000
+        size_t pass_read_limit=1024000000,
+        bool allow_mismatched_pq_schemas=False
     ):
 
         cdef parquet_reader_options opts = _setup_parquet_reader_options(
@@ -103,6 +109,7 @@ cdef class ChunkedParquetReader:
             use_pandas_metadata=use_pandas_metadata,
             skip_rows=skip_rows,
             nrows=nrows,
+            allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
         )
 
         with nogil:
@@ -152,6 +159,7 @@ cpdef read_parquet(
     bool use_pandas_metadata = True,
     int64_t skip_rows = 0,
     size_type nrows = -1,
+    bool allow_mismatched_pq_schemas = False,
     # Disabled, these aren't used by cudf-python
     # we should only add them back in if there's user demand
     # ReaderColumnSchema reader_column_schema = None,
@@ -179,6 +187,9 @@ cpdef read_parquet(
         The number of rows to skip from the start of the file.
     nrows : size_type, default -1
         The number of rows to read. By default, read the entire file.
+    allow_mismatched_pq_schemas : bool, default False
+        If True, enable reading (matching) columns specified in `columns`
+        from the input files with otherwise mismatched schemas.
 
     Returns
     -------
@@ -195,6 +206,7 @@ cpdef read_parquet(
         use_pandas_metadata,
         skip_rows,
         nrows,
+        allow_mismatched_pq_schemas,
     )
 
     with nogil:
