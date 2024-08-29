@@ -20,7 +20,8 @@ from pyarrow import dataset as ds
 import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
-from cudf.core.column import as_column, build_categorical_column, column_empty
+from cudf.core.column import as_column, column_empty
+from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
 
@@ -513,6 +514,7 @@ def read_parquet(
     dataset_kwargs=None,
     nrows=None,
     skip_rows=None,
+    allow_mismatched_pq_schemas=False,
     *args,
     **kwargs,
 ):
@@ -621,6 +623,7 @@ def read_parquet(
         dataset_kwargs=dataset_kwargs,
         nrows=nrows,
         skip_rows=skip_rows,
+        allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
         **kwargs,
     )
     # Apply filters row-wise (if any are defined), and return
@@ -811,12 +814,17 @@ def _parquet_to_frame(
                     partition_categories[name].index(value),
                     length=_len,
                 )
-                dfs[-1][name] = build_categorical_column(
-                    categories=partition_categories[name],
-                    codes=codes,
+                codes = as_unsigned_codes(
+                    len(partition_categories[name]), codes
+                )
+                dfs[-1][name] = CategoricalColumn(
+                    data=None,
                     size=codes.size,
+                    dtype=cudf.CategoricalDtype(
+                        categories=partition_categories[name], ordered=False
+                    ),
                     offset=codes.offset,
-                    ordered=False,
+                    children=(codes,),
                 )
             else:
                 # Not building categorical columns, so
@@ -859,6 +867,7 @@ def _read_parquet(
     use_pandas_metadata=None,
     nrows=None,
     skip_rows=None,
+    allow_mismatched_pq_schemas=False,
     *args,
     **kwargs,
 ):
@@ -883,6 +892,7 @@ def _read_parquet(
                 use_pandas_metadata=use_pandas_metadata,
                 nrows=nrows if nrows is not None else -1,
                 skip_rows=skip_rows if skip_rows is not None else 0,
+                allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
             )
         else:
             if nrows is None:
@@ -896,6 +906,7 @@ def _read_parquet(
                 use_pandas_metadata=use_pandas_metadata,
                 nrows=nrows,
                 skip_rows=skip_rows,
+                allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
             )
     else:
         if (

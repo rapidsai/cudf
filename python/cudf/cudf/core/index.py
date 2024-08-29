@@ -1470,6 +1470,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 pd_preprocess.dtype._categories = (
                     preprocess.categories.to_pandas()
                 )
+                pd_preprocess.dtype._ordered = preprocess.dtype.ordered
                 cats_repr = repr(pd_preprocess).split("\n")
                 output = "\n".join(data_repr[:-1] + cats_repr[-1:])
 
@@ -3093,22 +3094,8 @@ class CategoricalIndex(Index):
         name = _getdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
             data = data
-        elif isinstance(data, pd.Series) and (
-            isinstance(data.dtype, pd.CategoricalDtype)
-        ):
-            codes_data = column.as_column(data.cat.codes.values)
-            data = column.build_categorical_column(
-                categories=data.cat.categories,
-                codes=codes_data,
-                ordered=data.cat.ordered,
-            )
-        elif isinstance(data, (pd.Categorical, pd.CategoricalIndex)):
-            codes_data = column.as_column(data.codes)
-            data = column.build_categorical_column(
-                categories=data.categories,
-                codes=codes_data,
-                ordered=data.ordered,
-            )
+        elif isinstance(getattr(data, "dtype", None), pd.CategoricalDtype):
+            data = column.as_column(data)
         else:
             data = column.as_column(
                 data, dtype="category" if dtype is None else dtype
