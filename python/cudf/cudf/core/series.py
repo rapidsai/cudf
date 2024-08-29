@@ -377,7 +377,10 @@ class _SeriesLocIndexer(_FrameIndexer):
                     warnings.warn(warn_msg, FutureWarning)
                     return arg
             try:
-                indices = self._frame.index._column.indices_of(arg)
+                if isinstance(self._frame.index, RangeIndex):
+                    indices = self._frame.index._indices_of(arg)
+                else:
+                    indices = self._frame.index._column.indices_of(arg)
                 if (n := len(indices)) == 0:
                     raise KeyError("Label scalar is out of bounds")
                 elif n == 1:
