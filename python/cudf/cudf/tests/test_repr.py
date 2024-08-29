@@ -1480,3 +1480,22 @@ def test_interval_index_repr():
     gi = cudf.from_pandas(pi)
 
     assert repr(pi) == repr(gi)
+
+
+def test_large_unique_categories_repr():
+    # Unfortunately, this is a long running test (takes about 1 minute)
+    # and there is no way we can reduce the time
+    pi = pd.CategoricalIndex(range(100_000_000))
+    gi = cudf.CategoricalIndex(range(100_000_000))
+    expected_repr = repr(pi)
+    with utils.cudf_timeout(2, timeout_message="Failed to repr fast enough"):
+        actual_repr = repr(gi)
+    assert expected_repr == actual_repr
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_categorical_index_ordered(ordered):
+    pi = pd.CategoricalIndex(range(10), ordered=ordered)
+    gi = cudf.CategoricalIndex(range(10), ordered=ordered)
+
+    assert repr(pi) == repr(gi)
