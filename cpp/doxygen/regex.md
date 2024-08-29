@@ -17,7 +17,7 @@ The details are based on features documented at https://www.regular-expressions.
 
 **Note:** The alternation character is the pipe character `|` and not the character included in the tables on this page. There is an issue including the pipe character inside the table markdown that is rendered by doxygen.
 
-Only the `\n` character is recognized as a line break. The [cudf::strings::regex_flags::EXT_NEWLINE](@ref cudf::strings::regex_flags) increases the set of line break characters to include:
+By default, only the `\n` character is recognized as a line break. The [cudf::strings::regex_flags::EXT_NEWLINE](@ref cudf::strings::regex_flags) increases the set of line break characters to include:
 - Paragraph separator (Unicode: `2029`, UTF-8: `E280A9`)
 - Line separator (Unicode: `2028`, UTF-8: `E280A8`)
 - Next line (Unicode: `0085`, UTF-8: `C285`)
