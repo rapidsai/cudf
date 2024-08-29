@@ -528,6 +528,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
             name=self.name,
         )
 
+    def to_frame(
+        self, index: bool = True, name: Hashable = no_default
+    ) -> cudf.DataFrame:
+        return self._as_int_index().to_frame(index=index, name=name)
+
     @property
     def is_unique(self) -> bool:
         return True
