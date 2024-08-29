@@ -188,16 +188,18 @@ std::unique_ptr<cudf::column> generate_random_string_column_from_set(
   CUDF_FUNC_RANGE();
   // Build a gather map of random strings to choose from
   // The size of the string sets always fits within 16-bit integers
+  auto const indices =
+    generate_primary_key_column(cudf::numeric_scalar<int16_t>(0), set.size(), stream, mr);
   auto const keys       = cudf::test::strings_column_wrapper(set.begin(), set.end()).release();
-  auto const gather_map = cudf::table_view({keys->view()});
+  auto const gather_map = cudf::table_view({indices->view(), keys->view()});
 
   // Build a column of random keys to gather from the set
-  auto const indices =
+  auto const gather_keys =
     generate_random_numeric_column<int16_t>(0, set.size() - 1, num_rows, stream, mr);
 
   // Perform the gather operation
-  auto const gathered_table =
-    cudf::gather(gather_map, indices->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
+  auto const gathered_table = cudf::gather(
+    gather_map, gather_keys->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
   auto gathered_table_columns = gathered_table->release();
   return std::move(gathered_table_columns[1]);
 }
