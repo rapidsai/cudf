@@ -25,8 +25,6 @@
 #include <cudf/reshape.hpp>
 #include <cudf/scalar/scalar.hpp>
 
-/**
- */
 std::unique_ptr<cudf::table> compute_results(
   cudf::column_view const& cities,
   cudf::column_view const& temperatures,
@@ -49,8 +47,6 @@ std::unique_ptr<cudf::table> compute_results(
   return std::make_unique<cudf::table>(std::move(rtn));
 }
 
-/**
- */
 std::unique_ptr<cudf::table> compute_final_aggregates(
   std::vector<std::unique_ptr<cudf::table>>& agg_data, rmm::cuda_stream_view stream)
 {
@@ -83,12 +79,11 @@ std::unique_ptr<cudf::table> compute_final_aggregates(
   // Build the offsets needed for segmented reduce.
   // These are increasing integer values spaced evenly as per the number of cities (keys).
   auto const num_keys = agg_data.front()->num_rows();
-  auto seg_offsets =
-    cudf::sequence(static_cast<cudf::size_type>(num_keys) + 1,                            // size
-                   cudf::numeric_scalar<cudf::size_type>(0, true, stream),                // start
-                   cudf::numeric_scalar<cudf::size_type>(agg_data.size(), true, stream),  // step
-                   stream);
-  auto offsets_span = cudf::device_span<cudf::size_type const>(seg_offsets->view());
+  auto const size     = static_cast<cudf::size_type>(num_keys) + 1;
+  auto const start    = cudf::numeric_scalar<cudf::size_type>(0, true, stream);
+  auto const step     = cudf::numeric_scalar<cudf::size_type>(agg_data.size(), true, stream);
+  auto seg_offsets    = cudf::sequence(size, start, step, stream);
+  auto offsets_span   = cudf::device_span<cudf::size_type const>(seg_offsets->view());
 
   // compute the min/max for each key by using segmented reduce
   auto min_agg = cudf::make_min_aggregation<cudf::segmented_reduce_aggregation>();
