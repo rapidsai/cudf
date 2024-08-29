@@ -7,7 +7,7 @@ import pickle
 import textwrap
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -27,6 +27,8 @@ else:
     PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.PandasDtype
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from cudf._typing import Dtype
     from cudf.core.buffer import Buffer
 
