@@ -1,9 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import pyarrow as pa
+import pylibcudf as plc
 import pytest
 from utils import _convert_types, assert_table_and_meta_eq, make_source
-
-import cudf._lib.pylibcudf as plc
 
 # Shared kwargs to pass to make_source
 _COMMON_ORC_SOURCE_KWARGS = {"format": "orc"}
