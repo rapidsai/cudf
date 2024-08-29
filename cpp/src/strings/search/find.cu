@@ -20,6 +20,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/lists/list_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/find.hpp>
@@ -35,9 +36,12 @@
 #include <cuda/atomic>
 #include <thrust/binary_search.h>
 #include <thrust/fill.h>
+#include <thrust/find.h>
 #include <thrust/for_each.h>
+#include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/sort.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -414,38 +418,6 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
   return results;
 }
 
-CUDF_KERNEL void multi_contains_fn(column_device_view const d_strings,
-                                   column_device_view const d_targets,
-                                   cudf::device_span<bool*> d_results)
-{
-  auto const str_idx     = static_cast<size_type>(cudf::detail::grid_1d::global_thread_id());
-  auto const num_targets = d_targets.size();
-  auto const num_rows    = d_strings.size();
-  if (str_idx >= num_rows) { return; }
-  if (d_strings.is_null(str_idx)) { return; }  // bitmask will set result to null.
-  auto const d_str = d_strings.element<string_view>(str_idx);
-
-  // check empty target
-  for (auto target_idx = 0; target_idx < num_targets; ++target_idx) {
-    auto const d_target            = d_targets.element<string_view>(target_idx);
-    d_results[target_idx][str_idx] = d_target.size_bytes() == 0;
-  }
-
-  for (auto str_byte_idx = 0; str_byte_idx < d_str.size_bytes();
-       ++str_byte_idx) {  // iterate the start index in the string
-    for (auto target_idx = 0; target_idx < num_targets; ++target_idx) {  // iterate targets
-      if (!d_results[target_idx][str_idx]) {                             // not found before
-        auto const d_target = d_targets.element<string_view>(target_idx);
-        if (d_str.size_bytes() - str_byte_idx >= d_target.size_bytes() &&
-            (d_target.compare(d_str.data() + str_byte_idx, d_target.size_bytes()) == 0)) {
-          // found
-          d_results[target_idx][str_idx] = true;
-        }
-      }
-    }
-  }
-}
-
 CUDF_KERNEL void multi_contains_warp_parallel_multi_scalars_fn(column_device_view const d_strings,
                                                                column_device_view const d_targets,
                                                                cudf::device_span<bool*> d_results)
@@ -488,11 +460,200 @@ CUDF_KERNEL void multi_contains_warp_parallel_multi_scalars_fn(column_device_vie
   }
 }
 
-std::vector<std::unique_ptr<column>> multi_contains(strings_column_view const& input,
-                                                    strings_column_view const& targets,
-                                                    bool warp_parallel,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+CUDF_KERNEL void multi_contains_using_indexes_fn(
+  column_device_view const d_strings,
+  column_device_view const d_targets,
+  cudf::device_span<char> const d_target_first_bytes,
+  column_device_view const d_target_indexes_for_first_bytes,
+  cudf::device_span<bool*> d_results)
+{
+  auto const str_idx     = static_cast<size_type>(cudf::detail::grid_1d::global_thread_id());
+  auto const num_targets = d_targets.size();
+  auto const num_rows    = d_strings.size();
+  if (str_idx >= num_rows) { return; }
+  if (d_strings.is_null(str_idx)) { return; }  // bitmask will set result to null.
+  auto const d_str = d_strings.element<string_view>(str_idx);
+
+  // check empty target, the result of searching empty target is true.
+  for (auto target_idx = 0; target_idx < num_targets; ++target_idx) {
+    auto const d_target            = d_targets.element<string_view>(target_idx);
+    d_results[target_idx][str_idx] = d_target.size_bytes() == 0;
+  }
+
+  for (auto str_byte_idx = 0; str_byte_idx < d_str.size_bytes();
+       ++str_byte_idx) {  // iterate the start index in the string
+
+    // binary search in the target first char set.
+    char c = *(d_str.data() + str_byte_idx);
+    auto first_byte_ptr =
+      thrust::lower_bound(thrust::seq, d_target_first_bytes.begin(), d_target_first_bytes.end(), c);
+
+    if (not(first_byte_ptr != d_target_first_bytes.end() && *first_byte_ptr == c)) {
+      // For non-empty targets: no need to search for `str_byte_idx` position, because first char is
+      // unmatched. For empty targets: already set result as found.
+      continue;
+    }
+
+    int first_char_index_in_list = first_byte_ptr - d_target_first_bytes.begin();
+    // get possible targets
+    auto const possible_targets_list =
+      cudf::list_device_view{d_target_indexes_for_first_bytes, first_char_index_in_list};
+
+    for (auto i = 0; i < possible_targets_list.size(); ++i) {  // iterate possible targets
+      auto target_idx = possible_targets_list.element<size_type>(i);
+      if (!d_results[target_idx][str_idx]) {  // not found before
+        auto const d_target = d_targets.element<string_view>(target_idx);
+        if (d_str.size_bytes() - str_byte_idx >= d_target.size_bytes() &&
+            (d_target.compare(d_str.data() + str_byte_idx, d_target.size_bytes()) == 0)) {
+          // found
+          d_results[target_idx][str_idx] = true;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Execute multi contains for short strings
+ * First index the first char for all targets.
+ * Index the first char:
+ *   collect first char for all targets and do uniq and sort,
+ *   then index the targets for the first char.
+ *   e.g.:
+ *     targets: xa xb ac ad af
+ *     first char set is: (a, x)
+ *     index result is:
+ *       {
+ *         a: [2, 3, 4],   // indexes for: ac ad af
+ *         x: [0, 1]       // indexes for: xa xb
+ *       }
+ * when do searching:
+ *   find (binary search) from `first char set` for a char in string:
+ *     if char in string is not in ['a', 'x'], fast skip
+ *     if char in string is 'x', then only need to try ["xa", "xb"] targets.
+ *     if char in string is 'a', then only need to try ["ac", "ad", "af"] targets.
+ *
+ */
+std::vector<std::unique_ptr<column>> multi_contains_using_indexes(
+  strings_column_view const& input,
+  strings_column_view const& targets,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  auto const num_targets = static_cast<size_type>(targets.size());
+  CUDF_EXPECTS(not targets.is_empty(), "Must specify at least one target string.");
+
+  // 1. copy targets from device to host
+  auto const h_targets_child = cudf::detail::make_std_vector_sync<char>(
+    cudf::device_span<char const>(targets.chars_begin(stream), targets.chars_size(stream)), stream);
+  auto const targets_offsets   = targets.offsets();
+  auto const h_targets_offsets = cudf::detail::make_std_vector_sync(
+    cudf::device_span<int const>{targets_offsets.data<int>(),
+                                 static_cast<size_t>(targets_offsets.size())},
+    stream);
+
+  // 2. index the first characters in targets
+  // 2.1 collect first characters in targets
+  thrust::host_vector<char> h_first_bytes = {};
+  for (auto i = 0; i < targets.size(); i++) {
+    auto target_begin_offset = h_targets_offsets[i];
+    auto target_end_offset   = h_targets_offsets[i + 1];
+    if (target_end_offset - target_begin_offset > 0) {
+      char first_char = h_targets_child[target_begin_offset];
+      auto no_exist =
+        thrust::find(h_first_bytes.begin(), h_first_bytes.end(), first_char) == h_first_bytes.end();
+      if (no_exist) { h_first_bytes.push_back(first_char); }
+    }
+  }
+
+  // 2.2 sort the first characters
+  thrust::sort(h_first_bytes.begin(), h_first_bytes.end());
+
+  // 2.3 generate indexes: map from `first char in target` to `target indexes`
+  thrust::host_vector<size_type> h_offsets  = {0};
+  thrust::host_vector<size_type> h_elements = {};
+  for (size_t i = 0; i < h_first_bytes.size(); i++) {
+    auto expected_first_byte = h_first_bytes[i];
+    for (auto target_idx = 0; target_idx < targets.size(); target_idx++) {
+      auto target_begin_offset = h_targets_offsets[target_idx];
+      auto target_end_offset   = h_targets_offsets[target_idx + 1];
+      if (target_end_offset - target_begin_offset > 0) {
+        char curr_first_byte = h_targets_child[target_begin_offset];
+        if (expected_first_byte == curr_first_byte) { h_elements.push_back(target_idx); }
+      }
+    }
+    h_offsets.push_back(h_elements.size());
+  }
+
+  // 2.4 copy first char set and first char indexes to device
+  auto d_first_bytes  = cudf::detail::make_device_uvector_async(h_first_bytes, stream, mr);
+  auto d_offsets      = cudf::detail::make_device_uvector_async(h_offsets, stream, mr);
+  auto d_elements     = cudf::detail::make_device_uvector_async(h_elements, stream, mr);
+  auto offsets_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
+                                                       h_offsets.size(),
+                                                       d_offsets.release(),
+                                                       rmm::device_buffer{},  // null mask
+                                                       0                      // null size
+  );
+  auto element_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
+                                                       h_elements.size(),
+                                                       d_elements.release(),
+                                                       rmm::device_buffer{},  // null mask
+                                                       0                      // null size
+  );
+  auto list_column    = cudf::make_lists_column(h_first_bytes.size(),
+                                             std::move(offsets_column),
+                                             std::move(element_column),
+                                             0,                     // null count
+                                             rmm::device_buffer{},  // null mask
+                                             stream,
+                                             mr);
+  auto d_list_column  = column_device_view::create(list_column->view(), stream);
+
+  // 3. Create output columns.
+  auto const results_iter =
+    thrust::make_transform_iterator(thrust::counting_iterator<cudf::size_type>(0), [&](int i) {
+      return make_numeric_column(data_type{type_id::BOOL8},
+                                 input.size(),
+                                 cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                 input.null_count(),
+                                 stream,
+                                 mr);
+    });
+  auto results_list =
+    std::vector<std::unique_ptr<column>>(results_iter, results_iter + targets.size());
+  auto device_results_list = [&] {
+    auto host_results_pointer_iter =
+      thrust::make_transform_iterator(results_list.begin(), [](auto const& results_column) {
+        return results_column->mutable_view().template data<bool>();
+      });
+    auto host_results_pointers = std::vector<bool*>(
+      host_results_pointer_iter, host_results_pointer_iter + results_list.size());
+    return cudf::detail::make_device_uvector_async(host_results_pointers, stream, mr);
+  }();
+
+  auto const d_strings = column_device_view::create(input.parent(), stream);
+  auto const d_targets = column_device_view::create(targets.parent(), stream);
+
+  constexpr int block_size = 256;
+  cudf::detail::grid_1d grid{input.size(), block_size};
+
+  multi_contains_using_indexes_fn<<<grid.num_blocks,
+                                    grid.num_threads_per_block,
+                                    0,
+                                    stream.value()>>>(
+    *d_strings, *d_targets, d_first_bytes, *d_list_column, device_results_list);
+  return results_list;
+}
+
+/**
+ * Execute multi contains for long strings
+ */
+std::vector<std::unique_ptr<column>> multi_contains_using_warp_parallel(
+  strings_column_view const& input,
+  strings_column_view const& targets,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   auto const num_targets = static_cast<size_type>(targets.size());
   CUDF_EXPECTS(not targets.is_empty(), "Must specify at least one target string.");
@@ -519,26 +680,18 @@ std::vector<std::unique_ptr<column>> multi_contains(strings_column_view const& i
     return cudf::detail::make_device_uvector_async(host_results_pointers, stream, mr);
   }();
 
-  // Populate all output vectors,
-
   constexpr int block_size = 256;
-  // launch warp per string
-  auto const d_strings = column_device_view::create(input.parent(), stream);
-  auto const d_targets = column_device_view::create(targets.parent(), stream);
+  auto const d_strings     = column_device_view::create(input.parent(), stream);
+  auto const d_targets     = column_device_view::create(targets.parent(), stream);
 
-  if (warp_parallel) {
-    // one warp handles multi-targets for a string
-    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
-    multi_contains_warp_parallel_multi_scalars_fn<<<grid.num_blocks,
-                                                    grid.num_threads_per_block,
-                                                    0,
-                                                    stream.value()>>>(
-      *d_strings, *d_targets, device_results_list);
-  } else {
-    cudf::detail::grid_1d grid{input.size(), block_size};
-    multi_contains_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      *d_strings, *d_targets, device_results_list);
-  }
+  // launch warp per string; one warp handles multi-targets for the same string.
+  cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+  multi_contains_warp_parallel_multi_scalars_fn<<<grid.num_blocks,
+                                                  grid.num_threads_per_block,
+                                                  0,
+                                                  stream.value()>>>(
+    *d_strings, *d_targets, device_results_list);
+
   return results_list;
 }
 
@@ -699,10 +852,10 @@ std::unique_ptr<table> multi_contains(strings_column_view const& input,
         ((input.chars_size(stream) / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
       // Large strings.
       // use warp parallel when the average string width is greater than the threshold
-      return multi_contains(input, targets, /*warp_parallel=*/true, stream, mr);
+      return multi_contains_using_warp_parallel(input, targets, stream, mr);
     } else {
       // Small strings. Searching for multiple targets in one thread seems to work fastest.
-      return multi_contains(input, targets, /*warp_parallel=*/false, stream, mr);
+      return multi_contains_using_indexes(input, targets, stream, mr);
     }
   }();
   return std::make_unique<table>(std::move(result_columns));
