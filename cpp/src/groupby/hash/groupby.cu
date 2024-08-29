@@ -555,11 +555,10 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
 
   auto const num_input_rows = keys.num_rows();
 
-  auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
-
-  auto compute_mapping_indices_fn_ptr =
-    compute_mapping_indices<shared_set_ref_type, decltype(global_set_ref), decltype(window_extent)>;
-  auto const grid_size = max_occupancy_grid_size(compute_mapping_indices_fn_ptr, num_input_rows);
+  auto global_set_ref  = global_set.ref(cuco::op::insert_and_find);
+  auto const grid_size = max_occupancy_grid_size(
+    compute_mapping_indices<shared_set_ref_type, decltype(global_set_ref), decltype(window_extent)>,
+    num_input_rows);
   // 'local_mapping_index' maps from the global row index of the input table to the row index of
   // the local pre-aggregate table
   rmm::device_uvector<cudf::size_type> local_mapping_index(num_input_rows, stream);
