@@ -5736,7 +5736,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ret = np.recarray(len(self), dtype=dtype)
         if index:
             ret["index"] = self.index.to_numpy()
-        for col in self._column_namess:
+        for col in self._column_names:
             ret[col] = self[col].to_numpy()
         return ret
 
