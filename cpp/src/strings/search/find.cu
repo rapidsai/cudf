@@ -503,10 +503,16 @@ CUDF_KERNEL void multi_contains_using_indexes_fn(
       auto target_idx = possible_targets_list.element<size_type>(i);
       if (!d_results[target_idx][str_idx]) {  // not found before
         auto const d_target = d_targets.element<string_view>(target_idx);
-        if (d_str.size_bytes() - str_byte_idx >= d_target.size_bytes() &&
-            (d_target.compare(d_str.data() + str_byte_idx, d_target.size_bytes()) == 0)) {
-          // found
-          d_results[target_idx][str_idx] = true;
+        if (d_str.size_bytes() - str_byte_idx >= d_target.size_bytes()) {
+          // first char already checked, only need to check the [2nd, end) chars if has.
+          bool found = true;
+          for (auto i = 1; i < d_target.size(); i++) {
+            if (*(d_str.data() + str_byte_idx + i) != *(d_target.data() + i)) {
+              found = false;
+              break;
+            }
+          }
+          if (found) { d_results[target_idx][str_idx] = true; }
         }
       }
     }
