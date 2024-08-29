@@ -50,8 +50,6 @@ CUDF_KERNEL void test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
 // calls.
 TEST(StreamCheck, FailedKernel)
 {
-  if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { GTEST_SKIP(); }
-
   rmm::cuda_stream stream;
   int a;
   test_kernel<<<0, 0, 0, stream.value()>>>(&a);
@@ -63,8 +61,6 @@ TEST(StreamCheck, FailedKernel)
 
 TEST(StreamCheck, CatchFailedKernel)
 {
-  if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { GTEST_SKIP(); }
-
   rmm::cuda_stream stream;
   int a;
   test_kernel<<<0, 0, 0, stream.value()>>>(&a);
@@ -131,6 +127,8 @@ TEST(DebugAssert, cudf_assert_true)
 // 2.) The RMM Pool interferes with the death test
 int main(int argc, char** argv)
 {
+  if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { return 0; }
+
   ::testing::InitGoogleTest(&argc, argv);
   auto const cmd_opts = parse_cudf_test_opts(argc, argv);
   auto adaptor        = make_stream_mode_adaptor(cmd_opts);
