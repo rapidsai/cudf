@@ -11,7 +11,6 @@ from cudf.core.column.column import (
     build_column,
     column_empty,
     column_empty_like,
-    column_empty_like_same_mask,
     concat_columns,
     deserialize_columns,
     serialize_columns,
