@@ -229,6 +229,33 @@ def test_read_parquet(
     assert_eq(expect, got2)
 
 
+@pytest.mark.parametrize("method", [None, "all", "parquet"])
+def test_read_parquet_prefetch_options(
+    s3_base,
+    s3so,
+    pdf,
+    method,
+):
+    fname = "test_parquet_reader_prefetch_options.parquet"
+    bucket = "parquet"
+    buffer = BytesIO()
+    pdf.to_parquet(path=buffer)
+    buffer.seek(0)
+    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
+        if method is None:
+            prefetch_options = {}
+        else:
+            prefetch_options = {"method": method}
+        got = cudf.read_parquet(
+            f"s3://{bucket}/{fname}",
+            storage_options=s3so,
+            prefetch_options=prefetch_options,
+            columns=["String"],
+        )
+    expect = pdf[["String"]]
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
 @pytest.mark.parametrize("columns", [None, ["List", "Struct"]])
 @pytest.mark.parametrize("index", [None, "Integer"])

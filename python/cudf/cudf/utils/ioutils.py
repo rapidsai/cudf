@@ -2168,18 +2168,20 @@ def _prefetch_remote_buffers(
 ):
     # Gather bytes ahead of time for remote filesystems
     if fs and paths and not _is_local_filesystem(fs):
-        _prefetchers = {
-            "parquet": _get_remote_bytes_parquet,
-            "all": _get_remote_bytes_all,
-        }
-        if method not in _prefetchers:
+        try:
+            prefetcher = {
+                "parquet": _get_remote_bytes_parquet,
+                "all": _get_remote_bytes_all,
+            }[method]
+        except KeyError:
             raise NotImplementedError(
                 f"{method} is not a supported remote-data prefetcher"
             )
-        return _prefetchers.get(method)(
+        return prefetcher(
             paths,
             fs,
             **prefetch_options,
         )
+
     else:
         return paths
