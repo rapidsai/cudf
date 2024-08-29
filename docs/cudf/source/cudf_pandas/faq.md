@@ -32,7 +32,7 @@ pandas. You can learn more about these edge cases in
 
 We also run nightly tests that track interactions between
 `cudf.pandas` and other third party libraries. See
-[Third-Party Library Compatibility](#does-it-work-with-third-party-libraries).
+[Third-Party Library Compatibility](#does-cudf-pandas-work-with-third-party-libraries).
 
 ## How can I tell if `cudf.pandas` is active?
 
