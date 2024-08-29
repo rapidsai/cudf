@@ -544,8 +544,6 @@ std::unique_ptr<cudf::table> generate_partsupp(double scale_factor,
                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  std::cout << __func__ << std::endl;
-
   // Define the number of rows in the `part` and `partsupp` tables
   cudf::size_type const p_num_rows  = scale_factor * 200'000;
   cudf::size_type const ps_num_rows = scale_factor * 800'000;
@@ -597,8 +595,6 @@ std::unique_ptr<cudf::table> generate_part(double scale_factor,
                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  std::cout << __func__ << std::endl;
-
   cudf::size_type const num_rows = scale_factor * 200'000;
 
   // Generate the `p_partkey` column
@@ -725,8 +721,6 @@ generate_orders_lineitem_part(double scale_factor,
                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  std::cout << __func__ << std::endl;
-
   // Generate a table with the independent columns of the `orders` table
   auto orders_independent = generate_orders_independent(scale_factor, stream, mr);
 
@@ -796,8 +790,6 @@ std::unique_ptr<cudf::table> generate_supplier(double scale_factor,
                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  std::cout << __func__ << std::endl;
-
   // Calculate the number of rows based on the scale factor
   cudf::size_type const num_rows = scale_factor * 10'000;
 
@@ -862,8 +854,6 @@ std::unique_ptr<cudf::table> generate_customer(double scale_factor,
                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  std::cout << __func__ << std::endl;
-
   // Calculate the number of rows based on the scale factor
   cudf::size_type const num_rows = scale_factor * 150'000;
 
@@ -934,8 +924,6 @@ std::unique_ptr<cudf::table> generate_nation(rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  std::cout << __func__ << std::endl;
-
   // Define the number of rows
   constexpr cudf::size_type num_rows = 25;
 
@@ -976,8 +964,6 @@ std::unique_ptr<cudf::table> generate_region(rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  std::cout << __func__ << std::endl;
-
   // Define the number of rows
   constexpr cudf::size_type num_rows = 5;
 
