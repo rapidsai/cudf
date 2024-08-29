@@ -174,8 +174,7 @@ std::unique_ptr<cudf::table> generate_orders_independent(double scale_factor,
                         {},
                         stream,
                         mr);
-    auto sort_result_columns = sort_result->release();
-    return std::move(sort_result_columns[0]);
+    return std::move(sort_result->release()[0]);
   }();
 
   // Generate the `o_custkey` column
@@ -385,8 +384,7 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
     auto const gather_map     = cudf::table_view({indices->view(), keys->view()});
     auto const gathered_table = cudf::gather(
       gather_map, ternary_mask->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
-    auto gathered_table_columns = gathered_table->release();
-    return std::move(gathered_table_columns[1]);
+    return std::move(gathered_table->release()[1]);
   }();
 
   // Generate the `l_linestatus` column
@@ -402,8 +400,7 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
     auto const gather_map     = cudf::table_view({indices->view(), keys->view()});
     auto const gathered_table = cudf::gather(
       gather_map, mask_index_type->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
-    auto gathered_table_columns = gathered_table->release();
-    return std::make_tuple(std::move(gathered_table_columns[1]), std::move(mask_index_type));
+    return std::make_tuple(std::move(gathered_table->release()[1]), std::move(mask_index_type));
   }();
 
   // Generate the `l_shipinstruct` column
@@ -552,9 +549,8 @@ std::unique_ptr<cudf::table> generate_partsupp(double scale_factor,
   auto ps_partkey = [&]() {
     auto const p_partkey =
       generate_primary_key_column(cudf::numeric_scalar<cudf::size_type>(1), p_num_rows, stream, mr);
-    auto const rep_table   = cudf::repeat(cudf::table_view({p_partkey->view()}), 4, stream, mr);
-    auto rep_table_columns = rep_table->release();
-    return std::move(rep_table_columns[0]);
+    auto const rep_table = cudf::repeat(cudf::table_view({p_partkey->view()}), 4, stream, mr);
+    return std::move(rep_table->release()[0]);
   }();
 
   // Generate the `ps_suppkey` column
