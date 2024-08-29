@@ -185,7 +185,7 @@ struct aggregate_writer_metadata {
     std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
-  thrust::optional<std::vector<ColumnOrder>> column_orders = thrust::nullopt;
+  cuda::std::optional<std::vector<ColumnOrder>> column_orders = cuda::std::nullopt;
 };
 
 namespace {
@@ -471,7 +471,7 @@ struct leaf_schema_fn {
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
     col_schema.type           = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type = thrust::nullopt;
+    col_schema.converted_type = cuda::std::nullopt;
     col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
     if (timestamp_is_int96) {
       col_schema.ts_scale = -1000;  // negative value indicates division by absolute value
@@ -749,7 +749,7 @@ std::vector<schema_tree_node> construct_parquet_schema_tree(
           col_schema.type = Type::BYTE_ARRAY;
         }
 
-        col_schema.converted_type  = thrust::nullopt;
+        col_schema.converted_type  = cuda::std::nullopt;
         col_schema.stats_dtype     = statistics_dtype::dtype_byte_array;
         col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
         col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
@@ -2230,20 +2230,20 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     bool need_sync{false};
 
     // need to fetch the histogram data from the device
-    std::vector<uint32_t> h_def_histogram;
-    std::vector<uint32_t> h_rep_histogram;
-    if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-      if (def_histogram_bfr_size > 0) {
-        h_def_histogram =
-          std::move(cudf::detail::make_std_vector_async(def_level_histogram, stream));
+    auto const h_def_histogram = [&]() {
+      if (stats_granularity == statistics_freq::STATISTICS_COLUMN && def_histogram_bfr_size > 0) {
         need_sync = true;
+        return cudf::detail::make_host_vector_async(def_level_histogram, stream);
       }
-      if (rep_histogram_bfr_size > 0) {
-        h_rep_histogram =
-          std::move(cudf::detail::make_std_vector_async(rep_level_histogram, stream));
+      return cudf::detail::make_host_vector<uint32_t>(0, stream);
+    }();
+    auto const h_rep_histogram = [&]() {
+      if (stats_granularity == statistics_freq::STATISTICS_COLUMN && rep_histogram_bfr_size > 0) {
         need_sync = true;
+        return cudf::detail::make_host_vector_async(rep_level_histogram, stream);
       }
-    }
+      return cudf::detail::make_host_vector<uint32_t>(0, stream);
+    }();
 
     for (int r = 0; r < num_rowgroups; r++) {
       int p           = rg_to_part[r];
@@ -2265,7 +2265,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         update_chunk_encoding_stats(column_chunk_meta, ck, write_v2_headers);
 
         if (ck.ck_stat_size != 0) {
-          std::vector<uint8_t> const stats_blob = cudf::detail::make_std_vector_sync(
+          auto const stats_blob = cudf::detail::make_host_vector_sync(
             device_span<uint8_t const>(dev_bfr, ck.ck_stat_size), stream);
           CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
           cp.read(&column_chunk_meta.statistics);
@@ -2776,7 +2776,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
   // See https://github.com/rapidsai/cudf/pull/14264#issuecomment-1778311615
   for (auto& se : md.schema) {
     if (se.logical_type.has_value() && se.logical_type.value().type == LogicalType::UNKNOWN) {
-      se.logical_type = thrust::nullopt;
+      se.logical_type = cuda::std::nullopt;
     }
   }
 

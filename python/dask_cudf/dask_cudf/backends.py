@@ -64,8 +64,11 @@ def _nonempty_index(idx):
         values = cudf.core.column.as_column(data)
         return cudf.DatetimeIndex(values, name=idx.name)
     elif isinstance(idx, cudf.CategoricalIndex):
-        values = cudf.core.column.build_categorical_column(
-            categories=idx.categories, codes=[0, 0], ordered=idx.ordered
+        values = cudf.core.column.CategoricalColumn(
+            data=None,
+            size=None,
+            dtype=idx.dtype,
+            children=(cudf.core.column.as_column([0, 0], dtype=np.uint8),),
         )
         return cudf.CategoricalIndex(values, name=idx.name)
     elif isinstance(idx, cudf.MultiIndex):
@@ -105,12 +108,16 @@ def _get_non_empty_data(
         )
         codes = cudf.core.column.as_column(
             0,
-            dtype=cudf._lib.types.size_type_dtype,
+            dtype=np.uint8,
             length=2,
         )
-        ordered = s.ordered  # type: ignore[attr-defined]
-        return cudf.core.column.build_categorical_column(
-            categories=categories, codes=codes, ordered=ordered
+        return cudf.core.column.CategoricalColumn(
+            data=None,
+            size=codes.size,
+            dtype=cudf.CategoricalDtype(
+                categories=categories, ordered=s.dtype.ordered
+            ),
+            children=(codes,),  # type: ignore[arg-type]
         )
     elif isinstance(s.dtype, cudf.ListDtype):
         leaf_type = s.dtype.leaf_type
@@ -134,6 +141,8 @@ def _get_non_empty_data(
         return cudf.core.column.as_column(
             np.arange(start=0, stop=2, dtype=s.dtype)
         )
+    elif isinstance(s.dtype, cudf.core.dtypes.DecimalDtype):
+        return cudf.core.column.as_column(range(2), dtype=s.dtype)
     else:
         raise TypeError(
             f"Don't know how to handle column of type {type(s).__name__}"
@@ -498,6 +507,25 @@ def _unsupported_kwargs(old, new, kwargs):
         )
 
 
+def _raise_unsupported_parquet_kwargs(
+    open_file_options=None, filesystem=None, **kwargs
+):
+    import fsspec
+
+    if open_file_options is not None:
+        raise ValueError(
+            "The open_file_options argument is no longer supported "
+            "by the 'cudf' backend."
+        )
+
+    if filesystem not in ("fsspec", None) and not isinstance(
+        filesystem, fsspec.AbstractFileSystem
+    ):
+        raise ValueError(
+            f"filesystem={filesystem} is not supported by the 'cudf' backend."
+        )
+
+
 # Register cudf->pandas
 to_pandas_dispatch = PandasBackendEntrypoint.to_backend_dispatch()
 
@@ -516,6 +544,12 @@ to_cudf_dispatch = Dispatch("to_cudf_dispatch")
 def to_cudf_dispatch_from_pandas(data, nan_as_null=None, **kwargs):
     _unsupported_kwargs("pandas", "cudf", kwargs)
     return cudf.from_pandas(data, nan_as_null=nan_as_null)
+
+
+@to_cudf_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+def to_cudf_dispatch_from_cudf(data, **kwargs):
+    _unsupported_kwargs("cudf", "cudf", kwargs)
+    return data
 
 
 # Define "cudf" backend engine to be registered with Dask
@@ -573,6 +607,7 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
     def read_parquet(*args, engine=None, **kwargs):
         from dask_cudf.io.parquet import CudfEngine
 
+        _raise_unsupported_parquet_kwargs(**kwargs)
         return _default_backend(
             dd.read_parquet,
             *args,
@@ -623,20 +658,20 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
     Examples
     --------
     >>> import dask
-    >>> import dask_expr
+    >>> import dask_expr as dx
     >>> with dask.config.set({"dataframe.backend": "cudf"}):
     ...     ddf = dx.from_dict({"a": range(10)})
     >>> type(ddf._meta)
     <class 'cudf.core.dataframe.DataFrame'>
     """
 
-    @classmethod
-    def to_backend_dispatch(cls):
-        return CudfBackendEntrypoint.to_backend_dispatch()
+    @staticmethod
+    def to_backend(data, **kwargs):
+        import dask_expr as dx
 
-    @classmethod
-    def to_backend(cls, *args, **kwargs):
-        return CudfBackendEntrypoint.to_backend(*args, **kwargs)
+        from dask_cudf.expr._expr import ToCudfBackend
+
+        return dx.new_collection(ToCudfBackend(data, kwargs))
 
     @staticmethod
     def from_dict(
@@ -665,6 +700,7 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
 
         from dask_cudf.io.parquet import CudfEngine
 
+        _raise_unsupported_parquet_kwargs(**kwargs)
         return _default_backend(
             dx.read_parquet, *args, engine=CudfEngine, **kwargs
         )

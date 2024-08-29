@@ -1,7 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from cudf._lib import pylibcudf
-from cudf._lib.pylibcudf.null_mask import MaskState
+import pylibcudf
+from pylibcudf.null_mask import MaskState
+
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 
 from cudf._lib.column cimport Column

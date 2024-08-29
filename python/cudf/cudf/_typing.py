@@ -1,7 +1,8 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import sys
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, TypeVar, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Dict, Iterable, TypeVar, Union
 
 import numpy as np
 from pandas import Period, Timedelta, Timestamp

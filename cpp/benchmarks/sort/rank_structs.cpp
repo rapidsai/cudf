@@ -35,6 +35,8 @@ void nvbench_rank_structs(nvbench::state& state, nvbench::type_list<nvbench::enu
                cudf::order::ASCENDING,
                nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE,
                cudf::null_order::AFTER,
+               false,
+               cudf::get_default_stream(),
                rmm::mr::get_current_device_resource());
   });
 }

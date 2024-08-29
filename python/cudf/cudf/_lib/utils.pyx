@@ -10,11 +10,12 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+from pylibcudf.libcudf.column.column cimport column, column_view
+from pylibcudf.libcudf.table.table cimport table
+from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.types cimport size_type
+
 from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_view
-from cudf._lib.pylibcudf.libcudf.table.table cimport table
-from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 try:
     import ujson as json
