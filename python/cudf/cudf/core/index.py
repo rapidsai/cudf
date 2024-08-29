@@ -1456,6 +1456,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 pd_preprocess.dtype._categories = (
                     preprocess.categories.to_pandas()
                 )
+                pd_preprocess.dtype._ordered = preprocess.dtype.ordered
                 cats_repr = repr(pd_preprocess).split("\n")
                 output = "\n".join(data_repr[:-1] + cats_repr[-1:])
 
