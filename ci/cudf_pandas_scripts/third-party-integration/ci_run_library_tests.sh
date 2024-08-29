@@ -11,7 +11,6 @@ trap cleanup EXIT
 
 runtest_gold() {
     local lib=$1
-    local test_keys=${@:2}
 
     pytest \
     -v \
@@ -19,13 +18,11 @@ runtest_gold() {
     --cache-clear \
     --numprocesses=${NUM_PROCESSES} \
     --dist=worksteal \
-    ${TEST_DIR}/test_${lib}*.py \
-    ${test_keys}
+    ${TEST_DIR}/test_${lib}*.py
 }
 
 runtest_cudf_pandas() {
     local lib=$1
-    local test_keys=${@:2}
 
     pytest \
     -p cudf.pandas \
@@ -34,17 +31,15 @@ runtest_cudf_pandas() {
     --cache-clear \
     --numprocesses=${NUM_PROCESSES} \
     --dist=worksteal \
-    ${TEST_DIR}/test_${lib}*.py \
-    ${test_keys}
+    ${TEST_DIR}/test_${lib}*.py
 }
 
 main() {
     local lib=$1
-    local test_keys=${@:2}
 
     # generation phase
-    runtest_gold ${lib} ${test_keys}
-    runtest_cudf_pandas ${lib} ${test_keys}
+    runtest_gold ${lib}
+    runtest_cudf_pandas ${lib}
 
     # assertion phase
     pytest \
@@ -55,8 +50,7 @@ main() {
     --cache-clear \
     --numprocesses=${NUM_PROCESSES} \
     --dist=worksteal \
-    ${TEST_DIR}/test_${lib}*.py \
-    ${test_keys}
+    ${TEST_DIR}/test_${lib}*.py
 }
 
 main $@
