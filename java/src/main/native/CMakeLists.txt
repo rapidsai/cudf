@@ -268,7 +268,7 @@ if(TARGET nvcomp::nvcomp)
     TARGET cudfjni
     PRE_LINK
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:nvcomp::nvcomp>
-            "${PROJECT_BINARY_DIR}/libnvcomp.so"
+            "${PROJECT_BINARY_DIR}"
     COMMENT "Copying nvcomp libraries to ${PROJECT_BINARY_DIR}"
   )
 endif()

@@ -26,7 +26,6 @@ function(find_and_configure_nvcomp)
   if(TARGET nvcomp AND CUDF_USE_PER_THREAD_DEFAULT_STREAM)
     target_compile_definitions(nvcomp PRIVATE CUDA_API_PER_THREAD_DEFAULT_STREAM)
   endif()
-  target_link_libraries(nvcomp::nvcomp INTERFACE $<LINK_ONLY:CUDA::cuda_driver>)
 endfunction()
 
 find_and_configure_nvcomp()
