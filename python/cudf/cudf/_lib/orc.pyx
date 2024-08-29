@@ -15,29 +15,14 @@ try:
 except ImportError:
     import json
 
-cimport pylibcudf.libcudf.lists.lists_column_view as cpp_lists_column_view
 cimport pylibcudf.libcudf.io.types as cudf_io_types
+cimport pylibcudf.libcudf.lists.lists_column_view as cpp_lists_column_view
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.orc cimport (
     chunked_orc_writer_options,
     orc_chunked_writer,
     orc_writer_options,
     write_orc as libcudf_write_orc,
-)
-from pylibcudf.libcudf.io.orc_metadata cimport (
-    binary_statistics,
-    bucket_statistics,
-    column_statistics,
-    date_statistics,
-    decimal_statistics,
-    double_statistics,
-    integer_statistics,
-    no_statistics,
-    parsed_orc_statistics,
-    read_parsed_orc_statistics as libcudf_read_parsed_orc_statistics,
-    statistics_type,
-    string_statistics,
-    timestamp_statistics,
 )
 from pylibcudf.libcudf.io.types cimport (
     column_in_metadata,
@@ -46,24 +31,17 @@ from pylibcudf.libcudf.io.types cimport (
     table_input_metadata,
 )
 from pylibcudf.libcudf.table.table_view cimport table_view
-from pylibcudf.libcudf.types cimport data_type, size_type, type_id
-from pylibcudf.variant cimport get_if as std_get_if, holds_alternative
 
 from cudf._lib.column cimport Column
-from cudf._lib.io.utils cimport (
-    make_sink_info,
-    make_source_info,
-    update_col_struct_field_names,
-)
+from cudf._lib.io.utils cimport make_sink_info, update_col_struct_field_names
 from cudf._lib.utils cimport data_from_pylibcudf_io, table_view_from_table
-
-import cudf
-from cudf.core.buffer import acquire_spill_lock
-from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
-from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
 import pylibcudf as plc
 
+import cudf
+from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
+from cudf._lib.utils import _index_level_name, generate_pandas_metadata
+from cudf.core.buffer import acquire_spill_lock
 
 
 cpdef read_parsed_orc_statistics(filepath_or_buffer):

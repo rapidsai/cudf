@@ -11,13 +11,6 @@ from pylibcudf.libcudf.io.orc cimport (
     orc_reader_options,
     read_orc as cpp_read_orc,
 )
-from pylibcudf.libcudf.io.types cimport table_with_metadata
-from pylibcudf.libcudf.types cimport size_type, type_id
-from pylibcudf.types cimport DataType
-from pylibcudf.libcudf.io.orc cimport (
-    orc_reader_options,
-    read_orc as cpp_read_orc,
-)
 from pylibcudf.libcudf.io.orc_metadata cimport (
     binary_statistics,
     bucket_statistics,
@@ -32,6 +25,9 @@ from pylibcudf.libcudf.io.orc_metadata cimport (
     string_statistics,
     timestamp_statistics,
 )
+from pylibcudf.libcudf.io.types cimport table_with_metadata
+from pylibcudf.libcudf.types cimport size_type, type_id
+from pylibcudf.types cimport DataType
 from pylibcudf.variant cimport get_if, holds_alternative
 
 

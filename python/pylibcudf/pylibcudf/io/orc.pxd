@@ -4,15 +4,14 @@ from libcpp cimport bool
 from libcpp.optional cimport optional
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-
 from pylibcudf.io.types cimport SourceInfo, TableWithMetadata
-from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.types cimport DataType
 from pylibcudf.libcudf.io.orc_metadata cimport (
     column_statistics,
     parsed_orc_statistics,
     statistics_type,
 )
+from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.types cimport DataType
 
 
 cpdef TableWithMetadata read_orc(
