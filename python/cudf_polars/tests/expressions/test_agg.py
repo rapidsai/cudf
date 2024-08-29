@@ -105,6 +105,26 @@ def test_cum_agg_reverse_unsupported(cum_agg):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+@pytest.mark.parametrize("q", [0.5, pl.lit(0.5)])
+@pytest.mark.parametrize("interp", ["nearest", "higher", "lower", "midpoint", "linear"])
+def test_quantile(df, q, interp):
+    expr = pl.col("a").quantile(q, interp)
+    q = df.select(expr)
+
+    # https://github.com/rapidsai/cudf/issues/15852
+    check_dtypes = q.collect_schema()["a"] == pl.Float64
+    if not check_dtypes:
+        with pytest.raises(AssertionError):
+            assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
+
+
+def test_quantile_invalid_q(df):
+    expr = pl.col("a").quantile(pl.col("a"))
+    q = df.select(expr)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
 @pytest.mark.parametrize(
     "op", [pl.Expr.min, pl.Expr.nan_min, pl.Expr.max, pl.Expr.nan_max]
 )

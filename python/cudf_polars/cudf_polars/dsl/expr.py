@@ -1480,6 +1480,13 @@ class Agg(Expr):
             req = plc.aggregation.variance(ddof=options)
         elif name == "count":
             req = plc.aggregation.count(null_handling=plc.types.NullPolicy.EXCLUDE)
+        elif name == "quantile":
+            _, quantile = self.children
+            if not isinstance(quantile, Literal):
+                raise NotImplementedError("Only support literal quantile values")
+            req = plc.aggregation.quantile(
+                quantiles=[quantile.value.as_py()], interp=Agg.interp_mapping[options]
+            )
         else:
             raise NotImplementedError(
                 f"Unreachable, {name=} is incorrectly listed in _SUPPORTED"
@@ -1511,8 +1518,17 @@ class Agg(Expr):
             "count",
             "std",
             "var",
+            "quantile",
         ]
     )
+
+    interp_mapping: ClassVar[dict[str, plc.types.Interpolation]] = {
+        "nearest": plc.types.Interpolation.NEAREST,
+        "higher": plc.types.Interpolation.HIGHER,
+        "lower": plc.types.Interpolation.LOWER,
+        "midpoint": plc.types.Interpolation.MIDPOINT,
+        "linear": plc.types.Interpolation.LINEAR,
+    }
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
@@ -1605,7 +1621,10 @@ class Agg(Expr):
             raise NotImplementedError(
                 f"Agg in context {context}"
             )  # pragma: no cover; unreachable
-        (child,) = self.children
+
+        # Aggregations like quantiles may have additional children that were
+        # preprocessed into pylibcudf requests.
+        child = self.children[0]
         return self.op(child.evaluate(df, context=context, mapping=mapping))
 
 
