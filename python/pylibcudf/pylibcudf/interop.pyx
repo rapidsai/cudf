@@ -152,7 +152,6 @@ def _from_arrow_scalar(pyarrow_object, *, DataType data_type=None):
 
 
 @from_arrow.register(pa.Array)
-@from_arrow.register(pa.ChunkedArray)
 def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
     if data_type is not None:
         raise ValueError("data_type may not be passed for arrays")
