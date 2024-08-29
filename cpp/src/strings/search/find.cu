@@ -847,6 +847,7 @@ std::unique_ptr<table> multi_contains(strings_column_view const& input,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(not targets.has_nulls(), "Target strings cannot be null");
   auto result_columns = [&] {
     if ((input.null_count() < input.size()) &&
         ((input.chars_size(stream) / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
