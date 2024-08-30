@@ -770,9 +770,9 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
                 )
             if blocksize == "default":
                 blocksize = "256 MiB"
-            if aggregate_files is not None:
+            if aggregate_files not in (None, True):
                 raise NotImplementedError(
-                    "aggregate_files is not supported when using the pyarrow filesystem."
+                    f"aggregate_files={aggregate_files} is not supported when using the pyarrow filesystem."
                 )
             if parquet_file_extension != (".parq", ".parquet", ".pq"):
                 raise NotImplementedError(
