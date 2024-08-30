@@ -771,7 +771,7 @@ class Frame(BinaryOperand, Scannable):
         try:
             del self._data[name]
         except KeyError as err:
-            if errors == "raise":
+            if errors != "ignore":
                 raise KeyError(f"column '{name}' does not exist") from err
 
     @_performance_tracking
