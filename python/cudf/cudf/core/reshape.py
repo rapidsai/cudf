@@ -13,7 +13,7 @@ from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.column import ColumnBase, as_column, column_empty_like
+from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils.dtypes import min_unsigned_type
 
@@ -420,8 +420,8 @@ def concat(
                         # if join is inner and it contains an empty df
                         # we return an empty df, hence creating an empty
                         # column with dtype metadata retained.
-                        result_data[name] = cudf.core.column.column_empty_like(
-                            col, newsize=0
+                        result_data[name] = column_empty(
+                            row_count=0, dtype=col.dtype
                         )
                     else:
                         result_data[name] = col
@@ -457,8 +457,8 @@ def concat(
                     else:
                         col_label = (k, name)
                     if empty_inner:
-                        result_data[col_label] = (
-                            cudf.core.column.column_empty_like(col, newsize=0)
+                        result_data[col_label] = column_empty(
+                            row_count=0, dtype=col.dtype
                         )
                     else:
                         result_data[col_label] = col
@@ -990,9 +990,7 @@ def _pivot(df, index, columns):
             ]
             new_size = nrows * len(names)
             scatter_map = (columns_idx * np.int32(nrows)) + index_idx
-            target_col = cudf.core.column.column_empty_like(
-                col, masked=True, newsize=new_size
-            )
+            target_col = column_empty(row_count=new_size, dtype=col.dtype)
             target_col[scatter_map] = col
             target = cudf.Index._from_column(target_col)
             result.update(
@@ -1264,7 +1262,9 @@ def _one_hot_encode_column(
     """
     if isinstance(column.dtype, cudf.CategoricalDtype):
         if column.size == column.null_count:
-            column = column_empty_like(categories, newsize=column.size)
+            column = column_empty(
+                row_count=column.size, dtype=categories.dtype
+            )
         else:
             column = column._get_decategorized_column()  # type: ignore[attr-defined]
 

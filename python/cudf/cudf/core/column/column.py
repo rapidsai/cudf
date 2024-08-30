@@ -831,7 +831,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         # Handle zero size
         if indices.size == 0:
-            return cast(Self, column_empty_like(self, newsize=0))
+            return cast(Self, column_empty(row_count=0, dtype=self.dtype))
 
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
@@ -1154,7 +1154,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             "data": (self.data_ptr, False),
             "version": 1,
         }
-
         if self.nullable and self.has_nulls():
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
@@ -1444,37 +1443,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return codes.fillna(na_sentinel.value)
 
 
-def column_empty_like(
-    column: ColumnBase,
-    dtype: Dtype | None = None,
-    masked: bool = False,
-    newsize: int | None = None,
-) -> ColumnBase:
-    """Allocate a new column like the given *column*"""
-    if dtype is None:
-        dtype = column.dtype
-    row_count = len(column) if newsize is None else newsize
-
-    if (
-        hasattr(column, "dtype")
-        and isinstance(column.dtype, cudf.CategoricalDtype)
-        and dtype == column.dtype
-    ):
-        catcolumn = cast("cudf.core.column.CategoricalColumn", column)
-        codes = column_empty_like(
-            catcolumn.codes, masked=masked, newsize=newsize
-        )
-        return build_column(
-            data=None,
-            dtype=dtype,
-            mask=codes.base_mask,
-            children=(codes,),
-            size=codes.size,
-        )
-
-    return column_empty(row_count, dtype, masked)
-
-
 def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
     """Check if an object dtype Series or array contains NaN."""
     return any(
@@ -1486,7 +1454,12 @@ def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
 def column_empty(
     row_count: int, dtype: Dtype = "object", masked: bool = False
 ) -> ColumnBase:
-    """Allocate a new column like the given row_count and dtype."""
+    """
+    Allocate a new column like the given row_count and dtype.
+
+    * A row_count == 0 creates a size 0 column without a mask buffer.
+    * A row_count > 0 creates an all null column with a mask buffer.
+    """
     dtype = cudf.dtype(dtype)
     children: tuple[ColumnBase, ...] = ()
 
@@ -1528,7 +1501,7 @@ def column_empty(
     else:
         data = as_buffer(rmm.DeviceBuffer(size=row_count * dtype.itemsize))
 
-    if masked:
+    if row_count > 0:
         mask = create_null_mask(row_count, state=MaskState.ALL_NULL)
     else:
         mask = None
@@ -2268,9 +2241,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         if not is_dtype_equal(obj.dtype, head.dtype):
             # if all null, cast to appropriate dtype
             if obj.null_count == len(obj):
-                objs[i] = column_empty_like(
-                    head, dtype=head.dtype, masked=True, newsize=len(obj)
-                )
+                objs[i] = column_empty(row_count=len(obj), dtype=head.dtype)
             else:
                 raise ValueError("All columns must be the same type")
 
