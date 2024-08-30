@@ -71,9 +71,10 @@ static void bench_find_string(nvbench::state& state)
       cudf::strings::find_multiple(input, cudf::strings_column_view(targets));
     });
   } else if (api == "contains") {
-    constexpr bool combine          = true;  // test true/false
-    bool has_same_target_first_char = true;  // test true/false
-    constexpr int iters             = 4;     // test 4/10
+    constexpr bool combine          = false;  // test true/false
+    bool has_same_target_first_char = false;  // test true/false
+    constexpr int iters             = 10;     // test 4/10
+    bool check_result               = false;
 
     std::vector<std::string> match_targets({" abc",
                                             "W43",
@@ -81,7 +82,7 @@ static void bench_find_string(nvbench::state& state)
                                             "123 abc",
                                             "23 abc",
                                             "3 abc",
-                                            "5W",
+                                            "é",
                                             "7 5W43",
                                             "87 5W43",
                                             "987 5W43"});
@@ -94,8 +95,21 @@ static void bench_find_string(nvbench::state& state)
 
     if constexpr (not combine) {
       state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+        std::vector<std::unique_ptr<cudf::column>> contains_results;
+        std::vector<cudf::column_view> contains_cvs;
         for (size_t i = 0; i < multi_targets.size(); i++) {
-          cudf::strings::contains(input, cudf::string_scalar(multi_targets[i]));
+          contains_results.emplace_back(cudf::strings::contains(input, cudf::string_scalar(multi_targets[i])));
+          contains_cvs.emplace_back(contains_results.back()->view());
+        }
+
+        if (check_result) {
+          cudf::test::strings_column_wrapper multi_targets_column(multi_targets.begin(),
+                                                                multi_targets.end());
+          auto tab = cudf::strings::multi_contains(input, cudf::strings_column_view(multi_targets_column));
+          for (int i = 0; i < tab->num_columns(); i++)
+          {
+            cudf::test::detail::expect_columns_equal(contains_cvs[i], tab->get_column(i).view());
+          }
         }
       });
     } else {  // combine

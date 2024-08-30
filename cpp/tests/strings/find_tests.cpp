@@ -211,7 +211,7 @@ TEST_F(StringsFindTest, MultiContains)
      ""},
     null_at(8)};
   auto strings_view = cudf::strings_column_view(strings);
-  std::vector<std::string> match_targets({" the ", "a", ""});
+  std::vector<std::string> match_targets({" the ", "a", "", "é"});
   cudf::test::strings_column_wrapper multi_targets_column(match_targets.begin(),
                                                           match_targets.end());
   auto results =
@@ -222,9 +222,12 @@ TEST_F(StringsFindTest, MultiContains)
     cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1, 1, 0, 0}, null_at(8));
   auto expected_2 =
     cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1, 1, 1, 0}, null_at(8));
+  auto expected_3 =
+    cudf::test::fixed_width_column_wrapper<bool>({1, 0, 0, 0, 0, 0, 0, 0, 0}, null_at(8));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(0), expected_0);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(1), expected_1);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(2), expected_2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(3), expected_3);
 }
 
 TEST_F(StringsFindTest, StartsWith)
