@@ -91,11 +91,13 @@
 }
 int main(int argc, char const** argv)
 {
-  auto const args = parse_args(argc, argv);
+  std::string rmm_mode = argv[1];
+  auto resource        = create_memory_resource(rmm_mode);
+  rmm::mr::set_current_device_resource(resource.get());
 
-  // Use a memory pool
-  auto resource = create_memory_resource(args.memory_resource_type);
-  cudf::set_current_device_resource(resource.get());
+  // Define a map for holding parquet data sources
+  std::unordered_map<std::string, parquet_device_buffer> sources;
+  generate_parquet_data_sources({"customer", "orders", "lineitem", "nation"}, sources);
 
   // Define the column projection and filter predicate for the `orders` table
   std::vector<std::string> const orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
@@ -123,15 +125,15 @@ int main(int argc, char const** argv)
   // Read out the tables from parquet files
   // while pushing down the column projections and filter predicates
   auto const customer = read_parquet(
-    args.dataset_dir + "/customer.parquet",
+    sources["customer"].make_source_info(),
     {"c_custkey", "c_name", "c_nationkey", "c_acctbal", "c_address", "c_phone", "c_comment"});
   auto const orders =
-    read_parquet(args.dataset_dir + "/orders.parquet", orders_cols, std::move(orders_pred));
+    read_parquet(sources["orders"].make_source_info(), orders_cols, std::move(orders_pred));
   auto const lineitem =
-    read_parquet(args.dataset_dir + "/lineitem.parquet",
+    read_parquet(sources["lineitem"].make_source_info(),
                  {"l_extendedprice", "l_discount", "l_orderkey", "l_returnflag"},
                  std::move(lineitem_pred));
-  auto const nation = read_parquet(args.dataset_dir + "/nation.parquet", {"n_name", "n_nationkey"});
+  auto const nation = read_parquet(sources["nation"].make_source_info(), {"n_name", "n_nationkey"});
 
   // Perform the joins
   auto const join_a       = apply_inner_join(customer, nation, {"c_nationkey"}, {"n_nationkey"});

@@ -110,24 +110,27 @@
 
 int main(int argc, char const** argv)
 {
-  auto const args = parse_args(argc, argv);
+  std::string rmm_mode = argv[1];
+  auto resource        = create_memory_resource(rmm_mode);
+  rmm::mr::set_current_device_resource(resource.get());
 
-  // Use a memory pool
-  auto resource = create_memory_resource(args.memory_resource_type);
-  cudf::set_current_device_resource(resource.get());
+  // Define a map for holding parquet data sources
+  std::unordered_map<std::string, parquet_device_buffer> sources;
+  generate_parquet_data_sources({"part", "supplier", "lineitem", "partsupp", "orders", "nation"},
+                                sources);
 
   // Read out the table from parquet files
   auto const lineitem = read_parquet(
-    args.dataset_dir + "/lineitem.parquet",
+    sources["lineitem"].make_source_info(),
     {"l_suppkey", "l_partkey", "l_orderkey", "l_extendedprice", "l_discount", "l_quantity"});
-  auto const nation = read_parquet(args.dataset_dir + "/nation.parquet", {"n_nationkey", "n_name"});
+  auto const nation = read_parquet(sources["nation"].make_source_info(), {"n_nationkey", "n_name"});
   auto const orders =
-    read_parquet(args.dataset_dir + "/orders.parquet", {"o_orderkey", "o_orderdate"});
-  auto const part     = read_parquet(args.dataset_dir + "/part.parquet", {"p_partkey", "p_name"});
-  auto const partsupp = read_parquet(args.dataset_dir + "/partsupp.parquet",
+    read_parquet(sources["orders"].make_source_info(), {"o_orderkey", "o_orderdate"});
+  auto const part     = read_parquet(sources["part"].make_source_info(), {"p_partkey", "p_name"});
+  auto const partsupp = read_parquet(sources["partsupp"].make_source_info(),
                                      {"ps_suppkey", "ps_partkey", "ps_supplycost"});
   auto const supplier =
-    read_parquet(args.dataset_dir + "/supplier.parquet", {"s_suppkey", "s_nationkey"});
+    read_parquet(sources["supplier"].make_source_info(), {"s_suppkey", "s_nationkey"});
 
   // Generating the `profit` table
   // Filter the part table using `p_name like '%green%'`

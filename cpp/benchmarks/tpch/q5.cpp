@@ -87,11 +87,14 @@
 
 int main(int argc, char const** argv)
 {
-  auto const args = parse_args(argc, argv);
+  std::string rmm_mode = argv[1];
+  auto resource        = create_memory_resource(rmm_mode);
+  rmm::mr::set_current_device_resource(resource.get());
 
-  // Use a memory pool
-  auto resource = create_memory_resource(args.memory_resource_type);
-  cudf::set_current_device_resource(resource.get());
+  // Define a map for holding parquet data sources
+  std::unordered_map<std::string, parquet_device_buffer> sources;
+  generate_parquet_data_sources({"customer", "orders", "lineitem", "supplier", "nation", "region"},
+                                sources);
 
   // Define the column projection and filter predicate for the `orders` table
   std::vector<std::string> const orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
@@ -122,17 +125,17 @@ int main(int argc, char const** argv)
   // Read out the tables from parquet files
   // while pushing down the column projections and filter predicates
   auto const customer =
-    read_parquet(args.dataset_dir + "/customer.parquet", {"c_custkey", "c_nationkey"});
+    read_parquet(sources["customer"].make_source_info(), {"c_custkey", "c_nationkey"});
   auto const orders =
-    read_parquet(args.dataset_dir + "/orders.parquet", orders_cols, std::move(orders_pred));
-  auto const lineitem = read_parquet(args.dataset_dir + "/lineitem.parquet",
+    read_parquet(sources["orders"].make_source_info(), orders_cols, std::move(orders_pred));
+  auto const lineitem = read_parquet(sources["lineitem"].make_source_info(),
                                      {"l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"});
   auto const supplier =
-    read_parquet(args.dataset_dir + "/supplier.parquet", {"s_suppkey", "s_nationkey"});
+    read_parquet(sources["supplier"].make_source_info(), {"s_suppkey", "s_nationkey"});
   auto const nation =
-    read_parquet(args.dataset_dir + "/nation.parquet", {"n_nationkey", "n_regionkey", "n_name"});
+    read_parquet(sources["nation"].make_source_info(), {"n_nationkey", "n_regionkey", "n_name"});
   auto const region =
-    read_parquet(args.dataset_dir + "/region.parquet", region_cols, std::move(region_pred));
+    read_parquet(sources["region"].make_source_info(), region_cols, std::move(region_pred));
 
   // Perform the joins
   auto const join_a = apply_inner_join(region, nation, {"r_regionkey"}, {"n_regionkey"});

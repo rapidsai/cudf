@@ -61,11 +61,13 @@
 
 int main(int argc, char const** argv)
 {
-  auto const args = parse_args(argc, argv);
+  std::string rmm_mode = argv[1];
+  auto resource        = create_memory_resource(rmm_mode);
+  rmm::mr::set_current_device_resource(resource.get());
 
-  // Use a memory pool
-  auto resource = create_memory_resource(args.memory_resource_type);
-  cudf::set_current_device_resource(resource.get());
+  // Define a map for holding parquet data sources
+  std::unordered_map<std::string, parquet_device_buffer> sources;
+  generate_parquet_data_sources({"lineitem"}, sources);
 
   // Read out the `lineitem` table from parquet file
   std::vector<std::string> const lineitem_cols = {
@@ -85,7 +87,7 @@ int main(int argc, char const** argv)
   auto const lineitem_pred = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LOGICAL_AND, shipdate_pred_a, shipdate_pred_b);
   auto lineitem =
-    read_parquet(args.dataset_dir + "/lineitem.parquet", lineitem_cols, std::move(lineitem_pred));
+    read_parquet(sources["lineitem"].make_source_info(), lineitem_cols, std::move(lineitem_pred));
 
   // Cast the discount and quantity columns to float32 and append to lineitem table
   auto discout_float =

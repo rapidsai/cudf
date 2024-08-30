@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "common/tpch_data_generator/tpch_data_generator.hpp"
+
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -29,17 +31,104 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_device.hpp>
+#include <rmm/device_uvector.hpp>
+#include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/device/prefetch_resource_adaptor.hpp>
+#include <rmm/mr/device/statistics_resource_adaptor.hpp>
 
+#include <cstdlib>
 #include <ctime>
+
+namespace {
+const std::vector<std::string> ORDERS   = {"o_orderkey",
+                                           "o_custkey",
+                                           "o_orderdate",
+                                           "o_orderpriority",
+                                           "o_clerk",
+                                           "o_shippriority",
+                                           "o_comment",
+                                           "o_totalprice",
+                                           "o_orderstatus"};
+const std::vector<std::string> LINEITEM = {"l_orderkey",
+                                           "l_partkey",
+                                           "l_suppkey",
+                                           "l_linenumber",
+                                           "l_quantity",
+                                           "l_discount",
+                                           "l_tax",
+                                           "l_shipdate",
+                                           "l_commitdate",
+                                           "l_receiptdate",
+                                           "l_returnflag",
+                                           "l_linestatus",
+                                           "l_shipinstruct",
+                                           "l_shipmode",
+                                           "l_comment",
+                                           "l_extendedprice"};
+const std::vector<std::string> PART     = {"p_partkey",
+                                           "p_name",
+                                           "p_mfgr",
+                                           "p_brand",
+                                           "p_type",
+                                           "p_size",
+                                           "p_container",
+                                           "p_retailprice",
+                                           "p_comment"};
+const std::vector<std::string> PARTSUPP = {
+  "ps_partkey", "ps_suppkey", "ps_availqty", "ps_supplycost", "ps_comment"};
+const std::vector<std::string> SUPPLIER = {
+  "s_suppkey", "s_name", "s_address", "s_nationkey", "s_phone", "s_acctbal", "s_comment"};
+const std::vector<std::string> CUSTOMER = {"c_custkey",
+                                           "c_name",
+                                           "c_address",
+                                           "c_nationkey",
+                                           "c_phone",
+                                           "c_acctbal",
+                                           "c_mktsegment",
+                                           "c_comment"};
+const std::vector<std::string> NATION   = {"n_nationkey", "n_name", "n_regionkey", "n_comment"};
+const std::vector<std::string> REGION   = {"r_regionkey", "r_name", "r_comment"};
+
+}  // namespace
+
+/**
+ * @brief Log the peak memory usage of the GPU
+ */
+class memory_stats_logger {
+ public:
+  memory_stats_logger()
+    : existing_mr(rmm::mr::get_current_device_resource()),
+      statistics_mr(rmm::mr::make_statistics_adaptor(existing_mr))
+  {
+    rmm::mr::set_current_device_resource(&statistics_mr);
+  }
+
+  ~memory_stats_logger() { rmm::mr::set_current_device_resource(existing_mr); }
+
+  [[nodiscard]] void print_peak_memory_usage() const noexcept
+  {
+    std::cout << "Peak memory usage: "
+              << static_cast<double>(statistics_mr.get_bytes_counter().peak / (1024 * 1024))
+              << " MB" << std::endl;
+  }
+
+ private:
+  rmm::mr::device_memory_resource* existing_mr;
+  rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> statistics_mr;
+};
 
 // RMM memory resource creation utilities
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
+inline auto make_async()
+{
+  return std::make_shared<rmm::mr::cuda_async_memory_resource>(
+    rmm::percent_of_free_device_memory(50));
+}
 inline auto make_pool()
 {
   return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
@@ -51,15 +140,27 @@ inline auto make_managed_pool()
   return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
     make_managed(), rmm::percent_of_free_device_memory(50));
 }
-inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
-  std::string const& mode)
+inline auto make_prefetch()
 {
-  if (mode == "cuda") return make_cuda();
-  if (mode == "pool") return make_pool();
-  if (mode == "managed") return make_managed();
-  if (mode == "managed_pool") return make_managed_pool();
-  CUDF_FAIL("Unknown rmm_mode parameter: " + mode +
-            "\nExpecting: cuda, pool, managed, or managed_pool");
+  return rmm::mr::make_owning_wrapper<rmm::mr::prefetch_resource_adaptor>(make_managed());
+}
+inline auto make_prefetch_pool()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::prefetch_resource_adaptor>(make_managed_pool());
+}
+inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
+  std::string const& rmm_mode)
+{
+  if (rmm_mode == "cuda") return make_cuda();
+  if (rmm_mode == "async") return make_async();
+  if (rmm_mode == "pool") return make_pool();
+  if (rmm_mode == "managed") return make_managed();
+  if (rmm_mode == "managed_pool") return make_managed_pool();
+  if (rmm_mode == "prefetch") return make_prefetch();
+  if (rmm_mode == "prefetch_pool") return make_prefetch_pool();
+  CUDF_FAIL(
+    "Unknown rmm_mode parameter: " + rmm_mode +
+    "\nExpecting: cuda, async, pool, async_pool, managed, managed_pool, prefetch, prefetch_pool");
 }
 
 /**
@@ -97,7 +198,10 @@ class table_with_names {
   {
     CUDF_FUNC_RANGE();
     auto it = std::find(col_names.begin(), col_names.end(), col_name);
-    if (it == col_names.end()) { throw std::runtime_error("Column not found"); }
+    if (it == col_names.end()) {
+      std::string err_msg = "Column `" + col_name + "` not found";
+      throw std::runtime_error(err_msg);
+    }
     return std::distance(col_names.begin(), it);
   }
   /**
@@ -162,6 +266,7 @@ class table_with_names {
 template <typename T>
 std::vector<T> concat(std::vector<T> const& lhs, std::vector<T> const& rhs)
 {
+  CUDF_FUNC_RANGE();
   std::vector<T> result;
   result.reserve(lhs.size() + rhs.size());
   std::copy(lhs.begin(), lhs.end(), std::back_inserter(result));
@@ -243,7 +348,7 @@ std::vector<T> concat(std::vector<T> const& lhs, std::vector<T> const& rhs)
 }
 
 /**
- * @brief Apply a filter predicated to a table
+ * @brief Apply a filter predicate to a table
  *
  * @param table The input table
  * @param predicate The filter predicate
@@ -375,18 +480,17 @@ struct groupby_context_t {
 /**
  * @brief Read a parquet file into a table
  *
- * @param filename The path to the parquet file
+ * @param source_info The source of the parquet file
  * @param columns The columns to read
  * @param predicate The filter predicate to pushdown
  */
 [[nodiscard]] std::unique_ptr<table_with_names> read_parquet(
-  std::string const& filename,
+  cudf::io::source_info const& source_info,
   std::vector<std::string> const& columns                = {},
   std::unique_ptr<cudf::ast::operation> const& predicate = nullptr)
 {
   CUDF_FUNC_RANGE();
-  auto const source = cudf::io::source_info(filename);
-  auto builder      = cudf::io::parquet_reader_options_builder(source);
+  auto builder = cudf::io::parquet_reader_options_builder(source_info);
   if (!columns.empty()) { builder.columns(columns); }
   if (predicate) { builder.filter(*predicate); }
   auto const options       = builder.build();
@@ -431,28 +535,105 @@ int32_t days_since_epoch(int year, int month, int day)
   return static_cast<int32_t>(diff);
 }
 
-struct tpch_example_args {
-  std::string dataset_dir;
-  std::string memory_resource_type;
+/**
+ * @brief Read the scale factor from the environment variable `CUDF_TPCH_SF`
+ */
+cudf::size_type get_sf()
+{
+  char* val          = getenv("CUDF_TPCH_SF");
+  cudf::size_type sf = (val == NULL) ? 1 : atoi(val);
+  std::cout << "Using scale factor: " << sf << std::endl;
+  return sf;
+}
+
+/**
+ * @brief Struct representing a parquet device buffer
+ */
+struct parquet_device_buffer {
+  parquet_device_buffer() : d_buffer{0, cudf::get_default_stream()} {};
+  cudf::io::source_info make_source_info() { return cudf::io::source_info(d_buffer); }
+  rmm::device_uvector<std::byte> d_buffer;
 };
 
 /**
- * @brief Parse command line arguments into a struct
+ * @brief Write a `cudf::table` to a parquet device buffer
  *
- * @param argc The number of command line arguments
- * @param argv The command line arguments
+ * @param table The `cudf::table` to write
+ * @param col_names The column names of the table
+ * @param parquet_device_buffer The parquet device buffer to write the table to
  */
-tpch_example_args parse_args(int argc, char const** argv)
+void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
+                                    std::vector<std::string> const& col_names,
+                                    parquet_device_buffer& source)
 {
-  if (argc < 3) {
-    std::string usage_message = "Usage: " + std::string(argv[0]) +
-                                " <dataset_dir> <memory_resource_type>\n The query result will be "
-                                "saved to a parquet file named q{query_no}.parquet in the current "
-                                "working directory ";
-    throw std::runtime_error(usage_message);
+  CUDF_FUNC_RANGE();
+  auto const stream = cudf::get_default_stream();
+
+  // Prepare the table metadata
+  cudf::io::table_metadata metadata;
+  std::vector<cudf::io::column_name_info> col_name_infos;
+  for (auto& col_name : col_names) {
+    col_name_infos.push_back(cudf::io::column_name_info(col_name));
   }
-  tpch_example_args args;
-  args.dataset_dir          = argv[1];
-  args.memory_resource_type = argv[2];
-  return args;
+  metadata.schema_info            = col_name_infos;
+  auto const table_input_metadata = cudf::io::table_input_metadata{metadata};
+
+  // Declare a host and device buffer
+  std::vector<char> h_buffer;
+
+  // Write parquet data to host buffer
+  auto builder =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&h_buffer), table->view());
+  builder.metadata(table_input_metadata);
+  auto const options = builder.build();
+  cudf::io::write_parquet(options);
+
+  // Copy host buffer to device buffer
+  source.d_buffer.resize(h_buffer.size(), stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    source.d_buffer.data(), h_buffer.data(), h_buffer.size(), cudaMemcpyDefault, stream.value()));
+}
+
+/**
+ * @brief Generate TPC-H tables and write to parquet device buffers
+ *
+ * @param table_names The names of the tables to generate
+ * @param sources The parquet data sources to populate
+ */
+void generate_parquet_data_sources(std::vector<std::string> const& table_names,
+                                   std::unordered_map<std::string, parquet_device_buffer>& sources)
+{
+  CUDF_FUNC_RANGE();
+  std::for_each(table_names.begin(), table_names.end(), [&](auto const& table_name) {
+    sources[table_name] = parquet_device_buffer();
+  });
+
+  auto scale_factor = get_sf();
+
+  auto [orders, lineitem, part] = cudf::datagen::generate_orders_lineitem_part(
+    scale_factor, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+
+  auto partsupp = cudf::datagen::generate_partsupp(
+    scale_factor, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+
+  auto supplier = cudf::datagen::generate_supplier(
+    scale_factor, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+
+  auto customer = cudf::datagen::generate_customer(
+    scale_factor, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+
+  auto nation = cudf::datagen::generate_nation(cudf::get_default_stream(),
+                                               rmm::mr::get_current_device_resource());
+
+  auto region = cudf::datagen::generate_region(cudf::get_default_stream(),
+                                               rmm::mr::get_current_device_resource());
+
+  write_to_parquet_device_buffer(std::move(orders), ORDERS, sources["orders"]);
+  write_to_parquet_device_buffer(std::move(lineitem), LINEITEM, sources["lineitem"]);
+  write_to_parquet_device_buffer(std::move(part), PART, sources["part"]);
+  write_to_parquet_device_buffer(std::move(partsupp), PARTSUPP, sources["partsupp"]);
+  write_to_parquet_device_buffer(std::move(customer), CUSTOMER, sources["customer"]);
+  write_to_parquet_device_buffer(std::move(supplier), SUPPLIER, sources["supplier"]);
+  write_to_parquet_device_buffer(std::move(nation), NATION, sources["nation"]);
+  write_to_parquet_device_buffer(std::move(region), REGION, sources["region"]);
 }
