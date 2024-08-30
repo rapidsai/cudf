@@ -337,16 +337,17 @@ def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
 
     with ctx:
         polars_schema = visitor.get_schema()
+        node = visitor.view_current_node()
+        schema = {k: dtypes.from_polars(v) for k, v in polars_schema.items()}
+        result = _translate_ir(node, visitor, schema)
         if any(
             isinstance(dtype, pl.Null)
             for dtype in pl.datatypes.unpack_dtypes(*polars_schema.values())
         ):
             raise NotImplementedError(
-                "No support for computing GPU dataframes with Null column dtype"
+                f"No GPU support for {result} with Null column dtype."
             )
-        node = visitor.view_current_node()
-        schema = {k: dtypes.from_polars(v) for k, v in polars_schema.items()}
-        return _translate_ir(node, visitor, schema)
+        return result
 
 
 def translate_named_expr(
