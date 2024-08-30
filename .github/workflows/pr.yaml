@@ -64,7 +64,7 @@ jobs:
           ref: ${{ inputs.sha }}
           persist-credentials: false
       - name: Calculate merge base
-        idD: calculate-merge-base
+        id: calculate-merge-base
         env:
           PR_SHA: ${{ input.sha }}
           BASE_SHA: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.ref }}
