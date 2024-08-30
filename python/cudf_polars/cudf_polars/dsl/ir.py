@@ -222,6 +222,8 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
+        if any(p.startswith("https://") for p in self.paths):
+            raise NotImplementedError("Read from https")
         if self.typ == "csv":
             if self.reader_options["skip_rows_after_header"] != 0:
                 raise NotImplementedError("Skipping rows after header in CSV reader")

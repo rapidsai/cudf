@@ -315,3 +315,8 @@ def test_scan_parquet_nested_null_raises(tmp_path):
     q = pl.scan_parquet(tmp_path / "file.pq")
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_hf_url_raises():
+    q = pl.scan_csv("hf://datasets/scikit-learn/iris/Iris.csv")
+    assert_ir_translation_raises(q, NotImplementedError)
