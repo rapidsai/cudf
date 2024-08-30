@@ -697,7 +697,7 @@ class BooleanFunction(Expr):
 
 
 class StringFunction(Expr):
-    __slots__ = ("name", "options", "children")
+    __slots__ = ("name", "options", "children", "_regex_program")
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
@@ -741,6 +741,16 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
+                pattern = self.children[1].value.as_py()
+                try:
+                    self._regex_program = plc.strings.regex_program.RegexProgram.create(
+                        pattern,
+                        flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
+                    )
+                except RuntimeError as e:
+                    raise NotImplementedError(
+                        f"Unsupported regex {pattern} for GPU engine."
+                    ) from e
         elif self.name == pl_expr.StringFunction.Replace:
             _, literal = self.options
             if not literal:
@@ -812,12 +822,10 @@ class StringFunction(Expr):
                     else pat.obj
                 )
                 return Column(plc.strings.find.contains(column.obj, pattern))
-            assert isinstance(arg, Literal)
-            prog = plc.strings.regex_program.RegexProgram.create(
-                arg.value.as_py(),
-                flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
-            )
-            return Column(plc.strings.contains.contains_re(column.obj, prog))
+            else:
+                return Column(
+                    plc.strings.contains.contains_re(column.obj, self._regex_program)
+                )
         elif self.name == pl_expr.StringFunction.Slice:
             child, expr_offset, expr_length = self.children
             assert isinstance(expr_offset, Literal)

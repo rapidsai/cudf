@@ -317,3 +317,23 @@ def test_strip_chars_end(strip_ldf, to_strip):
 def test_strip_chars_column(strip_ldf):
     q = strip_ldf.select(pl.col("a").str.strip_chars(pl.col("a")))
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_invalid_regex_raises():
+    df = pl.LazyFrame({"a": ["abc"]})
+
+    q = df.select(pl.col("a").str.contains(r"ab)", strict=True))
+
+    assert_collect_raises(
+        q,
+        polars_except=pl.exceptions.ComputeError,
+        cudf_except=pl.exceptions.ComputeError,
+    )
+
+
+@pytest.mark.parametrize("pattern", ["a{1000}", "a(?i:B)"])
+def test_unsupported_regex_raises(pattern):
+    df = pl.LazyFrame({"a": ["abc"]})
+
+    q = df.select(pl.col("a").str.contains(pattern, strict=True))
+    assert_ir_translation_raises(q, NotImplementedError)
