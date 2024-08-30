@@ -40,7 +40,7 @@ def add_months(Column col, Column months):
 @acquire_spill_lock()
 def extract_datetime_component(Column col, object field):
     result = Column.from_pylibcudf(
-        plc.extract_datetime_component(col.to_pylibcudf(mode="read"))
+        plc.datetime.extract_datetime_component(col.to_pylibcudf(mode="read"), field)
     )
 
     if field == "weekday":
