@@ -580,14 +580,32 @@ def read_parquet(
     # Prepare remote-IO options
     prefetch_options = kwargs.pop("prefetch_options", {})
     if not ioutils._is_local_filesystem(fs):
-        method = prefetch_options.get("method", "parquet")
+        method = prefetch_options.get("method")
+        _row_groups = None
+        if method in (None, "parquet"):
+            if row_groups is None:
+                # Don't use 'parquet' prefetcher for column
+                # projection alone.
+                method = method or "all"
+            elif all(r == row_groups[0] for r in row_groups):
+                # Row group selection means we are probably
+                # reading half the file or less. We should
+                # avoid a full file transfer by default.
+                method = "parquet"
+                _row_groups = row_groups[0]
+            elif (method := method or "all") == "parquet":
+                raise ValueError(
+                    "The 'parquet' prefetcher requires a uniform "
+                    "row-group selection for all paths within the "
+                    "same `read_parquet` call. "
+                    "Got: {row_groups}"
+                )
         if method == "parquet":
             prefetch_options = prefetch_options.update(
                 {
                     "method": method,
                     "columns": columns,
-                    # All paths must have the same row-group selection
-                    "row_groups": row_groups[0] if row_groups else None,
+                    "row_groups": _row_groups,
                 }
             )
 

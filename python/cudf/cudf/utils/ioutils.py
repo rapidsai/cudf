@@ -1,6 +1,8 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
+import functools
+import operator
 import os
 import urllib
 import warnings
@@ -193,6 +195,10 @@ nrows : int, default None
 allow_mismatched_pq_schemas : boolean, default False
     If True, enables reading (matching) columns specified in `columns` and `filters`
     options from the input files with otherwise mismatched schemas.
+prefetch_options : dict, default None
+    WARNING: This is an experimental feature (added in 24.10).
+    Dictionary of options to use to prefetch bytes from remote storage.
+    These options are passed through to `get_reader_filepath_or_buffer`.
 
 Returns
 -------
@@ -1445,6 +1451,13 @@ expand_dir_pattern : str, default None
     Glob pattern to use when expanding directories into file paths
     (e.g. "*.json"). If this parameter is not specified, directories
     will not be expanded.
+prefetch_options : dict, default None
+    WARNING: This is an experimental feature (added in 24.10).
+    Dictionary of options to use to prefetch bytes from remote storage.
+    These options are only used when `path_or_data` is a list of remote
+    paths. If 'method' is set to 'all' (the default), the only supported
+    option is 'blocksize' (default 256 MB). If method is set to 'parquet',
+    'columns' and 'row_groups' are also supported (default None).
 
 Returns
 -------
@@ -2100,32 +2113,32 @@ def _read_byte_ranges(
 def _get_remote_bytes_all(
     remote_paths, fs, *, blocksize=_BYTES_PER_THREAD_DEFAULT
 ):
-    if (
-        len(remote_paths) >= 8  # Heuristic to avoid fs.sizes
-        or max(sizes := fs.sizes(remote_paths)) <= blocksize
-    ):
-        # Don't bother braking up individual files
+    # TODO: Experiment with a heuristic to avoid the fs.sizes
+    # call when we are reading many files at once (the latency
+    # of collecting the file sizes is unnecessary in this case)
+    if max(sizes := fs.sizes(remote_paths)) <= blocksize:
+        # Don't bother breaking up individual files
         return fs.cat_ranges(remote_paths, None, None)
     else:
         # Construct list of paths, starts, and ends
-        paths, starts, ends = [], [], []
-        for i, remote_path in enumerate(remote_paths):
-            for j in range(0, sizes[i], blocksize):
-                paths.append(remote_path)
-                starts.append(j)
-                ends.append(min(j + blocksize, sizes[i]))
+        paths, starts, ends = zip(
+            *[
+                (r, j, min(j + blocksize, s))
+                for r, s in zip(remote_paths, sizes)
+                for j in range(0, s, blocksize)
+            ]
+        )
 
         # Collect the byte ranges
         chunks = fs.cat_ranges(paths, starts, ends)
 
         # Construct local byte buffers
-        buffers = []
-        path_counts = np.unique(paths, return_counts=True)[1]
-        for i, remote_path in enumerate(remote_paths):
-            bytes_arr = bytearray()
-            for j in range(path_counts[i]):
-                bytes_arr.extend(chunks.pop(0))
-            buffers.append(bytes(bytes_arr))
+        buffers = [
+            functools.reduce(operator.add, chunks[:counts])
+            for _, counts in zip(
+                remote_paths, np.unique(paths, return_counts=True)[1]
+            )
+        ]
         return buffers
 
 
@@ -2151,10 +2164,10 @@ def _get_remote_bytes_parquet(
 
     buffers = []
     for size, path in zip(sizes, remote_paths):
-        path_data = data.pop(path)
-        buf = np.zeros(size, dtype="b")
-        for range_offset in list(path_data.keys()):
-            chunk = path_data.pop(range_offset)
+        path_data = data[path]
+        buf = np.empty(size, dtype="b")
+        for range_offset in path_data.keys():
+            chunk = path_data[range_offset]
             buf[range_offset[0] : range_offset[1]] = np.frombuffer(
                 chunk, dtype="b"
             )
