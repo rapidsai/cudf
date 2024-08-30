@@ -529,6 +529,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
             name=self.name,
         )
 
+    def to_frame(
+        self, index: bool = True, name: Hashable = no_default
+    ) -> cudf.DataFrame:
+        return self._as_int_index().to_frame(index=index, name=name)
+
     @property
     def is_unique(self) -> bool:
         return True
@@ -1645,6 +1650,58 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
         result.name = self.name
         return result
+
+    def to_frame(
+        self, index: bool = True, name: Hashable = no_default
+    ) -> cudf.DataFrame:
+        """Create a DataFrame with a column containing this Index
+
+        Parameters
+        ----------
+        index : boolean, default True
+            Set the index of the returned DataFrame as the original Index
+        name : object, defaults to index.name
+            The passed name should substitute for the index name (if it has
+            one).
+
+        Returns
+        -------
+        DataFrame
+            DataFrame containing the original Index data.
+
+        See Also
+        --------
+        Index.to_series : Convert an Index to a Series.
+        Series.to_frame : Convert Series to DataFrame.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index(['Ant', 'Bear', 'Cow'], name='animal')
+        >>> idx.to_frame()
+               animal
+        animal
+        Ant       Ant
+        Bear     Bear
+        Cow       Cow
+
+        By default, the original Index is reused. To enforce a new Index:
+
+        >>> idx.to_frame(index=False)
+            animal
+        0   Ant
+        1  Bear
+        2   Cow
+
+        To override the name of the resulting column, specify `name`:
+
+        >>> idx.to_frame(index=False, name='zoo')
+            zoo
+        0   Ant
+        1  Bear
+        2   Cow
+        """
+        return self._to_frame(name=name, index=self if index else None)
 
     def append(self, other):
         if is_list_like(other):
