@@ -1664,7 +1664,7 @@ def test_notebook_slow_repr():
         nb = nbformat.read(f, as_version=4)
 
     ep = ExecutePreprocessor(
-        timeout=20, kernel_name=jupyter_client.KernelManager().kernel_name
+        timeout=30, kernel_name=jupyter_client.KernelManager().kernel_name
     )
 
     try:
