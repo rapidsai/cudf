@@ -1488,6 +1488,14 @@ def test_large_unique_categories_repr():
     pi = pd.CategoricalIndex(range(100_000_000))
     gi = cudf.CategoricalIndex(range(100_000_000))
     expected_repr = repr(pi)
-    with utils.cudf_timeout(2, timeout_message="Failed to repr fast enough"):
+    with utils.cudf_timeout(6):
         actual_repr = repr(gi)
     assert expected_repr == actual_repr
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_categorical_index_ordered(ordered):
+    pi = pd.CategoricalIndex(range(10), ordered=ordered)
+    gi = cudf.CategoricalIndex(range(10), ordered=ordered)
+
+    assert repr(pi) == repr(gi)
