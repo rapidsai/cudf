@@ -1540,6 +1540,10 @@ class Agg(Expr):
             raise NotImplementedError("Nan propagation in groupby for min/max")
         (child,) = self.children
         ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
+        request = self.request
+        # These are handled specially here because we don't set up the
+        # request for the whole-frame agg because we can avoid a
+        # reduce for these.
         if self.name == "first":
             request = plc.aggregation.nth_element(
                 0, null_handling=plc.types.NullPolicy.INCLUDE
@@ -1548,8 +1552,6 @@ class Agg(Expr):
             request = plc.aggregation.nth_element(
                 -1, null_handling=plc.types.NullPolicy.INCLUDE
             )
-        else:
-            request = self.request
         if request is None:
             raise NotImplementedError(
                 f"Aggregation {self.name} in groupby"
