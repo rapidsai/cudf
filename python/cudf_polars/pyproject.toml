@@ -58,6 +58,9 @@ exclude_also = [
   "class .*\\bProtocol\\):",
   "assert_never\\("
 ]
+# The cudf_polars test suite doesn't exercise the plugin, so we omit
+# it from coverage checks.
+omit = ["cudf_polars/testing/plugin.py"]
 
 [tool.ruff]
 line-length = 88
