@@ -202,6 +202,7 @@ class Scan(IR):
 
     def __post_init__(self) -> None:
         """Validate preconditions."""
+        super().__post_init__()
         if self.typ not in ("csv", "parquet", "ndjson"):  # pragma: no cover
             # This line is unhittable ATM since IPC/Anonymous scan raise
             # on the polars side
@@ -537,6 +538,7 @@ class GroupBy(IR):
 
     def __post_init__(self) -> None:
         """Check whether all the aggregations are implemented."""
+        super().__post_init__()
         if self.options.rolling:
             raise NotImplementedError(
                 "rolling window/groupby"
@@ -649,6 +651,7 @@ class Join(IR):
 
     def __post_init__(self) -> None:
         """Validate preconditions."""
+        super().__post_init__()
         if any(
             isinstance(e.value, expr.Literal)
             for e in itertools.chain(self.left_on, self.right_on)
@@ -1075,6 +1078,7 @@ class MapFunction(IR):
 
     def __post_init__(self) -> None:
         """Validate preconditions."""
+        super().__post_init__()
         if self.name not in MapFunction._NAMES:
             raise NotImplementedError(f"Unhandled map function {self.name}")
         if self.name == "explode":
@@ -1127,6 +1131,7 @@ class Union(IR):
 
     def __post_init__(self) -> None:
         """Validate preconditions."""
+        super().__post_init__()
         schema = self.dfs[0].schema
         if not all(s.schema == schema for s in self.dfs[1:]):
             raise NotImplementedError("Schema mismatch")
