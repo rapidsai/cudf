@@ -75,11 +75,13 @@ class Frame(BinaryOperand, Scannable):
         return self._data.columns
 
     @property
-    def _column_labels_and_values(self) -> abc.Iterable:
+    def _column_labels_and_values(
+        self,
+    ) -> abc.Iterable[tuple[abc.Hashable, ColumnBase]]:
         return zip(self._column_names, self._columns)
 
     @property
-    def _dtypes(self) -> abc.Generator:
+    def _dtypes(self) -> abc.Generator[tuple[abc.Hashable, Dtype], None, None]:
         for label, col in self._column_labels_and_values:
             yield label, col.dtype
 

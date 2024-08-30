@@ -293,7 +293,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property
     @_performance_tracking
-    def _columns(self) -> tuple[NumericalColumn]:
+    def _columns(self) -> tuple[ColumnBase]:
         return (self._values,)
 
     @property
