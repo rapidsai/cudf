@@ -67,6 +67,8 @@ jobs:
       - name: Get changed files
         id: changed-files
         uses: tj-actions/changed-files@v45
+        env:
+          ACTIONS_STEP_DEBUG: true
         with:
           base_sha: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.sha }}
           files_yaml: |
