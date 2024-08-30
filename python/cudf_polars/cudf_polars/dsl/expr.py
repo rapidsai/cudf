@@ -1218,6 +1218,8 @@ class UnaryFunction(Expr):
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
+        if self.name in {"unique", "drop_nulls"} | self._supported_cum_aggs:
+            raise NotImplementedError(f"{self.name} in groupby")
         if depth == 1:
             # inside aggregation, need to pre-evaluate, groupby
             # construction has checked that we don't have nested aggs,
