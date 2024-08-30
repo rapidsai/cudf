@@ -707,9 +707,12 @@ TEST_F(JsonReaderTest, JsonLinesByteRangeWithRealloc)
     return json_string;
   }();
 
-  // Initialize parsing options (reading json lines). Set byte range offset and size so as to read the second row of input
+  // Initialize parsing options (reading json lines). Set byte range offset and size so as to read
+  // the second row of input
   cudf::io::json_reader_options json_lines_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(json_string.data()), json_string.size())})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte>(
+        reinterpret_cast<std::byte*>(json_string.data()), json_string.size())})
       .lines(true)
       .compression(cudf::io::compression_type::NONE)
       .recovery_mode(cudf::io::json_recovery_mode_t::FAIL)
