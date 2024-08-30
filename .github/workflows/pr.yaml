@@ -56,18 +56,18 @@ jobs:
       - name: Checkout base branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.ref }}
+          ref: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.sha }}
           persist-credentials: false
       - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.sha }}
+          ref: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).head.sha }}
           persist-credentials: false
       - name: Calculate merge base
         id: calculate-merge-base
         env:
-          PR_SHA: ${{ inputs.sha }}
-          BASE_SHA: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.ref }}
+          PR_SHA: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).head.sha }}
+          BASE_SHA: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.sha }}
         run: |
           (echo -n "merge-base="; git merge-base "$BASE_SHA" "$PR_SHA") > "$GITHUB_OUTPUT"
       - name: Get changed files
