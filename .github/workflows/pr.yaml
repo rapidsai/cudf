@@ -53,22 +53,28 @@ jobs:
       - name: Get PR info
         id: get-pr-info
         uses: rapidsai/shared-actions/get-pr-info@main
-      - name: Calculate number of commits to fetch
-        id: calculate-num-commits
-        env:
-          COMMITS: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).commits }}
-        run: echo "commits=$(( "$COMMITS" + 1 ))" >> "$GITHUB_OUTPUT"
-      - name: Checkout code repo
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.ref }}
+          persist-credentials: false
+      - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.sha }}
-          fetch-depth: ${{ steps.calculate-num-commits.outputs.commits }}
           persist-credentials: false
+      - name: Calculate merge base
+        idD: calculate-merge-base
+        env:
+          PR_SHA: ${{ input.sha }}
+          BASE_SHA: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.ref }}
+        run: |
+          (echo -n "merge-base="; git merge-base "$BASE_SHA" "$PR_SHA") > "$GITHUB_OUTPUT"
       - name: Get changed files
         id: changed-files
         uses: tj-actions/changed-files@v45
         with:
-          base_sha: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.sha }}
+          base_sha: ${{ steps.calculate-merge-base.outputs.merge-base }}
           files_yaml: |
             cpp:
               - '**'
