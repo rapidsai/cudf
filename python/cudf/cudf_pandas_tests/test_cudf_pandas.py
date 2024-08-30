@@ -14,9 +14,12 @@ import tempfile
 import types
 from io import BytesIO, StringIO
 
+import jupyter_client
+import nbformat
 import numpy as np
 import pyarrow as pa
 import pytest
+from nbconvert.preprocessors import ExecutePreprocessor
 from numba import NumbaDeprecationWarning
 from pytz import utc
 
@@ -41,6 +44,8 @@ from pandas.tseries.holiday import (
     USThanksgivingDay,
     get_calendar,
 )
+
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 # Accelerated pandas has the real pandas and cudf modules as attributes
 pd = xpd._fsproxy_slow
@@ -607,6 +612,10 @@ def test_array_function_series_fallback(series):
     tm.assert_equal(expect, got)
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_timedeltaproperties(series):
     psr, sr = series
     psr, sr = psr.astype("timedelta64[ns]"), sr.astype("timedelta64[ns]")
@@ -666,6 +675,10 @@ def test_maintain_container_subclasses(multiindex):
     assert isinstance(got, xpd.core.indexes.frozen.FrozenList)
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas due to unsupported boxcar window type",
+)
 def test_rolling_win_type():
     pdf = pd.DataFrame(range(5))
     df = xpd.DataFrame(range(5))
@@ -1281,6 +1294,10 @@ def test_super_attribute_lookup():
     assert s.max_times_two() == 6
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="DatetimeArray.__floordiv__ missing in pandas-2.0.0",
+)
 def test_floordiv_array_vs_df():
     xarray = xpd.Series([1, 2, 3], dtype="datetime64[ns]").array
     parray = pd.Series([1, 2, 3], dtype="datetime64[ns]").array
@@ -1552,6 +1569,10 @@ def test_numpy_cupy_flatiter(series):
     assert type(arr.flat._fsproxy_slow) == np.flatiter
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="pyarrow_numpy storage type was not supported in pandas-2.0.0",
+)
 def test_arrow_string_arrays():
     cu_s = xpd.Series(["a", "b", "c"])
     pd_s = pd.Series(["a", "b", "c"])
@@ -1632,3 +1653,36 @@ def test_change_index_name(index):
 
         assert s.index.name == name
         assert df.index.name == name
+
+
+def test_notebook_slow_repr():
+    notebook_filename = (
+        os.path.dirname(os.path.abspath(__file__))
+        + "/data/repr_slow_down_test.ipynb"
+    )
+    with open(notebook_filename, "r", encoding="utf-8") as f:
+        nb = nbformat.read(f, as_version=4)
+
+    ep = ExecutePreprocessor(
+        timeout=30, kernel_name=jupyter_client.KernelManager().kernel_name
+    )
+
+    try:
+        ep.preprocess(nb, {"metadata": {"path": "./"}})
+    except Exception as e:
+        assert False, f"Error executing the notebook: {e}"
+
+    # Collect the outputs
+    html_result = nb.cells[2]["outputs"][0]["data"]["text/html"]
+    for string in {
+        "div",
+        "Column_1",
+        "Column_2",
+        "Column_3",
+        "Column_4",
+        "tbody",
+        "</table>",
+    }:
+        assert (
+            string in html_result
+        ), f"Expected string {string} not found in the output"

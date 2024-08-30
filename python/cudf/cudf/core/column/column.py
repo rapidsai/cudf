@@ -352,13 +352,17 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
             codes = libcudf.interop.from_arrow(indices_table)[0]
             categories = libcudf.interop.from_arrow(dictionaries_table)[0]
-
-            return build_categorical_column(
-                categories=categories,
-                codes=codes,
-                mask=codes.base_mask,
+            codes = cudf.core.column.categorical.as_unsigned_codes(
+                len(categories), codes
+            )
+            return cudf.core.column.CategoricalColumn(
+                data=None,
                 size=codes.size,
-                ordered=array.type.ordered,
+                dtype=CategoricalDtype(
+                    categories=categories, ordered=array.type.ordered
+                ),
+                mask=codes.base_mask,
+                children=(codes,),
             )
 
         result = libcudf.interop.from_arrow(data)[0]
@@ -553,7 +557,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
 
         # Normalize value to scalar/column
-        value_normalized = (
+        value_normalized: cudf.Scalar | ColumnBase = (
             cudf.Scalar(value, dtype=self.dtype)
             if is_scalar(value)
             else as_column(value, dtype=self.dtype)
@@ -609,9 +613,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 )
 
         # step != 1, create a scatter map with arange
-        scatter_map = as_column(
-            rng,
-            dtype=cudf.dtype(np.int32),
+        scatter_map = cast(
+            cudf.core.column.NumericalColumn,
+            as_column(
+                rng,
+                dtype=cudf.dtype(np.int32),
+            ),
         )
 
         return self._scatter_by_column(scatter_map, value)
@@ -947,10 +954,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         )
 
     def sort_values(
-        self: ColumnBase,
+        self: Self,
         ascending: bool = True,
         na_position: str = "last",
-    ) -> ColumnBase:
+    ) -> Self:
         if (not ascending and self.is_monotonic_decreasing) or (
             ascending and self.is_monotonic_increasing
         ):
@@ -1038,12 +1045,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             and dtype._categories is not None
         ):
             cat_col = dtype._categories
-            labels = self._label_encoding(cats=cat_col)
-            return build_categorical_column(
-                categories=cat_col,
-                codes=labels,
+            codes = self._label_encoding(cats=cat_col)
+            codes = cudf.core.column.categorical.as_unsigned_codes(
+                len(cat_col), codes
+            )
+            return cudf.core.column.categorical.CategoricalColumn(
+                data=None,
+                size=None,
+                dtype=dtype,
                 mask=self.mask,
-                ordered=dtype.ordered,
+                children=(codes,),
             )
 
         # Categories must be unique and sorted in ascending order.
@@ -1055,15 +1066,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # columns include null index in factorization; remove:
         if self.has_nulls():
             cats = cats.dropna()
-            min_type = min_unsigned_type(len(cats), 8)
-            if cudf.dtype(min_type).itemsize < labels.dtype.itemsize:
-                labels = labels.astype(min_type)
 
-        return build_categorical_column(
-            categories=cats,
-            codes=labels,
+        labels = cudf.core.column.categorical.as_unsigned_codes(
+            len(cats), labels
+        )
+        return cudf.core.column.categorical.CategoricalColumn(
+            data=None,
+            size=None,
+            dtype=CategoricalDtype(categories=cats, ordered=ordered),
             mask=self.mask,
-            ordered=ordered,
+            children=(labels,),
         )
 
     def as_numerical_column(
@@ -1111,11 +1123,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if (ascending and self.is_monotonic_increasing) or (
             not ascending and self.is_monotonic_decreasing
         ):
-            return as_column(range(len(self)))
+            return cast(
+                cudf.core.column.NumericalColumn, as_column(range(len(self)))
+            )
         elif (ascending and self.is_monotonic_decreasing) or (
             not ascending and self.is_monotonic_increasing
         ):
-            return as_column(range(len(self) - 1, -1, -1))
+            return cast(
+                cudf.core.column.NumericalColumn,
+                as_column(range(len(self) - 1, -1, -1)),
+            )
         else:
             return libcudf.sort.order_by(
                 [self], [ascending], na_position, stable=True
@@ -1178,7 +1195,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             na_position=na_position,
         )
 
-    def unique(self) -> ColumnBase:
+    def unique(self) -> Self:
         """
         Get unique values in the data
         """
@@ -1466,22 +1483,6 @@ def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
     )
 
 
-def column_empty_like_same_mask(
-    column: ColumnBase, dtype: Dtype
-) -> ColumnBase:
-    """Create a new empty Column with the same length and the same mask.
-
-    Parameters
-    ----------
-    dtype : np.dtype like
-        The dtype of the data buffer.
-    """
-    result = column_empty_like(column, dtype)
-    if column.nullable:
-        result = result.set_mask(column.mask)
-    return result
-
-
 def column_empty(
     row_count: int, dtype: Dtype = "object", masked: bool = False
 ) -> ColumnBase:
@@ -1513,6 +1514,7 @@ def column_empty(
                         * cudf.dtype(libcudf.types.size_type_dtype).itemsize
                     )
                 ),
+                size=None,
                 dtype=libcudf.types.size_type_dtype,
             ),
         )
@@ -1577,25 +1579,18 @@ def build_column(
         return col
 
     if isinstance(dtype, CategoricalDtype):
-        if not len(children) == 1:
-            raise ValueError(
-                "Must specify exactly one child column for CategoricalColumn"
-            )
-        if not isinstance(children[0], ColumnBase):
-            raise TypeError("children must be a tuple of Columns")
         return cudf.core.column.CategoricalColumn(
+            data=data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             size=size,
             offset=offset,
             null_count=null_count,
-            children=children,
+            children=children,  # type: ignore[arg-type]
         )
     elif dtype.type is np.datetime64:
-        if data is None:
-            raise TypeError("Must specify data buffer")
         return cudf.core.column.DatetimeColumn(
-            data=data,
+            data=data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             size=size,
@@ -1603,10 +1598,8 @@ def build_column(
             null_count=null_count,
         )
     elif isinstance(dtype, pd.DatetimeTZDtype):
-        if data is None:
-            raise TypeError("Must specify data buffer")
         return cudf.core.column.datetime.DatetimeTZColumn(
-            data=data,
+            data=data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             size=size,
@@ -1614,10 +1607,8 @@ def build_column(
             null_count=null_count,
         )
     elif dtype.type is np.timedelta64:
-        if data is None:
-            raise TypeError("Must specify data buffer")
         return cudf.core.column.TimeDeltaColumn(
-            data=data,
+            data=data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             size=size,
@@ -1635,40 +1626,38 @@ def build_column(
         )
     elif isinstance(dtype, ListDtype):
         return cudf.core.column.ListColumn(
-            size=size,
+            data=None,
+            size=size,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            children=children,  # type: ignore[arg-type]
         )
     elif isinstance(dtype, IntervalDtype):
         return cudf.core.column.IntervalColumn(
+            data=None,
+            size=size,  # type: ignore[arg-type]
             dtype=dtype,
             mask=mask,
-            size=size,
             offset=offset,
-            children=children,
             null_count=null_count,
+            children=children,  # type: ignore[arg-type]
         )
     elif isinstance(dtype, StructDtype):
-        if size is None:
-            raise TypeError("Must specify size")
         return cudf.core.column.StructColumn(
-            data=data,
+            data=None,
+            size=size,  # type: ignore[arg-type]
             dtype=dtype,
-            size=size,
-            offset=offset,
             mask=mask,
+            offset=offset,
             null_count=null_count,
-            children=children,
+            children=children,  # type: ignore[arg-type]
         )
     elif isinstance(dtype, cudf.Decimal64Dtype):
-        if size is None:
-            raise TypeError("Must specify size")
         return cudf.core.column.Decimal64Column(
-            data=data,
-            size=size,
+            data=data,  # type: ignore[arg-type]
+            size=size,  # type: ignore[arg-type]
             offset=offset,
             dtype=dtype,
             mask=mask,
@@ -1676,11 +1665,9 @@ def build_column(
             children=children,
         )
     elif isinstance(dtype, cudf.Decimal32Dtype):
-        if size is None:
-            raise TypeError("Must specify size")
         return cudf.core.column.Decimal32Column(
-            data=data,
-            size=size,
+            data=data,  # type: ignore[arg-type]
+            size=size,  # type: ignore[arg-type]
             offset=offset,
             dtype=dtype,
             mask=mask,
@@ -1688,11 +1675,9 @@ def build_column(
             children=children,
         )
     elif isinstance(dtype, cudf.Decimal128Dtype):
-        if size is None:
-            raise TypeError("Must specify size")
         return cudf.core.column.Decimal128Column(
-            data=data,
-            size=size,
+            data=data,  # type: ignore[arg-type]
+            size=size,  # type: ignore[arg-type]
             offset=offset,
             dtype=dtype,
             mask=mask,
@@ -1701,51 +1686,6 @@ def build_column(
         )
     else:
         raise TypeError(f"Unrecognized dtype: {dtype}")
-
-
-def build_categorical_column(
-    categories: ColumnBase,
-    codes: ColumnBase,
-    mask: Buffer | None = None,
-    size: int | None = None,
-    offset: int = 0,
-    null_count: int | None = None,
-    ordered: bool = False,
-) -> "cudf.core.column.CategoricalColumn":
-    """
-    Build a CategoricalColumn
-
-    Parameters
-    ----------
-    categories : Column
-        Column of categories
-    codes : Column
-        Column of codes, the size of the resulting Column will be
-        the size of `codes`
-    mask : Buffer
-        Null mask
-    size : int, optional
-    offset : int, optional
-    ordered : bool, default False
-        Indicates whether the categories are ordered
-    """
-    codes_dtype = min_unsigned_type(len(categories))
-    codes = as_column(codes)
-    if codes.dtype != codes_dtype:
-        codes = codes.astype(codes_dtype)
-
-    dtype = CategoricalDtype(categories=categories, ordered=ordered)
-
-    result = build_column(
-        data=None,
-        dtype=dtype,
-        mask=mask,
-        size=size,
-        offset=offset,
-        null_count=null_count,
-        children=(codes,),
-    )
-    return cast("cudf.core.column.CategoricalColumn", result)
 
 
 def check_invalid_array(shape: tuple, dtype):
@@ -1768,7 +1708,7 @@ def as_column(
     nan_as_null: bool | None = None,
     dtype: Dtype | None = None,
     length: int | None = None,
-):
+) -> ColumnBase:
     """Create a Column from an arbitrary object
 
     Parameters

@@ -24,8 +24,8 @@ rapids_test_init()
 # properties and linking to build the test
 function(ConfigureTest CMAKE_TEST_NAME)
   set(options)
-  set(one_value GPUS PERCENT STREAM_MODE EXTRA_LIB)
-  set(multi_value)
+  set(one_value GPUS PERCENT STREAM_MODE)
+  set(multi_value EXTRA_LIBS)
   cmake_parse_arguments(_CUDF_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
   if(NOT DEFINED _CUDF_TEST_GPUS AND NOT DEFINED _CUDF_TEST_PERCENT)
     set(_CUDF_TEST_GPUS 1)
@@ -57,7 +57,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
   target_link_libraries(
     ${CMAKE_TEST_NAME}
     PRIVATE cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
-            nvtx3::nvtx3-cpp $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIB}"
+            nvtx3::nvtx3-cpp $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
   )
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
@@ -77,6 +77,14 @@ function(ConfigureTest CMAKE_TEST_NAME)
     )
   endif()
 endfunction()
+
+# ##################################################################################################
+# dependencies  ###################################################################################
+# ##################################################################################################
+
+# No need to install Arrow libs when only the final test executables are shipped.
+set(CUDF_EXCLUDE_ARROW_FROM_ALL ON)
+include(../cmake/thirdparty/get_arrow.cmake)
 
 # ##################################################################################################
 # test sources ##################################################################################
@@ -197,7 +205,7 @@ ConfigureTest(
   QUANTILES_TEST quantiles/percentile_approx_test.cpp quantiles/quantile_test.cpp
   quantiles/quantiles_test.cpp
   GPUS 1
-  PERCENT 70
+  PERCENT 70 EXTRA_LIBS ${ARROW_LIBRARIES}
 )
 
 # ##################################################################################################
@@ -276,8 +284,9 @@ ConfigureTest(
   interop/from_arrow_host_test.cpp
   interop/from_arrow_stream_test.cpp
   interop/dlpack_test.cpp
-  EXTRA_LIB
+  EXTRA_LIBS
   nanoarrow
+  ${ARROW_LIBRARIES}
 )
 
 # ##################################################################################################
@@ -288,7 +297,7 @@ ConfigureTest(ROW_SELECTION_TEST io/row_selection_test.cpp)
 ConfigureTest(
   CSV_TEST io/csv_test.cpp
   GPUS 1
-  PERCENT 30
+  PERCENT 30 EXTRA_LIBS ${ARROW_LIBRARIES}
 )
 ConfigureTest(
   FILE_IO_TEST io/file_io_test.cpp
@@ -316,12 +325,11 @@ ConfigureTest(
 ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu
   GPUS 1
-  PERCENT 30
+  PERCENT 30 EXTRA_LIBS ${ARROW_LIBRARIES}
 )
 ConfigureTest(JSON_WRITER_TEST io/json/json_writer.cpp)
 ConfigureTest(JSON_TYPE_CAST_TEST io/json/json_type_cast_test.cu)
 ConfigureTest(NESTED_JSON_TEST io/json/nested_json_test.cpp io/json/json_tree.cpp)
-ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
 ConfigureTest(JSON_QUOTE_NORMALIZATION io/json/json_quote_normalization_test.cpp)
 ConfigureTest(JSON_WHITESPACE_NORMALIZATION io/json/json_whitespace_normalization_test.cu)
@@ -334,9 +342,6 @@ target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
 ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
-if(CUDF_ENABLE_ARROW_S3)
-  target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
-endif()
 
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
@@ -393,6 +398,7 @@ ConfigureTest(
   utilities_tests/pinned_memory_tests.cpp
   utilities_tests/type_check_tests.cpp
   utilities_tests/type_list_tests.cpp
+  utilities_tests/batched_memset_tests.cu
 )
 
 # ##################################################################################################
@@ -689,10 +695,6 @@ ConfigureTest(STREAM_DICTIONARY_TEST streams/dictionary_test.cpp STREAM_MODE tes
 ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp STREAM_MODE testing)
-# Deprecation from 16297 and fixes in 16379 caused this test to be empty This will be reenabled once
-# the deprecated APIs have been replaced in 24.10.
-#
-# ConfigureTest(STREAM_INTEROP_TEST streams/interop_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LABELING_BINS_TEST streams/labeling_bins_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
@@ -735,6 +737,7 @@ ConfigureTest(
   STREAM_MODE
   testing
 )
+ConfigureTest(STREAM_TRANSFORM_TEST streams/transform_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_UNARY_TEST streams/unary_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################

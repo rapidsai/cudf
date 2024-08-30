@@ -8,14 +8,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Literal, Protocol, Union
 
+import pylibcudf as plc
+
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
-import cudf._lib.pylibcudf as plc
-
 if TYPE_CHECKING:
-    from typing import Callable
-
-    from typing_extensions import TypeAlias
+    from collections.abc import Callable
+    from typing import TypeAlias
 
     import polars as pl
 
