@@ -52,6 +52,7 @@ def keys(request):
         [(pl.col("float") - pl.lit(2)).max()],
         [pl.col("float").sum().round(decimals=1)],
         [pl.col("float").round(decimals=1).sum()],
+        [pl.col("int").first(), pl.col("float").last()],
     ],
     ids=lambda aggs: "-".join(map(str, aggs)),
 )
