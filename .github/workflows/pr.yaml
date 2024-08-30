@@ -53,15 +53,10 @@ jobs:
       - name: Get PR info
         id: get-pr-info
         uses: rapidsai/shared-actions/get-pr-info@main
-      - name: Checkout base branch
+      - name: Checkout code repo
         uses: actions/checkout@v4
         with:
-          ref: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.sha }}
-          persist-credentials: false
-      - name: Checkout PR branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).head.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Calculate merge base
         id: calculate-merge-base
