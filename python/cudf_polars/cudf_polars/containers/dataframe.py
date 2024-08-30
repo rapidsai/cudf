@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import itertools
 from functools import cached_property
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pyarrow as pa
 
@@ -46,11 +46,19 @@ class DataFrame:
 
     def to_polars(self) -> pl.DataFrame:
         """Convert to a polars DataFrame."""
+        # If the arrow table has empty names, from_arrow produces
+        # column_$i. But here we know there is only one such column
+        # (by construction) and it should have an empty name.
+        # https://github.com/pola-rs/polars/issues/11632
+        # To guarantee we produce correct names, we therefore
+        # serialise with names we control and rename with that map.
+        name_map = {f"column_{i}": c.name for i, c in enumerate(self.columns)}
         table: pa.Table = plc.interop.to_arrow(
             self.table,
-            [plc.interop.ColumnMetadata(name=c.name) for c in self.columns],
+            [plc.interop.ColumnMetadata(name=name) for name in name_map],
         )
-        return cast(pl.DataFrame, pl.from_arrow(table)).with_columns(
+        df: pl.DataFrame = pl.from_arrow(table)
+        return df.rename(name_map).with_columns(
             *(
                 pl.col(c.name).set_sorted(
                     descending=c.order == plc.types.Order.DESCENDING

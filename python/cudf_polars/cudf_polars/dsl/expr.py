@@ -21,7 +21,9 @@ from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 import pyarrow as pa
+import pyarrow.compute as pc
 
+from polars.exceptions import InvalidOperationError
 from polars.polars import _expr_nodes as pl_expr
 
 import cudf._lib.pylibcudf as plc
@@ -714,12 +716,18 @@ class StringFunction(Expr):
 
     def _validate_input(self):
         if self.name not in (
-            pl_expr.StringFunction.Lowercase,
-            pl_expr.StringFunction.Uppercase,
-            pl_expr.StringFunction.EndsWith,
-            pl_expr.StringFunction.StartsWith,
             pl_expr.StringFunction.Contains,
+            pl_expr.StringFunction.EndsWith,
+            pl_expr.StringFunction.Lowercase,
+            pl_expr.StringFunction.Replace,
+            pl_expr.StringFunction.ReplaceMany,
             pl_expr.StringFunction.Slice,
+            pl_expr.StringFunction.Strptime,
+            pl_expr.StringFunction.StartsWith,
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+            pl_expr.StringFunction.Uppercase,
         ):
             raise NotImplementedError(f"String function {self.name}")
         if self.name == pl_expr.StringFunction.Contains:
@@ -733,10 +741,54 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
+        elif self.name == pl_expr.StringFunction.Replace:
+            _, literal = self.options
+            if not literal:
+                raise NotImplementedError("literal=False is not supported for replace")
+            if not all(isinstance(expr, Literal) for expr in self.children[1:]):
+                raise NotImplementedError("replace only supports scalar target")
+            target = self.children[1]
+            if target.value == pa.scalar("", type=pa.string()):
+                raise NotImplementedError(
+                    "libcudf replace does not support empty strings"
+                )
+        elif self.name == pl_expr.StringFunction.ReplaceMany:
+            (ascii_case_insensitive,) = self.options
+            if ascii_case_insensitive:
+                raise NotImplementedError(
+                    "ascii_case_insensitive not implemented for replace_many"
+                )
+            if not all(
+                isinstance(expr, (LiteralColumn, Literal)) for expr in self.children[1:]
+            ):
+                raise NotImplementedError("replace_many only supports literal inputs")
+            target = self.children[1]
+            if pc.any(pc.equal(target.value, "")).as_py():
+                raise NotImplementedError(
+                    "libcudf replace_many is implemented differently from polars "
+                    "for empty strings"
+                )
         elif self.name == pl_expr.StringFunction.Slice:
             if not all(isinstance(child, Literal) for child in self.children[1:]):
                 raise NotImplementedError(
                     "Slice only supports literal start and stop values"
+                )
+        elif self.name == pl_expr.StringFunction.Strptime:
+            format, _, exact, cache = self.options
+            if cache:
+                raise NotImplementedError("Strptime cache is a CPU feature")
+            if format is None:
+                raise NotImplementedError("Strptime format is required")
+            if not exact:
+                raise NotImplementedError("Strptime does not support exact=False")
+        elif self.name in {
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+        }:
+            if not isinstance(self.children[1], Literal):
+                raise NotImplementedError(
+                    "strip operations only support scalar patterns"
                 )
 
     def do_evaluate(
@@ -796,6 +848,22 @@ class StringFunction(Expr):
                     plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
                 )
             )
+        elif self.name in {
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+        }:
+            column, chars = (
+                c.evaluate(df, context=context, mapping=mapping) for c in self.children
+            )
+            if self.name == pl_expr.StringFunction.StripCharsStart:
+                side = plc.strings.SideType.LEFT
+            elif self.name == pl_expr.StringFunction.StripCharsEnd:
+                side = plc.strings.SideType.RIGHT
+            else:
+                side = plc.strings.SideType.BOTH
+            return Column(plc.strings.strip.strip(column.obj, side, chars.obj_scalar))
+
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
@@ -825,6 +893,51 @@ class StringFunction(Expr):
                     if column.obj.size() != prefix.obj.size() and prefix.is_scalar
                     else prefix.obj,
                 )
+            )
+        elif self.name == pl_expr.StringFunction.Strptime:
+            # TODO: ignores ambiguous
+            format, strict, exact, cache = self.options
+            col = self.children[0].evaluate(df, context=context, mapping=mapping)
+
+            is_timestamps = plc.strings.convert.convert_datetime.is_timestamp(
+                col.obj, format.encode()
+            )
+
+            if strict:
+                if not plc.interop.to_arrow(
+                    plc.reduce.reduce(
+                        is_timestamps,
+                        plc.aggregation.all(),
+                        plc.DataType(plc.TypeId.BOOL8),
+                    )
+                ).as_py():
+                    raise InvalidOperationError("conversion from `str` failed.")
+            else:
+                not_timestamps = plc.unary.unary_operation(
+                    is_timestamps, plc.unary.UnaryOperator.NOT
+                )
+
+                null = plc.interop.from_arrow(pa.scalar(None, type=pa.string()))
+                res = plc.copying.boolean_mask_scatter(
+                    [null], plc.Table([col.obj]), not_timestamps
+                )
+                return Column(
+                    plc.strings.convert.convert_datetime.to_timestamps(
+                        res.columns()[0], self.dtype, format.encode()
+                    )
+                )
+        elif self.name == pl_expr.StringFunction.Replace:
+            column, target, repl = columns
+            n, _ = self.options
+            return Column(
+                plc.strings.replace.replace(
+                    column.obj, target.obj_scalar, repl.obj_scalar, maxrepl=n
+                )
+            )
+        elif self.name == pl_expr.StringFunction.ReplaceMany:
+            column, target, repl = columns
+            return Column(
+                plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj)
             )
         raise NotImplementedError(
             f"StringFunction {self.name}"
@@ -953,6 +1066,52 @@ class UnaryFunction(Expr):
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
+    _OP_MAPPING: ClassVar[dict[str, plc.unary.UnaryOperator]] = {
+        "sin": plc.unary.UnaryOperator.SIN,
+        "cos": plc.unary.UnaryOperator.COS,
+        "tan": plc.unary.UnaryOperator.TAN,
+        "arcsin": plc.unary.UnaryOperator.ARCSIN,
+        "arccos": plc.unary.UnaryOperator.ARCCOS,
+        "arctan": plc.unary.UnaryOperator.ARCTAN,
+        "sinh": plc.unary.UnaryOperator.SINH,
+        "cosh": plc.unary.UnaryOperator.COSH,
+        "tanh": plc.unary.UnaryOperator.TANH,
+        "arcsinh": plc.unary.UnaryOperator.ARCSINH,
+        "arccosh": plc.unary.UnaryOperator.ARCCOSH,
+        "arctanh": plc.unary.UnaryOperator.ARCTANH,
+        "exp": plc.unary.UnaryOperator.EXP,
+        "log": plc.unary.UnaryOperator.LOG,
+        "sqrt": plc.unary.UnaryOperator.SQRT,
+        "cbrt": plc.unary.UnaryOperator.CBRT,
+        "ceil": plc.unary.UnaryOperator.CEIL,
+        "floor": plc.unary.UnaryOperator.FLOOR,
+        "abs": plc.unary.UnaryOperator.ABS,
+        "bit_invert": plc.unary.UnaryOperator.BIT_INVERT,
+        "not": plc.unary.UnaryOperator.NOT,
+    }
+    _supported_misc_fns = frozenset(
+        {
+            "drop_nulls",
+            "fill_null",
+            "mask_nans",
+            "round",
+            "set_sorted",
+            "unique",
+            "pow",
+        }
+    )
+    _supported_cum_aggs = frozenset(
+        {
+            "cum_min",
+            "cum_max",
+            "cum_prod",
+            "cum_sum",
+        }
+    )
+    _supported_fns = frozenset().union(
+        _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
+    )
+
     def __init__(
         self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
     ) -> None:
@@ -960,15 +1119,15 @@ class UnaryFunction(Expr):
         self.name = name
         self.options = options
         self.children = children
-        if self.name not in (
-            "mask_nans",
-            "round",
-            "set_sorted",
-            "unique",
-            "drop_nulls",
-            "fill_null",
-        ):
+
+        if self.name not in UnaryFunction._supported_fns:
             raise NotImplementedError(f"Unary function {name=}")
+        if self.name in UnaryFunction._supported_cum_aggs:
+            (reverse,) = self.options
+            if reverse:
+                raise NotImplementedError(
+                    "reverse=True is not supported for cumulative aggregations"
+                )
 
     def do_evaluate(
         self,
@@ -1073,7 +1232,72 @@ class UnaryFunction(Expr):
                 )
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
             return Column(plc.replace.replace_nulls(column.obj, arg))
+        elif self.name == "pow":
+            (base, exponent) = (
+                c.evaluate(df, context=context, mapping=mapping) for c in self.children
+            )
+            base_obj = (
+                base.obj_scalar
+                if (base.is_scalar and not exponent.is_scalar)
+                else base.obj
+            )
+            exponent_obj = exponent.obj_scalar if exponent.is_scalar else exponent.obj
+            return Column(
+                plc.binaryop.binary_operation(
+                    base_obj, exponent_obj, plc.binaryop.BinaryOperator.POW, self.dtype
+                )
+            )
+        elif self.name in self._OP_MAPPING:
+            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            if column.obj.type().id() != self.dtype.id():
+                arg = plc.unary.cast(column.obj, self.dtype)
+            else:
+                arg = column.obj
+            return Column(plc.unary.unary_operation(arg, self._OP_MAPPING[self.name]))
+        elif self.name in UnaryFunction._supported_cum_aggs:
+            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            plc_col = column.obj
+            col_type = column.obj.type()
+            # cum_sum casts
+            # Int8, UInt8, Int16, UInt16 -> Int64 for overflow prevention
+            # Bool -> UInt32
+            # cum_prod casts integer dtypes < int64 and bool to int64
+            # See:
+            # https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/cum_agg.rs
+            if (
+                self.name == "cum_sum"
+                and col_type.id()
+                in {
+                    plc.types.TypeId.INT8,
+                    plc.types.TypeId.UINT8,
+                    plc.types.TypeId.INT16,
+                    plc.types.TypeId.UINT16,
+                }
+            ) or (
+                self.name == "cum_prod"
+                and plc.traits.is_integral(col_type)
+                and plc.types.size_of(col_type) <= 4
+            ):
+                plc_col = plc.unary.cast(
+                    plc_col, plc.types.DataType(plc.types.TypeId.INT64)
+                )
+            elif (
+                self.name == "cum_sum"
+                and column.obj.type().id() == plc.types.TypeId.BOOL8
+            ):
+                plc_col = plc.unary.cast(
+                    plc_col, plc.types.DataType(plc.types.TypeId.UINT32)
+                )
+            if self.name == "cum_sum":
+                agg = plc.aggregation.sum()
+            elif self.name == "cum_prod":
+                agg = plc.aggregation.product()
+            elif self.name == "cum_min":
+                agg = plc.aggregation.min()
+            elif self.name == "cum_max":
+                agg = plc.aggregation.max()
 
+            return Column(plc.reduce.scan(plc_col, agg, plc.reduce.ScanType.INCLUSIVE))
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
         )  # pragma: no cover; init trips first
@@ -1334,6 +1558,13 @@ class Agg(Expr):
             req = plc.aggregation.variance(ddof=options)
         elif name == "count":
             req = plc.aggregation.count(null_handling=plc.types.NullPolicy.EXCLUDE)
+        elif name == "quantile":
+            _, quantile = self.children
+            if not isinstance(quantile, Literal):
+                raise NotImplementedError("Only support literal quantile values")
+            req = plc.aggregation.quantile(
+                quantiles=[quantile.value.as_py()], interp=Agg.interp_mapping[options]
+            )
         else:
             raise NotImplementedError(
                 f"Unreachable, {name=} is incorrectly listed in _SUPPORTED"
@@ -1365,8 +1596,17 @@ class Agg(Expr):
             "count",
             "std",
             "var",
+            "quantile",
         ]
     )
+
+    interp_mapping: ClassVar[dict[str, plc.types.Interpolation]] = {
+        "nearest": plc.types.Interpolation.NEAREST,
+        "higher": plc.types.Interpolation.HIGHER,
+        "lower": plc.types.Interpolation.LOWER,
+        "midpoint": plc.types.Interpolation.MIDPOINT,
+        "linear": plc.types.Interpolation.LINEAR,
+    }
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
@@ -1378,7 +1618,19 @@ class Agg(Expr):
             raise NotImplementedError("Nan propagation in groupby for min/max")
         (child,) = self.children
         ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
-        if self.request is None:
+        request = self.request
+        # These are handled specially here because we don't set up the
+        # request for the whole-frame agg because we can avoid a
+        # reduce for these.
+        if self.name == "first":
+            request = plc.aggregation.nth_element(
+                0, null_handling=plc.types.NullPolicy.INCLUDE
+            )
+        elif self.name == "last":
+            request = plc.aggregation.nth_element(
+                -1, null_handling=plc.types.NullPolicy.INCLUDE
+            )
+        if request is None:
             raise NotImplementedError(
                 f"Aggregation {self.name} in groupby"
             )  # pragma: no cover; __init__ trips first
@@ -1387,7 +1639,7 @@ class Agg(Expr):
             # Ignore nans in these groupby aggs, do this by masking
             # nans in the input
             expr = UnaryFunction(self.dtype, "mask_nans", (), expr)
-        return AggInfo([(expr, self.request, self)])
+        return AggInfo([(expr, request, self)])
 
     def _reduce(
         self, column: Column, *, request: plc.aggregation.Aggregation
@@ -1459,7 +1711,10 @@ class Agg(Expr):
             raise NotImplementedError(
                 f"Agg in context {context}"
             )  # pragma: no cover; unreachable
-        (child,) = self.children
+
+        # Aggregations like quantiles may have additional children that were
+        # preprocessed into pylibcudf requests.
+        child = self.children[0]
         return self.op(child.evaluate(df, context=context, mapping=mapping))
 
 
