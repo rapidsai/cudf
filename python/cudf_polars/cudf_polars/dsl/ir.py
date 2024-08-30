@@ -18,7 +18,7 @@ import itertools
 import types
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pyarrow as pa
 import pylibcudf as plc
@@ -31,7 +31,7 @@ from cudf_polars.containers import DataFrame, NamedColumn
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
     from typing import Literal
 
     from cudf_polars.typing import Schema
