@@ -76,13 +76,6 @@ jobs:
           - '!img/**'
           - '!java/**'
           - '!notebooks/**'
-      transform_expr: |
-        {
-          "test_cpp": (.cpp_any_changed == "true"),
-          "test_java": (.java_any_changed == "true"),
-          "test_notebooks": (.notebooks_any_changed == "true"),
-          "test_python": (.python_any_changed == "true"),
-        }
   checks:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.10
