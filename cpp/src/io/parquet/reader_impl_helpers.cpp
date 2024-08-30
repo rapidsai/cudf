@@ -423,13 +423,13 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
   std::vector<column_chunk_info> chunks(rg.columns.size());
 
   for (size_t col_idx = 0; col_idx < rg.columns.size(); col_idx++) {
-    auto const& col_chunk  = rg.columns[col_idx];
-    auto mapped_schema_idx = col_chunk.schema_idx;
-    try {
-      mapped_schema_idx = map_schema_index(col_chunk.schema_idx, rg_info.source_index);
-    } catch (...) {
-    }
-    auto& schema             = get_schema(mapped_schema_idx, rg_info.source_index);
+    auto const& col_chunk = rg.columns[col_idx];
+    auto const is_schema_idx_mapped =
+      is_schema_index_mapped(col_chunk.schema_idx, rg_info.source_index);
+    auto const mapped_schema_idx = is_schema_idx_mapped
+                                     ? map_schema_index(col_chunk.schema_idx, rg_info.source_index)
+                                     : col_chunk.schema_idx;
+    auto& schema = get_schema(mapped_schema_idx, is_schema_idx_mapped ? rg_info.source_index : 0);
     auto const max_def_level = schema.max_definition_level;
     auto const max_rep_level = schema.max_repetition_level;
 
