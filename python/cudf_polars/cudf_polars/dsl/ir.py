@@ -133,8 +133,7 @@ class IR:
 
     def __post_init__(self):
         """Validate preconditions."""
-        if any(dtype.id() == plc.TypeId.EMPTY for dtype in self.schema.values()):
-            raise NotImplementedError("Cannot make empty columns.")
+        pass  # noqa: PIE790
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """
