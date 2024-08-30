@@ -66,7 +66,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
   size_t const sum_max_depths = std::accumulate(
     pass.chunks.begin(), pass.chunks.end(), 0, [&](size_t cursum, ColumnChunkDesc const& chunk) {
-      return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
+      return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema, chunk.src_file_idx);
     });
 
   // figure out which kernels to run
@@ -136,7 +136,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     CUDF_EXPECTS(input_col.schema_idx == pass.chunks[c].src_col_schema,
                  "Column/page schema index mismatch");
 
-    size_t max_depth = _metadata->get_output_nesting_depth(pass.chunks[c].src_col_schema);
+    size_t max_depth = _metadata->get_output_nesting_depth(pass.chunks[c].src_col_schema,
+                                                           pass.chunks[c].src_file_idx);
     chunk_offsets.push_back(chunk_off);
 
     // get a slice of size `nesting depth` from `chunk_nested_valids` to store an array of pointers

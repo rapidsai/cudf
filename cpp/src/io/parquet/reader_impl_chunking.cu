@@ -1500,10 +1500,13 @@ void reader::impl::create_global_chunk_info()
     std::transform(
       _input_columns.begin(), _input_columns.end(), column_mapping.begin(), [&](auto const& col) {
         // translate schema_idx into something we can use for the page indexes
-        if (auto it = std::find_if(
-              columns.begin(),
-              columns.end(),
-              [&col](auto const& col_chunk) { return col_chunk.schema_idx == col.schema_idx; });
+        if (auto it = std::find_if(columns.begin(),
+                                   columns.end(),
+                                   [&](auto const& col_chunk) {
+                                     return col_chunk.schema_idx ==
+                                            _metadata->map_schema_index(col.schema_idx,
+                                                                        rg.source_index);
+                                   });
             it != columns.end()) {
           return std::distance(columns.begin(), it);
         }
@@ -1524,7 +1527,8 @@ void reader::impl::create_global_chunk_info()
       auto col = _input_columns[i];
       // look up metadata
       auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
-      auto& schema   = _metadata->get_schema(col.schema_idx, rg.source_index);
+      auto& schema   = _metadata->get_schema(
+        _metadata->map_schema_index(col.schema_idx, rg.source_index), rg.source_index);
 
       auto [clock_rate, logical_type] =
         conversion_info(to_type_id(schema, _strings_to_categorical, _options.timestamp_type.id()),

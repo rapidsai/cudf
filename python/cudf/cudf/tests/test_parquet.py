@@ -3817,8 +3817,8 @@ def test_parquet_reader_with_mismatched_tables(store_schema):
     df1 = cudf.DataFrame(
         {
             "i32": cudf.Series([None, None, None], dtype="int32"),
-            "i64": cudf.Series([1234, None, 123], dtype="int64"),
-            "list": list([[1, 2], [None, 4], [5, 6]]),
+            "i64": cudf.Series([1234, 467, 123], dtype="int64"),
+            "list": list([[1, 2], None, [None, 6]]),
             "time": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
             "str": ["vfd", None, "ghu"],
             "d_list": list(
@@ -3833,14 +3833,14 @@ def test_parquet_reader_with_mismatched_tables(store_schema):
 
     df2 = cudf.DataFrame(
         {
-            "str": ["abc", "def", None],
+            "str": ["abc", "def", "ghi"],
             "i64": cudf.Series([None, 65, 98], dtype="int64"),
             "times": cudf.Series([1234, None, 4123], dtype="datetime64[us]"),
-            "list": list([[7, 8], [9, 10], [None, 12]]),
+            "list": list([[7, 8], [9, 10], [11, 12]]),
             "d_list": list(
                 [
                     [pd.Timedelta(minutes=4), None],
-                    [None, None],
+                    None,
                     [pd.Timedelta(minutes=6), None],
                 ]
             ),
@@ -4067,16 +4067,20 @@ def test_parquet_reader_mismatched_nullability(tmpdir):
             "duration_list": list(
                 [
                     [
-                        datetime.timedelta(minutes=7, seconds=4),
-                        datetime.timedelta(minutes=7),
+                        [
+                            [pd.Timedelta(minutes=1), pd.Timedelta(minutes=2)],
+                            None,
+                            [pd.Timedelta(minutes=8), None],
+                        ],
+                        None,
                     ],
+                    None,
                     [
-                        datetime.timedelta(minutes=12),
-                        datetime.timedelta(minutes=3),
-                    ],
-                    [
-                        datetime.timedelta(minutes=7, seconds=4),
-                        datetime.timedelta(minutes=5),
+                        [
+                            [pd.Timedelta(minutes=1), pd.Timedelta(minutes=2)],
+                            [pd.Timedelta(minutes=5), pd.Timedelta(minutes=3)],
+                            [pd.Timedelta(minutes=8), pd.Timedelta(minutes=4)],
+                        ]
                     ],
                 ]
             ),
@@ -4096,13 +4100,24 @@ def test_parquet_reader_mismatched_nullability(tmpdir):
             "duration_list": list(
                 [
                     [
-                        datetime.timedelta(minutes=7, seconds=4),
-                        datetime.timedelta(minutes=7),
+                        [
+                            [pd.Timedelta(minutes=1), pd.Timedelta(minutes=2)],
+                            [pd.Timedelta(minutes=8), pd.Timedelta(minutes=1)],
+                        ],
                     ],
-                    None,
                     [
-                        datetime.timedelta(minutes=7, seconds=4),
-                        None,
+                        [
+                            [pd.Timedelta(minutes=1), pd.Timedelta(minutes=2)],
+                            [pd.Timedelta(minutes=5), pd.Timedelta(minutes=3)],
+                            [pd.Timedelta(minutes=8), pd.Timedelta(minutes=4)],
+                        ]
+                    ],
+                    [
+                        [
+                            [pd.Timedelta(minutes=1), pd.Timedelta(minutes=2)],
+                            [pd.Timedelta(minutes=5), pd.Timedelta(minutes=3)],
+                            [pd.Timedelta(minutes=8), pd.Timedelta(minutes=4)],
+                        ]
                     ],
                 ]
             ),
