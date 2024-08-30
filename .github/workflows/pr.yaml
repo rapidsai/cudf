@@ -70,6 +70,7 @@ jobs:
         uses: tj-actions/changed-files@v45
         with:
           base_sha: ${{ steps.calculate-merge-base.outputs.merge-base }}
+          sha: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).head.sha }}
           files_yaml: |
             cpp:
               - '**'
