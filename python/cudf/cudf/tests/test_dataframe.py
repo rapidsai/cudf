@@ -511,6 +511,17 @@ def test_dataframe_drop_columns(pdf, columns, inplace):
     assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize("obj", ["Index", "Series"])
+def test_drop_cudf_obj_columns(obj):
+    pdf = pd.DataFrame({"A": [1], "B": [1]})
+    gdf = cudf.from_pandas(pdf)
+
+    columns = ["B"]
+    expected = pdf.drop(labels=getattr(pd, obj)(columns), axis=1)
+    actual = gdf.drop(columns=getattr(cudf, obj)(columns), axis=1)
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize(
     "pdf",
     [

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import numbers
 import operator
 import textwrap
 import warnings
@@ -150,24 +149,14 @@ doc_binop_template = textwrap.dedent(
 )
 
 
-def _get_host_unique(array):
+def _get_unique_drop_labels(array):
+    """Return labels to be dropped for IndexFrame.drop."""
     if isinstance(array, (cudf.Series, cudf.Index, ColumnBase)):
-        return array.unique.to_pandas()
-    elif isinstance(array, (str, numbers.Number)):
-        return [array]
+        yield from as_column(array).unique().values_host
+    elif is_scalar(array):
+        yield array
     else:
-        return set(array)
-
-
-def _drop_columns(f: Frame, columns: abc.Iterable, errors: str):
-    for c in columns:
-        try:
-            f._drop_column(c)
-        except KeyError as e:
-            if errors == "ignore":
-                pass
-            else:
-                raise e
+        yield from set(array)
 
 
 def _indices_from_labels(obj, labels):
@@ -5261,15 +5250,14 @@ class IndexedFrame(Frame):
             out = self.copy()
 
         if axis in (1, "columns"):
-            target = _get_host_unique(target)
-
-            _drop_columns(out, target, errors)
+            for label in _get_unique_drop_labels(target):
+                out._drop_column(label, errors=errors)
         elif axis in (0, "index"):
             dropped = _drop_rows_by_labels(out, target, level, errors)
 
             if columns is not None:
-                columns = _get_host_unique(columns)
-                _drop_columns(dropped, columns, errors)
+                for label in _get_unique_drop_labels(columns):
+                    dropped._drop_column(label, errors=errors)
 
             out._mimic_inplace(dropped, inplace=True)
 

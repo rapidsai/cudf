@@ -764,11 +764,15 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_performance_tracking
-    def _drop_column(self, name):
-        """Drop a column by *name*"""
-        if name not in self._data:
-            raise KeyError(f"column '{name}' does not exist")
-        del self._data[name]
+    def _drop_column(
+        self, name: abc.Hashable, errors: Literal["ignore", "raise"] = "raise"
+    ) -> None:
+        """Drop a column by *name* inplace."""
+        try:
+            del self._data[name]
+        except KeyError as err:
+            if errors == "raise":
+                raise KeyError(f"column '{name}' does not exist") from err
 
     @_performance_tracking
     def _quantile_table(
