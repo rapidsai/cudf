@@ -66,7 +66,7 @@ jobs:
       - name: Calculate merge base
         id: calculate-merge-base
         env:
-          PR_SHA: ${{ input.sha }}
+          PR_SHA: ${{ inputs.sha }}
           BASE_SHA: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.ref }}
         run: |
           (echo -n "merge-base="; git merge-base "$BASE_SHA" "$PR_SHA") > "$GITHUB_OUTPUT"
