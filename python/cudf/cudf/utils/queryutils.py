@@ -210,7 +210,6 @@ def query_execute(df, expr, callenv):
         Contains keys 'local_dict', 'locals' and 'globals' which are all dict.
         They represent the arg, local and global dictionaries of the caller.
     """
-
     # compile
     compiled = query_compile(expr)
     columns = compiled["colnames"]
@@ -247,7 +246,8 @@ def query_execute(df, expr, callenv):
 
     # allocate output buffer
     nrows = len(df)
-    out = column_empty(nrows, dtype=np.bool_)
+    # numba doesn't support masks
+    out = column_empty(nrows, dtype=np.bool_).set_mask(None)
     # run kernel
     args = [out] + colarrays + envargs
     with _CUDFNumbaConfig():

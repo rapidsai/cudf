@@ -154,7 +154,10 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     offsets = cp.asarray(offsets)
     ngroups = len(offsets) - 1
 
-    output = cudf.core.column.column_empty(ngroups, dtype=return_type)
+    # numba doesn't support masks
+    output = cudf.core.column.column_empty(
+        ngroups, dtype=return_type
+    ).set_mask(None)
 
     launch_args = [
         offsets,
