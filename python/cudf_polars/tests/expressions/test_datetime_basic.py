@@ -9,7 +9,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.mark.parametrize(
@@ -50,12 +53,22 @@ datetime_extract_fields = [
     "nanosecond",
 ]
 
+unsupported_extract_fields = ["millennium"]
+
 
 @pytest.fixture(
     ids=datetime_extract_fields,
     params=[methodcaller(f) for f in datetime_extract_fields],
 )
 def field(request):
+    return request.param
+
+
+@pytest.fixture(
+    ids=unsupported_extract_fields,
+    params=[methodcaller(f) for f in unsupported_extract_fields],
+)
+def unsupported_field(request):
     return request.param
 
 
@@ -80,6 +93,23 @@ def test_datetime_extract(field):
         assert_gpu_result_equal(q)
 
     assert_gpu_result_equal(q, check_dtypes=False)
+
+
+def test_datetime_extra_unsupported(unsupported_field):
+    ldf = pl.LazyFrame(
+        {
+            "datetimes": pl.datetime_range(
+                datetime.datetime(2020, 1, 1),
+                datetime.datetime(2021, 12, 30),
+                "3mo14h15s11ms33us999ns",
+                eager=True,
+            )
+        }
+    )
+
+    q = ldf.select(unsupported_field(pl.col("datetimes").dt))
+
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize(
