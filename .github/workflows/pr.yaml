@@ -81,8 +81,6 @@ jobs:
               - '!java/**'
               - '!notebooks/**'
               - '!python/**'
-              # TODO: Remove before merging
-              - '!.github/**'
             java:
               - '**'
               - '!CONTRIBUTING.md'
@@ -91,15 +89,11 @@ jobs:
               - '!img/**'
               - '!notebooks/**'
               - '!python/**'
-              # TODO: Remove before merging
-              - '!.github/**'
             notebooks:
               - '**'
               - '!CONTRIBUTING.md'
               - '!README.md'
               - '!java/**'
-              # TODO: Remove before merging
-              - '!.github/**'
             python:
               - '**'
               - '!CONTRIBUTING.md'
@@ -108,8 +102,6 @@ jobs:
               - '!img/**'
               - '!java/**'
               - '!notebooks/**'
-              # TODO: Remove before merging
-              - '!.github/**'
   checks:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.10
