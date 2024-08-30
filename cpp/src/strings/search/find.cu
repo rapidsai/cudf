@@ -506,7 +506,7 @@ CUDF_KERNEL void multi_contains_using_indexes_fn(
         if (d_str.size_bytes() - str_byte_idx >= d_target.size_bytes()) {
           // first char already checked, only need to check the [2nd, end) chars if has.
           bool found = true;
-          for (auto i = 1; i < d_target.size(); i++) {
+          for (auto i = 1; i < d_target.size_bytes(); i++) {
             if (*(d_str.data() + str_byte_idx + i) != *(d_target.data() + i)) {
               found = false;
               break;
