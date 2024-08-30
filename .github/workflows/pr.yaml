@@ -62,7 +62,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.sha }}
-          fetch-depth: ${{ steps.calculate-num-commits.outputs.commit }}
+          fetch-depth: ${{ steps.calculate-num-commits.outputs.commits }}
           persist-credentials: false
       - name: Get changed files
         id: changed-files
