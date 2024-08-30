@@ -24,7 +24,6 @@
 
 #include <rmm/resource_ref.hpp>
 
-#include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
