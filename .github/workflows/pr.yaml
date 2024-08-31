@@ -46,7 +46,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@changed-files
     with:
       files_yaml: |
-        cpp:
+        test_cpp:
           - '**'
           - '!CONTRIBUTING.md'
           - '!README.md'
@@ -55,7 +55,7 @@ jobs:
           - '!java/**'
           - '!notebooks/**'
           - '!python/**'
-        java:
+        test_java:
           - '**'
           - '!CONTRIBUTING.md'
           - '!README.md'
@@ -63,12 +63,12 @@ jobs:
           - '!img/**'
           - '!notebooks/**'
           - '!python/**'
-        notebooks:
+        test_notebooks:
           - '**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!java/**'
-        python:
+        test_python:
           - '**'
           - '!CONTRIBUTING.md'
           - '!README.md'
