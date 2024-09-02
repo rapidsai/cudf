@@ -76,25 +76,11 @@ def _translate_ir(
 def _(
     node: pl_ir.PythonScan, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    if visitor.version()[0] == 1:
-        # https://github.com/pola-rs/polars/pull/17939
-        # Versioning can be dropped once polars 1.4 is lowest
-        # supported version.
-        scan_fn, with_columns, source_type, predicate, nrows = node.options
-        options = (scan_fn, with_columns, source_type, nrows)
-        predicate = (
-            translate_named_expr(visitor, n=predicate)
-            if predicate is not None
-            else None
-        )
-    else:  # pragma: no cover; CI tests 1.4
-        # version == 0
-        options = node.options
-        predicate = (
-            translate_named_expr(visitor, n=node.predicate)
-            if node.predicate is not None
-            else None
-        )
+    scan_fn, with_columns, source_type, predicate, nrows = node.options
+    options = (scan_fn, with_columns, source_type, nrows)
+    predicate = (
+        translate_named_expr(visitor, n=predicate) if predicate is not None else None
+    )
     return ir.PythonScan(schema, options, predicate)
 
 
@@ -115,13 +101,8 @@ def _(
         n_rows = -1  # All rows
         skip_rows = 0  # Don't skip
     else:
-        if visitor.version() >= (1, 0):
-            # Polars 1.4 n_rows property is (skip, nrows)
-            skip_rows, n_rows = n_rows
-        else:  # pragma: no cover; CI tests 1.4
-            # Polars 1.3 n_rows property is integer, skip rows was
-            # always zero because it was not pushed down to reader.
-            skip_rows = 0
+        # TODO: with versioning, rename on the rust side
+        skip_rows, n_rows = n_rows
 
     row_index = file_options.row_index
     return ir.Scan(
