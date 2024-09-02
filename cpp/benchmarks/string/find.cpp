@@ -98,16 +98,17 @@ static void bench_find_string(nvbench::state& state)
         std::vector<std::unique_ptr<cudf::column>> contains_results;
         std::vector<cudf::column_view> contains_cvs;
         for (size_t i = 0; i < multi_targets.size(); i++) {
-          contains_results.emplace_back(cudf::strings::contains(input, cudf::string_scalar(multi_targets[i])));
+          contains_results.emplace_back(
+            cudf::strings::contains(input, cudf::string_scalar(multi_targets[i])));
           contains_cvs.emplace_back(contains_results.back()->view());
         }
 
         if (check_result) {
           cudf::test::strings_column_wrapper multi_targets_column(multi_targets.begin(),
-                                                                multi_targets.end());
-          auto tab = cudf::strings::multi_contains(input, cudf::strings_column_view(multi_targets_column));
-          for (int i = 0; i < tab->num_columns(); i++)
-          {
+                                                                  multi_targets.end());
+          auto tab =
+            cudf::strings::multi_contains(input, cudf::strings_column_view(multi_targets_column));
+          for (int i = 0; i < tab->num_columns(); i++) {
             cudf::test::detail::expect_columns_equal(contains_cvs[i], tab->get_column(i).view());
           }
         }
