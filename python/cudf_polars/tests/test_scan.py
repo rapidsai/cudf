@@ -317,6 +317,12 @@ def test_scan_parquet_nested_null_raises(tmp_path):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_scan_parquet_only_row_index_raises(df, tmp_path):
+    make_source(df, tmp_path / "file", "parquet")
+    q = pl.scan_parquet(tmp_path / "file", row_index_name="index").select("index")
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
 def test_scan_hf_url_raises():
     q = pl.scan_csv("hf://datasets/scikit-learn/iris/Iris.csv")
     assert_ir_translation_raises(q, NotImplementedError)
