@@ -305,3 +305,13 @@ def test_scan_ndjson_unsupported(df, tmp_path):
     make_source(df, tmp_path / "file", "ndjson")
     q = pl.scan_ndjson(tmp_path / "file", ignore_errors=True)
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_parquet_nested_null_raises(tmp_path):
+    df = pl.DataFrame({"a": pl.Series([None], dtype=pl.List(pl.Null))})
+
+    df.write_parquet(tmp_path / "file.pq")
+
+    q = pl.scan_parquet(tmp_path / "file.pq")
+
+    assert_ir_translation_raises(q, NotImplementedError)
