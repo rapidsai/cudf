@@ -3344,7 +3344,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector[] stringContains(ColumnView targets) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert targets.getType().equals(DType.STRING) : "targets type must be a string";
-    assert targets.getNullCount() > 0 : "targets must not be null";
+    assert targets.getNullCount() == 0 : "targets must not be null";
     long[] resultPointers = stringContainsMulti(getNativeView(), targets.getNativeView());
     return Arrays.stream(resultPointers).mapToObj(ColumnVector::new).toArray(ColumnVector[]::new);
   }
