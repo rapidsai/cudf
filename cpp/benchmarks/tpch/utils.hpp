@@ -44,8 +44,7 @@
 #include <cstdlib>
 #include <ctime>
 
-namespace {
-const std::vector<std::string> ORDERS   = {"o_orderkey",
+std::vector<std::string> const ORDERS   = {"o_orderkey",
                                            "o_custkey",
                                            "o_orderdate",
                                            "o_orderpriority",
@@ -54,7 +53,7 @@ const std::vector<std::string> ORDERS   = {"o_orderkey",
                                            "o_comment",
                                            "o_totalprice",
                                            "o_orderstatus"};
-const std::vector<std::string> LINEITEM = {"l_orderkey",
+std::vector<std::string> const LINEITEM = {"l_orderkey",
                                            "l_partkey",
                                            "l_suppkey",
                                            "l_linenumber",
@@ -70,7 +69,7 @@ const std::vector<std::string> LINEITEM = {"l_orderkey",
                                            "l_shipmode",
                                            "l_comment",
                                            "l_extendedprice"};
-const std::vector<std::string> PART     = {"p_partkey",
+std::vector<std::string> const PART     = {"p_partkey",
                                            "p_name",
                                            "p_mfgr",
                                            "p_brand",
@@ -79,11 +78,11 @@ const std::vector<std::string> PART     = {"p_partkey",
                                            "p_container",
                                            "p_retailprice",
                                            "p_comment"};
-const std::vector<std::string> PARTSUPP = {
+std::vector<std::string> const PARTSUPP = {
   "ps_partkey", "ps_suppkey", "ps_availqty", "ps_supplycost", "ps_comment"};
-const std::vector<std::string> SUPPLIER = {
+std::vector<std::string> const SUPPLIER = {
   "s_suppkey", "s_name", "s_address", "s_nationkey", "s_phone", "s_acctbal", "s_comment"};
-const std::vector<std::string> CUSTOMER = {"c_custkey",
+std::vector<std::string> const CUSTOMER = {"c_custkey",
                                            "c_name",
                                            "c_address",
                                            "c_nationkey",
@@ -91,10 +90,8 @@ const std::vector<std::string> CUSTOMER = {"c_custkey",
                                            "c_acctbal",
                                            "c_mktsegment",
                                            "c_comment"};
-const std::vector<std::string> NATION   = {"n_nationkey", "n_name", "n_regionkey", "n_comment"};
-const std::vector<std::string> REGION   = {"r_regionkey", "r_name", "r_comment"};
-
-}  // namespace
+std::vector<std::string> const NATION   = {"n_nationkey", "n_name", "n_regionkey", "n_comment"};
+std::vector<std::string> const REGION   = {"r_regionkey", "r_name", "r_comment"};
 
 /**
  * @brief Log the peak memory usage of the GPU
