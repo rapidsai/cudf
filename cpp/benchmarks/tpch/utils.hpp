@@ -121,11 +121,7 @@ class memory_stats_logger {
 
 // RMM memory resource creation utilities
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
-inline auto make_async()
-{
-  return std::make_shared<rmm::mr::cuda_async_memory_resource>(
-    rmm::percent_of_free_device_memory(50));
-}
+inline auto make_async() { return std::make_shared<rmm::mr::cuda_async_memory_resource>(); }
 inline auto make_pool()
 {
   return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
