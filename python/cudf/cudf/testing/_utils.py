@@ -2,6 +2,7 @@
 
 import itertools
 import string
+import time
 from collections import abc
 from contextlib import contextmanager
 from decimal import Decimal
@@ -368,3 +369,24 @@ def sv_to_udf_str_testing_lowering(context, builder, sig, args):
     return cast_string_view_to_udf_string(
         context, builder, sig.args[0], sig.return_type, args[0]
     )
+
+
+class cudf_timeout:
+    """
+    Context manager to raise a TimeoutError after a specified number of seconds.
+    """
+
+    def __init__(self, timeout):
+        self.timeout = timeout
+
+    def __enter__(self):
+        self.start_time = time.perf_counter()
+
+    def __exit__(self, *args):
+        elapsed_time = (
+            time.perf_counter() - self.start_time
+        )  # Calculate elapsed time
+        if elapsed_time >= self.timeout:
+            raise TimeoutError(
+                f"Expected to finish in {self.timeout=} seconds but took {elapsed_time=} seconds"
+            )
