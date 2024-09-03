@@ -987,15 +987,15 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
 
       data_type target_type{};
 
-      if (schema.has_value()) {
+      if (json_col.forced_as_string_column) {
+        target_type = data_type{type_id::STRING};
+      } else if (schema.has_value()) {
 #ifdef NJP_DEBUG_PRINT
         std::cout << "-> explicit type: "
                   << (schema.has_value() ? std::to_string(static_cast<int>(schema->type.id()))
                                          : "n/a");
 #endif
         target_type = schema.value().type;
-      } else if (json_col.forced_as_string_column) {
-        target_type = data_type{type_id::STRING};
       }
       // Infer column type, if we don't have an explicit type for it
       else {
