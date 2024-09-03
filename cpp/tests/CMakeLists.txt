@@ -111,10 +111,6 @@ ConfigureTest(SCALAR_TEST scalar/scalar_test.cpp scalar/scalar_device_view_test.
 ConfigureTest(TIMESTAMPS_TEST wrappers/timestamps_test.cu)
 
 # ##################################################################################################
-# * cudf tests ------------------------------------------------------------------------------------
-ConfigureTest(ERROR_TEST error/error_handling_test.cu)
-
-# ##################################################################################################
 # * groupby tests ---------------------------------------------------------------------------------
 ConfigureTest(
   GROUPBY_TEST

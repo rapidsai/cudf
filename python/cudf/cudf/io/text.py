@@ -33,7 +33,7 @@ def read_text(
         filepath_or_buffer, "read_text"
     )
 
-    return cudf.Series._from_data(
+    return cudf.Series._from_column(
         libtext.read_text(
             filepath_or_buffer,
             delimiter=delimiter,

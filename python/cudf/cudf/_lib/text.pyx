@@ -86,4 +86,4 @@ def read_text(object filepaths_or_buffers,
             delim,
             c_options))
 
-    return {None: Column.from_unique_ptr(move(c_col))}
+    return Column.from_unique_ptr(move(c_col))
