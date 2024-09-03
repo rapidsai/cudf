@@ -366,8 +366,8 @@ std::unique_ptr<scalar> to_tdigest_scalar(std::unique_ptr<column>&& tdigest,
  * @param group_cluster_wl    Output.  The set of cluster weight limits for each group.
  * @param group_num_clusters  Output.  The number of output clusters for each input group.
  * @param group_cluster_offsets  Offsets per-group to the start of it's clusters
- * @param may_have_empty_clusters Whether or not there could be empty clusters. It should be
- * set to false only when there is no empty cluster.
+ * @param may_have_empty_clusters Whether or not there could be empty clusters. Must only be
+ * set to false when there is no empty cluster, true otherwise.
  */
 
 template <typename GroupInfo, typename NearestWeightFunc, typename CumulativeWeight>
