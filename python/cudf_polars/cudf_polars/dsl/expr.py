@@ -1002,7 +1002,7 @@ class TemporalFunction(Expr):
                     column.obj, "microsecond"
                 )
                 processed_mili = plc.binaryop.binary_operation(
-                    milis,
+                    millis,
                     plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
                     plc.binaryop.BinaryOperator.MUL,
                     self.dtype,
@@ -1015,7 +1015,7 @@ class TemporalFunction(Expr):
                 )
                 return Column(total_micros)
             elif self.name == pl_expr.TemporalFunction.Nanosecond:
-                milis = plc.datetime.extract_datetime_component(
+                millis = plc.datetime.extract_datetime_component(
                     column.obj, "millisecond"
                 )
                 micros = plc.datetime.extract_datetime_component(
@@ -1025,7 +1025,7 @@ class TemporalFunction(Expr):
                     column.obj, "nanosecond"
                 )
                 processed_mili = plc.binaryop.binary_operation(
-                    milis,
+                    millis,
                     plc.interop.from_arrow(pa.scalar(1_000_000, type=pa.int64())),
                     plc.binaryop.BinaryOperator.MUL,
                     plc.types.DataType(plc.types.TypeId.INT64),

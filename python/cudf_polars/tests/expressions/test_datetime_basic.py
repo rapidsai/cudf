@@ -9,6 +9,7 @@ import pytest
 
 import polars as pl
 
+from cudf_polars.dsl.expr import TemporalFunction
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -53,22 +54,12 @@ datetime_extract_fields = [
     "nanosecond",
 ]
 
-unsupported_extract_fields = ["millennium"]
-
 
 @pytest.fixture(
     ids=datetime_extract_fields,
     params=[methodcaller(f) for f in datetime_extract_fields],
 )
 def field(request):
-    return request.param
-
-
-@pytest.fixture(
-    ids=unsupported_extract_fields,
-    params=[methodcaller(f) for f in unsupported_extract_fields],
-)
-def unsupported_field(request):
     return request.param
 
 
@@ -95,7 +86,7 @@ def test_datetime_extract(field):
     assert_gpu_result_equal(q, check_dtypes=False)
 
 
-def test_datetime_extra_unsupported(unsupported_field):
+def test_datetime_extra_unsupported(monkeypatch):
     ldf = pl.LazyFrame(
         {
             "datetimes": pl.datetime_range(
@@ -107,7 +98,19 @@ def test_datetime_extra_unsupported(unsupported_field):
         }
     )
 
-    q = ldf.select(unsupported_field(pl.col("datetimes").dt))
+    def unsupported_name_setter(self, value):
+        pass
+
+    def unsupported_name_getter(self):
+        return "unsupported"
+
+    monkeypatch.setattr(
+        TemporalFunction,
+        "name",
+        property(unsupported_name_getter, unsupported_name_setter),
+    )
+
+    q = ldf.select(pl.col("datetimes").dt.nanosecond())
 
     assert_ir_translation_raises(q, NotImplementedError)
 
