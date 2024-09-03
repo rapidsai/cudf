@@ -170,11 +170,9 @@ void run_tpch_q1(nvbench::state& state)
 
 void tpch_q1(nvbench::state& state)
 {
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto stream = cudf::get_default_stream();
-    state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-    run_tpch_q1(state);
-  });
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) { run_tpch_q1(state); });
 }
 
-NVBENCH_BENCH(tpch_q1);
+NVBENCH_BENCH(tpch_q1).set_name("tpch_q1");
