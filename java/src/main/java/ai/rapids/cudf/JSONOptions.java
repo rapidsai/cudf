@@ -158,8 +158,6 @@ public final class JSONOptions extends ColumnFilterOptions {
       return this;
     }
 
-    // TODO need to finish this for other configs...
-
     /**
      * Whether to parse dates as DD/MM versus MM/DD
      * @param dayFirst true: DD/MM, false, MM/DD
