@@ -13,8 +13,8 @@ import sys
 import textwrap
 import warnings
 from collections import abc, defaultdict
-from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping, cast
+from collections.abc import Callable, Iterator
+from typing import TYPE_CHECKING, Any, Literal, MutableMapping, cast
 
 import cupy
 import numba
@@ -48,10 +48,10 @@ from cudf.core.column import (
     ColumnBase,
     StructColumn,
     as_column,
-    build_categorical_column,
     column_empty,
     concat_columns,
 )
+from cudf.core.column.categorical import as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask
 from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
@@ -382,19 +382,19 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 value = as_column(value, length=length)
 
             if isinstance(value, ColumnBase):
-                new_col = cudf.Series._from_column(value, index=idx)
+                new_ser = cudf.Series._from_column(value, index=idx)
             else:
-                new_col = cudf.Series(value, index=idx)
+                new_ser = cudf.Series(value, index=idx)
             if len(self._frame.index) != 0:
-                new_col = new_col._align_to_index(
+                new_ser = new_ser._align_to_index(
                     self._frame.index, how="right"
                 )
 
             if len(self._frame.index) == 0:
                 self._frame.index = (
-                    idx if idx is not None else cudf.RangeIndex(len(new_col))
+                    idx if idx is not None else cudf.RangeIndex(len(new_ser))
                 )
-            self._frame._data.insert(key[1], new_col)
+            self._frame._data.insert(key[1], new_ser._column)
         else:
             if is_scalar(value):
                 for col in columns_df._column_names:
@@ -414,8 +414,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     )
 
             else:
-                value = cupy.asarray(value)
-                if value.ndim == 2:
+                if not is_column_like(value):
+                    value = cupy.asarray(value)
+                if getattr(value, "ndim", 1) == 2:
                     # If the inner dimension is 1, it's broadcastable to
                     # all columns of the dataframe.
                     indexed_shape = columns_df.loc[key[0]].shape
@@ -558,8 +559,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         else:
             # TODO: consolidate code path with identical counterpart
             # in `_DataFrameLocIndexer._setitem_tuple_arg`
-            value = cupy.asarray(value)
-            if value.ndim == 2:
+            if not is_column_like(value):
+                value = cupy.asarray(value)
+            if getattr(value, "ndim", 1) == 2:
                 indexed_shape = columns_df.iloc[key[0]].shape
                 if value.shape[1] == 1:
                     if value.shape[0] != indexed_shape[0]:
@@ -678,7 +680,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     3  3   0.3
     """
 
-    _PROTECTED_KEYS = frozenset(("_data", "_index"))
+    _PROTECTED_KEYS = frozenset(
+        ("_data", "_index", "_ipython_canary_method_should_not_exist_")
+    )
     _accessors: set[Any] = set()
     _loc_indexer_type = _DataFrameLocIndexer
     _iloc_indexer_type = _DataFrameIlocIndexer
@@ -981,6 +985,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self._data.rangeindex = isinstance(
                 columns, (range, cudf.RangeIndex, pd.RangeIndex)
             )
+            self._data.label_dtype = pd.Index(columns).dtype
         else:
             self._data.rangeindex = True
 
@@ -3062,7 +3067,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
-            _make_categorical_like,
         )
 
         # First process the condition.
@@ -3114,7 +3118,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         out = []
         for (name, col), other_col in zip(self._data.items(), other_cols):
-            col, other_col = _check_and_cast_columns_with_other(
+            source_col, other_col = _check_and_cast_columns_with_other(
                 source_col=col,
                 other=other_col,
                 inplace=inplace,
@@ -3122,16 +3126,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             if cond_col := cond._data.get(name):
                 result = cudf._lib.copying.copy_if_else(
-                    col, other_col, cond_col
+                    source_col, other_col, cond_col
                 )
 
-                out.append(_make_categorical_like(result, self._data[name]))
+                out.append(result._with_type_metadata(col.dtype))
             else:
                 out_mask = cudf._lib.null_mask.create_null_mask(
-                    len(col),
+                    len(source_col),
                     state=cudf._lib.null_mask.MaskState.ALL_NULL,
                 )
-                out.append(col.set_mask(out_mask))
+                out.append(source_col.set_mask(out_mask))
 
         return self._mimic_inplace(
             self._from_data_like_self(self._data._from_columns_like_self(out)),
@@ -3272,9 +3276,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             If False, a reindexing operation is performed if
             `value.index` is not equal to `self.index`.
         """
-        if name in self._data:
-            raise NameError(f"duplicated column name {name}")
-
         num_cols = self._num_columns
         if loc < 0:
             loc += num_cols + 1
@@ -3294,9 +3295,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # least require a deprecation cycle because we currently support
         # inserting a pd.Categorical.
         if isinstance(value, pd.Categorical):
-            value = cudf.core.column.categorical.pandas_categorical_as_column(
-                value
-            )
+            value = as_column(value)
 
         if _is_scalar_or_zero_d_array(value):
             dtype = None
@@ -5832,7 +5831,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         df = cls._from_data(
             ColumnAccessor(
-                data=ca_data,
+                data=ca_data,  # type: ignore[arg-type]
                 multiindex=isinstance(
                     columns, (pd.MultiIndex, cudf.MultiIndex)
                 ),
@@ -8508,12 +8507,16 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
 def _reassign_categories(categories, cols, col_idxs):
     for name, idx in zip(cols, col_idxs):
         if idx in categories:
-            cols[name] = build_categorical_column(
-                categories=categories[idx],
-                codes=cols[name],
-                mask=cols[name].base_mask,
-                offset=cols[name].offset,
-                size=cols[name].size,
+            codes = as_unsigned_codes(len(categories[idx]), cols[name])
+            cols[name] = CategoricalColumn(
+                data=None,
+                size=codes.size,
+                dtype=cudf.CategoricalDtype(
+                    categories=categories[idx], ordered=False
+                ),
+                mask=codes.base_mask,
+                offset=codes.offset,
+                children=(codes,),
             )
 
 

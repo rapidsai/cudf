@@ -6,7 +6,7 @@ import operator
 import pickle
 import warnings
 from collections import abc
-from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping
+from typing import TYPE_CHECKING, Any, Literal, MutableMapping
 
 # TODO: The `numpy` import is needed for typing purposes during doc builds
 # only, need to figure out why the `np` alias is insufficient then remove.
@@ -24,10 +24,10 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
     as_column,
-    build_categorical_column,
     deserialize_columns,
     serialize_columns,
 )
+from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.utils import ioutils
@@ -403,7 +403,7 @@ class Frame(BinaryOperand, Scannable):
     @_performance_tracking
     def _to_array(
         self,
-        get_array: Callable,
+        get_array: abc.Callable,
         module: ModuleType,
         copy: bool,
         dtype: Dtype | None = None,
@@ -889,18 +889,21 @@ class Frame(BinaryOperand, Scannable):
                 for name in dict_dictionaries.keys()
             }
 
-            cudf_category_frame = {
-                name: build_categorical_column(
-                    cudf_dictionaries_columns[name],
-                    codes,
-                    mask=codes.base_mask,
+            for name, codes in zip(
+                dict_indices_table.column_names, indices_columns
+            ):
+                categories = cudf_dictionaries_columns[name]
+                codes = as_unsigned_codes(len(categories), codes)
+                cudf_category_frame[name] = CategoricalColumn(
+                    data=None,
                     size=codes.size,
-                    ordered=dict_ordered[name],
+                    dtype=cudf.CategoricalDtype(
+                        categories=categories,
+                        ordered=dict_ordered[name],
+                    ),
+                    mask=codes.base_mask,
+                    children=(codes,),
                 )
-                for name, codes in zip(
-                    dict_indices_table.column_names, indices_columns
-                )
-            }
 
         # Handle non-dict arrays
         cudf_non_category_frame = {
@@ -1010,9 +1013,7 @@ class Frame(BinaryOperand, Scannable):
         See `ColumnBase._with_type_metadata` for more information.
         """
         for (name, col), (_, dtype) in zip(self._data.items(), other._dtypes):
-            self._data.set_by_label(
-                name, col._with_type_metadata(dtype), validate=False
-            )
+            self._data.set_by_label(name, col._with_type_metadata(dtype))
 
         return self
 

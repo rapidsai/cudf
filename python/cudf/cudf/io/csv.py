@@ -64,21 +64,14 @@ def read_csv(
     if bytes_per_thread is None:
         bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
 
-    is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
+    filepath_or_buffer = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
-        storage_options=storage_options,
-    )
-    if not is_single_filepath_or_buffer:
-        raise NotImplementedError(
-            "`read_csv` does not yet support reading multiple files"
-        )
-
-    filepath_or_buffer, compression = ioutils.get_reader_filepath_or_buffer(
-        path_or_data=filepath_or_buffer,
-        compression=compression,
         iotypes=(BytesIO, StringIO),
         storage_options=storage_options,
         bytes_per_thread=bytes_per_thread,
+    )
+    filepath_or_buffer = ioutils._select_single_source(
+        filepath_or_buffer, "read_csv"
     )
 
     if na_values is not None and is_scalar(na_values):
