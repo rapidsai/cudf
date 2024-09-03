@@ -4057,3 +4057,28 @@ def test_parquet_reader_with_mismatched_schemas_error():
             columns=["struct.b.inner_b"],
             allow_mismatched_pq_schemas=True,
         )
+
+
+def test_parquet_roundtrip_zero_rows_no_column_mask():
+    expected = cudf.DataFrame._from_data(
+        {
+            "int": cudf.core.column.column_empty(0, "int64"),
+            "float": cudf.core.column.column_empty(0, "float64"),
+            "datetime": cudf.core.column.column_empty(0, "datetime64[ns]"),
+            "timedelta": cudf.core.column.column_empty(0, "timedelta64[ns]"),
+            "bool": cudf.core.column.column_empty(0, "bool"),
+            "decimal": cudf.core.column.column_empty(
+                0, cudf.Decimal64Dtype(1)
+            ),
+            "struct": cudf.core.column.column_empty(
+                0, cudf.StructDtype({"a": "int64"})
+            ),
+            "list": cudf.core.column.column_empty(
+                0, cudf.ListDtype("float64")
+            ),
+        }
+    )
+    with BytesIO() as bio:
+        expected.to_parquet(bio)
+        result = cudf.read_parquet(bio)
+    assert_eq(result, expected)
