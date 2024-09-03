@@ -67,8 +67,8 @@ std::unique_ptr<column> rolling_window(
   size_type following_window,
   size_type min_periods,
   rolling_aggregation const& agg,
-  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  @copybrief rolling_window
@@ -92,8 +92,8 @@ std::unique_ptr<column> rolling_window(
   size_type following_window,
   size_type min_periods,
   rolling_aggregation const& agg,
-  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Abstraction for window boundary sizes
@@ -242,8 +242,8 @@ std::unique_ptr<column> grouped_rolling_window(
   size_type following_window,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  @copybrief grouped_rolling_window
@@ -264,8 +264,8 @@ std::unique_ptr<column> grouped_rolling_window(
   window_bounds following_window,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  @copybrief grouped_rolling_window
@@ -291,8 +291,8 @@ std::unique_ptr<column> grouped_rolling_window(
   size_type following_window,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  @copybrief grouped_rolling_window
@@ -315,8 +315,8 @@ std::unique_ptr<column> grouped_rolling_window(
   window_bounds following_window,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
@@ -412,8 +412,8 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
   size_type following_window_in_days,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
@@ -443,8 +443,8 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
   window_bounds following_window_in_days,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Applies a grouping-aware, value range-based rolling window function to the values in a
@@ -565,8 +565,8 @@ std::unique_ptr<column> grouped_range_rolling_window(
   range_window_bounds const& following,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Applies a variable-size rolling window function to the values in a column.
@@ -610,8 +610,8 @@ std::unique_ptr<column> rolling_window(
   column_view const& following_window,
   size_type min_periods,
   rolling_aggregation const& agg,
-  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

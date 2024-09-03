@@ -63,8 +63,8 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   column(column const& other,
-         rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-         cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+         rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+         rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Move the contents from `other` to create a new column.
@@ -141,8 +141,8 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   explicit column(column_view view,
-                  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-                  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+                  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Returns the column's logical element type

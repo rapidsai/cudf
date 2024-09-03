@@ -45,8 +45,8 @@ namespace strings {
  */
 std::unique_ptr<column> url_encode(
   strings_column_view const& input,
-  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Encodes each string using URL encoding.
@@ -68,8 +68,8 @@ std::unique_ptr<column> url_encode(
  */
 std::unique_ptr<column> url_decode(
   strings_column_view const& input,
-  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

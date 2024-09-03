@@ -207,7 +207,7 @@ class output_builder {
   output_builder(size_type max_write_size,
                  size_type max_growth,
                  rmm::cuda_stream_view stream,
-                 cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
     : _max_write_size{max_write_size}, _max_growth{max_growth}
   {
     CUDF_EXPECTS(max_write_size > 0, "Internal error");

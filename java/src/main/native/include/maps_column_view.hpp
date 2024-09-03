@@ -85,8 +85,8 @@ class maps_column_view {
    */
   std::unique_ptr<column> get_values_for(
     column_view const& keys,
-    rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-    cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
    * @brief Map lookup by a scalar key.
@@ -104,8 +104,8 @@ class maps_column_view {
    */
   std::unique_ptr<column> get_values_for(
     scalar const& key,
-    rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-    cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
    * @brief Check if each map row contains a specified scalar key.
@@ -125,8 +125,8 @@ class maps_column_view {
    */
   std::unique_ptr<column> contains(
     scalar const& key,
-    rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-    cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
    * @brief Check if each map row contains keys specified by a column
@@ -147,8 +147,8 @@ class maps_column_view {
 
   std::unique_ptr<column> contains(
     column_view const& key,
-    rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-    cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
   lists_column_view keys_, values_;

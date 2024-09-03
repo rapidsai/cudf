@@ -389,7 +389,7 @@ class java_debug_event_handler_memory_resource final : public java_event_handler
 
 inline auto& prior_cudf_pinned_mr()
 {
-  static cudf::host_device_async_resource_ref _prior_cudf_pinned_mr =
+  static rmm::host_device_async_resource_ref _prior_cudf_pinned_mr =
     cudf::get_pinned_memory_resource();
   return _prior_cudf_pinned_mr;
 }
@@ -616,7 +616,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv* env,
 {
   try {
     cudf::jni::auto_set_device(env);
-    cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
     auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
     void* ret     = mr.allocate_async(size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
     return reinterpret_cast<jlong>(ret);
@@ -629,8 +629,8 @@ Java_ai_rapids_cudf_Rmm_free(JNIEnv* env, jclass clazz, jlong ptr, jlong size, j
 {
   try {
     cudf::jni::auto_set_device(env);
-    cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
-    void* cptr                         = reinterpret_cast<void*>(ptr);
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
+    void* cptr                        = reinterpret_cast<void*>(ptr);
     auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
     mr.deallocate_async(cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
   }

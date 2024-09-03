@@ -116,7 +116,7 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::struc
 auto scalar_to_column_view(
   scalar const& scal,
   rmm::cuda_stream_view stream,
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, mr);
 }

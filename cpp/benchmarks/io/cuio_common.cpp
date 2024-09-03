@@ -32,7 +32,7 @@
 temp_directory const cuio_source_sink_pair::tmpdir{"cudf_gbench"};
 
 // Don't use cudf's pinned pool for the source data
-cudf::host_async_resource_ref pinned_memory_resource()
+rmm::host_async_resource_ref pinned_memory_resource()
 {
   static auto mr = rmm::mr::pinned_host_memory_resource{};
 

@@ -54,7 +54,7 @@ std::unique_ptr<column> sorted_order(
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr             = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr              = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Computes the row indices that would produce `input` in a stable
@@ -69,7 +69,7 @@ std::unique_ptr<column> stable_sorted_order(
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr             = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr              = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Checks whether the rows of a `table` are sorted in a lexicographical
@@ -113,7 +113,7 @@ std::unique_ptr<table> sort(
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr             = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr              = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs a stable lexicographic sort of the rows of a table
@@ -125,7 +125,7 @@ std::unique_ptr<table> stable_sort(
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr             = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr              = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs a key-value sort.
@@ -155,7 +155,7 @@ std::unique_ptr<table> sort_by_key(
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr             = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr              = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs a key-value stable sort.
@@ -168,7 +168,7 @@ std::unique_ptr<table> stable_sort_by_key(
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr             = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr              = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Computes the ranks of input column in sorted order.
@@ -207,8 +207,8 @@ std::unique_ptr<column> rank(
   null_policy null_handling,
   null_order null_precedence,
   bool percentage,
-  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns sorted order after sorting each segment in the table.
@@ -259,7 +259,7 @@ std::unique_ptr<column> segmented_sorted_order(
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr             = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr              = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns sorted order after stably sorting each segment in the table.
@@ -272,7 +272,7 @@ std::unique_ptr<column> stable_segmented_sorted_order(
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr             = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr              = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs a lexicographic segmented sort of a table
@@ -328,7 +328,7 @@ std::unique_ptr<table> segmented_sort_by_key(
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr             = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr              = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs a stably lexicographic segmented sort of a table
@@ -342,7 +342,7 @@ std::unique_ptr<table> stable_segmented_sort_by_key(
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr             = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr              = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

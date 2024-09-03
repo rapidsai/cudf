@@ -56,8 +56,8 @@ class table {
    * @param mr Device memory resource to use for all device memory allocations
    */
   explicit table(table const& other,
-                 rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-                 cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
   /**
    * @brief Moves the contents from a vector of `unique_ptr`s to columns to
    * construct a new table.
@@ -75,8 +75,8 @@ class table {
    * @param mr Device memory resource used for allocating the device memory for the new columns
    */
   table(table_view view,
-        rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-        cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+        rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+        rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Returns the number of columns in the table

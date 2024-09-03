@@ -59,7 +59,7 @@ std::unique_ptr<column> quantile(
   interpolation interp               = interpolation::LINEAR,
   column_view const& ordered_indices = {},
   bool exact                         = true,
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr  = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the rows of the input corresponding to the requested quantiles.
@@ -98,7 +98,7 @@ std::unique_ptr<table> quantiles(
   cudf::sorted is_input_sorted                   = sorted::NO,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
-  cudf::device_async_resource_ref mr             = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr              = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Calculate approximate percentiles on an input tdigest column.
@@ -125,7 +125,7 @@ std::unique_ptr<table> quantiles(
 std::unique_ptr<column> percentile_approx(
   tdigest::tdigest_column_view const& input,
   column_view const& percentiles,
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

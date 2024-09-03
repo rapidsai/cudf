@@ -72,9 +72,9 @@ enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
  */
 std::unique_ptr<column> round(
   column_view const& input,
-  int32_t decimal_places             = 0,
-  rounding_method method             = rounding_method::HALF_UP,
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  int32_t decimal_places            = 0,
+  rounding_method method            = rounding_method::HALF_UP,
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

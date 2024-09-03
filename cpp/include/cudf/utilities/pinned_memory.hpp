@@ -29,15 +29,15 @@ namespace CUDF_EXPORT cudf {
  * @param mr The rmm resource to be used for pinned allocations
  * @return The previous resource that was in use
  */
-cudf::host_device_async_resource_ref set_pinned_memory_resource(
-  cudf::host_device_async_resource_ref mr);
+rmm::host_device_async_resource_ref set_pinned_memory_resource(
+  rmm::host_device_async_resource_ref mr);
 
 /**
  * @brief Get the rmm resource being used for pinned memory allocations.
  *
  * @return The rmm resource used for pinned allocations
  */
-cudf::host_device_async_resource_ref get_pinned_memory_resource();
+rmm::host_device_async_resource_ref get_pinned_memory_resource();
 
 /**
  * @brief Options to configure the default pinned memory resource
