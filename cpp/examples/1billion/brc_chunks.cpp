@@ -19,7 +19,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/io/csv.hpp>
-#include <cudf/io/datasource.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -49,7 +48,7 @@ std::unique_ptr<cudf::table> load_chunk(std::string const& input_file,
       .dtypes(std::vector<cudf::data_type>{cudf::data_type{cudf::type_id::STRING},
                                            cudf::data_type{cudf::type_id::FLOAT32}})
       .na_filter(false);
-  return cudf::io::read_csv(in_opts).tbl;
+  return cudf::io::read_csv(in_opts, stream).tbl;
 }
 
 int main(int argc, char const** argv)
