@@ -19,7 +19,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/io/csv.hpp>
-#include <cudf/io/datasource.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -42,9 +41,8 @@ std::unique_ptr<cudf::table> load_chunk(std::string const& input_file,
                                         std::size_t size,
                                         rmm::cuda_stream_view stream)
 {
-  auto const source = cudf::io::datasource::create(input_file);
   cudf::io::csv_reader_options in_opts =
-    cudf::io::csv_reader_options::builder(cudf::io::source_info{source.get()})
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{input_file})
       .header(-1)
       .delimiter(';')
       .doublequote(false)
