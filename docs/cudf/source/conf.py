@@ -342,6 +342,7 @@ _reftarget_aliases = {
     "cudf.Series": ("cudf.core.series.Series", "cudf.Series"),
     "cudf.Index": ("cudf.core.index.Index", "cudf.Index"),
     "cupy.core.core.ndarray": ("cupy.ndarray", "cupy.ndarray"),
+    "DeviceBuffer": ("rmm._lib.device_buffer.DeviceBuffer", "rmm.DeviceBuffer"),
 }
 
 
@@ -383,6 +384,7 @@ _names_to_skip_in_pylibcudf = {
     # Cython types that don't alias cleanly because of
     # https://github.com/cython/cython/issues/5609
     "size_type",
+    "size_t",
     "type_id",
     # Unknown base types
     "int32_t",
