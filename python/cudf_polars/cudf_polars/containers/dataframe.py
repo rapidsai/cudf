@@ -105,7 +105,9 @@ class DataFrame:
         return cls(
             [
                 NamedColumn(column, h_col.name).copy_metadata(h_col)
-                for column, h_col in zip(d_table.columns(), df.iter_columns())
+                for column, h_col in zip(
+                    d_table.columns(), df.iter_columns(), strict=True
+                )
             ]
         )
 
@@ -134,8 +136,10 @@ class DataFrame:
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
         return cls(
-            # TODO: strict=True when we drop py39
-            [NamedColumn(c, name) for c, name in zip(table.columns(), names)]
+            [
+                NamedColumn(c, name)
+                for c, name in zip(table.columns(), names, strict=True)
+            ]
         )
 
     def sorted_like(
@@ -165,8 +169,7 @@ class DataFrame:
         subset = self.column_names_set if subset is None else subset
         self.columns = [
             c.sorted_like(other) if c.name in subset else c
-            # TODO: strict=True when we drop py39
-            for c, other in zip(self.columns, like.columns)
+            for c, other in zip(self.columns, like.columns, strict=True)
         ]
         return self
 
