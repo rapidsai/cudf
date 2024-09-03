@@ -4,16 +4,14 @@ import glob
 import math
 import os
 
+import dask
 import numpy as np
 import pandas as pd
 import pytest
-
-import dask
 from dask import dataframe as dd
 from dask.utils import natural_sort_key
 
 import cudf
-
 import dask_cudf
 from dask_cudf.tests.utils import skip_dask_expr, xfail_dask_expr
 

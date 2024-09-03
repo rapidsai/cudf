@@ -14,11 +14,10 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
+import rmm
 from numba import cuda
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from typing_extensions import Self
-
-import rmm
 
 import cudf
 from cudf import _lib as libcudf
@@ -31,9 +30,11 @@ from cudf._lib.null_mask import (
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import (
     apply_boolean_mask,
-    distinct_count as cpp_distinct_count,
     drop_duplicates,
     drop_nulls,
+)
+from cudf._lib.stream_compaction import (
+    distinct_count as cpp_distinct_count,
 )
 from cudf._lib.transform import bools_to_mask
 from cudf._lib.types import size_type_dtype

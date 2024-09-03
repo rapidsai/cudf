@@ -1,15 +1,13 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
+import dask
+import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import pytest
 from packaging.version import Version
 
-import dask
-import dask.dataframe as dd
-
 import cudf
-
 from dask_cudf.expr import QUERY_PLANNING_ON
 
 if QUERY_PLANNING_ON:

@@ -6,24 +6,24 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from tlz import partition_all
-
 from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
 from dask.dataframe.core import (
     Scalar,
     handle_out,
-    make_meta as dask_make_meta,
     map_partitions,
+)
+from dask.dataframe.core import (
+    make_meta as dask_make_meta,
 )
 from dask.dataframe.utils import raise_on_meta_error
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, OperatorMethodMixin, apply, derived_from, funcname
+from tlz import partition_all
 
 import cudf
 from cudf import _lib as libcudf
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
-
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
 from dask_cudf.sorting import _deprecate_shuffle_kwarg, _get_shuffle_method

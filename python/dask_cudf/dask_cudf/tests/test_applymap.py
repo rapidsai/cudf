@@ -1,9 +1,8 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import pytest
-from pandas import NA
-
 from dask import dataframe as dd
+from pandas import NA
 
 from dask_cudf.tests.utils import _make_random_frame
 

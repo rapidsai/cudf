@@ -2,10 +2,10 @@
 
 import datetime
 import os
-import zoneinfo
 
 import pandas as pd
 import pytest
+import zoneinfo
 
 import cudf
 from cudf import date_range

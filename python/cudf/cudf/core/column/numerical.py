@@ -7,9 +7,8 @@ from typing import TYPE_CHECKING, Any, Sequence, cast
 
 import numpy as np
 import pandas as pd
-from typing_extensions import Self
-
 import pylibcudf
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf

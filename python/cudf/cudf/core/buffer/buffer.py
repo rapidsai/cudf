@@ -9,10 +9,9 @@ from types import SimpleNamespace
 from typing import Any, Literal, Mapping
 
 import numpy
-from typing_extensions import Self
-
 import pylibcudf
 import rmm
+from typing_extensions import Self
 
 import cudf
 from cudf.core.abc import Serializable

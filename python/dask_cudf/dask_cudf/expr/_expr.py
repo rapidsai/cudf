@@ -2,13 +2,12 @@
 import functools
 
 import dask_expr._shuffle as _shuffle_module
+from dask.dataframe.core import is_dataframe_like, make_meta, meta_nonempty
+from dask.dataframe.dispatch import is_categorical_dtype
 from dask_expr import new_collection
 from dask_expr._cumulative import CumulativeBlockwise
 from dask_expr._expr import Elemwise, Expr, VarColumns
 from dask_expr._reductions import Reduction, Var
-
-from dask.dataframe.core import is_dataframe_like, make_meta, meta_nonempty
-from dask.dataframe.dispatch import is_categorical_dtype
 
 import cudf
 

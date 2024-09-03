@@ -3,7 +3,6 @@
 from io import StringIO
 
 import pytest
-
 import rmm.mr
 import rmm.statistics
 

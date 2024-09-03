@@ -5,12 +5,10 @@ from collections.abc import Iterator
 from functools import partial
 
 import cupy as cp
+import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.api.types import is_scalar
-
-import dask.dataframe as dd
 from dask import config
 from dask.array.dispatch import percentile_lookup
 from dask.dataframe.backends import (
@@ -40,6 +38,7 @@ from dask.dataframe.utils import (
 )
 from dask.sizeof import sizeof as sizeof_dispatch
 from dask.utils import Dispatch, is_arraylike
+from pandas.api.types import is_scalar
 
 import cudf
 from cudf.api.types import is_string_dtype
