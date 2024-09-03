@@ -1005,13 +1005,13 @@ class TemporalFunction(Expr):
                     millis,
                     plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
                     plc.binaryop.BinaryOperator.MUL,
-                    self.dtype,
+                    plc.DataType(plc.TypeId.INT32),
                 )
                 total_micros = plc.binaryop.binary_operation(
                     micros,
                     processed_mili,
                     plc.binaryop.BinaryOperator.ADD,
-                    plc.types.DataType(plc.types.TypeId.INT64),
+                    plc.types.DataType(plc.types.TypeId.INT32),
                 )
                 return Column(total_micros)
             elif self.name == pl_expr.TemporalFunction.Nanosecond:
@@ -1026,27 +1026,27 @@ class TemporalFunction(Expr):
                 )
                 processed_mili = plc.binaryop.binary_operation(
                     millis,
-                    plc.interop.from_arrow(pa.scalar(1_000_000, type=pa.int64())),
+                    plc.interop.from_arrow(pa.scalar(1_000_000, type=pa.int32())),
                     plc.binaryop.BinaryOperator.MUL,
-                    plc.types.DataType(plc.types.TypeId.INT64),
+                    plc.types.DataType(plc.types.TypeId.INT32),
                 )
                 processed_micro = plc.binaryop.binary_operation(
                     micros,
-                    plc.interop.from_arrow(pa.scalar(1_000, type=pa.int64())),
+                    plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
                     plc.binaryop.BinaryOperator.MUL,
-                    plc.types.DataType(plc.types.TypeId.INT64),
+                    plc.types.DataType(plc.types.TypeId.INT32),
                 )
                 total_nanos = plc.binaryop.binary_operation(
                     nanos,
                     processed_mili,
                     plc.binaryop.BinaryOperator.ADD,
-                    plc.types.DataType(plc.types.TypeId.INT64),
+                    plc.types.DataType(plc.types.TypeId.INT32),
                 )
                 total_nanos = plc.binaryop.binary_operation(
                     total_nanos,
                     processed_micro,
                     plc.binaryop.BinaryOperator.ADD,
-                    plc.types.DataType(plc.types.TypeId.INT64),
+                    plc.types.DataType(plc.types.TypeId.INT32),
                 )
                 return Column(total_nanos)
 
