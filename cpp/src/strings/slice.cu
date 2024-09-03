@@ -287,8 +287,6 @@ std::unique_ptr<column> slice_strings(strings_column_view const& input,
   auto const step_value = step_valid ? step.value(stream) : 1;
   if (step_valid) { CUDF_EXPECTS(step_value != 0, "Step parameter must not be 0"); }
 
-  // printf("slice_strings - scalar %d, %d\n", input.size(), step_value);
-
   // optimization for (step==1 and start < stop) -- expect this to be most common
   if (step_value == 1) {
     auto const start_value = start.is_valid(stream) ? start.value(stream) : 0;
@@ -347,7 +345,6 @@ std::unique_ptr<column> slice_strings(strings_column_view const& input,
                "Positions values must be fixed width type.",
                cudf::data_type_error);
 
-  // auto strings_column = column_device_view::create(strings.parent(), stream);
   auto starts_iter = cudf::detail::indexalator_factory::make_input_iterator(starts_column);
   auto stops_iter  = cudf::detail::indexalator_factory::make_input_iterator(stops_column);
   return compute_substrings_from_fn(input, starts_iter, stops_iter, stream, mr);
