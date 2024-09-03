@@ -1160,7 +1160,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
 
     @_performance_tracking
-    def to_frame(self, name=None):
+    def to_frame(self, name: abc.Hashable = no_default) -> cudf.DataFrame:
         """Convert Series into a DataFrame
 
         Parameters
@@ -1192,15 +1192,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         13   <NA>
         15      d
         """  # noqa: E501
-
-        if name is not None:
-            col = name
-        elif self.name is None:
-            col = 0
-        else:
-            col = self.name
-
-        return cudf.DataFrame({col: self._column}, index=self.index)
+        return self._to_frame(name=name, index=self.index)
 
     @_performance_tracking
     def memory_usage(self, index=True, deep=False):
