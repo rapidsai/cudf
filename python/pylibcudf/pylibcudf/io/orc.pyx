@@ -32,6 +32,13 @@ from pylibcudf.variant cimport get_if, holds_alternative
 
 
 cdef class OrcColumnStatistics:
+    def __init__(self):
+        raise TypeError(
+            "OrcColumnStatistics should not be instantiated by users. If it is "
+            "being constructed in Cython from a preexisting libcudf object, "
+            "use `OrcColumnStatistics.from_libcudf` instead."
+        )
+
     @property
     def number_of_values(self):
         if self.number_of_values_c.has_value():
@@ -161,8 +168,8 @@ cdef class OrcColumnStatistics:
     def __contains__(self, item):
         return item in self.column_stats
 
-    def get(self, item, alt=None):
-        return self.column_stats.get(item, alt)
+    def get(self, item, default=None):
+        return self.column_stats.get(item, default)
 
     @staticmethod
     cdef OrcColumnStatistics from_libcudf(column_statistics& col_stats):
@@ -182,20 +189,20 @@ cdef class ParsedOrcStatistics:
 
     @property
     def file_stats(self):
-        stats_lst = []
-        for i in range(self.c_obj.file_stats.size()):
-            stats_lst.append(OrcColumnStatistics.from_libcudf(self.c_obj.file_stats[i]))
-        return stats_lst
+        return [
+            OrcColumnStatistics.from_libcudf(self.c_obj.file_stats[i])
+            for i in range(self.c_obj.file_stats.size())
+        ]
 
     @property
     def stripes_stats(self):
-        stats_lst = []
-        for stripe_stats_c in self.c_obj.stripes_stats:
-            stripe_stats = []
-            for i in range(stripe_stats_c.size()):
-                stripe_stats.append(OrcColumnStatistics.from_libcudf(stripe_stats_c[i]))
-            stats_lst.append(stripe_stats)
-        return stats_lst
+        return [
+            [
+                OrcColumnStatistics.from_libcudf(stripe_stats_c[i])
+                for i in range(stripe_stats_c.size())
+            ]
+            for stripe_stats_c in self.c_obj.stripes_stats
+        ]
 
     @staticmethod
     cdef ParsedOrcStatistics from_libcudf(parsed_orc_statistics& orc_stats):
@@ -233,6 +240,10 @@ cpdef TableWithMetadata read_orc(
         Whether to use the row index to speed up reading.
     use_np_dtypes : bool, default True
         Whether to use numpy compatible dtypes.
+    timestamp_type : DataType, default None
+        The timestamp type to use for the timestamp columns.
+    decimal128_columns : list, default None
+        List of column names to be read as 128-bit decimals.
 
     Returns
     -------
@@ -253,18 +264,26 @@ cpdef TableWithMetadata read_orc(
     if stripes is not None:
         c_stripes = stripes
         opts.set_stripes(c_stripes)
-    if timestamp_type.id() != type_id.EMPTY:
+    if timestamp_type.id() is not None:
         opts.set_timestamp_type(timestamp_type.c_obj)
 
+    cdef vector[string] c_decimal128_columns
+    if decimal128_columns is not None and len(decimal128_columns) > 0:
+        c_decimal128_columns.reserve(len(decimal128_columns))
+        for col in decimal128_columns:
+            if not isinstance(col, str):
+                raise TypeError("Decimal 128 column names must be strings!")
+            c_decimal128_columns.push_back(col.encode())
+        opts.set_decimal128_columns(c_decimal128_columns)
+
     cdef vector[string] c_column_names
-    if columns is not None:
+    if columns is not None and len(columns) > 0:
         c_column_names.reserve(len(columns))
         for col in columns:
             if not isinstance(col, str):
                 raise TypeError("Column names must be strings!")
-            c_column_names.push_back(str(col).encode())
-        if len(columns) > 0:
-            opts.set_columns(c_column_names)
+            c_column_names.push_back(col.encode())
+        opts.set_columns(c_column_names)
 
     cdef table_with_metadata c_result
 

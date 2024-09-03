@@ -44,6 +44,7 @@ from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 from cudf.core.buffer import acquire_spill_lock
 
 
+# TODO: Consider inlining this function since it seems to only be used in one place.
 cpdef read_parsed_orc_statistics(filepath_or_buffer):
     """
     Cython function to call into libcudf API, see `read_parsed_orc_statistics`.
@@ -59,21 +60,7 @@ cpdef read_parsed_orc_statistics(filepath_or_buffer):
         )
     )
 
-    file_stats = parsed.file_stats
-    stripes_stats = parsed.stripes_stats
-
-    parsed_file_stats = [
-        file_stat
-        for file_stat in file_stats
-    ]
-
-    parsed_stripes_stats = [
-        [col_stat
-         for col_stat in stripes_stat]
-        for stripes_stat in stripes_stats
-    ]
-
-    return parsed.column_names, parsed_file_stats, parsed_stripes_stats
+    return parsed.column_names, parsed.file_stats, parsed.stripes_stats
 
 
 cpdef read_orc(object filepaths_or_buffers,
@@ -89,6 +76,11 @@ cpdef read_orc(object filepaths_or_buffers,
     See Also
     --------
     cudf.read_orc
+
+    Notes
+    -----
+    Currently this function only considers the metadata of the first file in the list of
+    filepaths_or_buffers.
     """
 
     if columns is not None:
@@ -167,9 +159,6 @@ cdef tuple _get_index_from_metadata(
         object skip_rows,
         object num_rows):
 
-    # TODO: consider metadata from more than the first file?
-    # Note: This code used to use the deprecated user_data member on
-    # table_metadata (which only considers the first file)
     meta = None
     index_col = None
     is_range_index = False

@@ -245,14 +245,15 @@ def is_nested_list(typ):
 
 def _convert_types(pa_table, input_pred, result_type):
     """
-    Useful little helper for testing the
-    dtypes option in I/O readers.
+    Useful little helper for testing the dtypes option in I/O readers.
 
-    Returns a tuple containing the pylibcudf dtypes
-    and the new pyarrow schema
+    Returns a tuple containing the pylibcudf dtypes and the new pyarrow schema based on
+    the data in the table.
 
     Parameters
     ----------
+    pa_table : pyarrow.Table
+        The table from which to extract the dtypes
     input_pred : function
         Predicate that evaluates to true for types to replace
     result_type : pa.DataType
