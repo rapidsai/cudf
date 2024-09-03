@@ -12,6 +12,7 @@ import pytest
 from dask.dataframe import assert_eq
 
 import dask_cudf
+from dask_cudf.tests.utils import QUERY_PLANNING_ON
 
 moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")
@@ -127,7 +128,19 @@ def test_read_parquet_open_file_options_raises():
         )
 
 
-@pytest.mark.parametrize("filesystem", ["arrow", "fsspec"])
+@pytest.mark.parametrize(
+    "filesystem",
+    [
+        pytest.param(
+            "arrow",
+            marks=pytest.mark.skipif(
+                not QUERY_PLANNING_ON,
+                reason="Not supported for legacy API",
+            ),
+        ),
+        "fsspec",
+    ],
+)
 def test_read_parquet_filesystem(s3_base, s3so, pdf, filesystem):
     fname = "test_parquet_filesystem.parquet"
     bucket = "parquet"
@@ -136,11 +149,21 @@ def test_read_parquet_filesystem(s3_base, s3so, pdf, filesystem):
     buffer.seek(0)
     with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
         path = f"s3://{bucket}/{fname}"
-        df = dask_cudf.read_parquet(
-            path,
-            storage_options=s3so,
-            filesystem=filesystem,
-        )
+        if filesystem == "arrow":
+            import pyarrow.fs as pa_fs
+
+            df = dask_cudf.read_parquet(
+                path,
+                filesystem=pa_fs.S3FileSystem(
+                    endpoint_override=s3so["client_kwargs"]["endpoint_url"],
+                ),
+            )
+        else:
+            df = dask_cudf.read_parquet(
+                path,
+                storage_options=s3so,
+                filesystem=filesystem,
+            )
         assert df.b.sum().compute() == 9
 
 
