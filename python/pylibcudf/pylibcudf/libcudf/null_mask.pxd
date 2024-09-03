@@ -8,8 +8,6 @@ from pylibcudf.libcudf.types cimport bitmask_type, mask_state, size_type
 
 from rmm._lib.device_buffer cimport device_buffer
 
-ctypedef int32_t underlying_type_t_mask_state
-
 
 cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:
     cdef device_buffer copy_bitmask "cudf::copy_bitmask" (
