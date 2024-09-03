@@ -98,8 +98,8 @@ function(ConfigureBench CMAKE_BENCH_NAME)
                CUDA_STANDARD_REQUIRED ON
   )
   target_link_libraries(
-    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common tpch_data_generator cudf_datagen
-                                benchmark::benchmark_main $<TARGET_NAME_IF_EXISTS:conda_env>
+    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
+                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   add_custom_command(
     OUTPUT CUDF_BENCHMARKS
@@ -127,8 +127,8 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
                INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(
-    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen nvbench::nvbench
-                                $<TARGET_NAME_IF_EXISTS:conda_env>
+    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common tpch_data_generator cudf_datagen
+                                nvbench::nvbench $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   install(
     TARGETS ${CMAKE_BENCH_NAME}
@@ -181,11 +181,9 @@ ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask.cpp
 
 # ##################################################################################################
 # * tpch benchmark --------------------------------------------------------------------------------
-ConfigureBench(TPCH_Q1 tpch/q1.cpp)
-ConfigureBench(TPCH_Q5 tpch/q5.cpp)
-ConfigureBench(TPCH_Q6 tpch/q6.cpp)
-ConfigureBench(TPCH_Q9 tpch/q9.cpp)
-ConfigureBench(TPCH_Q10 tpch/q10.cpp)
+ConfigureNVBench(TPCH_Q1 tpch/q1.cpp)
+# ConfigureNVBench(TPCH_Q5 tpch/q5.cpp) ConfigureNVBench(TPCH_Q6 tpch/q6.cpp)
+# ConfigureNVBench(TPCH_Q9 tpch/q9.cpp) ConfigureNVBench(TPCH_Q10 tpch/q10.cpp)
 
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
