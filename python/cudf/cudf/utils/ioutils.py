@@ -2121,23 +2121,27 @@ def _get_remote_bytes_all(
         return fs.cat_ranges(remote_paths, None, None)
     else:
         # Construct list of paths, starts, and ends
-        paths, starts, ends = zip(
-            *[
-                (r, j, min(j + blocksize, s))
-                for r, s in zip(remote_paths, sizes)
-                for j in range(0, s, blocksize)
-            ]
+        paths, starts, ends = map(
+            list,
+            zip(
+                *(
+                    (r, j, min(j + blocksize, s))
+                    for r, s in zip(remote_paths, sizes)
+                    for j in range(0, s, blocksize)
+                )
+            ),
         )
 
         # Collect the byte ranges
         chunks = fs.cat_ranges(paths, starts, ends)
 
         # Construct local byte buffers
+        # (Need to make sure path offsets are ordered correctly)
+        unique_count = dict(zip(*np.unique(paths, return_counts=True)))
+        offset = np.cumsum([0] + [unique_count[p] for p in remote_paths])
         buffers = [
-            functools.reduce(operator.add, chunks[:counts])
-            for _, counts in zip(
-                remote_paths, np.unique(paths, return_counts=True)[1]
-            )
+            functools.reduce(operator.add, chunks[offset[i] : offset[i + 1]])
+            for i in range(len(remote_paths))
         ]
         return buffers
 

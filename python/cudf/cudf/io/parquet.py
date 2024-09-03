@@ -580,6 +580,13 @@ def read_parquet(
     # Prepare remote-IO options
     prefetch_options = kwargs.pop("prefetch_options", {})
     if not ioutils._is_local_filesystem(fs):
+        # The default prefetch method depends on the
+        # `row_groups` argument. In most cases we will use
+        # method="all" by default, because it is fastest
+        # when we need to read most of the file(s).
+        # If a (simple) `row_groups` selection is made, we
+        # use method="parquet" to avoid transferring the
+        # entire file over the network
         method = prefetch_options.get("method")
         _row_groups = None
         if method in (None, "parquet"):
