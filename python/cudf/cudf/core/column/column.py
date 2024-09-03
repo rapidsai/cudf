@@ -1455,7 +1455,7 @@ def column_empty(
     row_count: int, dtype: Dtype = "object", masked: bool = False
 ) -> ColumnBase:
     """
-    Allocate a new column like the given row_count and dtype.
+    Allocate a new column with the given row_count and dtype.
 
     * A row_count == 0 creates a size 0 column without a mask buffer.
     * A row_count > 0 creates an all null column with a mask buffer.
