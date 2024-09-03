@@ -995,7 +995,7 @@ class TemporalFunction(Expr):
                     plc.datetime.extract_datetime_component(column.obj, "millisecond")
                 )
             if self.name == pl_expr.TemporalFunction.Microsecond:
-                milis = plc.datetime.extract_datetime_component(
+                millis = plc.datetime.extract_datetime_component(
                     column.obj, "millisecond"
                 )
                 micros = plc.datetime.extract_datetime_component(
@@ -1003,9 +1003,9 @@ class TemporalFunction(Expr):
                 )
                 processed_mili = plc.binaryop.binary_operation(
                     milis,
-                    plc.interop.from_arrow(pa.scalar(1_000, type=pa.int64())),
+                    plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
                     plc.binaryop.BinaryOperator.MUL,
-                    plc.types.DataType(plc.types.TypeId.INT64),
+                    self.dtype,
                 )
                 total_micros = plc.binaryop.binary_operation(
                     micros,
