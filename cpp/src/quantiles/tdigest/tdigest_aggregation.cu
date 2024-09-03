@@ -366,8 +366,8 @@ std::unique_ptr<scalar> to_tdigest_scalar(std::unique_ptr<column>&& tdigest,
  * @param group_cluster_wl    Output.  The set of cluster weight limits for each group.
  * @param group_num_clusters  Output.  The number of output clusters for each input group.
  * @param group_cluster_offsets  Offsets per-group to the start of it's clusters
- * @param may_have_empty_clusters Whether or not there could be empty clusters. False if there
- * should be no empty clusters.
+ * @param may_have_empty_clusters Whether or not there could be empty clusters. It should be
+ * set to false only when there is no empty cluster.
  */
 
 template <typename GroupInfo, typename NearestWeightFunc, typename CumulativeWeight>
@@ -502,8 +502,8 @@ CUDF_KERNEL void generate_cluster_limits_kernel(int delta,
  * stream that falls before our current cluster limit
  * @param group_info         A functor which returns the info for the specified group (total weight,
  * size and start offset)
- * @param may_have_empty_clusters Whether or not there could be empty clusters. False if there
- * should be no empty clusters.
+ * @param may_have_empty_clusters Whether or not there could be empty clusters. It should be
+ * set to false only when there is no empty cluster.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
@@ -720,8 +720,8 @@ struct compute_tdigests_keys_fn {
  * @param group_cluster_wl   Cluster weight limits for each group.
  * @param group_cluster_offsets R-value reference of offsets into the cluster weight limits.
  * @param total_clusters     Total number of clusters in all groups.
- * @param may_have_empty_clusters Whether or not there could be empty clusters. False if there
- * should be no empty clusters.
+ * @param may_have_empty_clusters Whether or not there could be empty clusters. It should be
+ * set to false only when there is no empty cluster.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  *

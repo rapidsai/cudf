@@ -145,7 +145,7 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
 /**
  * @brief Create an empty tdigest column.
  *
- * An empty tdigest column contains rows of length 0.
+ * An empty tdigest column contains specified number of rows of length 0.
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.

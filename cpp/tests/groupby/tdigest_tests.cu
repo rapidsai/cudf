@@ -514,7 +514,7 @@ std::unique_ptr<cudf::table> do_agg(
 {
   std::vector<cudf::column_view> keys;
   keys.push_back(key);
-  cudf::table_view key_table(keys);
+  cudf::table_view const key_table(keys);
 
   cudf::groupby::groupby gb(key_table);
   std::vector<cudf::groupby::aggregation_request> requests;
@@ -523,7 +523,7 @@ std::unique_ptr<cudf::table> do_agg(
   req.aggregations.push_back(make_agg());
   requests.push_back(std::move(req));
 
-  auto result = gb.aggregate(requests);
+  auto result = gb.aggregate(std::move(requests));
 
   std::vector<std::unique_ptr<cudf::column>> result_columns;
   for (auto&& c : result.first->release()) {
@@ -541,25 +541,26 @@ TEST_F(TDigestMergeTest, AllGroupsHaveEmptyClusters)
 {
   // The input must be sorted by the key.
   // See `aggregate_result_functor::operator()<aggregation::TDIGEST>` for details.
-  auto keys       = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 0, 1, 1, 2}};
+  auto const keys      = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 0, 1, 1, 2}};
+  auto const keys_view = cudf::column_view(keys);
   auto val_elems  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
   auto val_valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
     // All values are null
     return false;
   });
-  auto vals       = cudf::test::fixed_width_column_wrapper<int32_t>{
-    val_elems, val_elems + cudf::column_view(keys).size(), val_valids};
+  auto const vals = cudf::test::fixed_width_column_wrapper<int32_t>{
+    val_elems, val_elems + keys_view.size(), val_valids};
 
   auto const delta = 10000;
 
   // Compute tdigest. The result should have 3 empty clusters, one per group.
-  auto compute_result = do_agg(cudf::column_view(keys), cudf::column_view(vals), [&delta]() {
+  auto const compute_result = do_agg(keys_view, cudf::column_view(vals), [&delta]() {
     return cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(delta);
   });
 
-  auto expected_computed_keys = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 1, 2}};
-  cudf::column_view expected_computed_keys_view{expected_computed_keys};
-  auto expected_computed_vals = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
+  auto const expected_computed_keys = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 1, 2}};
+  cudf::column_view const expected_computed_keys_view{expected_computed_keys};
+  auto const expected_computed_vals = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
     expected_computed_keys_view.size(),
     cudf::get_default_stream(),
     rmm::mr::get_current_device_resource());
@@ -569,14 +570,14 @@ TEST_F(TDigestMergeTest, AllGroupsHaveEmptyClusters)
                                  compute_result->get_column(1).view());
 
   // Merge tdigest. The result should have 3 empty clusters, one per group.
-  auto merge_result =
+  auto const merge_result =
     do_agg(compute_result->get_column(0).view(), compute_result->get_column(1).view(), [&delta]() {
       return cudf::make_merge_tdigest_aggregation<cudf::groupby_aggregation>(delta);
     });
 
-  auto expected_merged_keys = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 1, 2}};
-  cudf::column_view expected_merged_keys_view{expected_merged_keys};
-  auto expected_merged_vals = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
+  auto const expected_merged_keys = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 1, 2}};
+  cudf::column_view const expected_merged_keys_view{expected_merged_keys};
+  auto const expected_merged_vals = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
     expected_merged_keys_view.size(),
     cudf::get_default_stream(),
     rmm::mr::get_current_device_resource());
