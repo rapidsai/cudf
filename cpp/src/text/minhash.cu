@@ -206,17 +206,16 @@ CUDF_KERNEL void minhash_word_kernel(cudf::detail::lists_column_device_view cons
     for (std::size_t seed_idx = 0; seed_idx < seeds.size(); ++seed_idx) {
       auto const hasher = HashFunction(seeds[seed_idx]);
       // hash string and store the min value
+      hash_value_type hv;
       if constexpr (std::is_same_v<hash_value_type, uint32_t>) {
-        auto const hvalue = hasher(hash_str);
-        cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{*(d_output + seed_idx)};
-        ref.fetch_min(hvalue, cuda::std::memory_order_relaxed);
+        hv = hasher(hash_str);
       } else {
         // This code path assumes the use of MurmurHash3_x64_128 which produces 2 uint64 values
         // but only uses the first uint64 value as requested by the LLM team.
-        auto const hvalue = thrust::get<0>(hasher(hash_str));
-        cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{*(d_output + seed_idx)};
-        ref.fetch_min(hvalue, cuda::std::memory_order_relaxed);
+        hv = thrust::get<0>(hasher(hash_str));
       }
+      cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{*(d_output + seed_idx)};
+      ref.fetch_min(hv, cuda::std::memory_order_relaxed);
     }
   }
 }
