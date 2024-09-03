@@ -473,15 +473,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         ca = self._frame._data
         index = self._frame.index
         if col_is_scalar:
-            s = Series._from_data(
-                data=ColumnAccessor(
-                    {key: ca._data[key] for key in column_names},
-                    multiindex=ca.multiindex,
-                    level_names=ca.level_names,
-                    verify=False,
-                ),
-                index=index,
-            )
+            name = column_names[0]
+            s = Series._from_column(ca._data[name], name=name, index=index)
             return s._getitem_preprocessed(row_spec)
         if column_names != list(self._frame._column_names):
             frame = self._frame._from_data(
@@ -7768,8 +7761,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "interleave_columns does not support 'category' dtype."
             )
 
-        return self._constructor_sliced._from_data(
-            {None: libcudf.reshape.interleave_columns([*self._columns])}
+        return self._constructor_sliced._from_column(
+            libcudf.reshape.interleave_columns([*self._columns])
         )
 
     @_performance_tracking
