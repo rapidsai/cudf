@@ -182,8 +182,10 @@ ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask.cpp
 # ##################################################################################################
 # * tpch benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(TPCH_Q1 tpch/q1.cpp)
-# ConfigureNVBench(TPCH_Q5 tpch/q5.cpp) ConfigureNVBench(TPCH_Q6 tpch/q6.cpp)
-# ConfigureNVBench(TPCH_Q9 tpch/q9.cpp) ConfigureNVBench(TPCH_Q10 tpch/q10.cpp)
+ConfigureNVBench(TPCH_Q5 tpch/q5.cpp)
+ConfigureNVBench(TPCH_Q6 tpch/q6.cpp)
+ConfigureNVBench(TPCH_Q9 tpch/q9.cpp)
+ConfigureNVBench(TPCH_Q10 tpch/q10.cpp)
 
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------

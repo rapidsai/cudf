@@ -21,6 +21,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <nvbench/nvbench.cuh>
+
 /**
  * @file q5.cpp
  * @brief Implement query 5 of the TPC-H benchmark.
@@ -85,12 +87,8 @@
   return revenue;
 }
 
-int main(int argc, char const** argv)
+void run_tpch_q5(nvbench::state& state)
 {
-  std::string rmm_mode = argv[1];
-  auto resource        = create_memory_resource(rmm_mode);
-  rmm::mr::set_current_device_resource(resource.get());
-
   // Define a map for holding parquet data sources
   std::unordered_map<std::string, parquet_device_buffer> sources;
   generate_parquet_data_sources({"customer", "orders", "lineitem", "supplier", "nation", "region"},
@@ -164,5 +162,13 @@ int main(int argc, char const** argv)
 
   // Write query result to a parquet file
   orderedby_table->to_parquet("q5.parquet");
-  return 0;
 }
+
+void tpch_q5(nvbench::state& state)
+{
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) { run_tpch_q5(state); });
+}
+
+NVBENCH_BENCH(tpch_q5).set_name("tpch_q5");
