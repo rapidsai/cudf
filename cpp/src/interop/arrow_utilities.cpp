@@ -19,7 +19,6 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
 
