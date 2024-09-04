@@ -138,12 +138,15 @@ class file_source : public datasource {
  */
 class memory_mapped_source : public file_source {
  public:
-  explicit memory_mapped_source(char const* filepath, size_t offset, size_t size)
+  explicit memory_mapped_source(char const* filepath,
+                                size_t offset,
+                                size_t map_size,
+                                size_t register_size)
     : file_source(filepath)
   {
     if (_file.size() != 0) {
-      map(_file.desc(), offset, size);
-      register_mmap_buffer();
+      map(_file.desc(), offset, map_size);
+      register_mmap_buffer(register_size);
     }
   }
 
@@ -184,13 +187,16 @@ class memory_mapped_source : public file_source {
    *
    * Fixes nvbugs/4215160
    */
-  void register_mmap_buffer()
+  void register_mmap_buffer(size_t register_size)
   {
     if (_map_addr == nullptr or _map_size == 0 or not pageableMemoryAccessUsesHostPageTables()) {
       return;
     }
 
-    auto const result = cudaHostRegister(_map_addr, _map_size, cudaHostRegisterDefault);
+    auto const actual_register_size =
+      std::min(register_size != 0 ? register_size : _file.size() - _map_offset, _map_size);
+
+    auto const result = cudaHostRegister(_map_addr, actual_register_size, cudaHostRegisterDefault);
     if (result == cudaSuccess) {
       _is_map_registered = true;
     } else {
@@ -233,8 +239,8 @@ class memory_mapped_source : public file_source {
   }
 
  private:
-  size_t _map_size        = 0;
   size_t _map_offset      = 0;
+  size_t _map_size        = 0;
   void* _map_addr         = nullptr;
   bool _is_map_registered = false;
 };
@@ -431,7 +437,8 @@ class user_datasource_wrapper : public datasource {
 
 std::unique_ptr<datasource> datasource::create(std::string const& filepath,
                                                size_t offset,
-                                               size_t size)
+                                               size_t max_size_estimate,
+                                               size_t min_size_estimate)
 {
 #ifdef CUFILE_FOUND
   if (cufile_integration::is_always_enabled()) {
@@ -440,7 +447,8 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
   }
 #endif
   // Use our own memory mapping implementation for direct file reads
-  return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, size);
+  return std::make_unique<memory_mapped_source>(
+    filepath.c_str(), offset, max_size_estimate, min_size_estimate);
 }
 
 std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)

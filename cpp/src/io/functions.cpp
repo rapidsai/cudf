@@ -122,14 +122,16 @@ chunked_parquet_writer_options_builder chunked_parquet_writer_options::builder(
 namespace {
 
 std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info const& info,
-                                                                    size_t range_offset = 0,
-                                                                    size_t range_size   = 0)
+                                                                    size_t offset            = 0,
+                                                                    size_t max_size_estimate = 0,
+                                                                    size_t min_size_estimate = 0)
 {
   switch (info.type()) {
     case io_type::FILEPATH: {
       auto sources = std::vector<std::unique_ptr<cudf::io::datasource>>();
       for (auto const& filepath : info.filepaths()) {
-        sources.emplace_back(cudf::io::datasource::create(filepath, range_offset, range_size));
+        sources.emplace_back(
+          cudf::io::datasource::create(filepath, offset, max_size_estimate, min_size_estimate));
       }
       return sources;
     }
@@ -211,7 +213,8 @@ table_with_metadata read_json(json_reader_options options,
 
   auto datasources = make_datasources(options.get_source(),
                                       options.get_byte_range_offset(),
-                                      options.get_byte_range_size_with_padding());
+                                      options.get_byte_range_size_with_padding(),
+                                      options.get_byte_range_size());
 
   return json::detail::read_json(datasources, options, stream, mr);
 }
@@ -238,7 +241,8 @@ table_with_metadata read_csv(csv_reader_options options,
 
   auto datasources = make_datasources(options.get_source(),
                                       options.get_byte_range_offset(),
-                                      options.get_byte_range_size_with_padding());
+                                      options.get_byte_range_size_with_padding(),
+                                      options.get_byte_range_size());
 
   CUDF_EXPECTS(datasources.size() == 1, "Only a single source is currently supported.");
 
