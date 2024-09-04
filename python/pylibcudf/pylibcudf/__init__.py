@@ -1,5 +1,15 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
+# If libcudf was installed as a wheel, we must request it to load the library symbols.
+# Otherwise, we assume that the library was installed in a system path that ld can find.
+try:
+    import libcudf
+except ModuleNotFoundError:
+    pass
+else:
+    libcudf.load_library()
+    del libcudf
+
 from . import (
     aggregation,
     binaryop,
@@ -16,6 +26,7 @@ from . import (
     join,
     lists,
     merge,
+    null_mask,
     quantiles,
     reduce,
     replace,
@@ -59,6 +70,7 @@ __all__ = [
     "join",
     "lists",
     "merge",
+    "null_mask",
     "quantiles",
     "reduce",
     "replace",

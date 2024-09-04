@@ -54,11 +54,6 @@ mark_as_advanced(CUDF_BUILD_TESTUTIL)
 option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
 option(CUDF_LARGE_STRINGS_DISABLED "Build with large string support disabled" OFF)
 mark_as_advanced(CUDF_LARGE_STRINGS_DISABLED)
-option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
-option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
-option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
-option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
-option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" OFF)
 option(
   CUDF_USE_PER_THREAD_DEFAULT_STREAM
   "Build cuDF with per-thread default stream, including passing the per-thread default
@@ -81,8 +76,6 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
-option(USE_LIBARROW_FROM_PYARROW "Only use the libarrow contained in pyarrow" OFF)
-mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
 if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
@@ -100,8 +93,6 @@ message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
 message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
-message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
-message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_ENABLE_ARROW_S3}")
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
@@ -192,8 +183,6 @@ include(cmake/thirdparty/get_nvcomp.cmake)
 include(cmake/thirdparty/get_cccl.cmake)
 # find rmm
 include(cmake/thirdparty/get_rmm.cmake)
-# find arrow
-include(cmake/thirdparty/get_arrow.cmake)
 # find flatbuffers
 include(cmake/thirdparty/get_flatbuffers.cmake)
 # find dlpack
@@ -668,6 +657,7 @@ add_library(
   src/unary/math_ops.cu
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
+  src/utilities/cuda.cpp
   src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
   src/utilities/host_memory.cpp
@@ -808,7 +798,7 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
+  PUBLIC CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
           kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
 )
@@ -1057,37 +1047,12 @@ following IMPORTED GLOBAL  targets:
     ]=]
 )
 
-if(CUDF_ENABLE_ARROW_PARQUET)
-  string(
-    APPEND
-    install_code_string
-    [=[
-  if(NOT Parquet_DIR)
-    set(Parquet_DIR "${Arrow_DIR}")
-  endif()
-  set(ArrowDataset_DIR "${Arrow_DIR}")
-  find_dependency(ArrowDataset)
-  ]=]
-  )
-endif()
-
-string(
-  APPEND
-  install_code_string
-  [=[
-if(testing IN_LIST cudf_FIND_COMPONENTS)
-  enable_language(CUDA)
-endif()
-]=]
-)
-
 rapids_export(
   INSTALL cudf
   EXPORT_SET cudf-exports ${_components_export_string}
   GLOBAL_TARGETS cudf cudftestutil
   NAMESPACE cudf::
   DOCUMENTATION doc_string
-  FINAL_CODE_BLOCK install_code_string
 )
 
 # ##################################################################################################
