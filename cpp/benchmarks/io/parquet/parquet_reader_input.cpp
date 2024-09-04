@@ -231,6 +231,31 @@ void BM_parquet_read_chunks(nvbench::state& state, nvbench::type_list<nvbench::e
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
+template <data_type DataType>
+void BM_parquet_read_wide_tables_mixed(nvbench::state& state,
+                                       nvbench::type_list<nvbench::enum_type<DataType>> type_list)
+{
+  auto const d_type = get_type_or_group(static_cast<int32_t>(DataType));
+
+  auto const n_col       = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  auto const num_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const source_type = io_type::FILEPATH;
+  cuio_source_sink_pair source_sink(source_type);
+
+  {
+    auto const tbl =
+      create_random_table(cycle_dtypes(d_type, n_col), row_count{num_rows}, data_profile_builder());
+    auto const view = tbl->view();
+
+    cudf::io::parquet_writer_options write_opts =
+      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
+        .compression(cudf::io::compression_type::SNAPPY);
+    cudf::io::write_parquet(write_opts);
+  }
+
+  parquet_read_common(num_rows, n_col, source_sink, state);
+}
+
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::FLOAT,
                                             data_type::DECIMAL,
@@ -271,6 +296,18 @@ NVBENCH_BENCH(BM_parquet_read_io_small_mixed)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
   .add_int64_axis("num_string_cols", {1, 2, 3});
+
+using d_type_list_wide_table = nvbench::enum_type_list<data_type::INTEGRAL,
+                                                       data_type::FLOAT,
+                                                       data_type::DECIMAL,
+                                                       data_type::TIMESTAMP,
+                                                       data_type::DURATION,
+                                                       data_type::STRING>;
+NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables_mixed, NVBENCH_TYPE_AXES(d_type_list_wide_table))
+  .set_name("parquet_read_wide_tables_mixed")
+  .set_min_samples(4)
+  .add_int64_axis("num_rows", {10'000, 100'000, 500'000, 1'000'000})
+  .add_int64_axis("num_cols", {64, 256, 512, 1024});
 
 // a benchmark for structs that only contain fixed-width types
 using d_type_list_struct_only = nvbench::enum_type_list<data_type::STRUCT>;
