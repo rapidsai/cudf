@@ -530,10 +530,10 @@ int32_t days_since_epoch(int year, int month, int day)
 /**
  * @brief Read the scale factor from the environment variable `CUDF_TPCH_SF`
  */
-cudf::size_type get_sf()
+double get_sf()
 {
-  char* val          = getenv("CUDF_TPCH_SF");
-  cudf::size_type sf = (val == NULL) ? 1 : atoi(val);
+  char* val       = getenv("CUDF_TPCH_SF");
+  double const sf = (val == nullptr) ? 1 : std::atof(val);
   std::cout << "Using scale factor: " << sf << std::endl;
   return sf;
 }
