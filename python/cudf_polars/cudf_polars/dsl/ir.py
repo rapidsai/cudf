@@ -222,6 +222,8 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
+        if any(p.startswith("https://") for p in self.paths):
+            raise NotImplementedError("Read from https")
         if self.typ == "csv":
             if self.reader_options["skip_rows_after_header"] != 0:
                 raise NotImplementedError("Skipping rows after header in CSV reader")
@@ -249,6 +251,15 @@ class Scan(IR):
                 raise NotImplementedError(
                     "ignore_errors is not supported in the JSON reader"
                 )
+        elif (
+            self.typ == "parquet"
+            and self.row_index is not None
+            and self.with_columns is not None
+            and len(self.with_columns) == 0
+        ):
+            raise NotImplementedError(
+                "Reading only parquet metadata to produce row index."
+            )
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -365,12 +376,7 @@ class Scan(IR):
             raise NotImplementedError(
                 f"Unhandled scan type: {self.typ}"
             )  # pragma: no cover; post init trips first
-        if (
-            row_index is not None
-            # TODO: remove condition when dropping support for polars 1.0
-            # https://github.com/pola-rs/polars/pull/17363
-            and row_index[0] in self.schema
-        ):
+        if row_index is not None:
             name, offset = row_index
             dtype = self.schema[name]
             step = plc.interop.from_arrow(
