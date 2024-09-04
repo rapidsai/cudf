@@ -290,7 +290,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
     strategy:
       matrix:
-        group: [1, 2, 3, 4, 5]
+        group: [1, 2, 3]
     if: needs.changed-files.outputs.test_python == 'true'
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
