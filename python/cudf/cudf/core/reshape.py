@@ -12,6 +12,7 @@ import cudf
 from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
+from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column_accessor import ColumnAccessor
@@ -1227,9 +1228,11 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         )
         return res
     else:
-        df = df.copy(deep=False)
-        columns = df.index._poplevels(level)
-        index = df.index
+        columns = df.index.droplevel(level)
+        if is_scalar(level):
+            index = df.index.get_level_values(level)
+        else:
+            pass
     result = _pivot(df, index, columns)
     if result.index.nlevels == 1:
         result.index = result.index.get_level_values(result.index.names[0])
