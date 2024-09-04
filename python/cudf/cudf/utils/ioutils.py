@@ -1,6 +1,8 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
+import functools
+import operator
 import os
 import urllib
 import warnings
@@ -17,6 +19,12 @@ from fsspec.core import expand_paths_if_needed, get_fs_token_paths
 from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
+
+try:
+    import fsspec.parquet as fsspec_parquet
+
+except ImportError:
+    fsspec_parquet = None
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
 _ROW_GROUP_SIZE_BYTES_DEFAULT = 128 * 1024 * 1024
@@ -187,6 +195,11 @@ nrows : int, default None
 allow_mismatched_pq_schemas : boolean, default False
     If True, enables reading (matching) columns specified in `columns` and `filters`
     options from the input files with otherwise mismatched schemas.
+prefetch_options : dict, default None
+    WARNING: This is an experimental feature and may be removed at any
+    time without warning or deprecation period.
+    Dictionary of options to use to prefetch bytes from remote storage.
+    These options are passed through to `get_reader_filepath_or_buffer`.
 
 Returns
 -------
@@ -1439,6 +1452,14 @@ expand_dir_pattern : str, default None
     Glob pattern to use when expanding directories into file paths
     (e.g. "*.json"). If this parameter is not specified, directories
     will not be expanded.
+prefetch_options : dict, default None
+    WARNING: This is an experimental feature and may be removed at any
+    time without warning or deprecation period.
+    Dictionary of options to use to prefetch bytes from remote storage.
+    These options are only used when `path_or_data` is a list of remote
+    paths. If 'method' is set to 'all' (the default), the only supported
+    option is 'blocksize' (default 256 MB). If method is set to 'parquet',
+    'columns' and 'row_groups' are also supported (default None).
 
 Returns
 -------
@@ -1620,6 +1641,7 @@ def get_reader_filepath_or_buffer(
     warn_on_raw_text_input=None,
     warn_meta=None,
     expand_dir_pattern=None,
+    prefetch_options=None,
 ):
     """{docstring}"""
 
@@ -1690,26 +1712,15 @@ def get_reader_filepath_or_buffer(
                 raw_text_input = True
 
         elif fs is not None:
-            # TODO: We can use cat_ranges and/or parquet-aware logic
-            # to copy all remote data into host memory at once here.
-            # The current solution iterates over files, and copies
-            # ALL data from each file (even when we are performing
-            # partial IO, and don't need the entire file)
             if len(paths) == 0:
                 raise FileNotFoundError(
                     f"{input_sources} could not be resolved to any files"
                 )
-            filepaths_or_buffers = [
-                BytesIO(
-                    _fsspec_data_transfer(
-                        fpath,
-                        fs=fs,
-                        mode=mode,
-                        bytes_per_thread=bytes_per_thread,
-                    )
-                )
-                for fpath in paths
-            ]
+            filepaths_or_buffers = _prefetch_remote_buffers(
+                paths,
+                fs,
+                **(prefetch_options or {}),
+            )
         else:
             raw_text_input = True
 
@@ -2099,3 +2110,101 @@ def _read_byte_ranges(
 
     for worker in workers:
         worker.join()
+
+
+def _get_remote_bytes_all(
+    remote_paths, fs, *, blocksize=_BYTES_PER_THREAD_DEFAULT
+):
+    # TODO: Experiment with a heuristic to avoid the fs.sizes
+    # call when we are reading many files at once (the latency
+    # of collecting the file sizes is unnecessary in this case)
+    if max(sizes := fs.sizes(remote_paths)) <= blocksize:
+        # Don't bother breaking up individual files
+        return fs.cat_ranges(remote_paths, None, None)
+    else:
+        # Construct list of paths, starts, and ends
+        paths, starts, ends = map(
+            list,
+            zip(
+                *(
+                    (r, j, min(j + blocksize, s))
+                    for r, s in zip(remote_paths, sizes)
+                    for j in range(0, s, blocksize)
+                )
+            ),
+        )
+
+        # Collect the byte ranges
+        chunks = fs.cat_ranges(paths, starts, ends)
+
+        # Construct local byte buffers
+        # (Need to make sure path offsets are ordered correctly)
+        unique_count = dict(zip(*np.unique(paths, return_counts=True)))
+        offset = np.cumsum([0] + [unique_count[p] for p in remote_paths])
+        buffers = [
+            functools.reduce(operator.add, chunks[offset[i] : offset[i + 1]])
+            for i in range(len(remote_paths))
+        ]
+        return buffers
+
+
+def _get_remote_bytes_parquet(
+    remote_paths,
+    fs,
+    *,
+    columns=None,
+    row_groups=None,
+    blocksize=_BYTES_PER_THREAD_DEFAULT,
+):
+    if fsspec_parquet is None or (columns is None and row_groups is None):
+        return _get_remote_bytes_all(remote_paths, fs, blocksize=blocksize)
+
+    sizes = fs.sizes(remote_paths)
+    data = fsspec_parquet._get_parquet_byte_ranges(
+        remote_paths,
+        fs,
+        columns=columns,
+        row_groups=row_groups,
+        max_block=blocksize,
+    )
+
+    buffers = []
+    for size, path in zip(sizes, remote_paths):
+        path_data = data[path]
+        buf = np.empty(size, dtype="b")
+        for range_offset in path_data.keys():
+            chunk = path_data[range_offset]
+            buf[range_offset[0] : range_offset[1]] = np.frombuffer(
+                chunk, dtype="b"
+            )
+        buffers.append(buf.tobytes())
+    return buffers
+
+
+def _prefetch_remote_buffers(
+    paths,
+    fs,
+    *,
+    method="all",
+    **prefetch_options,
+):
+    # Gather bytes ahead of time for remote filesystems
+    if fs and paths and not _is_local_filesystem(fs):
+        try:
+            prefetcher = {
+                "parquet": _get_remote_bytes_parquet,
+                "all": _get_remote_bytes_all,
+            }[method]
+        except KeyError:
+            raise ValueError(
+                f"{method} is not a supported remote-data prefetcher."
+                " Expected 'parquet' or 'all'."
+            )
+        return prefetcher(
+            paths,
+            fs,
+            **prefetch_options,
+        )
+
+    else:
+        return paths
