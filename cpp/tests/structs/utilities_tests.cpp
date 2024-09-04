@@ -30,6 +30,7 @@
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 template <typename T>
 using nums = cudf::test::fixed_width_column_wrapper<T, int32_t>;

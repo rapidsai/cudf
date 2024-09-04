@@ -17,6 +17,7 @@
 #include <benchmarks/common/generate_input.hpp>
 
 #include <cudf/lists/set_operations.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
 

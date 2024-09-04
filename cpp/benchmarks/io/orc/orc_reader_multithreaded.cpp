@@ -23,6 +23,7 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <BS_thread_pool.hpp>

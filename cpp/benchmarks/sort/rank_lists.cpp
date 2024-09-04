@@ -21,6 +21,7 @@
 #include <cudf_test/column_utilities.hpp>
 
 #include <cudf/sorting.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
 

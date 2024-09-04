@@ -20,6 +20,7 @@
 
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/search.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 struct DictionarySearchTest : public cudf::test::BaseFixture {};
 

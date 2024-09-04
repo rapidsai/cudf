@@ -23,6 +23,7 @@
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/regex/regex_program.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>

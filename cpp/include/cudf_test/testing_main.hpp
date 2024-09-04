@@ -21,6 +21,7 @@
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/aligned.hpp>
 #include <rmm/cuda_stream_view.hpp>

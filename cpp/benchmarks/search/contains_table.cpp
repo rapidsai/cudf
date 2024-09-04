@@ -20,6 +20,7 @@
 #include <cudf/detail/search.hpp>
 #include <cudf/lists/list_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
 

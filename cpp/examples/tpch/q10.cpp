@@ -20,6 +20,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 /**
  * @file q10.cpp

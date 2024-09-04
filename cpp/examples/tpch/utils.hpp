@@ -27,6 +27,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>

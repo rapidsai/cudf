@@ -26,6 +26,7 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/unary.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <src/io/parquet/parquet.hpp>
 #include <src/io/parquet/parquet_common.hpp>

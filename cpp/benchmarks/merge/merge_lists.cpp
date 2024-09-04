@@ -18,6 +18,7 @@
 
 #include <cudf/detail/merge.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
 

@@ -34,6 +34,7 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>

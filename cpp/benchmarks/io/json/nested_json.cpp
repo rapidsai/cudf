@@ -23,6 +23,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
 

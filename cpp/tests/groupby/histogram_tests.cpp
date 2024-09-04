@@ -24,6 +24,7 @@
 #include <cudf/groupby.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
 using int64s_col  = cudf::test::fixed_width_column_wrapper<int64_t>;

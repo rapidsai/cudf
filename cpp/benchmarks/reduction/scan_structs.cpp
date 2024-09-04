@@ -20,6 +20,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/scan.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
 

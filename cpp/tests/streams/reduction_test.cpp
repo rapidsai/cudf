@@ -23,6 +23,7 @@
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 class ReductionTest : public cudf::test::BaseFixture {};
 

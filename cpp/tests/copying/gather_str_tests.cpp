@@ -24,6 +24,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 class GatherTestStr : public cudf::test::BaseFixture {};
 

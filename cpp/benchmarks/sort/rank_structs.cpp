@@ -19,6 +19,7 @@
 #include <benchmarks/common/generate_nested_types.hpp>
 
 #include <cudf/sorting.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
 

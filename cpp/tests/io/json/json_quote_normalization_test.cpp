@@ -25,6 +25,7 @@
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>

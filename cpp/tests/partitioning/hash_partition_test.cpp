@@ -26,6 +26,7 @@
 #include <cudf/partitioning.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
