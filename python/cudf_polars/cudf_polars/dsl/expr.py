@@ -480,12 +480,6 @@ class BooleanFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
-        if (
-            self.name in (pl_expr.BooleanFunction.Any, pl_expr.BooleanFunction.All)
-            and not self.options[0]
-        ):
-            # With ignore_nulls == False, polars uses Kleene logic
-            raise NotImplementedError(f"Kleene logic for {self.name}")
         if self.name == pl_expr.BooleanFunction.IsIn and not all(
             c.dtype == self.children[0].dtype for c in self.children
         ):
@@ -580,20 +574,31 @@ class BooleanFunction(Expr):
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
         ]
-        if self.name == pl_expr.BooleanFunction.Any:
+        # Kleene logic for Any (OR) and All (AND) if ignore_nulls is
+        # False
+        if self.name in (pl_expr.BooleanFunction.Any, pl_expr.BooleanFunction.All):
+            (ignore_nulls,) = self.options
             (column,) = columns
-            return Column(
-                plc.Column.from_scalar(
-                    plc.reduce.reduce(column.obj, plc.aggregation.any(), self.dtype), 1
-                )
-            )
-        elif self.name == pl_expr.BooleanFunction.All:
-            (column,) = columns
-            return Column(
-                plc.Column.from_scalar(
-                    plc.reduce.reduce(column.obj, plc.aggregation.all(), self.dtype), 1
-                )
-            )
+            is_any = self.name == pl_expr.BooleanFunction.Any
+            agg = plc.aggregation.any() if is_any else plc.aggregation.all()
+            result = plc.reduce.reduce(column.obj, agg, self.dtype)
+            if not ignore_nulls and column.obj.null_count() > 0:
+                #      Truth tables
+                #     Any         All
+                #   | F U T     | F U T
+                # --+------   --+------
+                # F | F U T   F | F F F
+                # U | U U T   U | F U U
+                # T | T T T   T | F U T
+                #
+                # If the input null count was non-zero, we must
+                # post-process the result to insert the correct value.
+                h_result = plc.interop.to_arrow(result).as_py()
+                if is_any and not h_result or not is_any and h_result:
+                    # Any                     All
+                    # False || Null => Null   True && Null => Null
+                    return Column(plc.Column.all_null_like(column.obj, 1))
+            return Column(plc.Column.from_scalar(result, 1))
         if self.name == pl_expr.BooleanFunction.IsNull:
             (column,) = columns
             return Column(plc.unary.is_null(column.obj))
@@ -601,13 +606,19 @@ class BooleanFunction(Expr):
             (column,) = columns
             return Column(plc.unary.is_valid(column.obj))
         elif self.name == pl_expr.BooleanFunction.IsNan:
-            # TODO: copy over null mask since is_nan(null) => null in polars
             (column,) = columns
-            return Column(plc.unary.is_nan(column.obj))
+            return Column(
+                plc.unary.is_nan(column.obj).with_mask(
+                    column.obj.null_mask(), column.obj.null_count()
+                )
+            )
         elif self.name == pl_expr.BooleanFunction.IsNotNan:
-            # TODO: copy over null mask since is_not_nan(null) => null in polars
             (column,) = columns
-            return Column(plc.unary.is_not_nan(column.obj))
+            return Column(
+                plc.unary.is_not_nan(column.obj).with_mask(
+                    column.obj.null_mask(), column.obj.null_count()
+                )
+            )
         elif self.name == pl_expr.BooleanFunction.IsFirstDistinct:
             (column,) = columns
             return self._distinct(
@@ -657,26 +668,22 @@ class BooleanFunction(Expr):
                 ),
             )
         elif self.name == pl_expr.BooleanFunction.AllHorizontal:
-            if any(c.obj.null_count() > 0 for c in columns):
-                raise NotImplementedError("Kleene logic for all_horizontal")
             return Column(
                 reduce(
                     partial(
                         plc.binaryop.binary_operation,
-                        op=plc.binaryop.BinaryOperator.BITWISE_AND,
+                        op=plc.binaryop.BinaryOperator.NULL_LOGICAL_AND,
                         output_type=self.dtype,
                     ),
                     (c.obj for c in columns),
                 )
             )
         elif self.name == pl_expr.BooleanFunction.AnyHorizontal:
-            if any(c.obj.null_count() > 0 for c in columns):
-                raise NotImplementedError("Kleene logic for any_horizontal")
             return Column(
                 reduce(
                     partial(
                         plc.binaryop.binary_operation,
-                        op=plc.binaryop.BinaryOperator.BITWISE_OR,
+                        op=plc.binaryop.BinaryOperator.NULL_LOGICAL_OR,
                         output_type=self.dtype,
                     ),
                     (c.obj for c in columns),
@@ -1689,6 +1696,11 @@ class BinOp(Expr):
         right: Expr,
     ) -> None:
         super().__init__(dtype)
+        if plc.traits.is_boolean(self.dtype):
+            # For boolean output types, bitand and bitor implement
+            # boolean logic, so translate. bitxor also does, but the
+            # default behaviour is correct.
+            op = BinOp._BOOL_KLEENE_MAPPING.get(op, op)
         self.op = op
         self.children = (left, right)
         if not plc.binaryop.is_supported_operation(
@@ -1699,6 +1711,15 @@ class BinOp(Expr):
                 f"for types {left.dtype.id().name} and {right.dtype.id().name} "
                 f"with output type {self.dtype.id().name}"
             )
+
+    _BOOL_KLEENE_MAPPING: ClassVar[
+        dict[plc.binaryop.BinaryOperator, plc.binaryop.BinaryOperator]
+    ] = {
+        plc.binaryop.BinaryOperator.BITWISE_AND: plc.binaryop.BinaryOperator.NULL_LOGICAL_AND,
+        plc.binaryop.BinaryOperator.BITWISE_OR: plc.binaryop.BinaryOperator.NULL_LOGICAL_OR,
+        plc.binaryop.BinaryOperator.LOGICAL_AND: plc.binaryop.BinaryOperator.NULL_LOGICAL_AND,
+        plc.binaryop.BinaryOperator.LOGICAL_OR: plc.binaryop.BinaryOperator.NULL_LOGICAL_OR,
+    }
 
     _MAPPING: ClassVar[dict[pl_expr.Operator, plc.binaryop.BinaryOperator]] = {
         pl_expr.Operator.Eq: plc.binaryop.BinaryOperator.EQUAL,
