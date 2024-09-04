@@ -109,22 +109,20 @@ def wrap_ndarray(cls, arr: cupy.ndarray | numpy.ndarray, constructor):
 
 
 def ndarray__array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-    if is_proxy_object(inputs[0]) and isinstance(ufunc, numpy.ufunc):
-        ndarray_type = type(inputs[0]._fsproxy_slow)
-        inputs = tuple(
-            x._fsproxy_slow
-            if is_proxy_object(x) and isinstance(x, numpy.ndarray)
-            else x
-            for x in inputs
-        )
-        return ndarray_type.__array_ufunc__(
-            self, ufunc, method, *inputs, **kwargs
-        )
     result, _ = _fast_slow_function_call(
         getattr(ufunc, method),
         *inputs,
         **kwargs,
     )
+    if isinstance(result, tuple):
+        if is_proxy_object(result[0]) and isinstance(
+            result[0]._fsproxy_wrapped, numpy.ndarray
+        ):
+            return tuple(numpy.asarray(x) for x in result)
+    elif is_proxy_object(result) and isinstance(
+        result._fsproxy_wrapped, numpy.ndarray
+    ):
+        return numpy.asarray(result)
     return result
 
 

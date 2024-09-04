@@ -565,11 +565,17 @@ class _FinalProxy(_FastSlowProxy):
         _FinalProxy subclasses can override this classmethod if they
         need particular behaviour when wrapped up.
         """
+        # TODO: Replace the if-elif-else using singledispatch helper function
         base_class = _get_proxy_base_class(cls)
         if base_class is object:
             proxy = base_class.__new__(cls)
-        else:
+        elif base_class is ProxyNDarrayBase:
             proxy = base_class.__new__(cls, value)
+        else:
+            raise TypeError(
+                f"Cannot create an proxy instance of {cls.__name__} using base class {base_class.__name__}. "
+                f"Expected either 'object' or another type in 'PROXY_BASE_CLASSES'"
+            )
         proxy._fsproxy_wrapped = value
         return proxy
 
@@ -936,7 +942,6 @@ def _fast_slow_function_call(
                             f"The exception was {e}."
                         )
     except Exception as err:
-        print(err)
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],

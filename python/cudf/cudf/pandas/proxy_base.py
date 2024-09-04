@@ -9,15 +9,12 @@ import numpy as np
 class ProxyNDarrayBase(np.ndarray):
     def __new__(cls, arr):
         if isinstance(arr, cp.ndarray):
-            obj = arr.get().view(cls)
-            return obj
-        elif isinstance(arr, np.ndarray):
-            obj = arr.view(cls)
-            return obj
-        else:
+            arr = arr.get()
+        if not isinstance(arr, np.ndarray):
             raise TypeError(
                 "Unsupported array type. Must be numpy.ndarray or cupy.ndarray"
             )
+        return np.asarray(arr, dtype=arr.dtype).view(cls)
 
     def __array_finalize__(self, obj):
         if obj is None:
