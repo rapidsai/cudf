@@ -79,6 +79,31 @@ def _is_row_of(chunk, obj):
 NamedAgg = pd.NamedAgg
 
 
+NamedAgg.__doc__ = """
+Helper for column specific aggregation with control over output column names.
+
+Subclass of typing.NamedTuple.
+
+Parameters
+----------
+column : Hashable
+    Column label in the DataFrame to apply aggfunc.
+aggfunc : function or str
+    Function to apply to the provided column.
+
+Examples
+--------
+>>> df = cudf.DataFrame({"key": [1, 1, 2], "a": [-1, 0, 1], 1: [10, 11, 12]})
+>>> agg_a = cudf.NamedAgg(column="a", aggfunc="min")
+>>> agg_1 = cudf.NamedAgg(column=1, aggfunc=lambda x: x.mean())
+>>> df.groupby("key").agg(result_a=agg_a, result_1=agg_1)
+        result_a  result_1
+key
+1          -1      10.5
+2           1      12.0
+"""
+
+
 groupby_doc_template = textwrap.dedent(
     """Group using a mapper or by a Series of columns.
 
