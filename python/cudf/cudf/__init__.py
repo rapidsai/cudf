@@ -46,7 +46,7 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
-from cudf.core.groupby import Grouper
+from cudf.core.groupby import Grouper, NamedAgg
 from cudf.core.index import (
     BaseIndex,
     CategoricalIndex,
