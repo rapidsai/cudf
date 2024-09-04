@@ -1689,7 +1689,7 @@ class BinOp(Expr):
             # For boolean output types, bitand and bitor implement
             # boolean logic, so translate. bitxor also does, but the
             # default behaviour is correct.
-            op = BinOp._KLEENE_MAPPING.get(op, op)
+            op = BinOp._BOOL_KLEENE_MAPPING.get(op, op)
         self.op = op
         self.children = (left, right)
         if not plc.binaryop.is_supported_operation(
@@ -1701,7 +1701,7 @@ class BinOp(Expr):
                 f"with output type {self.dtype.id().name}"
             )
 
-    _KLEENE_MAPPING: ClassVar[
+    _BOOL_KLEENE_MAPPING: ClassVar[
         dict[plc.binaryop.BinaryOperator, plc.binaryop.BinaryOperator]
     ] = {
         plc.binaryop.BinaryOperator.BITWISE_AND: plc.binaryop.BinaryOperator.NULL_LOGICAL_AND,
