@@ -1106,7 +1106,10 @@ class MapFunction(IR):
                 dtypes.can_cast(self.df.schema[p], self.schema[value_name])
                 for p in pivotees
             ):
-                raise NotImplementedError("unpivot with non-fixed-width columns.")
+                raise NotImplementedError(
+                    "Unpivot cannot cast all input columns to "
+                    f"{self.schema[value_name].id()}"
+                )
             self.options = (indices, pivotees, variable_name, value_name)
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
@@ -1133,16 +1136,13 @@ class MapFunction(IR):
             indices, pivotees, variable_name, value_name = self.options
             npiv = len(pivotees)
             df = self.df.evaluate(cache=cache)
-            if indices:
-                index_columns = [
-                    NamedColumn(col, name)
-                    for col, name in zip(
-                        plc.reshape.tile(df.select(indices).table, npiv).columns(),
-                        indices,
-                    )
-                ]
-            else:
-                index_columns = []
+            index_columns = [
+                NamedColumn(col, name)
+                for col, name in zip(
+                    plc.reshape.tile(df.select(indices).table, npiv).columns(),
+                    indices,
+                )
+            ]
             (variable_column,) = plc.filling.repeat(
                 plc.Table(
                     [
