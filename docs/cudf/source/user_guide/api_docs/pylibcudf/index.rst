@@ -37,6 +37,7 @@ This page provides API documentation for pylibcudf.
     table
     traits
     transform
+    transpose
     types
     unary
 
