@@ -88,15 +88,16 @@ CUDF_KERNEL void substring_from_kernel(column_device_view const d_strings,
   auto const str_idx = idx / cudf::detail::warp_size;
   if (str_idx >= d_strings.size()) { return; }
 
-  auto const lane_idx = idx % cudf::detail::warp_size;
+  namespace cg    = cooperative_groups;
+  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
 
   if (d_strings.is_null(str_idx)) {
-    if (lane_idx == 0) { d_output[str_idx] = string_index_pair{nullptr, 0}; }
+    if (warp.thread_rank() == 0) { d_output[str_idx] = string_index_pair{nullptr, 0}; }
     return;
   }
   auto const d_str = d_strings.element<cudf::string_view>(str_idx);
   if (d_str.empty()) {
-    if (lane_idx == 0) { d_output[str_idx] = string_index_pair{"", 0}; }
+    if (warp.thread_rank() == 0) { d_output[str_idx] = string_index_pair{"", 0}; }
     return;
   }
 
@@ -106,13 +107,10 @@ CUDF_KERNEL void substring_from_kernel(column_device_view const d_strings,
   }();
   auto const end = d_str.data() + d_str.size_bytes();
 
-  namespace cg    = cooperative_groups;
-  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
-
   auto start_counts = thrust::make_pair(0, 0);
   auto stop_counts  = thrust::make_pair(0, 0);
 
-  auto itr = d_str.data() + lane_idx;
+  auto itr = d_str.data() + warp.thread_rank();
 
   size_type char_count = 0;
   size_type byte_count = 0;
@@ -130,7 +128,7 @@ CUDF_KERNEL void substring_from_kernel(column_device_view const d_strings,
     itr += cudf::detail::warp_size;
   }
 
-  if (lane_idx == 0) {
+  if (warp.thread_rank() == 0) {
     if (start >= char_count) {
       d_output[str_idx] = string_index_pair{"", 0};
       return;
