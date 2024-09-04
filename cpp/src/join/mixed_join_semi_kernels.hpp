@@ -39,6 +39,7 @@ namespace detail {
  * @tparam block_size The number of threads per block for this kernel
  * @tparam has_nulls Whether or not the inputs may contain nulls.
  *
+ * @param[in] has_nulls If the input has nulls
  * @param[in] left_table The left table
  * @param[in] right_table The right table
  * @param[in] probe The table with which to probe the hash table for matches.
@@ -51,17 +52,20 @@ namespace detail {
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
  */
-template <cudf::size_type block_size, bool has_nulls, typename HashProbe>
-__attribute__((visibility("hidden"))) __launch_bounds__(block_size) __global__
-  void mixed_join_semi(table_device_view left_table,
-                       table_device_view right_table,
-                       table_device_view probe,
-                       table_device_view build,
-                       HashProbe const hash_probe,
-                       row_equality const equality_probe,
-                       cudf::detail::semi_map_type::device_view hash_table_view,
-                       cudf::device_span<bool> left_table_keep_mask,
-                       cudf::ast::detail::expression_device_view device_expression_data);
+template <typename HashProbe>
+void launch_mixed_join_semi(bool has_nulls,
+                            table_device_view left_table,
+                            table_device_view right_table,
+                            table_device_view probe,
+                            table_device_view build,
+                            HashProbe const hash_probe,
+                            row_equality const equality_probe,
+                            cudf::detail::semi_map_type::device_view hash_table_view,
+                            cudf::device_span<bool> left_table_keep_mask,
+                            cudf::ast::detail::expression_device_view device_expression_data,
+                            detail::grid_1d const config,
+                            int64_t shmem_size_per_block,
+                            rmm::cuda_stream_view stream);
 
 }  // namespace detail
 

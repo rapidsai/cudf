@@ -17,7 +17,7 @@
 #include "join/join_common_utils.cuh"
 #include "join/join_common_utils.hpp"
 #include "join/mixed_join_common_utils.cuh"
-#include "join/mixed_join_kernels_semi.cuh"
+#include "join/mixed_join_semi_kernels.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -31,16 +31,16 @@ namespace detail {
 #pragma GCC diagnostic ignored "-Wattributes"
 
 template <cudf::size_type block_size, bool has_nulls, typename HashProbe>
-CUDF_HIDDEN __launch_bounds__(block_size) __global__
-  void mixed_join_semi(table_device_view left_table,
-                       table_device_view right_table,
-                       table_device_view probe,
-                       table_device_view build,
-                       HashProbe const hash_probe,
-                       row_equality const equality_probe,
-                       cudf::detail::semi_map_type::device_view hash_table_view,
-                       cudf::device_span<bool> left_table_keep_mask,
-                       cudf::ast::detail::expression_device_view device_expression_data)
+CUDF_KERNEL void __launch_bounds__(block_size)
+  mixed_join_semi(table_device_view left_table,
+                  table_device_view right_table,
+                  table_device_view probe,
+                  table_device_view build,
+                  HashProbe const hash_probe,
+                  row_equality const equality_probe,
+                  cudf::detail::semi_map_type::device_view hash_table_view,
+                  cudf::device_span<bool> left_table_keep_mask,
+                  cudf::ast::detail::expression_device_view device_expression_data)
 {
   // Normally the casting of a shared memory array is used to create multiple
   // arrays of different types from the shared memory buffer, but here it is
@@ -56,7 +56,7 @@ CUDF_HIDDEN __launch_bounds__(block_size) __global__
   cudf::size_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows            = left_num_rows;
 
-  cudf::size_type outer_row_index = threadIdx.x + blockIdx.x * block_size;
+  auto outer_row_index = cudf::detail::grid_1d::global_thread_id();
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
@@ -70,5 +70,48 @@ CUDF_HIDDEN __launch_bounds__(block_size) __global__
       hash_table_view.contains(outer_row_index, hash_probe, equality);
   }
 }
+
+template <typename HashProbe>
+void launch_mixed_join_semi(bool has_nulls,
+                            table_device_view left_table,
+                            table_device_view right_table,
+                            table_device_view probe,
+                            table_device_view build,
+                            HashProbe const hash_probe,
+                            row_equality const equality_probe,
+                            cudf::detail::semi_map_type::device_view hash_table_view,
+                            cudf::device_span<bool> left_table_keep_mask,
+                            cudf::ast::detail::expression_device_view device_expression_data,
+                            detail::grid_1d const config,
+                            int64_t shmem_size_per_block,
+                            rmm::cuda_stream_view stream)
+{
+  if (has_nulls) {
+    mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true, HashProbe>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+        left_table,
+        right_table,
+        probe,
+        build,
+        hash_probe,
+        equality_probe,
+        hash_table_view,
+        left_table_keep_mask,
+        device_expression_data);
+  } else {
+    mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false, HashProbe>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+        left_table,
+        right_table,
+        probe,
+        build,
+        hash_probe,
+        equality_probe,
+        hash_table_view,
+        left_table_keep_mask,
+        device_expression_data);
+  }
+}
+
 }  // namespace detail
 }  // namespace cudf

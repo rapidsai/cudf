@@ -130,7 +130,7 @@ struct distinct_hash_join {
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
     _preprocessed_build;  ///< input table preprocssed for row operators
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
-    _preprocessed_probe;                         ///< input table preprocssed for row operators
+    _preprocessed_probe;                         ///< input table preprocessed for row operators
   std::unique_ptr<hash_table_type> _hash_table;  ///< hash table built on `_build`
 
  public:

@@ -459,9 +459,9 @@ add_library(
   src/join/mixed_join_kernel.cu
   src/join/mixed_join_kernel_nulls.cu
   src/join/mixed_join_semi.cu
-  src/join/mixed_join_kernels_semi.cu
-  src/join/mixed_join_kernels_semi_nested.cu
-  src/join/mixed_join_kernels_semi_compound.cu
+  src/join/mixed_join_semi_kernels.cu
+  src/join/mixed_join_semi_kernels_nested.cu
+  src/join/mixed_join_semi_kernels_compound.cu
   src/join/mixed_join_size_kernel.cu
   src/join/mixed_join_size_kernel_nulls.cu
   src/join/semi_join.cu

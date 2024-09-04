@@ -74,26 +74,26 @@ using type_identity_t = T;
  * @tparam Rest Type transformations to apply
  */
 template <typename T, template <typename> typename... Rest>
-struct transform_sequence;
+struct dispatch_sequence;
 
-/// @copydoc transform_sequence
+/// @copydoc dispatch_sequence
 template <typename T, template <typename> typename First, template <typename> typename... Rest>
-struct transform_sequence<T, First, Rest...> {
+struct dispatch_sequence<T, First, Rest...> {
   using type =
-    typename transform_sequence<First<T>, Rest...>::type;  ///< Resolved type after transformations
+    typename dispatch_sequence<First<T>, Rest...>::type;  ///< Resolved type after transformations
 };
 
-/// @copydoc transform_sequence
+/// @copydoc dispatch_sequence
 template <typename T>
-struct transform_sequence<T> {
+struct dispatch_sequence<T> {
   using type = T;  ///< The underlying type
 };
 
 /**
- * @brief Helper alias for transform_sequence
+ * @brief Helper alias for dispatch_sequence
  */
 template <typename T, template <typename> typename... Rest>
-using transform_sequence_t = typename transform_sequence<T, Rest...>::type;
+using dispatch_sequence_t = typename dispatch_sequence<T, Rest...>::type;
 
 /**
  * @brief Void dispatcher helper
@@ -1416,10 +1416,10 @@ class device_row_comparator {
 
   template <cudf::type_id T>
   using dispatch_void_if_nested =
-    transform_sequence<id_to_type<T>, dispatch_conditional_t, dispatch_void_if_nested_t>;
+    dispatch_sequence<id_to_type<T>, dispatch_conditional_t, dispatch_void_if_nested_t>;
 
   template <cudf::type_id T>
-  using dispatch_conditional = transform_sequence<id_to_type<T>, dispatch_conditional_t>;
+  using dispatch_conditional = dispatch_sequence<id_to_type<T>, dispatch_conditional_t>;
 
  public:
   /**
@@ -1506,7 +1506,7 @@ class device_row_comparator {
      *
      * @return False
      */
-    template <typename Element, CUDF_ENABLE_IF(std::is_void_v<Element>)>
+    template <typename Element, CUDF_ENABLE_IF(cuda::std::is_void_v<Element>)>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
     {
@@ -1526,7 +1526,7 @@ class device_row_comparator {
      */
     template <typename Element,
               CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>() and
-                             (not std::is_void_v<Element>))>
+                             not cuda::std::is_void_v<Element>)>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
     {
@@ -1547,7 +1547,7 @@ class device_row_comparator {
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>() and
                              (not has_nested_columns or not cudf::is_nested<Element>()) and
-                             (not std::is_void_v<Element>)),
+                             not cuda::std::is_void_v<Element>),
               typename... Args>
     __device__ bool operator()(Args...)
     {
@@ -1556,7 +1556,7 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(has_nested_columns and cudf::is_nested<Element>() and
-                             (not std::is_void_v<Element>))>
+                             not cuda::std::is_void_v<Element>)>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
     {
@@ -2110,11 +2110,11 @@ class device_row_hasher {
   friend class row_hasher;  ///< Allow row_hasher to access private members.
   template <cudf::type_id T>
   using dispatch_storage_type =
-    transform_sequence<id_to_type<T>, dispatch_conditional_t, device_storage_type_t>;
+    dispatch_sequence<id_to_type<T>, dispatch_conditional_t, device_storage_type_t>;
 
   template <cudf::type_id T>
   using dispatch_void_if_nested =
-    transform_sequence<id_to_type<T>, dispatch_conditional_t, dispatch_void_if_nested_t>;
+    dispatch_sequence<id_to_type<T>, dispatch_conditional_t, dispatch_void_if_nested_t>;
 
  public:
   /**
