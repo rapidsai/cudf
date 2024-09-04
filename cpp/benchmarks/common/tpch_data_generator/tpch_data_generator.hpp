@@ -17,6 +17,8 @@
 #pragma once
 
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace CUDF_EXPORT cudf {
 namespace datagen {
@@ -32,7 +34,7 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>, std::uniq
 generate_orders_lineitem_part(
   double scale_factor,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Generate the `partsupp` table
@@ -44,7 +46,7 @@ generate_orders_lineitem_part(
 std::unique_ptr<cudf::table> generate_partsupp(
   double scale_factor,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Generate the `supplier` table
@@ -56,7 +58,7 @@ std::unique_ptr<cudf::table> generate_partsupp(
 std::unique_ptr<cudf::table> generate_supplier(
   double scale_factor,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Generate the `customer` table
@@ -68,7 +70,7 @@ std::unique_ptr<cudf::table> generate_supplier(
 std::unique_ptr<cudf::table> generate_customer(
   double scale_factor,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Generate the `nation` table
@@ -78,7 +80,7 @@ std::unique_ptr<cudf::table> generate_customer(
  */
 std::unique_ptr<cudf::table> generate_nation(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Generate the `region` table
@@ -88,7 +90,7 @@ std::unique_ptr<cudf::table> generate_nation(
  */
 std::unique_ptr<cudf::table> generate_region(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 }  // namespace datagen
 }  // namespace CUDF_EXPORT cudf
