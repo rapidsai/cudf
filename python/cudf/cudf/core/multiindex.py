@@ -698,7 +698,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             if isinstance(row, slice) and row == slice(None):
                 continue
             lookup[i] = cudf.Series(row)
-        frame = cudf.DataFrame(dict(enumerate(index._data.columns)))
+        frame = cudf.DataFrame._from_data(
+            ColumnAccessor(
+                dict(enumerate(index._data.columns)),
+                verify=False,
+            )
+        )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
             data_table = cudf.concat(
@@ -774,18 +779,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             index_key = index_key[0]
 
         slice_access = isinstance(index_key, slice)
-        out_index = cudf.DataFrame()
-        # Select the last n-k columns where n is the number of columns and k is
+        # Count the last n-k columns where n is the number of columns and k is
         # the length of the indexing tuple
         size = 0
         if not isinstance(index_key, (numbers.Number, slice)):
             size = len(index_key)
-        for k in range(size, len(index._data)):
-            out_index.insert(
-                out_index._num_columns,
-                k,
-                cudf.Series._from_column(index._data.columns[k]),
-            )
+        num_selected = max(0, index.nlevels - size)
 
         # determine if we should downcast from a DataFrame to a Series
         need_downcast = (
@@ -808,16 +807,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             result = cudf.Series._from_data(
                 {}, name=tuple(col[0] for col in index._data.columns)
             )
-        elif out_index._num_columns == 1:
+        elif num_selected == 1:
             # If there's only one column remaining in the output index, convert
             # it into an Index and name the final index values according
             # to that column's name.
             *_, last_column = index._data.columns
-            out_index = cudf.Index._from_column(
-                last_column, name=index.names[-1]
-            )
-            index = out_index
-        elif out_index._num_columns > 1:
+            index = cudf.Index._from_column(last_column, name=index.names[-1])
+        elif num_selected > 1:
             # Otherwise pop the leftmost levels, names, and codes from the
             # source index until it has the correct number of columns (n-k)
             result.reset_index(drop=True)

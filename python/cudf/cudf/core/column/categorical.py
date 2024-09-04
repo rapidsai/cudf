@@ -1337,7 +1337,7 @@ class CategoricalColumn(column.ColumnBase):
 
         # Ensure new_categories is unique first
         if not (is_unique or new_cats.is_unique):
-            new_cats = cudf.Series(new_cats)._column.unique()
+            new_cats = new_cats.unique()
 
         if cur_cats.equals(new_cats, check_dtypes=True):
             # TODO: Internal usages don't always need a copy; add a copy keyword

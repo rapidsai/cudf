@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import warnings
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
 from cudf._lib.reduce import scan
 from cudf.api.types import is_numeric_dtype
 from cudf.core.window.rolling import _RollingBase
+
+if TYPE_CHECKING:
+    from cudf.core.column.column import ColumnBase
 
 
 class ExponentialMovingWindow(_RollingBase):
@@ -179,8 +182,10 @@ class ExponentialMovingWindow(_RollingBase):
     ):
         raise NotImplementedError("cov not yet supported.")
 
-    def _apply_agg_series(self, sr, agg_name):
-        if not is_numeric_dtype(sr.dtype):
+    def _apply_agg_column(
+        self, source_column: ColumnBase, agg_name: str
+    ) -> ColumnBase:
+        if not is_numeric_dtype(source_column.dtype):
             raise TypeError("No numeric types to aggregate")
 
         # libcudf ewm has special casing for nulls only
@@ -188,20 +193,14 @@ class ExponentialMovingWindow(_RollingBase):
         # pandas does nans in the same positions mathematically.
         # as such we need to convert the nans to nulls before
         # passing them in.
-        to_libcudf_column = sr._column.astype("float64").nans_to_nulls()
+        to_libcudf_column = source_column.astype("float64").nans_to_nulls()
 
-        return self.obj._from_data_like_self(
-            self.obj._data._from_columns_like_self(
-                [
-                    scan(
-                        agg_name,
-                        to_libcudf_column,
-                        True,
-                        com=self.com,
-                        adjust=self.adjust,
-                    )
-                ]
-            )
+        return scan(
+            agg_name,
+            to_libcudf_column,
+            True,
+            com=self.com,
+            adjust=self.adjust,
         )
 
 

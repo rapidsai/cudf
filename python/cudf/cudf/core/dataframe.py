@@ -6287,14 +6287,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         if not skipna and any(col.nullable for col in filtered._columns):
-            mask = DataFrame(
+            length = filtered._data.nrows
+            ca = ColumnAccessor(
                 {
-                    name: filtered._data[name]._get_mask_as_column()
-                    if filtered._data[name].nullable
-                    else as_column(True, length=len(filtered._data[name]))
-                    for name in filtered._data.names
+                    name: col._get_mask_as_column()
+                    if col.nullable
+                    else as_column(True, length=length)
+                    for name, col in filtered._data.items()
                 }
             )
+            mask = DataFrame._from_data(ca)
             mask = mask.all(axis=1)
         else:
             mask = None
@@ -6679,18 +6681,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
             return Series._from_column(result, index=self.index)
         else:
-            result_df = DataFrame(result).set_index(self.index)
+            result_df = DataFrame(result, index=self.index)
             result_df._set_columns_like(prepared._data)
             return result_df
-
-    @_performance_tracking
-    def _columns_view(self, columns):
-        """
-        Return a subset of the DataFrame's columns as a view.
-        """
-        return DataFrame(
-            {col: self._data[col] for col in columns}, index=self.index
-        )
 
     @_performance_tracking
     def select_dtypes(self, include=None, exclude=None):
@@ -6763,8 +6756,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not isinstance(exclude, (list, tuple)):
             exclude = (exclude,) if exclude is not None else ()
 
-        df = DataFrame(index=self.index)
-
         # cudf_dtype_from_pydata_dtype can distinguish between
         # np.float and np.number
         selection = tuple(map(frozenset, (include, exclude)))
@@ -6820,12 +6811,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # remove all exclude types
         inclusion = inclusion - exclude_subtypes
 
-        for k, col in self._data.items():
-            infered_type = cudf_dtype_from_pydata_dtype(col.dtype)
-            if infered_type in inclusion:
-                df._insert(len(df._data), k, col)
-
-        return df
+        to_select = [
+            label
+            for label, dtype in self._dtypes
+            if cudf_dtype_from_pydata_dtype(dtype) in inclusion
+        ]
+        return self.loc[:, to_select]
 
     @ioutils.doc_to_parquet()
     def to_parquet(
@@ -7331,7 +7322,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         cov = cupy.cov(self.values, ddof=ddof, rowvar=False)
         cols = self._data.to_pandas_index()
-        df = DataFrame(cupy.asfortranarray(cov)).set_index(cols)
+        df = DataFrame(cupy.asfortranarray(cov), index=cols)
         df._set_columns_like(self._data)
         return df
 
@@ -7374,7 +7365,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         corr = cupy.corrcoef(values, rowvar=False)
         cols = self._data.to_pandas_index()
-        df = DataFrame(cupy.asfortranarray(corr)).set_index(cols)
+        df = DataFrame(cupy.asfortranarray(corr), index=cols)
         df._set_columns_like(self._data)
         return df
 
