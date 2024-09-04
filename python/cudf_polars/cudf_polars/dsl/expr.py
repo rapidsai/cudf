@@ -1003,6 +1003,7 @@ class UnaryFunction(Expr):
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
+    # Note: log, and pow are handled via translation to binops
     _OP_MAPPING: ClassVar[dict[str, plc.unary.UnaryOperator]] = {
         "sin": plc.unary.UnaryOperator.SIN,
         "cos": plc.unary.UnaryOperator.COS,
@@ -1017,7 +1018,6 @@ class UnaryFunction(Expr):
         "arccosh": plc.unary.UnaryOperator.ARCCOSH,
         "arctanh": plc.unary.UnaryOperator.ARCTANH,
         "exp": plc.unary.UnaryOperator.EXP,
-        "log": plc.unary.UnaryOperator.LOG,
         "sqrt": plc.unary.UnaryOperator.SQRT,
         "cbrt": plc.unary.UnaryOperator.CBRT,
         "ceil": plc.unary.UnaryOperator.CEIL,
@@ -1034,7 +1034,6 @@ class UnaryFunction(Expr):
             "round",
             "set_sorted",
             "unique",
-            "pow",
         }
     )
     _supported_cum_aggs = frozenset(
@@ -1169,21 +1168,6 @@ class UnaryFunction(Expr):
                 )
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
             return Column(plc.replace.replace_nulls(column.obj, arg))
-        elif self.name == "pow":
-            (base, exponent) = (
-                c.evaluate(df, context=context, mapping=mapping) for c in self.children
-            )
-            base_obj = (
-                base.obj_scalar
-                if (base.is_scalar and not exponent.is_scalar)
-                else base.obj
-            )
-            exponent_obj = exponent.obj_scalar if exponent.is_scalar else exponent.obj
-            return Column(
-                plc.binaryop.binary_operation(
-                    base_obj, exponent_obj, plc.binaryop.BinaryOperator.POW, self.dtype
-                )
-            )
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context, mapping=mapping)
             if column.obj.type().id() != self.dtype.id():
@@ -1241,6 +1225,8 @@ class UnaryFunction(Expr):
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
+        if self.name in {"unique", "drop_nulls"} | self._supported_cum_aggs:
+            raise NotImplementedError(f"{self.name} in groupby")
         if depth == 1:
             # inside aggregation, need to pre-evaluate, groupby
             # construction has checked that we don't have nested aggs,

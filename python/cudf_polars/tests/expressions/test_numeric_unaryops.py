@@ -24,8 +24,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
         "arcsinh",
         "arccosh",
         "arctanh",
-        # "exp", Missing rust side impl
-        # "log", Missing rust side impl
+        "exp",
         "sqrt",
         "cbrt",
         "ceil",
@@ -76,5 +75,17 @@ def test_pow(ldf, base_literal, exponent_literal):
     exponent = pl.lit(-3, dtype=pl.Float32) if exponent_literal else pl.col("b")
 
     q = ldf.select(base.pow(exponent))
+
+    assert_gpu_result_equal(q, check_exact=False)
+
+
+@pytest.mark.parametrize("natural", [True, False])
+def test_log(ldf, natural):
+    if natural:
+        expr = pl.col("a").log()
+    else:
+        expr = pl.col("a").log(10)
+
+    q = ldf.select(expr)
 
     assert_gpu_result_equal(q, check_exact=False)

@@ -178,3 +178,12 @@ def test_groupby_literal_in_agg(df, key, expr):
     # so just sort by the group key
     q = df.group_by(key).agg(expr).sort(key, maintain_order=True)
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [pl.col("int").unique(), pl.col("int").drop_nulls(), pl.col("int").cum_max()],
+)
+def test_groupby_unary_non_pointwise_raises(df, expr):
+    q = df.group_by("key1").agg(expr)
+    assert_ir_translation_raises(q, NotImplementedError)
