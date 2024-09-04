@@ -576,36 +576,27 @@ class BooleanFunction(Expr):
         ]
         # Kleene logic for Any (OR) and All (AND) if ignore_nulls is
         # False
-        if self.name == pl_expr.BooleanFunction.Any:
+        if self.name in (pl_expr.BooleanFunction.Any, pl_expr.BooleanFunction.All):
             (ignore_nulls,) = self.options
             (column,) = columns
-            result = plc.reduce.reduce(column.obj, plc.aggregation.any(), self.dtype)
+            is_any = self.name == pl_expr.BooleanFunction.Any
+            agg = plc.aggregation.any() if is_any else plc.aggregation.all()
+            result = plc.reduce.reduce(column.obj, agg, self.dtype)
             if not ignore_nulls and column.obj.null_count() > 0:
-                #   | F U T
-                # --+------
-                # F | F U T
-                # U | U U T
-                # T | T T T
-                # libcudf ignores nulls so all false must be
-                # post-processed if the null count is non-zero
+                #      Truth tables
+                #     Any         All
+                #   | F U T     | F U T
+                # --+------   --+------
+                # F | F U T   F | F F F
+                # U | U U T   U | F U U
+                # T | T T T   T | F U T
+                #
+                # If the input null count was non-zero, we must
+                # post-process the result to insert the correct value.
                 h_result = plc.interop.to_arrow(result).as_py()
-                if not h_result:  # False || Null => Null
-                    return Column(plc.Column.all_null_like(column.obj, 1))
-            return Column(plc.Column.from_scalar(result, 1))
-        elif self.name == pl_expr.BooleanFunction.All:
-            (ignore_nulls,) = self.options
-            (column,) = columns
-            result = plc.reduce.reduce(column.obj, plc.aggregation.all(), self.dtype)
-            if not ignore_nulls and column.obj.null_count() > 0:
-                #   | F U T
-                # --+------
-                # F | F F F
-                # U | F U U
-                # T | F U T
-                # libcudf ignores nulls so all true must be
-                # post-processed if the null count is non-zero
-                h_result = plc.interop.to_arrow(result).as_py()
-                if h_result:  # True && Null => Null
+                if is_any and not h_result or not is_any and h_result:
+                    # Any                     All
+                    # False || Null => Null   True && Null => Null
                     return Column(plc.Column.all_null_like(column.obj, 1))
             return Column(plc.Column.from_scalar(result, 1))
         if self.name == pl_expr.BooleanFunction.IsNull:
