@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "tpch_data_generator.hpp"
+#include "ndsh_data_generator.hpp"
 
 #include "random_column_generator.hpp"
 #include "table_helpers.hpp"

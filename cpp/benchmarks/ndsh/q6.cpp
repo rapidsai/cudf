@@ -61,7 +61,7 @@
   return revenue;
 }
 
-void run_tpch_q6(nvbench::state& state)
+void run_ndsh_q6(nvbench::state& state)
 {
   double const scale_factor = state.get_float64("scale_factor");
 
@@ -133,11 +133,11 @@ void run_tpch_q6(nvbench::state& state)
   result_table->to_parquet("q6.parquet");
 }
 
-void tpch_q6(nvbench::state& state)
+void ndsh_q6(nvbench::state& state)
 {
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) { run_tpch_q6(state); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) { run_ndsh_q6(state); });
 }
 
-NVBENCH_BENCH(tpch_q6).set_name("tpch_q6").add_float64_axis("scale_factor", {0.01, 0.1, 1});
+NVBENCH_BENCH(ndsh_q6).set_name("ndsh_q6").add_float64_axis("scale_factor", {0.01, 0.1, 1});

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "common/tpch_data_generator/tpch_data_generator.hpp"
+#include "common/ndsh_data_generator/ndsh_data_generator.hpp"
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>

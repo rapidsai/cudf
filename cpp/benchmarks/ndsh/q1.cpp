@@ -102,7 +102,7 @@
   return charge;
 }
 
-void run_tpch_q1(nvbench::state& state)
+void run_ndsh_q1(nvbench::state& state)
 {
   double const scale_factor = state.get_float64("scale_factor");
 
@@ -170,11 +170,11 @@ void run_tpch_q1(nvbench::state& state)
   orderedby_table->to_parquet("q1.parquet");
 }
 
-void tpch_q1(nvbench::state& state)
+void ndsh_q1(nvbench::state& state)
 {
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) { run_tpch_q1(state); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) { run_ndsh_q1(state); });
 }
 
-NVBENCH_BENCH(tpch_q1).set_name("tpch_q1").add_float64_axis("scale_factor", {0.01, 0.1, 1});
+NVBENCH_BENCH(ndsh_q1).set_name("ndsh_q1").add_float64_axis("scale_factor", {0.01, 0.1, 1});
