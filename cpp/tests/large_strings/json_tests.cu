@@ -22,6 +22,7 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 struct JsonLargeReaderTest : public cudf::test::StringsLargeTest {};

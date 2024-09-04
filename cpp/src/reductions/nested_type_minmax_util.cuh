@@ -22,6 +22,7 @@
 #include <cudf/reduction/detail/reduction_operators.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf {
 namespace reduction {

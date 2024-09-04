@@ -17,6 +17,7 @@
 #include <tests/iterator/iterator_tests.cuh>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/host_vector.h>
 

@@ -24,6 +24,7 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/fill.h>
