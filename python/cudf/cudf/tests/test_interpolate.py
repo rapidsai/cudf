@@ -125,6 +125,10 @@ def test_interpolate_series_values_or_index(data, index, method):
         ),
     ],
 )
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Does not fail on older versions of pandas",
+)
 def test_interpolate_dataframe_error_cases(data, kwargs):
     gsr = cudf.DataFrame(data)
     psr = gsr.to_pandas()
