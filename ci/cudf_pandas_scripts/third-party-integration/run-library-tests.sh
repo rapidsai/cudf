@@ -9,23 +9,17 @@ cleanup() {
 
 trap cleanup EXIT
 
-runtest_gold() {
+runtest() {
     local lib=$1
+    local mode=$2
+
+    local plugin=""
+    if [ "$mode" = "cudf" ]; then
+        plugin="-p cudf.pandas"
+    fi
 
     pytest \
-    -v \
-    --continue-on-collection-errors \
-    --cache-clear \
-    --numprocesses=${NUM_PROCESSES} \
-    --dist=worksteal \
-    ${TEST_DIR}/test_${lib}*.py
-}
-
-runtest_cudf_pandas() {
-    local lib=$1
-
-    pytest \
-    -p cudf.pandas \
+    $plugin \
     -v \
     --continue-on-collection-errors \
     --cache-clear \
@@ -38,8 +32,8 @@ main() {
     local lib=$1
 
     # generation phase
-    runtest_gold ${lib}
-    runtest_cudf_pandas ${lib}
+    runtest ${lib} "gold"
+    runtest ${lib} "cudf"
 
     # assertion phase
     pytest \
