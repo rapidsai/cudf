@@ -233,19 +233,18 @@ All memory resource parameters should be defaulted to use the return value of
 Memory resources are passed via resource ref parameters. A resource ref is a memory resource wrapper
 that enables consumers to specify properties of resources that they expect. These are defined
 in the `cuda::mr` namespace of libcu++, but RMM provides some convenience aliases in
-`rmm/resource_ref.hpp` and libcudf provides its own (identical) aliases in
-`cudf/utilities/memory_resource.hpp`.
- - `cudf::device_resource_ref` accepts a memory resource that provides synchronous allocation
+`rmm/resource_ref.hpp`.
+ - `rmm::device_resource_ref` accepts a memory resource that provides synchronous allocation
     of device-accessible memory.
- - `cudf::device_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
+ - `rmm::device_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
     of device-accessible memory.
- - `cudf::host_resource_ref` accepts a memory resource that provides synchronous allocation of host-
+ - `rmm::host_resource_ref` accepts a memory resource that provides synchronous allocation of host-
     accessible memory.
- - `cudf::host_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
+ - `rmm::host_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
     of host-accessible memory.
- - `cudf::host_device_resource_ref` accepts a memory resource that provides synchronous allocation of
+ - `rmm::host_device_resource_ref` accepts a memory resource that provides synchronous allocation of
     host- and device-accessible memory.
- - `cudf::host_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
+ - `rmm::host_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
     of host- and device-accessible memory.
 
 See the libcu++ [docs on `resource_ref`](https://nvidia.github.io/cccl/libcudacxx/extended_api/memory_resource/resource_ref.html)
@@ -517,7 +516,7 @@ For example:
 // cpp/include/cudf/header.hpp
 void external_function(...,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 // cpp/include/cudf/detail/header.hpp
 namespace detail{
@@ -569,7 +568,7 @@ how device memory is allocated.
 ### Output Memory
 
 Any libcudf API that allocates memory that is *returned* to a user must accept a
-`cudf::device_async_resource_ref` as the last parameter. Inside the API, this memory resource must
+`rmm::device_async_resource_ref` as the last parameter. Inside the API, this memory resource must
 be used to allocate any memory for returned objects. It should therefore be passed into functions
 whose outputs will be returned. Example:
 
@@ -577,7 +576,7 @@ whose outputs will be returned. Example:
 // Returned `column` contains newly allocated memory,
 // therefore the API must accept a memory resource pointer
 std::unique_ptr<column> returns_output_memory(
-  ..., cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  ..., rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 // This API does not allocate any new *output* memory, therefore
 // a memory resource is unnecessary
@@ -598,7 +597,7 @@ obtained from `cudf::get_current_device_resource_ref()` for temporary memory all
 
 ```c++
 rmm::device_buffer some_function(
-  ..., cudf::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
+  ..., rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
     rmm::device_buffer returned_buffer(..., mr); // Returned buffer uses the passed in MR
     ...
     rmm::device_buffer temporary_buffer(...); // Temporary buffer uses default MR
@@ -614,7 +613,7 @@ use memory resources for device memory allocation with automated lifetime manage
 
 #### rmm::device_buffer
 Allocates a specified number of bytes of untyped, uninitialized device memory using a
-memory resource. If no `cudf::device_async_resource_ref` is explicitly provided, it uses
+memory resource. If no `rmm::device_async_resource_ref` is explicitly provided, it uses
 `cudf::get_current_device_resource_ref()`.
 
 `rmm::device_buffer` is movable and copyable on a stream. A copy performs a deep copy of the
