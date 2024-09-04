@@ -25,7 +25,7 @@ cpdef tuple transpose(Table input_table):
     tuple[Column, Table]
         Two-tuple transposed column and table.
     """
-    c_result = pair[unique_ptr[column], table_view]
+    cdef pair[unique_ptr[column], table_view] c_result
     with nogil:
         c_result = cpp_transpose.transpose(input_table.view())
     return (
