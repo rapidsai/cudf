@@ -118,7 +118,7 @@ def spilled_and_unspilled(manager: SpillManager) -> tuple[int, int]:
 
 @pytest.fixture
 def manager(request):
-    """Fixture to enable and make a spilling manager availabe"""
+    """Fixture to enable and make a spilling manager available"""
     kwargs = dict(getattr(request, "param", {}))
     with warnings.catch_warnings():
         warnings.simplefilter("error")
@@ -131,6 +131,16 @@ def manager(request):
             # test is failing.
             warnings.simplefilter("ignore")
         set_global_manager(manager=None)
+
+
+@pytest.fixture
+def rmm_cleanup():
+    """Reset the current RMM resource stack after the test"""
+    mr = rmm.mr.get_current_device_resource()
+    try:
+        yield
+    finally:
+        rmm.mr.set_current_device_resource(mr)
 
 
 def test_spillable_buffer(manager: SpillManager):
@@ -784,3 +794,46 @@ def test_spilling_and_copy_on_write(manager: SpillManager):
         assert not a.is_spilled
         assert a.owner.exposed
         assert not b.owner.exposed
+
+
+def test_oom_protection(manager: SpillManager, rmm_cleanup, capsys):
+    # Use a limit of 10% of device (256 aligned)
+    _, total_dev_mem = rmm.mr.available_device_memory()
+    alloc_limit = int(round(total_dev_mem * 0.1 / 256) * 256)
+
+    track_mr = rmm.mr.TrackingResourceAdaptor(
+        rmm.mr.get_current_device_resource()
+    )
+    rmm.mr.set_current_device_resource(
+        rmm.mr.LimitingResourceAdaptor(track_mr, allocation_limit=alloc_limit)
+    )
+
+    # With a disabled OOM protection, we expect a OOM error including a
+    # stdout warning.
+    with spill_on_demand_globally(spill_oom_protection=0):
+        a = as_buffer(data=rmm.DeviceBuffer(size=alloc_limit), exposed=True)
+        assert track_mr.get_allocated_bytes() == a.nbytes
+        with pytest.raises(MemoryError, match="Exceeded memory limit"):
+            as_buffer(data=rmm.DeviceBuffer(size=alloc_limit))
+        assert "[WARNING] RMM allocation" in capsys.readouterr().out
+        del a
+    assert track_mr.get_allocated_bytes() == 0
+
+    # With OOM protection (no headroom), `track_mr` only encounters the
+    # first alloction and no stdout warning.
+    with spill_on_demand_globally(spill_oom_protection=100):
+        a = as_buffer(data=rmm.DeviceBuffer(size=alloc_limit), exposed=True)
+        assert track_mr.get_allocated_bytes() == a.nbytes
+        b = as_buffer(data=rmm.DeviceBuffer(size=alloc_limit), exposed=True)
+        assert track_mr.get_allocated_bytes() == b.nbytes
+        del a
+        del b
+    assert track_mr.get_allocated_bytes() == 0
+    assert "[WARNING] RMM allocation" not in capsys.readouterr().out
+
+    # With OOM protection (5% headroom), `track_mr` doesn't encounters any
+    # alloctions because of the 5% headroom
+    with spill_on_demand_globally(spill_oom_protection=5):
+        as_buffer(data=rmm.DeviceBuffer(size=alloc_limit), exposed=True)
+        assert track_mr.get_allocated_bytes() == 0
+    assert "[WARNING] RMM allocation" not in capsys.readouterr().out

@@ -292,7 +292,7 @@ _register_option(
 
         This has no effect if spill on demand is disabled, see the "spill"
         and the "spill_on_demand" options.
-        Valid values are any positive integer. Default is 0 (disabled).
+        Valid values are any positive integer. Default is 100 (no headroom).
         """
     ),
     _integer_validator,

@@ -482,8 +482,8 @@ def set_spill_on_demand_globally(
             "is already registered"
         )
 
-    # Add a limiting resource to the RMM stack when the OOM protection should
-    # kick in before total device memory usage.
+    # Add a limiting resource to the RMM stack when spilling and the OOM
+    # protection should kick in before total device memory usage.
     if spill_oom_protection > 0 and spill_oom_protection < 100:
         _, total_dev_mem = rmm.mr.available_device_memory()
         mr_limit = int(total_dev_mem * (spill_oom_protection / 100))
@@ -505,7 +505,7 @@ def set_spill_on_demand_globally(
 
 
 @contextmanager
-def spill_on_demand_globally():
+def spill_on_demand_globally(spill_oom_protection: int | None = None):
     """Context to enable spill on demand temporarily.
 
     Warning
@@ -523,8 +523,11 @@ def spill_on_demand_globally():
     ValueError
         If the RMM memory source stack was changed while in the context.
     """
-    set_spill_on_demand_globally()
-    # Save the new memory resource stack for later cleanup
+    # Save the current memory resource for later cleanup
+    mr_old = rmm.mr.get_current_device_resource()
+
+    set_spill_on_demand_globally(spill_oom_protection)
+    # Save the new memory resource stack for later consistency check
     mr_stack = get_rmm_memory_resource_stack(
         rmm.mr.get_current_device_resource()
     )
@@ -536,4 +539,4 @@ def spill_on_demand_globally():
             raise ValueError(
                 "RMM memory source stack was changed while in the context"
             )
-        rmm.mr.set_current_device_resource(mr_stack[1])
+        rmm.mr.set_current_device_resource(mr_old)
