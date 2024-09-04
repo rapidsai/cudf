@@ -1818,8 +1818,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     auto const table_size  = std::reduce(column_sizes.begin(), column_sizes.end());
     auto const avg_row_len = util::div_rounding_up_safe<size_t>(table_size, input.num_rows());
     if (avg_row_len > 0) {
-      auto const rg_frag_size = util::div_rounding_up_safe(max_row_group_size, avg_row_len);
-      max_page_fragment_size  = std::min<size_type>(rg_frag_size, max_page_fragment_size);
+      auto const rg_frag_size =
+        std::min<size_t>(std::numeric_limits<size_type>::max(),
+                         util::div_rounding_up_safe(max_row_group_size, avg_row_len));
+      max_page_fragment_size = std::min<size_type>(rg_frag_size, max_page_fragment_size);
     }
 
     // dividing page size by average row length will tend to overshoot the desired
