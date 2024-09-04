@@ -1899,6 +1899,26 @@ def test_string_findall(pat, flags):
     assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize(
+    "pat, flags, pos",
+    [
+        ("Monkey", 0, [-1, 0, -1, -1]),
+        ("on", 0, [2, 1, -1, 1]),
+        ("bit", 0, [-1, -1, 3, -1]),
+        ("on$", 0, [2, -1, -1, -1]),
+        ("on$", re.MULTILINE, [2, -1, -1, 1]),
+        ("o.*k", re.DOTALL, [-1, 1, -1, 1]),
+    ],
+)
+def test_string_find_re(pat, flags, pos):
+    test_data = ["Lion", "Monkey", "Rabbit", "Don\nkey"]
+    gs = cudf.Series(test_data)
+
+    expected = pd.Series(pos, dtype=np.int32)
+    actual = gs.str.find_re(pat, flags)
+    assert_eq(expected, actual)
+
+
 def test_string_replace_multi():
     ps = pd.Series(["hello", "goodbye"])
     gs = cudf.Series(["hello", "goodbye"])

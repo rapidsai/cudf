@@ -8,6 +8,7 @@ This page specifies which regular expression (regex) features are currently supp
 - cudf::strings::extract()
 - cudf::strings::extract_all_record()
 - cudf::strings::findall()
+- cudf::strings::find_re()
 - cudf::strings::replace_re()
 - cudf::strings::replace_with_backrefs()
 - cudf::strings::split_re()

@@ -3626,6 +3626,35 @@ class StringMethods(ColumnMethods):
         data = libstrings.findall(self._column, pat, flags)
         return self._return_or_inplace(data)
 
+    def find_re(self, pat: str, flags: int = 0) -> SeriesOrIndex:
+        """
+        Find first occurrence of pattern or regular expression in the
+        Series/Index.
+
+        Parameters
+        ----------
+        pat : str
+            Pattern or regular expression.
+        flags : int, default 0 (no flags)
+            Flags to pass through to the regex engine (e.g. re.MULTILINE)
+
+        Returns
+        -------
+        Series
+            A Series of position values where the pattern first matches
+            each string.
+        """
+        if isinstance(pat, re.Pattern):
+            flags = pat.flags & ~re.U
+            pat = pat.pattern
+        if not _is_supported_regex_flags(flags):
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
+
+        data = libstrings.find_re(self._column, pat, flags)
+        return self._return_or_inplace(data)
+
     def find_multiple(self, patterns: SeriesOrIndex) -> cudf.Series:
         """
         Find all first occurrences of patterns in the Series/Index.

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from cudf._lib.nvtext.edit_distance import edit_distance, edit_distance_matrix
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams,
@@ -66,7 +66,7 @@ from cudf._lib.strings.find import (
     startswith_multiple,
 )
 from cudf._lib.strings.find_multiple import find_multiple
-from cudf._lib.strings.findall import findall
+from cudf._lib.strings.findall import find_re, findall
 from cudf._lib.strings.json import GetJsonObjectOptions, get_json_object
 from cudf._lib.strings.padding import (
     SideType,
