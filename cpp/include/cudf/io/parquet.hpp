@@ -74,6 +74,8 @@ class parquet_reader_options {
   bool _use_pandas_metadata = true;
   // Whether to read and use ARROW schema
   bool _use_arrow_schema = true;
+  // Whether to allow reading matching select columns from mismatched Parquet files.
+  bool _allow_mismatched_pq_schemas = false;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
@@ -135,6 +137,18 @@ class parquet_reader_options {
    * @return `true` if arrow schema is used while reading
    */
   [[nodiscard]] bool is_enabled_use_arrow_schema() const { return _use_arrow_schema; }
+
+  /**
+   * @brief Returns true/false depending on whether to read matching projected and filter columns
+   * from mismatched Parquet sources.
+   *
+   * @return `true` if mismatched projected and filter columns will be read from mismatched Parquet
+   * sources.
+   */
+  [[nodiscard]] bool is_enabled_allow_mismatched_pq_schemas() const
+  {
+    return _allow_mismatched_pq_schemas;
+  }
 
   /**
    * @brief Returns optional tree of metadata.
@@ -257,6 +271,15 @@ class parquet_reader_options {
   void enable_use_arrow_schema(bool val) { _use_arrow_schema = val; }
 
   /**
+   * @brief Sets to enable/disable reading of matching projected and filter columns from mismatched
+   * Parquet sources.
+   *
+   * @param val Boolean value whether to read matching projected and filter columns from mismatched
+   * Parquet sources.
+   */
+  void enable_allow_mismatched_pq_schemas(bool val) { _allow_mismatched_pq_schemas = val; }
+
+  /**
    * @brief Sets reader column schema.
    *
    * @param val Tree of schema nodes to enable/disable conversion of binary to string columns.
@@ -377,6 +400,20 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& use_arrow_schema(bool val)
   {
     options._use_arrow_schema = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets to enable/disable reading of matching projected and filter columns from mismatched
+   * Parquet sources.
+   *
+   * @param val Boolean value whether to read matching projected and filter columns from mismatched
+   * Parquet sources.
+   * @return this for chaining.
+   */
+  parquet_reader_options_builder& allow_mismatched_pq_schemas(bool val)
+  {
+    options._allow_mismatched_pq_schemas = val;
     return *this;
   }
 

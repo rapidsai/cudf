@@ -158,6 +158,17 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.to_arrow()
 
+    def _to_frame(
+        self, name: Hashable, index: cudf.Index | None
+    ) -> cudf.DataFrame:
+        """Helper function for Series.to_frame, Index.to_frame"""
+        if name is no_default:
+            col_name = 0 if self.name is None else self.name
+        else:
+            col_name = name
+        ca = ColumnAccessor({col_name: self._column}, verify=False)
+        return cudf.DataFrame._from_data(ca, index=index)
+
     @property  # type: ignore
     @_performance_tracking
     def is_unique(self) -> bool:
@@ -350,7 +361,6 @@ class SingleColumnFrame(Frame, NotIterable):
     def where(self, cond, other=None, inplace=False):
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
-            _make_categorical_like,
         )
 
         if isinstance(other, cudf.DataFrame):
@@ -366,14 +376,12 @@ class SingleColumnFrame(Frame, NotIterable):
         if not cudf.api.types.is_scalar(other):
             other = cudf.core.column.as_column(other)
 
-        self_column = self._column
         input_col, other = _check_and_cast_columns_with_other(
-            source_col=self_column, other=other, inplace=inplace
+            source_col=self._column, other=other, inplace=inplace
         )
 
         result = cudf._lib.copying.copy_if_else(input_col, other, cond)
-
-        return _make_categorical_like(result, self_column)
+        return result._with_type_metadata(self.dtype)
 
     @_performance_tracking
     def transpose(self):

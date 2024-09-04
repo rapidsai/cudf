@@ -468,7 +468,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
  * offsets (depth 1)   {0, 2, 5, 7}
  * data    (depth 1)
  * offsets (depth 2)
- * data    (depth 1)   {1, 2, 3, 4, 5, 6, 7}
+ * data    (depth 2)   {1, 2, 3, 4, 5, 6, 7}
  * @endcode
  *
  * @param[in] num_rows The number of lists the column represents.

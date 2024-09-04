@@ -4,9 +4,9 @@ import datetime
 import os
 import urllib
 import warnings
+from collections.abc import Callable
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
-from typing import Callable
 
 import fsspec
 import fsspec.implementations.local
@@ -184,6 +184,9 @@ nrows : int, default None
 
     .. note:
        This option is not supported when the low-memory mode is on.
+allow_mismatched_pq_schemas : boolean, default False
+    If True, enables reading (matching) columns specified in `columns` and `filters`
+    options from the input files with otherwise mismatched schemas.
 
 Returns
 -------
