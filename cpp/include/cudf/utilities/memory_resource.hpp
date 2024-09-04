@@ -26,6 +26,12 @@
 namespace cudf {
 
 /**
+ * @addtogroup memory_resource
+ * @{
+ * @file
+ */
+
+/**
  * @brief Get the current device memory resource.
  *
  * @return The current device memory resource.
@@ -80,4 +86,5 @@ inline rmm::device_async_resource_ref reset_current_device_resource_ref()
   return rmm::mr::reset_current_device_resource_ref();
 }
 
+/** @} */  // end of group
 }  // namespace cudf

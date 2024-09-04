@@ -7,6 +7,7 @@ libcudf documentation
 
    cudf_namespace
    default_stream
+   memory_resource
    cudf_classes
    column_apis
    datetime_apis
