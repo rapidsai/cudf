@@ -48,6 +48,5 @@ add_subdirectory(../../cpp cudf-cpp)
 # Ensure other libraries needed by libcudf.so get installed alongside it.
 include(cmake/Modules/WheelHelpers.cmake)
 install_aliased_imported_targets(
-  TARGETS cudf nvcomp::nvcomp DESTINATION
-  ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+  TARGETS cudf nvcomp::nvcomp DESTINATION ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
 )
