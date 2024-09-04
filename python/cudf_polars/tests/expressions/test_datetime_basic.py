@@ -134,10 +134,4 @@ def test_date_extract(field):
 
     q = ldf.select(field(pl.col("dates").dt))
 
-    with pytest.raises(AssertionError):
-        # polars produces int32, libcudf produces int16 for extraction methods
-        # libcudf can lose data here.
-        # https://github.com/rapidsai/cudf/issues/16196
-        assert_gpu_result_equal(q)
-
     assert_gpu_result_equal(q, check_dtypes=False)
