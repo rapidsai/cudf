@@ -153,11 +153,14 @@ std::unique_ptr<column> contains(
  *
  * Any null string entries return corresponding null entries in the output columns.
  * e.g.:
+ * @code
  *   input:   "a", "b", "c"
  *   targets: "a", "c"
  *   output is a table with two boolean columns:
  *     column_0: true, false, false
  *     column_1: false, false, true
+ * @endcode
+ *
  * @param input Strings instance for this operation
  * @param targets UTF-8 encoded strings to search for in each string in `input`
  * @param stream CUDA stream used for device memory operations and kernel launches
