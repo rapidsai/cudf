@@ -34,6 +34,8 @@ select = [
     "F",
     # pycodestyle Warning
     "W",
+    # isort
+    "I",
     # no-blank-line-before-function
     "D201",
     # one-blank-line-after-class
@@ -102,6 +104,9 @@ exclude = [
     # TODO: Remove this in a follow-up where we fix __all__.
     "__init__.py",
 ]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cudf*", "dask_cudf", "custreamz"]
 
 [tool.ruff.lint.per-file-ignores]
 # Lots of pytest implicitly injected attributes in conftest-patch.py

@@ -8,7 +8,6 @@ import hashlib
 import sys
 
 import nvtx
-
 import rmm.statistics
 
 from cudf.options import get_option

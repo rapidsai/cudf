@@ -2,16 +2,14 @@
 
 from functools import partial
 
-import numpy as np
-from fsspec.core import get_compression, get_fs_token_paths
-
 import dask
+import numpy as np
 from dask.utils import parse_bytes
+from fsspec.core import get_compression, get_fs_token_paths
 
 import cudf
 from cudf.core.column import as_column
 from cudf.utils.ioutils import _is_local_filesystem
-
 from dask_cudf.backends import _default_backend
 
 

@@ -7,7 +7,6 @@ from functools import wraps
 import cupy
 import numpy as np
 import tlz as toolz
-
 from dask import config
 from dask.base import tokenize
 from dask.dataframe import methods

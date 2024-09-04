@@ -3,11 +3,10 @@
 import math
 import os
 
-import pandas as pd
-import pytest
-
 import dask
 import dask.dataframe as dd
+import pandas as pd
+import pytest
 from dask.utils import tmpfile
 
 import dask_cudf

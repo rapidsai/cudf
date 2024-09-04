@@ -11,17 +11,41 @@ import sys
 import pandas as pd
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
+)
+from pandas.tseries.holiday import (
     EasterMonday as pd_EasterMonday,
+)
+from pandas.tseries.holiday import (
     GoodFriday as pd_GoodFriday,
+)
+from pandas.tseries.holiday import (
     Holiday as pd_Holiday,
+)
+from pandas.tseries.holiday import (
     HolidayCalendarFactory as pd_HolidayCalendarFactory,
+)
+from pandas.tseries.holiday import (
     HolidayCalendarMetaClass as pd_HolidayCalendarMetaClass,
+)
+from pandas.tseries.holiday import (
     USColumbusDay as pd_USColumbusDay,
+)
+from pandas.tseries.holiday import (
     USFederalHolidayCalendar as pd_USFederalHolidayCalendar,
+)
+from pandas.tseries.holiday import (
     USLaborDay as pd_USLaborDay,
+)
+from pandas.tseries.holiday import (
     USMartinLutherKingJr as pd_USMartinLutherKingJr,
+)
+from pandas.tseries.holiday import (
     USMemorialDay as pd_USMemorialDay,
+)
+from pandas.tseries.holiday import (
     USPresidentsDay as pd_USPresidentsDay,
+)
+from pandas.tseries.holiday import (
     USThanksgivingDay as pd_USThanksgivingDay,
 )
 
@@ -36,9 +60,13 @@ from ..fast_slow_proxy import (
     _FastSlowAttribute,
     _FunctionProxy,
     _Unusable,
-    make_final_proxy_type as _make_final_proxy_type,
-    make_intermediate_proxy_type as _make_intermediate_proxy_type,
     register_proxy_func,
+)
+from ..fast_slow_proxy import (
+    make_final_proxy_type as _make_final_proxy_type,
+)
+from ..fast_slow_proxy import (
+    make_intermediate_proxy_type as _make_intermediate_proxy_type,
 )
 from .common import (
     array_function_method,

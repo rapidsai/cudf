@@ -6,12 +6,10 @@ Test IO with dask.delayed API
 
 import numpy as np
 import pytest
+from dask.delayed import delayed
 from pandas.testing import assert_frame_equal
 
-from dask.delayed import delayed
-
 import cudf
-
 import dask_cudf
 
 

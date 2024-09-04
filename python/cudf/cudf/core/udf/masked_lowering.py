@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import operator
 
@@ -7,6 +7,8 @@ from numba.core import cgutils
 from numba.core.typing import signature as nb_signature
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
+)
+from numba.cuda.cudaimpl import (
     registry as cuda_lowering_registry,
 )
 from numba.extending import lower_builtin, types

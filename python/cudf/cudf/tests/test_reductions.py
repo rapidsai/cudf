@@ -11,7 +11,8 @@ import pytest
 import cudf
 from cudf import Series
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
-from cudf.testing import _utils as utils, assert_eq
+from cudf.testing import _utils as utils
+from cudf.testing import assert_eq
 from cudf.testing._utils import NUMERIC_TYPES, expect_warning_if, gen_rand
 
 params_dtype = NUMERIC_TYPES

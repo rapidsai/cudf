@@ -5,9 +5,10 @@ from functools import wraps
 
 import numpy as np
 import pandas as pd
-
 from dask.dataframe.core import (
     DataFrame as DaskDataFrame,
+)
+from dask.dataframe.core import (
     aca,
     split_out_on_cols,
 )
@@ -17,7 +18,6 @@ from dask.utils import funcname
 import cudf
 from cudf.core.groupby.groupby import _deprecate_collect
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
-
 from dask_cudf.sorting import _deprecate_shuffle_kwarg
 
 # aggregations that are dask-cudf optimized

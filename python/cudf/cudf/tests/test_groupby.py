@@ -12,10 +12,9 @@ from functools import partial
 import numpy as np
 import pandas as pd
 import pytest
+import rmm
 from numba import cuda
 from numpy.testing import assert_array_equal
-
-import rmm
 
 import cudf
 from cudf import DataFrame, Series

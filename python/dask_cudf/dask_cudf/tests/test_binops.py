@@ -1,15 +1,13 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import operator
 
 import numpy as np
 import pandas as pd
 import pytest
-
 from dask import dataframe as dd
 
 import cudf
-
 from dask_cudf.tests.utils import _make_random_frame
 
 

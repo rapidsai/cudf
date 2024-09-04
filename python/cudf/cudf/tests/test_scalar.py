@@ -8,9 +8,8 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from packaging import version
-
 import rmm
+from packaging import version
 
 import cudf
 from cudf._lib.copying import get_element

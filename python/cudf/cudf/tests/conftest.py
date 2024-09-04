@@ -7,7 +7,6 @@ import pathlib
 import cupy as cp
 import numpy as np
 import pytest
-
 import rmm  # noqa: F401
 
 import cudf

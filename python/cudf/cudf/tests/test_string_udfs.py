@@ -4,11 +4,10 @@ import numba
 import numpy as np
 import pandas as pd
 import pytest
+import rmm
 from numba import cuda
 from numba.core.typing import signature as nb_signature
 from numba.types import CPointer, void
-
-import rmm
 
 import cudf
 from cudf._lib.strings_udf import (

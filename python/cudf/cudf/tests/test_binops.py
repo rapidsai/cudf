@@ -15,7 +15,8 @@ import cudf
 from cudf import Index, Series
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
-from cudf.testing import _utils as utils, assert_eq
+from cudf.testing import _utils as utils
+from cudf.testing import assert_eq
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,

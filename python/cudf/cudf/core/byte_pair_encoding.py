@@ -5,6 +5,8 @@ from __future__ import annotations
 import cudf
 from cudf._lib.nvtext.byte_pair_encode import (
     BPEMergePairs as cpp_merge_pairs,
+)
+from cudf._lib.nvtext.byte_pair_encode import (
     byte_pair_encoding as cpp_byte_pair_encoding,
 )
 

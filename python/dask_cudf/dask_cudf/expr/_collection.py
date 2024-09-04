@@ -3,18 +3,23 @@
 import warnings
 from functools import cached_property
 
+from dask import config
+from dask.dataframe.core import is_dataframe_like
 from dask_expr import (
     DataFrame as DXDataFrame,
+)
+from dask_expr import (
     FrameBase,
-    Index as DXIndex,
-    Series as DXSeries,
     get_collection_type,
+)
+from dask_expr import (
+    Index as DXIndex,
+)
+from dask_expr import (
+    Series as DXSeries,
 )
 from dask_expr._collection import new_collection
 from dask_expr._util import _raise_if_object_series
-
-from dask import config
-from dask.dataframe.core import is_dataframe_like
 
 import cudf
 

@@ -5,11 +5,9 @@ from functools import partial
 import numpy as np
 import pandas as pd
 import pytest
-
 from dask import dataframe as dd
 
 import cudf
-
 import dask_cudf
 
 param_nrows = [5, 10, 50, 100]

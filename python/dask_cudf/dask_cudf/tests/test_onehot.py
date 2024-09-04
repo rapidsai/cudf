@@ -2,11 +2,9 @@
 
 import pandas as pd
 import pytest
-
 from dask import dataframe as dd
 
 import cudf
-
 import dask_cudf
 from dask_cudf.tests.utils import xfail_dask_expr
 

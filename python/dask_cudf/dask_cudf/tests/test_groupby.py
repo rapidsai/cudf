@@ -1,17 +1,15 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
+import dask
 import numpy as np
 import pandas as pd
 import pytest
-
-import dask
 from dask import dataframe as dd
 from dask.utils_test import hlg_layer
 
 import cudf
-from cudf.testing._utils import expect_warning_if
-
 import dask_cudf
+from cudf.testing._utils import expect_warning_if
 from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
 from dask_cudf.tests.utils import QUERY_PLANNING_ON, xfail_dask_expr
 

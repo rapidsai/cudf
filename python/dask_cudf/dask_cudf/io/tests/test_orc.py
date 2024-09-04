@@ -4,13 +4,11 @@ import glob
 import os
 from datetime import datetime, timezone
 
-import pytest
-
 import dask
+import pytest
 from dask import dataframe as dd
 
 import cudf
-
 import dask_cudf
 from dask_cudf.tests.utils import skip_dask_expr
 
