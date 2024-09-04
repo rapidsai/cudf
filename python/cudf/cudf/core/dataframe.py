@@ -6294,7 +6294,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     if col.nullable
                     else as_column(True, length=length)
                     for name, col in filtered._data.items()
-                }
+                },
+                verify=False,
             )
             mask = DataFrame._from_data(ca)
             mask = mask.all(axis=1)
