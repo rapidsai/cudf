@@ -236,7 +236,9 @@ class SpillManager:
         self._device_memory_limit = device_memory_limit
         self.statistics = SpillStatistics(statistic_level)
 
-    def _out_of_memory_handle(self, nbytes: int, *, retry_once=True) -> bool:
+    def _out_of_memory_handle(
+        self, nbytes: int, *, retry_once=True, verbose=True
+    ) -> bool:
         """Try to handle an out-of-memory error by spilling
 
         This can by used as the callback function to RMM's
@@ -269,15 +271,17 @@ class SpillManager:
         if retry_once:
             # Let's collect garbage and try one more time
             gc.collect()
-            return self._out_of_memory_handle(nbytes, retry_once=False)
+            return self._out_of_memory_handle(
+                nbytes, retry_once=False, verbose=verbose
+            )
 
-        # TODO: write to log instead of stdout
-        print(
-            f"[WARNING] RMM allocation of {format_bytes(nbytes)} bytes "
-            "failed, spill-on-demand couldn't find any device memory to "
-            f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}\n"
-            f"{self.statistics}"
-        )
+        if verbose:
+            print(
+                f"[WARNING] RMM allocation of {format_bytes(nbytes)} bytes "
+                "failed, spill-on-demand couldn't find any device memory to "
+                f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}\n"
+                f"{self.statistics}"
+            )
         return False  # Since we didn't find anything to spill, we give up
 
     def add(self, buffer: SpillableBufferOwner) -> None:
@@ -436,11 +440,17 @@ def get_global_manager() -> SpillManager | None:
     return _global_manager
 
 
-def set_spill_on_demand_globally() -> None:
+def set_spill_on_demand_globally(
+    spill_oom_protection: int | None = None,
+) -> None:
     """Enable spill on demand in the current global spill manager.
 
-    Warning: this modifies the current RMM memory resource. A memory resource
-    to handle out-of-memory errors is pushed onto the RMM memory resource stack.
+    Warning
+    -------
+    This modifies the current RMM memory resource. A memory resource to
+    handle out-of-memory errors is pushed onto the RMM memory resource
+    stack. Modifying or rmm.reinitialize the RMM stack will disable spill
+    on demand.
 
     Raises
     ------
@@ -449,6 +459,13 @@ def set_spill_on_demand_globally() -> None:
     ValueError
         If a failure callback resource is already in the resource stack.
     """
+    if spill_oom_protection is None:
+        spill_oom_protection = get_option("spill_oom_protection")
+    if spill_oom_protection < 0 or spill_oom_protection > 100:
+        raise ValueError(
+            "spill_oom_protection must be an integer between 0 and 100 "
+            f"(was {spill_oom_protection})"
+        )
 
     manager = get_global_manager()
     if manager is None:
@@ -464,20 +481,38 @@ def set_spill_on_demand_globally() -> None:
             "Spill on demand (or another failure callback resource) "
             "is already registered"
         )
-    rmm.mr.set_current_device_resource(
-        rmm.mr.FailureCallbackResourceAdaptor(
-            mr, manager._out_of_memory_handle
+
+    # Add a limiting resource to the RMM stack when the OOM protection should
+    # kick in before total device memory usage.
+    if spill_oom_protection > 0 and spill_oom_protection < 100:
+        _, total_dev_mem = rmm.mr.available_device_memory()
+        mr_limit = int(total_dev_mem * (spill_oom_protection / 100))
+        mr = rmm.mr.LimitingResourceAdaptor(mr, allocation_limit=mr_limit)
+
+    # Add the OOM handle to the RMM stack. When OOM protection is enabled,
+    # the OOM handle should be quiet.
+    oom_handle_func = manager._out_of_memory_handle
+    if spill_oom_protection > 0:
+        oom_handle_func = partial(oom_handle_func, verbose=False)
+    mr = rmm.mr.FailureCallbackResourceAdaptor(mr, oom_handle_func)
+
+    # Add the OOM protection to the RMM stack.
+    if spill_oom_protection > 0:
+        mr = rmm.mr.FailureAlternateResourceAdaptor(
+            mr, rmm.mr.ManagedMemoryResource()
         )
-    )
+    rmm.mr.set_current_device_resource(mr)
 
 
 @contextmanager
 def spill_on_demand_globally():
     """Context to enable spill on demand temporarily.
 
-    Warning: this modifies the current RMM memory resource. A memory resource
-    to handle out-of-memory errors is pushed onto the RMM memory resource stack
-    when entering the context and popped again when exiting.
+    Warning
+    -------
+    This modifies the current RMM memory resource. A memory resource to
+    handle out-of-memory errors is pushed onto the RMM memory resource
+    stack when entering the context and popped again when exiting.
 
     Raises
     ------

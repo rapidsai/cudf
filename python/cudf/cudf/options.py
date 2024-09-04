@@ -279,6 +279,26 @@ _register_option(
 )
 
 _register_option(
+    "spill_oom_protection",
+    _env_get_int("CUDF_SPILL_OOM_PROTECTION", 100),
+    textwrap.dedent(
+        """
+        If not 0, enables out-of-memory protection. The value specifies at
+        which procent of total device memory the protection should kick in.
+            0    - disabled.
+            1-99 - enable OOM protection when reaching 1%% to 99%% of total
+                   device memory.
+            100  - enable OOM protection only on OOM errors (no headroom).
+
+        This has no effect if spill on demand is disabled, see the "spill"
+        and the "spill_on_demand" options.
+        Valid values are any positive integer. Default is 0 (disabled).
+        """
+    ),
+    _integer_validator,
+)
+
+_register_option(
     "spill_stats",
     _env_get_int("CUDF_SPILL_STATS", 0),
     textwrap.dedent(
