@@ -591,8 +591,8 @@ def read_parquet(
         _row_groups = None
         if method in (None, "parquet"):
             if row_groups is None:
-                # Don't use 'parquet' prefetcher for column
-                # projection alone.
+                # If the user didn't specify a method, don't use
+                # 'parquet' prefetcher for column projection alone.
                 method = method or "all"
             elif all(r == row_groups[0] for r in row_groups):
                 # Row group selection means we are probably

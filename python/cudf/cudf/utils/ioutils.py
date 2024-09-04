@@ -196,7 +196,8 @@ allow_mismatched_pq_schemas : boolean, default False
     If True, enables reading (matching) columns specified in `columns` and `filters`
     options from the input files with otherwise mismatched schemas.
 prefetch_options : dict, default None
-    WARNING: This is an experimental feature (added in 24.10).
+    WARNING: This is an experimental feature and may be removed at any
+    time without warning or deprecation period.
     Dictionary of options to use to prefetch bytes from remote storage.
     These options are passed through to `get_reader_filepath_or_buffer`.
 
@@ -1452,7 +1453,8 @@ expand_dir_pattern : str, default None
     (e.g. "*.json"). If this parameter is not specified, directories
     will not be expanded.
 prefetch_options : dict, default None
-    WARNING: This is an experimental feature (added in 24.10).
+    WARNING: This is an experimental feature and may be removed at any
+    time without warning or deprecation period.
     Dictionary of options to use to prefetch bytes from remote storage.
     These options are only used when `path_or_data` is a list of remote
     paths. If 'method' is set to 'all' (the default), the only supported
@@ -2194,8 +2196,9 @@ def _prefetch_remote_buffers(
                 "all": _get_remote_bytes_all,
             }[method]
         except KeyError:
-            raise NotImplementedError(
-                f"{method} is not a supported remote-data prefetcher"
+            raise ValueError(
+                f"{method} is not a supported remote-data prefetcher."
+                " Expected 'parquet' or 'all'."
             )
         return prefetcher(
             paths,
