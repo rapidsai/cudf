@@ -616,19 +616,19 @@ cdef class ParquetWriter:
         Name of the compression to use. Use ``None`` for no compression.
     statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
         Level at which column statistics should be included in file.
-    row_group_size_bytes: size_t, default infinite
+    row_group_size_bytes: int, default infinite
         Maximum size of each stripe of the output.
         By default, an infinite value equal to uint64 max (~18446744073GB) will be used.
     row_group_size_rows: int, default 1000000
         Maximum number of rows of each stripe of the output.
         By default, 1000000 (10^6 rows) will be used.
-    max_page_size_bytes: size_t, default 524288
+    max_page_size_bytes: int, default 524288
         Maximum uncompressed size of each page of the output.
         By default, 524288 (512KB) will be used.
     max_page_size_rows: int, default 20000
         Maximum number of rows of each page of the output.
         By default, 20000 will be used.
-    max_dictionary_size: size_t, default 1048576
+    max_dictionary_size: int, default 1048576
         Maximum size of the dictionary page for each output column chunk. Dictionary
         encoding for column chunks that exceeds this limit will be disabled.
         By default, 1048576 (1MB) will be used.
