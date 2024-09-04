@@ -63,9 +63,11 @@
 
 void run_tpch_q6(nvbench::state& state)
 {
+  double const scale_factor = state.get_float64("scale_factor");
+
   // Define a map for holding parquet data sources
   std::unordered_map<std::string, parquet_device_buffer> sources;
-  generate_parquet_data_sources({"lineitem"}, sources);
+  generate_parquet_data_sources(scale_factor, {"lineitem"}, sources);
 
   // Read out the `lineitem` table from parquet file
   std::vector<std::string> const lineitem_cols = {
@@ -138,4 +140,4 @@ void tpch_q6(nvbench::state& state)
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) { run_tpch_q6(state); });
 }
 
-NVBENCH_BENCH(tpch_q6).set_name("tpch_q6");
+NVBENCH_BENCH(tpch_q6).set_name("tpch_q6").add_float64_axis("scale_factor", {0.01, 0.1, 1});

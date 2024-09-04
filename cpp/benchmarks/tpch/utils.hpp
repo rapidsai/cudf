@@ -528,17 +528,6 @@ int32_t days_since_epoch(int year, int month, int day)
 }
 
 /**
- * @brief Read the scale factor from the environment variable `CUDF_TPCH_SF`
- */
-double get_sf()
-{
-  char* val       = getenv("CUDF_TPCH_SF");
-  double const sf = (val == nullptr) ? 1 : std::atof(val);
-  std::cout << "Using scale factor: " << sf << std::endl;
-  return sf;
-}
-
-/**
  * @brief Struct representing a parquet device buffer
  */
 struct parquet_device_buffer {
@@ -589,18 +578,18 @@ void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
 /**
  * @brief Generate TPC-H tables and write to parquet device buffers
  *
+ * @param scale_factor The scale factor of NDS-H tables to generate
  * @param table_names The names of the tables to generate
  * @param sources The parquet data sources to populate
  */
-void generate_parquet_data_sources(std::vector<std::string> const& table_names,
+void generate_parquet_data_sources(double scale_factor,
+                                   std::vector<std::string> const& table_names,
                                    std::unordered_map<std::string, parquet_device_buffer>& sources)
 {
   CUDF_FUNC_RANGE();
   std::for_each(table_names.begin(), table_names.end(), [&](auto const& table_name) {
     sources[table_name] = parquet_device_buffer();
   });
-
-  auto scale_factor = get_sf();
 
   auto [orders, lineitem, part] = cudf::datagen::generate_orders_lineitem_part(
     scale_factor, cudf::get_default_stream(), rmm::mr::get_current_device_resource());

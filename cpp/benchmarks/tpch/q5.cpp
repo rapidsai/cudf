@@ -89,10 +89,12 @@
 
 void run_tpch_q5(nvbench::state& state)
 {
+  double const scale_factor = state.get_float64("scale_factor");
+
   // Define a map for holding parquet data sources
   std::unordered_map<std::string, parquet_device_buffer> sources;
-  generate_parquet_data_sources({"customer", "orders", "lineitem", "supplier", "nation", "region"},
-                                sources);
+  generate_parquet_data_sources(
+    scale_factor, {"customer", "orders", "lineitem", "supplier", "nation", "region"}, sources);
 
   // Define the column projection and filter predicate for the `orders` table
   std::vector<std::string> const orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
@@ -171,4 +173,4 @@ void tpch_q5(nvbench::state& state)
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) { run_tpch_q5(state); });
 }
 
-NVBENCH_BENCH(tpch_q5).set_name("tpch_q5");
+NVBENCH_BENCH(tpch_q5).set_name("tpch_q5").add_float64_axis("scale_factor", {0.01, 0.1, 1});
