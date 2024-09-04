@@ -432,15 +432,15 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
         # functions for which evaluation of the expression may not return
         # the same dtype as polars, either due to libcudf returning a different
         # dtype, or due to our internal processing affecting what libcudf returns
-        polars_result_dtypes = {
-            pl_expr.TemporalFunction.Year: plc.DataType(plc.TypeId.INT32),
-            pl_expr.TemporalFunction.Month: plc.DataType(plc.TypeId.INT8),
-            pl_expr.TemporalFunction.Day: plc.DataType(plc.TypeId.INT8),
-            pl_expr.TemporalFunction.WeekDay: plc.DataType(plc.TypeId.INT8),
-            pl_expr.TemporalFunction.Hour: plc.DataType(plc.TypeId.INT8),
-            pl_expr.TemporalFunction.Minute: plc.DataType(plc.TypeId.INT8),
-            pl_expr.TemporalFunction.Second: plc.DataType(plc.TypeId.INT8),
-            pl_expr.TemporalFunction.Millisecond: plc.DataType(plc.TypeId.INT32),
+        needs_cast = {
+            pl_expr.TemporalFunction.Year,
+            pl_expr.TemporalFunction.Month,
+            pl_expr.TemporalFunction.Day,
+            pl_expr.TemporalFunction.WeekDay,
+            pl_expr.TemporalFunction.Hour,
+            pl_expr.TemporalFunction.Minute,
+            pl_expr.TemporalFunction.Second,
+            pl_expr.TemporalFunction.Millisecond,
         }
         result_expr = expr.TemporalFunction(
             dtype,
@@ -448,8 +448,8 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
             options,
             *(translate_expr(visitor, n=n) for n in node.input),
         )
-        if name in polars_result_dtypes:
-            return expr.Cast(polars_result_dtypes[name], result_expr)
+        if name in needs_cast:
+            return expr.Cast(dtype, result_expr)
         return result_expr
 
     elif isinstance(name, str):

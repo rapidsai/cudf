@@ -946,7 +946,7 @@ class StringFunction(Expr):
 
 class TemporalFunction(Expr):
     __slots__ = ("name", "options", "children")
-    _temporal_extraction_function_map: ClassVar[dict[pl_expr.TemporalFunction, str]] = {
+    _COMPONENT_MAP: ClassVar[dict[pl_expr.TemporalFunction, str]] = {
         pl_expr.TemporalFunction.Year: "year",
         pl_expr.TemporalFunction.Month: "month",
         pl_expr.TemporalFunction.Day: "day",
@@ -958,7 +958,6 @@ class TemporalFunction(Expr):
         pl_expr.TemporalFunction.Microsecond: "microsecond",
         pl_expr.TemporalFunction.Nanosecond: "nanosecond",
     }
-    _supported_temporal_functions = _temporal_extraction_function_map
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
@@ -973,7 +972,7 @@ class TemporalFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
-        if self.name not in TemporalFunction._supported_temporal_functions:
+        if self.name not in self._COMPONENT_MAP:
             raise NotImplementedError(f"Temporal function {self.name}")
 
     def do_evaluate(
@@ -1001,7 +1000,7 @@ class TemporalFunction(Expr):
                 micros = plc.datetime.extract_datetime_component(
                     column.obj, "microsecond"
                 )
-                processed_mili = plc.binaryop.binary_operation(
+                millis_as_micros = plc.binaryop.binary_operation(
                     millis,
                     plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
                     plc.binaryop.BinaryOperator.MUL,
@@ -1009,7 +1008,7 @@ class TemporalFunction(Expr):
                 )
                 total_micros = plc.binaryop.binary_operation(
                     micros,
-                    processed_mili,
+                    millis_as_micros,
                     plc.binaryop.BinaryOperator.ADD,
                     plc.types.DataType(plc.types.TypeId.INT32),
                 )
@@ -1024,13 +1023,13 @@ class TemporalFunction(Expr):
                 nanos = plc.datetime.extract_datetime_component(
                     column.obj, "nanosecond"
                 )
-                processed_mili = plc.binaryop.binary_operation(
+                millis_as_nanos = plc.binaryop.binary_operation(
                     millis,
                     plc.interop.from_arrow(pa.scalar(1_000_000, type=pa.int32())),
                     plc.binaryop.BinaryOperator.MUL,
                     plc.types.DataType(plc.types.TypeId.INT32),
                 )
-                processed_micro = plc.binaryop.binary_operation(
+                micros_as_nanos = plc.binaryop.binary_operation(
                     micros,
                     plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
                     plc.binaryop.BinaryOperator.MUL,
@@ -1038,13 +1037,13 @@ class TemporalFunction(Expr):
                 )
                 total_nanos = plc.binaryop.binary_operation(
                     nanos,
-                    processed_mili,
+                    millis_as_nanos,
                     plc.binaryop.BinaryOperator.ADD,
                     plc.types.DataType(plc.types.TypeId.INT32),
                 )
                 total_nanos = plc.binaryop.binary_operation(
                     total_nanos,
-                    processed_micro,
+                    micros_as_nanos,
                     plc.binaryop.BinaryOperator.ADD,
                     plc.types.DataType(plc.types.TypeId.INT32),
                 )
@@ -1053,7 +1052,7 @@ class TemporalFunction(Expr):
             return Column(
                 plc.datetime.extract_datetime_component(
                     column.obj,
-                    TemporalFunction._temporal_extraction_function_map[self.name],
+                    self._COMPONENT_MAP[self.name],
                 )
             )
         raise NotImplementedError(
