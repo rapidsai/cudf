@@ -426,12 +426,19 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
             *(translate_expr(visitor, n=n) for n in node.input),
         )
     elif isinstance(name, str):
-        return expr.UnaryFunction(
-            dtype,
-            name,
-            options,
-            *(translate_expr(visitor, n=n) for n in node.input),
-        )
+        children = (translate_expr(visitor, n=n) for n in node.input)
+        if name == "log":
+            (base,) = options
+            (child,) = children
+            return expr.BinOp(
+                dtype,
+                plc.binaryop.BinaryOperator.LOG_BASE,
+                child,
+                expr.Literal(dtype, pa.scalar(base, type=plc.interop.to_arrow(dtype))),
+            )
+        elif name == "pow":
+            return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
+        return expr.UnaryFunction(dtype, name, options, *children)
     raise NotImplementedError(
         f"No handler for Expr function node with {name=}"
     )  # pragma: no cover; polars raises on the rust side for now
