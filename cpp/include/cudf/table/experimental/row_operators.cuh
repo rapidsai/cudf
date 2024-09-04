@@ -108,7 +108,7 @@ template <typename... Types>
 struct dispatch_void_conditional_generator {
   /// The underlying type
   template <typename T>
-  using type = dispatch_void_conditional_t<std::disjunction<std::is_same<T, Types>...>::value, T>;
+  using type = dispatch_void_conditional_t<std::disjunction_v<std::is_same<T, Types>...>, T>;
 };
 
 /**
@@ -151,6 +151,13 @@ template <cudf::type_id t>
 struct dispatch_void_if_nested {
   /// The underlying type
   using type = dispatch_void_if_nested_t<id_to_type<t>>;
+};
+
+auto static any_of = [](std::initializer_list<cudf::type_id> ids,
+                        std::unordered_set<cudf::type_id> const& search_set) {
+  return std::any_of(ids.begin(), ids.end(), [&search_set](auto const& id) {
+    return search_set.find(id) != search_set.end();
+  });
 };
 
 namespace row {
@@ -1804,24 +1811,16 @@ class self_comparator {
                             PhysicalEqualityComparator,
                             dispatch_void_if_compound_t>>;
 
-    auto find_any = [](std::initializer_list<cudf::type_id> ids,
-                       std::unordered_set<cudf::type_id> const& search_set) {
-      for (auto id : ids) {
-        if (search_set.find(id) != search_set.end()) return true;
-      }
-      return false;
-    };
-
-    if (find_any({type_id::STRUCT, type_id::LIST}, column_types)) {
+    if (cudf::experimental::any_of({type_id::STRUCT, type_id::LIST}, column_types)) {
       return row_comparator_t{
         device_row_comparator<true, Nullate, PhysicalEqualityComparator, type_identity_t>{
           nullate, *d_t, *d_t, nulls_are_equal, comparator}};
-    } else if (find_any({type_id::DECIMAL32,
-                         type_id::DECIMAL64,
-                         type_id::DECIMAL128,
-                         type_id::STRING,
-                         type_id::DICTIONARY32},
-                        column_types)) {
+    } else if (cudf::experimental::any_of({type_id::DECIMAL32,
+                                           type_id::DECIMAL64,
+                                           type_id::DECIMAL128,
+                                           type_id::STRING,
+                                           type_id::DICTIONARY32},
+                                          column_types)) {
       return row_comparator_t{device_row_comparator<false,
                                                     Nullate,
                                                     PhysicalEqualityComparator,
@@ -1994,24 +1993,16 @@ class two_table_comparator {
                                                             PhysicalEqualityComparator,
                                                             dispatch_void_if_compound_t>>>;
 
-    auto find_any = [](std::initializer_list<cudf::type_id> ids,
-                       std::unordered_set<cudf::type_id> const& search_set) {
-      for (auto id : ids) {
-        if (search_set.find(id) != search_set.end()) return true;
-      }
-      return false;
-    };
-
-    if (find_any({type_id::STRUCT, type_id::LIST}, column_types)) {
+    if (cudf::experimental::any_of({type_id::STRUCT, type_id::LIST}, column_types)) {
       return row_comparator_t{strong_index_comparator_adapter{
         device_row_comparator<true, Nullate, PhysicalEqualityComparator, type_identity_t>(
           nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)}};
-    } else if (find_any({type_id::DECIMAL32,
-                         type_id::DECIMAL64,
-                         type_id::DECIMAL128,
-                         type_id::STRING,
-                         type_id::DICTIONARY32},
-                        column_types)) {
+    } else if (cudf::experimental::any_of({type_id::DECIMAL32,
+                                           type_id::DECIMAL64,
+                                           type_id::DECIMAL128,
+                                           type_id::STRING,
+                                           type_id::DICTIONARY32},
+                                          column_types)) {
       return row_comparator_t{
         strong_index_comparator_adapter{device_row_comparator<false,
                                                               Nullate,
@@ -2317,23 +2308,16 @@ class row_hasher {
       std::variant<DeviceRowHasher<hash_function, Nullate, type_identity_t>,
                    DeviceRowHasher<hash_function, Nullate, dispatch_void_if_nested_t>,
                    DeviceRowHasher<hash_function, Nullate, dispatch_void_if_compound_t>>;
-    auto find_any = [](std::initializer_list<cudf::type_id> ids,
-                       std::unordered_set<cudf::type_id> const& search_set) {
-      for (auto id : ids) {
-        if (search_set.find(id) != search_set.end()) return true;
-      }
-      return false;
-    };
 
-    if (find_any({type_id::STRUCT, type_id::LIST}, column_types)) {
+    if (cudf::experimental::any_of({type_id::STRUCT, type_id::LIST}, column_types)) {
       return row_hasher_t{
         DeviceRowHasher<hash_function, Nullate, type_identity_t>(nullate, *d_t, seed)};
-    } else if (find_any({type_id::DECIMAL32,
-                         type_id::DECIMAL64,
-                         type_id::DECIMAL128,
-                         type_id::STRING,
-                         type_id::DICTIONARY32},
-                        column_types)) {
+    } else if (cudf::experimental::any_of({type_id::DECIMAL32,
+                                           type_id::DECIMAL64,
+                                           type_id::DECIMAL128,
+                                           type_id::STRING,
+                                           type_id::DICTIONARY32},
+                                          column_types)) {
       return row_hasher_t{
         DeviceRowHasher<hash_function, Nullate, dispatch_void_if_nested_t>(nullate, *d_t, seed)};
     } else {
