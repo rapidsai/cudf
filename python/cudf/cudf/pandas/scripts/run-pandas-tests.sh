@@ -46,6 +46,7 @@ if [ ! -d "pandas-tests" ]; then
     # pyproject.toml
     # tests/
     cp pandas/pandas/conftest.py pandas-tests/conftest.py
+    cp python/cudf/cudf/pandas/scripts/.test_durations pandas-tests/.test_durations
     # Vendored from pandas/pyproject.toml
     cat > pandas-tests/pyproject.toml << \EOF
 [tool.pytest.ini_options]
