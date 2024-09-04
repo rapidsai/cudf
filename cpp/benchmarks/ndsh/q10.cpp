@@ -25,7 +25,7 @@
 
 /**
  * @file q10.cpp
- * @brief Implement query 10 of the TPC-H benchmark.
+ * @brief Implement query 10 of the NDS-H benchmark.
  *
  * create view customer as select * from '/tables/scale-1/customer.parquet';
  * create view orders as select * from '/tables/scale-1/orders.parquet';

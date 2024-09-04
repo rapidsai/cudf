@@ -27,7 +27,7 @@
 
 /**
  * @file q9.cpp
- * @brief Implement query 9 of the TPC-H benchmark.
+ * @brief Implement query 9 of the NDS-H benchmark.
  *
  * create view part as select * from '/tables/scale-1/part.parquet';
  * create view supplier as select * from '/tables/scale-1/supplier.parquet';

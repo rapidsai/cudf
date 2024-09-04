@@ -576,7 +576,7 @@ void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
 }
 
 /**
- * @brief Generate TPC-H tables and write to parquet device buffers
+ * @brief Generate NDS-H tables and write to parquet device buffers
  *
  * @param scale_factor The scale factor of NDS-H tables to generate
  * @param table_names The names of the tables to generate

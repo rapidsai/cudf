@@ -25,7 +25,7 @@
 
 /**
  * @file q1.cpp
- * @brief Implement query 1 of the TPC-H benchmark.
+ * @brief Implement query 1 of the NDS-H benchmark.
  *
  * create view lineitem as select * from '/tables/scale-1/lineitem.parquet';
  *
