@@ -928,6 +928,7 @@ dependencies:
           # installation issues with `psycopg2`.
           - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
           - pytest-reportlog
+          - pytest-split
           - ipython
   test_python_cudf_pandas:
     common:
