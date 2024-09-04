@@ -1226,8 +1226,9 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         )
         return res
     else:
+        df = df.copy(deep=False)
+        columns = df.index._poplevels(level)
         index = df.index
-        columns = df.index.copy(deep=False)._poplevels(level)
         result = _pivot(df._data, index, columns)
         if result.index.nlevels == 1:
             result.index = result.index.get_level_values(result.index.names[0])
