@@ -1507,6 +1507,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   device_span<SymbolOffsetT const> token_indices,
   rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   // Instantiate FST for post-processing the token stream to remove all tokens that belong to an
   // invalid JSON line
   token_filter::UnwrapTokenFromSymbolOp sgid_op{};
@@ -1660,6 +1661,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
 
   if (delimiter_offset == 1) {
     tokens.set_element(0, token_t::LineEnd, stream);
+    validate_token_stream(json_in, tokens, tokens_indices, options, stream);
     auto [filtered_tokens, filtered_tokens_indices] =
       process_token_stream(tokens, tokens_indices, stream);
     tokens         = std::move(filtered_tokens);
@@ -2082,7 +2084,9 @@ cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& opt
   parse_opts.keepquotes = options.is_enabled_keep_quotes();
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
-  parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
+  std::vector<std::string> na_values{"", "null"};
+  na_values.insert(na_values.end(), options.get_na_values().begin(), options.get_na_values().end());
+  parse_opts.trie_na = cudf::detail::create_serialized_trie(na_values, stream);
   return parse_opts;
 }
 
