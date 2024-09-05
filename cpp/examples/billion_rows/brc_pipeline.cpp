@@ -108,9 +108,9 @@ int main(int argc, char const** argv)
   auto const divider      = (argc < 3) ? 25 : std::stoi(std::string(argv[2]));
   auto const thread_count = (argc < 4) ? 2 : std::stoi(std::string(argv[3]));
 
-  std::cout << "input:   " << input_file << std::endl;
-  std::cout << "chunks:  " << divider << std::endl;
-  std::cout << "threads: " << thread_count << std::endl;
+  std::cout << "Input: " << input_file << std::endl;
+  std::cout << "Chunks: " << divider << std::endl;
+  std::cout << "Threads: " << thread_count << std::endl;
 
   auto const mr_name = std::string("pool");
   auto resource      = create_memory_resource(mr_name);
@@ -130,17 +130,17 @@ int main(int argc, char const** argv)
   auto stream_pool = rmm::cuda_stream_pool(thread_count);
   std::vector<std::vector<result_t>> chunk_results(thread_count);
 
-  std::vector<chunk_fn> chunks;
+  std::vector<chunk_fn> chunk_tasks;
   for (auto& cr : chunk_results) {
-    chunks.emplace_back(chunk_fn{input_file, cr, stream_pool.get_stream()});
+    chunk_tasks.emplace_back(chunk_fn{input_file, cr, stream_pool.get_stream()});
   }
   for (std::size_t i = 0; i < divider; ++i) {
     auto start = i * chunk_size;
     auto size  = std::min(chunk_size, file_size - start);
-    chunks[i % thread_count].add_range(start, size);
+    chunk_tasks[i % thread_count].add_range(start, size);
   }
   std::vector<std::thread> threads;
-  for (auto& c : chunks) {
+  for (auto& c : chunk_tasks) {
     threads.emplace_back(std::thread{c});
   }
   for (auto& t : threads) {
@@ -163,9 +163,9 @@ int main(int argc, char const** argv)
   stream.synchronize();
 
   elapsed_t elapsed = std::chrono::steady_clock::now() - start;
-  std::cout << "number of keys: " << results->num_rows() << std::endl;
-  std::cout << "process time: " << elapsed.count() << " seconds\n";
-  std::cout << "peak memory: " << (stats_mr.get_bytes_counter().peak / 1048576.0) << " MB\n";
+  std::cout << "Number of keys: " << results->num_rows() << std::endl;
+  std::cout << "Process time: " << elapsed.count() << " seconds\n";
+  std::cout << "Peak memory: " << (stats_mr.get_bytes_counter().peak / 1048576.0) << " MB\n";
 
   return 0;
 }

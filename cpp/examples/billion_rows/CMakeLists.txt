@@ -5,11 +5,11 @@ cmake_minimum_required(VERSION 3.26.4)
 include(../set_cuda_architecture.cmake)
 
 # initialize cuda architecture
-rapids_cuda_init_architectures(billion)
+rapids_cuda_init_architectures(billion_rows)
 rapids_cuda_set_architectures(RAPIDS)
 
 project(
-  billion
+  billion_rows
   VERSION 0.0.1
   LANGUAGES CXX CUDA
 )

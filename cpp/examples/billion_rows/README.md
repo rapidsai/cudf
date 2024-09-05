@@ -1,7 +1,7 @@
 # libcudf C++ example for the 1 billion row challenge
 
 This C++ example demonstrates using libcudf APIs to read and process
-a table with 1 billion rows. The 1 billion row challenge is describe here:
+a table with 1 billion rows. The 1 billion row challenge is described here:
 https://github.com/gunnarmorling/1brc
 
 The examples load the 1 billion row text file using the CSV reader.
@@ -33,11 +33,9 @@ cmake -S . -B build/
 cmake --build build/ --parallel $PARALLEL_LEVEL
 # Execute
 build/brc input.txt
---OR--
-# load and process the input in 25 chunks (default)
+# Execute in chunked mode with 25 chunks (default)
 build/brc_chunks input.txt 25
---OR--
-# load and process the input in 25 chunks and 2 threads (defaults)
+# Execute in pipeline mode with 25 chunks and 2 threads (defaults)
 build/brc_pipeline input.txt 25 2
 ```
 

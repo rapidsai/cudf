@@ -62,8 +62,8 @@ int main(int argc, char const** argv)
   auto const input_file = std::string{argv[1]};
   auto const divider    = (argc < 3) ? 25 : std::stoi(std::string(argv[2]));
 
-  std::cout << "input:   " << input_file << std::endl;
-  std::cout << "chunks:  " << divider << std::endl;
+  std::cout << "Input: " << input_file << std::endl;
+  std::cout << "Chunks: " << divider << std::endl;
 
   auto const mr_name = std::string("pool");
   auto resource      = create_memory_resource(mr_name);
@@ -99,7 +99,7 @@ int main(int argc, char const** argv)
     agg_data.emplace_back(
       cudf::sort_by_key(result->view(), result->view().select({0}), {}, {}, stream));
     start_pos += chunk_size;
-    if (start_pos + chunk_size > file_size) { chunk_size = file_size - start_pos; }
+    chunk_size = std::min(chunk_size, file_size - start_pos);
     total_rows += read_rows;
   } while (start_pos < file_size && chunk_size > 0);
 
@@ -108,9 +108,9 @@ int main(int argc, char const** argv)
   stream.synchronize();
 
   elapsed_t elapsed = std::chrono::steady_clock::now() - start;
-  std::cout << "number of keys = " << results->num_rows() << std::endl;
-  std::cout << "process time: " << elapsed.count() << " seconds\n";
-  std::cout << "peak memory: " << (stats_mr.get_bytes_counter().peak / 1048576.0) << " MB\n";
+  std::cout << "Number of keys: " << results->num_rows() << std::endl;
+  std::cout << "Process time: " << elapsed.count() << " seconds\n";
+  std::cout << "Peak memory: " << (stats_mr.get_bytes_counter().peak / 1048576.0) << " MB\n";
 
   return 0;
 }

@@ -19,7 +19,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/io/csv.hpp>
-#include <cudf/io/datasource.hpp>
+#include <cudf/io/types.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -41,7 +41,7 @@ int main(int argc, char const** argv)
   }
 
   auto const input_file = std::string{argv[1]};
-  std::cout << "input:   " << input_file << std::endl;
+  std::cout << "Input: " << input_file << std::endl;
 
   auto const mr_name = std::string("pool");
   auto resource      = create_memory_resource(mr_name);
@@ -64,9 +64,9 @@ int main(int argc, char const** argv)
     return cudf::io::read_csv(in_opts, stream).tbl;
   }();
   elapsed_t elapsed = std::chrono::steady_clock::now() - start;
-  std::cout << "file load time: " << elapsed.count() << " seconds\n";
+  std::cout << "File load time: " << elapsed.count() << " seconds\n";
   auto const csv_table = csv_result->view();
-  std::cout << "input rows: " << csv_table.num_rows() << std::endl;
+  std::cout << "Input rows: " << csv_table.num_rows() << std::endl;
 
   auto const cities = csv_table.column(0);
   auto const temps  = csv_table.column(1);
@@ -86,9 +86,9 @@ int main(int argc, char const** argv)
   stream.synchronize();
 
   elapsed = std::chrono::steady_clock::now() - start;
-  std::cout << "number of keys: " << result->num_rows() << std::endl;
-  std::cout << "process time: " << elapsed.count() << " seconds\n";
-  std::cout << "peak memory: " << (stats_mr.get_bytes_counter().peak / 1048576.0) << " MB\n";
+  std::cout << "Number of keys: " << result->num_rows() << std::endl;
+  std::cout << "Process time: " << elapsed.count() << " seconds\n";
+  std::cout << "Peak memory: " << (stats_mr.get_bytes_counter().peak / 1048576.0) << " MB\n";
 
   return 0;
 }
