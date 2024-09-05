@@ -14,23 +14,16 @@ from libcpp.vector cimport vector
 import datetime
 from collections import OrderedDict
 
-cimport cudf._lib.pylibcudf.libcudf.lists.lists_column_view as cpp_lists_column_view
+cimport pylibcudf.libcudf.lists.lists_column_view as cpp_lists_column_view
 
 try:
     import ujson as json
 except ImportError:
     import json
 
-cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
-from cudf._lib.column cimport Column
-from cudf._lib.io.utils cimport (
-    make_sink_info,
-    make_source_info,
-    update_column_struct_field_names,
-)
-from cudf._lib.pylibcudf.io.datasource cimport NativeFileDatasource
-from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
-from cudf._lib.pylibcudf.libcudf.io.orc cimport (
+cimport pylibcudf.libcudf.io.types as cudf_io_types
+from pylibcudf.libcudf.io.data_sink cimport data_sink
+from pylibcudf.libcudf.io.orc cimport (
     chunked_orc_writer_options,
     orc_chunked_writer,
     orc_reader_options,
@@ -38,7 +31,7 @@ from cudf._lib.pylibcudf.libcudf.io.orc cimport (
     read_orc as libcudf_read_orc,
     write_orc as libcudf_write_orc,
 )
-from cudf._lib.pylibcudf.libcudf.io.orc_metadata cimport (
+from pylibcudf.libcudf.io.orc_metadata cimport (
     binary_statistics,
     bucket_statistics,
     column_statistics,
@@ -53,7 +46,7 @@ from cudf._lib.pylibcudf.libcudf.io.orc_metadata cimport (
     string_statistics,
     timestamp_statistics,
 )
-from cudf._lib.pylibcudf.libcudf.io.types cimport (
+from pylibcudf.libcudf.io.types cimport (
     column_in_metadata,
     compression_type,
     sink_info,
@@ -61,16 +54,21 @@ from cudf._lib.pylibcudf.libcudf.io.types cimport (
     table_input_metadata,
     table_with_metadata,
 )
-from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
-from cudf._lib.pylibcudf.libcudf.types cimport data_type, size_type, type_id
-from cudf._lib.variant cimport get_if as std_get_if, holds_alternative
+from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.types cimport data_type, size_type, type_id
+from pylibcudf.variant cimport get_if as std_get_if, holds_alternative
+
+from cudf._lib.column cimport Column
+from cudf._lib.io.utils cimport (
+    make_sink_info,
+    make_source_info,
+    update_column_struct_field_names,
+)
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
-
-from pyarrow.lib import NativeFile
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
@@ -202,10 +200,6 @@ cpdef read_parsed_orc_statistics(filepath_or_buffer):
     --------
     cudf.io.orc.read_orc_statistics
     """
-
-    # Handle NativeFile input
-    if isinstance(filepath_or_buffer, NativeFile):
-        filepath_or_buffer = NativeFileDatasource(filepath_or_buffer)
 
     cdef parsed_orc_statistics parsed = (
         libcudf_read_parsed_orc_statistics(make_source_info([filepath_or_buffer]))
@@ -489,9 +483,6 @@ cdef orc_reader_options make_orc_reader_options(
     bool use_index
 ) except*:
 
-    for i, datasource in enumerate(filepaths_or_buffers):
-        if isinstance(datasource, NativeFile):
-            filepaths_or_buffers[i] = NativeFileDatasource(datasource)
     cdef vector[vector[size_type]] strps = stripes
     cdef orc_reader_options opts
     cdef source_info src = make_source_info(filepaths_or_buffers)

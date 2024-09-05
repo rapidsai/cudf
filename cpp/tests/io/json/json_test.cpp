@@ -26,7 +26,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/repeat_strings.hpp>
@@ -681,6 +680,53 @@ TEST_F(JsonReaderTest, JsonLinesByteRange)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{3000, 4000, 5000}});
 }
 
+TEST_F(JsonReaderTest, JsonLinesByteRangeWithRealloc)
+{
+  std::string long_string     = "haha";
+  std::size_t log_repetitions = 12;
+  long_string.reserve(long_string.size() * (1UL << log_repetitions));
+  for (std::size_t i = 0; i < log_repetitions; i++) {
+    long_string += long_string;
+  }
+
+  auto json_string = [&long_string]() {
+    std::string json_string   = R"(
+      { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
+      { "a": { "y" : 6}, "b" : [4, 5   ], "c": 12 }
+      { "a": { "y" : 6}, "b" : [6      ], "c": 13 }
+      { "a": { "y" : 6}, "b" : [7      ], "c": 14 })";
+    std::string replace_chars = "c";
+    std::size_t pos           = json_string.find(replace_chars);
+    while (pos != std::string::npos) {
+      // Replace the substring with the specified string
+      json_string.replace(pos, replace_chars.size(), long_string);
+
+      // Find the next occurrence of the substring
+      pos = json_string.find(replace_chars, pos + long_string.size());
+    }
+    return json_string;
+  }();
+
+  // Initialize parsing options (reading json lines). Set byte range offset and size so as to read
+  // the second row of input
+  cudf::io::json_reader_options json_lines_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte>(
+        reinterpret_cast<std::byte*>(json_string.data()), json_string.size())})
+      .lines(true)
+      .compression(cudf::io::compression_type::NONE)
+      .recovery_mode(cudf::io::json_recovery_mode_t::FAIL)
+      .byte_range_offset(16430)
+      .byte_range_size(30);
+
+  // Read full test data via existing, nested JSON lines reader
+  cudf::io::table_with_metadata result = cudf::io::read_json(json_lines_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 3);
+  EXPECT_EQ(result.tbl->num_rows(), 1);
+  EXPECT_EQ(result.metadata.schema_info[2].name, long_string);
+}
+
 TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_AcrossFiles)
 {
   const std::string file1 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest1.json";
@@ -956,31 +1002,6 @@ TEST_F(JsonReaderTest, NoDataFileValues)
 
   auto const view = result.tbl->view();
   EXPECT_EQ(0, view.num_columns());
-}
-
-TEST_F(JsonReaderTest, ArrowFileSource)
-{
-  const std::string fname = temp_env->get_temp_dir() + "ArrowFileSource.csv";
-
-  std::ofstream outfile(fname, std::ofstream::out);
-  outfile << "[9]\n[8]\n[7]\n[6]\n[5]\n[4]\n[3]\n[2]\n";
-  outfile.close();
-
-  std::shared_ptr<arrow::io::ReadableFile> infile;
-  ASSERT_TRUE(arrow::io::ReadableFile::Open(fname).Value(&infile).ok());
-
-  auto arrow_source = cudf::io::arrow_io_source{infile};
-  cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{&arrow_source})
-      .dtypes({dtype<int8_t>()})
-      .lines(true);
-
-  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-
-  EXPECT_EQ(result.tbl->num_columns(), 1);
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT8);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int8_wrapper{{9, 8, 7, 6, 5, 4, 3, 2}});
 }
 
 TEST_P(JsonReaderParamTest, InvalidFloatingPoint)

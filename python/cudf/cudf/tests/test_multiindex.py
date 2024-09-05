@@ -167,7 +167,9 @@ def test_string_index():
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = cudf.Index(as_column(["a", "b", "c", "d", "e"]), name="name")
+    stringIndex = cudf.Index._from_column(
+        as_column(["a", "b", "c", "d", "e"]), name="name"
+    )
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)

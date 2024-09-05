@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_220
 from cudf.testing import assert_eq
 
 
@@ -168,6 +169,10 @@ def test_interval_index_unique():
 
 @pytest.mark.parametrize("box", [pd.Series, pd.IntervalIndex])
 @pytest.mark.parametrize("tz", ["US/Eastern", None])
+@pytest.mark.skipif(
+    condition=not PANDAS_GE_220,
+    reason="ME frequency new in pandas 2.2",
+)
 def test_interval_with_datetime(tz, box):
     dti = pd.date_range(
         start=pd.Timestamp("20180101", tz=tz),
@@ -194,3 +199,14 @@ def test_intervaldtype_eq_string_with_attributes():
     dtype = cudf.IntervalDtype("int64", closed="left")
     assert dtype == "interval"
     assert dtype == "interval[int64, left]"
+
+
+def test_reduction_return_interval_pandas_compatible():
+    ii = pd.IntervalIndex.from_tuples(
+        [("2017-01-03", "2017-01-04")], dtype="interval[datetime64[ns], right]"
+    )
+    cudf_ii = cudf.IntervalIndex.from_pandas(ii)
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = cudf_ii.min()
+    expected = ii.min()
+    assert result == expected

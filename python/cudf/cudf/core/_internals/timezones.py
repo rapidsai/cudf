@@ -120,7 +120,7 @@ def _read_tzfile_as_columns(
 
         # this happens for UTC-like zones
         min_date = np.int64(np.iinfo("int64").min + 1).astype("M8[s]")
-        return (as_column([min_date]), as_column([np.timedelta64(0, "s")]))
+        return (as_column([min_date]), as_column([np.timedelta64(0, "s")]))  # type: ignore[return-value]
     return tuple(transition_times_and_offsets)  # type: ignore[return-value]
 
 
