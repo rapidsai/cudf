@@ -50,13 +50,13 @@ For finer control, you can pass a GPUEngine object with additional configuration
 Open Beta Announcement
 ----------------------
 
-.. important::
-
    The GPU backend for Polars is now available in Open Beta and the engine is undergoing rapid development. To learn more, visit the `GPU Support page <YOUR_LINK_TO_GPU_SUPPORT_PAGE>`_ on the Polars website.
 
 Launch on Google Colab
 ----------------------
 
-.. important::
+.. figure:: ../_static/colab.png
+    :width: 200px
+    :target: <YOUR_LINK_TO_COLAB>
 
-   Take the cuDF backend for Polars for a test-drive in a free GPU-enabled notebook environment using your Google account by `launching on Colab <YOUR_LINK_TO_COLAB>`_.
+   Take the cuDF backend for Polars for a test-drive in a free GPU-enabled notebook environment on Google Colab.
