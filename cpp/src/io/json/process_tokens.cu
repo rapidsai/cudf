@@ -72,12 +72,9 @@ __device__ inline bool substr_eq(const char* data,
                                  SymbolOffsetT const expected_len,
                                  const char* expected)
 {
-  if (end - start != expected_len) {
-    return false;
-  } else {
-    for (auto idx = 0; idx < expected_len; idx++) {
-      if (data[start + idx] != expected[idx]) { return false; }
-    }
+  if (end - start != expected_len) { return false; }
+  for (auto idx = 0; idx < expected_len; idx++) {
+    if (data[start + idx] != expected[idx]) { return false; }
   }
   return true;
 }
