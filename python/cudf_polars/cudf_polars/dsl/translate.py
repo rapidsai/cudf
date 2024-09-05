@@ -94,6 +94,13 @@ def _(
         cloud_options = None
     else:
         reader_options, cloud_options = map(json.loads, options)
+    if (
+        typ == "csv"
+        and visitor.version()[0] == 1
+        and reader_options["schema"] is not None
+    ):
+        # Polars 1.7 renames the inner slot from "inner" to "fields".
+        reader_options["schema"] = {"fields": reader_options["schema"]["inner"]}
     file_options = node.file_options
     with_columns = file_options.with_columns
     n_rows = file_options.n_rows
@@ -310,8 +317,8 @@ def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
     # IR is versioned with major.minor, minor is bumped for backwards
     # compatible changes (e.g. adding new nodes), major is bumped for
     # incompatible changes (e.g. renaming nodes).
-    # Polars 1.4 changes definition of PythonScan.
-    if (version := visitor.version()) >= (2, 0):
+    # Polars 1.7 changes definition of the CSV reader options schema name.
+    if (version := visitor.version()) >= (3, 0):
         raise NotImplementedError(
             f"No support for polars IR {version=}"
         )  # pragma: no cover; no such version for now.
