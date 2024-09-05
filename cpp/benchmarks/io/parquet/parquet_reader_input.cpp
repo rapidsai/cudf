@@ -239,12 +239,16 @@ void BM_parquet_read_wide_tables_mixed(nvbench::state& state,
 
   auto const n_col       = static_cast<cudf::size_type>(state.get_int64("num_cols"));
   auto const num_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
   auto const source_type = io_type::FILEPATH;
   cuio_source_sink_pair source_sink(source_type);
 
   {
-    auto const tbl =
-      create_random_table(cycle_dtypes(d_type, n_col), row_count{num_rows}, data_profile_builder());
+    auto const tbl = create_random_table(
+      cycle_dtypes(d_type, n_col),
+      row_count{num_rows},
+      data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
     auto const view = tbl->view();
 
     cudf::io::parquet_writer_options write_opts =
@@ -307,7 +311,9 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables_mixed, NVBENCH_TYPE_AXES(d_type_
   .set_name("parquet_read_wide_tables_mixed")
   .set_min_samples(4)
   .add_int64_axis("num_rows", {10'000, 100'000, 500'000, 1'000'000})
-  .add_int64_axis("num_cols", {64, 256, 512, 1024});
+  .add_int64_axis("num_cols", {64, 256, 512, 1024})
+  .add_int64_axis("cardinality", {0, 1000})
+  .add_int64_axis("run_length", {1, 32});
 
 // a benchmark for structs that only contain fixed-width types
 using d_type_list_struct_only = nvbench::enum_type_list<data_type::STRUCT>;
