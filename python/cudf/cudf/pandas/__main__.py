@@ -86,7 +86,7 @@ def main():
         f.seek(0)
         args.args.insert(0, f.name)
 
-    rmm_mode = install()
+    install()
 
     script_name = args.args[0] if len(args.args) > 0 else None
     with profile(args.profile, args.line_profile, script_name) as fn:
@@ -110,17 +110,6 @@ def main():
                 cprt = 'Type "help", "copyright", "credits" or "license" for more information.'
                 banner += "\n" + cprt
             code.interact(banner=banner, exitmsg="")
-
-    if "managed" in rmm_mode:
-        for key in {
-            "column_view::get_data",
-            "mutable_column_view::get_data",
-            "gather",
-            "hash_join",
-        }:
-            from cudf._lib import pylibcudf
-
-            pylibcudf.experimental.enable_prefetching(key)
 
 
 if __name__ == "__main__":

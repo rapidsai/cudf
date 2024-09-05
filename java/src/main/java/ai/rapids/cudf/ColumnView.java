@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -911,25 +911,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
 
     return new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
-  }
-
-  /**
-   * Creates a deep copy of a column while replacing the validity mask. The validity mask is the
-   * device_vector equivalent of the boolean column given as argument.
-   *
-   * The boolColumn must have the same number of rows as the current column.
-   * The result column will have the same number of rows as the current column.
-   * For all indices `i` where the boolColumn is `true`, the result column will have a valid value at index i.
-   * For all other values (i.e. `false` or `null`), the result column will have nulls.
-   *
-   * If the current column has a null at a given index `i`, and the new validity mask is `true` at index `i`,
-   * then the row value is undefined.
-   *
-   * @param boolColumn bool column whose value is to be used as the validity mask.
-   * @return Deep copy of the column with replaced validity mask.
-   */
-  public final ColumnVector copyWithBooleanColumnAsValidity(ColumnView boolColumn) {
-    return new ColumnVector(copyWithBooleanColumnAsValidity(getNativeView(), boolColumn.getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -4767,25 +4748,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
                                                         int nullConfig) throws CudfException;
 
-  /**
-   * Native method to deep copy a column while replacing the null mask. The null mask is the
-   * device_vector equivalent of the boolean column given as argument.
-   *
-   * The boolColumn must have the same number of rows as the exemplar column.
-   * The result column will have the same number of rows as the exemplar.
-   * For all indices `i` where the boolean column is `true`, the result column will have a valid value at index i.
-   * For all other values (i.e. `false` or `null`), the result column will have nulls.
-   *
-   * If the exemplar column has a null at a given index `i`, and the new validity mask is `true` at index `i`,
-   * then the resultant row value is undefined.
-   *
-   * @param exemplarViewHandle column view of the column that is deep copied.
-   * @param boolColumnViewHandle bool column whose value is to be used as the null mask.
-   * @return Deep copy of the column with replaced null mask.
-   */
-  private static native long copyWithBooleanColumnAsValidity(long exemplarViewHandle,
-                                                             long boolColumnViewHandle) throws CudfException;
-
   ////////
   // Native cudf::column_view life cycle and metadata access methods. Life cycle methods
   // should typically only be called from the OffHeap inner class.
@@ -5034,8 +4996,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   // DATA MOVEMENT
   /////////////////////////////////////////////////////////////////////////////
 
-  private static HostColumnVectorCore copyToHostNestedHelper(
-      ColumnView deviceCvPointer, HostMemoryAllocator hostMemoryAllocator) {
+  private static HostColumnVectorCore copyToHostAsyncNestedHelper(
+      Cuda.Stream stream, ColumnView deviceCvPointer, HostMemoryAllocator hostMemoryAllocator) {
     if (deviceCvPointer == null) {
       return null;
     }
@@ -5056,20 +5018,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       currValidity = deviceCvPointer.getValid();
       if (currData != null) {
         hostData = hostMemoryAllocator.allocate(currData.length);
-        hostData.copyFromDeviceBuffer(currData);
+        hostData.copyFromDeviceBufferAsync(currData, stream);
       }
       if (currValidity != null) {
         hostValid = hostMemoryAllocator.allocate(currValidity.length);
-        hostValid.copyFromDeviceBuffer(currValidity);
+        hostValid.copyFromDeviceBufferAsync(currValidity, stream);
       }
       if (currOffsets != null) {
         hostOffsets = hostMemoryAllocator.allocate(currOffsets.length);
-        hostOffsets.copyFromDeviceBuffer(currOffsets);
+        hostOffsets.copyFromDeviceBufferAsync(currOffsets, stream);
       }
       int numChildren = deviceCvPointer.getNumChildren();
       for (int i = 0; i < numChildren; i++) {
         try(ColumnView childDevPtr = deviceCvPointer.getChildColumnView(i)) {
-          children.add(copyToHostNestedHelper(childDevPtr, hostMemoryAllocator));
+          children.add(copyToHostAsyncNestedHelper(stream, childDevPtr, hostMemoryAllocator));
         }
       }
       currNullCount = deviceCvPointer.getNullCount();
@@ -5103,11 +5065,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
   }
 
-  /**
-   * Copy the data to the host.
-   */
+  /** Copy the data to the host synchronously. */
   public HostColumnVector copyToHost(HostMemoryAllocator hostMemoryAllocator) {
-    try (NvtxRange toHost = new NvtxRange("ensureOnHost", NvtxColor.BLUE)) {
+    HostColumnVector result = copyToHostAsync(Cuda.DEFAULT_STREAM, hostMemoryAllocator);
+    Cuda.DEFAULT_STREAM.sync();
+    return result;
+  }
+
+  /**
+   * Copy the data to the host asynchronously. The caller MUST synchronize on the stream
+   * before examining the result.
+   */
+  public HostColumnVector copyToHostAsync(Cuda.Stream stream,
+                                          HostMemoryAllocator hostMemoryAllocator) {
+    try (NvtxRange toHost = new NvtxRange("toHostAsync", NvtxColor.BLUE)) {
       HostMemoryBuffer hostDataBuffer = null;
       HostMemoryBuffer hostValidityBuffer = null;
       HostMemoryBuffer hostOffsetsBuffer = null;
@@ -5127,16 +5098,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         if (!type.isNestedType()) {
           if (valid != null) {
             hostValidityBuffer = hostMemoryAllocator.allocate(valid.getLength());
-            hostValidityBuffer.copyFromDeviceBuffer(valid);
+            hostValidityBuffer.copyFromDeviceBufferAsync(valid, stream);
           }
           if (offsets != null) {
             hostOffsetsBuffer = hostMemoryAllocator.allocate(offsets.length);
-            hostOffsetsBuffer.copyFromDeviceBuffer(offsets);
+            hostOffsetsBuffer.copyFromDeviceBufferAsync(offsets, stream);
           }
           // If a strings column is all null values there is no data buffer allocated
           if (data != null) {
             hostDataBuffer = hostMemoryAllocator.allocate(data.length);
-            hostDataBuffer.copyFromDeviceBuffer(data);
+            hostDataBuffer.copyFromDeviceBufferAsync(data, stream);
           }
           HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
               hostDataBuffer, hostValidityBuffer, hostOffsetsBuffer);
@@ -5145,21 +5116,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         } else {
           if (data != null) {
             hostDataBuffer = hostMemoryAllocator.allocate(data.length);
-            hostDataBuffer.copyFromDeviceBuffer(data);
+            hostDataBuffer.copyFromDeviceBufferAsync(data, stream);
           }
 
           if (valid != null) {
             hostValidityBuffer = hostMemoryAllocator.allocate(valid.getLength());
-            hostValidityBuffer.copyFromDeviceBuffer(valid);
+            hostValidityBuffer.copyFromDeviceBufferAsync(valid, stream);
           }
           if (offsets != null) {
             hostOffsetsBuffer = hostMemoryAllocator.allocate(offsets.getLength());
-            hostOffsetsBuffer.copyFromDeviceBuffer(offsets);
+            hostOffsetsBuffer.copyFromDeviceBufferAsync(offsets, stream);
           }
           List<HostColumnVectorCore> children = new ArrayList<>();
           for (int i = 0; i < getNumChildren(); i++) {
             try (ColumnView childDevPtr = getChildColumnView(i)) {
-              children.add(copyToHostNestedHelper(childDevPtr, hostMemoryAllocator));
+              children.add(copyToHostAsyncNestedHelper(stream, childDevPtr, hostMemoryAllocator));
             }
           }
           HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
@@ -5192,8 +5163,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
   }
 
+  /** Copy the data to host memory synchronously */
   public HostColumnVector copyToHost() {
     return copyToHost(DefaultHostMemoryAllocator.get());
+  }
+
+  /**
+   * Copy the data to the host asynchronously. The caller MUST synchronize on the stream
+   * before examining the result.
+   */
+  public HostColumnVector copyToHostAsync(Cuda.Stream stream) {
+    return copyToHostAsync(stream, DefaultHostMemoryAllocator.get());
   }
 
   /**

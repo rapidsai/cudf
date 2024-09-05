@@ -1,6 +1,8 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
-
 from __future__ import annotations
+
+import warnings
+from typing import Literal
 
 import numpy as np
 
@@ -103,13 +105,24 @@ class ExponentialMovingWindow(_RollingBase):
         ignore_na: bool = False,
         axis: int = 0,
         times: str | np.ndarray | None = None,
+        method: Literal["single", "table"] = "single",
     ):
-        if (min_periods, ignore_na, axis, times) != (0, False, 0, None):
+        if min_periods != 0:
             raise NotImplementedError(
-                "The parameters `min_periods`, `ignore_na`, "
-                "`axis`, and `times` are not yet supported."
+                "min_periods is currently not supported."
             )
-
+        if ignore_na is not False:
+            raise NotImplementedError("ignore_na is currently not supported.")
+        if axis != 0:
+            warnings.warn(
+                "axis is deprecated with will be removed in a future version. "
+                "Transpose the DataFrame first instead."
+            )
+            raise NotImplementedError("axis is currently not supported.")
+        if times is not None:
+            raise NotImplementedError("times is currently not supported.")
+        if method != "single":
+            raise NotImplementedError("method is currently not supported.")
         self.obj = obj
         self.adjust = adjust
         self.com = get_center_of_mass(com, span, halflife, alpha)

@@ -79,6 +79,8 @@ Debug
 build/
 cpp/build/
 cpp/examples/*/install/
+cpp/examples/*/build/
+cpp/examples/tpch/datagen/datafusion
 cpp/include/cudf/ipc_generated/*.h
 cpp/thirdparty/googletest/
 
@@ -176,3 +178,7 @@ jupyter_execute
 # clang tooling
 compile_commands.json
 .clangd/
+
+# pytest artifacts
+rmm_log.txt
+python/cudf/cudf_pandas_tests/data/rmm_log.txt

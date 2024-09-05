@@ -1,7 +1,6 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 import itertools
 import warnings
-from contextlib import ExitStack
 from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
 
@@ -20,19 +19,11 @@ except ImportError:
     create_metadata_file_dd = None
 
 import cudf
-from cudf.core.column import as_column, build_categorical_column
+from cudf.core.column import CategoricalColumn, as_column
 from cudf.io import write_to_dataset
-from cudf.io.parquet import (
-    _apply_post_filters,
-    _default_open_file_options,
-    _normalize_filters,
-)
+from cudf.io.parquet import _apply_post_filters, _normalize_filters
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
-from cudf.utils.ioutils import (
-    _ROW_GROUP_SIZE_BYTES_DEFAULT,
-    _is_local_filesystem,
-    _open_remote_files,
-)
+from cudf.utils.ioutils import _ROW_GROUP_SIZE_BYTES_DEFAULT
 
 
 class CudfEngine(ArrowDatasetEngine):
@@ -97,52 +88,40 @@ class CudfEngine(ArrowDatasetEngine):
 
         dataset_kwargs = dataset_kwargs or {}
         dataset_kwargs["partitioning"] = partitioning or "hive"
-        with ExitStack() as stack:
-            # Non-local filesystem handling
-            paths_or_fobs = paths
-            if not _is_local_filesystem(fs):
-                paths_or_fobs = _open_remote_files(
-                    paths_or_fobs,
-                    fs,
-                    context_stack=stack,
-                    **_default_open_file_options(
-                        open_file_options, columns, row_groups
-                    ),
-                )
 
-            # Use cudf to read in data
-            try:
-                df = cudf.read_parquet(
-                    paths_or_fobs,
-                    engine="cudf",
-                    columns=columns,
-                    row_groups=row_groups if row_groups else None,
-                    dataset_kwargs=dataset_kwargs,
-                    categorical_partitions=False,
-                    **kwargs,
+        # Use cudf to read in data
+        try:
+            df = cudf.read_parquet(
+                paths,
+                engine="cudf",
+                columns=columns,
+                row_groups=row_groups if row_groups else None,
+                dataset_kwargs=dataset_kwargs,
+                categorical_partitions=False,
+                filesystem=fs,
+                **kwargs,
+            )
+        except RuntimeError as err:
+            # TODO: Remove try/except after null-schema issue is resolved
+            # (See: https://github.com/rapidsai/cudf/issues/12702)
+            if len(paths) > 1:
+                df = cudf.concat(
+                    [
+                        cudf.read_parquet(
+                            path,
+                            engine="cudf",
+                            columns=columns,
+                            row_groups=row_groups[i] if row_groups else None,
+                            dataset_kwargs=dataset_kwargs,
+                            categorical_partitions=False,
+                            filesystem=fs,
+                            **kwargs,
+                        )
+                        for i, path in enumerate(paths)
+                    ]
                 )
-            except RuntimeError as err:
-                # TODO: Remove try/except after null-schema issue is resolved
-                # (See: https://github.com/rapidsai/cudf/issues/12702)
-                if len(paths_or_fobs) > 1:
-                    df = cudf.concat(
-                        [
-                            cudf.read_parquet(
-                                pof,
-                                engine="cudf",
-                                columns=columns,
-                                row_groups=row_groups[i]
-                                if row_groups
-                                else None,
-                                dataset_kwargs=dataset_kwargs,
-                                categorical_partitions=False,
-                                **kwargs,
-                            )
-                            for i, pof in enumerate(paths_or_fobs)
-                        ]
-                    )
-                else:
-                    raise err
+            else:
+                raise err
 
         # Apply filters (if any are defined)
         df = _apply_post_filters(df, filters)
@@ -184,12 +163,14 @@ class CudfEngine(ArrowDatasetEngine):
                         partitions[i].keys.get_loc(index2),
                         length=len(df),
                     )
-                    df[name] = build_categorical_column(
-                        categories=partitions[i].keys,
-                        codes=codes,
+                    df[name] = CategoricalColumn(
+                        data=None,
                         size=codes.size,
+                        dtype=cudf.CategoricalDtype(
+                            categories=partitions[i].keys, ordered=False
+                        ),
                         offset=codes.offset,
-                        ordered=False,
+                        children=(codes,),
                     )
                 elif name not in df.columns:
                     # Add non-categorical partition column

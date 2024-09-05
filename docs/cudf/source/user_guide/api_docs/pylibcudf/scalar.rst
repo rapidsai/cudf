@@ -2,5 +2,5 @@
 Scalar
 ======
 
-.. automodule:: cudf._lib.pylibcudf.scalar
+.. automodule:: pylibcudf.scalar
    :members:

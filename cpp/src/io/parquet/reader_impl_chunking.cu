@@ -77,9 +77,9 @@ void print_cumulative_page_info(device_span<PageInfo const> d_pages,
                                 device_span<cumulative_page_info const> d_c_info,
                                 rmm::cuda_stream_view stream)
 {
-  std::vector<PageInfo> pages              = cudf::detail::make_std_vector_sync(d_pages, stream);
-  std::vector<ColumnChunkDesc> chunks      = cudf::detail::make_std_vector_sync(d_chunks, stream);
-  std::vector<cumulative_page_info> c_info = cudf::detail::make_std_vector_sync(d_c_info, stream);
+  auto const pages  = cudf::detail::make_host_vector_sync(d_pages, stream);
+  auto const chunks = cudf::detail::make_host_vector_sync(d_chunks, stream);
+  auto const c_info = cudf::detail::make_host_vector_sync(d_c_info, stream);
 
   printf("------------\nCumulative sizes by page\n");
 
@@ -370,11 +370,11 @@ int64_t find_next_split(int64_t cur_pos,
  *
  * @return A tuple of Parquet clock rate and Parquet decimal type.
  */
-[[nodiscard]] std::tuple<int32_t, thrust::optional<LogicalType>> conversion_info(
+[[nodiscard]] std::tuple<int32_t, cuda::std::optional<LogicalType>> conversion_info(
   type_id column_type_id,
   type_id timestamp_type_id,
   Type physical,
-  thrust::optional<LogicalType> logical_type)
+  cuda::std::optional<LogicalType> logical_type)
 {
   int32_t const clock_rate =
     is_chrono(data_type{column_type_id}) ? to_clockrate(timestamp_type_id) : 0;
@@ -385,7 +385,7 @@ int64_t find_next_split(int64_t cur_pos,
     // if decimal but not outputting as float or decimal, then convert to no logical type
     if (column_type_id != type_id::FLOAT64 and
         not cudf::is_fixed_point(data_type{column_type_id})) {
-      return std::make_tuple(clock_rate, thrust::nullopt);
+      return std::make_tuple(clock_rate, cuda::std::nullopt);
     }
   }
 
@@ -647,7 +647,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_std_vector_sync(aggregated_info, stream);
+  auto const h_aggregated_info = cudf::detail::make_host_vector_sync(aggregated_info, stream);
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   // TODO: if the user has explicitly specified skip_rows/num_rows we could be more intelligent
@@ -694,8 +694,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  std::vector<cumulative_page_info> h_aggregated_info =
-    cudf::detail::make_std_vector_sync(aggregated_info, stream);
+  auto const h_aggregated_info = cudf::detail::make_host_vector_sync(aggregated_info, stream);
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   std::vector<row_range> splits;
@@ -1304,9 +1303,8 @@ void reader::impl::setup_next_pass(read_mode mode)
     printf("\tskip_rows: %'lu\n", pass.skip_rows);
     printf("\tnum_rows: %'lu\n", pass.num_rows);
     printf("\tbase mem usage: %'lu\n", pass.base_mem_size);
-    auto const num_columns = _input_columns.size();
-    std::vector<size_type> h_page_offsets =
-      cudf::detail::make_std_vector_sync(pass.page_offsets, _stream);
+    auto const num_columns    = _input_columns.size();
+    auto const h_page_offsets = cudf::detail::make_host_vector_sync(pass.page_offsets, _stream);
     for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
       printf("\t\tColumn %'lu: num_pages(%'d)\n",
              c_idx,
@@ -1426,7 +1424,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
     subpass.pages = subpass.page_buf;
   }
 
-  std::vector<page_span> h_spans = cudf::detail::make_std_vector_async(page_indices, _stream);
+  auto const h_spans = cudf::detail::make_host_vector_async(page_indices, _stream);
   subpass.pages.device_to_host_async(_stream);
 
   _stream.synchronize();
@@ -1464,7 +1462,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
   printf("\t\tTotal expected usage: %'lu\n",
          total_expected_size == 0 ? subpass.decomp_page_data.size() + pass.base_mem_size
                                   : total_expected_size + pass.base_mem_size);
-  std::vector<page_span> h_page_indices = cudf::detail::make_std_vector_sync(page_indices, _stream);
+  auto const h_page_indices = cudf::detail::make_host_vector_sync(page_indices, _stream);
   for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
     printf("\t\tColumn %'lu: pages(%'lu - %'lu)\n",
            c_idx,

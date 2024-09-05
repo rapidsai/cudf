@@ -798,64 +798,6 @@ class BaseIndex(Serializable):
 
         return super().fillna(value=value)
 
-    def to_frame(self, index=True, name=no_default):
-        """Create a DataFrame with a column containing this Index
-
-        Parameters
-        ----------
-        index : boolean, default True
-            Set the index of the returned DataFrame as the original Index
-        name : object, defaults to index.name
-            The passed name should substitute for the index name (if it has
-            one).
-
-        Returns
-        -------
-        DataFrame
-            DataFrame containing the original Index data.
-
-        See Also
-        --------
-        Index.to_series : Convert an Index to a Series.
-        Series.to_frame : Convert Series to DataFrame.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index(['Ant', 'Bear', 'Cow'], name='animal')
-        >>> idx.to_frame()
-               animal
-        animal
-        Ant       Ant
-        Bear     Bear
-        Cow       Cow
-
-        By default, the original Index is reused. To enforce a new Index:
-
-        >>> idx.to_frame(index=False)
-            animal
-        0   Ant
-        1  Bear
-        2   Cow
-
-        To override the name of the resulting column, specify `name`:
-
-        >>> idx.to_frame(index=False, name='zoo')
-            zoo
-        0   Ant
-        1  Bear
-        2   Cow
-        """
-
-        if name is no_default:
-            col_name = 0 if self.name is None else self.name
-        else:
-            col_name = name
-
-        return cudf.DataFrame(
-            {col_name: self._values}, index=self if index else None
-        )
-
     def to_arrow(self):
         """Convert to a suitable Arrow object."""
         raise NotImplementedError
@@ -867,6 +809,24 @@ class BaseIndex(Serializable):
     def to_numpy(self):
         """Convert to a numpy array."""
         raise NotImplementedError
+
+    def to_flat_index(self) -> Self:
+        """
+        Identity method.
+
+        This is implemented for compatibility with subclass implementations
+        when chaining.
+
+        Returns
+        -------
+        pd.Index
+            Caller.
+
+        See Also
+        --------
+        MultiIndex.to_flat_index : Subclass implementation.
+        """
+        return self
 
     def any(self):
         """
@@ -945,7 +905,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def isin(self, values):
+    def isin(self, values, level=None):
         """Return a boolean array where the index values are in values.
 
         Compute boolean array of whether each index value is found in
@@ -956,6 +916,9 @@ class BaseIndex(Serializable):
         ----------
         values : set, list-like, Index
             Sought values.
+        level : str or int, optional
+            Name or position of the index level to use (if the index is a
+            `MultiIndex`).
 
         Returns
         -------
@@ -979,7 +942,7 @@ class BaseIndex(Serializable):
         # ColumnBase.isin).
         raise NotImplementedError
 
-    def unique(self):
+    def unique(self, level: int | None = None):
         """
         Return unique values in the index.
 
@@ -1677,7 +1640,7 @@ class BaseIndex(Serializable):
         # in case of MultiIndex
         if isinstance(lhs, cudf.MultiIndex):
             on = (
-                lhs._data.select_by_index(level).names[0]
+                lhs._data.get_labels_by_index(level)[0]
                 if isinstance(level, int)
                 else level
             )
@@ -1958,7 +1921,7 @@ class BaseIndex(Serializable):
                 name=index.name,
             )
         else:
-            return cudf.Index(
+            return cudf.Index._from_column(
                 column.as_column(index, nan_as_null=nan_as_null),
                 name=index.name,
             )
