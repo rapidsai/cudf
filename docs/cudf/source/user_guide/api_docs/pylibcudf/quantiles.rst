@@ -2,5 +2,5 @@
 quantiles
 =========
 
-.. automodule:: cudf._lib.pylibcudf.quantiles
+.. automodule:: pylibcudf.quantiles
    :members:

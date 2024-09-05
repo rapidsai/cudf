@@ -16,8 +16,9 @@
 
 #pragma once
 
-#include "join/join_common_utils.hpp"
-#include "join/mixed_join_common_utils.cuh"
+#include "join_common_utils.cuh"
+#include "join_common_utils.hpp"
+#include "mixed_join_common_utils.cuh"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -39,6 +40,7 @@ namespace detail {
  * @tparam block_size The number of threads per block for this kernel
  * @tparam has_nulls Whether or not the inputs may contain nulls.
  *
+ * @param[in] has_nulls If the input has nulls
  * @param[in] left_table The left table
  * @param[in] right_table The right table
  * @param[in] probe The table with which to probe the hash table for matches.
@@ -50,15 +52,19 @@ namespace detail {
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
  */
-template <cudf::size_type block_size, bool has_nulls>
-__global__ void mixed_join_semi(table_device_view left_table,
-                                table_device_view right_table,
-                                table_device_view probe,
-                                table_device_view build,
-                                row_equality const equality_probe,
-                                hash_set_ref_type set_ref,
-                                cudf::device_span<bool> left_table_keep_mask,
-                                cudf::ast::detail::expression_device_view device_expression_data);
+void launch_mixed_join_semi(bool has_nulls,
+                            table_device_view left_table,
+                            table_device_view right_table,
+                            table_device_view probe,
+                            table_device_view build,
+                            row_hash const hash_probe,
+                            row_equality const equality_probe,
+                            hash_set_ref_type set_ref,
+                            cudf::device_span<bool> left_table_keep_mask,
+                            cudf::ast::detail::expression_device_view device_expression_data,
+                            detail::grid_1d const config,
+                            int64_t shmem_size_per_block,
+                            rmm::cuda_stream_view stream);
 
 }  // namespace detail
 

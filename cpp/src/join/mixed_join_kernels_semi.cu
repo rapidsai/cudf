@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-#include "join/join_common_utils.cuh"
-#include "join/join_common_utils.hpp"
-#include "join/mixed_join_common_utils.cuh"
+#include "join/mixed_join_kernels_semi.cuh"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -35,15 +33,16 @@ namespace cg = cooperative_groups;
 #pragma GCC diagnostic ignored "-Wattributes"
 
 template <cudf::size_type block_size, bool has_nulls>
-CUDF_HIDDEN __launch_bounds__(block_size) __global__
-  void mixed_join_semi(table_device_view left_table,
-                       table_device_view right_table,
-                       table_device_view probe,
-                       table_device_view build,
-                       row_equality const equality_probe,
-                       hash_set_ref_type set_ref,
-                       cudf::device_span<bool> left_table_keep_mask,
-                       cudf::ast::detail::expression_device_view device_expression_data)
+CUDF_KERNEL void __launch_bounds__(block_size)
+  mixed_join_semi(table_device_view left_table,
+                  table_device_view right_table,
+                  table_device_view probe,
+                  table_device_view build,
+                  row_hash const hash_probe,
+                  row_equality const equality_probe,
+                  hash_set_ref_type set_ref,
+                  cudf::device_span<bool> left_table_keep_mask,
+                  cudf::ast::detail::expression_device_view device_expression_data)
 {
   auto constexpr cg_size = hash_set_ref_type::cg_size;
 
@@ -77,26 +76,46 @@ CUDF_HIDDEN __launch_bounds__(block_size) __global__
   }
 }
 
-template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>(
-  table_device_view left_table,
-  table_device_view right_table,
-  table_device_view probe,
-  table_device_view build,
-  row_equality const equality_probe,
-  hash_set_ref_type set_ref,
-  cudf::device_span<bool> left_table_keep_mask,
-  cudf::ast::detail::expression_device_view device_expression_data);
-
-template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>(
-  table_device_view left_table,
-  table_device_view right_table,
-  table_device_view probe,
-  table_device_view build,
-  row_equality const equality_probe,
-  hash_set_ref_type set_ref,
-  cudf::device_span<bool> left_table_keep_mask,
-  cudf::ast::detail::expression_device_view device_expression_data);
+void launch_mixed_join_semi(bool has_nulls,
+                            table_device_view left_table,
+                            table_device_view right_table,
+                            table_device_view probe,
+                            table_device_view build,
+                            row_hash const hash_probe,
+                            row_equality const equality_probe,
+                            hash_set_ref_type set_ref,
+                            cudf::device_span<bool> left_table_keep_mask,
+                            cudf::ast::detail::expression_device_view device_expression_data,
+                            detail::grid_1d const config,
+                            int64_t shmem_size_per_block,
+                            rmm::cuda_stream_view stream)
+{
+  if (has_nulls) {
+    mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+        left_table,
+        right_table,
+        probe,
+        build,
+        hash_probe,
+        equality_probe,
+        set_ref,
+        left_table_keep_mask,
+        device_expression_data);
+  } else {
+    mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+        left_table,
+        right_table,
+        probe,
+        build,
+        hash_probe,
+        equality_probe,
+        set_ref,
+        left_table_keep_mask,
+        device_expression_data);
+  }
+}
 
 }  // namespace detail
-
 }  // namespace cudf

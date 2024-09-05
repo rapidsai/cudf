@@ -7,6 +7,8 @@ from typing import Union, overload
 from typing_extensions import Literal
 
 import cudf
+import cudf.core.column
+import cudf.core.column_accessor
 from cudf.utils.utils import NotIterable
 
 ParentType = Union["cudf.Series", "cudf.core.index.Index"]
@@ -63,8 +65,8 @@ class ColumnMethods(NotIterable):
         """
         if inplace:
             self._parent._mimic_inplace(
-                self._parent.__class__._from_data(
-                    {self._parent.name: new_col}
+                type(self._parent)._from_column(
+                    new_col, name=self._parent.name
                 ),
                 inplace=True,
             )
@@ -84,15 +86,12 @@ class ColumnMethods(NotIterable):
                         data=table, index=self._parent.index
                     )
             elif isinstance(self._parent, cudf.Series):
-                if retain_index:
-                    return cudf.Series(
-                        new_col,
-                        name=self._parent.name,
-                        index=self._parent.index,
-                    )
-                else:
-                    return cudf.Series(new_col, name=self._parent.name)
+                return cudf.Series._from_column(
+                    new_col,
+                    name=self._parent.name,
+                    index=self._parent.index if retain_index else None,
+                )
             elif isinstance(self._parent, cudf.BaseIndex):
-                return cudf.Index(new_col, name=self._parent.name)
+                return cudf.Index._from_column(new_col, name=self._parent.name)
             else:
                 return self._parent._mimic_inplace(new_col, inplace=False)

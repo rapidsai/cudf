@@ -6,13 +6,11 @@ from libcpp cimport bool as cbool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.labeling cimport inclusive, label_bins as cpp_label_bins
+
 from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.labeling cimport (
-    inclusive,
-    label_bins as cpp_label_bins,
-)
 
 
 # Note that the parameter input shadows a Python built-in in the local scope,
