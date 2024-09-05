@@ -23,14 +23,17 @@ cpdef tuple transpose(Table input_table):
     Returns
     -------
     tuple[Column, Table]
-        Two-tuple transposed column and table.
+        Two-tuple of the owner column and transposed table.
     """
     cdef pair[unique_ptr[column], table_view] c_result
 
     with nogil:
         c_result = move(cpp_transpose.transpose(input_table.view()))
 
+    owner_column = Column.from_libcudf(move(c_result.first))
+    owner_table = Table([owner_column] * c_result.second.num_columns())
+
     return (
-        Column.from_libcudf(move(c_result.first)),
-        Table.from_table_view(c_result.second, input_table)
+        owner_column,
+        Table.from_table_view(c_result.second, owner_table)
     )

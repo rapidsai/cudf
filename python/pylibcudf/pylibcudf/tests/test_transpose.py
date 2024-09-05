@@ -6,15 +6,22 @@ import pytest
 
 
 @pytest.mark.parametrize(
-    "data",
+    "arr",
     [
         [],
-        {"a": [1, 2, 3], "b": [1, 2, 3]},
-        {"a": [1, 2], "b": [1, 2]},
-        {"a": [1], "b": [1]},
+        [1, 2, 3],
+        [1, 2],
+        [1],
     ],
 )
-def test_transpose(data):
+def test_transpose(arr):
+    data = {"a": arr, "b": arr}
     arrow_tbl = pa.table(data)
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
-    plc.transpose.transpose(plc_tbl)
+    _, plc_result = plc.transpose.transpose(plc_tbl)
+    arrow_result = plc.interop.to_arrow(plc_result)
+    if len(arr) == 0:
+        expected = (0, 0)
+    else:
+        expected = (len(data), len(arr))
+    assert arrow_result.shape == expected
