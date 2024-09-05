@@ -1,5 +1,5 @@
 =========
-null_mask
+transpose
 =========
 
 .. automodule:: pylibcudf.transpose
