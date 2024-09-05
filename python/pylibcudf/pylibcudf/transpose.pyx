@@ -26,8 +26,10 @@ cpdef tuple transpose(Table input_table):
         Two-tuple transposed column and table.
     """
     cdef pair[unique_ptr[column], table_view] c_result
+
     with nogil:
-        c_result = cpp_transpose.transpose(input_table.view())
+        c_result = move(cpp_transpose.transpose(input_table.view()))
+
     return (
         Column.from_libcudf(move(c_result.first)),
         Table.from_table_view(c_result.second, input_table)
