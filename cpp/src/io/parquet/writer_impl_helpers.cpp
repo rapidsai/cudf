@@ -62,7 +62,7 @@ uint32_t page_alignment(Compression codec)
     return 1u;
   }
 
-  return 1u << nvcomp::compress_input_alignment_bits(to_nvcomp_compression_type(codec));
+  return nvcomp::required_alignment(to_nvcomp_compression_type(codec));
 }
 
 size_t max_compression_output_size(Compression codec, uint32_t compression_blocksize)
