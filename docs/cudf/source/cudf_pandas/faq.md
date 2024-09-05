@@ -99,6 +99,7 @@ Here are some more tips to improve workflow performance:
   storage. Use the `.values` method to convert a DataFrame or Series to
   an array.
 
+(does-cudf-pandas-work-with-third-party-libraries)=
 ## Does `cudf.pandas` work with third-party libraries?
 
 `cudf.pandas` is tested with numerous popular third-party libraries.
@@ -141,6 +142,7 @@ cuDF (learn more in [this
 blog](https://medium.com/rapids-ai/easy-cpu-gpu-arrays-and-dataframes-run-your-dask-code-where-youd-like-e349d92351d)) and the [RAPIDS Accelerator for Apache Spark](https://nvidia.github.io/spark-rapids/)
 provides a similar configuration-based plugin for Spark.
 
+(are-there-any-known-limitations)=
 ## Are there any known limitations?
 
 There are a few known limitations that you should be aware of:
