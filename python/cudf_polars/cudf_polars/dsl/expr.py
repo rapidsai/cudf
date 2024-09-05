@@ -961,6 +961,18 @@ class StringFunction(Expr):
 
 class TemporalFunction(Expr):
     __slots__ = ("name", "options", "children")
+    _COMPONENT_MAP: ClassVar[dict[pl_expr.TemporalFunction, str]] = {
+        pl_expr.TemporalFunction.Year: "year",
+        pl_expr.TemporalFunction.Month: "month",
+        pl_expr.TemporalFunction.Day: "day",
+        pl_expr.TemporalFunction.WeekDay: "weekday",
+        pl_expr.TemporalFunction.Hour: "hour",
+        pl_expr.TemporalFunction.Minute: "minute",
+        pl_expr.TemporalFunction.Second: "second",
+        pl_expr.TemporalFunction.Millisecond: "millisecond",
+        pl_expr.TemporalFunction.Microsecond: "microsecond",
+        pl_expr.TemporalFunction.Nanosecond: "nanosecond",
+    }
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
@@ -975,7 +987,7 @@ class TemporalFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
-        if self.name != pl_expr.TemporalFunction.Year:
+        if self.name not in self._COMPONENT_MAP:
             raise NotImplementedError(f"Temporal function {self.name}")
 
     def do_evaluate(
@@ -990,12 +1002,59 @@ class TemporalFunction(Expr):
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
         ]
-        if self.name == pl_expr.TemporalFunction.Year:
-            (column,) = columns
-            return Column(plc.datetime.extract_year(column.obj))
-        raise NotImplementedError(
-            f"TemporalFunction {self.name}"
-        )  # pragma: no cover; init trips first
+        (column,) = columns
+        if self.name == pl_expr.TemporalFunction.Microsecond:
+            millis = plc.datetime.extract_datetime_component(column.obj, "millisecond")
+            micros = plc.datetime.extract_datetime_component(column.obj, "microsecond")
+            millis_as_micros = plc.binaryop.binary_operation(
+                millis,
+                plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
+                plc.binaryop.BinaryOperator.MUL,
+                plc.DataType(plc.TypeId.INT32),
+            )
+            total_micros = plc.binaryop.binary_operation(
+                micros,
+                millis_as_micros,
+                plc.binaryop.BinaryOperator.ADD,
+                plc.types.DataType(plc.types.TypeId.INT32),
+            )
+            return Column(total_micros)
+        elif self.name == pl_expr.TemporalFunction.Nanosecond:
+            millis = plc.datetime.extract_datetime_component(column.obj, "millisecond")
+            micros = plc.datetime.extract_datetime_component(column.obj, "microsecond")
+            nanos = plc.datetime.extract_datetime_component(column.obj, "nanosecond")
+            millis_as_nanos = plc.binaryop.binary_operation(
+                millis,
+                plc.interop.from_arrow(pa.scalar(1_000_000, type=pa.int32())),
+                plc.binaryop.BinaryOperator.MUL,
+                plc.types.DataType(plc.types.TypeId.INT32),
+            )
+            micros_as_nanos = plc.binaryop.binary_operation(
+                micros,
+                plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
+                plc.binaryop.BinaryOperator.MUL,
+                plc.types.DataType(plc.types.TypeId.INT32),
+            )
+            total_nanos = plc.binaryop.binary_operation(
+                nanos,
+                millis_as_nanos,
+                plc.binaryop.BinaryOperator.ADD,
+                plc.types.DataType(plc.types.TypeId.INT32),
+            )
+            total_nanos = plc.binaryop.binary_operation(
+                total_nanos,
+                micros_as_nanos,
+                plc.binaryop.BinaryOperator.ADD,
+                plc.types.DataType(plc.types.TypeId.INT32),
+            )
+            return Column(total_nanos)
+
+        return Column(
+            plc.datetime.extract_datetime_component(
+                column.obj,
+                self._COMPONENT_MAP[self.name],
+            )
+        )
 
 
 class UnaryFunction(Expr):

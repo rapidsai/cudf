@@ -419,12 +419,29 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
             *(translate_expr(visitor, n=n) for n in node.input),
         )
     elif isinstance(name, pl_expr.TemporalFunction):
-        return expr.TemporalFunction(
+        # functions for which evaluation of the expression may not return
+        # the same dtype as polars, either due to libcudf returning a different
+        # dtype, or due to our internal processing affecting what libcudf returns
+        needs_cast = {
+            pl_expr.TemporalFunction.Year,
+            pl_expr.TemporalFunction.Month,
+            pl_expr.TemporalFunction.Day,
+            pl_expr.TemporalFunction.WeekDay,
+            pl_expr.TemporalFunction.Hour,
+            pl_expr.TemporalFunction.Minute,
+            pl_expr.TemporalFunction.Second,
+            pl_expr.TemporalFunction.Millisecond,
+        }
+        result_expr = expr.TemporalFunction(
             dtype,
             name,
             options,
             *(translate_expr(visitor, n=n) for n in node.input),
         )
+        if name in needs_cast:
+            return expr.Cast(dtype, result_expr)
+        return result_expr
+
     elif isinstance(name, str):
         children = (translate_expr(visitor, n=n) for n in node.input)
         if name == "log":
