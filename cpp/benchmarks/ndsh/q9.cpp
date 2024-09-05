@@ -16,6 +16,7 @@
 
 #include "utils.hpp"
 
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/scalar/scalar.hpp>
