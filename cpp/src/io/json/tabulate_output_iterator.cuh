@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-// Tabulate Output iterator
 #pragma once
 
 #include <thrust/iterator/counting_iterator.h>
@@ -44,7 +43,7 @@ class tabulate_output_iterator_proxy {
 };
 
 /**
- * @brief Transform output iterator with custom binary function which takes index and value.
+ * @brief Tabulate output iterator with custom binary function which takes index and value.
  *
  * @code {.cpp}
  * #include "tabulate_output_iterator.cuh"
