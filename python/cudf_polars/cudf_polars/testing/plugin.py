@@ -134,7 +134,6 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/sql/test_cast.py::test_cast_errors[values1-values::uint4-conversion from `i64` to `u32` failed]": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_cast.py::test_cast_errors[values2-values::int1-conversion from `i64` to `i8` failed]": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_miscellaneous.py::test_read_csv": "Incorrect handling of missing_is_null in read_csv",
-    "tests/unit/sql/test_temporal.py::test_extract[parts2-Int32-expected2]": "Mismatching dtypes in datetime extraction functions",
     "tests/unit/sql/test_wildcard_opts.py::test_select_wildcard_errors": "Raises correctly but with different exception",
     "tests/unit/streaming/test_streaming_io.py::test_parquet_eq_statistics": "Debug output on stderr doesn't match",
     "tests/unit/test_cse.py::test_cse_predicate_self_join": "Debug output on stderr doesn't match",
