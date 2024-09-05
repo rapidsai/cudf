@@ -23,6 +23,7 @@ from nbconvert.preprocessors import ExecutePreprocessor
 from numba import NumbaDeprecationWarning
 from pytz import utc
 
+from cudf.core._compat import PANDAS_GE_220
 from cudf.pandas import LOADED, Profiler
 from cudf.pandas.fast_slow_proxy import _Unusable, is_proxy_object
 
@@ -536,12 +537,15 @@ def test_array_ufunc(series):
 @pytest.mark.xfail(strict=False, reason="Fails in CI, passes locally.")
 def test_groupby_apply_func_returns_series(dataframe):
     pdf, df = dataframe
+    if PANDAS_GE_220:
+        kwargs = {"include_groups": False}
+    else:
+        kwargs = {}
+
     expect = pdf.groupby("a").apply(
-        lambda group: pd.Series({"x": 1}), include_groups=False
+        lambda group: pd.Series({"x": 1}), **kwargs
     )
-    got = df.groupby("a").apply(
-        lambda group: xpd.Series({"x": 1}), include_groups=False
-    )
+    got = df.groupby("a").apply(lambda group: xpd.Series({"x": 1}), **kwargs)
     tm.assert_equal(expect, got)
 
 
