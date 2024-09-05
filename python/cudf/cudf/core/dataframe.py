@@ -8261,6 +8261,8 @@ def from_pandas(obj, nan_as_null=no_default):
         return cudf.CategoricalDtype.from_pandas(obj)
     elif isinstance(obj, pd.IntervalDtype):
         return cudf.IntervalDtype.from_pandas(obj)
+    elif isinstance(obj, pd.Timestamp):
+        return cudf.Timestamp.from_pandas(obj)
     else:
         raise TypeError(
             f"from_pandas unsupported for object of type {type(obj).__name__}"

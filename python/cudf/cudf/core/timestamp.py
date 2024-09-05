@@ -10,6 +10,8 @@ import pandas as pd
 from cudf.core.scalar import Scalar
 
 
+# TODO: Use cupy when it supports timestamps and timedeltas. See https://github.com/cupy/cupy/issues/2622
+# TODO: Replace with cudf.Timedelta. See https://github.com/rapidsai/cudf/issues/5882
 class Timestamp(Scalar):
     def __init__(
         self,
@@ -21,50 +23,54 @@ class Timestamp(Scalar):
         super().__init__(ts)
 
     @property
-    def value(self) -> np.datetime64:
+    def value(self) -> int:
+        return self.to_pandas().value
+
+    @property
+    def _scalar_value(self) -> Scalar:
         return super().value
 
     @property
     def year(self) -> int:
-        return pd.Timestamp(super().value).year
+        return self.to_pandas().year
 
     @property
     def month(self) -> int:
-        return pd.Timestamp(super().value).month
+        return self.to_pandas().month
 
     @property
     def day(self) -> int:
-        return pd.Timestamp(super().value).day
+        return self.to_pandas().day
 
     @property
     def hour(self) -> int:
-        return pd.Timestamp(super().value).hour
+        return self.to_pandas().hour
 
     @property
     def minute(self) -> int:
-        return pd.Timestamp(super().value).minute
+        return self.to_pandas().minute
 
     @property
     def second(self) -> int:
-        return pd.Timestamp(super().value).second
+        return self.to_pandas().second
 
     @property
     def microsecond(self) -> int:
-        return pd.Timestamp(super().value).microsecond
+        return self.to_pandas().microsecond
 
     @property
     def nanosecond(self) -> int:
-        return pd.Timestamp(super().value).nanosecond
+        return self.to_pandas().nanosecond
 
     def __repr__(self):
         return pd.Timestamp(self.value).__repr__()
 
     @property
     def asm8(self) -> np.datetime64:
-        return super().value
+        return self._scalar_value
 
     def to_pandas(self):
-        return pd.Timestamp(super().value)
+        return pd.Timestamp(self._scalar_value)
 
     @classmethod
     def from_pandas(cls, obj: pd.Timestamp):
@@ -74,11 +80,11 @@ class Timestamp(Scalar):
     def from_scalar(cls, obj: Scalar):
         return cls(obj.value)
 
-    def _to_scalar(self):
-        return Scalar(self.value)
+    def to_scalar(self):
+        return Scalar(self._scalar_value)
 
     def __add__(self, other: timedelta | np.timedelta64):
-        return self.from_scalar(self._to_scalar() + other)
+        return self.from_scalar(self.to_scalar() + other)
 
     def __radd__(self, other: timedelta):
         return self + other
@@ -87,11 +93,11 @@ class Timestamp(Scalar):
         self, other: datetime | timedelta | np.timedelta64
     ) -> pd.Timedelta:
         if isinstance(other, datetime):
-            return pd.Timedelta(self.value - other)
+            return pd.Timedelta(self.to_pandas() - other)
         elif isinstance(other, self.__class__):
             return pd.Timedelta(self.value - other.value)
         elif isinstance(other, (timedelta, np.timedelta64)):
-            return self.from_scalar(self._to_scalar() - other)
+            return self.from_scalar(self.to_scalar() - other)
         else:
             raise TypeError(
                 f"Subtraction not supported between types {type(self)} and {type(other)}"
