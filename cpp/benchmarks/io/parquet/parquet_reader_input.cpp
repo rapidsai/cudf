@@ -249,7 +249,7 @@ void BM_parquet_read_wide_tables_mixed(nvbench::state& state,
 
     cudf::io::parquet_writer_options write_opts =
       cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-        .compression(cudf::io::compression_type::SNAPPY);
+        .compression(cudf::io::compression_type::NONE);
     cudf::io::write_parquet(write_opts);
   }
 
