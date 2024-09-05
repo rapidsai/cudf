@@ -483,11 +483,16 @@ std::
     rmm::exec_policy(stream), col_lengths.begin(), col_lengths.end(), inbuf_offsets.begin(), 0);
 
   auto input_it = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), 
-    cuda::proclaim_return_type<char const*>([d_input = d_input.begin(), col_offsets = col_offsets.begin()] __device__(size_t i) -> char const* { return &d_input[col_offsets[i]]; }));
+    thrust::make_counting_iterator(0),
+    cuda::proclaim_return_type<char const*>(
+      [d_input = d_input.begin(), col_offsets = col_offsets.begin()] __device__(
+        size_t i) -> char const* { return &d_input[col_offsets[i]]; }));
   auto output_it = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), 
-    cuda::proclaim_return_type<char*>([inbuf = inbuf.begin(), inbuf_offsets = inbuf_offsets.begin()] __device__(size_t i) -> char* { return &inbuf[inbuf_offsets[i]]; }));
+    thrust::make_counting_iterator(0),
+    cuda::proclaim_return_type<char*>(
+      [inbuf = inbuf.begin(), inbuf_offsets = inbuf_offsets.begin()] __device__(size_t i) -> char* {
+        return &inbuf[inbuf_offsets[i]];
+      }));
 
   // cub device batched copy
   size_t temp_storage_bytes = 0;
