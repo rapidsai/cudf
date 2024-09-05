@@ -9,7 +9,7 @@ and run on the CPU. You can install the GPU backend for Polars with a feature fl
 
 .. code-block:: bash
 
-   pip install polars[gpu]
+   pip install polars[gpu] --extra-index-url=https://pypi.nvidia.com 
 
 GPU-based execution can be triggered by simply running ``.collect(engine="gpu")`` instead of ``.collect()``.
 
