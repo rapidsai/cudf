@@ -43,5 +43,5 @@ python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json p
 RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
 mv pandas-testing/${SUMMARY_FILE_NAME} ${RAPIDS_ARTIFACTS_DIR}/
-mv pandas-testing/.test_durations ${RAPIDS_ARTIFACTS_DIR}/
+mv pandas-testing/pandas-tests/.test_durations ${RAPIDS_ARTIFACTS_DIR}/
 rapids-upload-to-s3 ${RAPIDS_ARTIFACTS_DIR}/${SUMMARY_FILE_NAME} "${RAPIDS_ARTIFACTS_DIR}"
