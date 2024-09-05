@@ -124,13 +124,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     cudf::experimental::row::equality::two_table_comparator{preprocessed_build, preprocessed_probe};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
-  semi_map_type hash_table{
-    compute_hash_table_size(build.num_rows()),
-    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-    cuco::empty_value{cudf::detail::JoinNoneValue},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
-
   // Create hash table containing all keys found in right table
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
@@ -162,14 +155,15 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
 
   auto const build_num_rows = compute_hash_table_size(build.num_rows());
 
-  hash_set_type set{build_num_rows,
-                    cuco::empty_key{JoinNoneValue},
-                    equality_build,
-                    {row_hash_build.device_hasher(build_nulls)},
-                    {},
-                    {},
-                    cudf::detail::cuco_allocator{stream},
-                    stream.value()};
+  hash_set_type set{
+    build_num_rows,
+    cuco::empty_key{JoinNoneValue},
+    equality_build,
+    {row_hash_build.device_hasher(build_nulls)},
+    {},
+    {},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream.value()};
 
   auto iter = thrust::make_counting_iterator(0);
 
@@ -192,10 +186,10 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const shmem_size_per_block =
     (parser.shmem_per_thread / cg_size) * config.num_threads_per_block;
 
-  auto const row_hash = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  auto const hash_probe = row_hash.device_hasher(has_nulls);
 
-  hash_set_ref_type set_ref =
-    set.ref(cuco::contains).with_hash_function(row_hash.device_hasher(has_nulls));
+  hash_set_ref_type set_ref = set.ref(cuco::contains).with_hash_function(hash_probe);
 
   // Vector used to indicate indices from left/probe table which are present in output
   auto left_table_keep_mask = rmm::device_uvector<bool>(probe.num_rows(), stream);
@@ -205,7 +199,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                          *right_conditional_view,
                          *probe_view,
                          *build_view,
-                         hash_probe,
                          equality_probe,
                          set_ref,
                          cudf::device_span<bool>(left_table_keep_mask),

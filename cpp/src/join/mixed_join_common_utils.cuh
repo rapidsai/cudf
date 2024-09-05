@@ -191,7 +191,7 @@ using hash_set_type = cuco::static_set<size_type,
                                        cuda::thread_scope_device,
                                        double_row_equality,
                                        cuco::linear_probing<4, row_hash>,
-                                       cudf::detail::cuco_allocator,
+                                       cudf::detail::cuco_allocator<char>,
                                        cuco::storage<1>>;
 
 // The device_ref_type used by mixed_semi_join kerenels for probing.
