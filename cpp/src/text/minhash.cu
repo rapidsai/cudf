@@ -56,6 +56,7 @@ namespace {
  * @param d_strings Strings column to process
  * @param seeds Seeds for hashing each string
  * @param width Substring window size in characters
+ * @param working_memory Memory used to hold intermediate hash values
  * @param d_hashes Minhash output values for each string
  */
 template <
@@ -65,28 +66,29 @@ template <
 CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
                                 cudf::device_span<hash_value_type const> seeds,
                                 cudf::size_type width,
+                                hash_value_type* working_memory,
                                 hash_value_type* d_hashes)
 {
-  auto const idx = static_cast<std::size_t>(threadIdx.x + blockIdx.x * blockDim.x);
-  if (idx >= (static_cast<std::size_t>(d_strings.size()) *
-              static_cast<std::size_t>(cudf::detail::warp_size))) {
-    return;
-  }
-
-  auto const str_idx  = static_cast<cudf::size_type>(idx / cudf::detail::warp_size);
-  auto const lane_idx = static_cast<cudf::size_type>(idx % cudf::detail::warp_size);
+  auto const idx     = cudf::detail::grid_1d::global_thread_id();
+  auto const str_idx = idx / cudf::detail::warp_size;
+  if (str_idx >= d_strings.size()) { return; }
 
   if (d_strings.is_null(str_idx)) { return; }
 
   auto const d_str    = d_strings.element<cudf::string_view>(str_idx);
-  auto const d_output = d_hashes + (str_idx * seeds.size());
+  auto const init     = d_str.empty() ? 0 : std::numeric_limits<hash_value_type>::max();
+  auto const lane_idx = idx % cudf::detail::warp_size;
 
-  // initialize hashes output for this string
-  if (lane_idx == 0) {
-    auto const init = d_str.empty() ? 0 : std::numeric_limits<hash_value_type>::max();
-    thrust::fill(thrust::seq, d_output, d_output + seeds.size(), init);
+  auto warp_hashes = working_memory + (str_idx * cudf::detail::warp_size * seeds.size());
+
+  for (std::size_t seed_idx = lane_idx; seed_idx < seeds.size();
+       seed_idx += cudf::detail::warp_size) {
+    auto begin = warp_hashes + (seed_idx * cudf::detail::warp_size);
+    thrust::uninitialized_fill(thrust::seq, begin, begin + cudf::detail::warp_size, init);
   }
   __syncwarp();
+
+  auto const d_output = d_hashes + (str_idx * seeds.size());
 
   auto const begin = d_str.data() + lane_idx;
   auto const end   = d_str.data() + d_str.size_bytes();
@@ -100,23 +102,27 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
     if ((itr != d_str.data()) && (left > 0)) { continue; }  // true if past the end of the string
 
     auto const hash_str = cudf::string_view(itr, bytes);
-    // hashing with each seed on the same section of the string is 10x faster than
-    // computing the substrings for each seed
     for (std::size_t seed_idx = 0; seed_idx < seeds.size(); ++seed_idx) {
       auto const hasher = HashFunction(seeds[seed_idx]);
-      // hash substring and store the min value
+      hash_value_type hv;
       if constexpr (std::is_same_v<hash_value_type, uint32_t>) {
-        auto const hvalue = hasher(hash_str);
-        cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{*(d_output + seed_idx)};
-        ref.fetch_min(hvalue, cuda::std::memory_order_relaxed);
+        hv = hasher(hash_str);
       } else {
-        // This code path assumes the use of MurmurHash3_x64_128 which produces 2 uint64 values
-        // but only uses the first uint64 value as requested by the LLM team.
-        auto const hvalue = thrust::get<0>(hasher(hash_str));
-        cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{*(d_output + seed_idx)};
-        ref.fetch_min(hvalue, cuda::std::memory_order_relaxed);
+        hv = thrust::get<0>(hasher(hash_str));
       }
+      warp_hashes[(seed_idx * cudf::detail::warp_size) + lane_idx] =
+        min(hv, warp_hashes[(seed_idx * cudf::detail::warp_size) + lane_idx]);
     }
+  }
+  __syncwarp();
+
+  // compute final result
+  for (std::size_t seed_idx = lane_idx; seed_idx < seeds.size();
+       seed_idx += cudf::detail::warp_size) {
+    auto begin = warp_hashes + (seed_idx * cudf::detail::warp_size);
+    auto hv =
+      thrust::reduce(thrust::seq, begin, begin + cudf::detail::warp_size, init, thrust::minimum{});
+    d_output[seed_idx] = hv;
   }
 }
 
@@ -152,9 +158,14 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
   auto d_hashes = hashes->mutable_view().data<hash_value_type>();
 
   constexpr int block_size = 256;
+
+  auto const wm_size = cudf::util::round_up_safe(
+    seeds.size() * cudf::detail::warp_size * input.size(), static_cast<std::size_t>(block_size));
+  auto working_memory = rmm::device_uvector<hash_value_type>(wm_size, stream);
+
   cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
   minhash_kernel<HashFunction><<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-    *d_strings, seeds, width, d_hashes);
+    *d_strings, seeds, width, working_memory.data(), d_hashes);
 
   return hashes;
 }

@@ -43,12 +43,11 @@ static void bench_minhash(nvbench::state& state)
     create_random_table({cudf::type_id::STRING}, row_count{num_rows}, strings_profile);
   cudf::strings_column_view input(strings_table->view().column(0));
 
-  data_profile const seeds_profile = data_profile_builder().null_probability(0).distribution(
+  data_profile const seeds_profile = data_profile_builder().no_validity().distribution(
     cudf::type_to_id<cudf::hash_value_type>(), distribution_id::NORMAL, 0, row_width);
   auto const seed_type   = base64 ? cudf::type_id::UINT64 : cudf::type_id::UINT32;
   auto const seeds_table = create_random_table({seed_type}, row_count{seed_count}, seeds_profile);
   auto seeds             = seeds_table->get_column(0);
-  seeds.set_null_mask(rmm::device_buffer{}, 0);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
@@ -64,8 +63,8 @@ static void bench_minhash(nvbench::state& state)
 
 NVBENCH_BENCH(bench_minhash)
   .set_name("minhash")
-  .add_int64_axis("num_rows", {1024, 8192, 16364, 131072})
-  .add_int64_axis("row_width", {128, 512, 2048})
-  .add_int64_axis("hash_width", {5, 10})
-  .add_int64_axis("seed_count", {2, 26})
+  .add_int64_axis("num_rows", {16364, 131072})
+  .add_int64_axis("row_width", {256, 512, 1024})
+  .add_int64_axis("hash_width", {5, 10, 20})
+  .add_int64_axis("seed_count", {2, 26, 260})
   .add_int64_axis("hash_type", {32, 64});
