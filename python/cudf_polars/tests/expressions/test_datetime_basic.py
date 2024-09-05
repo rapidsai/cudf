@@ -134,4 +134,4 @@ def test_date_extract(field):
 
     q = ldf.select(field(pl.col("dates").dt))
 
-    assert_gpu_result_equal(q, check_dtypes=False)
+    assert_gpu_result_equal(q)
