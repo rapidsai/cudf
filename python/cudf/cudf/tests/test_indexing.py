@@ -1016,6 +1016,10 @@ def test_series_setitem_iloc(key, value, nulls):
         (slice(0, 2), [0.5, 0.25]),
     ],
 )
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_series_setitem_dtype(key, value):
     psr = pd.Series([1, 2, 3], dtype="int32")
     gsr = cudf.from_pandas(psr)
@@ -1634,6 +1638,10 @@ def test_dataframe_loc_iloc_inplace_update_with_RHS_dataframe(
     assert_eq(expected, actual)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="No warning in older versions of pandas",
+)
 def test_dataframe_loc_inplace_update_with_invalid_RHS_df_columns():
     gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
     pdf = gdf.to_pandas()

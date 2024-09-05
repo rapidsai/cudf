@@ -611,9 +611,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         4      14
         dtype: int64
         """
-        col = as_column(data).set_mask(mask)
-        ca = ColumnAccessor({None: col}, verify=False)
-        return cls._from_data(ca)
+        return cls._from_column(as_column(data).set_mask(mask))
 
     @_performance_tracking
     def __init__(
@@ -1150,7 +1148,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if name is no_default:
                 name = 0 if self.name is None else self.name
             data[name] = data.pop(self.name)
-            return cudf.core.dataframe.DataFrame._from_data(data, index)
+            return self._constructor_expanddim._from_data(data, index)
         # For ``name`` behavior, see:
         # https://github.com/pandas-dev/pandas/issues/44575
         # ``name`` has to be ignored when `drop=True`
@@ -1661,9 +1659,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if len(objs):
             col = col._with_type_metadata(objs[0].dtype)
 
-        return cls._from_data(
-            ColumnAccessor({name: col}, verify=False), index=result_index
-        )
+        return cls._from_column(col, name=name, index=result_index)
 
     @property  # type: ignore
     @_performance_tracking
@@ -1977,7 +1973,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "Inclusive has to be either string of 'both', "
                 "'left', 'right', or 'neither'."
             )
-        return self._from_data({self.name: lmask & rmask}, self.index)
+        return self._from_column(
+            lmask & rmask, name=self.name, index=self.index
+        )
 
     @_performance_tracking
     def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
