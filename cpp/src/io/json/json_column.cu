@@ -23,6 +23,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
+#include <cudf/io/detail/json.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -975,6 +976,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
 
   switch (json_col.type) {
     case json_col_t::StringColumn: {
+
       // move string_offsets to GPU and transform to string column
       auto const col_size      = json_col.string_offsets.size();
       using char_length_pair_t = thrust::pair<char const*, size_type>;
@@ -982,38 +984,54 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                    "string offset, string length mismatch");
       rmm::device_uvector<char_length_pair_t> d_string_data(col_size, stream);
       // TODO how about directly storing pair<char*, size_t> in json_column?
-      auto offset_length_it =
-        thrust::make_zip_iterator(json_col.string_offsets.begin(), json_col.string_lengths.begin());
-
-      data_type target_type{};
-
-      if (schema.has_value()) {
-#ifdef NJP_DEBUG_PRINT
-        std::cout << "-> explicit type: "
-                  << (schema.has_value() ? std::to_string(static_cast<int>(schema->type.id()))
-                                         : "n/a");
-#endif
-        target_type = schema.value().type;
-      } else if (json_col.forced_as_string_column) {
-        target_type = data_type{type_id::STRING};
-      }
-      // Infer column type, if we don't have an explicit type for it
-      else {
-        target_type = cudf::io::detail::infer_data_type(
-          options.json_view(), d_input, offset_length_it, col_size, stream);
-      }
 
       auto [result_bitmask, null_count] = make_validity(json_col);
-      // Convert strings to the inferred data type
-      auto col = parse_data(d_input.data(),
-                            offset_length_it,
-                            col_size,
-                            target_type,
-                            std::move(result_bitmask),
-                            null_count,
-                            options.view(),
-                            stream,
-                            mr);
+
+      data_type target_type{};
+      std::unique_ptr<column> col{};
+      if(options.normalize_whitespace && json_col.forced_as_string_column) {
+        auto [normalized_d_input, col_lengths, col_offsets] = cudf::io::json::detail::mixed_type_column_ws_normalization(d_input, json_col.string_lengths, json_col.string_offsets, stream, mr);
+        auto offset_length_it =
+          thrust::make_zip_iterator(col_offsets.begin(), col_lengths.begin());
+        target_type = data_type{type_id::STRING};
+        // Convert strings to the inferred data type
+        col = parse_data(normalized_d_input.data(),
+                              offset_length_it,
+                              col_size,
+                              target_type,
+                              std::move(result_bitmask),
+                              null_count,
+                              options.view(),
+                              stream,
+                              mr);
+      }
+      else {
+        auto offset_length_it =
+          thrust::make_zip_iterator(json_col.string_offsets.begin(), json_col.string_lengths.begin());
+        if (schema.has_value()) {
+#ifdef NJP_DEBUG_PRINT
+          std::cout << "-> explicit type: "
+                    << (schema.has_value() ? std::to_string(static_cast<int>(schema->type.id()))
+                                           : "n/a");
+#endif
+          target_type = schema.value().type;
+        } 
+        // Infer column type, if we don't have an explicit type for it
+        else {
+          target_type = cudf::io::detail::infer_data_type(
+            options.json_view(), d_input, offset_length_it, col_size, stream);
+        }
+        // Convert strings to the inferred data type
+        col = parse_data(d_input.data(),
+                              offset_length_it,
+                              col_size,
+                              target_type,
+                              std::move(result_bitmask),
+                              null_count,
+                              options.view(),
+                              stream,
+                              mr);
+      }
 
       // Reset nullable if we do not have nulls
       // This is to match the existing JSON reader's behaviour:

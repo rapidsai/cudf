@@ -2080,6 +2080,7 @@ cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& opt
 
   parse_opts.dayfirst   = options.is_enabled_dayfirst();
   parse_opts.keepquotes = options.is_enabled_keep_quotes();
+  parse_opts.normalize_whitespace = options.is_enabled_normalize_whitespace();
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);

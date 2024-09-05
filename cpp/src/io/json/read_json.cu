@@ -234,9 +234,11 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
 
   // If input JSON buffer has unquoted spaces and tabs and option to normalize whitespaces is
   // enabled, invoke pre-processing FST
+  /*
   if (reader_opts.is_enabled_normalize_whitespace()) {
     normalize_whitespace(bufview, stream, rmm::mr::get_current_device_resource());
   }
+  */
 
   auto buffer =
     cudf::device_span<char const>(reinterpret_cast<char const*>(bufview.data()), bufview.size());

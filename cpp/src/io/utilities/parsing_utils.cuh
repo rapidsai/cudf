@@ -85,6 +85,7 @@ struct parse_options {
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
+  bool normalize_whitespace;
   cudf::detail::optional_trie trie_true;
   cudf::detail::optional_trie trie_false;
   cudf::detail::optional_trie trie_na;
