@@ -26,6 +26,8 @@ PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
 --ignore=tests/io/test_clipboard.py"
 
+cat python/cudf/cudf/pandas/scripts/.test_durations
+
 mkdir -p pandas-testing
 cd pandas-testing
 
