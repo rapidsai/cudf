@@ -118,7 +118,7 @@ skip = [
 filterwarnings = [
     "error::FutureWarning",
     "error::DeprecationWarning",
-    # some third-party dependencies (e.g. 'boto3') still using datatime.datetime.utcnow()
+    # some third-party dependencies (e.g. 'boto3') still using datetime.datetime.utcnow()
     "ignore:.*datetime.*utcnow.*scheduled for removal:DeprecationWarning",
     "ignore:create_block_manager_from_blocks is deprecated and will be removed in a future version. Use public APIs instead.:DeprecationWarning",
     # https://github.com/dask/partd/blob/main/partd/pandas.py#L198
