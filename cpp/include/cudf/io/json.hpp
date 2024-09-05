@@ -511,7 +511,7 @@ class json_reader_options {
 
   /**
    * @brief Set whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity,
-   * Infinity, and -Infinity. strict validation must be enabled for this to work.
+   * Infinity, and -Infinity. Strict validation must be enabled for this to work.
    *
    * @note: strict_validation must be enabled for this to work.
    *
