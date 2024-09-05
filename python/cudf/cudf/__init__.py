@@ -1,5 +1,15 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+# If libcudf was installed as a wheel, we must request it to load the library symbols.
+# Otherwise, we assume that the library was installed in a system path that ld can find.
+try:
+    import libcudf
+except ModuleNotFoundError:
+    pass
+else:
+    libcudf.load_library()
+    del libcudf
+
 # _setup_numba _must be called before numba.cuda is imported, because
 # it sets the numba config variable responsible for enabling
 # Minor Version Compatibility. Setting it after importing numba.cuda has no effect.
@@ -24,7 +34,7 @@ from cudf.api.extensions import (
     register_series_accessor,
 )
 from cudf.api.types import dtype
-from cudf.core.algorithms import factorize
+from cudf.core.algorithms import factorize, unique
 from cudf.core.cut import cut
 from cudf.core.dataframe import DataFrame, from_dataframe, from_pandas, merge
 from cudf.core.dtypes import (
@@ -98,6 +108,7 @@ __all__ = [
     "DatetimeIndex",
     "Decimal32Dtype",
     "Decimal64Dtype",
+    "Decimal128Dtype",
     "Grouper",
     "Index",
     "IntervalDtype",
@@ -128,6 +139,7 @@ __all__ = [
     "isclose",
     "melt",
     "merge",
+    "option_context",
     "pivot",
     "pivot_table",
     "read_avro",

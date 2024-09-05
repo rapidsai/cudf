@@ -19,10 +19,11 @@ import pyarrow as pa
 import pytest
 from fsspec.core import get_fs_token_paths
 from packaging import version
-from pyarrow import fs as pa_fs, parquet as pq
+from pyarrow import parquet as pq
 
 import cudf
 from cudf._lib.parquet import read_parquet_chunked
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -515,10 +516,6 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
     )
 
 
-@pytest.mark.skipif(
-    version.parse(pa.__version__) < version.parse("1.0.1"),
-    reason="pyarrow 1.0.0 needed for various operators and operand types",
-)
 @pytest.mark.parametrize(
     "predicate,expected_len",
     [
@@ -705,40 +702,17 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
     assert_eq(expect, got)
 
 
-def test_parquet_reader_arrow_nativefile(parquet_path_or_buf):
-    # Check that we can read a file opened with the
-    # Arrow FileSystem interface
-    expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
-    fs, path = pa_fs.FileSystem.from_uri(parquet_path_or_buf("filepath"))
-    with fs.open_input_file(path) as fil:
-        with pytest.warns(FutureWarning):
-            got = cudf.read_parquet(fil)
-
-    assert_eq(expect, got)
-
-
-@pytest.mark.parametrize("use_python_file_object", [True, False])
-def test_parquet_reader_use_python_file_object(
-    parquet_path_or_buf, use_python_file_object
-):
-    # Check that the non-default `use_python_file_object=True`
-    # option works as expected
+def test_parquet_reader_file_types(parquet_path_or_buf):
     expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
     fs, _, paths = get_fs_token_paths(parquet_path_or_buf("filepath"))
 
     # Pass open fsspec file
-    with pytest.warns(FutureWarning):
-        with fs.open(paths[0], mode="rb") as fil:
-            got1 = cudf.read_parquet(
-                fil, use_python_file_object=use_python_file_object
-            )
+    with fs.open(paths[0], mode="rb") as fil:
+        got1 = cudf.read_parquet(fil)
     assert_eq(expect, got1)
 
     # Pass path only
-    with pytest.warns(FutureWarning):
-        got2 = cudf.read_parquet(
-            paths[0], use_python_file_object=use_python_file_object
-        )
+    got2 = cudf.read_parquet(paths[0])
     assert_eq(expect, got2)
 
 
@@ -2416,6 +2390,10 @@ def test_parquet_writer_list_large_mixed(tmpdir):
 
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_writer_list_chunked(tmpdir, store_schema):
+    if store_schema and version.parse(pa.__version__) < version.parse(
+        "15.0.0"
+    ):
+        pytest.skip("https://github.com/apache/arrow/pull/37792")
     table1 = cudf.DataFrame(
         {
             "a": list_gen(string_gen, 128, 80, 50),
@@ -2601,6 +2579,10 @@ def normalized_equals(value1, value2):
 @pytest.mark.parametrize("add_nulls", [True, False])
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_writer_statistics(tmpdir, pdf, add_nulls, store_schema):
+    if store_schema and version.parse(pa.__version__) < version.parse(
+        "15.0.0"
+    ):
+        pytest.skip("https://github.com/apache/arrow/pull/37792")
     file_path = tmpdir.join("cudf.parquet")
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category", "col_bool"])
@@ -2980,6 +2962,10 @@ def test_per_column_options_string_col(tmpdir, encoding):
     assert encoding in fmd.row_group(0).column(0).encodings
 
 
+@pytest.mark.skipif(
+    version.parse(pa.__version__) < version.parse("16.0.0"),
+    reason="https://github.com/apache/arrow/pull/39748",
+)
 @pytest.mark.parametrize(
     "num_rows",
     [200, 10000],
@@ -3049,6 +3035,10 @@ def test_parquet_reader_rle_boolean(datadir):
 #                a list column in a schema, the cudf reader was confusing
 #                nesting information between a list column and a subsequent
 #                string column, ultimately causing a crash.
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Older versions of pandas do not have DataFrame.map()",
+)
 def test_parquet_reader_one_level_list2(datadir):
     # we are reading in a file containing binary types, but cudf returns
     # those as strings. so we have to massage the pandas data to get
@@ -3580,6 +3570,10 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema(tmpdir, data):
 
 
 @pytest.mark.parametrize("index", [None, True, False])
+@pytest.mark.skipif(
+    version.parse(pa.__version__) < version.parse("15.0.0"),
+    reason="https://github.com/apache/arrow/pull/37792",
+)
 def test_parquet_writer_roundtrip_with_arrow_schema(index):
     # Ensure that the concrete and nested types are faithfully being roundtripped
     # across Parquet with arrow schema
@@ -3730,6 +3724,10 @@ def test_parquet_writer_int96_timestamps_and_arrow_schema():
     ],
 )
 @pytest.mark.parametrize("index", [None, True, False])
+@pytest.mark.skipif(
+    version.parse(pa.__version__) < version.parse("15.0.0"),
+    reason="https://github.com/apache/arrow/pull/37792",
+)
 def test_parquet_writer_roundtrip_structs_with_arrow_schema(
     tmpdir, data, index
 ):
@@ -3816,3 +3814,251 @@ def test_parquet_reader_pandas_compatibility():
     with cudf.option_context("io.parquet.low_memory", True):
         expected = cudf.read_parquet(buffer)
     assert_eq(expected, df)
+
+
+@pytest.mark.parametrize("store_schema", [True, False])
+def test_parquet_reader_with_mismatched_tables(store_schema):
+    # cuDF tables with mixed types
+    df1 = cudf.DataFrame(
+        {
+            "i32": cudf.Series([None, None, None], dtype="int32"),
+            "i64": cudf.Series([1234, None, 123], dtype="int64"),
+            "list": list([[1, 2], [None, 4], [5, 6]]),
+            "time": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
+            "str": ["vfd", None, "ghu"],
+            "d_list": list(
+                [
+                    [pd.Timedelta(minutes=1), pd.Timedelta(minutes=2)],
+                    [None, pd.Timedelta(minutes=3)],
+                    [pd.Timedelta(minutes=8), None],
+                ]
+            ),
+        }
+    )
+
+    df2 = cudf.DataFrame(
+        {
+            "str": ["abc", "def", None],
+            "i64": cudf.Series([None, 65, 98], dtype="int64"),
+            "times": cudf.Series([1234, None, 4123], dtype="datetime64[us]"),
+            "list": list([[7, 8], [9, 10], [None, 12]]),
+            "d_list": list(
+                [
+                    [pd.Timedelta(minutes=4), None],
+                    [None, None],
+                    [pd.Timedelta(minutes=6), None],
+                ]
+            ),
+        }
+    )
+
+    # IO buffers
+    buf1 = BytesIO()
+    buf2 = BytesIO()
+
+    # Write Parquet with and without arrow schema
+    df1.to_parquet(buf1, store_schema=store_schema)
+    df2.to_parquet(buf2, store_schema=store_schema)
+
+    # Read mismatched Parquet files
+    got = cudf.read_parquet(
+        [buf1, buf2],
+        columns=["list", "d_list", "str"],
+        filters=[("i64", ">", 20)],
+        allow_mismatched_pq_schemas=True,
+    )
+
+    # Construct the expected table
+    expected = cudf.concat(
+        [
+            df1[df1["i64"] > 20][["list", "d_list", "str"]],
+            df2[df2["i64"] > 20][["list", "d_list", "str"]],
+        ]
+    ).reset_index(drop=True)
+
+    # Read with chunked reader (filter columns not supported)
+    got_chunked = read_parquet_chunked(
+        [buf1, buf2],
+        columns=["list", "d_list", "str"],
+        chunk_read_limit=240,
+        pass_read_limit=240,
+        allow_mismatched_pq_schemas=True,
+    )
+
+    # Construct the expected table without filter columns
+    expected_chunked = cudf.concat(
+        [df1[["list", "d_list", "str"]], df2[["list", "d_list", "str"]]]
+    ).reset_index(drop=True)
+
+    # Check results
+    assert_eq(expected, got)
+    assert_eq(expected_chunked, got_chunked)
+
+
+def test_parquet_reader_with_mismatched_structs():
+    data1 = [
+        {
+            "a": 1,
+            "b": {
+                "inner_a": 10,
+                "inner_b": {"inner_inner_b": 1, "inner_inner_a": 2},
+            },
+            "c": 2,
+        },
+        {
+            "a": 3,
+            "b": {"inner_a": 30, "inner_b": {"inner_inner_a": 210}},
+            "c": 4,
+        },
+        {"a": 5, "b": {"inner_a": 50, "inner_b": None}, "c": 6},
+        {"a": 7, "b": None, "c": 8},
+        {"a": None, "b": {"inner_a": None, "inner_b": None}, "c": None},
+        None,
+        {
+            "a": None,
+            "b": {
+                "inner_a": None,
+                "inner_b": {"inner_inner_b": None, "inner_inner_a": 10},
+            },
+            "c": 10,
+        },
+    ]
+
+    data2 = [
+        {"a": 1, "b": {"inner_b": {"inner_inner_a": None}}},
+        {"a": 3, "b": {"inner_b": {"inner_inner_a": 1}}},
+        {"a": 5, "b": {"inner_b": None}},
+        {"a": 7, "b": {"inner_b": {"inner_inner_b": 1, "inner_inner_a": 0}}},
+        {"a": None, "b": {"inner_b": None}},
+        None,
+        {"a": None, "b": {"inner_b": {"inner_inner_a": 1}}},
+    ]
+
+    # cuDF tables from struct data
+    df1 = cudf.DataFrame.from_arrow(pa.Table.from_pydict({"struct": data1}))
+    df2 = cudf.DataFrame.from_arrow(pa.Table.from_pydict({"struct": data2}))
+
+    # Buffers
+    buf1 = BytesIO()
+    buf2 = BytesIO()
+
+    # Write to parquet
+    df1.to_parquet(buf1)
+    df2.to_parquet(buf2)
+
+    # Read the struct.b.inner_b.inner_inner_a column from parquet
+    got = cudf.read_parquet(
+        [buf1, buf2],
+        columns=["struct.b.inner_b.inner_inner_a"],
+        allow_mismatched_pq_schemas=True,
+    )
+    got = (
+        cudf.Series(got["struct"])
+        .struct.field("b")
+        .struct.field("inner_b")
+        .struct.field("inner_inner_a")
+    )
+
+    # Read with chunked reader
+    got_chunked = read_parquet_chunked(
+        [buf1, buf2],
+        columns=["struct.b.inner_b.inner_inner_a"],
+        chunk_read_limit=240,
+        pass_read_limit=240,
+        allow_mismatched_pq_schemas=True,
+    )
+    got_chunked = (
+        cudf.Series(got_chunked["struct"])
+        .struct.field("b")
+        .struct.field("inner_b")
+        .struct.field("inner_inner_a")
+    )
+
+    # Construct the expected series
+    expected = cudf.concat(
+        [
+            cudf.Series(df1["struct"])
+            .struct.field("b")
+            .struct.field("inner_b")
+            .struct.field("inner_inner_a"),
+            cudf.Series(df2["struct"])
+            .struct.field("b")
+            .struct.field("inner_b")
+            .struct.field("inner_inner_a"),
+        ]
+    ).reset_index(drop=True)
+
+    # Check results
+    assert_eq(expected, got)
+    assert_eq(expected, got_chunked)
+
+
+def test_parquet_reader_with_mismatched_schemas_error():
+    df1 = cudf.DataFrame(
+        {
+            "millis": cudf.Series([123, 3454, 123], dtype="timedelta64[ms]"),
+            "i64": cudf.Series([123, 3454, 123], dtype="int64"),
+            "i32": cudf.Series([123, 3454, 123], dtype="int32"),
+        }
+    )
+    df2 = cudf.DataFrame(
+        {
+            "i64": cudf.Series([123, 3454, 123], dtype="int64"),
+            "millis": cudf.Series([123, 3454, 123], dtype="timedelta64[ms]"),
+        }
+    )
+
+    buf1 = BytesIO()
+    buf2 = BytesIO()
+
+    df1.to_parquet(buf1, store_schema=True)
+    df2.to_parquet(buf2, store_schema=False)
+
+    with pytest.raises(
+        ValueError,
+        match="Encountered mismatching SchemaElement properties for a column in the selected path",
+    ):
+        cudf.read_parquet(
+            [buf1, buf2], columns=["millis"], allow_mismatched_pq_schemas=True
+        )
+
+    data1 = [
+        {"a": 1, "b": {"inner_a": 1, "inner_b": 6}},
+        {"a": 3, "b": {"inner_a": None, "inner_b": 2}},
+    ]
+    data2 = [
+        {"b": {"inner_a": 1}, "c": "str"},
+        {"b": {"inner_a": None}, "c": None},
+    ]
+
+    # cuDF tables from struct data
+    df1 = cudf.DataFrame.from_arrow(pa.Table.from_pydict({"struct": data1}))
+    df2 = cudf.DataFrame.from_arrow(pa.Table.from_pydict({"struct": data2}))
+
+    # Buffers
+    buf1 = BytesIO()
+    buf2 = BytesIO()
+
+    # Write to parquet
+    df1.to_parquet(buf1)
+    df2.to_parquet(buf2)
+
+    with pytest.raises(
+        IndexError,
+        match="Encountered mismatching number of children for a column in the selected path",
+    ):
+        cudf.read_parquet(
+            [buf1, buf2],
+            columns=["struct.b"],
+            allow_mismatched_pq_schemas=True,
+        )
+
+    with pytest.raises(
+        IndexError,
+        match="Encountered mismatching schema tree depths across data sources",
+    ):
+        cudf.read_parquet(
+            [buf1, buf2],
+            columns=["struct.b.inner_b"],
+            allow_mismatched_pq_schemas=True,
+        )
