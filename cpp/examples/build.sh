@@ -61,5 +61,5 @@ build_example tpch
 build_example strings
 build_example nested_types
 build_example parquet_io
-build_example 1billion
+build_example billion_rows
 build_example interop
