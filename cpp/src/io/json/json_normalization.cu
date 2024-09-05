@@ -466,23 +466,14 @@ void normalize_whitespace(datasource::owning_buffer<rmm::device_buffer>& indata,
   std::swap(indata, outdata);
 }
 
-struct cub_batched_copy {
-  char* d_output;
-  size_type* offsets;
-  __device__ char* operator()(size_t idx) { return d_output + offsets[idx]; }
-};
-
 std::
   tuple<rmm::device_uvector<char>, rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
-  mixed_type_column_ws_normalization(device_span<char const> d_input_,
+  mixed_type_column_ws_normalization(device_span<char const> d_input,
                                      rmm::device_uvector<size_type>& col_lengths,
                                      rmm::device_uvector<size_type>& col_offsets,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
 {
-  rmm::device_uvector<char> d_input(d_input_.size(), stream);
-  thrust::copy(rmm::exec_policy(stream), d_input_.begin(), d_input_.end(), d_input.begin());
-
   size_t col_lengths_size = col_lengths.size();
   size_type inbuf_size =
     thrust::reduce(rmm::exec_policy(stream), col_lengths.begin(), col_lengths.end());
@@ -492,9 +483,11 @@ std::
     rmm::exec_policy(stream), col_lengths.begin(), col_lengths.end(), inbuf_offsets.begin(), 0);
 
   auto input_it = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), cub_batched_copy{d_input.data(), col_offsets.data()});
+    thrust::make_counting_iterator(0), 
+    cuda::proclaim_return_type<char const*>([d_input = d_input.begin(), col_offsets = col_offsets.begin()] __device__(size_t i) -> char const* { return &d_input[col_offsets[i]]; }));
   auto output_it = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), cub_batched_copy{inbuf.data(), inbuf_offsets.data()});
+    thrust::make_counting_iterator(0), 
+    cuda::proclaim_return_type<char*>([inbuf = inbuf.begin(), inbuf_offsets = inbuf_offsets.begin()] __device__(size_t i) -> char* { return &inbuf[inbuf_offsets[i]]; }));
 
   // cub device batched copy
   size_t temp_storage_bytes = 0;
