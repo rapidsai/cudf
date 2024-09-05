@@ -696,6 +696,28 @@ dependencies:
           - pytest<8
           - pytest-cov
           - pytest-xdist
+    specific:
+      # Define additional constraints for testing with oldest dependencies.
+      - output_types: [conda, requirements]
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - numba==0.57.*
+              - numpy==1.23.*
+              - pandas==2.0.*
+              - pyarrow==14.0.0
+              - cupy==12.0.0  # ignored as pip constraint
+          - matrix:
+            packages:
+      - output_types: requirements
+        # Using --constraints for pip install, so we list cupy multiple times
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - cupy-cuda11x==12.0.0
+              - cupy-cuda12x==12.0.0
+          - matrix:
+            packages:
   test_python_pylibcudf:
     common:
       - output_types: [conda, requirements, pyproject]
