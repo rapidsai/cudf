@@ -229,6 +229,53 @@ def test_read_parquet(
     assert_eq(expect, got2)
 
 
+@pytest.mark.parametrize("method", ["all", "parquet"])
+@pytest.mark.parametrize("blocksize", [1024 * 1024, 1024])
+def test_read_parquet_prefetch_options(
+    s3_base,
+    s3so,
+    pdf,
+    method,
+    blocksize,
+):
+    bucket = "parquet"
+    fname_1 = "test_parquet_reader_prefetch_options_1.parquet"
+    buffer_1 = BytesIO()
+    pdf.to_parquet(path=buffer_1)
+    buffer_1.seek(0)
+
+    fname_2 = "test_parquet_reader_prefetch_options_2.parquet"
+    buffer_2 = BytesIO()
+    pdf_2 = pdf.copy()
+    pdf_2["Integer"] += 1
+    pdf_2.to_parquet(path=buffer_2)
+    buffer_2.seek(0)
+
+    with s3_context(
+        s3_base=s3_base,
+        bucket=bucket,
+        files={
+            fname_1: buffer_1,
+            fname_2: buffer_2,
+        },
+    ):
+        got = cudf.read_parquet(
+            [
+                f"s3://{bucket}/{fname_1}",
+                f"s3://{bucket}/{fname_2}",
+            ],
+            storage_options=s3so,
+            prefetch_options={
+                "method": method,
+                "blocksize": blocksize,
+            },
+            columns=["String", "Integer"],
+        )
+
+    expect = pd.concat([pdf, pdf_2], ignore_index=True)[["String", "Integer"]]
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
 @pytest.mark.parametrize("columns", [None, ["List", "Struct"]])
 @pytest.mark.parametrize("index", [None, "Integer"])

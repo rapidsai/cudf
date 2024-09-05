@@ -10,6 +10,7 @@ import pytest
 
 import cudf
 from cudf import Series
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import _utils as utils, assert_eq
 from cudf.testing._utils import NUMERIC_TYPES, expect_warning_if, gen_rand
@@ -341,6 +342,10 @@ def test_any_all_axis_none(data, op):
         "mean",
         "median",
     ],
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Warning not given on older versions of pandas",
 )
 def test_reductions_axis_none_warning(op):
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [10, 2, 3]})
