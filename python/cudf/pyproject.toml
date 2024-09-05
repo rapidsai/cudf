@@ -127,7 +127,7 @@ skip = [
 [tool.pytest.ini_options]
 filterwarnings = [
     # some third-party dependencies (e.g. 'boto3') still using datatime.datetime.utcnow()
-    "ignore:.*datetime.*utcnow.*scheduled for removal:DeprecationWarning",,
+    "ignore:.*datetime.*utcnow.*scheduled for removal:DeprecationWarning",
 ]
 
 [tool.rapids-build-backend]
