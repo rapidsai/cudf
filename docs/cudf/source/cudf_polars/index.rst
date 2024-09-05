@@ -56,7 +56,7 @@ Launch on Google Colab
 ----------------------
 
 .. figure:: ../_static/colab.png
-    :width: 200px
-    :target: https://nvda.ws/rapids-cudf
+   :width: 200px
+   :target: https://nvda.ws/rapids-cudf
 
    Take the cuDF backend for Polars for a test-drive in a free GPU-enabled notebook environment on Google Colab.
