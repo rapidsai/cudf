@@ -500,7 +500,7 @@ class json_reader_options {
   void set_strict_validation(bool val) { _strict_validation = val; }
 
   /**
-   * @brief Set whether leading zeros are allowed in numeric values. strict validation
+   * @brief Set whether leading zeros are allowed in numeric values. Strict validation
    * must be enabled for this to work.
    *
    * @note: strict_validation must be enabled for this to work.
