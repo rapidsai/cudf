@@ -13,6 +13,7 @@ files:
       - cuda
       - cuda_version
       - depends_on_cupy
+      - depends_on_libkvikio
       - depends_on_librmm
       - depends_on_rmm
       - develop
@@ -135,6 +136,7 @@ files:
     includes:
       - build_base
       - build_cpp
+      - depends_on_libkvikio
       - depends_on_librmm
   py_build_pylibcudf:
     output: pyproject
@@ -350,7 +352,6 @@ dependencies:
         packages:
           - fmt>=10.1.1,<11
           - librmm==24.10.*,>=0.0.0a0
-          - libkvikio==24.10.*,>=0.0.0a0
           - flatbuffers==24.3.25
           - librdkafka>=2.5.0,<2.6.0a0
           # Align nvcomp version with rapids-cmake
@@ -889,6 +890,31 @@ dependencies:
             packages: &cupy_packages_cu11
               - cupy-cuda11x>=12.0.0
           - {matrix: null, packages: *cupy_packages_cu11}
+  depends_on_libkvikio:
+    common:
+      - output_types: conda
+        packages:
+          - &libkvikio_unsuffixed libkvikio==24.10.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - libkvikio-cu12==24.10.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
+              - libkvikio-cu11==24.10.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *libkvikio_unsuffixed
   depends_on_librmm:
     common:
       - output_types: conda
