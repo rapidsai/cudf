@@ -238,7 +238,9 @@ void validate_token_stream(device_span<char const> d_input,
       auto u_count = 0;
       for (SymbolOffsetT idx = start + 1; idx < end; idx++) {
         auto c = data[idx];
-        if (!allow_unquoted_control_chars && c >= char{0} && c < char{32}) { return false; }
+        if (!allow_unquoted_control_chars && static_cast<int>(c) >= 0 && static_cast<int>(c) < 32) {
+          return false;
+        }
 
         switch (state) {
           case string_state::normal:
