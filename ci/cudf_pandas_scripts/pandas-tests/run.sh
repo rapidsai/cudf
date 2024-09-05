@@ -12,6 +12,7 @@ rapids-logger "Running Pandas tests using $PANDAS_TESTS_BRANCH branch and rapids
 rapids-logger "PR number: ${RAPIDS_REF_NAME:-"unknown"}"
 
 cat python/cudf/cudf/pandas/scripts/.test_durations
+rapids-logger "logged file"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 
