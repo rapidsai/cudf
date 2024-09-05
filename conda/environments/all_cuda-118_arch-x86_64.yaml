@@ -58,7 +58,7 @@ dependencies:
 - numpy>=1.23,<3.0a0
 - numpydoc
 - nvcc_linux-64=11.8
-- nvcomp==3.0.6
+- nvcomp==4.0.1
 - nvtx>=0.2.1
 - openpyxl
 - packaging
