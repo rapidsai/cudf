@@ -89,7 +89,7 @@ cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftes
 
 # Run the tests
 cd pandas-tests/
-
+cat .test_durations
 
 # TODO: Needs motoserver/moto container running on http://localhost:5000
 TEST_THAT_NEED_MOTO_SERVER="not test_styler_to_s3 \
