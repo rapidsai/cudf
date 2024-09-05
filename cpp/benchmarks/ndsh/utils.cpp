@@ -119,8 +119,8 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::str
   if (rmm_mode == "pool") return make_pool();
   if (rmm_mode == "managed") return make_managed();
   if (rmm_mode == "managed_pool") return make_managed_pool();
-  // if (rmm_mode == "prefetch") return make_prefetch();
-  // if (rmm_mode == "prefetch_pool") return make_prefetch_pool();
+  if (rmm_mode == "prefetch") return make_prefetch();
+  if (rmm_mode == "prefetch_pool") return make_prefetch_pool();
   CUDF_FAIL("Unknown rmm_mode parameter: " + rmm_mode +
             "\nExpecting: cuda, async, pool, managed, managed_pool, prefetch, prefetch_pool");
 }
