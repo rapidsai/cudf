@@ -14,14 +14,20 @@ import tempfile
 import types
 from io import BytesIO, StringIO
 
+import cupy as cp
+import jupyter_client
+import nbformat
 import numpy as np
 import pyarrow as pa
 import pytest
-from numba import NumbaDeprecationWarning
+from nbconvert.preprocessors import ExecutePreprocessor
+from numba import NumbaDeprecationWarning, vectorize
 from pytz import utc
 
+from cudf.core._compat import PANDAS_GE_220
 from cudf.pandas import LOADED, Profiler
 from cudf.pandas.fast_slow_proxy import _Unusable, is_proxy_object
+from cudf.testing import assert_eq
 
 if not LOADED:
     raise ImportError("These tests must be run with cudf.pandas loaded")
@@ -533,12 +539,15 @@ def test_array_ufunc(series):
 @pytest.mark.xfail(strict=False, reason="Fails in CI, passes locally.")
 def test_groupby_apply_func_returns_series(dataframe):
     pdf, df = dataframe
+    if PANDAS_GE_220:
+        kwargs = {"include_groups": False}
+    else:
+        kwargs = {}
+
     expect = pdf.groupby("a").apply(
-        lambda group: pd.Series({"x": 1}), include_groups=False
+        lambda group: pd.Series({"x": 1}), **kwargs
     )
-    got = df.groupby("a").apply(
-        lambda group: xpd.Series({"x": 1}), include_groups=False
-    )
+    got = df.groupby("a").apply(lambda group: xpd.Series({"x": 1}), **kwargs)
     tm.assert_equal(expect, got)
 
 
@@ -1650,3 +1659,82 @@ def test_change_index_name(index):
 
         assert s.index.name == name
         assert df.index.name == name
+
+
+def test_notebook_slow_repr():
+    notebook_filename = (
+        os.path.dirname(os.path.abspath(__file__))
+        + "/data/repr_slow_down_test.ipynb"
+    )
+    with open(notebook_filename, "r", encoding="utf-8") as f:
+        nb = nbformat.read(f, as_version=4)
+
+    ep = ExecutePreprocessor(
+        timeout=30, kernel_name=jupyter_client.KernelManager().kernel_name
+    )
+
+    try:
+        ep.preprocess(nb, {"metadata": {"path": "./"}})
+    except Exception as e:
+        assert False, f"Error executing the notebook: {e}"
+
+    # Collect the outputs
+    html_result = nb.cells[2]["outputs"][0]["data"]["text/html"]
+    for string in {
+        "div",
+        "Column_1",
+        "Column_2",
+        "Column_3",
+        "Column_4",
+        "tbody",
+        "</table>",
+    }:
+        assert (
+            string in html_result
+        ), f"Expected string {string} not found in the output"
+
+
+def test_numpy_ndarray_isinstancecheck(array):
+    arr1, arr2 = array
+    assert isinstance(arr1, np.ndarray)
+    assert isinstance(arr2, np.ndarray)
+
+
+def test_numpy_ndarray_np_ufunc(array):
+    arr1, arr2 = array
+
+    @np.vectorize
+    def add_one_ufunc(arr):
+        return arr + 1
+
+    assert_eq(add_one_ufunc(arr1), add_one_ufunc(arr2))
+
+
+def test_numpy_ndarray_cp_ufunc(array):
+    arr1, arr2 = array
+
+    @cp.vectorize
+    def add_one_ufunc(arr):
+        return arr + 1
+
+    assert_eq(add_one_ufunc(cp.asarray(arr1)), add_one_ufunc(arr2))
+
+
+def test_numpy_ndarray_numba_ufunc(array):
+    arr1, arr2 = array
+
+    @vectorize
+    def add_one_ufunc(arr):
+        return arr + 1
+
+    assert_eq(add_one_ufunc(arr1), add_one_ufunc(arr2))
+
+
+def test_numpy_ndarray_numba_cuda_ufunc(array):
+    arr1, arr2 = array
+
+    @vectorize(["int64(int64)"], target="cuda")
+    def add_one_ufunc(a):
+        return a + 1
+
+    assert_eq(cp.asarray(add_one_ufunc(arr1)), cp.asarray(add_one_ufunc(arr2)))

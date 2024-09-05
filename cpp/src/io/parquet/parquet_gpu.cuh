@@ -18,25 +18,37 @@
 
 #include "parquet_gpu.hpp"
 
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/types.hpp>
 
-#include <cuco/static_map.cuh>
+#include <cuco/pair.cuh>
+#include <cuco/storage.cuh>
 
 namespace cudf::io::parquet::detail {
 
-auto constexpr KEY_SENTINEL   = size_type{-1};
-auto constexpr VALUE_SENTINEL = size_type{-1};
+using key_type    = size_type;
+using mapped_type = size_type;
+using slot_type   = cuco::pair<key_type, mapped_type>;
 
-using map_type = cuco::legacy::static_map<size_type, size_type>;
+auto constexpr map_cg_size =
+  1;  ///< A CUDA Cooperative Group of 1 thread (set for best performance) to handle each subset.
+      ///< Note: Adjust insert and find loops to use `cg::tile<map_cg_size>` if increasing this.
+auto constexpr window_size =
+  1;  ///< Number of concurrent slots (set for best performance) handled by each thread.
+auto constexpr occupancy_factor = 1.43f;  ///< cuCollections suggests using a hash map of size
+                                          ///< N * (1/0.7) = 1.43 to target a 70% occupancy factor.
 
-/**
- * @brief The alias of `map_type::pair_atomic_type` class.
- *
- * Declare this struct by trivial subclassing instead of type aliasing so we can have forward
- * declaration of this struct somewhere else.
- */
-struct slot_type : public map_type::pair_atomic_type {};
+auto constexpr KEY_SENTINEL   = key_type{-1};
+auto constexpr VALUE_SENTINEL = mapped_type{-1};
+auto constexpr SCOPE          = cuda::thread_scope_block;
+
+using storage_type     = cuco::aow_storage<slot_type,
+                                       window_size,
+                                       cuco::extent<std::size_t>,
+                                       cudf::detail::cuco_allocator<char>>;
+using storage_ref_type = typename storage_type::ref_type;
+using window_type      = typename storage_type::window_type;
 
 /**
  * @brief Return the byte length of parquet dtypes that are physically represented by INT32
@@ -80,5 +92,44 @@ inline size_type __device__ row_to_value_idx(size_type idx,
   }
   return idx;
 }
+
+/**
+ * @brief Insert chunk values into their respective hash maps
+ *
+ * @param map_storage Bulk hashmap storage
+ * @param frags Column fragments
+ * @param stream CUDA stream to use
+ */
+void populate_chunk_hash_maps(device_span<window_type> const map_storage,
+                              cudf::detail::device_2dspan<PageFragment const> frags,
+                              rmm::cuda_stream_view stream);
+
+/**
+ * @brief Compact dictionary hash map entries into chunk.dict_data
+ *
+ * @param map_storage Bulk hashmap storage
+ * @param chunks Flat span of chunks to compact hash maps for
+ * @param stream CUDA stream to use
+ */
+void collect_map_entries(device_span<window_type> const map_storage,
+                         device_span<EncColumnChunk> chunks,
+                         rmm::cuda_stream_view stream);
+
+/**
+ * @brief Get the Dictionary Indices for each row
+ *
+ * For each row of a chunk, gets the indices into chunk.dict_data which contains the value otherwise
+ * stored in input column [row]. Stores these indices into chunk.dict_index.
+ *
+ * Since dict_data itself contains indices into the original cudf column, this means that
+ * col[row] == col[dict_data[dict_index[row - chunk.start_row]]]
+ *
+ * @param map_storage Bulk hashmap storage
+ * @param frags Column fragments
+ * @param stream CUDA stream to use
+ */
+void get_dictionary_indices(device_span<window_type> const map_storage,
+                            cudf::detail::device_2dspan<PageFragment const> frags,
+                            rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::parquet::detail

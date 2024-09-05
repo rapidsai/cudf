@@ -10,7 +10,7 @@ import warnings
 from collections import defaultdict
 from contextlib import ExitStack
 from functools import partial, reduce
-from typing import Callable
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import numpy as np
@@ -20,9 +20,14 @@ from pyarrow import dataset as ds
 import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
-from cudf.core.column import as_column, build_categorical_column, column_empty
+from cudf.core.column import as_column, column_empty
+from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 BYTE_SIZES = {
     "kb": 1000,
@@ -329,39 +334,12 @@ def write_to_dataset(
 @_performance_tracking
 def read_parquet_metadata(filepath_or_buffer):
     """{docstring}"""
-    # Multiple sources are passed as a list. If a single source is passed,
-    # wrap it in a list for unified processing downstream.
-    if not is_list_like(filepath_or_buffer):
-        filepath_or_buffer = [filepath_or_buffer]
-
-    # Start by trying to construct a filesystem object
-    fs, paths = ioutils._get_filesystem_and_paths(
-        path_or_data=filepath_or_buffer, storage_options=None
-    )
-
-    # Check if filepath or buffer
-    filepath_or_buffer = paths if paths else filepath_or_buffer
 
     # List of filepaths or buffers
-    filepaths_or_buffers = []
-
-    for source in filepath_or_buffer:
-        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            fs=fs,
-            storage_options=None,
-            bytes_per_thread=None,
-        )
-
-        if compression is not None:
-            raise ValueError(
-                "URL content-encoding decompression is not supported"
-            )
-        if isinstance(tmp_source, list):
-            filepath_or_buffer.extend(tmp_source)
-        else:
-            filepaths_or_buffers.append(tmp_source)
+    filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
+        path_or_data=filepath_or_buffer,
+        bytes_per_thread=None,
+    )
 
     return libparquet.read_parquet_metadata(filepaths_or_buffers)
 
@@ -536,6 +514,7 @@ def read_parquet(
     dataset_kwargs=None,
     nrows=None,
     skip_rows=None,
+    allow_mismatched_pq_schemas=False,
     *args,
     **kwargs,
 ):
@@ -598,24 +577,52 @@ def read_parquet(
         )
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
-    filepaths_or_buffers = []
-    for source in filepath_or_buffer:
-        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            fs=fs,
-            storage_options=storage_options,
-            bytes_per_thread=bytes_per_thread,
-        )
-
-        if compression is not None:
-            raise ValueError(
-                "URL content-encoding decompression is not supported"
+    # Prepare remote-IO options
+    prefetch_options = kwargs.pop("prefetch_options", {})
+    if not ioutils._is_local_filesystem(fs):
+        # The default prefetch method depends on the
+        # `row_groups` argument. In most cases we will use
+        # method="all" by default, because it is fastest
+        # when we need to read most of the file(s).
+        # If a (simple) `row_groups` selection is made, we
+        # use method="parquet" to avoid transferring the
+        # entire file over the network
+        method = prefetch_options.get("method")
+        _row_groups = None
+        if method in (None, "parquet"):
+            if row_groups is None:
+                # If the user didn't specify a method, don't use
+                # 'parquet' prefetcher for column projection alone.
+                method = method or "all"
+            elif all(r == row_groups[0] for r in row_groups):
+                # Row group selection means we are probably
+                # reading half the file or less. We should
+                # avoid a full file transfer by default.
+                method = "parquet"
+                _row_groups = row_groups[0]
+            elif (method := method or "all") == "parquet":
+                raise ValueError(
+                    "The 'parquet' prefetcher requires a uniform "
+                    "row-group selection for all paths within the "
+                    "same `read_parquet` call. "
+                    "Got: {row_groups}"
+                )
+        if method == "parquet":
+            prefetch_options = prefetch_options.update(
+                {
+                    "method": method,
+                    "columns": columns,
+                    "row_groups": _row_groups,
+                }
             )
-        if isinstance(tmp_source, list):
-            filepath_or_buffer.extend(tmp_source)
-        else:
-            filepaths_or_buffers.append(tmp_source)
+
+    filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
+        path_or_data=filepath_or_buffer,
+        fs=fs,
+        storage_options=storage_options,
+        bytes_per_thread=bytes_per_thread,
+        prefetch_options=prefetch_options,
+    )
 
     # Warn user if they are not using cudf for IO
     # (There is a good chance this was not the intention)
@@ -656,6 +663,7 @@ def read_parquet(
         dataset_kwargs=dataset_kwargs,
         nrows=nrows,
         skip_rows=skip_rows,
+        allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
         **kwargs,
     )
     # Apply filters row-wise (if any are defined), and return
@@ -846,12 +854,17 @@ def _parquet_to_frame(
                     partition_categories[name].index(value),
                     length=_len,
                 )
-                dfs[-1][name] = build_categorical_column(
-                    categories=partition_categories[name],
-                    codes=codes,
+                codes = as_unsigned_codes(
+                    len(partition_categories[name]), codes
+                )
+                dfs[-1][name] = CategoricalColumn(
+                    data=None,
                     size=codes.size,
+                    dtype=cudf.CategoricalDtype(
+                        categories=partition_categories[name], ordered=False
+                    ),
                     offset=codes.offset,
-                    ordered=False,
+                    children=(codes,),
                 )
             else:
                 # Not building categorical columns, so
@@ -894,6 +907,7 @@ def _read_parquet(
     use_pandas_metadata=None,
     nrows=None,
     skip_rows=None,
+    allow_mismatched_pq_schemas=False,
     *args,
     **kwargs,
 ):
@@ -918,6 +932,7 @@ def _read_parquet(
                 use_pandas_metadata=use_pandas_metadata,
                 nrows=nrows if nrows is not None else -1,
                 skip_rows=skip_rows if skip_rows is not None else 0,
+                allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
             )
         else:
             if nrows is None:
@@ -931,6 +946,7 @@ def _read_parquet(
                 use_pandas_metadata=use_pandas_metadata,
                 nrows=nrows,
                 skip_rows=skip_rows,
+                allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
             )
     else:
         if (

@@ -35,7 +35,6 @@ include(../../cpp/cmake/thirdparty/get_dlpack.cmake)
 include(rapids-cython-core)
 rapids_cython_init()
 
-include(../pylibcudf/cmake/Modules/LinkPyarrowHeaders.cmake)
 add_subdirectory(cudf/_lib)
 add_subdirectory(udf_cpp)
 

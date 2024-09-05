@@ -1,12 +1,14 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
+import functools
+import operator
 import os
 import urllib
 import warnings
+from collections.abc import Callable
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
-from typing import Callable
 
 import fsspec
 import fsspec.implementations.local
@@ -14,8 +16,15 @@ import numpy as np
 import pandas as pd
 from fsspec.core import expand_paths_if_needed, get_fs_token_paths
 
+from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
+
+try:
+    import fsspec.parquet as fsspec_parquet
+
+except ImportError:
+    fsspec_parquet = None
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
 _ROW_GROUP_SIZE_BYTES_DEFAULT = 128 * 1024 * 1024
@@ -183,6 +192,14 @@ nrows : int, default None
 
     .. note:
        This option is not supported when the low-memory mode is on.
+allow_mismatched_pq_schemas : boolean, default False
+    If True, enables reading (matching) columns specified in `columns` and `filters`
+    options from the input files with otherwise mismatched schemas.
+prefetch_options : dict, default None
+    WARNING: This is an experimental feature and may be removed at any
+    time without warning or deprecation period.
+    Dictionary of options to use to prefetch bytes from remote storage.
+    These options are passed through to `get_reader_filepath_or_buffer`.
 
 Returns
 -------
@@ -799,7 +816,7 @@ Using the `dtype` argument to specify type casting:
     k1   k2
 0  1.0  [1]
 """  # noqa: E501
-doc_read_json = docfmt_partial(docstring=_docstring_read_json)
+doc_read_json: Callable = docfmt_partial(docstring=_docstring_read_json)
 
 _docstring_to_json = """
 Convert the cuDF object to a JSON string.
@@ -869,7 +886,7 @@ See Also
 --------
 cudf.read_json
 """
-doc_to_json = docfmt_partial(docstring=_docstring_to_json)
+doc_to_json: Callable = docfmt_partial(docstring=_docstring_to_json)
 
 _docstring_read_hdf = """
 Read from the store, close it if we opened it.
@@ -1399,13 +1416,14 @@ _docstring_get_reader_filepath_or_buffer = """
 Return either a filepath string to data, or a memory buffer of data.
 If filepath, then the source filepath is expanded to user's environment.
 If buffer, then data is returned in-memory as bytes or a ByteIO object.
+This function is designed to process multiple data sources of the same
+type at once. If path_or_data is a list, the output will also be a list.
 
 Parameters
 ----------
-path_or_data : str, file-like object, bytes, ByteIO
-    Path to data or the data itself.
-compression : str
-    Type of compression algorithm for the content
+path_or_data : str, file-like object, bytes, ByteIO, list
+    Path to data or the data itself. Pass in a list to process multiple
+    sources of the same type at once.
 mode : str
     Mode in which file is opened
 iotypes : (), default (BytesIO)
@@ -1430,14 +1448,23 @@ bytes_per_thread : int, default None
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a Python thread pool). Default allocation is
     {bytes_per_thread} bytes.
+expand_dir_pattern : str, default None
+    Glob pattern to use when expanding directories into file paths
+    (e.g. "*.json"). If this parameter is not specified, directories
+    will not be expanded.
+prefetch_options : dict, default None
+    WARNING: This is an experimental feature and may be removed at any
+    time without warning or deprecation period.
+    Dictionary of options to use to prefetch bytes from remote storage.
+    These options are only used when `path_or_data` is a list of remote
+    paths. If 'method' is set to 'all' (the default), the only supported
+    option is 'blocksize' (default 256 MB). If method is set to 'parquet',
+    'columns' and 'row_groups' are also supported (default None).
 
 Returns
 -------
-filepath_or_buffer : str, bytes, BytesIO, list
-    Filepath string or in-memory buffer of data or a
-    list of Filepath strings or in-memory buffers of data.
-compression : str
-    Type of compression algorithm for the content
+List[str, bytes, BytesIO]
+    List of filepath strings or in-memory data buffers.
     """.format(bytes_per_thread=_BYTES_PER_THREAD_DEFAULT)
 
 
@@ -1494,29 +1521,15 @@ def _is_local_filesystem(fs):
     return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
 
 
-def ensure_single_filepath_or_buffer(path_or_data, storage_options=None):
-    """Return False if `path_or_data` resolves to multiple filepaths or
-    buffers.
+def _select_single_source(sources: list, caller: str):
+    """Select the first element from a list of sources.
+    Raise an error if sources contains multiple elements
     """
-    path_or_data = stringify_pathlike(path_or_data)
-    if isinstance(path_or_data, str):
-        path_or_data = os.path.expanduser(path_or_data)
-        try:
-            fs, _, paths = get_fs_token_paths(
-                path_or_data, mode="rb", storage_options=storage_options
-            )
-        except ValueError as e:
-            if str(e).startswith("Protocol not known"):
-                return True
-            else:
-                raise e
-
-        if len(paths) > 1:
-            return False
-    elif isinstance(path_or_data, (list, tuple)) and len(path_or_data) > 1:
-        return False
-
-    return True
+    if len(sources) > 1:
+        raise ValueError(
+            f"{caller} does not support multiple sources, got: {sources}"
+        )
+    return sources[0]
 
 
 def is_directory(path_or_data, storage_options=None):
@@ -1601,10 +1614,24 @@ def _get_filesystem_and_paths(
     return fs, return_paths
 
 
+def _maybe_expand_directories(paths, glob_pattern, fs):
+    # Expand directory paths using a glob pattern.
+    # This is a no-op if either glob_pattern or fs are None
+    if fs is None or glob_pattern is None:
+        return paths
+    expanded_paths = []
+    for path in paths:
+        if fs.isdir(path):
+            expanded_paths.extend(fs.glob(fs.sep.join([path, glob_pattern])))
+        else:
+            expanded_paths.append(path)
+    return expanded_paths
+
+
 @doc_get_reader_filepath_or_buffer()
 def get_reader_filepath_or_buffer(
     path_or_data,
-    compression,
+    *,
     mode="rb",
     fs=None,
     iotypes=(BytesIO,),
@@ -1613,32 +1640,39 @@ def get_reader_filepath_or_buffer(
     bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
     warn_on_raw_text_input=None,
     warn_meta=None,
+    expand_dir_pattern=None,
+    prefetch_options=None,
 ):
     """{docstring}"""
 
-    path_or_data = stringify_pathlike(path_or_data)
+    # Convert path_or_data to a list of input data sources
+    input_sources = [
+        stringify_pathlike(source)
+        for source in (
+            path_or_data if is_list_like(path_or_data) else [path_or_data]
+        )
+    ]
+    if not input_sources:
+        raise ValueError("Empty input source list: {input_sources}.")
 
-    if isinstance(path_or_data, str):
-        # Get a filesystem object if one isn't already available
-        paths = [path_or_data]
+    filepaths_or_buffers = []
+    string_paths = [isinstance(source, str) for source in input_sources]
+    if any(string_paths):
+        # Sources are all strings. Thes strings are typically
+        # file paths, but they may also be raw text strings.
+
+        # Don't allow a mix of source types
+        if not all(string_paths):
+            raise ValueError("Invalid input source list: {input_sources}.")
+
+        # Make sure we define a filesystem (if possible)
+        paths = input_sources
+        raw_text_input = False
         if fs is None:
-            fs, paths = _get_filesystem_and_paths(
-                path_or_data, storage_options
-            )
-            if fs is None:
-                if warn_on_raw_text_input:
-                    # Do not remove until pandas 3.0 support is added.
-                    assert (
-                        PANDAS_LT_300
-                    ), "Need to drop after pandas-3.0 support is added."
-                    warnings.warn(
-                        f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
-                        "deprecated and will be removed in a future version. "
-                        "To read from a literal string, wrap it in a "
-                        "'StringIO' object.",
-                        FutureWarning,
-                    )
-                return path_or_data, compression
+            fs, paths = _get_filesystem_and_paths(paths, storage_options)
+
+        # Expand directories (if necessary)
+        paths = _maybe_expand_directories(paths, expand_dir_pattern, fs)
 
         if _is_local_filesystem(fs):
             # Doing this as `read_json` accepts a json string
@@ -1660,7 +1694,7 @@ def get_reader_filepath_or_buffer(
 
             if len(paths):
                 if fs.exists(paths[0]):
-                    path_or_data = paths if len(paths) > 1 else paths[0]
+                    filepaths_or_buffers = paths
 
                 # raise FileNotFound if path looks like json
                 # following pandas
@@ -1670,21 +1704,29 @@ def get_reader_filepath_or_buffer(
                     tuple(f".json{c}" for c in compression_extensions)
                 ):
                     raise FileNotFoundError(
-                        f"{path_or_data} could not be resolved to any files"
+                        f"{input_sources} could not be resolved to any files"
                     )
-                elif warn_on_raw_text_input:
-                    # Do not remove until pandas 3.0 support is added.
-                    assert (
-                        PANDAS_LT_300
-                    ), "Need to drop after pandas-3.0 support is added."
-                    warnings.warn(
-                        f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
-                        "deprecated and will be removed in a future version. "
-                        "To read from a literal string, wrap it in a "
-                        "'StringIO' object.",
-                        FutureWarning,
-                    )
-            elif warn_on_raw_text_input:
+                else:
+                    raw_text_input = True
+            else:
+                raw_text_input = True
+
+        elif fs is not None:
+            if len(paths) == 0:
+                raise FileNotFoundError(
+                    f"{input_sources} could not be resolved to any files"
+                )
+            filepaths_or_buffers = _prefetch_remote_buffers(
+                paths,
+                fs,
+                **(prefetch_options or {}),
+            )
+        else:
+            raw_text_input = True
+
+        if raw_text_input:
+            filepaths_or_buffers = input_sources
+            if warn_on_raw_text_input:
                 # Do not remove until pandas 3.0 support is added.
                 assert (
                     PANDAS_LT_300
@@ -1697,35 +1739,25 @@ def get_reader_filepath_or_buffer(
                     FutureWarning,
                 )
 
-        else:
-            if len(paths) == 0:
-                raise FileNotFoundError(
-                    f"{path_or_data} could not be resolved to any files"
-                )
-            path_or_data = [
-                BytesIO(
-                    _fsspec_data_transfer(
-                        fpath,
-                        fs=fs,
-                        mode=mode,
-                        bytes_per_thread=bytes_per_thread,
+    else:
+        # Sources are already buffers or file-like objects
+        for source in input_sources:
+            if not isinstance(source, iotypes) and is_file_like(source):
+                if isinstance(source, TextIOWrapper):
+                    source = source.buffer
+                filepaths_or_buffers.append(
+                    BytesIO(
+                        _fsspec_data_transfer(
+                            source,
+                            mode=mode,
+                            bytes_per_thread=bytes_per_thread,
+                        )
                     )
                 )
-                for fpath in paths
-            ]
-            if len(path_or_data) == 1:
-                path_or_data = path_or_data[0]
+            else:
+                filepaths_or_buffers.append(source)
 
-    elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
-        if isinstance(path_or_data, TextIOWrapper):
-            path_or_data = path_or_data.buffer
-        path_or_data = BytesIO(
-            _fsspec_data_transfer(
-                path_or_data, mode=mode, bytes_per_thread=bytes_per_thread
-            )
-        )
-
-    return path_or_data, compression
+    return filepaths_or_buffers
 
 
 def get_writer_filepath_or_buffer(path_or_data, mode, storage_options=None):
@@ -2078,3 +2110,101 @@ def _read_byte_ranges(
 
     for worker in workers:
         worker.join()
+
+
+def _get_remote_bytes_all(
+    remote_paths, fs, *, blocksize=_BYTES_PER_THREAD_DEFAULT
+):
+    # TODO: Experiment with a heuristic to avoid the fs.sizes
+    # call when we are reading many files at once (the latency
+    # of collecting the file sizes is unnecessary in this case)
+    if max(sizes := fs.sizes(remote_paths)) <= blocksize:
+        # Don't bother breaking up individual files
+        return fs.cat_ranges(remote_paths, None, None)
+    else:
+        # Construct list of paths, starts, and ends
+        paths, starts, ends = map(
+            list,
+            zip(
+                *(
+                    (r, j, min(j + blocksize, s))
+                    for r, s in zip(remote_paths, sizes)
+                    for j in range(0, s, blocksize)
+                )
+            ),
+        )
+
+        # Collect the byte ranges
+        chunks = fs.cat_ranges(paths, starts, ends)
+
+        # Construct local byte buffers
+        # (Need to make sure path offsets are ordered correctly)
+        unique_count = dict(zip(*np.unique(paths, return_counts=True)))
+        offset = np.cumsum([0] + [unique_count[p] for p in remote_paths])
+        buffers = [
+            functools.reduce(operator.add, chunks[offset[i] : offset[i + 1]])
+            for i in range(len(remote_paths))
+        ]
+        return buffers
+
+
+def _get_remote_bytes_parquet(
+    remote_paths,
+    fs,
+    *,
+    columns=None,
+    row_groups=None,
+    blocksize=_BYTES_PER_THREAD_DEFAULT,
+):
+    if fsspec_parquet is None or (columns is None and row_groups is None):
+        return _get_remote_bytes_all(remote_paths, fs, blocksize=blocksize)
+
+    sizes = fs.sizes(remote_paths)
+    data = fsspec_parquet._get_parquet_byte_ranges(
+        remote_paths,
+        fs,
+        columns=columns,
+        row_groups=row_groups,
+        max_block=blocksize,
+    )
+
+    buffers = []
+    for size, path in zip(sizes, remote_paths):
+        path_data = data[path]
+        buf = np.empty(size, dtype="b")
+        for range_offset in path_data.keys():
+            chunk = path_data[range_offset]
+            buf[range_offset[0] : range_offset[1]] = np.frombuffer(
+                chunk, dtype="b"
+            )
+        buffers.append(buf.tobytes())
+    return buffers
+
+
+def _prefetch_remote_buffers(
+    paths,
+    fs,
+    *,
+    method="all",
+    **prefetch_options,
+):
+    # Gather bytes ahead of time for remote filesystems
+    if fs and paths and not _is_local_filesystem(fs):
+        try:
+            prefetcher = {
+                "parquet": _get_remote_bytes_parquet,
+                "all": _get_remote_bytes_all,
+            }[method]
+        except KeyError:
+            raise ValueError(
+                f"{method} is not a supported remote-data prefetcher."
+                " Expected 'parquet' or 'all'."
+            )
+        return prefetcher(
+            paths,
+            fs,
+            **prefetch_options,
+        )
+
+    else:
+        return paths

@@ -447,6 +447,10 @@ def test_cov1d(data1, data2):
     ],
 )
 @pytest.mark.parametrize("method", ["spearman", "pearson"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Warnings missing on older pandas (scipy version seems unrelated?)",
+)
 def test_corr1d(data1, data2, method):
     if method == "spearman":
         # Pandas uses scipy.stats.spearmanr code-path
@@ -585,6 +589,10 @@ def test_min_count_ops(data, ops, skipna, min_count):
     ],
 )
 @pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_cov_corr_datetime_timedelta(data1, data2, dtype):
     gsr1 = cudf.Series(data1, dtype=dtype)
     gsr2 = cudf.Series(data2, dtype=dtype)
