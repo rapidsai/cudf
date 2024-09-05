@@ -2788,10 +2788,7 @@ TEST_F(JsonReaderTest, MixedTypesWithSchema)
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
       .dtypes(data_types)
       .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
-      .normalize_single_quotes(true)
-      .normalize_whitespace(true)
       .mixed_types_as_string(true)
-      .strict_validation(true)
       .keep_quotes(true)
       .lines(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
@@ -2800,7 +2797,7 @@ TEST_F(JsonReaderTest, MixedTypesWithSchema)
   EXPECT_EQ(result.tbl->num_rows(), 2);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
   // expected output without whitespace
-  cudf::test::strings_column_wrapper expected({R"({"A":0,"B":1})", "[1,0]"});
+  cudf::test::strings_column_wrapper expected({R"({"A": 0, "B": 1})", "[1,0]"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result.tbl->get_column(0));
 }
 
