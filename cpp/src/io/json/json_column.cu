@@ -976,7 +976,6 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
 
   switch (json_col.type) {
     case json_col_t::StringColumn: {
-
       // move string_offsets to GPU and transform to string column
       auto const col_size      = json_col.string_offsets.size();
       using char_length_pair_t = thrust::pair<char const*, size_type>;
@@ -989,25 +988,25 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
 
       data_type target_type{};
       std::unique_ptr<column> col{};
-      if(options.normalize_whitespace && json_col.forced_as_string_column) {
-        auto [normalized_d_input, col_lengths, col_offsets] = cudf::io::json::detail::mixed_type_column_ws_normalization(d_input, json_col.string_lengths, json_col.string_offsets, stream, mr);
-        auto offset_length_it =
-          thrust::make_zip_iterator(col_offsets.begin(), col_lengths.begin());
-        target_type = data_type{type_id::STRING};
+      if (options.normalize_whitespace && json_col.forced_as_string_column) {
+        auto [normalized_d_input, col_lengths, col_offsets] =
+          cudf::io::json::detail::mixed_type_column_ws_normalization(
+            d_input, json_col.string_lengths, json_col.string_offsets, stream, mr);
+        auto offset_length_it = thrust::make_zip_iterator(col_offsets.begin(), col_lengths.begin());
+        target_type           = data_type{type_id::STRING};
         // Convert strings to the inferred data type
         col = parse_data(normalized_d_input.data(),
-                              offset_length_it,
-                              col_size,
-                              target_type,
-                              std::move(result_bitmask),
-                              null_count,
-                              options.view(),
-                              stream,
-                              mr);
-      }
-      else {
-        auto offset_length_it =
-          thrust::make_zip_iterator(json_col.string_offsets.begin(), json_col.string_lengths.begin());
+                         offset_length_it,
+                         col_size,
+                         target_type,
+                         std::move(result_bitmask),
+                         null_count,
+                         options.view(),
+                         stream,
+                         mr);
+      } else {
+        auto offset_length_it = thrust::make_zip_iterator(json_col.string_offsets.begin(),
+                                                          json_col.string_lengths.begin());
         if (schema.has_value()) {
 #ifdef NJP_DEBUG_PRINT
           std::cout << "-> explicit type: "
@@ -1015,7 +1014,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                                            : "n/a");
 #endif
           target_type = schema.value().type;
-        } 
+        }
         // Infer column type, if we don't have an explicit type for it
         else {
           target_type = cudf::io::detail::infer_data_type(
@@ -1023,14 +1022,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         }
         // Convert strings to the inferred data type
         col = parse_data(d_input.data(),
-                              offset_length_it,
-                              col_size,
-                              target_type,
-                              std::move(result_bitmask),
-                              null_count,
-                              options.view(),
-                              stream,
-                              mr);
+                         offset_length_it,
+                         col_size,
+                         target_type,
+                         std::move(result_bitmask),
+                         null_count,
+                         options.view(),
+                         stream,
+                         mr);
       }
 
       // Reset nullable if we do not have nulls

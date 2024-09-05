@@ -20,10 +20,6 @@
 #include <cudf/io/detail/json.hpp>
 #include <cudf/types.hpp>
 
-#include <cuda/atomic>
-
-#include <cub/device/device_copy.cuh>
-
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
@@ -31,6 +27,8 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <cub/device/device_copy.cuh>
+#include <cuda/atomic>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
 #include <thrust/gather.h>
@@ -378,7 +376,7 @@ struct TransduceToNormalizedWS {
     // OOS   | {<SPC>}          -> {<SPC>}
     // OOS   | {\t}             -> {\t}
 
-    // Case when read symbol is not an unquoted space or tab 
+    // Case when read symbol is not an unquoted space or tab
     // This will be the same condition as in `operator()(state_id, match_id, read_symbol)` function
     // However, since there is no output in this case i.e. the count returned by
     // operator()(state_id, match_id, read_symbol) is zero, this function is never called.
@@ -401,14 +399,14 @@ struct TransduceToNormalizedWS {
   {
     // Case when read symbol is a space or tab but is unquoted
     if (!(match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::WHITESPACE_SYMBOLS) &&
-        state_id == static_cast<StateT>(dfa_states::TT_OOS))) {
+          state_id == static_cast<StateT>(dfa_states::TT_OOS))) {
       return 0;
     }
     return 1;
   }
 };
 
-} // namespace normalize_whitespace_complement
+}  // namespace normalize_whitespace_complement
 
 namespace detail {
 
@@ -469,53 +467,60 @@ void normalize_whitespace(datasource::owning_buffer<rmm::device_buffer>& indata,
 }
 
 struct cub_batched_copy {
-  char *d_output;
-  size_type *offsets;
-  __device__ char* operator()(size_t idx) {
-    return d_output + offsets[idx];
-  }
+  char* d_output;
+  size_type* offsets;
+  __device__ char* operator()(size_t idx) { return d_output + offsets[idx]; }
 };
 
-std::tuple<rmm::device_uvector<char>, 
-  rmm::device_uvector<size_type>, 
-  rmm::device_uvector<size_type>> mixed_type_column_ws_normalization(
-    device_span<char const> d_input_,
-    rmm::device_uvector<size_type> &col_lengths, 
-    rmm::device_uvector<size_type> &col_offsets, 
-    rmm::cuda_stream_view stream, 
-    rmm::device_async_resource_ref mr) {
-
+std::
+  tuple<rmm::device_uvector<char>, rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
+  mixed_type_column_ws_normalization(device_span<char const> d_input_,
+                                     rmm::device_uvector<size_type>& col_lengths,
+                                     rmm::device_uvector<size_type>& col_offsets,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+{
   rmm::device_uvector<char> d_input(d_input_.size(), stream);
   thrust::copy(rmm::exec_policy(stream), d_input_.begin(), d_input_.end(), d_input.begin());
 
   size_t col_lengths_size = col_lengths.size();
-  size_type inbuf_size = thrust::reduce(rmm::exec_policy(stream), col_lengths.begin(), col_lengths.end());
+  size_type inbuf_size =
+    thrust::reduce(rmm::exec_policy(stream), col_lengths.begin(), col_lengths.end());
   rmm::device_uvector<char> inbuf(inbuf_size, stream);
   rmm::device_uvector<size_type> inbuf_offsets(col_lengths_size, stream);
-  thrust::exclusive_scan(rmm::exec_policy(stream), col_lengths.begin(), col_lengths.end(), inbuf_offsets.begin(), 0);
+  thrust::exclusive_scan(
+    rmm::exec_policy(stream), col_lengths.begin(), col_lengths.end(), inbuf_offsets.begin(), 0);
 
   auto input_it = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0), 
-      cub_batched_copy{d_input.data(), col_offsets.data()}
-      );
+    thrust::make_counting_iterator(0), cub_batched_copy{d_input.data(), col_offsets.data()});
   auto output_it = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0), 
-      cub_batched_copy{inbuf.data(), inbuf_offsets.data()}
-      );
+    thrust::make_counting_iterator(0), cub_batched_copy{inbuf.data(), inbuf_offsets.data()});
 
   // cub device batched copy
   size_t temp_storage_bytes = 0;
-  cub::DeviceCopy::Batched(nullptr, temp_storage_bytes, input_it, output_it, col_lengths.begin(), col_lengths_size, stream.value());
+  cub::DeviceCopy::Batched(nullptr,
+                           temp_storage_bytes,
+                           input_it,
+                           output_it,
+                           col_lengths.begin(),
+                           col_lengths_size,
+                           stream.value());
   rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-  cub::DeviceCopy::Batched(temp_storage.data(), temp_storage_bytes, input_it, output_it, col_lengths.begin(), col_lengths_size, stream.value());
+  cub::DeviceCopy::Batched(temp_storage.data(),
+                           temp_storage_bytes,
+                           input_it,
+                           output_it,
+                           col_lengths.begin(),
+                           col_lengths_size,
+                           stream.value());
 
   // complementary whitespace normalization : get only the indices
-  auto parser =
-    fst::detail::make_fst(fst::detail::make_symbol_group_lut(normalize_whitespace_complement::wna_sgs),
-                          fst::detail::make_transition_table(normalize_whitespace_complement::wna_state_tt),
-                          fst::detail::make_translation_functor<SymbolT, 0, 2>(
-                            normalize_whitespace_complement::TransduceToNormalizedWS{}),
-                          stream);
+  auto parser = fst::detail::make_fst(
+    fst::detail::make_symbol_group_lut(normalize_whitespace_complement::wna_sgs),
+    fst::detail::make_transition_table(normalize_whitespace_complement::wna_state_tt),
+    fst::detail::make_translation_functor<SymbolT, 0, 2>(
+      normalize_whitespace_complement::TransduceToNormalizedWS{}),
+    stream);
 
   rmm::device_uvector<size_type> outbuf_indices(inbuf.size(), stream, mr);
   rmm::device_scalar<SymbolOffsetT> outbuf_indices_size(stream, mr);
@@ -532,33 +537,33 @@ std::tuple<rmm::device_uvector<char>,
 
   // now these indices need to be removed
   // TODO: is there a better way to do this?
-  thrust::for_each(rmm::exec_policy(stream), outbuf_indices.begin(), outbuf_indices.end(),
-      [inbuf_offsets_begin = inbuf_offsets.begin(),
-       inbuf_offsets_end = inbuf_offsets.end(),
-       col_lengths = col_lengths.begin()] __device__ (size_type idx) {
-        auto it = thrust::upper_bound(thrust::seq, inbuf_offsets_begin, inbuf_offsets_end, idx);
-        auto pos = thrust::distance(inbuf_offsets_begin, it) - 1;
-        cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{
-          *(col_lengths + pos)};
-        ref.fetch_add(-1, cuda::std::memory_order_relaxed);
-      });
+  thrust::for_each(
+    rmm::exec_policy(stream),
+    outbuf_indices.begin(),
+    outbuf_indices.end(),
+    [inbuf_offsets_begin = inbuf_offsets.begin(),
+     inbuf_offsets_end   = inbuf_offsets.end(),
+     col_lengths         = col_lengths.begin()] __device__(size_type idx) {
+      auto it  = thrust::upper_bound(thrust::seq, inbuf_offsets_begin, inbuf_offsets_end, idx);
+      auto pos = thrust::distance(inbuf_offsets_begin, it) - 1;
+      cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(col_lengths + pos)};
+      ref.fetch_add(-1, cuda::std::memory_order_relaxed);
+    });
 
   rmm::device_uvector<int> stencil(inbuf_size, stream);
   thrust::fill(rmm::exec_policy(stream), stencil.begin(), stencil.end(), 0);
-  thrust::scatter(rmm::exec_policy(stream), 
-      thrust::make_constant_iterator(1), 
-      thrust::make_constant_iterator(1) + num_deletions, 
-      outbuf_indices.begin(), 
-      stencil.begin());
+  thrust::scatter(rmm::exec_policy(stream),
+                  thrust::make_constant_iterator(1),
+                  thrust::make_constant_iterator(1) + num_deletions,
+                  outbuf_indices.begin(),
+                  stencil.begin());
 
-  thrust::remove_if(rmm::exec_policy(stream), 
-      inbuf.begin(),
-      inbuf.end(),
-      stencil.begin(),
-      thrust::identity<int>());
+  thrust::remove_if(
+    rmm::exec_policy(stream), inbuf.begin(), inbuf.end(), stencil.begin(), thrust::identity<int>());
   inbuf.resize(inbuf_size - num_deletions, stream);
 
-  thrust::exclusive_scan(rmm::exec_policy(stream), col_lengths.begin(), col_lengths.end(), inbuf_offsets.begin(), 0);
+  thrust::exclusive_scan(
+    rmm::exec_policy(stream), col_lengths.begin(), col_lengths.end(), inbuf_offsets.begin(), 0);
   return std::tuple{std::move(inbuf), std::move(col_lengths), std::move(inbuf_offsets)};
 }
 

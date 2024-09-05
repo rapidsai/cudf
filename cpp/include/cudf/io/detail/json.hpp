@@ -76,14 +76,13 @@ void normalize_whitespace(datasource::owning_buffer<rmm::device_buffer>& indata,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr);
 
-std::tuple<rmm::device_uvector<char>, 
-  rmm::device_uvector<size_type>, 
-  rmm::device_uvector<size_type>> mixed_type_column_ws_normalization(
-    device_span<char const> d_input,
-    rmm::device_uvector<size_type> &col_lengths, 
-    rmm::device_uvector<size_type> &col_offsets, 
-    rmm::cuda_stream_view stream, 
-    rmm::device_async_resource_ref mr);
+std::
+  tuple<rmm::device_uvector<char>, rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
+  mixed_type_column_ws_normalization(device_span<char const> d_input,
+                                     rmm::device_uvector<size_type>& col_lengths,
+                                     rmm::device_uvector<size_type>& col_offsets,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr);
 
 }  // namespace io::json::detail
 }  // namespace CUDF_EXPORT cudf
