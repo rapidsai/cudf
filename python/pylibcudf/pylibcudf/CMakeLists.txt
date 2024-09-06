@@ -29,6 +29,7 @@ set(cython_sources
     join.pyx
     lists.pyx
     merge.pyx
+    null_mask.pyx
     quantiles.pyx
     reduce.pyx
     replace.pyx

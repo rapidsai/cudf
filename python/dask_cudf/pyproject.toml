@@ -34,6 +34,7 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 
 [project.entry-points."dask.dataframe.backends"]
@@ -117,6 +118,8 @@ skip = [
 filterwarnings = [
     "error::FutureWarning",
     "error::DeprecationWarning",
+    # some third-party dependencies (e.g. 'boto3') still using datetime.datetime.utcnow()
+    "ignore:.*datetime.*utcnow.*scheduled for removal:DeprecationWarning",
     "ignore:create_block_manager_from_blocks is deprecated and will be removed in a future version. Use public APIs instead.:DeprecationWarning",
     # https://github.com/dask/partd/blob/main/partd/pandas.py#L198
     "ignore:Passing a BlockManager to DataFrame is deprecated and will raise in a future version. Use public APIs instead.:DeprecationWarning",
