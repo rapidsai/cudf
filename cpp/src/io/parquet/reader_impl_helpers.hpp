@@ -242,9 +242,10 @@ class aggregate_reader_metadata {
   [[nodiscard]] inline bool is_schema_index_mapped(int schema_idx, int pfm_idx) const
   {
     // Check if schema_idx or pfm_idx is invalid
-    if (schema_idx < 0 or pfm_idx < 0 or pfm_idx >= static_cast<int>(per_file_metadata.size())) {
-      return false;
-    }
+    CUDF_EXPECTS(
+      schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
+      "Parquet reader encountered an invalid schema_idx or pfm_idx",
+      std::out_of_range);
 
     // True if root index requested or zeroth file index or schema_idx maps doesn't exist. (i.e.
     // schemas are identical).
