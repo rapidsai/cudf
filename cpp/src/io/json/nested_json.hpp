@@ -247,8 +247,8 @@ namespace detail {
 CUDF_EXPORT
 std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   tree_meta_t& tree,
-  device_span<NodeIndexT> original_col_ids,
-  device_span<size_type> row_offsets,
+  device_span<NodeIndexT const> original_col_ids,
+  device_span<size_type const> row_offsets,
   bool is_array_of_arrays,
   NodeIndexT const row_array_parent_col_id,
   rmm::cuda_stream_view stream);
@@ -373,10 +373,10 @@ get_array_children_indices(TreeDepthT row_array_children_level,
 CUDF_EXPORT
 std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 reduce_to_column_tree(tree_meta_t& tree,
-                      device_span<NodeIndexT> original_col_ids,
-                      device_span<NodeIndexT> sorted_col_ids,
-                      device_span<NodeIndexT> ordered_node_ids,
-                      device_span<size_type> row_offsets,
+                      device_span<NodeIndexT const> original_col_ids,
+                      device_span<NodeIndexT const> sorted_col_ids,
+                      device_span<NodeIndexT const> ordered_node_ids,
+                      device_span<size_type const> row_offsets,
                       bool is_array_of_arrays,
                       NodeIndexT const row_array_parent_col_id,
                       rmm::cuda_stream_view stream);

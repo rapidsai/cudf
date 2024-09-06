@@ -106,7 +106,7 @@ namespace experimental::detail {
 
 struct level_ordering {
   device_span<TreeDepthT> node_levels;
-  device_span<NodeIndexT> col_ids;
+  device_span<NodeIndexT const> col_ids;
   __device__ bool operator()(NodeIndexT lhs_node_id, NodeIndexT rhs_node_id) const
   {
     return (node_levels[lhs_node_id] < node_levels[rhs_node_id]) ||
@@ -116,7 +116,7 @@ struct level_ordering {
 };
 
 struct parent_nodeids_to_colids {
-  device_span<NodeIndexT> col_ids;
+  device_span<NodeIndexT const> col_ids;
   device_span<NodeIndexT> rev_mapped_col_ids;
   __device__ auto operator()(NodeIndexT parent_node_id) -> NodeIndexT
   {
@@ -141,8 +141,8 @@ struct parent_nodeids_to_colids {
  */
 std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   tree_meta_t& tree,
-  device_span<NodeIndexT> col_ids,
-  device_span<row_offset_t> row_offsets,
+  device_span<NodeIndexT const> col_ids,
+  device_span<row_offset_t const> row_offsets,
   bool is_array_of_arrays,
   NodeIndexT const row_array_parent_col_id,
   rmm::cuda_stream_view stream)
@@ -363,10 +363,10 @@ namespace detail {
  */
 std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 reduce_to_column_tree(tree_meta_t& tree,
-                      device_span<NodeIndexT> original_col_ids,
-                      device_span<NodeIndexT> sorted_col_ids,
-                      device_span<NodeIndexT> ordered_node_ids,
-                      device_span<size_type> row_offsets,
+                      device_span<NodeIndexT const> original_col_ids,
+                      device_span<NodeIndexT const> sorted_col_ids,
+                      device_span<NodeIndexT const> ordered_node_ids,
+                      device_span<size_type const> row_offsets,
                       bool is_array_of_arrays,
                       NodeIndexT const row_array_parent_col_id,
                       rmm::cuda_stream_view stream)

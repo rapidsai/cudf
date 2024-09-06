@@ -54,17 +54,8 @@ struct h_column_tree {
   std::vector<cuio_json::NodeIndexT> column_ids;
 };
 
-template <typename T>
-void print(std::string str, std::vector<T>& vec)
-{
-  std::cout << str << " = ";
-  for (size_t i = 0; i < vec.size(); i++)
-    std::cout << vec[i] << " ";
-  std::cout << std::endl;
-}
-
 bool check_equality(cuio_json::tree_meta_t& d_a,
-                    rmm::device_uvector<cudf::size_type>& d_a_max_row_offsets,
+                    cudf::device_span<cudf::size_type const> d_a_max_row_offsets,
                     cuio_json::experimental::csr& d_b_csr,
                     cuio_json::experimental::column_tree_properties& d_b_ctp,
                     rmm::cuda_stream_view stream)
