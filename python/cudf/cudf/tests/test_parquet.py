@@ -3895,38 +3895,27 @@ def test_parquet_reader_with_mismatched_structs():
         {
             "a": 1,
             "b": {
-                "inner_a": 10,
-                "inner_b": {"inner_inner_b": 1, "inner_inner_a": 2},
+                "a_a": 10,
+                "b_b": {"b_b_b": 1, "b_b_a": 2},
             },
             "c": 2,
         },
         {
             "a": 3,
-            "b": {"inner_a": 30, "inner_b": {"inner_inner_a": 210}},
+            "b": {"b_a": 30, "b_b": {"b_b_a": 210}},
             "c": 4,
         },
-        {"a": 5, "b": {"inner_a": 50, "inner_b": None}, "c": 6},
+        {"a": 5, "b": {"b_a": 50, "b_b": None}, "c": 6},
         {"a": 7, "b": None, "c": 8},
-        {"a": None, "b": {"inner_a": None, "inner_b": None}, "c": None},
-        None,
-        {
-            "a": None,
-            "b": {
-                "inner_a": None,
-                "inner_b": {"inner_inner_b": None, "inner_inner_a": 10},
-            },
-            "c": 10,
-        },
+        {"a": 5, "b": {"b_a": None, "b_b": None}, "c": None},
     ]
 
     data2 = [
-        {"a": 1, "b": {"inner_b": {"inner_inner_a": None}}},
-        {"a": 3, "b": {"inner_b": {"inner_inner_a": 1}}},
-        {"a": 5, "b": {"inner_b": None}},
-        {"a": 7, "b": {"inner_b": {"inner_inner_b": 1, "inner_inner_a": 0}}},
-        {"a": None, "b": {"inner_b": None}},
+        {"a": 1, "b": {"b_b": {"b_b_a": None}}},
+        {"a": 5, "b": {"b_b": None}},
+        {"a": 7, "b": {"b_b": {"b_b_b": 1, "b_b_a": 0}}},
+        {"a": None, "b": {"b_b": None}},
         None,
-        {"a": None, "b": {"inner_b": {"inner_inner_a": 1}}},
     ]
 
     # cuDF tables from struct data
@@ -3944,20 +3933,20 @@ def test_parquet_reader_with_mismatched_structs():
     # Read the struct.b.inner_b.inner_inner_a column from parquet
     got = cudf.read_parquet(
         [buf1, buf2],
-        columns=["struct.b.inner_b.inner_inner_a"],
+        columns=["struct.b.b_b.b_b_a"],
         allow_mismatched_pq_schemas=True,
     )
     got = (
         cudf.Series(got["struct"])
         .struct.field("b")
-        .struct.field("inner_b")
-        .struct.field("inner_inner_a")
+        .struct.field("b_b")
+        .struct.field("b_b_a")
     )
 
     # Read with chunked reader
     got_chunked = read_parquet_chunked(
         [buf1, buf2],
-        columns=["struct.b.inner_b.inner_inner_a"],
+        columns=["struct.b.b_b.b_b_a"],
         chunk_read_limit=240,
         pass_read_limit=240,
         allow_mismatched_pq_schemas=True,
@@ -3965,8 +3954,8 @@ def test_parquet_reader_with_mismatched_structs():
     got_chunked = (
         cudf.Series(got_chunked["struct"])
         .struct.field("b")
-        .struct.field("inner_b")
-        .struct.field("inner_inner_a")
+        .struct.field("b_b")
+        .struct.field("b_b_a")
     )
 
     # Construct the expected series
@@ -3974,12 +3963,12 @@ def test_parquet_reader_with_mismatched_structs():
         [
             cudf.Series(df1["struct"])
             .struct.field("b")
-            .struct.field("inner_b")
-            .struct.field("inner_inner_a"),
+            .struct.field("b_b")
+            .struct.field("b_b_a"),
             cudf.Series(df2["struct"])
             .struct.field("b")
-            .struct.field("inner_b")
-            .struct.field("inner_inner_a"),
+            .struct.field("b_b")
+            .struct.field("b_b_a"),
         ]
     ).reset_index(drop=True)
 
@@ -4018,12 +4007,12 @@ def test_parquet_reader_with_mismatched_schemas_error():
         )
 
     data1 = [
-        {"a": 1, "b": {"inner_a": 1, "inner_b": 6}},
-        {"a": 3, "b": {"inner_a": None, "inner_b": 2}},
+        {"a": 1, "b": {"b_a": 1, "b_b": 6}},
+        {"a": 3, "b": {"b_a": None, "b_b": 2}},
     ]
     data2 = [
-        {"b": {"inner_a": 1}, "c": "str"},
-        {"b": {"inner_a": None}, "c": None},
+        {"b": {"b_a": 1}, "c": "str"},
+        {"b": {"b_a": None}, "c": None},
     ]
 
     # cuDF tables from struct data
@@ -4054,7 +4043,7 @@ def test_parquet_reader_with_mismatched_schemas_error():
     ):
         cudf.read_parquet(
             [buf1, buf2],
-            columns=["struct.b.inner_b"],
+            columns=["struct.b.b_b"],
             allow_mismatched_pq_schemas=True,
         )
 
@@ -4084,7 +4073,7 @@ def test_parquet_reader_mismatched_nullability(tmpdir):
                     ],
                 ]
             ),
-            "int64": cudf.Series([1234, 123, 4123], dtype="int64"),
+            "int64": cudf.Series([1234, None, 4123], dtype="int64"),
             "int32": cudf.Series([1234, 123, 4123], dtype="int32"),
             "list": list([[1, 2], [1, 2], [1, 2]]),
             "datetime": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
@@ -4153,48 +4142,48 @@ def test_parquet_reader_mismatched_nullability_structs(tmpdir):
         {
             "a": "a",
             "b": {
-                "inner_a": 10,
-                "inner_b": {"inner_inner_b": 1, "inner_inner_a": 12},
+                "b_a": 10,
+                "b_b": {"b_b_b": 1, "b_b_a": 12},
             },
             "c": [1, 2],
         },
         {
             "a": "b",
             "b": {
-                "inner_a": 30,
-                "inner_b": {"inner_inner_b": 2, "inner_inner_a": 2},
+                "b_a": 30,
+                "b_b": {"b_b_b": 2, "b_b_a": 2},
             },
             "c": [3, 4],
         },
         {
             "a": "c",
             "b": {
-                "inner_a": 50,
-                "inner_b": {"inner_inner_b": 4, "inner_inner_a": 5},
+                "b_a": 50,
+                "b_b": {"b_b_b": 4, "b_b_a": 5},
             },
             "c": [5, 6],
         },
         {
             "a": "d",
             "b": {
-                "inner_a": 135,
-                "inner_b": {"inner_inner_b": 12, "inner_inner_a": 32},
+                "b_a": 135,
+                "b_b": {"b_b_b": 12, "b_b_a": 32},
             },
             "c": [7, 8],
         },
         {
             "a": "e",
             "b": {
-                "inner_a": 1,
-                "inner_b": {"inner_inner_b": 1, "inner_inner_a": 5},
+                "b_a": 1,
+                "b_b": {"b_b_b": 1, "b_b_a": 5},
             },
             "c": [9, 10],
         },
         {
             "a": "f",
             "b": {
-                "inner_a": 32,
-                "inner_b": {"inner_inner_b": 1, "inner_inner_a": 6},
+                "b_a": 32,
+                "b_b": {"b_b_b": 1, "b_b_a": 6},
             },
             "c": [11, 12],
         },
@@ -4204,26 +4193,18 @@ def test_parquet_reader_mismatched_nullability_structs(tmpdir):
         {
             "a": "g",
             "b": {
-                "inner_a": 10,
-                "inner_b": {"inner_inner_b": None, "inner_inner_a": None},
+                "b_a": 10,
+                "b_b": {"b_b_b": None, "b_b_a": 2},
             },
             "c": None,
         },
-        {
-            "a": "h",
-            "b": {
-                "inner_a": 30,
-                "inner_b": {"inner_inner_b": 1, "inner_inner_a": 2},
-            },
-            "c": [13, 14],
-        },
-        {"a": "i", "b": {"inner_a": None, "inner_b": None}, "c": [15, 16]},
+        {"a": None, "b": {"b_a": None, "b_b": None}, "c": [15, 16]},
         {"a": "j", "b": None, "c": [8, 10]},
-        {"a": None, "b": {"inner_a": None, "inner_b": None}, "c": None},
+        {"a": None, "b": {"b_a": None, "b_b": None}, "c": None},
         None,
         {
             "a": None,
-            "b": {"inner_a": None, "inner_b": {"inner_inner_b": None}},
+            "b": {"b_a": None, "b_b": {"b_b_b": 1}},
             "c": [18, 19],
         },
         {"a": None, "b": None, "c": None},

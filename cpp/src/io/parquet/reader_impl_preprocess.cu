@@ -94,8 +94,8 @@ void generate_depth_remappings(
 {
   // already generated for this level
   if (remap.find({src_col_schema, src_file_idx}) != remap.end()) { return; }
-  auto schema   = md.get_schema(mapped_src_col_schema, src_file_idx);
-  int max_depth = md.get_output_nesting_depth(src_col_schema, src_file_idx);
+  auto const& schema   = md.get_schema(mapped_src_col_schema, src_file_idx);
+  auto const max_depth = md.get_output_nesting_depth(src_col_schema);
 
   CUDF_EXPECTS(remap.find({src_col_schema, src_file_idx}) == remap.end(),
                "Attempting to remap a schema more than once");
@@ -144,7 +144,7 @@ void generate_depth_remappings(
       int cur_depth  = max_depth - 1;
       int schema_idx = mapped_src_col_schema;
       while (schema_idx > 0) {
-        auto cur_schema = md.get_schema(schema_idx, src_file_idx);
+        auto& cur_schema = md.get_schema(schema_idx, src_file_idx);
         if (cur_schema.max_repetition_level == r) {
           // if this is a repeated field, map it one level deeper
           shallowest = cur_schema.is_stub() ? cur_depth + 1 : cur_depth;
@@ -791,19 +791,18 @@ void reader::impl::allocate_nesting_info()
   std::transform(iter, iter + num_columns, per_page_nesting_info_size.begin(), [&](size_type i) {
     // Schema index of the current input column
     auto const schema_idx = _input_columns[i].schema_idx;
-    // Compute the max per_page_nesting_info_size across all input source files
-    auto max_per_page_nesting_info_size = 0;
-    std::for_each(thrust::make_counting_iterator(static_cast<size_t>(0)),
+    // Get the max_definition_level of this column across all sources.
+    auto max_definition_level = _metadata->get_schema(schema_idx).max_definition_level + 1;
+    std::for_each(thrust::make_counting_iterator(static_cast<size_t>(1)),
                   thrust::make_counting_iterator(_sources.size()),
                   [&](auto const src_file_idx) {
                     auto const& schema = _metadata->get_schema(
                       _metadata->map_schema_index(schema_idx, src_file_idx), src_file_idx);
-                    max_per_page_nesting_info_size = std::max(
-                      max_per_page_nesting_info_size,
-                      std::max(schema.max_definition_level + 1,
-                               _metadata->get_output_nesting_depth(schema_idx, src_file_idx)));
+                    max_definition_level =
+                      std::max(max_definition_level, schema.max_definition_level + 1);
                   });
-    return max_per_page_nesting_info_size;
+
+    return std::max(max_definition_level, _metadata->get_output_nesting_depth(schema_idx));
   });
 
   // compute total # of page_nesting infos needed and allocate space. doing this in one
@@ -831,16 +830,10 @@ void reader::impl::allocate_nesting_info()
         page_nesting_decode_info.device_ptr() + src_info_index;
 
       pages[target_page_index + p_idx].nesting_info_size = per_page_nesting_info_size[idx];
-      // Set the number of output nesting levels to the max from all input source files.
+      // Set the number of output nesting levels from the zeroth source as nesting must be
+      // identical across sources.
       pages[target_page_index + p_idx].num_output_nesting_levels =
         _metadata->get_output_nesting_depth(src_col_schema);
-      std::for_each(thrust::make_counting_iterator(static_cast<size_t>(1)),
-                    thrust::make_counting_iterator(_sources.size()),
-                    [&](auto const src_file_idx) {
-                      pages[target_page_index + p_idx].num_output_nesting_levels =
-                        std::max(pages[target_page_index + p_idx].num_output_nesting_levels,
-                                 _metadata->get_output_nesting_depth(src_col_schema, src_file_idx));
-                    });
 
       src_info_index += per_page_nesting_info_size[idx];
     }
@@ -855,20 +848,17 @@ void reader::impl::allocate_nesting_info()
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
     auto const src_col_schema = _input_columns[idx].schema_idx;
 
+    // real depth of the output cudf column hierarchy (1 == no nesting, 2 == 1 level, etc)
+    // nesting depth must be same across sources so getting it from the zeroth source is ok
+    int const max_output_depth = _metadata->get_output_nesting_depth(src_col_schema);
+
     // Map to store depths if this column has lists
     std::map<std::pair<int, int>, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
-
-    // real depth of the output cudf column hierarchy (1 == no nesting, 2 == 1 level, etc)
-    int max_output_depth = 0;
-    // Compute the max_output_depth across all input source files.
+    // if this column has lists, generate depth remapping
     std::for_each(
       thrust::make_counting_iterator(static_cast<size_t>(0)),
       thrust::make_counting_iterator(_sources.size()),
       [&](auto const src_file_idx) {
-        max_output_depth = std::max(
-          max_output_depth, _metadata->get_output_nesting_depth(src_col_schema, src_file_idx));
-
-        // if this column has lists, generate depth remapping
         auto const mapped_schema_idx = _metadata->map_schema_index(src_col_schema, src_file_idx);
         if (_metadata->get_schema(mapped_schema_idx, src_file_idx).max_repetition_level > 0) {
           generate_depth_remappings(

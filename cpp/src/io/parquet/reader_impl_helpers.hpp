@@ -266,7 +266,7 @@ class aggregate_reader_metadata {
     CUDF_EXPECTS(
       schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
       "Parquet reader encountered an invalid schema_idx or pfm_idx",
-      std::invalid_argument);
+      std::out_of_range);
 
     // Check if pfm_idx is zero or root index requested or schema_idx_maps doesn't exist (i.e.
     // schemas are identical).
@@ -277,7 +277,7 @@ class aggregate_reader_metadata {
     auto const& schema_idx_map = schema_idx_maps[pfm_idx - 1];
     CUDF_EXPECTS(schema_idx_map.find(schema_idx) != schema_idx_map.end(),
                  "Unmapped schema index encountered in the specified source tree",
-                 std::range_error);
+                 std::out_of_range);
 
     // Return the mapped schema idx.
     return schema_idx_map.at(schema_idx);
@@ -297,7 +297,7 @@ class aggregate_reader_metadata {
     CUDF_EXPECTS(
       schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
       "Parquet reader encountered an invalid schema_idx or pfm_idx",
-      std::invalid_argument);
+      std::out_of_range);
     return per_file_metadata[pfm_idx].schema[schema_idx];
   }
 
@@ -305,19 +305,18 @@ class aggregate_reader_metadata {
   [[nodiscard]] auto&& get_key_value_metadata() && { return std::move(keyval_maps); }
 
   /**
-   * @brief Gets the concrete nesting depth of output cudf columns
+   * @brief Gets the concrete nesting depth of output cudf columns.
+   *
+   * Gets the nesting depth of the output cudf column for the given schema.
+   * The nesting depth must be equal for the given schema_index across all sources.
    *
    * @param schema_index Schema index of the input column
-   * @param pfm_index File index of the input column
    *
    * @return comma-separated index column names in quotes
    */
-  [[nodiscard]] inline int get_output_nesting_depth(int schema_index, int pfm_index = 0) const
+  [[nodiscard]] inline int get_output_nesting_depth(int schema_index) const
   {
-    // Map schema index to the provided source file index
-    schema_index = map_schema_index(schema_index, pfm_index);
-
-    auto& pfm = per_file_metadata[pfm_index];
+    auto& pfm = per_file_metadata[0];
     int depth = 0;
 
     // walk upwards, skipping repeated fields

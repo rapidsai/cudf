@@ -1548,28 +1548,27 @@ void reader::impl::create_global_chunk_info()
       column_chunk_info const* const chunk_info =
         _has_page_index ? &rg.column_chunks.value()[column_mapping[i]] : nullptr;
 
-      chunks.push_back(
-        ColumnChunkDesc(col_meta.total_compressed_size,
-                        nullptr,
-                        col_meta.num_values,
-                        schema.type,
-                        schema.type_length,
-                        row_group_start,
-                        row_group_rows,
-                        schema.max_definition_level,
-                        schema.max_repetition_level,
-                        _metadata->get_output_nesting_depth(col.schema_idx, rg.source_index),
-                        required_bits(schema.max_definition_level),
-                        required_bits(schema.max_repetition_level),
-                        col_meta.codec,
-                        logical_type,
-                        clock_rate,
-                        i,
-                        col.schema_idx,
-                        chunk_info,
-                        list_bytes_per_row_est,
-                        schema.type == BYTE_ARRAY and _strings_to_categorical,
-                        rg.source_index));
+      chunks.push_back(ColumnChunkDesc(col_meta.total_compressed_size,
+                                       nullptr,
+                                       col_meta.num_values,
+                                       schema.type,
+                                       schema.type_length,
+                                       row_group_start,
+                                       row_group_rows,
+                                       schema.max_definition_level,
+                                       schema.max_repetition_level,
+                                       _metadata->get_output_nesting_depth(col.schema_idx),
+                                       required_bits(schema.max_definition_level),
+                                       required_bits(schema.max_repetition_level),
+                                       col_meta.codec,
+                                       logical_type,
+                                       clock_rate,
+                                       i,
+                                       col.schema_idx,
+                                       chunk_info,
+                                       list_bytes_per_row_est,
+                                       schema.type == BYTE_ARRAY and _strings_to_categorical,
+                                       rg.source_index));
     }
     // Adjust for skip_rows when updating the remaining rows after the first group
     remaining_rows -=
