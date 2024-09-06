@@ -4,26 +4,30 @@
 
 import subprocess
 import tempfile
+import textwrap
 
 
-def test_run_cudf_pandas_with_cli():
+def test_run_cudf_pandas_with_script():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=True) as f:
         code = """import pandas as pd; df = pd.DataFrame({'a': [1, 2, 3]}); print(df['a'].sum())"""
+        code = textwrap.dedent(
+            """
+            import pandas as pd; df = pd.DataFrame({'a': [1, 2, 3]}); print(df['a'].sum())
+            """
+        )
         f.write(code)
-        f.seek(0)
 
         command = f"python -m cudf.pandas {f.name}"
         res = subprocess.run(
             command, shell=True, capture_output=True, text=True
         )
 
-        f.seek(0)
         command = f"python {f.name}"
         expect = subprocess.run(
             command, shell=True, capture_output=True, text=True
         )
 
-        assert res.stdout == expect.stdout
+    assert res.stdout == expect.stdout
 
 
 def test_run_cudf_pandas_with_cli_with_cmd_args():
