@@ -401,10 +401,6 @@ feature_status_parameters::feature_status_parameters()
     are_all_integrations_enabled{nvcomp_integration::is_all_enabled()},
     are_stable_integrations_enabled{nvcomp_integration::is_stable_enabled()}
 {
-  int device;
-  CUDF_CUDA_TRY(cudaGetDevice(&device));
-  CUDF_CUDA_TRY(
-    cudaDeviceGetAttribute(&compute_capability_major, cudaDevAttrComputeCapabilityMajor, device));
 }
 
 // Represents all parameters required to determine status of a compression/decompression feature
@@ -433,27 +429,13 @@ std::optional<std::string> is_compression_disabled_impl(compression_type compres
       }
       return std::nullopt;
     }
-    case compression_type::SNAPPY: {
-      if (not params.are_stable_integrations_enabled) {
-        return "Snappy compression has been disabled through the `LIBCUDF_NVCOMP_POLICY` "
-               "environment variable.";
-      }
-      return std::nullopt;
-    }
-    case compression_type::ZSTD: {
-      if (not params.are_stable_integrations_enabled) {
-        return "Zstandard compression is experimental, you can enable it through "
-               "`LIBCUDF_NVCOMP_POLICY` environment variable.";
-      }
-      return std::nullopt;
-    }
     case compression_type::LZ4:
+    case compression_type::SNAPPY:
+    case compression_type::ZSTD:
       if (not params.are_stable_integrations_enabled) {
-        return "LZ4 compression has been disabled through the `LIBCUDF_NVCOMP_POLICY` "
-               "environment variable.";
+        return "nvCOMP use is disabled through the `LIBCUDF_NVCOMP_POLICY` environment variable.";
       }
       return std::nullopt;
-    default: return "Unsupported compression type";
   }
   return "Unsupported compression type";
 }
@@ -498,27 +480,14 @@ std::optional<std::string> is_decompression_disabled_impl(compression_type compr
       }
       return std::nullopt;
     }
-    case compression_type::SNAPPY: {
-      if (not params.are_stable_integrations_enabled) {
-        return "Snappy decompression has been disabled through the `LIBCUDF_NVCOMP_POLICY` "
-               "environment variable.";
-      }
-      return std::nullopt;
-    }
+    case compression_type::LZ4:
+    case compression_type::SNAPPY:
     case compression_type::ZSTD: {
       if (not params.are_stable_integrations_enabled) {
-        return "Zstandard decompression has been disabled through the `LIBCUDF_NVCOMP_POLICY` "
-               "environment variable.";
-      }
-    }
-    case compression_type::LZ4: {
-      if (not params.are_stable_integrations_enabled) {
-        return "LZ4 decompression has been disabled through the `LIBCUDF_NVCOMP_POLICY` "
-               "environment variable.";
+        return "nvCOMP use is disabled through the `LIBCUDF_NVCOMP_POLICY` environment variable.";
       }
       return std::nullopt;
     }
-    default: return "Unsupported compression type";
   }
   return "Unsupported compression type";
 }
