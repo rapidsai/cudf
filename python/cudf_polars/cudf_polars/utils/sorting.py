@@ -45,7 +45,7 @@ def sort_order(
     null_precedence = []
     if len(descending) != len(nulls_last) or len(descending) != num_keys:
         raise ValueError("Mismatching length of arguments in sort_order")
-    for asc, null_last in zip(column_order, nulls_last):
+    for asc, null_last in zip(column_order, nulls_last, strict=True):
         if (asc == plc.types.Order.ASCENDING) ^ (not null_last):
             null_precedence.append(plc.types.NullOrder.AFTER)
         elif (asc == plc.types.Order.ASCENDING) ^ null_last:

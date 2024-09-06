@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,21 @@
  * limitations under the License.
  */
 
-#pragma once
+#include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
-#include <cudf/detail/interop.hpp>
+#include <cuda_runtime.h>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
-// unique_ptr because that is what AllocateBuffer returns
-std::unique_ptr<arrow::Buffer> allocate_arrow_buffer(int64_t const size, arrow::MemoryPool* ar_mr);
+cudf::size_type num_multiprocessors()
+{
+  int device = 0;
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
+  int num_sms = 0;
+  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
+  return num_sms;
+}
 
-// shared_ptr because that is what AllocateBitmap returns
-std::shared_ptr<arrow::Buffer> allocate_arrow_bitmap(int64_t const size, arrow::MemoryPool* ar_mr);
-
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail

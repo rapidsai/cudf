@@ -8,7 +8,8 @@ import pandas as pd
 
 import cudf
 from cudf.api.types import is_list_like
-from cudf.core.column import as_column, build_categorical_column
+from cudf.core.column import as_column
+from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.index import IntervalIndex, interval_range
 
 
@@ -282,13 +283,17 @@ def cut(
             # should allow duplicate categories.
             return interval_labels[index_labels]
 
-    col = build_categorical_column(
-        categories=interval_labels,
-        codes=index_labels,
+    index_labels = as_unsigned_codes(len(interval_labels), index_labels)
+
+    col = CategoricalColumn(
+        data=None,
+        size=index_labels.size,
+        dtype=cudf.CategoricalDtype(
+            categories=interval_labels, ordered=ordered
+        ),
         mask=index_labels.base_mask,
         offset=index_labels.offset,
-        size=index_labels.size,
-        ordered=ordered,
+        children=(index_labels,),
     )
 
     # we return a categorical index, as we don't have a Categorical method

@@ -5,10 +5,10 @@ import os
 import textwrap
 from contextlib import ContextDecorator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Container
+    from collections.abc import Callable, Container
 
 
 @dataclass

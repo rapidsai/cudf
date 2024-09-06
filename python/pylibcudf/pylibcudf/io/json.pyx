@@ -51,8 +51,8 @@ cdef json_reader_options _setup_json_reader_options(
         list dtypes,
         compression_type compression,
         bool lines,
-        size_type byte_range_offset,
-        size_type byte_range_size,
+        size_t byte_range_offset,
+        size_t byte_range_size,
         bool keep_quotes,
         bool mixed_types_as_string,
         bool prune_columns,
@@ -189,8 +189,8 @@ cpdef TableWithMetadata read_json(
     list dtypes = None,
     compression_type compression = compression_type.AUTO,
     bool lines = False,
-    size_type byte_range_offset = 0,
-    size_type byte_range_size = 0,
+    size_t byte_range_offset = 0,
+    size_t byte_range_size = 0,
     bool keep_quotes = False,
     bool mixed_types_as_string = False,
     bool prune_columns = False,
@@ -212,9 +212,9 @@ cpdef TableWithMetadata read_json(
         (column_child_name, column_child_type, list of grandchild dtypes).
     compression: CompressionType, default CompressionType.AUTO
         The compression format of the JSON source.
-    byte_range_offset : size_type, default 0
+    byte_range_offset : size_t, default 0
         Number of bytes to skip from source start.
-    byte_range_size : size_type, default 0
+    byte_range_size : size_t, default 0
         Number of bytes to read. By default, will read all bytes.
     keep_quotes : bool, default False
         Whether the reader should keep quotes of string values.

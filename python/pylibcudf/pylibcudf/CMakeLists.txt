@@ -29,6 +29,7 @@ set(cython_sources
     join.pyx
     lists.pyx
     merge.pyx
+    null_mask.pyx
     quantiles.pyx
     reduce.pyx
     replace.pyx
@@ -52,6 +53,8 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_ ASSOCIATED_TARGETS cudf
 )
+
+target_include_directories(pylibcudf_interop PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
 
 include(${rapids-cmake-dir}/export/find_package_root.cmake)
 include(../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)

@@ -106,19 +106,6 @@ def _check_and_cast_columns_with_other(
     return _normalize_categorical(source_col.astype(common_dtype), other)
 
 
-def _make_categorical_like(result, column):
-    if isinstance(column, cudf.core.column.CategoricalColumn):
-        result = cudf.core.column.build_categorical_column(
-            categories=column.categories,
-            codes=result,
-            mask=result.base_mask,
-            size=result.size,
-            offset=result.offset,
-            ordered=column.ordered,
-        )
-    return result
-
-
 def _can_cast(from_dtype, to_dtype):
     """
     Utility function to determine if we can cast

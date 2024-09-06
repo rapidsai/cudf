@@ -13,10 +13,8 @@ To satisfy the goals of pylibcudf, we impose the following set of design princip
 - Every public function or method should be `cpdef`ed. This allows it to be used in both Cython and Python code. This incurs some slight overhead over `cdef` functions, but we assume that this is acceptable because 1) the vast majority of users will be using pure Python rather than Cython, and 2) the overhead of a `cpdef` function over a `cdef` function is on the order of a nanosecond, while CUDA kernel launch overhead is on the order of a microsecond, so these function overheads should be washed out by typical usage of pylibcudf.
 - Every variable used should be strongly typed and either be a primitive type (int, float, etc) or a cdef class. Any enums in C++ should be mirrored using `cpdef enum`, which will create both a C-style enum in Cython and a PEP 435-style Python enum that will automatically be used in Python.
 - All typing in code should be written using Cython syntax, not PEP 484 Python typing syntax. Not only does this ensure compatibility with Cython < 3, but even with Cython 3 PEP 484 support remains incomplete as of this writing.
-- All cudf code should interact only with pylibcudf, never with libcudf directly.
-- All imports should be relative so that pylibcudf can be easily extracted from cudf later
-  - Exception: All imports of libcudf API bindings in `cudf._lib.cpp` should use absolute imports of `cudf._lib.cpp as libcudf`. We should convert the `cpp` directory into a proper package so that it can be imported as `libcudf` in that fashion. When moving pylibcudf into a separate package, it will be renamed to `libcudf` and only the imports will need to change.
-- Ideally, pylibcudf should depend on nothing other than rmm and pyarrow. This will allow it to be extracted into a a largely standalone library and used in environments where the larger dependency tree of cudf may be cumbersome.
+- All cudf code should interact only with pylibcudf, never with libcudf directly. This is not currently the case, but is the direction that the library is moving towards.
+- Ideally, pylibcudf should depend on no RAPIDS component other than rmm, and should in general have minimal runtime dependencies.
 
 
 ## Relationship to libcudf
@@ -112,6 +110,9 @@ Then, a corresponding pylibcudf fixture may be created using a simple `from_arro
 This approach ensures consistent global coverage across types for various tests.
 
 In general, pylibcudf tests should prefer validating against a corresponding pyarrow implementation rather than hardcoding data.
+If there is no pyarrow implementation, another alternative is to write a pure Python implementation that loops over the values
+of the Table/Column, if a scalar Python equivalent of the pylibcudf implementation exists (this is especially relevant for string methods).
+
 This approach is more resilient to changes to input data, particularly given the fixture strategy outlined above.
 Standard tools for comparing between pylibcudf and pyarrow types are provided in the utils module.
 
@@ -242,3 +243,8 @@ cpdef ColumnOrTable empty_like(ColumnOrTable input)
 
 [Cython supports specializing the contents of fused-type functions based on the argument types](https://cython.readthedocs.io/en/latest/src/userguide/fusedtypes.html#type-checking-specializations), so any type-specific logic may be encoded using the appropriate conditionals.
 See the pylibcudf source for examples of how to implement such functions.
+
+In the event that libcudf provides multiple overloads for the same function with differing numbers of arguments, specify the maximum number of arguments in the Cython definition,
+and set arguments not shared between overloads to `None`. If a user tries to pass in an unsupported argument for a specific overload type, you should raise `ValueError`.
+
+Finally, consider making an libcudf issue if you think this inconsistency can be addressed on the libcudf side.
