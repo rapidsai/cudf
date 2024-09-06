@@ -1,12 +1,12 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
-from libcpp cimport bool
+from libcpp cimport int
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 
 
 cdef extern from "cudf/labeling/label_bins.hpp" namespace "cudf" nogil:
-    cpdef enum class inclusive(bool):
+    cpdef enum class inclusive(int):
         YES
         NO
 
