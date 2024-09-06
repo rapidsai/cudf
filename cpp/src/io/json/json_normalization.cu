@@ -476,11 +476,14 @@ std::
 {
   size_t col_lengths_size = col_lengths.size();
   size_type inbuf_size =
-    thrust::reduce(rmm::exec_policy(stream), col_lengths.begin(), col_lengths.end());
+    thrust::reduce(rmm::exec_policy_nosync(stream), col_lengths.begin(), col_lengths.end());
   rmm::device_uvector<char> inbuf(inbuf_size, stream);
   rmm::device_uvector<size_type> inbuf_offsets(col_lengths_size, stream);
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), col_lengths.begin(), col_lengths.end(), inbuf_offsets.begin(), 0);
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+                         col_lengths.begin(),
+                         col_lengths.end(),
+                         inbuf_offsets.begin(),
+                         0);
 
   auto input_it = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
@@ -536,7 +539,7 @@ std::
   // now these indices need to be removed
   // TODO: is there a better way to do this?
   thrust::for_each(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     outbuf_indices.begin(),
     outbuf_indices.end(),
     [inbuf_offsets_begin = inbuf_offsets.begin(),
@@ -548,20 +551,27 @@ std::
       ref.fetch_add(-1, cuda::std::memory_order_relaxed);
     });
 
-  rmm::device_uvector<int> stencil(inbuf_size, stream);
-  thrust::fill(rmm::exec_policy(stream), stencil.begin(), stencil.end(), 0);
-  thrust::scatter(rmm::exec_policy(stream),
+  auto stencil = cudf::detail::make_zeroed_device_uvector_async<int>(
+    static_cast<std::size_t>(inbuf_size), stream, rmm::mr::get_current_device_resource());
+  thrust::scatter(rmm::exec_policy_nosync(stream),
                   thrust::make_constant_iterator(1),
                   thrust::make_constant_iterator(1) + num_deletions,
                   outbuf_indices.begin(),
                   stencil.begin());
-
-  thrust::remove_if(
-    rmm::exec_policy(stream), inbuf.begin(), inbuf.end(), stencil.begin(), thrust::identity<int>());
+  thrust::remove_if(rmm::exec_policy_nosync(stream),
+                    inbuf.begin(),
+                    inbuf.end(),
+                    stencil.begin(),
+                    thrust::identity<int>());
   inbuf.resize(inbuf_size - num_deletions, stream);
 
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), col_lengths.begin(), col_lengths.end(), inbuf_offsets.begin(), 0);
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+                         col_lengths.begin(),
+                         col_lengths.end(),
+                         inbuf_offsets.begin(),
+                         0);
+
+  stream.synchronize();
   return std::tuple{std::move(inbuf), std::move(col_lengths), std::move(inbuf_offsets)};
 }
 
