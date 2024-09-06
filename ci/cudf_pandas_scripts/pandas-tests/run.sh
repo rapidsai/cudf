@@ -11,7 +11,7 @@ RAPIDS_FULL_VERSION=$(<./VERSION)
 rapids-logger "Running Pandas tests using $PANDAS_TESTS_BRANCH branch and rapids-version $RAPIDS_FULL_VERSION"
 rapids-logger "PR number: ${RAPIDS_REF_NAME:-"unknown"}"
 
-
+apt-get update && apt-get install git-lfs
 git lfs install
 git lfs fetch --all
 git lfs checkout

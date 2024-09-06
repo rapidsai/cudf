@@ -287,7 +287,7 @@ jobs:
     # run the Pandas unit tests using PR branch
     needs: [changed-files]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@test_prem
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@python-3.12
     strategy:
       matrix:
         group: [1, 2, 3]
