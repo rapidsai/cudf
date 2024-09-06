@@ -2557,6 +2557,13 @@ def test_series_arrow_list_types_roundtrip():
             cudf.from_pandas(pdf)
 
 
+@pytest.mark.parametrize("base_name", [None, "a"])
+def test_series_to_frame_none_name(base_name):
+    result = cudf.Series(range(1), name=base_name).to_frame(name=None)
+    expected = pd.Series(range(1), name=base_name).to_frame(name=None)
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize("klass", [cudf.Index, cudf.Series])
 @pytest.mark.parametrize(
     "data", [pa.array([float("nan")]), pa.chunked_array([[float("nan")]])]

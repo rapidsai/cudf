@@ -1679,7 +1679,13 @@ def run_orc_columns_and_index_param(index_obj, index, columns):
     "columns",
     [
         None,
-        [],
+        pytest.param(
+            [],
+            marks=pytest.mark.skipif(
+                PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+                reason="Bug in older version of pandas",
+            ),
+        ),
     ],
 )
 def test_orc_columns_and_index_param(index_obj, index, columns):

@@ -54,8 +54,19 @@ else
     RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp ./dist
     RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./dist
 
-    # echo to expand wildcard before adding `[extra]` requires for pip
+    echo "" > ./constraints.txt
+    if [[ $RAPIDS_DEPENDENCIES == "oldest" ]]; then
+        # `test_python` constraints are for `[test]` not `[cudf-pandas-tests]`
+        rapids-dependency-file-generator \
+            --output requirements \
+            --file-key test_python \
+            --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
+        | tee ./constraints.txt
+    fi
+
     python -m pip install \
+        -v \
+        --constraint ./constraints.txt \
         "$(echo ./dist/cudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test,cudf-pandas-tests]" \
         "$(echo ./dist/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \
         "$(echo ./dist/pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
@@ -64,7 +75,9 @@ fi
 python -m pip install ipykernel
 python -m ipykernel install --user --name python3
 
+# The third-party integration tests are ignored because they are run nightly in seperate CI job
 python -m pytest -p cudf.pandas \
+    --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
@@ -80,6 +93,7 @@ for version in "${versions[@]}"; do
     echo "Installing pandas version: ${version}"
     python -m pip install "numpy>=1.23,<2.0a0" "pandas==${version}"
     python -m pytest -p cudf.pandas \
+    --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
