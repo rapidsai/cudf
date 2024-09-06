@@ -167,7 +167,9 @@ def test_string_index():
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = cudf.Index(as_column(["a", "b", "c", "d", "e"]), name="name")
+    stringIndex = cudf.Index._from_column(
+        as_column(["a", "b", "c", "d", "e"]), name="name"
+    )
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
@@ -2178,4 +2180,14 @@ def test_unique_level():
 
     result = pd_mi.unique(level=1)
     expected = cudf_mi.unique(level=1)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "idx", [pd.Index, pd.CategoricalIndex, pd.DatetimeIndex, pd.TimedeltaIndex]
+)
+def test_from_arrays_infer_names(idx):
+    arrays = [idx([1], name="foo"), idx([2], name="bar")]
+    expected = pd.MultiIndex.from_arrays(arrays)
+    result = cudf.MultiIndex.from_arrays(arrays)
     assert_eq(result, expected)

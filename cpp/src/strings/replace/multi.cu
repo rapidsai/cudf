@@ -533,16 +533,5 @@ std::unique_ptr<column> replace_multiple(strings_column_view const& strings,
   return detail::replace_multiple(strings, targets, repls, stream, mr);
 }
 
-// deprecated in 24.08
-std::unique_ptr<column> replace(strings_column_view const& strings,
-                                strings_column_view const& targets,
-                                strings_column_view const& repls,
-                                rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::replace_multiple(strings, targets, repls, stream, mr);
-}
-
 }  // namespace strings
 }  // namespace cudf

@@ -13,13 +13,16 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-from pyarrow import fs as pa_fs
 
 import cudf
 from cudf import read_csv
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
+    PANDAS_VERSION,
+)
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -1080,18 +1083,6 @@ def test_csv_reader_filepath_or_buffer(tmpdir, path_or_buf, src):
     assert_eq(expect, got)
 
 
-def test_csv_reader_arrow_nativefile(path_or_buf):
-    # Check that we can read a file opened with the
-    # Arrow FileSystem interface
-    expect = cudf.read_csv(path_or_buf("filepath"))
-    fs, path = pa_fs.FileSystem.from_uri(path_or_buf("filepath"))
-    with pytest.warns(FutureWarning):
-        with fs.open_input_file(path) as fil:
-            got = cudf.read_csv(fil)
-
-    assert_eq(expect, got)
-
-
 def test_small_zip(tmpdir):
     df = pd.DataFrame(
         {
@@ -1283,14 +1274,14 @@ def test_csv_reader_delim_whitespace():
     # with header row
     with pytest.warns(FutureWarning):
         cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
-    with pytest.warns(FutureWarning):
+    with expect_warning_if(PANDAS_GE_220):
         pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
     assert_eq(pd_df, cu_df)
 
     # without header row
     with pytest.warns(FutureWarning):
         cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
-    with pytest.warns(FutureWarning):
+    with expect_warning_if(PANDAS_GE_220):
         pd_df = pd.read_csv(
             StringIO(buffer), delim_whitespace=True, header=None
         )

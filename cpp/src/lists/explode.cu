@@ -29,6 +29,7 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/optional>
 #include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
@@ -36,7 +37,6 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/optional.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
@@ -57,8 +57,8 @@ std::unique_ptr<table> build_table(
   size_type const explode_column_idx,
   column_view const& sliced_child,
   cudf::device_span<size_type const> gather_map,
-  thrust::optional<cudf::device_span<size_type const>> explode_col_gather_map,
-  thrust::optional<rmm::device_uvector<size_type>> position_array,
+  cuda::std::optional<cudf::device_span<size_type const>> explode_col_gather_map,
+  cuda::std::optional<rmm::device_uvector<size_type>> position_array,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -143,8 +143,8 @@ std::unique_ptr<table> explode(table_view const& input_table,
                      explode_column_idx,
                      sliced_child,
                      gather_map,
-                     thrust::nullopt,
-                     thrust::nullopt,
+                     cuda::std::nullopt,
+                     cuda::std::nullopt,
                      stream,
                      mr);
 }
@@ -193,7 +193,7 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
                      explode_column_idx,
                      sliced_child,
                      gather_map,
-                     thrust::nullopt,
+                     cuda::std::nullopt,
                      std::move(pos),
                      stream,
                      mr);
@@ -292,7 +292,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
     sliced_child,
     gather_map,
     explode_col_gather_map,
-    include_position ? std::move(pos) : thrust::optional<rmm::device_uvector<size_type>>{},
+    include_position ? std::move(pos) : cuda::std::optional<rmm::device_uvector<size_type>>{},
     stream,
     mr);
 }

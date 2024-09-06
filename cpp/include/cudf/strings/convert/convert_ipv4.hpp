@@ -44,15 +44,12 @@ namespace strings {
  * No checking is done on the format. If a string is not in IPv4 format, the resulting
  * integer is undefined.
  *
- * The resulting 32-bit integer is placed in an int64_t to avoid setting the sign-bit
- * in an int32_t type. This could be changed if cudf supported a UINT32 type in the future.
- *
  * Any null entries will result in corresponding null entries in the output column.
  *
  * @param input Strings instance for this operation
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New INT64 column converted from strings
+ * @return New UINT32 column converted from strings
  */
 std::unique_ptr<column> ipv4_to_integers(
   strings_column_view const& input,
@@ -68,13 +65,11 @@ std::unique_ptr<column> ipv4_to_integers(
  * Each input integer is dissected into four integers by dividing the input into 8-bit sections.
  * These sub-integers are then converted into [0-9] characters and placed between '.' characters.
  *
- * No checking is done on the input integer value. Only the lower 32-bits are used.
- *
  * Any null entries will result in corresponding null entries in the output column.
  *
- * @throw cudf::logic_error if the input column is not INT64 type.
+ * @throw cudf::logic_error if the input column is not UINT32 type.
  *
- * @param integers Integer (INT64) column to convert
+ * @param integers Integer (UINT32) column to convert
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column

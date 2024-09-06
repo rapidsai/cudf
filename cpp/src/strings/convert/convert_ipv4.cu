@@ -46,7 +46,7 @@ namespace {
 struct ipv4_to_integers_fn {
   column_device_view const d_strings;
 
-  __device__ int64_t operator()(size_type idx)
+  __device__ uint32_t operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str  = d_strings.element<string_view>(idx);
@@ -66,7 +66,7 @@ struct ipv4_to_integers_fn {
       }
     }
     uint32_t result = (ipvals[0] << 24) + (ipvals[1] << 16) + (ipvals[2] << 8) + ipvals[3];
-    return static_cast<int64_t>(result);
+    return result;
   }
 };
 
@@ -79,18 +79,18 @@ std::unique_ptr<column> ipv4_to_integers(strings_column_view const& input,
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
-    return make_numeric_column(data_type{type_id::INT64}, 0, mask_state::UNALLOCATED, stream);
+    return make_numeric_column(data_type{type_id::UINT32}, 0, mask_state::UNALLOCATED, stream);
   }
 
   auto strings_column = column_device_view::create(input.parent(), stream);
   // create output column copying the strings' null-mask
-  auto results   = make_numeric_column(data_type{type_id::INT64},
+  auto results   = make_numeric_column(data_type{type_id::UINT32},
                                      strings_count,
                                      cudf::detail::copy_bitmask(input.parent(), stream, mr),
                                      input.null_count(),
                                      stream,
                                      mr);
-  auto d_results = results->mutable_view().data<int64_t>();
+  auto d_results = results->mutable_view().data<uint32_t>();
   // fill output column with ipv4 integers
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
@@ -135,7 +135,7 @@ struct integers_to_ipv4_fn {
       return;
     }
 
-    auto const ip_number = d_column.element<int64_t>(idx);
+    auto const ip_number = d_column.element<uint32_t>(idx);
 
     char* out_ptr   = d_chars ? d_chars + d_offsets[idx] : nullptr;
     int shift_bits  = 24;
@@ -165,7 +165,7 @@ std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
 {
   if (integers.is_empty()) return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(integers.type().id() == type_id::INT64, "Input column must be type_id::INT64 type");
+  CUDF_EXPECTS(integers.type().id() == type_id::UINT32, "Input column must be UINT32 type");
 
   auto d_column = column_device_view::create(integers, stream);
   auto [offsets_column, chars] =

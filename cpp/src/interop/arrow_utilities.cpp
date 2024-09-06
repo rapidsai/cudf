@@ -98,6 +98,7 @@ ArrowType id_to_arrow_type(cudf::type_id id)
 ArrowType id_to_arrow_storage_type(cudf::type_id id)
 {
   switch (id) {
+    case cudf::type_id::TIMESTAMP_DAYS: return NANOARROW_TYPE_INT32;
     case cudf::type_id::TIMESTAMP_SECONDS:
     case cudf::type_id::TIMESTAMP_MILLISECONDS:
     case cudf::type_id::TIMESTAMP_MICROSECONDS:

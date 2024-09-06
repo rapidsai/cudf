@@ -20,11 +20,12 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/detail/fill.hpp>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 
 #include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/uninitialized_fill.h>
 
 namespace cudf {
 
@@ -57,15 +58,26 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
 {
   if (size == 0) return make_empty_column(value.type());
 
-  // Since we are setting every row to the scalar, the fill() never needs to access
-  // any of the children in the strings column which would otherwise cause an exception.
-  column_view sc{value.type(), size, nullptr, nullptr, 0};
-  auto& sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
+  if (!value.is_valid(stream)) {
+    return make_strings_column(
+      size,
+      make_column_from_scalar(numeric_scalar<int32_t>(0), size + 1, stream, mr),
+      rmm::device_buffer{},
+      size,
+      cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr));
+  }
+
+  auto& ss         = static_cast<scalar_type_t<cudf::string_view> const&>(value);
+  auto const d_str = ss.value(stream);  // no actual data is copied
 
   // fill the column with the scalar
-  auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, stream, mr);
-
-  return output;
+  rmm::device_uvector<cudf::strings::detail::string_index_pair> indices(size, stream);
+  auto const row_value =
+    d_str.empty() ? cudf::strings::detail::string_index_pair{"", 0}
+                  : cudf::strings::detail::string_index_pair{d_str.data(), d_str.size_bytes()};
+  thrust::uninitialized_fill(
+    rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), row_value);
+  return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, mr);
 }
 
 template <>

@@ -362,11 +362,15 @@ def test_replace_level_values_MultiColumn():
     got = ca.rename_levels(mapper={"a": "f"}, level=0)
     check_ca_equal(expect, got)
 
+    # passing without level kwarg assumes level=0
+    got = ca.rename_levels(mapper={"a": "f"})
+    check_ca_equal(expect, got)
+
 
 def test_clear_nrows_empty_before():
     ca = ColumnAccessor({})
     assert ca.nrows == 0
-    ca.insert("new", [1])
+    ca.insert("new", as_column([1]))
     assert ca.nrows == 1
 
 

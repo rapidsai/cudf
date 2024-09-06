@@ -649,7 +649,7 @@ struct column_to_strings_fn {
     auto const list_child_string = make_lists_column(
       column.size(),
       std::move(new_offsets),
-      std::move(child_string_with_null()),
+      child_string_with_null(),
       column.null_count(),
       cudf::detail::copy_bitmask(column, stream_, rmm::mr::get_current_device_resource()),
       stream_);

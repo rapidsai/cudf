@@ -155,3 +155,9 @@ def test_get_dummies_array_like_with_nan():
     actual = cudf.get_dummies(ser, dummy_na=True, prefix="a", prefix_sep="_")
 
     assert_eq(expected, actual)
+
+
+def test_get_dummies_cats_deprecated():
+    df = cudf.DataFrame(range(3))
+    with pytest.warns(FutureWarning):
+        cudf.get_dummies(df, cats={0: [0, 1, 2]})

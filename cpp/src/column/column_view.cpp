@@ -45,7 +45,10 @@ void prefetch_col_data(ColumnView& col, void const* data_ptr, std::string_view k
         key, data_ptr, col.size() * size_of(col.type()), cudf::get_default_stream());
     } else if (col.type().id() == type_id::STRING) {
       strings_column_view scv{col};
-
+      if (data_ptr == nullptr) {
+        // Do not call chars_size if the data_ptr is nullptr.
+        return;
+      }
       cudf::experimental::prefetch::detail::prefetch_noexcept(
         key,
         data_ptr,

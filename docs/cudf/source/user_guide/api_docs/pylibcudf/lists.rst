@@ -2,5 +2,5 @@
 lists
 =====
 
-.. automodule:: cudf._lib.pylibcudf.lists
+.. automodule:: pylibcudf.lists
    :members:

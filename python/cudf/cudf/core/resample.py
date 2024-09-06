@@ -145,7 +145,9 @@ class _ResampleGrouping(_Grouping):
     def keys(self):
         index = super().keys
         if self._freq is not None and isinstance(index, cudf.DatetimeIndex):
-            return cudf.DatetimeIndex._from_data(index._data, freq=self._freq)
+            return cudf.DatetimeIndex._from_column(
+                index._column, name=index.name, freq=self._freq
+            )
         return index
 
     def serialize(self):

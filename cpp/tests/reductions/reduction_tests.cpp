@@ -300,9 +300,6 @@ TYPED_TEST_SUITE(ReductionTest, cudf::test::NumericTypes);
 TYPED_TEST(ReductionTest, Product)
 {
   using T = TypeParam;
-  if constexpr (std::is_same_v<T, int16_t> || std::is_same_v<T, uint16_t>) {
-    if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { return; }
-  }
 
   std::vector<int> int_values({5, -1, 1, 0, 3, 2, 4});
   std::vector<bool> host_bools({true, true, false, false, true, true, true});

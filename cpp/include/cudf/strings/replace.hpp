@@ -160,18 +160,6 @@ std::unique_ptr<column> replace_multiple(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
-/**
- * @copydoc cudf::strings::replace_multiple
- *
- * @deprecated since 24.08
- */
-[[deprecated]] std::unique_ptr<column> replace(
-  strings_column_view const& input,
-  strings_column_view const& targets,
-  strings_column_view const& repls,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
-
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace CUDF_EXPORT cudf

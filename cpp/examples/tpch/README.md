@@ -1,38 +1,39 @@
-# TPC-H Inspired Examples
+# TPC-H Derived Examples
 
 Implements TPC-H queries using `libcudf`. We leverage the data generator (wrapper around official TPC-H datagen) from [Apache Datafusion](https://github.com/apache/datafusion) for generating data in Parquet format.
 
 ## Requirements
 
 - Rust
-
-## Generating the Dataset
-
-1. Clone the datafusion repository.
-```bash
-git clone git@github.com:apache/datafusion.git
-```
-
-2. Run the data generator. The data will be placed in a `data/` subdirectory.
-```bash
-cd datafusion/benchmarks/
-./bench.sh data tpch
-
-# for scale factor 10,
-./bench.sh data tpch10
-```
+- [libcudf](https://github.com/rapidsai/cudf/blob/branch-24.08/CONTRIBUTING.md#setting-up-your-build-environment)
 
 ## Running Queries
 
-1. Build the examples.
+1. Build the `libcudf` examples.
 ```bash
-cd cpp/examples
+cd cudf/cpp/examples
 ./build.sh
 ```
-The TPC-H query binaries would be built inside `examples/tpch/build`.
+The TPC-H query binaries would be built inside `tpch/build`.
 
-2. Execute the queries.
+2. Generate the dataset.
 ```bash
-./tpch/build/tpch_q1
+cd tpch/datagen
+./datagen.sh [scale factor (1/10)]
 ```
-A parquet file named `q1.parquet` would be generated holding the results of the query.
+
+The parquet files will be generated in `tpch/datagen/datafusion/benchmarks/data/tpch_sf[scale factor]`.
+
+3. Set these environment variables for optimized runtimes.
+```bash
+export KVIKIO_COMPAT_MODE="on"
+export LIBCUDF_CUFILE_POLICY="KVIKIO"
+export CUDA_MODULE_LOADING="EAGER"
+```
+
+4. Execute the queries.
+```bash
+./tpch/build/tpch_q[query no] [path to dataset] [memory resource type (cuda/pool/managed/managed_pool)]
+```
+
+A parquet file named `q[query no].parquet` would be generated containing the results of the query.

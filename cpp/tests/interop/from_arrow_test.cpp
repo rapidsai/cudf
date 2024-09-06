@@ -14,13 +14,6 @@
  * limitations under the License.
  */
 
-// These interop functions are deprecated. We keep the code in this
-// test and will migrate the tests to export the arrow C data
-// interface which we consume with from_arrow_host. For now, the tests
-// are commented out.
-
-#if 0
-
 #include <tests/interop/arrow_utils.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -42,6 +35,10 @@
 #include <cudf/types.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+
+#include <arrow/c/bridge.h>
+#include <nanoarrow/nanoarrow.h>
+#include <nanoarrow/nanoarrow_device.h>
 
 std::unique_ptr<cudf::table> get_cudf_table()
 {
@@ -93,6 +90,45 @@ struct FromArrowTest : public cudf::test::BaseFixture {};
 template <typename T>
 struct FromArrowTestDurationsTest : public cudf::test::BaseFixture {};
 
+std::optional<std::unique_ptr<cudf::table>> export_table(std::shared_ptr<arrow::Table> arrow_table)
+{
+  ArrowSchema schema;
+  if (!arrow::ExportSchema(*arrow_table->schema(), &schema).ok()) { return std::nullopt; }
+  auto batch = arrow_table->CombineChunksToBatch().ValueOrDie();
+  ArrowArray arr;
+  if (!arrow::ExportRecordBatch(*batch, &arr).ok()) { return std::nullopt; }
+  auto ret = cudf::from_arrow(&schema, &arr);
+  arr.release(&arr);
+  schema.release(&schema);
+  return {std::move(ret)};
+}
+
+std::optional<std::unique_ptr<cudf::scalar>> export_scalar(arrow::Scalar const& arrow_scalar)
+{
+  auto maybe_array = arrow::MakeArrayFromScalar(arrow_scalar, 1);
+  if (!maybe_array.ok()) { return std::nullopt; }
+  auto array = *maybe_array;
+
+  ArrowSchema schema;
+  if (!arrow::ExportType(*array->type(), &schema).ok()) { return std::nullopt; }
+
+  ArrowArray arr;
+  if (!arrow::ExportArray(*array, &arr).ok()) { return std::nullopt; }
+
+  auto col = cudf::from_arrow_column(&schema, &arr);
+  auto ret = cudf::get_element(col->view(), 0);
+
+  arr.release(&arr);
+  schema.release(&schema);
+  return {std::move(ret)};
+}
+
+std::optional<std::unique_ptr<cudf::scalar>> export_scalar(
+  std::shared_ptr<arrow::Scalar> const arrow_scalar)
+{
+  return export_scalar(*arrow_scalar);
+}
+
 TYPED_TEST_SUITE(FromArrowTestDurationsTest, cudf::test::DurationTypes);
 
 TEST_F(FromArrowTest, EmptyTable)
@@ -102,9 +138,10 @@ TEST_F(FromArrowTest, EmptyTable)
   auto expected_cudf_table = tables.first->view();
   auto arrow_table         = tables.second;
 
-  auto got_cudf_table = cudf::from_arrow(*arrow_table);
+  auto got_cudf_table = export_table(arrow_table);
+  ASSERT_TRUE(got_cudf_table.has_value());
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table, got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table, got_cudf_table.value()->view());
 }
 
 TEST_F(FromArrowTest, DateTimeTable)
@@ -127,9 +164,10 @@ TEST_F(FromArrowTest, DateTimeTable)
 
   auto arrow_table = arrow::Table::Make(schema, {arr});
 
-  auto got_cudf_table = cudf::from_arrow(*arrow_table);
+  auto got_cudf_table = export_table(arrow_table);
+  ASSERT_TRUE(got_cudf_table.has_value());
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table.value()->view());
 }
 
 TYPED_TEST(FromArrowTestDurationsTest, DurationTable)
@@ -160,9 +198,10 @@ TYPED_TEST(FromArrowTestDurationsTest, DurationTable)
 
   auto arrow_table = arrow::Table::Make(schema, {arr});
 
-  auto got_cudf_table = cudf::from_arrow(*arrow_table);
+  auto got_cudf_table = export_table(arrow_table);
+  ASSERT_TRUE(got_cudf_table.has_value());
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table.value()->view());
 }
 
 TEST_F(FromArrowTest, NestedList)
@@ -188,8 +227,9 @@ TEST_F(FromArrowTest, NestedList)
 
   auto arrow_table = arrow::Table::Make(schema, {nested_list_arr});
 
-  auto got_cudf_table = cudf::from_arrow(*arrow_table);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
+  auto got_cudf_table = export_table(arrow_table);
+  ASSERT_TRUE(got_cudf_table.has_value());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table.value()->view());
 }
 
 TEST_F(FromArrowTest, StructColumn)
@@ -274,9 +314,10 @@ TEST_F(FromArrowTest, StructColumn)
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
   auto input  = arrow::Table::Make(schema, {struct_array});
 
-  auto got_cudf_table = cudf::from_arrow(*input);
+  auto got_cudf_table = export_table(input);
+  ASSERT_TRUE(got_cudf_table.has_value());
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table, got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table, got_cudf_table.value()->view());
 }
 
 TEST_F(FromArrowTest, DictionaryIndicesType)
@@ -304,9 +345,10 @@ TEST_F(FromArrowTest, DictionaryIndicesType)
 
   cudf::table expected_table(std::move(columns));
 
-  auto got_cudf_table = cudf::from_arrow(*arrow_table);
+  auto got_cudf_table = export_table(arrow_table);
+  ASSERT_TRUE(got_cudf_table.has_value());
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table.view(), got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table.view(), got_cudf_table.value()->view());
 }
 
 TEST_F(FromArrowTest, ChunkedArray)
@@ -369,9 +411,10 @@ TEST_F(FromArrowTest, ChunkedArray)
 
   auto expected_cudf_table = get_cudf_table();
 
-  auto got_cudf_table = cudf::from_arrow(*arrow_table);
+  auto got_cudf_table = export_table(arrow_table);
+  ASSERT_TRUE(got_cudf_table.has_value());
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table->view(), got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table->view(), got_cudf_table.value()->view());
 }
 
 struct FromArrowTestSlice
@@ -388,13 +431,14 @@ TEST_P(FromArrowTestSlice, SliceTest)
   auto sliced_cudf_table   = cudf::slice(cudf_table_view, {start, end})[0];
   auto expected_cudf_table = cudf::table{sliced_cudf_table};
   auto sliced_arrow_table  = arrow_table->Slice(start, end - start);
-  auto got_cudf_table      = cudf::from_arrow(*sliced_arrow_table);
+  auto got_cudf_table      = export_table(sliced_arrow_table);
+  ASSERT_TRUE(got_cudf_table.has_value());
 
   // This has been added to take-care of empty string column issue with no children
-  if (got_cudf_table->num_rows() == 0 and expected_cudf_table.num_rows() == 0) {
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_cudf_table.view(), got_cudf_table->view());
+  if (got_cudf_table.value()->num_rows() == 0 and expected_cudf_table.num_rows() == 0) {
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_cudf_table.view(), got_cudf_table.value()->view());
   } else {
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table.view(), got_cudf_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table.view(), got_cudf_table.value()->view());
   }
 }
 
@@ -417,9 +461,10 @@ TEST_F(FromArrowTest, FixedPoint128Table)
     auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
     auto const arrow_table   = arrow::Table::Make(schema, {arr});
 
-    auto got_cudf_table = cudf::from_arrow(*arrow_table);
+    auto got_cudf_table = export_table(arrow_table);
+    ASSERT_TRUE(got_cudf_table.has_value());
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table.value()->view());
   }
 }
 
@@ -441,9 +486,10 @@ TEST_F(FromArrowTest, FixedPoint128TableLarge)
     auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
     auto const arrow_table   = arrow::Table::Make(schema, {arr});
 
-    auto got_cudf_table = cudf::from_arrow(*arrow_table);
+    auto got_cudf_table = export_table(arrow_table);
+    ASSERT_TRUE(got_cudf_table.has_value());
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table.value()->view());
   }
 }
 
@@ -466,9 +512,10 @@ TEST_F(FromArrowTest, FixedPoint128TableNulls)
     auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
     auto const arrow_table   = arrow::Table::Make(schema, {arr});
 
-    auto got_cudf_table = cudf::from_arrow(*arrow_table);
+    auto got_cudf_table = export_table(arrow_table);
+    ASSERT_TRUE(got_cudf_table.has_value());
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table.value()->view());
   }
 }
 
@@ -493,9 +540,10 @@ TEST_F(FromArrowTest, FixedPoint128TableNullsLarge)
     auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
     auto const arrow_table   = arrow::Table::Make(schema, {arr});
 
-    auto got_cudf_table = cudf::from_arrow(*arrow_table);
+    auto got_cudf_table = export_table(arrow_table);
+    ASSERT_TRUE(got_cudf_table.has_value());
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table.value()->view());
   }
 }
 
@@ -519,9 +567,12 @@ TYPED_TEST(FromArrowNumericScalarTest, Basic)
 {
   TypeParam const value{42};
   auto const arrow_scalar = arrow::MakeScalar(value);
-  auto const cudf_scalar  = cudf::from_arrow(*arrow_scalar);
+
+  auto const cudf_scalar = export_scalar(arrow_scalar);
+  ASSERT_TRUE(cudf_scalar.has_value());
+
   auto const cudf_numeric_scalar =
-    dynamic_cast<cudf::numeric_scalar<TypeParam>*>(cudf_scalar.get());
+    dynamic_cast<cudf::numeric_scalar<TypeParam>*>(cudf_scalar.value().get());
   if (cudf_numeric_scalar == nullptr) { CUDF_FAIL("Attempted to test with a non-numeric type."); }
   EXPECT_EQ(cudf_numeric_scalar->type(), cudf::data_type(cudf::type_to_id<TypeParam>()));
   EXPECT_EQ(cudf_numeric_scalar->value(), value);
@@ -535,12 +586,13 @@ TEST_F(FromArrowDecimalScalarTest, Basic)
   auto const value{42};
   auto const precision{8};
   auto const scale{4};
-  auto arrow_scalar = arrow::Decimal128Scalar(value, arrow::decimal128(precision, -scale));
-  auto cudf_scalar  = cudf::from_arrow(arrow_scalar);
+  auto arrow_scalar      = arrow::Decimal128Scalar(value, arrow::decimal128(precision, -scale));
+  auto const cudf_scalar = export_scalar(arrow_scalar);
+  ASSERT_TRUE(cudf_scalar.has_value());
 
   // Arrow offers a minimum of 128 bits for the Decimal type.
   auto const cudf_decimal_scalar =
-    dynamic_cast<cudf::fixed_point_scalar<numeric::decimal128>*>(cudf_scalar.get());
+    dynamic_cast<cudf::fixed_point_scalar<numeric::decimal128>*>(cudf_scalar.value().get());
   EXPECT_EQ(cudf_decimal_scalar->type(),
             cudf::data_type(cudf::type_to_id<numeric::decimal128>(), scale));
   EXPECT_EQ(cudf_decimal_scalar->value(), value);
@@ -552,9 +604,10 @@ TEST_F(FromArrowStringScalarTest, Basic)
 {
   auto const value        = std::string("hello world");
   auto const arrow_scalar = arrow::StringScalar(value);
-  auto const cudf_scalar  = cudf::from_arrow(arrow_scalar);
+  auto const cudf_scalar  = export_scalar(arrow_scalar);
+  ASSERT_TRUE(cudf_scalar.has_value());
 
-  auto const cudf_string_scalar = dynamic_cast<cudf::string_scalar*>(cudf_scalar.get());
+  auto const cudf_string_scalar = dynamic_cast<cudf::string_scalar*>(cudf_scalar.value().get());
   EXPECT_EQ(cudf_string_scalar->type(), cudf::data_type(cudf::type_id::STRING));
   EXPECT_EQ(cudf_string_scalar->to_string(), value);
 }
@@ -572,9 +625,10 @@ TEST_F(FromArrowListScalarTest, Basic)
   auto const array       = *maybe_array;
 
   auto const arrow_scalar = arrow::ListScalar(array);
-  auto const cudf_scalar  = cudf::from_arrow(arrow_scalar);
+  auto const cudf_scalar  = export_scalar(arrow_scalar);
+  ASSERT_TRUE(cudf_scalar.has_value());
 
-  auto const cudf_list_scalar = dynamic_cast<cudf::list_scalar*>(cudf_scalar.get());
+  auto const cudf_list_scalar = dynamic_cast<cudf::list_scalar*>(cudf_scalar.value().get());
   EXPECT_EQ(cudf_list_scalar->type(), cudf::data_type(cudf::type_id::LIST));
 
   cudf::test::fixed_width_column_wrapper<int64_t> const lhs(
@@ -592,9 +646,10 @@ TEST_F(FromArrowStructScalarTest, Basic)
   auto const field        = arrow::field("", underlying_arrow_scalar->type);
   auto const arrow_type   = arrow::struct_({field});
   auto const arrow_scalar = arrow::StructScalar({underlying_arrow_scalar}, arrow_type);
-  auto const cudf_scalar  = cudf::from_arrow(arrow_scalar);
+  auto const cudf_scalar  = export_scalar(arrow_scalar);
+  ASSERT_TRUE(cudf_scalar.has_value());
 
-  auto const cudf_struct_scalar = dynamic_cast<cudf::struct_scalar*>(cudf_scalar.get());
+  auto const cudf_struct_scalar = dynamic_cast<cudf::struct_scalar*>(cudf_scalar.value().get());
   EXPECT_EQ(cudf_struct_scalar->type(), cudf::data_type(cudf::type_id::STRUCT));
 
   cudf::test::fixed_width_column_wrapper<int64_t> const col({value});
@@ -602,5 +657,3 @@ TEST_F(FromArrowStructScalarTest, Basic)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(lhs, cudf_struct_scalar->view());
 }
-
-#endif

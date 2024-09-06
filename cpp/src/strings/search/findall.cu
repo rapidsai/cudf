@@ -104,7 +104,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   // Create lists offsets column
-  auto const sizes              = count_matches(*d_strings, *d_prog, strings_count, stream, mr);
+  auto const sizes              = count_matches(*d_strings, *d_prog, stream, mr);
   auto [offsets, total_matches] = cudf::detail::make_offsets_child_column(
     sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr);
   auto const d_offsets = offsets->view().data<size_type>();

@@ -21,6 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/detail/batched_memset.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -1494,6 +1495,11 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
   // buffers if they are not part of a list hierarchy. mark down
   // if we have any list columns that need further processing.
   bool has_lists = false;
+  // Casting to std::byte since data buffer pointer is void *
+  std::vector<cudf::device_span<std::byte>> memset_bufs;
+  // Validity Buffer is a uint32_t pointer
+  std::vector<cudf::device_span<cudf::bitmask_type>> nullmask_bufs;
+
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
     auto const& input_col  = _input_columns[idx];
     size_t const max_depth = input_col.nesting_depth();
@@ -1514,13 +1520,19 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
         // we're going to start null mask as all valid and then turn bits off if necessary
         out_buf.create_with_mask(
           out_buf.type.id() == type_id::LIST && l_idx < max_depth ? num_rows + 1 : num_rows,
-          cudf::mask_state::ALL_VALID,
+          cudf::mask_state::UNINITIALIZED,
+          false,
           _stream,
           _mr);
+        memset_bufs.push_back(cudf::device_span<std::byte>(static_cast<std::byte*>(out_buf.data()),
+                                                           out_buf.data_size()));
+        nullmask_bufs.push_back(cudf::device_span<cudf::bitmask_type>(
+          out_buf.null_mask(),
+          cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
+            sizeof(cudf::bitmask_type)));
       }
     }
   }
-
   // compute output column sizes by examining the pages of the -input- columns
   if (has_lists) {
     auto h_cols_info =
@@ -1593,11 +1605,22 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
 
           // allocate
           // we're going to start null mask as all valid and then turn bits off if necessary
-          out_buf.create_with_mask(size, cudf::mask_state::ALL_VALID, _stream, _mr);
+          out_buf.create_with_mask(size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
+          memset_bufs.push_back(cudf::device_span<std::byte>(
+            static_cast<std::byte*>(out_buf.data()), out_buf.data_size()));
+          nullmask_bufs.push_back(cudf::device_span<cudf::bitmask_type>(
+            out_buf.null_mask(),
+            cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
+              sizeof(cudf::bitmask_type)));
         }
       }
     }
   }
+
+  cudf::io::detail::batched_memset(memset_bufs, static_cast<std::byte>(0), _stream);
+  // Need to set null mask bufs to all high bits
+  cudf::io::detail::batched_memset(
+    nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
 }
 
 std::vector<size_t> reader::impl::calculate_page_string_offsets()

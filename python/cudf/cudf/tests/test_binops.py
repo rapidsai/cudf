@@ -13,7 +13,11 @@ import pytest
 
 import cudf
 from cudf import Index, Series
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
+    PANDAS_VERSION,
+)
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing import _utils as utils, assert_eq
 from cudf.utils.dtypes import (
@@ -288,6 +292,47 @@ def test_series_compare(cmpop, obj_class, dtype):
     np.testing.assert_equal(result1.to_numpy(), cmpop(arr1, arr1))
     np.testing.assert_equal(result2.to_numpy(), cmpop(arr2, arr2))
     np.testing.assert_equal(result3.to_numpy(), cmpop(arr1, arr2))
+
+
+@pytest.mark.parametrize(
+    "dtype,val",
+    [("int8", 200), ("int32", 2**32), ("uint8", -128), ("uint64", -1)],
+)
+@pytest.mark.parametrize(
+    "op",
+    [
+        operator.eq,
+        operator.ne,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+    ],
+)
+@pytest.mark.parametrize("reverse", [False, True])
+def test_series_compare_integer(dtype, val, op, reverse):
+    # Tests that these actually work, even though they are out of bound.
+    force_cast_val = np.array(val).astype(dtype)
+    sr = Series(
+        [np.iinfo(dtype).min, np.iinfo(dtype).max, force_cast_val, None],
+        dtype=dtype,
+    )
+
+    if reverse:
+        _op = op
+
+        def op(x, y):
+            return _op(y, x)
+
+    # We expect the same result as comparing to a value within range (e.g. 0)
+    # except that a NULL value evaluates to False
+    if op(0, val):
+        expected = Series([True, True, True, None])
+    else:
+        expected = Series([False, False, False, None])
+
+    res = op(sr, val)
+    assert_eq(res, expected)
 
 
 def _series_compare_nulls_typegen():
@@ -1740,6 +1785,20 @@ def test_datetime_dateoffset_binaryop(
             reason="https://github.com/pandas-dev/pandas/issues/57448",
         )
     )
+    if (
+        not PANDAS_GE_220
+        and dtype in {"datetime64[ms]", "datetime64[s]"}
+        and frequency in ("microseconds", "nanoseconds")
+        and n_periods != 0
+    ):
+        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
+    if (
+        not PANDAS_GE_220
+        and dtype == "datetime64[us]"
+        and frequency == "nanoseconds"
+        and n_periods != 0
+    ):
+        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
 
     date_col = [
         f"2000-01-01 00:00:{components}",
@@ -1793,7 +1852,11 @@ def test_datetime_dateoffset_binaryop(
     "ignore:Discarding nonzero nanoseconds:UserWarning"
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
-def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
+def test_datetime_dateoffset_binaryop_multiple(request, date_col, kwargs, op):
     gsr = cudf.Series(date_col, dtype="datetime64[ns]")
     psr = gsr.to_pandas()
 
@@ -1832,6 +1895,21 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
 def test_datetime_dateoffset_binaryop_reflected(
     n_periods, frequency, dtype, components
 ):
+    if (
+        not PANDAS_GE_220
+        and dtype in {"datetime64[ms]", "datetime64[s]"}
+        and frequency in ("microseconds", "nanoseconds")
+        and n_periods != 0
+    ):
+        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
+    if (
+        not PANDAS_GE_220
+        and dtype == "datetime64[us]"
+        and frequency == "nanoseconds"
+        and n_periods != 0
+    ):
+        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
+
     date_col = [
         f"2000-01-01 00:00:{components}",
         f"2000-01-31 00:00:{components}",

@@ -15,11 +15,14 @@ from cudf.api.types import (
     is_numeric_dtype,
 )
 from cudf.core.column import ColumnBase, as_column
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import NotIterable
 
 if TYPE_CHECKING:
+    from collections.abc import Hashable
+
     import cupy
     import numpy
     import pyarrow as pa
@@ -112,35 +115,17 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @classmethod
     @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None
+    ) -> Self:
+        """Constructor for a single Column."""
+        ca = ColumnAccessor({name: column}, verify=False)
+        return cls._from_data(ca)
+
+    @classmethod
+    @_performance_tracking
     def from_arrow(cls, array) -> Self:
-        """Create from PyArrow Array/ChunkedArray.
-
-        Parameters
-        ----------
-        array : PyArrow Array/ChunkedArray
-            PyArrow Object which has to be converted.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Returns
-        -------
-        SingleColumnFrame
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
-        Index(['a', 'b', None], dtype='object')
-        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
-        0       a
-        1       b
-        2    <NA>
-        dtype: object
-        """
-        return cls(ColumnBase.from_arrow(array))
+        raise NotImplementedError
 
     @_performance_tracking
     def to_arrow(self) -> pa.Array:
@@ -172,6 +157,17 @@ class SingleColumnFrame(Frame, NotIterable):
         ]
         """
         return self._column.to_arrow()
+
+    def _to_frame(
+        self, name: Hashable, index: cudf.Index | None
+    ) -> cudf.DataFrame:
+        """Helper function for Series.to_frame, Index.to_frame"""
+        if name is no_default:
+            col_name = 0 if self.name is None else self.name
+        else:
+            col_name = name
+        ca = ColumnAccessor({col_name: self._column}, verify=False)
+        return cudf.DataFrame._from_data(ca, index=index)
 
     @property  # type: ignore
     @_performance_tracking
@@ -365,7 +361,6 @@ class SingleColumnFrame(Frame, NotIterable):
     def where(self, cond, other=None, inplace=False):
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
-            _make_categorical_like,
         )
 
         if isinstance(other, cudf.DataFrame):
@@ -381,14 +376,12 @@ class SingleColumnFrame(Frame, NotIterable):
         if not cudf.api.types.is_scalar(other):
             other = cudf.core.column.as_column(other)
 
-        self_column = self._column
         input_col, other = _check_and_cast_columns_with_other(
-            source_col=self_column, other=other, inplace=inplace
+            source_col=self._column, other=other, inplace=inplace
         )
 
         result = cudf._lib.copying.copy_if_else(input_col, other, cond)
-
-        return _make_categorical_like(result, self_column)
+        return result._with_type_metadata(self.dtype)
 
     @_performance_tracking
     def transpose(self):

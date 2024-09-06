@@ -79,6 +79,8 @@ struct column_fast_sort_fn {
                                                 stream,
                                                 rmm::mr::get_current_device_resource());
     mutable_column_view output_view = temp_col->mutable_view();
+    auto temp_indices               = cudf::column(
+      cudf::column_view(indices.type(), indices.size(), indices.head(), nullptr, 0), stream);
 
     // DeviceSegmentedSort is faster than DeviceSegmentedRadixSort at this time
     auto fast_sort_impl = [stream](bool ascending, [[maybe_unused]] auto&&... args) {
@@ -118,7 +120,7 @@ struct column_fast_sort_fn {
     fast_sort_impl(ascending,
                    input.begin<T>(),
                    output_view.begin<T>(),
-                   indices.begin<size_type>(),
+                   temp_indices.view().begin<size_type>(),
                    indices.begin<size_type>(),
                    input.size(),
                    segment_offsets.size() - 1,

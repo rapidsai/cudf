@@ -93,10 +93,10 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
 }  // namespace detail
 
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
-  column_view const& input, rmm::device_async_resource_ref mr)
+  column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::nans_to_nulls(input, cudf::get_default_stream(), mr);
+  return detail::nans_to_nulls(input, stream, mr);
 }
 
 }  // namespace cudf

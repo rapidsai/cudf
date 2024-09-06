@@ -2,5 +2,5 @@
 expressions
 ===========
 
-.. automodule:: cudf._lib.pylibcudf.expressions
+.. automodule:: pylibcudf.expressions
    :members:
