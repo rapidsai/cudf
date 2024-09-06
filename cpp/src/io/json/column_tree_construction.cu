@@ -54,6 +54,8 @@
 
 namespace cudf::io::json {
 
+using row_offset_t = size_type;
+
 template <typename T>
 void print(device_span<T const> d_vec, std::string name, rmm::cuda_stream_view stream)
 {
@@ -67,9 +69,44 @@ void print(device_span<T const> d_vec, std::string name, rmm::cuda_stream_view s
   std::cout << std::endl;
 }
 
-namespace experimental::detail {
+template<typename InputIterator1, typename InputIterator2, typename OutputIterator1, typename OutputIterator2>
+void max_row_offsets_col_categories(InputIterator1 keys_first, InputIterator1 keys_last, InputIterator2 values_first, OutputIterator1 keys_output, OutputIterator2 values_output, rmm::cuda_stream_view stream) {
+  thrust::reduce_by_key(
+    rmm::exec_policy_nosync(stream),
+    keys_first,
+    keys_last,
+    values_first,
+    keys_output,
+    values_output,
+    thrust::equal_to<NodeIndexT>(),
+    [] __device__(auto a, auto b) {
+      auto row_offset_a = thrust::get<0>(a);
+      auto row_offset_b = thrust::get<0>(b);
+      auto type_a       = thrust::get<1>(a);
+      auto type_b       = thrust::get<1>(b);
 
-using row_offset_t = size_type;
+      NodeT ctg;
+      auto is_a_leaf = (type_a == NC_VAL || type_a == NC_STR);
+      auto is_b_leaf = (type_b == NC_VAL || type_b == NC_STR);
+      // (v+v=v, *+*=*,  *+v=*, *+#=E, NESTED+VAL=NESTED)
+      // *+*=*, v+v=v
+      if (type_a == type_b) {
+        ctg = type_a;
+      } else if (is_a_leaf) {
+        // *+v=*, N+V=N
+        // STRUCT/LIST + STR/VAL = STRUCT/LIST, STR/VAL + FN = ERR, STR/VAL + STR = STR
+        ctg = (type_b == NC_FN ? NC_ERR : (is_b_leaf ? NC_STR : type_b));
+      } else if (is_b_leaf) {
+        ctg = (type_a == NC_FN ? NC_ERR : (is_a_leaf ? NC_STR : type_a));
+      } else
+        ctg = NC_ERR;
+
+      thrust::maximum<row_offset_t> row_offset_op;
+      return thrust::make_pair(row_offset_op(row_offset_a, row_offset_b), ctg);
+    });
+}
+
+namespace experimental::detail {
 
 struct level_ordering {
   device_span<TreeDepthT> node_levels;
@@ -164,44 +201,14 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   //    reduce_by_key {col_id}, {node_categories} - custom opp (*+v=*, v+v=v, *+#=E)
   rmm::device_uvector<row_offset_t> max_row_offsets(num_columns, stream);
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
-  auto ordered_row_offsets =
-    thrust::make_permutation_iterator(row_offsets.begin(), level_ordered_node_ids.begin());
-  auto ordered_node_categories =
-    thrust::make_permutation_iterator(tree.node_categories.begin(), level_ordered_node_ids.begin());
-  thrust::reduce_by_key(
-    rmm::exec_policy_nosync(stream),
-    level_ordered_col_ids.begin(),
-    level_ordered_col_ids.end(),
-    thrust::make_zip_iterator(ordered_row_offsets, ordered_node_categories),
+  max_row_offsets_col_categories(
+    level_ordered_node_ids.begin(), 
+    level_ordered_node_ids.end(), 
+    thrust::make_zip_iterator(thrust::make_permutation_iterator(row_offsets.begin(), level_ordered_node_ids.begin()), thrust::make_permutation_iterator(tree.node_categories.begin(), level_ordered_node_ids.begin())),
     thrust::make_discard_iterator(),
     thrust::make_zip_iterator(max_row_offsets.begin(), column_categories.begin()),
-    thrust::equal_to<NodeIndexT>(),
-    [] __device__(auto a, auto b) {
-      auto row_offset_a = thrust::get<0>(a);
-      auto row_offset_b = thrust::get<0>(b);
-      auto type_a       = thrust::get<1>(a);
-      auto type_b       = thrust::get<1>(b);
-
-      NodeT ctg;
-      auto is_a_leaf = (type_a == NC_VAL || type_a == NC_STR);
-      auto is_b_leaf = (type_b == NC_VAL || type_b == NC_STR);
-      // (v+v=v, *+*=*,  *+v=*, *+#=E, NESTED+VAL=NESTED)
-      // *+*=*, v+v=v
-      if (type_a == type_b) {
-        ctg = type_a;
-      } else if (is_a_leaf) {
-        // *+v=*, N+V=N
-        // STRUCT/LIST + STR/VAL = STRUCT/LIST, STR/VAL + FN = ERR, STR/VAL + STR = STR
-        ctg = (type_b == NC_FN ? NC_ERR : (is_b_leaf ? NC_STR : type_b));
-      } else if (is_b_leaf) {
-        ctg = (type_a == NC_FN ? NC_ERR : (is_a_leaf ? NC_STR : type_a));
-      } else
-        ctg = NC_ERR;
-
-      thrust::maximum<row_offset_t> row_offset_op;
-      return thrust::make_pair(row_offset_op(row_offset_a, row_offset_b), ctg);
-    });
-
+    stream
+    );
   // 4. construct parent_col_ids using permutation iterator
   rmm::device_uvector<NodeIndexT> parent_col_ids(num_columns, stream);
   thrust::transform_output_iterator parent_col_ids_it(
@@ -374,44 +381,16 @@ reduce_to_column_tree(tree_meta_t& tree,
   // 2. reduce_by_key {col_id}, {row_offset}, max.
   rmm::device_uvector<NodeIndexT> unique_col_ids(num_columns, stream);
   rmm::device_uvector<size_type> max_row_offsets(num_columns, stream);
-  auto ordered_row_offsets =
-    thrust::make_permutation_iterator(row_offsets.begin(), ordered_node_ids.begin());
-  thrust::reduce_by_key(rmm::exec_policy(stream),
-                        sorted_col_ids.begin(),
-                        sorted_col_ids.end(),
-                        ordered_row_offsets,
-                        unique_col_ids.begin(),
-                        max_row_offsets.begin(),
-                        thrust::equal_to<size_type>(),
-                        thrust::maximum<size_type>());
-
   // 3. reduce_by_key {col_id}, {node_categories} - custom opp (*+v=*, v+v=v, *+#=E)
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
-  thrust::reduce_by_key(
-    rmm::exec_policy(stream),
-    sorted_col_ids.begin(),
-    sorted_col_ids.end(),
-    thrust::make_permutation_iterator(tree.node_categories.begin(), ordered_node_ids.begin()),
+  max_row_offsets_col_categories(
+    sorted_col_ids.begin(), 
+    sorted_col_ids.end(), 
+    thrust::make_zip_iterator(thrust::make_permutation_iterator(row_offsets.begin(), ordered_node_ids.begin()), thrust::make_permutation_iterator(tree.node_categories.begin(), ordered_node_ids.begin())),
     unique_col_ids.begin(),
-    column_categories.begin(),
-    thrust::equal_to<size_type>(),
-    [] __device__(NodeT type_a, NodeT type_b) -> NodeT {
-      auto is_a_leaf = (type_a == NC_VAL || type_a == NC_STR);
-      auto is_b_leaf = (type_b == NC_VAL || type_b == NC_STR);
-      // (v+v=v, *+*=*,  *+v=*, *+#=E, NESTED+VAL=NESTED)
-      // *+*=*, v+v=v
-      if (type_a == type_b) {
-        return type_a;
-      } else if (is_a_leaf) {
-        // *+v=*, N+V=N
-        // STRUCT/LIST + STR/VAL = STRUCT/LIST, STR/VAL + FN = ERR, STR/VAL + STR = STR
-        return type_b == NC_FN ? NC_ERR : (is_b_leaf ? NC_STR : type_b);
-      } else if (is_b_leaf) {
-        return type_a == NC_FN ? NC_ERR : (is_a_leaf ? NC_STR : type_a);
-      }
-      // *+#=E
-      return NC_ERR;
-    });
+    thrust::make_zip_iterator(max_row_offsets.begin(), column_categories.begin()),
+    stream
+    );
 
   // 4. unique_copy parent_node_ids, ranges
   rmm::device_uvector<TreeDepthT> column_levels(0, stream);  // not required
