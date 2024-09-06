@@ -13,6 +13,7 @@ from . cimport (
     filling,
     groupby,
     join,
+    labeling,
     lists,
     merge,
     null_mask,
