@@ -39,7 +39,7 @@ requirements:
     - python
     - rapids-build-backend >=0.3.0,<0.4.0.dev0
     - setuptools
-    - python-confluent-kafka >=1.9.0,<1.10.0a0
+    - python-confluent-kafka >=2.5.0,<2.6.0a0
     - cudf_kafka ={{ version }}
     - cuda-version ={{ cuda_version }}
   run:
@@ -48,7 +48,7 @@ requirements:
     - cudf ={{ version }}
     - cudf_kafka ={{ version }}
     - rapids-dask-dependency ={{ minor_version }}
-    - python-confluent-kafka >=1.9.0,<1.10.0a0
+    - python-confluent-kafka >=2.5.0,<2.6.0a0
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
 
 test:
