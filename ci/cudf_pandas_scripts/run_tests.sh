@@ -91,7 +91,7 @@ IFS=',' read -r -a versions <<< "$output"
 
 for version in "${versions[@]}"; do
     echo "Installing pandas version: ${version}"
-    python -m pip install "numpy>=1.23,<2.0a0" "pandas==${version}"
+    python -m pip install "numpy>=1.23,<2.0a0" "pandas==${version}.*"
     python -m pytest -p cudf.pandas \
     --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
     --cov-config=./python/cudf/.coveragerc \
