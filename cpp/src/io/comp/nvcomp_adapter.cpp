@@ -29,13 +29,6 @@
 
 #include <mutex>
 
-// When building with nvcomp 4.0 or newer, map the new version macros to the old ones
-#ifndef NVCOMP_MAJOR_VERSION
-#define NVCOMP_MAJOR_VERSION NVCOMP_VER_MAJOR
-#define NVCOMP_MINOR_VERSION NVCOMP_VER_MINOR
-#define NVCOMP_PATCH_VERSION NVCOMP_VER_PATCH
-#endif
-
 namespace cudf::io::nvcomp {
 
 // Dispatcher for nvcompBatched<format>DecompressGetTempSizeEx
@@ -395,9 +388,9 @@ void batched_compress(compression_type compression,
 }
 
 feature_status_parameters::feature_status_parameters()
-  : lib_major_version{NVCOMP_MAJOR_VERSION},
-    lib_minor_version{NVCOMP_MINOR_VERSION},
-    lib_patch_version{NVCOMP_PATCH_VERSION},
+  : lib_major_version{NVCOMP_VER_MAJOR},
+    lib_minor_version{NVCOMP_VER_MINOR},
+    lib_patch_version{NVCOMP_VER_PATCH},
     are_all_integrations_enabled{nvcomp_integration::is_all_enabled()},
     are_stable_integrations_enabled{nvcomp_integration::is_stable_enabled()}
 {
