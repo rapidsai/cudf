@@ -185,5 +185,5 @@ TEST_F(JsonColumnTreeTests, SimpleLines)
   auto iseq = check_equality(
     d_column_tree, d_max_row_offsets, d_column_tree_csr, d_column_tree_properties, stream);
   // assert equality between csr and meta formats
-  assert(iseq == true);
+  ASSERT_TRUE(iseq);
 }

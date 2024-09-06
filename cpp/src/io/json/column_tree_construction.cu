@@ -56,19 +56,6 @@ namespace cudf::io::json {
 
 using row_offset_t = size_type;
 
-template <typename T>
-void print(device_span<T const> d_vec, std::string name, rmm::cuda_stream_view stream)
-{
-  stream.synchronize();
-  auto h_vec = cudf::detail::make_std_vector_async(d_vec, stream);
-  stream.synchronize();
-  std::cout << name << " = ";
-  for (auto e : h_vec) {
-    std::cout << e << " ";
-  }
-  std::cout << std::endl;
-}
-
 template <typename InputIterator1,
           typename InputIterator2,
           typename OutputIterator1,
@@ -211,8 +198,8 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   rmm::device_uvector<row_offset_t> max_row_offsets(num_columns, stream);
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
   max_row_offsets_col_categories(
-    level_ordered_node_ids.begin(),
-    level_ordered_node_ids.end(),
+    level_ordered_col_ids.begin(),
+    level_ordered_col_ids.end(),
     thrust::make_zip_iterator(
       thrust::make_permutation_iterator(row_offsets.begin(), level_ordered_node_ids.begin()),
       thrust::make_permutation_iterator(tree.node_categories.begin(),
