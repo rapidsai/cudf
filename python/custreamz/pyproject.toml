@@ -19,7 +19,7 @@ authors = [
 license = { text = "Apache 2.0" }
 requires-python = ">=3.10"
 dependencies = [
-    "confluent-kafka>=1.9.0,<1.10.0a0",
+    "confluent-kafka>=2.5.0,<2.6.0a0",
     "cudf==24.10.*,>=0.0.0a0",
     "cudf_kafka==24.10.*,>=0.0.0a0",
     "streamz",
@@ -33,6 +33,7 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 
 [project.optional-dependencies]
