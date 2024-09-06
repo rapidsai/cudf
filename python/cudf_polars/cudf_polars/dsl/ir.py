@@ -273,7 +273,7 @@ class Scan(IR):
             eol = chr(parse_options["eol_char"])
             if self.reader_options["schema"] is not None:
                 # Reader schema provides names
-                column_names = list(self.reader_options["schema"]["inner"].keys())
+                column_names = list(self.reader_options["schema"]["fields"].keys())
             else:
                 # file provides column names
                 column_names = None
