@@ -121,8 +121,6 @@ def test_torch_tensor_ctor():
     return torch.tensor(s.values)
 
 
-@pytest.mark.xfail_cudf_pandas(reason="Known failure, see xdf/#210")
-@pytest.mark.xfail_compare
 def test_torch_tensor_from_numpy():
     s = pd.Series(range(5))
     return torch.from_numpy(s.values)
