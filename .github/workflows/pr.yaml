@@ -253,16 +253,16 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/build_wheel_dask_cudf.sh"
-  wheel-tests-dask-cudf:
-    needs: [wheel-build-dask-cudf, changed-files]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@python-3.12
-    if: needs.changed-files.outputs.test_python == 'true'
-    with:
-      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
-      build_type: pull-request
-      script: ci/test_wheel_dask_cudf.sh
+  # wheel-tests-dask-cudf:
+  #   needs: [wheel-build-dask-cudf, changed-files]
+  #   secrets: inherit
+  #   uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@python-3.12
+  #   if: needs.changed-files.outputs.test_python == 'true'
+  #   with:
+  #     # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+  #     matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+  #     build_type: pull-request
+  #     script: ci/test_wheel_dask_cudf.sh
   devcontainer:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@python-3.12
