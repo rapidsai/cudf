@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 from libcpp cimport bool
+from pylibcudf.libcudf.labeling cimport inclusive
 
 from .column cimport Column
 

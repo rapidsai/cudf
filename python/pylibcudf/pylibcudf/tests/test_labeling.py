@@ -18,3 +18,8 @@ def test_label_bins(left_inclusive, right_inclusive):
     )
     expected = pa.chunked_array([[0, 0, 0]], type=pa.int32())
     assert result.equals(expected)
+
+
+def test_Inclusive_enum():
+    assert plc.labeling.Inclusive.YES == 0
+    assert plc.labeling.Inclusive.NO == 1

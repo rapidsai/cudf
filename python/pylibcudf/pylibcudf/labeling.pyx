@@ -6,6 +6,8 @@ from pylibcudf.libcudf cimport labeling as cpp_labeling
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.labeling cimport inclusive
 
+from pylibcudf.libcudf.labeling import inclusive as Inclusive  # no-cython-lint
+
 from .column cimport Column
 
 
@@ -39,10 +41,14 @@ cpdef Column label_bins(
     """
     cdef unique_ptr[column] c_result
     cdef inclusive c_left_inclusive = (
-        inclusive.YES if left_inclusive else inclusive.NO
+        inclusive.YES
+        if left_inclusive
+        else inclusive.NO
     )
     cdef inclusive c_right_inclusive = (
-        inclusive.YES if right_inclusive else inclusive.NO
+        inclusive.YES
+        if right_inclusive
+        else inclusive.NO
     )
 
     with nogil:
