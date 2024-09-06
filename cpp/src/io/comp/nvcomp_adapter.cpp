@@ -43,7 +43,7 @@ std::optional<nvcompStatus_t> batched_decompress_get_temp_size_ex(compression_ty
       return nvcompBatchedZstdDecompressGetTempSizeEx(std::forward<Args>(args)...);
     case compression_type::LZ4:
       return nvcompBatchedLZ4DecompressGetTempSizeEx(std::forward<Args>(args)...);
-    case compression_type::DEFLATE: [[fallthrough]];
+    case compression_type::DEFLATE:
     default: return std::nullopt;
   }
   return std::nullopt;
