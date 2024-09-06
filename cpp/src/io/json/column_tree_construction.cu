@@ -178,11 +178,8 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   auto* dev_num_levels_ptr = thrust::max_element(
     rmm::exec_policy_nosync(stream), tree.node_levels.begin(), tree.node_levels.end());
 
-  rmm::device_uvector<NodeIndexT> mapped_col_ids_copy(num_columns, stream);
-  thrust::copy(rmm::exec_policy_nosync(stream),
-               mapped_col_ids.begin(),
-               mapped_col_ids.end(),
-               mapped_col_ids_copy.begin());
+  auto mapped_col_ids_copy = cudf::detail::make_device_uvector_async(
+    mapped_col_ids, stream, rmm::mr::get_current_device_resource());
   thrust::sequence(
     rmm::exec_policy_nosync(stream), rev_mapped_col_ids.begin(), rev_mapped_col_ids.end());
   thrust::sort_by_key(rmm::exec_policy_nosync(stream),
@@ -225,8 +222,8 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
           iii. col idx[coln] = adj_coln U {parent_col_id[coln]}
   */
 
-  rmm::device_uvector<NodeIndexT> rowidx(num_columns + 1, stream);
-  thrust::fill(rmm::exec_policy_nosync(stream), rowidx.begin(), rowidx.end(), 0);
+  auto rowidx = cudf::detail::make_zeroed_device_uvector_async<NodeIndexT>(
+    static_cast<std::size_t>(num_columns + 1), stream, rmm::mr::get_current_device_resource());
   // Note that the first element of csr_parent_col_ids is -1 (parent_node_sentinel)
   // children adjacency
   auto num_non_leaf_columns = thrust::unique_count(
