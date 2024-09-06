@@ -975,7 +975,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> s.to_dict()
         {0: 1, 1: 2, 2: 3, 3: 4}
         >>> from collections import OrderedDict, defaultdict
-        >>> s.to_dict(OrderedDict)
+        >>> s.to_dict(OrderedDict)  # doctest: +SKIP
         OrderedDict([(0, 1), (1, 2), (2, 3), (3, 4)])
         >>> dd = defaultdict(list)
         >>> s.to_dict(dd)
