@@ -164,37 +164,30 @@ struct pair_expression_equality : public expression_equality<has_nulls> {
 /**
  * @brief Equality comparator that composes two row_equality comparators.
  */
-class double_row_equality {
- public:
-  double_row_equality(row_equality equality_comparator, row_equality conditional_comparator)
-    : _equality_comparator{equality_comparator}, _conditional_comparator{conditional_comparator}
-  {
-  }
+struct double_row_equality_comparator {
+  row_equality const equality_comparator;
+  row_equality const conditional_comparator;
 
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
     using experimental::row::lhs_index_type;
     using experimental::row::rhs_index_type;
 
-    return _equality_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index}) &&
-           _conditional_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index});
+    return equality_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index}) &&
+           conditional_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index});
   }
-
- private:
-  row_equality _equality_comparator;
-  row_equality _conditional_comparator;
 };
 
-// The hash table type used by mixed_semi_join with the build_table.
+// The hash set type used by mixed_semi_join with the build_table.
 using hash_set_type = cuco::static_set<size_type,
                                        cuco::extent<size_t>,
                                        cuda::thread_scope_device,
-                                       double_row_equality,
+                                       double_row_equality_comparator,
                                        cuco::linear_probing<4, row_hash>,
                                        cudf::detail::cuco_allocator<char>,
                                        cuco::storage<1>>;
 
-// The device_ref_type used by mixed_semi_join kerenels for probing.
+// The hash_set_ref_type used by mixed_semi_join kerenels for probing.
 using hash_set_ref_type = hash_set_type::ref_type<cuco::contains_tag>;
 
 }  // namespace detail

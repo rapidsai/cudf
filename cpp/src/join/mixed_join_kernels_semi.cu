@@ -58,8 +58,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto thread_intermediate_storage =
     &intermediate_storage[(threadIdx.x / cg_size) * device_expression_data.num_intermediates];
 
-  cudf::size_type const outer_num_rows = left_table.num_rows();
-  cudf::size_type outer_row_index      = (threadIdx.x + blockIdx.x * block_size) / cg_size;
+  cudf::size_type const outer_num_rows  = left_table.num_rows();
+  cudf::size_type const outer_row_index = (threadIdx.x + blockIdx.x * block_size) / cg_size;
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
@@ -69,8 +69,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     auto equality = single_expression_equality<has_nulls>{
       evaluator, thread_intermediate_storage, false, equality_probe};
 
-    auto set_ref_equality = set_ref.with_key_eq(equality);
-    const auto result     = set_ref_equality.contains(tile, outer_row_index);
+    auto const set_ref_equality = set_ref.with_key_eq(equality);
+    auto const result           = set_ref_equality.contains(tile, outer_row_index);
     if (tile.thread_rank() == 0) left_table_keep_mask[outer_row_index] = result;
   }
 }
