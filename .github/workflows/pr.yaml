@@ -285,7 +285,7 @@ jobs:
   #     script: ci/cudf_pandas_scripts/run_tests.sh
   pandas-tests:
     # run the Pandas unit tests using PR branch
-    needs: [changed-files]
+    needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@python-3.12
     strategy:

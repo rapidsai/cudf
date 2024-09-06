@@ -26,8 +26,6 @@ PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
 --ignore=tests/io/test_clipboard.py"
 
-cat python/cudf/cudf/pandas/scripts/.test_durations
-
 mkdir -p pandas-testing
 cd pandas-testing
 
@@ -91,7 +89,6 @@ cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftes
 
 # Run the tests
 cd pandas-tests/
-cat .test_durations
 
 # TODO: Needs motoserver/moto container running on http://localhost:5000
 TEST_THAT_NEED_MOTO_SERVER="not test_styler_to_s3 \
