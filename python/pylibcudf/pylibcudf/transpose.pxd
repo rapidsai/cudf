@@ -2,4 +2,4 @@
 from .table cimport Table
 
 
-cpdef tuple transpose(Table input_table)
+cpdef Table transpose(Table input_table)

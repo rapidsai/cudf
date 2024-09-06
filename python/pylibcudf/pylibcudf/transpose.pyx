@@ -10,7 +10,7 @@ from .column cimport Column
 from .table cimport Table
 
 
-cpdef tuple transpose(Table input_table):
+cpdef Table transpose(Table input_table):
     """Transpose a Table.
 
     For details, see :cpp:func:`transpose`.
@@ -22,8 +22,8 @@ cpdef tuple transpose(Table input_table):
 
     Returns
     -------
-    tuple[Column, Table]
-        Two-tuple of the owner column and transposed table.
+    Table
+        Transposed table.
     """
     cdef pair[unique_ptr[column], table_view] c_result
 
@@ -33,7 +33,4 @@ cpdef tuple transpose(Table input_table):
     owner_column = Column.from_libcudf(move(c_result.first))
     owner_table = Table([owner_column] * c_result.second.num_columns())
 
-    return (
-        owner_column,
-        Table.from_table_view(c_result.second, owner_table)
-    )
+    return Table.from_table_view(c_result.second, owner_table)
