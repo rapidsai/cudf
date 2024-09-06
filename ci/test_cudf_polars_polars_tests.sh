@@ -13,23 +13,30 @@ set -eou pipefail
 if [ -n "$(git diff --name-only origin/branch-24.08...HEAD -- python/cudf_polars/ python/cudf/cudf/_lib/pylibcudf/)" ];
 then
     HAS_CHANGES=1
+    rapids-logger "PR has changes in cudf-polars/pylibcudf, test fails treated as failure"
 else
     HAS_CHANGES=0
+    rapids-logger "PR does not have changes in cudf-polars/pylibcudf, test fails NOT treated as failure"
 fi
+
+rapids-logger "Download wheels"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-s3 ./dist
 
 # Download the cudf built in the previous step
 RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
+
+rapids-logger "Install cudf"
 python -m pip install ./local-cudf-dep/cudf*.whl
 
 rapids-logger "Install cudf_polars"
 python -m pip install $(echo ./dist/cudf_polars*.whl)
 
-rapids-logger "Clone polars"
 TAG=$(python -c 'import polars; print(f"py-{polars.__version__}")')
+rapids-logger "Clone polars to ${TAG}"
 git clone https://github.com/pola-rs/polars.git --branch ${TAG} --depth 1
+
 # Install requirements for running polars tests
 rapids-logger "Install polars test requirements"
 python -m pip install -r polars/py-polars/requirements-dev.txt -r polars/py-polars/requirements-ci.txt
