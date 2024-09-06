@@ -40,6 +40,8 @@
 #include <cstdlib>
 #include <ctime>
 
+namespace {
+
 std::vector<std::string> const ORDERS_SCHEMA   = {"o_orderkey",
                                                   "o_custkey",
                                                   "o_orderdate",
@@ -90,40 +92,7 @@ std::vector<std::string> const NATION_SCHEMA   = {
   "n_nationkey", "n_name", "n_regionkey", "n_comment"};
 std::vector<std::string> const REGION_SCHEMA = {"r_regionkey", "r_name", "r_comment"};
 
-auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
-auto make_async() { return std::make_shared<rmm::mr::cuda_async_memory_resource>(); }
-auto make_pool()
-{
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    make_cuda(), rmm::percent_of_free_device_memory(50));
-}
-auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
-auto make_managed_pool()
-{
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    make_managed(), rmm::percent_of_free_device_memory(50));
-}
-auto make_prefetch()
-{
-  return rmm::mr::make_owning_wrapper<rmm::mr::prefetch_resource_adaptor>(make_managed());
-}
-auto make_prefetch_pool()
-{
-  return rmm::mr::make_owning_wrapper<rmm::mr::prefetch_resource_adaptor>(make_managed_pool());
-}
-
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& rmm_mode)
-{
-  if (rmm_mode == "cuda") return make_cuda();
-  if (rmm_mode == "async") return make_async();
-  if (rmm_mode == "pool") return make_pool();
-  if (rmm_mode == "managed") return make_managed();
-  if (rmm_mode == "managed_pool") return make_managed_pool();
-  if (rmm_mode == "prefetch") return make_prefetch();
-  if (rmm_mode == "prefetch_pool") return make_prefetch_pool();
-  CUDF_FAIL("Unknown rmm_mode parameter: " + rmm_mode +
-            "\nExpecting: cuda, async, pool, managed, managed_pool, prefetch, prefetch_pool");
-}
+}  // namespace
 
 [[nodiscard]] std::unique_ptr<cudf::table> join_and_gather(
   cudf::table_view const& left_input,

@@ -303,15 +303,6 @@ void generate_parquet_data_sources(double scale_factor,
 
 #include <rmm/device_uvector.hpp>
 
-// RMM memory resource creation utilities
-auto make_cuda();
-auto make_async();
-auto make_pool();
-auto make_managed();
-auto make_managed_pool();
-auto make_prefetch();
-auto make_prefetch_pool();
-
 /**
  * @brief Create an RMM memory resource
  *
