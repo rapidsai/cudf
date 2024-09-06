@@ -15,6 +15,8 @@
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -43,6 +45,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
+
+#include <algorithm>  // For std::min
 
 namespace cudf {
 namespace strings {
@@ -442,7 +446,7 @@ CUDF_KERNEL void multi_contains_warp_parallel_multi_scalars_fn(
   auto const d_str = d_strings.element<string_view>(str_idx);
 
   /**
-   * size of shared_bools = Min(targets_size * block_size, target_group * block_size)
+   * size of shared_bools = targets_size * block_size
    * each thread uses targets_size bools
    */
   extern __shared__ bool shared_bools[];
@@ -870,7 +874,28 @@ std::unique_ptr<table> multi_contains(strings_column_view const& input,
         ((input.chars_size(stream) / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
       // Large strings.
       // use warp parallel when the average string width is greater than the threshold
-      return multi_contains(/**warp parallel**/ true, input, targets, stream, mr);
+
+      static constexpr int target_group_size = 16;
+      if (targets.size() <= target_group_size) {
+        return multi_contains(/**warp parallel**/ true, input, targets, stream, mr);
+      } else {
+        // Too many targets will consume more shared memory, so split targets
+        std::vector<std::unique_ptr<column>> ret_columns;
+        ret_columns.resize(targets.size());
+        size_type num_groups = (targets.size() + target_group_size - 1) / target_group_size;
+        for (size_type group_idx = 0; group_idx < num_groups; group_idx++) {
+          size_type start_target = group_idx * target_group_size;
+          size_type end_target   = std::min(start_target + target_group_size, targets.size());
+          auto target_goup =
+            cudf::detail::slice(targets.parent(), start_target, end_target, stream);
+          auto bool_columns = multi_contains(
+            /**warp parallel**/ true, input, strings_column_view(target_goup), stream, mr);
+          for (auto& c : bool_columns) {
+            ret_columns.push_back(std::move(c));  // take the ownership
+          }
+        }
+        return ret_columns;
+      }
     } else {
       // Small strings. Searching for multiple targets in one thread seems to work fastest.
       return multi_contains(/**warp parallel**/ false, input, targets, stream, mr);

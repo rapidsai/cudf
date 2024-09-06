@@ -230,6 +230,39 @@ TEST_F(StringsFindTest, MultiContains)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(3), expected_3);
 }
 
+TEST_F(StringsFindTest, MultiContainsMoreTargets)
+{
+  using cudf::test::iterators::null_at;
+  auto const strings =
+    cudf::test::strings_column_wrapper{{"there world and goodbye", "good", ""}, null_at(2)};
+  auto strings_view = cudf::strings_column_view(strings);
+  std::vector<std::string> targets({"goodbye", "non-exist", ""});
+
+  std::vector<cudf::test::fixed_width_column_wrapper<bool>> expects;
+  expects.push_back(cudf::test::fixed_width_column_wrapper<bool>({1, 0, 0}, null_at(2)));
+  expects.push_back(cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0}, null_at(2)));
+  expects.push_back(cudf::test::fixed_width_column_wrapper<bool>({1, 1, 0}, null_at(2)));
+
+  std::vector<std::string> match_targets;
+  int max_num_targets = 50;
+
+  for (int num_targets = 1; num_targets < max_num_targets; num_targets++) {
+    match_targets.clear();
+    for (int i = 0; i < num_targets; i++) {
+      match_targets.push_back(targets[i % targets.size()]);
+    }
+
+    cudf::test::strings_column_wrapper multi_targets_column(match_targets.begin(),
+                                                            match_targets.end());
+    auto results =
+      cudf::strings::multi_contains(strings_view, cudf::strings_column_view(multi_targets_column));
+    EXPECT_EQ(results->num_columns(), num_targets);
+    for (int i = 0; i < num_targets; i++) {
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(i), expects[i % expects.size()]);
+    }
+  }
+}
+
 TEST_F(StringsFindTest, StartsWith)
 {
   cudf::test::strings_column_wrapper strings({"Héllo", "thesé", "", "lease", "tést strings", ""},
