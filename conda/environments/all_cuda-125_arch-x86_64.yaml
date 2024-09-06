@@ -42,7 +42,7 @@ dependencies:
 - libcufile-dev
 - libcurand-dev
 - libkvikio==24.10.*,>=0.0.0a0
-- librdkafka>=1.9.0,<1.10.0a0
+- librdkafka>=2.5.0,<2.6.0a0
 - librmm==24.10.*,>=0.0.0a0
 - make
 - moto>=4.0.8
@@ -56,7 +56,7 @@ dependencies:
 - numba>=0.57
 - numpy>=1.23,<3.0a0
 - numpydoc
-- nvcomp==3.0.6
+- nvcomp==4.0.1
 - nvtx>=0.2.1
 - openpyxl
 - packaging
@@ -72,8 +72,8 @@ dependencies:
 - pytest-cov
 - pytest-xdist
 - pytest<8
-- python-confluent-kafka>=1.9.0,<1.10.0a0
-- python>=3.10,<3.12
+- python-confluent-kafka>=2.5.0,<2.6.0a0
+- python>=3.10,<3.13
 - pytorch>=2.1.0
 - rapids-build-backend>=0.3.0,<0.4.0.dev0
 - rapids-dask-dependency==24.10.*,>=0.0.0a0
