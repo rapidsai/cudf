@@ -170,7 +170,9 @@ TEST_F(JsonWSNormalizationTest, ReadJsonOption_InvalidRows)
   std::string const host_input = R"(
   { "Root": { "Key": [ { "EE": tr ue } ] } }
   { "Root": { "Key": "abc" } }
+  { "Root": { "Key": [ { "EE": 12 34 } ] } }
   { "Root": { "Key": [{ "YY": 1}] } }
+  { "Root": { "Key": [ { "EE": 12. 34 } ] } }
   { "Root": { "Key": [ { "EE": "efg" } ] } }
   )";
   cudf::io::json_reader_options input_options =
@@ -187,7 +189,9 @@ TEST_F(JsonWSNormalizationTest, ReadJsonOption_InvalidRows)
   std::string const expected_input = R"(
   { "Root": { "Key": [ { "EE": tr ue } ] } }
   { "Root": { "Key": "abc" } }
+  { "Root": { "Key": [ { "EE": 12 34 } ] } }
   { "Root": { "Key": [{"YY":1}] } }
+  { "Root": { "Key": [ { "EE": 12. 34 } ] } }
   { "Root": { "Key": [{"EE":"efg"}] } }
   )";
   cudf::io::json_reader_options expected_input_options =
