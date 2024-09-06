@@ -57,7 +57,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS((join_type != join_kind::INNER_JOIN) && (join_type != join_kind::LEFT_JOIN) &&
+  CUDF_EXPECTS((join_type != join_kind::INNER_JOIN) and (join_type != join_kind::LEFT_JOIN) and
                  (join_type != join_kind::FULL_JOIN),
                "Inner, left, and full joins should use mixed_join.");
 
@@ -98,7 +98,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   // output column and follow the null-supporting expression evaluation code
   // path.
   auto const has_nulls = cudf::nullate::DYNAMIC{
-    cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
+    cudf::has_nulls(left_equality) or cudf::has_nulls(right_equality) or
     binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream)};
 
   auto const parser = ast::detail::expression_parser{
@@ -116,11 +116,13 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
   auto right_conditional_view = table_device_view::create(right_conditional, stream);
 
-  using namespace cudf::experimental::row::equality;
-  auto const preprocessed_build = preprocessed_table::create(build, stream);
-  auto const preprocessed_probe = preprocessed_table::create(probe, stream);
-  auto const row_comparator     = two_table_comparator{preprocessed_build, preprocessed_probe};
-  auto const equality_probe     = row_comparator.equal_to<false>(has_nulls, compare_nulls);
+  auto const preprocessed_build =
+    cudf::experimental::row::equality::preprocessed_table::create(build, stream);
+  auto const preprocessed_probe =
+    cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
+  auto const row_comparator =
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_build, preprocessed_probe};
+  auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
   // Create hash table containing all keys found in right table
   // TODO: To add support for nested columns we will need to flatten in many
@@ -138,12 +140,15 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   // the columns of the conditional table that are used by the expression, but
   // that requires additional plumbing through the AST machinery and is out of
   // scope for now.
-  auto const row_comparator_build = two_table_comparator{preprocessed_build, preprocessed_build};
+  auto const row_comparator_build =
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_build, preprocessed_build};
   auto const equality_build_equality =
     row_comparator_build.equal_to<false>(build_nulls, compare_nulls);
-  auto const preprocessed_build_condtional = preprocessed_table::create(right_conditional, stream);
+  auto const preprocessed_build_condtional =
+    cudf::experimental::row::equality::preprocessed_table::create(right_conditional, stream);
   auto const row_comparator_conditional_build =
-    two_table_comparator{preprocessed_build_condtional, preprocessed_build_condtional};
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_build_condtional,
+                                                            preprocessed_build_condtional};
   auto const equality_build_conditional =
     row_comparator_conditional_build.equal_to<false>(build_nulls, compare_nulls);
   double_row_equality_comparator equality_build{equality_build_equality,
@@ -182,10 +187,10 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const shmem_size_per_block =
     (parser.shmem_per_thread / cg_size) * config.num_threads_per_block;
 
-  auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-  auto const hash_probe = row_hash.device_hasher(has_nulls);
+  auto const row_hash = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
 
-  hash_set_ref_type const row_set_ref = row_set.ref(cuco::contains).with_hash_function(hash_probe);
+  hash_set_ref_type const row_set_ref =
+    row_set.ref(cuco::contains).with_hash_function(row_hash.device_hasher(has_nulls));
 
   // Vector used to indicate indices from left/probe table which are present in output
   auto left_table_keep_mask = rmm::device_uvector<bool>(probe.num_rows(), stream);
