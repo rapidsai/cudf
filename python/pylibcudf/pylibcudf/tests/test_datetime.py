@@ -22,7 +22,6 @@ def column(has_nulls):
 
 def test_extract_year(column):
     got = plc.datetime.extract_year(column)
-    # libcudf produces an int16, arrow produces an int64
     expect = pc.year(plc.interop.to_arrow(column)).cast(pa.int16())
 
     assert_column_eq(expect, got)
