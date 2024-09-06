@@ -33,8 +33,7 @@ namespace cudf::io::nvcomp {
 
 // Dispatcher for nvcompBatched<format>DecompressGetTempSizeEx
 template <typename... Args>
-std::optional<nvcompStatus_t> batched_decompress_get_temp_size_ex(compression_type compression,
-                                                                  Args&&... args)
+auto batched_decompress_get_temp_size_ex(compression_type compression, Args&&... args)
 {
   switch (compression) {
     case compression_type::SNAPPY:
@@ -44,26 +43,21 @@ std::optional<nvcompStatus_t> batched_decompress_get_temp_size_ex(compression_ty
     case compression_type::LZ4:
       return nvcompBatchedLZ4DecompressGetTempSizeEx(std::forward<Args>(args)...);
     case compression_type::DEFLATE:
-    default: return std::nullopt;
-  }
-  return std::nullopt;
-}
-
-// Dispatcher for nvcompBatched<format>DecompressGetTempSize
-template <typename... Args>
-auto batched_decompress_get_temp_size(compression_type compression, Args&&... args)
-{
-  switch (compression) {
-    case compression_type::SNAPPY:
-      return nvcompBatchedSnappyDecompressGetTempSize(std::forward<Args>(args)...);
-    case compression_type::ZSTD:
-      return nvcompBatchedZstdDecompressGetTempSize(std::forward<Args>(args)...);
-    case compression_type::DEFLATE:
-      return nvcompBatchedDeflateDecompressGetTempSize(std::forward<Args>(args)...);
-    case compression_type::LZ4:
-      return nvcompBatchedLZ4DecompressGetTempSize(std::forward<Args>(args)...);
     default: CUDF_FAIL("Unsupported compression type");
   }
+}
+size_t batched_decompress_temp_size(compression_type compression,
+                                    size_t num_chunks,
+                                    size_t max_uncomp_chunk_size,
+                                    size_t max_total_uncomp_size)
+{
+  size_t temp_size             = 0;
+  nvcompStatus_t nvcomp_status = batched_decompress_get_temp_size_ex(
+    compression, num_chunks, max_uncomp_chunk_size, &temp_size, max_total_uncomp_size);
+
+  CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
+               "Unable to get scratch size for decompression");
+  return temp_size;
 }
 
 // Dispatcher for nvcompBatched<format>DecompressAsync
@@ -91,27 +85,6 @@ std::string compression_type_name(compression_type compression)
     case compression_type::LZ4: return "LZ4";
   }
   return "compression_type(" + std::to_string(static_cast<int>(compression)) + ")";
-}
-
-size_t batched_decompress_temp_size(compression_type compression,
-                                    size_t num_chunks,
-                                    size_t max_uncomp_chunk_size,
-                                    size_t max_total_uncomp_size)
-{
-  size_t temp_size   = 0;
-  auto nvcomp_status = batched_decompress_get_temp_size_ex(
-    compression, num_chunks, max_uncomp_chunk_size, &temp_size, max_total_uncomp_size);
-
-  if (nvcomp_status.value_or(nvcompStatus_t::nvcompErrorInternal) !=
-      nvcompStatus_t::nvcompSuccess) {
-    nvcomp_status =
-      batched_decompress_get_temp_size(compression, num_chunks, max_uncomp_chunk_size, &temp_size);
-  }
-
-  CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
-               "Unable to get scratch size for decompression");
-
-  return temp_size;
 }
 
 void batched_decompress(compression_type compression,
@@ -148,43 +121,10 @@ void batched_decompress(compression_type compression,
   update_compression_results(nvcomp_statuses, actual_uncompressed_data_sizes, results, stream);
 }
 
-// Wrapper for nvcompBatched<format>CompressGetTempSize
-auto batched_compress_get_temp_size(compression_type compression,
-                                    size_t batch_size,
-                                    size_t max_uncompressed_chunk_bytes)
-{
-  size_t temp_size             = 0;
-  nvcompStatus_t nvcomp_status = nvcompStatus_t::nvcompSuccess;
-  switch (compression) {
-    case compression_type::SNAPPY:
-      nvcomp_status = nvcompBatchedSnappyCompressGetTempSize(
-        batch_size, max_uncompressed_chunk_bytes, nvcompBatchedSnappyDefaultOpts, &temp_size);
-      break;
-    case compression_type::DEFLATE:
-      nvcomp_status = nvcompBatchedDeflateCompressGetTempSize(
-        batch_size, max_uncompressed_chunk_bytes, nvcompBatchedDeflateDefaultOpts, &temp_size);
-      break;
-    case compression_type::ZSTD:
-      nvcomp_status = nvcompBatchedZstdCompressGetTempSize(
-        batch_size, max_uncompressed_chunk_bytes, nvcompBatchedZstdDefaultOpts, &temp_size);
-      break;
-    case compression_type::LZ4:
-      nvcomp_status = nvcompBatchedLZ4CompressGetTempSize(
-        batch_size, max_uncompressed_chunk_bytes, nvcompBatchedLZ4DefaultOpts, &temp_size);
-      break;
-    default: CUDF_FAIL("Unsupported compression type");
-  }
-
-  CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
-               "Unable to get scratch size for compression");
-  return temp_size;
-}
-
-// Wrapper for nvcompBatched<format>CompressGetTempSizeEx
-auto batched_compress_get_temp_size_ex(compression_type compression,
-                                       size_t batch_size,
-                                       size_t max_uncompressed_chunk_bytes,
-                                       size_t max_total_uncompressed_bytes)
+size_t batched_compress_temp_size(compression_type compression,
+                                  size_t batch_size,
+                                  size_t max_uncompressed_chunk_bytes,
+                                  size_t max_total_uncompressed_bytes)
 {
   size_t temp_size             = 0;
   nvcompStatus_t nvcomp_status = nvcompStatus_t::nvcompSuccess;
@@ -225,24 +165,7 @@ auto batched_compress_get_temp_size_ex(compression_type compression,
   return temp_size;
 }
 
-size_t batched_compress_temp_size(compression_type compression,
-                                  size_t num_chunks,
-                                  size_t max_uncomp_chunk_size,
-                                  size_t max_total_uncomp_size)
-{
-  try {
-    return batched_compress_get_temp_size_ex(
-      compression, num_chunks, max_uncomp_chunk_size, max_total_uncomp_size);
-  } catch (...) {
-    // Ignore errors in the expanded version; fall back to the old API in case of failure
-    CUDF_LOG_WARN(
-      "CompressGetTempSizeEx call failed, falling back to CompressGetTempSize; this may increase "
-      "the memory usage");
-  }
-
-  return batched_compress_get_temp_size(compression, num_chunks, max_uncomp_chunk_size);
-}
-
+// Wrapper for nvcompBatched<format>CompressGetMaxOutputChunkSize
 size_t compress_max_output_chunk_size(compression_type compression,
                                       uint32_t max_uncompressed_chunk_bytes)
 {
