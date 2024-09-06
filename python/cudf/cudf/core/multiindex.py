@@ -36,7 +36,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Hashable
 
     from typing_extensions import Self
 
@@ -1041,9 +1041,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
 
     @_performance_tracking
-    def get_level_values(self, level) -> cudf.Index:
+    def _level_to_ca_label(self, level) -> tuple[Hashable, int]:
         """
-        Return the values at the requested level
+        Convert a level to a ColumAccessor label and an integer position.
+
+        Useful if self._column_names != self.names.
 
         Parameters
         ----------
@@ -1051,10 +1053,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         Returns
         -------
-        An Index containing the values at the requested level.
+        tuple[Hashable, int]
+            (ColumnAccessor label corresponding to level, integer position of the level)
         """
-        colnames = self._data.names
-        if level not in colnames:
+        colnames = self._column_names
+        try:
+            level_idx = colnames.index(level)
+        except ValueError:
             if isinstance(level, int):
                 if level < 0:
                     level = level + len(colnames)
@@ -1067,8 +1072,22 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 level = colnames[level_idx]
             else:
                 raise KeyError(f"Level not found: '{level}'")
-        else:
-            level_idx = colnames.index(level)
+        return level, level_idx
+
+    @_performance_tracking
+    def get_level_values(self, level) -> cudf.Index:
+        """
+        Return the values at the requested level
+
+        Parameters
+        ----------
+        level : int or label
+
+        Returns
+        -------
+        An Index containing the values at the requested level.
+        """
+        level, level_idx = self._level_to_ca_label(level)
         level_values = cudf.Index._from_column(
             self._data[level], name=self.names[level_idx]
         )

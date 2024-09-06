@@ -1228,11 +1228,20 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         )
         return res
     else:
-        columns = df.index.droplevel(level)
+        index = df.index.droplevel(level)
         if is_scalar(level):
-            index = df.index.get_level_values(level)
+            columns = df.index.get_level_values(level)
         else:
-            pass
+            new_names = []
+            ca_data = {}
+            for lev in level:
+                ca_level, level_idx = df.index._level_to_ca_label(lev)
+                new_names.append(df.index.names[level_idx])
+                ca_data[ca_level] = df.index._data[ca_level]
+            columns = type(df.index)._from_data(
+                ColumnAccessor(ca_data, verify=False)
+            )
+            columns.names = new_names
     result = _pivot(df, index, columns)
     if result.index.nlevels == 1:
         result.index = result.index.get_level_values(result.index.names[0])
