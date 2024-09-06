@@ -38,6 +38,23 @@ namespace datetime {
  */
 
 /**
+ * @brief Types of datetime components that may be extracted.
+ */
+enum class datetime_component {
+  INVALID = 0,
+  YEAR,
+  MONTH,
+  DAY,
+  WEEKDAY,
+  HOUR,
+  MINUTE,
+  SECOND,
+  MILLISECOND,
+  MICROSECOND,
+  NANOSECOND
+};
+
+/**
  * @brief  Extracts year from any datetime type and returns an int16_t
  * cudf::column.
  *
@@ -148,6 +165,7 @@ std::unique_ptr<cudf::column> extract_second(
  * @returns cudf::column of the extracted int16_t milliseconds
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
+
 std::unique_ptr<cudf::column> extract_millisecond_fraction(
   cudf::column_view const& column,
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
@@ -185,6 +203,22 @@ std::unique_ptr<cudf::column> extract_microsecond_fraction(
 std::unique_ptr<cudf::column> extract_nanosecond_fraction(
   cudf::column_view const& column,
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief  Extracts the specified datetime component from any datetime type and
+ * returns an int16_t cudf::column.
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param component The datetime component to extract
+ * @param mr Device memory resource used to allocate device memory of the returned column
+ *
+ * @returns cudf::column of the extracted int16_t datetime component
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ */
+std::unique_ptr<cudf::column> extract_datetime_component(
+  cudf::column_view const& column,
+  datetime_component component,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 /**
