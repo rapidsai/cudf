@@ -23,17 +23,5 @@ template <typename T>
 struct NumericValueIteratorTest : public IteratorTest<T> {};
 
 TYPED_TEST_SUITE(NumericValueIteratorTest, TestingTypes);
-TYPED_TEST(NumericValueIteratorTest, non_null_iterator)
-{
-  if constexpr (std::is_same_v<TypeParam, int16_t> || std::is_same_v<TypeParam, uint16_t>) {
-    if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { return; }
-  }
-  non_null_iterator(*this);
-}
-TYPED_TEST(NumericValueIteratorTest, null_iterator)
-{
-  if constexpr (std::is_same_v<TypeParam, int16_t> || std::is_same_v<TypeParam, uint16_t>) {
-    if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { return; }
-  }
-  null_iterator(*this);
-}
+TYPED_TEST(NumericValueIteratorTest, non_null_iterator) { non_null_iterator(*this); }
+TYPED_TEST(NumericValueIteratorTest, null_iterator) { null_iterator(*this); }

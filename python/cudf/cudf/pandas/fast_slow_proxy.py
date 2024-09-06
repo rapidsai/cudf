@@ -10,15 +10,16 @@ import operator
 import pickle
 import types
 import warnings
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from enum import IntEnum
-from typing import Any, Callable, Literal, Mapping
+from typing import Any, Literal, Mapping
 
 import numpy as np
 
 from ..options import _env_get_bool
 from ..testing import assert_eq
 from .annotation import nvtx
+from .proxy_base import ProxyNDarrayBase
 
 
 def call_operator(fn, args, kwargs):
@@ -564,7 +565,17 @@ class _FinalProxy(_FastSlowProxy):
         _FinalProxy subclasses can override this classmethod if they
         need particular behaviour when wrapped up.
         """
-        proxy = object.__new__(cls)
+        # TODO: Replace the if-elif-else using singledispatch helper function
+        base_class = _get_proxy_base_class(cls)
+        if base_class is object:
+            proxy = base_class.__new__(cls)
+        elif base_class is ProxyNDarrayBase:
+            proxy = base_class.__new__(cls, value)
+        else:
+            raise TypeError(
+                f"Cannot create an proxy instance of {cls.__name__} using base class {base_class.__name__}. "
+                f"Expected either 'object' or another type in 'PROXY_BASE_CLASSES'"
+            )
         proxy._fsproxy_wrapped = value
         return proxy
 
@@ -1191,6 +1202,19 @@ def is_proxy_object(obj: Any) -> bool:
     if _FastSlowProxyMeta in type(type(obj)).__mro__:
         return True
     return False
+
+
+def _get_proxy_base_class(cls):
+    """Returns the proxy base class if one exists"""
+    for proxy_class in PROXY_BASE_CLASSES:
+        if proxy_class in cls.__mro__:
+            return proxy_class
+    return object
+
+
+PROXY_BASE_CLASSES: set[type] = {
+    ProxyNDarrayBase,
+}
 
 
 NUMPY_TYPES: set[str] = set(np.sctypeDict.values())

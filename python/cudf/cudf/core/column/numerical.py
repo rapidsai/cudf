@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, Callable, Sequence, cast
+from typing import TYPE_CHECKING, Any, Sequence, cast
 
 import numpy as np
 import pandas as pd
 from typing_extensions import Self
 
+import pylibcudf
+
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib import pylibcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.dtypes import CategoricalDtype
@@ -27,6 +28,8 @@ from cudf.utils.dtypes import (
 from .numerical_base import NumericalBaseColumn
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
@@ -61,25 +64,30 @@ class NumericalColumn(NumericalBaseColumn):
     def __init__(
         self,
         data: Buffer,
-        dtype: DtypeObj,
+        size: int | None,
+        dtype: np.dtype,
         mask: Buffer | None = None,
-        size: int | None = None,  # TODO: make this non-optional
         offset: int = 0,
         null_count: int | None = None,
+        children: tuple = (),
     ):
-        dtype = cudf.dtype(dtype)
+        if not (isinstance(dtype, np.dtype) and dtype.kind in "iufb"):
+            raise ValueError(
+                "dtype must be a floating, integer or boolean numpy dtype."
+            )
 
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = (data.size // dtype.itemsize) - offset
         super().__init__(
-            data,
+            data=data,
             size=size,
             dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
 
     def _clear_cache(self):
@@ -136,7 +144,7 @@ class NumericalColumn(NumericalBaseColumn):
         """
 
         # Normalize value to scalar/column
-        device_value = (
+        device_value: cudf.Scalar | ColumnBase = (
             cudf.Scalar(
                 value,
                 dtype=self.dtype
@@ -546,7 +554,7 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> cudf.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
-            cudf_obj = cudf.Scalar(fill_value)
+            cudf_obj: cudf.Scalar | ColumnBase = cudf.Scalar(fill_value)
             if not as_column(cudf_obj).can_cast_safely(self.dtype):
                 raise TypeError(
                     f"Cannot safely cast non-equivalent "
@@ -643,21 +651,20 @@ class NumericalColumn(NumericalBaseColumn):
 
         return False
 
-    def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
+    def _with_type_metadata(self: Self, dtype: Dtype) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
-            return column.build_categorical_column(
-                categories=dtype.categories._values,
-                codes=cudf.core.column.NumericalColumn(
-                    self.base_data,  # type: ignore[arg-type]
-                    dtype=self.dtype,
-                ),
-                mask=self.base_mask,
-                ordered=dtype.ordered,
+            codes = cudf.core.column.categorical.as_unsigned_codes(
+                len(dtype.categories), self
+            )
+            return cudf.core.column.CategoricalColumn(
+                data=None,
                 size=self.size,
+                dtype=dtype,
+                mask=self.base_mask,
                 offset=self.offset,
                 null_count=self.null_count,
+                children=(codes,),
             )
-
         return self
 
     def to_pandas(
