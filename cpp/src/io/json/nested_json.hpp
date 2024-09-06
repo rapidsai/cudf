@@ -23,10 +23,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 
-#include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
-
-#include <thrust/sequence.h>
 
 #include <map>
 #include <vector>
