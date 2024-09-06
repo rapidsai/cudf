@@ -54,8 +54,19 @@ else
     RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp ./dist
     RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./dist
 
-    # echo to expand wildcard before adding `[extra]` requires for pip
+    echo "" > ./constraints.txt
+    if [[ $RAPIDS_DEPENDENCIES == "oldest" ]]; then
+        # `test_python` constraints are for `[test]` not `[cudf-pandas-tests]`
+        rapids-dependency-file-generator \
+            --output requirements \
+            --file-key test_python \
+            --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
+        | tee ./constraints.txt
+    fi
+
     python -m pip install \
+        -v \
+        --constraint ./constraints.txt \
         "$(echo ./dist/cudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test,cudf-pandas-tests]" \
         "$(echo ./dist/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \
         "$(echo ./dist/pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
