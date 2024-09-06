@@ -388,11 +388,17 @@ void batched_compress(compression_type compression,
 }
 
 feature_status_parameters::feature_status_parameters()
+  : feature_status_parameters(nvcomp_integration::is_all_enabled(),
+                              nvcomp_integration::is_stable_enabled())
+{
+}
+
+feature_status_parameters::feature_status_parameters(bool all_enabled, bool stable_enabled)
   : lib_major_version{NVCOMP_VER_MAJOR},
     lib_minor_version{NVCOMP_VER_MINOR},
     lib_patch_version{NVCOMP_VER_PATCH},
-    are_all_integrations_enabled{nvcomp_integration::is_all_enabled()},
-    are_stable_integrations_enabled{nvcomp_integration::is_stable_enabled()}
+    are_all_integrations_enabled{all_enabled},
+    are_stable_integrations_enabled{stable_enabled}
 {
 }
 
