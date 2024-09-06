@@ -43,6 +43,7 @@ auto batched_decompress_get_temp_size_ex(compression_type compression, Args&&...
     case compression_type::LZ4:
       return nvcompBatchedLZ4DecompressGetTempSizeEx(std::forward<Args>(args)...);
     case compression_type::DEFLATE:
+      return nvcompBatchedDeflateDecompressGetTempSizeEx(std::forward<Args>(args)...);
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
