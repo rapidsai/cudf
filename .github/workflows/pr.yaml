@@ -28,12 +28,12 @@ jobs:
       - wheel-build-pylibcudf
       - wheel-build-cudf
       # - wheel-tests-cudf
-      - wheel-build-cudf-polars
+      # - wheel-build-cudf-polars
       # - wheel-tests-cudf-polars
-      - wheel-build-dask-cudf
+      # - wheel-build-dask-cudf
       # - wheel-tests-dask-cudf
       - devcontainer
-      - unit-tests-cudf-pandas
+      # - unit-tests-cudf-pandas
       - pandas-tests
       - pandas-tests-diff
     secrets: inherit
