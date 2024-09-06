@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "utils.hpp"
+#include "utilities.hpp"
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/binaryop.hpp>
@@ -51,7 +51,7 @@
  * @param stream The CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_revenue(
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_revenue(
   cudf::column_view const& extendedprice,
   cudf::column_view const& discount,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -124,8 +124,8 @@ void run_ndsh_q6(nvbench::state& state)
   auto const filtered_table = apply_filter(lineitem, discount_quantity_pred);
 
   // Calculate the `revenue` column
-  auto revenue =
-    calc_revenue(filtered_table->column("l_extendedprice"), filtered_table->column("l_discount"));
+  auto revenue = calculate_revenue(filtered_table->column("l_extendedprice"),
+                                   filtered_table->column("l_discount"));
 
   // Sum the `revenue` column
   auto const revenue_view = revenue->view();

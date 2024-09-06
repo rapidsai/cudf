@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "utils.hpp"
+#include "utilities.hpp"
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
@@ -81,7 +81,7 @@
  * @param stream The CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_amount(
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_amount(
   cudf::column_view const& discount,
   cudf::column_view const& extendedprice,
   cudf::column_view const& supplycost,
@@ -151,10 +151,10 @@ void run_ndsh_q9(nvbench::state& state)
   // Calculate the `nation`, `o_year`, and `amount` columns
   auto n_name = std::make_unique<cudf::column>(joined_table->column("n_name"));
   auto o_year = cudf::datetime::extract_year(joined_table->column("o_orderdate"));
-  auto amount = calc_amount(joined_table->column("l_discount"),
-                            joined_table->column("l_extendedprice"),
-                            joined_table->column("ps_supplycost"),
-                            joined_table->column("l_quantity"));
+  auto amount = calculate_amount(joined_table->column("l_discount"),
+                                 joined_table->column("l_extendedprice"),
+                                 joined_table->column("ps_supplycost"),
+                                 joined_table->column("l_quantity"));
 
   // Put together the `profit` table
   std::vector<std::unique_ptr<cudf::column>> profit_columns;

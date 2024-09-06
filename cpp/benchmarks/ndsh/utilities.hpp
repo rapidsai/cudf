@@ -309,85 +309,46 @@ void generate_parquet_data_sources(double scale_factor,
 class table_with_names {
  public:
   table_with_names(std::unique_ptr<cudf::table> tbl, std::vector<std::string> col_names)
-    : tbl(std::move(tbl)), col_names(col_names)
-  {
-  }
+    : tbl(std::move(tbl)), col_names(col_names){};
   /**
    * @brief Return the table view
    */
-  [[nodiscard]] cudf::table_view table() const { return tbl->view(); }
+  [[nodiscard]] cudf::table_view table() const;
   /**
    * @brief Return the column view for a given column name
    *
    * @param col_name The name of the column
    */
-  [[nodiscard]] cudf::column_view column(std::string const& col_name) const
-  {
-    return tbl->view().column(col_id(col_name));
-  }
+  [[nodiscard]] cudf::column_view column(std::string const& col_name) const;
   /**
    * @param Return the column names of the table
    */
-  [[nodiscard]] std::vector<std::string> column_names() const { return col_names; }
+  [[nodiscard]] std::vector<std::string> column_names() const;
   /**
    * @brief Translate a column name to a column index
    *
    * @param col_name The name of the column
    */
-  [[nodiscard]] cudf::size_type col_id(std::string const& col_name) const
-  {
-    auto it = std::find(col_names.begin(), col_names.end(), col_name);
-    if (it == col_names.end()) {
-      std::string err_msg = "Column `" + col_name + "` not found";
-      throw std::runtime_error(err_msg);
-    }
-    return std::distance(col_names.begin(), it);
-  }
+  [[nodiscard]] cudf::size_type col_id(std::string const& col_name) const;
   /**
    * @brief Append a column to the table
    *
    * @param col The column to append
    * @param col_name The name of the appended column
    */
-  table_with_names& append(std::unique_ptr<cudf::column>& col, std::string const& col_name)
-  {
-    auto cols = tbl->release();
-    cols.push_back(std::move(col));
-    tbl = std::make_unique<cudf::table>(std::move(cols));
-    col_names.push_back(col_name);
-    return (*this);
-  }
+  table_with_names& append(std::unique_ptr<cudf::column>& col, std::string const& col_name);
   /**
    * @brief Select a subset of columns from the table
    *
    * @param col_names The names of the columns to select
    */
-  [[nodiscard]] cudf::table_view select(std::vector<std::string> const& col_names) const
-  {
-    std::vector<cudf::size_type> col_indices;
-    for (auto const& col_name : col_names) {
-      col_indices.push_back(col_id(col_name));
-    }
-    return tbl->select(col_indices);
-  }
+  [[nodiscard]] cudf::table_view select(std::vector<std::string> const& col_names) const;
   /**
    * @brief Write the table to a parquet file
    *
    * @param filepath The path to the parquet file
    */
-  void to_parquet(std::string const& filepath) const
-  {
-    CUDF_FUNC_RANGE();
-    auto const sink_info = cudf::io::sink_info(filepath);
-    cudf::io::table_metadata metadata;
-    metadata.schema_info =
-      std::vector<cudf::io::column_name_info>(col_names.begin(), col_names.end());
-    auto const table_input_metadata = cudf::io::table_input_metadata{metadata};
-    auto builder = cudf::io::parquet_writer_options::builder(sink_info, tbl->view());
-    builder.metadata(table_input_metadata);
-    auto const options = builder.build();
-    cudf::io::write_parquet(options);
-  }
+  void to_parquet(std::string const& filepath) const;
 
  private:
   std::unique_ptr<cudf::table> tbl;

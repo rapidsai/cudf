@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "utils.hpp"
+#include "utilities.hpp"
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/binaryop.hpp>
@@ -61,7 +61,7 @@
  * @param stream The CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_disc_price(
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_disc_price(
   cudf::column_view const& discount,
   cudf::column_view const& extendedprice,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -88,7 +88,7 @@
  * @param stream The CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_charge(
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_charge(
   cudf::column_view const& tax,
   cudf::column_view const& disc_price,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -134,8 +134,8 @@ void run_ndsh_q1(nvbench::state& state)
 
   // Calculate the discount price and charge columns and append to lineitem table
   auto disc_price =
-    calc_disc_price(lineitem->column("l_discount"), lineitem->column("l_extendedprice"));
-  auto charge = calc_charge(lineitem->column("l_tax"), disc_price->view());
+    calculate_disc_price(lineitem->column("l_discount"), lineitem->column("l_extendedprice"));
+  auto charge = calculate_charge(lineitem->column("l_tax"), disc_price->view());
   (*lineitem).append(disc_price, "disc_price").append(charge, "charge");
 
   // Perform the group by operation

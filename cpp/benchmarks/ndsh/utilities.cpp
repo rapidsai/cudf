@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "utils.hpp"
+#include "utilities.hpp"
 
 #include "common/ndsh_data_generator/ndsh_data_generator.hpp"
 
@@ -85,6 +85,59 @@ std::vector<std::string> const NATION_SCHEMA   = {
 std::vector<std::string> const REGION_SCHEMA = {"r_regionkey", "r_name", "r_comment"};
 
 }  // namespace
+
+cudf::table_view table_with_names::table() const { return tbl->view(); }
+
+cudf::column_view table_with_names::column(std::string const& col_name) const
+{
+  return tbl->view().column(col_id(col_name));
+}
+
+std::vector<std::string> table_with_names::column_names() const { return col_names; }
+
+cudf::size_type table_with_names::col_id(std::string const& col_name) const
+{
+  auto it = std::find(col_names.begin(), col_names.end(), col_name);
+  if (it == col_names.end()) {
+    std::string err_msg = "Column `" + col_name + "` not found";
+    throw std::runtime_error(err_msg);
+  }
+  return std::distance(col_names.begin(), it);
+}
+
+table_with_names& table_with_names::append(std::unique_ptr<cudf::column>& col,
+                                           std::string const& col_name)
+{
+  auto cols = tbl->release();
+  cols.push_back(std::move(col));
+  tbl = std::make_unique<cudf::table>(std::move(cols));
+  col_names.push_back(col_name);
+  return (*this);
+}
+
+cudf::table_view table_with_names::select(std::vector<std::string> const& col_names) const
+{
+  CUDF_FUNC_RANGE();
+  std::vector<cudf::size_type> col_indices;
+  for (auto const& col_name : col_names) {
+    col_indices.push_back(col_id(col_name));
+  }
+  return tbl->select(col_indices);
+}
+
+void table_with_names::to_parquet(std::string const& filepath) const
+{
+  CUDF_FUNC_RANGE();
+  auto const sink_info = cudf::io::sink_info(filepath);
+  cudf::io::table_metadata metadata;
+  metadata.schema_info =
+    std::vector<cudf::io::column_name_info>(col_names.begin(), col_names.end());
+  auto const table_input_metadata = cudf::io::table_input_metadata{metadata};
+  auto builder = cudf::io::parquet_writer_options::builder(sink_info, tbl->view());
+  builder.metadata(table_input_metadata);
+  auto const options = builder.build();
+  cudf::io::write_parquet(options);
+}
 
 [[nodiscard]] std::unique_ptr<cudf::table> join_and_gather(
   cudf::table_view const& left_input,
