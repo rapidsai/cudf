@@ -42,6 +42,6 @@ SUMMARY_FILE_NAME=${PANDAS_TESTS_BRANCH}-${RAPIDS_FULL_VERSION}-results.json
 python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json pandas-testing/${PANDAS_TESTS_BRANCH}.json > pandas-testing/${SUMMARY_FILE_NAME}
 RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
-mv pandas-testing/${SUMMARY_FILE_NAME} ${RAPIDS_ARTIFACTS_DIR}/
-mv pandas-testing/pandas-tests/.test_durations ${RAPIDS_ARTIFACTS_DIR}/
+# mv pandas-testing/${SUMMARY_FILE_NAME} ${RAPIDS_ARTIFACTS_DIR}/
+mv pandas-testing/pandas-tests/.test_durations ${RAPIDS_ARTIFACTS_DIR}/${SUMMARY_FILE_NAME}
 rapids-upload-to-s3 ${RAPIDS_ARTIFACTS_DIR}/${SUMMARY_FILE_NAME} "${RAPIDS_ARTIFACTS_DIR}"
