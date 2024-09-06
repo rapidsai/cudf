@@ -19,9 +19,9 @@ def test_transpose(arr):
     arrow_tbl = pa.table(data)
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
     _, plc_result = plc.transpose.transpose(plc_tbl)
-    arrow_result = plc.interop.to_arrow(plc_result)
-    if len(arr) == 0:
-        expected = (0, 0)
-    else:
-        expected = (len(data), len(arr))
-    assert arrow_result.shape == expected
+    result = plc.interop.to_arrow(plc_result)
+    expected = pa.Table.from_pandas(
+        arrow_tbl.to_pandas().T, preserve_index=False
+    ).rename_columns([""] * len(arr))
+    expected = pa.table(expected, schema=result.schema)
+    assert result.equals(expected)
