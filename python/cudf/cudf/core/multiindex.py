@@ -1548,8 +1548,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         """
         if is_scalar(level):
             level = (level,)
-
-        if len(level) == 0:
+        elif len(level) == 0:
             return self
 
         new_names = list(self.names)

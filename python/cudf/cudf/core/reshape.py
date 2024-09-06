@@ -1242,10 +1242,10 @@ def unstack(df, level, fill_value=None, sort: bool = True):
                 ColumnAccessor(ca_data, verify=False)
             )
             columns.names = new_names
-    result = _pivot(df, index, columns)
-    if result.index.nlevels == 1:
-        result.index = result.index.get_level_values(result.index.names[0])
-    return result
+        result = _pivot(df, index, columns)
+        if result.index.nlevels == 1:
+            result.index = result.index.get_level_values(result.index.names[0])
+        return result
 
 
 def _get_unique(column: ColumnBase, dummy_na: bool) -> ColumnBase:
