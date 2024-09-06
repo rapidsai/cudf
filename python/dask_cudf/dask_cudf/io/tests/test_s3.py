@@ -134,8 +134,8 @@ def test_read_parquet_open_file_options_raises():
         pytest.param(
             "arrow",
             marks=pytest.mark.skipif(
-                not QUERY_PLANNING_ON,
-                reason="Not supported for legacy API",
+                not QUERY_PLANNING_ON or not dask_cudf.backends.PYARROW_GE_15,
+                reason="Not supported",
             ),
         ),
         "fsspec",
@@ -150,6 +150,9 @@ def test_read_parquet_filesystem(s3_base, s3so, pdf, filesystem):
     with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
         path = f"s3://{bucket}/{fname}"
         if filesystem == "arrow":
+            # This feature requires arrow >= 15
+            pytest.importorskip("pyarrow", minversion="15.0.0")
+
             import pyarrow.fs as pa_fs
 
             df = dask_cudf.read_parquet(

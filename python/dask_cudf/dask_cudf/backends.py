@@ -9,6 +9,7 @@ import fsspec
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from packaging.version import Version
 from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
@@ -51,6 +52,10 @@ from .core import DataFrame, Index, Series
 get_parallel_type.register(cudf.DataFrame, lambda _: DataFrame)
 get_parallel_type.register(cudf.Series, lambda _: Series)
 get_parallel_type.register(cudf.BaseIndex, lambda _: Index)
+
+
+# Required for Arrow filesystem support in read_parquet
+PYARROW_GE_15 = Version(pa.__version__) >= Version("15.0.0")
 
 
 @meta_nonempty.register(cudf.BaseIndex)
@@ -759,6 +764,11 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             import distributed  # noqa: F401
 
             from dask_cudf.expr._expr import CudfReadParquetPyarrowFS
+
+            if not PYARROW_GE_15:
+                raise RuntimeError(
+                    "Arrow filesystem support requires pyarrow>=15"
+                )
 
             if metadata_task_size is not None:
                 raise NotImplementedError(
