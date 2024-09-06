@@ -29,14 +29,6 @@
 #include <cudf/table/table.hpp>
 #include <cudf/transform.hpp>
 
-#include <rmm/mr/device/cuda_async_memory_resource.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/managed_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
-#include <rmm/mr/device/prefetch_resource_adaptor.hpp>
-
 #include <cstdlib>
 #include <ctime>
 

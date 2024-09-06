@@ -304,14 +304,6 @@ void generate_parquet_data_sources(double scale_factor,
 #include <rmm/device_uvector.hpp>
 
 /**
- * @brief Create an RMM memory resource
- *
- * @param rmm_mode The type of memory resource to create
- */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
-  std::string const& rmm_mode);
-
-/**
  * @brief A class to represent a table with column names attached
  */
 class table_with_names {
