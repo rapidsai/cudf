@@ -97,8 +97,8 @@ void max_row_offsets_col_categories(InputIterator1 keys_first,
                           } else
                             ctg = NC_ERR;
 
-                          thrust::maximum<row_offset_t> row_offset_op;
-                          return thrust::make_pair(row_offset_op(row_offset_a, row_offset_b), ctg);
+                          return thrust::make_pair(
+                            thrust::maximum<row_offset_t>{}(row_offset_a, row_offset_b), ctg);
                         });
 }
 
@@ -149,10 +149,9 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
 {
   CUDF_FUNC_RANGE();
 
-  rmm::device_uvector<NodeIndexT> level_ordered_col_ids(col_ids.size(), stream);
+  auto level_ordered_col_ids = cudf::detail::make_device_uvector_async(
+    col_ids, stream, rmm::mr::get_current_device_resource());
   rmm::device_uvector<NodeIndexT> level_ordered_node_ids(col_ids.size(), stream);
-  thrust::copy(
-    rmm::exec_policy_nosync(stream), col_ids.begin(), col_ids.end(), level_ordered_col_ids.begin());
   thrust::sequence(
     rmm::exec_policy_nosync(stream), level_ordered_node_ids.begin(), level_ordered_node_ids.end());
 
@@ -172,7 +171,7 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   rmm::device_uvector<NodeIndexT> rev_mapped_col_ids(num_columns, stream);
   thrust::unique_by_key_copy(rmm::exec_policy_nosync(stream),
                              level_ordered_col_ids.begin(),
-                             level_ordered_node_ids.end(),
+                             level_ordered_col_ids.end(),
                              level_ordered_node_ids.begin(),
                              mapped_col_ids.begin(),
                              level_ordered_unique_node_ids.begin());
