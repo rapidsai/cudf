@@ -23,6 +23,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <nvcomp/deflate.h>
+#include <nvcomp/gzip.h>
 #include <nvcomp/lz4.h>
 #include <nvcomp/snappy.h>
 #include <nvcomp/zstd.h>
@@ -44,6 +45,8 @@ auto batched_decompress_get_temp_size_ex(compression_type compression, Args&&...
       return nvcompBatchedLZ4DecompressGetTempSizeEx(std::forward<Args>(args)...);
     case compression_type::DEFLATE:
       return nvcompBatchedDeflateDecompressGetTempSizeEx(std::forward<Args>(args)...);
+    case compression_type::GZIP:
+      return nvcompBatchedGzipDecompressGetTempSizeEx(std::forward<Args>(args)...);
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
@@ -73,6 +76,8 @@ auto batched_decompress_async(compression_type compression, Args&&... args)
     case compression_type::DEFLATE:
       return nvcompBatchedDeflateDecompressAsync(std::forward<Args>(args)...);
     case compression_type::LZ4: return nvcompBatchedLZ4DecompressAsync(std::forward<Args>(args)...);
+    case compression_type::GZIP:
+      return nvcompBatchedGzipDecompressAsync(std::forward<Args>(args)...);
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
@@ -84,6 +89,7 @@ std::string compression_type_name(compression_type compression)
     case compression_type::ZSTD: return "Zstandard";
     case compression_type::DEFLATE: return "Deflate";
     case compression_type::LZ4: return "LZ4";
+    case compression_type::GZIP: return "Gzip";
   }
   return "compression_type(" + std::to_string(static_cast<int>(compression)) + ")";
 }
@@ -359,8 +365,8 @@ std::optional<std::string> is_compression_disabled_impl(compression_type compres
         return "nvCOMP use is disabled through the `LIBCUDF_NVCOMP_POLICY` environment variable.";
       }
       return std::nullopt;
+    default: return "Unsupported compression type";
   }
-  return "Unsupported compression type";
 }
 
 std::optional<std::string> is_compression_disabled(compression_type compression,
@@ -396,7 +402,8 @@ std::optional<std::string> is_decompression_disabled_impl(compression_type compr
                                                           feature_status_parameters params)
 {
   switch (compression) {
-    case compression_type::DEFLATE: {
+    case compression_type::DEFLATE:
+    case compression_type::GZIP: {
       if (not params.are_all_integrations_enabled) {
         return "DEFLATE decompression is experimental, you can enable it through "
                "`LIBCUDF_NVCOMP_POLICY` environment variable.";
@@ -451,6 +458,7 @@ size_t required_alignment(compression_type compression)
     case compression_type::SNAPPY: return nvcompSnappyRequiredAlignment;
     case compression_type::ZSTD: return nvcompZstdRequiredAlignment;
     case compression_type::LZ4: return nvcompLZ4RequiredAlignment;
+    case compression_type::GZIP: return 1;  // TODO: check if this is correct
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
@@ -462,7 +470,7 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
     case compression_type::SNAPPY: return nvcompSnappyCompressionMaxAllowedChunkSize;
     case compression_type::ZSTD: return nvcompZstdCompressionMaxAllowedChunkSize;
     case compression_type::LZ4: return nvcompLZ4CompressionMaxAllowedChunkSize;
-    default: return std::nullopt;
+    default: CUDF_FAIL("Unsupported compression type");
   }
 }
 
