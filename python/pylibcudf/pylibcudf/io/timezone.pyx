@@ -12,13 +12,13 @@ from pylibcudf.libcudf.table.table cimport table
 from ..table cimport Table
 
 
-cpdef Table make_timezone_transition_table(tzif_dir, str timezone_name):
+cpdef Table make_timezone_transition_table(str tzif_dir, str timezone_name):
     """
     Creates a transition table to convert ORC timestamps to UTC.
 
     Parameters
     ----------
-    tzif_dir : str | None
+    tzif_dir : str
         The directory where the TZif files are located
 
     timezone_name : str
