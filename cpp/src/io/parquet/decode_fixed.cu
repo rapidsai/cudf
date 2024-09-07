@@ -41,6 +41,8 @@ __device__ inline void gpuDecodeFixedWidthValues(
 
   static constexpr bool enable_print = false;
   static constexpr bool enable_print_range_error = false;
+  static constexpr bool enable_print_large_list = false;
+  static constexpr bool enable_print_loop_check = false;
 
   if constexpr (enable_print) {
     if(t == 0) { printf("DECODE VALUES: start %d, end %d, first_row %d, leaf_level_index %d, dtype_len %u, "
@@ -50,10 +52,19 @@ __device__ inline void gpuDecodeFixedWidthValues(
     }
   }
 
+int loop_count = 0;
+
   // decode values
   int pos = start;
   while (pos < end) {
     int const batch_size = min(max_batch_size, end - pos);
+
+    if constexpr (enable_print_loop_check) {
+      ++loop_count;
+      if((loop_count > 100) && (t == 0)) {
+        printf("INFINITE LOOP IN gpuDecodeFixedWidthValues!\n");
+      }
+    }
 
     int const target_pos = pos + batch_size;
     int src_pos    = pos + t;
@@ -133,11 +144,13 @@ __device__ inline void gpuDecodeFixedWidthValues(
         gpuOutputGeneric(s, sb, src_pos, static_cast<uint8_t*>(dst), dtype_len);
       }
 
-      if (dtype == INT32) {
-        int value_stored = *static_cast<uint32_t*>(dst);
-        int overall_index = blockIdx.x * 20000 * 4 + src_pos;
-        if((overall_index % 1024) != value_stored) {
-          printf("WHOA BAD VALUE: WROTE %d to %d!\n", value_stored, overall_index);
+      if constexpr (enable_print_large_list) {
+        if (dtype == INT32) {
+          int value_stored = *static_cast<uint32_t*>(dst);
+          int overall_index = blockIdx.x * 20000 * 4 + src_pos;
+          if((overall_index % 1024) != value_stored) {
+            printf("WHOA BAD VALUE: WROTE %d to %d!\n", value_stored, overall_index);
+          }
         }
       }
     }
@@ -562,7 +575,8 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
 
   static constexpr bool enable_print = false;
   static constexpr bool enable_print_range_error = false;
-  static constexpr bool enable_print_large_list = true;
+  static constexpr bool enable_print_large_list = false;
+  static constexpr bool enable_print_loop_check = false;
   int const printf_num_threads = 0;
 
   // how many rows we've processed in the page so far
@@ -592,7 +606,20 @@ if constexpr (enable_print_large_list) {
   }
 }
 
+  using block_scan = cub::BlockScan<int, decode_block_size>;
+  __shared__ typename block_scan::TempStorage scan_storage;
+
+int loop_count = 0;
+
   while (value_count < target_value_count) {
+
+    if constexpr (enable_print_loop_check) {
+      ++loop_count;
+      if((loop_count > 100) && (t == 0)) {
+        printf("INFINITE LOOP IN LISTS!\n");
+      }
+    }
+
     if constexpr (enable_print) {
       if(t == 0) { printf("LIST VALUE COUNT: %d\n", value_count); }
     }
@@ -627,20 +654,19 @@ if constexpr (enable_print_large_list) {
         }
       }
       if constexpr (enable_print) {
-        if (t < printf_num_threads) { printf("t %d, def_level %d, rep_level %d, start_depth %d, end_depth %d\n", \
-          t, def_level, rep_level, start_depth, end_depth); }
+        if (t == 0) { printf("t %d, def_level %d, rep_level %d, start_depth %d, end_depth %d, max_depth %d\n", \
+          t, def_level, rep_level, start_depth, end_depth, max_depth); }
       }
     }
 
     //Determine value count & row index
     // track (page-relative) row index for the thread so we can compare against input bounds
     // keep track of overall # of rows we've read.
+    //THIS IS THE UNDO POINT
     int const is_new_row = start_depth == 0 ? 1 : 0;
     int num_prior_new_rows, total_num_new_rows;
-    using block_scan = cub::BlockScan<int, decode_block_size>;
-    __shared__ typename block_scan::TempStorage scan_storage;
     block_scan(scan_storage).ExclusiveSum(is_new_row, num_prior_new_rows, total_num_new_rows);
-    __syncthreads(); //Needed because scan_storage will be reused
+    __syncthreads();
 
 if constexpr (enable_print_large_list) {
   if(bool(is_new_row) != (t % 4 == 0)) {
@@ -704,8 +730,16 @@ if constexpr (enable_print_large_list) {
         t, thread_value_count, in_nesting_bounds); }
     }
 
+int depth_loop_count = 0;
     // column is either nullable or is a list (or both): iterate by depth
     for (int d_idx = 0; d_idx <= max_depth; d_idx++) {
+
+      if constexpr (enable_print_loop_check) {
+        ++depth_loop_count;
+        if((depth_loop_count > 100) && (t == 0)) {
+          printf("INFINITE LOOP IN LISTS DEPTH!\n");
+        }
+      }
 
       auto& ni = s->nesting_info[d_idx];
 
@@ -742,7 +776,6 @@ if constexpr (enable_print_large_list) {
       using block_reduce = cub::BlockReduce<__uint128_t, decode_block_size>;
       __shared__ typename block_reduce::TempStorage reduce_storage;
       __uint128_t block_valid_mask = block_reduce(reduce_storage).Reduce(shifted_validity, or_reducer);
-      __syncthreads(); // TODO: WHY IS THIS NEEDED?
 
       //Reduction result is only visible to thread zero, must share with other threads:
       __shared__ __uint128_t block_valid_mask_storage;
@@ -755,7 +788,7 @@ if constexpr (enable_print_large_list) {
       };
       auto thread_mask = (__uint128_t(1) << thread_value_count) - 1;
       int const thread_valid_count = count_set_bits(block_valid_mask & thread_mask);
-int const block_valid_count = count_set_bits(block_valid_mask);
+//int const block_valid_count = count_set_bits(block_valid_mask);
 
 if constexpr (enable_print_large_list) {
   if(((d_idx == 0) && (is_valid != (t % 4 == 0))) || ((d_idx == 1) && !is_valid)) {
@@ -766,13 +799,11 @@ if constexpr (enable_print_large_list) {
     printf("CUB GARBAGE: blockIdx.x %d, value_count %d, target_value_count %d, t %d, d_idx %d, thread_valid_count %d\n", 
       blockIdx.x, value_count, target_value_count, t, d_idx, thread_valid_count);
   }
-  if(((d_idx == 0) && (block_valid_count != 32)) || ((d_idx == 1) && (block_valid_count != 128))) {
+/*  if(((d_idx == 0) && (block_valid_count != 32)) || ((d_idx == 1) && (block_valid_count != 128))) {
     printf("CUB GARBAGE: blockIdx.x %d, value_count %d, target_value_count %d, t %d, d_idx %d, block_valid_count %d\n", 
       blockIdx.x, value_count, target_value_count, t, d_idx, block_valid_count);
-  }
+  }*/
 }
-
-
 
       if constexpr (enable_print) {
         if((block_valid_mask == 0) && (t == 0) && (d_idx == max_depth)) { 
@@ -796,11 +827,8 @@ if constexpr (enable_print_large_list) {
         next_in_nesting_bounds = 
           (d_idx + 1 >= start_depth && d_idx + 1 <= end_depth && in_row_bounds) ? 1 : 0;
 
-        using block_scan = cub::BlockScan<int, decode_block_size>;
-        __shared__ typename block_scan::TempStorage scan_storage;
         block_scan(scan_storage).ExclusiveSum(next_in_nesting_bounds, next_thread_value_count, next_block_value_count);
-        __syncthreads(); // TODO: WHY IS THIS NEEDED?
-
+        __syncthreads();
 
 if constexpr (enable_print_large_list) {
   if(next_in_nesting_bounds != 1) {
@@ -816,7 +844,6 @@ if constexpr (enable_print_large_list) {
       blockIdx.x, value_count, target_value_count, t, next_block_value_count);
   }
 }
-
 
         if constexpr (enable_print) {
           if (t == 0) { printf("next depth %d, next_block_value_count %d\n", d_idx + 1, next_block_value_count); }
@@ -836,17 +863,19 @@ if constexpr (enable_print_large_list) {
           //STORE THE OFFSET FOR THE NEW LIST LOCATION
           (reinterpret_cast<cudf::size_type*>(ni.data_out))[idx] = ofs;
 
-int overall_index = 4*(blockIdx.x * 20000 + idx);
-if(overall_index != ofs) {
-  printf("WHOA BAD OFFSET: WROTE %d to %d! t %d, blockIdx.x %d, idx %d, d_idx %d, start_depth %d, end_depth %d, max_depth %d, "
-    "in_row_bounds %d, in_nesting_bounds %d, next_in_nesting_bounds %d, row_index %d, row_index_lower_bound %d, last_row %d, "
-    "input_row_count %d, num_prior_new_rows %d, is_new_row %d, total_num_new_rows %d, rep_level %d, def_level %d, ni.value_count %d, "
-    "thread_value_count %d, next_ni.value_count %d, next_thread_value_count %d, next_ni.page_start_value %d, value_count %d, "
-    "target_value_count %d, block_value_count %d, next_block_value_count %d\n", 
-    ofs, overall_index, t, blockIdx.x, idx, d_idx, start_depth, end_depth, max_depth, in_row_bounds, in_nesting_bounds, 
-    next_in_nesting_bounds, row_index, row_index_lower_bound, last_row, input_row_count, num_prior_new_rows, is_new_row, 
-    total_num_new_rows, rep_level, def_level, ni.value_count, thread_value_count, next_ni.value_count, 
-    next_thread_value_count, next_ni.page_start_value, value_count, target_value_count, block_value_count, next_block_value_count);
+if constexpr (enable_print_large_list) {
+  int overall_index = 4*(blockIdx.x * 20000 + idx);
+  if(overall_index != ofs) {
+    printf("WHOA BAD OFFSET: WROTE %d to %d! t %d, blockIdx.x %d, idx %d, d_idx %d, start_depth %d, end_depth %d, max_depth %d, "
+      "in_row_bounds %d, in_nesting_bounds %d, next_in_nesting_bounds %d, row_index %d, row_index_lower_bound %d, last_row %d, "
+      "input_row_count %d, num_prior_new_rows %d, is_new_row %d, total_num_new_rows %d, rep_level %d, def_level %d, ni.value_count %d, "
+      "thread_value_count %d, next_ni.value_count %d, next_thread_value_count %d, next_ni.page_start_value %d, value_count %d, "
+      "target_value_count %d, block_value_count %d, next_block_value_count %d\n", 
+      ofs, overall_index, t, blockIdx.x, idx, d_idx, start_depth, end_depth, max_depth, in_row_bounds, in_nesting_bounds, 
+      next_in_nesting_bounds, row_index, row_index_lower_bound, last_row, input_row_count, num_prior_new_rows, is_new_row, 
+      total_num_new_rows, rep_level, def_level, ni.value_count, thread_value_count, next_ni.value_count, 
+      next_thread_value_count, next_ni.page_start_value, value_count, target_value_count, block_value_count, next_block_value_count);
+  }
 }
 
           if constexpr (enable_print || enable_print_range_error) {
@@ -914,11 +943,14 @@ if(overall_index != ofs) {
       }
 
       // if this is valid and we're at the leaf, output dst_pos
+      // Read these before the sync, so that when thread 0 modifies them we've already read their values
+      int current_value_count = ni.value_count;
+      int current_valid_count = ni.valid_count;
       __syncthreads();  // handle modification of ni.valid_count from below
       if (is_valid && d_idx == max_depth) {
         // for non-list types, the value count is always the same across
-        int const dst_pos = ni.value_count + thread_value_count;
-        int const src_pos = ni.valid_count + thread_valid_count;
+        int const dst_pos = current_value_count + thread_value_count;
+        int const src_pos = current_valid_count + thread_valid_count;
         int const output_index = rolling_index<state_buf::nz_buf_size>(src_pos);
 
         if constexpr (enable_print || enable_print_range_error) {
@@ -941,11 +973,11 @@ if(overall_index != ofs) {
         //Index from rolling buffer of values (which doesn't include nulls) to final array (which includes gaps for nulls)        
         sb->nz_idx[output_index] = dst_pos;
       }
-      __syncthreads();  // handle modification of ni.value_count from below
+//      __syncthreads();  // handle modification of ni.value_count from below TODO: TRY REMOVE
 
       // update stuff
       if (t == 0) {
-//        int const block_valid_count = count_set_bits(block_valid_mask);
+        int const block_valid_count = count_set_bits(block_valid_mask);
         ni.valid_count += block_valid_count;
         ni.value_count += block_value_count;
         ni.valid_map_offset += block_value_count;
@@ -1044,7 +1076,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
                            device_span<ColumnChunkDesc const> chunks,
                            size_t min_row,
                            size_t num_rows,
-                           kernel_error::pointer error_code)
+                           kernel_error::pointer error_code /*, int page_idx = -1, int num_pages = -1*/)
 {
   constexpr int rolling_buf_size    = decode_block_size_t * 2;
   constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<decode_block_size_t>();
@@ -1059,7 +1091,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   auto* const sb        = &state_buffers;
   int const page_idx    = blockIdx.x;
 /*  page_idx = (page_idx == -1) ? blockIdx.x : page_idx + blockIdx.x;
-  if(page_idx >= num_pages) {
+  if((page_idx >= num_pages) && (num_pages != -1)) {
     printf("BAIL ON PAGE %d of %d\n", page_idx, num_pages);
     return;
   }*/
@@ -1091,16 +1123,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   bool const should_process_def_levels = should_process_nulls || has_lists_t;
 
   // shared buffer. all shared memory is suballocated out of here
+  static constexpr auto align_test = false;
+  static constexpr size_t buffer_alignment = align_test ? 128 : 16;
   constexpr int shared_rep_size = has_lists_t ? cudf::util::round_up_unsafe(rle_run_buffer_size *
-    sizeof(rle_run<level_t>), size_t{16}) : 0;
+    sizeof(rle_run<level_t>), buffer_alignment) : 0;
   constexpr int shared_dict_size =
     has_dict_t
-      ? cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run<uint32_t>), size_t{16})
+      ? cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run<uint32_t>), buffer_alignment)
       : 0;
   constexpr int shared_def_size =
-    cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run<level_t>), size_t{16});
+    cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run<level_t>), buffer_alignment);
   constexpr int shared_buf_size = shared_rep_size + shared_dict_size + shared_def_size;
-  __shared__ __align__(16) uint8_t shared_buf[shared_buf_size];
+  __shared__ __align__(buffer_alignment) uint8_t shared_buf[shared_buf_size];
 
   // setup all shared memory buffers
   int shared_offset = 0;
@@ -1133,11 +1167,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   }
 
   static constexpr bool enable_print = false;
+  static constexpr bool enable_print_loop_check = false;
 
   rle_stream<uint32_t, decode_block_size_t, rolling_buf_size> dict_stream{dict_runs};
   if constexpr (has_dict_t) {
-    //auto const skipped_leaf_values = s->page.skipped_leaf_values;
-    //int const dict_offset = skipped_leaf_values * sizeof(uint32_t);
     dict_stream.init(
       s->dict_bits, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
     if constexpr (enable_print) {
@@ -1155,6 +1188,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
     }
   }
   __syncthreads();
+
+  if constexpr (enable_print) {
+    if((t == 0) && (page_idx == 0)){
+      printf("SIZES: shared_rep_size %d, shared_dict_size %d, shared_def_size %d\n", shared_rep_size, shared_dict_size, shared_def_size);
+    }
+  }
 
   // We use two counters in the loop below: processed_count and valid_count.
   // - processed_count: number of values out of num_input_values that we have decoded so far.
@@ -1198,11 +1237,22 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   if constexpr (enable_print) {
     if(t == 0) {printf("LOOP START page_idx %d\n", page_idx);}
   }
+int loop_count = 0;  
   while (s->error == 0 && processed_count < s->page.num_input_values) {
     int next_valid_count;
 
+    if constexpr (enable_print_loop_check) {
+      ++loop_count;
+      if((loop_count > 10000) && (t == 0)) {
+        printf("INFINITE LOOP IN MAIN!\n");
+      }
+    }
+
     if constexpr (has_lists_t){
       rep_decoder.decode_next(t);
+      if constexpr (!align_test) {
+        __syncthreads();
+      }
     }
 
     // only need to process definition levels if this is a nullable column
@@ -1299,13 +1349,13 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
 
   dim3 dim_block(decode_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
-  /*
+/*  
   auto num_pages = pages.size();
-  auto grid_dim = num_pages; //2, 10, 40, 100 no problem; all = problem
+  auto grid_dim = 1; //2, 10, 40, 100 no problem; all = problem
   dim3 dim_grid(grid_dim, 1);  // 1 threadblock per page
 
 for(decltype(num_pages) idx = 0; idx < num_pages; idx += grid_dim) {
-  */
+*/
   if (level_type_size == 1) {
     if (is_list) {
       gpuDecodePageDataGeneric<uint8_t,
@@ -1373,6 +1423,7 @@ for(decltype(num_pages) idx = 0; idx < num_pages; idx += grid_dim) {
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
     }
   }
+//}
 }
 
 void __host__ DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,

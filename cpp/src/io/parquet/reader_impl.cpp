@@ -51,6 +51,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
+//printf("PREP LAUNCH: decode_page_data: mode %d, skip_rows %lu, num_rows %lu, #pages %lu\n", 
+//  (int)mode, skip_rows, num_rows, subpass.pages.size());
 
   auto& page_nesting        = subpass.page_nesting_info;
   auto& page_nesting_decode = subpass.page_nesting_decode_info;
@@ -418,9 +420,11 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
 
+//printf("SYNC ERROR CODE\n");
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
   }
+//printf("ERROR CODE SUNK\n");
 
   // for list columns, add the final offset to every offset buffer.
   // TODO : make this happen in more efficiently. Maybe use thrust::for_each
