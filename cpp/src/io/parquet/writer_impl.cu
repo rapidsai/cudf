@@ -1285,10 +1285,10 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     return std::pair(std::move(dict_data), std::move(dict_index));
   }
 
-  // Allocate slots for each chunk
-  std::vector<rmm::device_uvector<slot_type>> hash_maps_storage;
-  hash_maps_storage.reserve(h_chunks.size());
-  for (auto& chunk : h_chunks) {
+  // Variable to keep track of the current total map storage size
+  size_t total_map_storage_size = 0;
+  // Populate dict offsets and sizes for each chunk that need to build a dictionary.
+  std::for_each(h_chunks.begin(), h_chunks.end(), [&](auto& chunk) {
     auto const& chunk_col_desc = col_desc[chunk.col_desc_id];
     auto const is_requested_non_dict =
       chunk_col_desc.requested_encoding != column_encoding::USE_DEFAULT &&
@@ -1300,19 +1300,31 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
       chunk.use_dictionary = false;
     } else {
       chunk.use_dictionary = true;
-      // cuCollections suggests using a hash map of size N * (1/0.7) = num_values * 1.43
-      // https://github.com/NVIDIA/cuCollections/blob/3a49fc71/include/cuco/static_map.cuh#L190-L193
-      auto& inserted_map   = hash_maps_storage.emplace_back(chunk.num_values * 1.43, stream);
-      chunk.dict_map_slots = inserted_map.data();
-      chunk.dict_map_size  = inserted_map.size();
+      chunk.dict_map_size =
+        static_cast<cudf::size_type>(cuco::make_window_extent<map_cg_size, window_size>(
+          static_cast<cudf::size_type>(occupancy_factor * chunk.num_values)));
+      chunk.dict_map_offset = total_map_storage_size;
+      total_map_storage_size += chunk.dict_map_size;
     }
-  }
+  });
 
+  // No chunk needs to create a dictionary, exit early
+  if (total_map_storage_size == 0) { return {std::move(dict_data), std::move(dict_index)}; }
+
+  // Create a single bulk storage used by all sub-dictionaries
+  auto map_storage = storage_type{
+    total_map_storage_size,
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
+  // Create a span of non-const map_storage as map_storage_ref takes in a non-const pointer.
+  device_span<window_type> const map_storage_data{map_storage.data(), total_map_storage_size};
+
+  // Synchronize
   chunks.host_to_device_async(stream);
-
-  initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
-  populate_chunk_hash_maps(frags, stream);
-
+  // Initialize storage with the given sentinel
+  map_storage.initialize_async({KEY_SENTINEL, VALUE_SENTINEL}, {stream.value()});
+  // Populate the hash map for each chunk
+  populate_chunk_hash_maps(map_storage_data, frags, stream);
+  // Synchronize again
   chunks.device_to_host_sync(stream);
 
   // Make decision about which chunks have dictionary
@@ -1372,8 +1384,8 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     chunk.dict_index          = inserted_dict_index.data();
   }
   chunks.host_to_device_async(stream);
-  collect_map_entries(chunks.device_view().flat_view(), stream);
-  get_dictionary_indices(frags, stream);
+  collect_map_entries(map_storage_data, chunks.device_view().flat_view(), stream);
+  get_dictionary_indices(map_storage_data, frags, stream);
 
   return std::pair(std::move(dict_data), std::move(dict_index));
 }

@@ -266,7 +266,8 @@ def read_parquet_chunked(
     size_t chunk_read_limit=0,
     size_t pass_read_limit=1024000000,
     size_type nrows=-1,
-    int64_t skip_rows=0
+    int64_t skip_rows=0,
+    allow_mismatched_pq_schemas=False
 ):
     # Note: If this function ever takes accepts filters
     # allow_range_index needs to be False when a filter is passed
@@ -277,11 +278,12 @@ def read_parquet_chunked(
         plc.io.SourceInfo(filepaths_or_buffers),
         columns,
         row_groups,
-        use_pandas_metadata,
+        use_pandas_metadata=use_pandas_metadata,
         chunk_read_limit=chunk_read_limit,
         pass_read_limit=pass_read_limit,
         skip_rows=skip_rows,
         nrows=nrows,
+        allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
     )
 
     tbl_w_meta = reader.read_chunk()
@@ -323,7 +325,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                    use_pandas_metadata=True,
                    Expression filters=None,
                    size_type nrows=-1,
-                   int64_t skip_rows=0):
+                   int64_t skip_rows=0,
+                   allow_mismatched_pq_schemas=False):
     """
     Cython function to call into libcudf API, see `read_parquet`.
 
@@ -351,6 +354,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         use_pandas_metadata = use_pandas_metadata,
         skip_rows = skip_rows,
         nrows = nrows,
+        allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
     )
 
     df = cudf.DataFrame._from_data(

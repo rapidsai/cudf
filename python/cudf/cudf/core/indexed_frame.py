@@ -173,17 +173,7 @@ def _drop_columns(f: Frame, columns: abc.Iterable, errors: str):
 def _indices_from_labels(obj, labels):
     if not isinstance(labels, cudf.MultiIndex):
         labels = cudf.core.column.as_column(labels)
-
-        if isinstance(obj.index.dtype, cudf.CategoricalDtype):
-            labels = labels.astype("category")
-            codes = labels.codes.astype(obj.index.codes.dtype)
-            labels = cudf.core.column.build_categorical_column(
-                categories=labels.dtype.categories,
-                codes=codes,
-                ordered=labels.dtype.ordered,
-            )
-        else:
-            labels = labels.astype(obj.index.dtype)
+        labels = labels.astype(obj.index.dtype)
         idx_labels = cudf.Index._from_column(labels)
     else:
         idx_labels = labels

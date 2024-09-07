@@ -651,22 +651,20 @@ class NumericalColumn(NumericalBaseColumn):
 
         return False
 
-    def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
+    def _with_type_metadata(self: Self, dtype: Dtype) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
-            return column.build_categorical_column(
-                categories=dtype.categories._values,
-                codes=cudf.core.column.NumericalColumn(
-                    self.base_data,  # type: ignore[arg-type]
-                    self.size,
-                    dtype=self.dtype,
-                ),
-                mask=self.base_mask,
-                ordered=dtype.ordered,
+            codes = cudf.core.column.categorical.as_unsigned_codes(
+                len(dtype.categories), self
+            )
+            return cudf.core.column.CategoricalColumn(
+                data=None,
                 size=self.size,
+                dtype=dtype,
+                mask=self.base_mask,
                 offset=self.offset,
                 null_count=self.null_count,
+                children=(codes,),
             )
-
         return self
 
     def to_pandas(

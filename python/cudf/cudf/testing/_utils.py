@@ -1,8 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import itertools
-import signal
 import string
+import time
 from collections import abc
 from contextlib import contextmanager
 from decimal import Decimal
@@ -376,16 +376,17 @@ class cudf_timeout:
     Context manager to raise a TimeoutError after a specified number of seconds.
     """
 
-    def __init__(self, seconds, *, timeout_message=""):
-        self.seconds = int(seconds)
-        self.timeout_message = timeout_message
-
-    def _timeout_handler(self, signum, frame):
-        raise TimeoutError(self.timeout_message)
+    def __init__(self, timeout):
+        self.timeout = timeout
 
     def __enter__(self):
-        signal.signal(signal.SIGALRM, self._timeout_handler)
-        signal.alarm(self.seconds)
+        self.start_time = time.perf_counter()
 
-    def __exit__(self, type, value, traceback):
-        signal.alarm(0)
+    def __exit__(self, *args):
+        elapsed_time = (
+            time.perf_counter() - self.start_time
+        )  # Calculate elapsed time
+        if elapsed_time >= self.timeout:
+            raise TimeoutError(
+                f"Expected to finish in {self.timeout=} seconds but took {elapsed_time=} seconds"
+            )

@@ -64,8 +64,11 @@ def _nonempty_index(idx):
         values = cudf.core.column.as_column(data)
         return cudf.DatetimeIndex(values, name=idx.name)
     elif isinstance(idx, cudf.CategoricalIndex):
-        values = cudf.core.column.build_categorical_column(
-            categories=idx.categories, codes=[0, 0], ordered=idx.ordered
+        values = cudf.core.column.CategoricalColumn(
+            data=None,
+            size=None,
+            dtype=idx.dtype,
+            children=(cudf.core.column.as_column([0, 0], dtype=np.uint8),),
         )
         return cudf.CategoricalIndex(values, name=idx.name)
     elif isinstance(idx, cudf.MultiIndex):
@@ -105,12 +108,16 @@ def _get_non_empty_data(
         )
         codes = cudf.core.column.as_column(
             0,
-            dtype=cudf._lib.types.size_type_dtype,
+            dtype=np.uint8,
             length=2,
         )
-        ordered = s.ordered  # type: ignore[attr-defined]
-        return cudf.core.column.build_categorical_column(
-            categories=categories, codes=codes, ordered=ordered
+        return cudf.core.column.CategoricalColumn(
+            data=None,
+            size=codes.size,
+            dtype=cudf.CategoricalDtype(
+                categories=categories, ordered=s.dtype.ordered
+            ),
+            children=(codes,),  # type: ignore[arg-type]
         )
     elif isinstance(s.dtype, cudf.ListDtype):
         leaf_type = s.dtype.leaf_type
