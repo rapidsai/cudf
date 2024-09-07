@@ -103,14 +103,9 @@
   return charge;
 }
 
-void run_ndsh_q1(nvbench::state& state)
+void run_ndsh_q1(nvbench::state& state,
+                 std::unordered_map<std::string, parquet_device_buffer>& sources)
 {
-  double const scale_factor = state.get_float64("scale_factor");
-
-  // Define a map for holding parquet data sources
-  std::unordered_map<std::string, parquet_device_buffer> sources;
-  generate_parquet_data_sources(scale_factor, {"lineitem"}, sources);
-
   // Define the column projections and filter predicate for `lineitem` table
   std::vector<std::string> const lineitem_cols = {"l_returnflag",
                                                   "l_linestatus",
@@ -173,9 +168,15 @@ void run_ndsh_q1(nvbench::state& state)
 
 void ndsh_q1(nvbench::state& state)
 {
+  // Generate the required parquet files in device buffers
+  double const scale_factor = state.get_float64("scale_factor");
+  std::unordered_map<std::string, parquet_device_buffer> sources;
+  generate_parquet_data_sources(scale_factor, {"lineitem"}, sources);
+
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) { run_ndsh_q1(state); });
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { run_ndsh_q1(state, sources); });
 }
 
 NVBENCH_BENCH(ndsh_q1).set_name("ndsh_q1").add_float64_axis("scale_factor", {0.01, 0.1, 1});

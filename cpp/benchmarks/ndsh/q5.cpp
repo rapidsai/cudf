@@ -88,15 +88,9 @@
   return revenue;
 }
 
-void run_ndsh_q5(nvbench::state& state)
+void run_ndsh_q5(nvbench::state& state,
+                 std::unordered_map<std::string, parquet_device_buffer>& sources)
 {
-  double const scale_factor = state.get_float64("scale_factor");
-
-  // Define a map for holding parquet data sources
-  std::unordered_map<std::string, parquet_device_buffer> sources;
-  generate_parquet_data_sources(
-    scale_factor, {"customer", "orders", "lineitem", "supplier", "nation", "region"}, sources);
-
   // Define the column projection and filter predicate for the `orders` table
   std::vector<std::string> const orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
   auto const o_orderdate_ref                 = cudf::ast::column_reference(std::distance(
@@ -169,9 +163,16 @@ void run_ndsh_q5(nvbench::state& state)
 
 void ndsh_q5(nvbench::state& state)
 {
+  // Generate the required parquet files in device buffers
+  double const scale_factor = state.get_float64("scale_factor");
+  std::unordered_map<std::string, parquet_device_buffer> sources;
+  generate_parquet_data_sources(
+    scale_factor, {"customer", "orders", "lineitem", "supplier", "nation", "region"}, sources);
+
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) { run_ndsh_q5(state); });
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { run_ndsh_q5(state, sources); });
 }
 
 NVBENCH_BENCH(ndsh_q5).set_name("ndsh_q5").add_float64_axis("scale_factor", {0.01, 0.1, 1});
