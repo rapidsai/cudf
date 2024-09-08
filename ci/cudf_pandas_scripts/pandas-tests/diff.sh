@@ -28,6 +28,7 @@ ls -al
 # $PR_ARTIFACT pr-results.json
 python python/cudf/cudf/pandas/scripts/merge-json-files.py -d python/cudf/cudf/pandas/scripts/ -o pr-results.json
 ls -al
+cat pr-results.json
 
 # Compute the diff and prepare job summary:
 python -m pip install pandas tabulate
