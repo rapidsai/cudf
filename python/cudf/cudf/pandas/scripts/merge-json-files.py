@@ -15,16 +15,30 @@ def merge_json_files(directory_path, output_file):
     """
     merged_data = []
     # Iterate over all files in the directory
+
     for filename in os.listdir(directory_path):
         if filename.endswith(".json") and ".pr-" in filename:
             file_path = os.path.join(directory_path, filename)
             with open(file_path, "r") as file:
                 data = json.load(file)
                 merged_data.append(data)
-
+    final_dict = {}
+    for intermediate_dict in merged_data:
+        for key, value in intermediate_dict.items():
+            if key in final_dict:
+                existing_value = value
+                final_dict_values = final_dict[key]
+                for k, v in existing_value.items():
+                    if k in final_dict_values:
+                        final_dict_values[k] += v
+                    else:
+                        final_dict_values[k] = v
+                final_dict[key] = final_dict_values
+            else:
+                final_dict[key] = value
     # Write the merged data into a single JSON file
     with open(output_file, "w") as outfile:
-        json.dump(merged_data, outfile, indent=4)
+        json.dump(final_dict, outfile, indent=4)
 
 
 if __name__ == "__main__":
