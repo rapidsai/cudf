@@ -955,6 +955,7 @@ dependencies:
           - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
           - pytest-reportlog
           - pytest-split
+          - pytest-shard
           - ipython
   test_python_cudf_pandas:
     common:

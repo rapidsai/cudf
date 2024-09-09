@@ -41,8 +41,8 @@ bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
   --max-worker-restart=3 \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas.xml" \
   --dist worksteal \
-  --splits 3 \
-  --group "${MATRIX_GROUP}" \
+  --shard-id="${MATRIX_GROUP}" \
+  --num-shards=3 \
   --report-log=${PANDAS_TESTS_BRANCH}.json 2>&1
 
 SUMMARY_FILE_NAME=${PANDAS_TESTS_BRANCH}-${RAPIDS_FULL_VERSION}-${MATRIX_GROUP}-results.json
