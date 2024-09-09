@@ -644,12 +644,12 @@ cdef class Column:
             dtype=dtype,
             size=col.size(),
             mask=as_buffer(
-                col.null_mask().obj
+                col.null_mask().obj, exposed=data_ptr_exposed
             ) if col.null_mask() is not None else None,
             offset=col.offset(),
             null_count=col.null_count(),
             children=tuple([
-                Column.from_pylibcudf(child)
+                Column.from_pylibcudf(child, exposed=data_ptr_exposed)
                 for child in col.children()
             ])
         )
