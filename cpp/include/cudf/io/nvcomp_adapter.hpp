@@ -38,13 +38,13 @@ struct feature_status_parameters {
   bool are_stable_integrations_enabled;  ///< stable integrations
 
   /**
-   * @brief Default Constructor, with the current version of nvcomp and current environment
+   * @brief Default constructor using the current version of nvcomp and current environment
    * variables
    */
   feature_status_parameters();
 
   /**
-   * @brief feature_status_parameters Constructor, with the current version of nvcomp
+   * @brief Constructor using the current version of nvcomp
    *
    * @param all_enabled if all integrations are enabled
    * @param stable_enabled if stable integrations are enabled
