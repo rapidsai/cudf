@@ -30,6 +30,7 @@ set(cython_sources
     lists.pyx
     merge.pyx
     null_mask.pyx
+    partitioning.pyx
     quantiles.pyx
     reduce.pyx
     replace.pyx

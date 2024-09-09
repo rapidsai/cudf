@@ -24,6 +24,7 @@ This page provides API documentation for pylibcudf.
     lists
     merge
     null_mask
+    partitioning
     quantiles
     reduce
     replace
