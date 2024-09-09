@@ -649,7 +649,7 @@ cdef class Column:
             offset=col.offset(),
             null_count=col.null_count(),
             children=tuple([
-                Column.from_pylibcudf(child, exposed=data_ptr_exposed)
+                Column.from_pylibcudf(child, data_ptr_exposed=data_ptr_exposed)
                 for child in col.children()
             ])
         )
