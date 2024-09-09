@@ -11,13 +11,11 @@ RAPIDS_FULL_VERSION=$(<./VERSION)
 rapids-logger "Running Pandas tests using $PANDAS_TESTS_BRANCH branch and rapids-version $RAPIDS_FULL_VERSION"
 rapids-logger "PR number: ${RAPIDS_REF_NAME:-"unknown"}"
 
+# Need git-lfs to use the .test_durations file
 apt-get update && apt-get install git-lfs
 git lfs install
 git lfs fetch --all
 git lfs checkout
-
-cat python/cudf/cudf/pandas/scripts/.test_durations
-rapids-logger "logged file"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 
