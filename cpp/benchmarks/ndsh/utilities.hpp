@@ -323,7 +323,7 @@ class table_with_names {
   /**
    * @param Return the column names of the table
    */
-  [[nodiscard]] std::vector<std::string> column_names() const;
+  [[nodiscard]] std::vector<std::string> const& column_names() const;
   /**
    * @brief Translate a column name to a column index
    *

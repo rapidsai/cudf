@@ -93,7 +93,7 @@ cudf::column_view table_with_names::column(std::string const& col_name) const
   return tbl->view().column(col_id(col_name));
 }
 
-std::vector<std::string> table_with_names::column_names() const { return col_names; }
+std::vector<std::string> const& table_with_names::column_names() const { return col_names; }
 
 cudf::size_type table_with_names::col_id(std::string const& col_name) const
 {
@@ -190,16 +190,16 @@ std::unique_ptr<table_with_names> apply_inner_join(
   auto table = join_and_gather(
     left_input->table(), right_input->table(), left_on_indices, right_on_indices, compare_nulls);
   ;
-  auto left_input_column_names  = left_input->column_names();
-  auto right_input_column_names = right_input->column_names();
   std::vector<std::string> merged_column_names;
-  merged_column_names.reserve(left_input_column_names.size() + right_input_column_names.size());
-  std::copy(left_input_column_names.begin(),
-            left_input_column_names.end(),
+  merged_column_names.reserve(left_input->column_names().size() +
+                              right_input->column_names().size());
+  std::copy(left_input->column_names().begin(),
+            left_input->column_names().end(),
             std::back_inserter(merged_column_names));
-  std::copy(right_input_column_names.begin(),
-            right_input_column_names.end(),
+  std::copy(right_input->column_names().begin(),
+            right_input->column_names().end(),
             std::back_inserter(merged_column_names));
+  return std::make_unique<table_with_names>(std::move(table), merged_column_names);
   return std::make_unique<table_with_names>(std::move(table), merged_column_names);
 }
 
