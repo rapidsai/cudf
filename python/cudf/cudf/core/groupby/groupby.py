@@ -1335,8 +1335,6 @@ class GroupBy(Serializable, Reducible, Scannable):
                 *(
                     (self.obj._data[x[0]], x[1])
                     if isinstance(x, tuple)
-                    else (self.obj._data[x.column], x.pyfunc)
-                    if isinstance(x, NamedAgg)
                     else (_raise_invalid_type(x))
                     for x in kwargs.values()
                 )
