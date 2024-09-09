@@ -2239,9 +2239,9 @@ TEST_F(JsonReaderTest, ValueValidation)
       cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
         .lines(true)
         .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+        .strict_validation(true)
         .numeric_leading_zeros(false)
-        .na_values({"nan"})
-        .strict_validation(true);
+        .na_values({"nan"});
     cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
     EXPECT_EQ(result.tbl->num_columns(), 4);

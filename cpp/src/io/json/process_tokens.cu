@@ -91,7 +91,7 @@ void validate_token_stream(device_span<char const> d_input,
   cudf::detail::optional_trie trie_na =
     cudf::detail::create_serialized_trie(options.get_na_values(), stream);
   auto trie_na_view = cudf::detail::make_trie_view(trie_na);
-  auto validate_values =
+  auto validate_values = cuda::proclaim_return_type<bool>(
     [data                        = d_input.data(),
      trie_na                     = trie_na_view,
      allow_numeric_leading_zeros = options.is_allowed_numeric_leading_zeros(),
@@ -217,9 +217,9 @@ void validate_token_stream(device_span<char const> d_input,
     } else {
       return false;
     }
-  };
+  });
 
-  auto validate_strings =
+  auto validate_strings = cuda::proclaim_return_type<bool>(
     [data = d_input.data(),
      allow_unquoted_control_chars =
        options.is_allowed_unquoted_control_chars()] __device__(SymbolOffsetT start,
@@ -268,7 +268,7 @@ void validate_token_stream(device_span<char const> d_input,
       }
     }
     return string_state::NORMAL == state;
-  };
+  });
 
   auto num_tokens = tokens.size();
   auto count_it   = thrust::make_counting_iterator(0);

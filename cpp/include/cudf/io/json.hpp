@@ -20,6 +20,7 @@
 
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
@@ -131,7 +132,7 @@ class json_reader_options {
   json_recovery_mode_t _recovery_mode = json_recovery_mode_t::FAIL;
 
   // Validation checks for spark
-  // Should the json validation be strict of not
+  // Should the json validation be strict or not
   bool _strict_validation = false;
   // Allow leading zeros for numeric values.
   bool _allow_numeric_leading_zeros = true;
@@ -503,32 +504,44 @@ class json_reader_options {
    * @brief Set whether leading zeros are allowed in numeric values. Strict validation
    * must be enabled for this to work.
    *
-   * @note: strict_validation must be enabled for this to work.
+   * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
    *
    * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
    */
-  void allow_numeric_leading_zeros(bool val) { _allow_numeric_leading_zeros = val; }
+  void allow_numeric_leading_zeros(bool val)
+  {
+    CUDF_EXPECTS(_strict_validation, "Strict validation must be enabled for this to work.");
+    _allow_numeric_leading_zeros = val;
+  }
 
   /**
    * @brief Set whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity,
    * Infinity, and -Infinity. Strict validation must be enabled for this to work.
    *
-   * @note: strict_validation must be enabled for this to work.
+   * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
    *
    * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
    */
-  void allow_nonnumeric_numbers(bool val) { _allow_nonnumeric_numbers = val; }
+  void allow_nonnumeric_numbers(bool val)
+  {
+    CUDF_EXPECTS(_strict_validation, "Strict validation must be enabled for this to work.");
+    _allow_nonnumeric_numbers = val;
+  }
 
   /**
    * @brief Set whether in a quoted string should characters greater than or equal to 0
    * and less than 32 be allowed without some form of escaping. Strict validation must
    * be enabled for this to work.
    *
-   * @note: strict_validation must be enabled for this to work.
+   * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
    *
    * @param val true to indicate whether unquoted control chars are allowed.
    */
-  void allow_unquoted_control_chars(bool val) { _allow_unquoted_control_chars = val; }
+  void allow_unquoted_control_chars(bool val)
+  {
+    CUDF_EXPECTS(_strict_validation, "Strict validation must be enabled for this to work.");
+    _allow_unquoted_control_chars = val;
+  }
 
   /**
    * @brief Sets additional values to recognize as null values.
