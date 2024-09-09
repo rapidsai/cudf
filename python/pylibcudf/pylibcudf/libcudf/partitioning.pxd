@@ -30,5 +30,5 @@ cdef extern from "cudf/partitioning.hpp" namespace "cudf" nogil:
         round_robin_partition "cudf::round_robin_partition" (
         const table_view& input,
         int num_partitions,
-        int start_partition=*
+        int start_partition
     ) except +

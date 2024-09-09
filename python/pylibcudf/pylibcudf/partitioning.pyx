@@ -35,15 +35,17 @@ cpdef tuple[Table, list] hash_partition(
         An output table and a vector of row offsets to each partition
     """
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
+    cdef vector[libcudf_types.size_type] c_columns_to_hash = columns_to_hash
+    cdef int c_num_partitions = num_partitions
 
     with nogil:
         c_result = move(
             cpp_partitioning.hash_partition(
-                table.view(), columns_to_hash, num_partitions
+                input.view(), c_columns_to_hash, c_num_partitions
             )
         )
 
-    return Table.from_libcudf(move(c_result.first)), c_result.second
+    return Table.from_libcudf(move(c_result.first)), list(c_result.second)
 
 cpdef tuple[Table, list] partition(Table t, Column partition_map, int num_partitions):
     """
@@ -65,13 +67,14 @@ cpdef tuple[Table, list] partition(Table t, Column partition_map, int num_partit
         An output table and a list of row offsets to each partition
     """
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
+    cdef int c_num_partitions = num_partitions
 
     with nogil:
         c_result = move(
-            cpp_partitioning.partition(t.view(), partition_map.view(), num_partitions)
+            cpp_partitioning.partition(t.view(), partition_map.view(), c_num_partitions)
         )
 
-    return Table.from_libcudf(move(c_result.first)), c_result.second
+    return Table.from_libcudf(move(c_result.first)), list(c_result.second)
 
 
 cpdef tuple[Table, list] round_robin_partition(
@@ -98,12 +101,14 @@ cpdef tuple[Table, list] round_robin_partition(
         for each partition within the table.
     """
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
+    cdef int c_num_partitions = num_partitions
+    cdef int c_start_partition = start_partition
 
     with nogil:
         c_result = move(
             cpp_partitioning.round_robin_partition(
-                table.view(), num_partitions, start_partition
+                input.view(), c_num_partitions, c_start_partition
             )
         )
 
-    return Table.from_libcudf(move(c_result.first)), c_result.second
+    return Table.from_libcudf(move(c_result.first)), list(c_result.second)
