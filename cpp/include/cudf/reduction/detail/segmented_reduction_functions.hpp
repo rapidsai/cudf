@@ -19,7 +19,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 

@@ -17,7 +17,8 @@
 #pragma once
 
 #include <cudf/utilities/export.hpp>
-#include <cudf/utilities/memory_resource.hpp>
+
+#include <rmm/resource_ref.hpp>
 
 #include <cub/block/block_scan.cuh>
 #include <cuda/atomic>
