@@ -399,10 +399,11 @@ CUDF_KERNEL void generate_cluster_limits_kernel(int delta,
   // a group with nothing in it.
   group_num_clusters[group_index] = 0;
   if (total_weight <= 0) {
-    // if the input contains nulls we can potentially have a group that generates no
-    // clusters because -all- of the input values are null.  in that case, the reduce_by_key call
-    // in the tdigest generation step will need a location to store the unused reduction value for
-    // that group of nulls. these "stubs" will be postprocessed out afterwards.
+    // If the input contains empty clusters, we can potentially have a group that also generates
+    // empty clusters because -all- of the input values are null or empty cluster. In that case, the
+    // `reduce_by_key` call in the tdigest generation step will need a location to store the unused
+    // reduction value for that group of nulls and empty clusters. These "stubs" will be
+    // postprocessed out afterwards.
     if (may_have_empty_clusters) { group_num_clusters[group_index] = 1; }
     return;
   }
