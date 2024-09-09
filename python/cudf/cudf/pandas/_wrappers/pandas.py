@@ -160,10 +160,10 @@ Timedelta = make_final_proxy_type(
 
 Timestamp = make_final_proxy_type(
     "Timestamp",
-    cudf.Timestamp,
+    _Unusable,
     pd.Timestamp,
-    fast_to_slow=lambda fast: fast.to_pandas(),
-    slow_to_fast=cudf.from_pandas,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
         "__new__": Timestamp_Timedelta__new__,
