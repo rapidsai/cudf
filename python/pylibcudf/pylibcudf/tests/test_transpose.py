@@ -3,8 +3,13 @@
 import pyarrow as pa
 import pylibcudf as plc
 import pytest
+from packaging.version import parse
 
 
+@pytest.mark.skipif(
+    parse(pa.__version__) < parse("16.0.0"),
+    reason="https://github.com/apache/arrow/pull/40070",
+)
 @pytest.mark.parametrize(
     "arr",
     [
