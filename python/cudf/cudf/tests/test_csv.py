@@ -16,9 +16,13 @@ import pytest
 
 import cudf
 from cudf import read_csv
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
+    PANDAS_VERSION,
+)
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -1270,14 +1274,14 @@ def test_csv_reader_delim_whitespace():
     # with header row
     with pytest.warns(FutureWarning):
         cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
-    with pytest.warns(FutureWarning):
+    with expect_warning_if(PANDAS_GE_220):
         pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
     assert_eq(pd_df, cu_df)
 
     # without header row
     with pytest.warns(FutureWarning):
         cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
-    with pytest.warns(FutureWarning):
+    with expect_warning_if(PANDAS_GE_220):
         pd_df = pd.read_csv(
             StringIO(buffer), delim_whitespace=True, header=None
         )
@@ -2265,3 +2269,11 @@ def test_read_compressed_BOM(tmpdir):
         f.write(buffer)
 
     assert_eq(pd.read_csv(fname), cudf.read_csv(fname))
+
+
+def test_read_header_none_pandas_compat_column_type():
+    data = "1\n2\n"
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = cudf.read_csv(StringIO(data), header=None).columns
+    expected = pd.read_csv(StringIO(data), header=None).columns
+    pd.testing.assert_index_equal(result, expected, exact=True)

@@ -22,6 +22,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/slice.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -32,6 +33,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <cooperative_groups.h>
+#include <cooperative_groups/reduce.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
@@ -40,6 +43,9 @@ namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
+
+constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 128;
+
 /**
  * @brief Function logic for compute_substrings_from_fn API
  *
@@ -51,17 +57,19 @@ struct substring_from_fn {
   IndexIterator const starts;
   IndexIterator const stops;
 
-  __device__ string_view operator()(size_type idx) const
+  __device__ string_index_pair operator()(size_type idx) const
   {
-    if (d_column.is_null(idx)) { return string_view{nullptr, 0}; }
+    if (d_column.is_null(idx)) { return string_index_pair{nullptr, 0}; }
     auto const d_str  = d_column.template element<string_view>(idx);
     auto const length = d_str.length();
     auto const start  = std::max(starts[idx], 0);
-    if (start >= length) { return string_view{}; }
+    if (start >= length) { return string_index_pair{"", 0}; }
 
-    auto const stop = stops[idx];
-    auto const end  = (((stop < 0) || (stop > length)) ? length : stop);
-    return start < end ? d_str.substr(start, end - start) : string_view{};
+    auto const stop    = stops[idx];
+    auto const end     = (((stop < 0) || (stop > length)) ? length : stop);
+    auto const sub_str = start < end ? d_str.substr(start, end - start) : string_view{};
+    return sub_str.empty() ? string_index_pair{"", 0}
+                           : string_index_pair{sub_str.data(), sub_str.size_bytes()};
   }
 
   substring_from_fn(column_device_view const& d_column, IndexIterator starts, IndexIterator stops)
@@ -69,6 +77,82 @@ struct substring_from_fn {
   {
   }
 };
+
+template <typename IndexIterator>
+CUDF_KERNEL void substring_from_kernel(column_device_view const d_strings,
+                                       IndexIterator starts,
+                                       IndexIterator stops,
+                                       string_index_pair* d_output)
+{
+  auto const idx     = cudf::detail::grid_1d::global_thread_id();
+  auto const str_idx = idx / cudf::detail::warp_size;
+  if (str_idx >= d_strings.size()) { return; }
+
+  namespace cg    = cooperative_groups;
+  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+
+  if (d_strings.is_null(str_idx)) {
+    if (warp.thread_rank() == 0) { d_output[str_idx] = string_index_pair{nullptr, 0}; }
+    return;
+  }
+  auto const d_str = d_strings.element<cudf::string_view>(str_idx);
+  if (d_str.empty()) {
+    if (warp.thread_rank() == 0) { d_output[str_idx] = string_index_pair{"", 0}; }
+    return;
+  }
+
+  auto const start = max(starts[str_idx], 0);
+  auto stop        = [stop = stops[str_idx]] {
+    return (stop < 0) ? std::numeric_limits<size_type>::max() : stop;
+  }();
+  auto const end = d_str.data() + d_str.size_bytes();
+
+  auto start_counts = thrust::make_pair(0, 0);
+  auto stop_counts  = thrust::make_pair(0, 0);
+
+  auto itr = d_str.data() + warp.thread_rank();
+
+  size_type char_count = 0;
+  size_type byte_count = 0;
+  while (byte_count < d_str.size_bytes()) {
+    if (char_count <= start) { start_counts = {char_count, byte_count}; }
+    if (char_count <= stop) {
+      stop_counts = {char_count, byte_count};
+    } else {
+      break;
+    }
+    size_type const cc = (itr < end) && is_begin_utf8_char(*itr);
+    size_type const bc = (itr < end);
+    char_count += cg::reduce(warp, cc, cg::plus<int>());
+    byte_count += cg::reduce(warp, bc, cg::plus<int>());
+    itr += cudf::detail::warp_size;
+  }
+
+  if (warp.thread_rank() == 0) {
+    if (start >= char_count) {
+      d_output[str_idx] = string_index_pair{"", 0};
+      return;
+    }
+
+    // we are just below start/stop and must now increment up to it from here
+    auto first_byte = start_counts.second;
+    if (start_counts.first < start) {
+      auto const sub_str = string_view(d_str.data() + first_byte, d_str.size_bytes() - first_byte);
+      first_byte += std::get<0>(bytes_to_character_position(sub_str, start - start_counts.first));
+    }
+
+    stop           = max(stop, char_count);
+    auto last_byte = stop_counts.second;
+    if (stop_counts.first < stop) {
+      auto const sub_str = string_view(d_str.data() + last_byte, d_str.size_bytes() - last_byte);
+      last_byte += std::get<0>(bytes_to_character_position(sub_str, stop - stop_counts.first));
+    }
+
+    d_output[str_idx] = (first_byte < last_byte)
+                          ? string_index_pair{d_str.data() + first_byte, last_byte - first_byte}
+                          : string_index_pair{"", 0};
+  }
+}
 
 /**
  * @brief Function logic for the substring API.
@@ -149,54 +233,67 @@ struct substring_fn {
  *
  * @tparam IndexIterator Iterator type for character position values
  *
- * @param d_column Input strings column to substring
+ * @param input Input strings column to substring
  * @param starts Start positions index iterator
  * @param stops Stop positions index iterator
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename IndexIterator>
-std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_column,
+std::unique_ptr<column> compute_substrings_from_fn(strings_column_view const& input,
                                                    IndexIterator starts,
                                                    IndexIterator stops,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::device_async_resource_ref mr)
 {
-  auto results = rmm::device_uvector<string_view>(d_column.size(), stream);
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::counting_iterator<size_type>(0),
-                    thrust::counting_iterator<size_type>(d_column.size()),
-                    results.begin(),
-                    substring_from_fn{d_column, starts, stops});
-  return make_strings_column(results, string_view{nullptr, 0}, stream, mr);
+  auto results = rmm::device_uvector<string_index_pair>(input.size(), stream);
+
+  auto const d_column = column_device_view::create(input.parent(), stream);
+
+  if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::counting_iterator<size_type>(0),
+                      thrust::counting_iterator<size_type>(input.size()),
+                      results.begin(),
+                      substring_from_fn{*d_column, starts, stops});
+  } else {
+    constexpr thread_index_type block_size = 512;
+    auto const threads =
+      static_cast<cudf::thread_index_type>(input.size()) * cudf::detail::warp_size;
+    auto const num_blocks = util::div_rounding_up_safe(threads, block_size);
+    substring_from_kernel<IndexIterator>
+      <<<num_blocks, block_size, 0, stream.value()>>>(*d_column, starts, stops, results.data());
+  }
+  return make_strings_column(results.begin(), results.end(), stream, mr);
 }
 
 }  // namespace
 
 //
-std::unique_ptr<column> slice_strings(strings_column_view const& strings,
+std::unique_ptr<column> slice_strings(strings_column_view const& input,
                                       numeric_scalar<size_type> const& start,
                                       numeric_scalar<size_type> const& stop,
                                       numeric_scalar<size_type> const& step,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
-  if (strings.is_empty()) return make_empty_column(type_id::STRING);
+  if (input.size() == input.null_count()) {
+    return std::make_unique<column>(input.parent(), stream, mr);
+  }
 
   auto const step_valid = step.is_valid(stream);
-  auto const step_value = step_valid ? step.value(stream) : 0;
+  auto const step_value = step_valid ? step.value(stream) : 1;
   if (step_valid) { CUDF_EXPECTS(step_value != 0, "Step parameter must not be 0"); }
 
-  auto const d_column = column_device_view::create(strings.parent(), stream);
-
   // optimization for (step==1 and start < stop) -- expect this to be most common
-  if (step_value == 1 and start.is_valid(stream) and stop.is_valid(stream)) {
-    auto const start_value = start.value(stream);
-    auto const stop_value  = stop.value(stream);
+  if (step_value == 1) {
+    auto const start_value = start.is_valid(stream) ? start.value(stream) : 0;
+    auto const stop_value =
+      stop.is_valid(stream) ? stop.value(stream) : std::numeric_limits<size_type>::max();
     // note that any negative values here must use the alternate function below
     if ((start_value >= 0) && (start_value < stop_value)) {
       // this is about 2x faster on long strings for this common case
-      return compute_substrings_from_fn(*d_column,
+      return compute_substrings_from_fn(input,
                                         thrust::constant_iterator<size_type>(start_value),
                                         thrust::constant_iterator<size_type>(stop_value),
                                         stream,
@@ -204,31 +301,35 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
     }
   }
 
+  auto const d_column = column_device_view::create(input.parent(), stream);
+
   auto const d_start = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(start));
   auto const d_stop  = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(stop));
   auto const d_step  = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(step));
 
   auto [offsets, chars] = make_strings_children(
-    substring_fn{*d_column, d_start, d_stop, d_step}, strings.size(), stream, mr);
+    substring_fn{*d_column, d_start, d_stop, d_step}, input.size(), stream, mr);
 
-  return make_strings_column(strings.size(),
+  return make_strings_column(input.size(),
                              std::move(offsets),
                              chars.release(),
-                             strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
+                             input.null_count(),
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
-std::unique_ptr<column> slice_strings(strings_column_view const& strings,
+std::unique_ptr<column> slice_strings(strings_column_view const& input,
                                       column_view const& starts_column,
                                       column_view const& stops_column,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
-  size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(type_id::STRING);
-  CUDF_EXPECTS(starts_column.size() == strings_count,
+  if (input.size() == input.null_count()) {
+    return std::make_unique<column>(input.parent(), stream, mr);
+  }
+
+  CUDF_EXPECTS(starts_column.size() == input.size(),
                "Parameter starts must have the same number of rows as strings.");
-  CUDF_EXPECTS(stops_column.size() == strings_count,
+  CUDF_EXPECTS(stops_column.size() == input.size(),
                "Parameter stops must have the same number of rows as strings.");
   CUDF_EXPECTS(cudf::have_same_types(starts_column, stops_column),
                "Parameters starts and stops must be of the same type.",
@@ -242,17 +343,16 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                "Positions values must be fixed width type.",
                cudf::data_type_error);
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto starts_iter    = cudf::detail::indexalator_factory::make_input_iterator(starts_column);
-  auto stops_iter     = cudf::detail::indexalator_factory::make_input_iterator(stops_column);
-  return compute_substrings_from_fn(*strings_column, starts_iter, stops_iter, stream, mr);
+  auto starts_iter = cudf::detail::indexalator_factory::make_input_iterator(starts_column);
+  auto stops_iter  = cudf::detail::indexalator_factory::make_input_iterator(stops_column);
+  return compute_substrings_from_fn(input, starts_iter, stops_iter, stream, mr);
 }
 
 }  // namespace detail
 
 // external API
 
-std::unique_ptr<column> slice_strings(strings_column_view const& strings,
+std::unique_ptr<column> slice_strings(strings_column_view const& input,
                                       numeric_scalar<size_type> const& start,
                                       numeric_scalar<size_type> const& stop,
                                       numeric_scalar<size_type> const& step,
@@ -260,17 +360,17 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice_strings(strings, start, stop, step, stream, mr);
+  return detail::slice_strings(input, start, stop, step, stream, mr);
 }
 
-std::unique_ptr<column> slice_strings(strings_column_view const& strings,
+std::unique_ptr<column> slice_strings(strings_column_view const& input,
                                       column_view const& starts_column,
                                       column_view const& stops_column,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice_strings(strings, starts_column, stops_column, stream, mr);
+  return detail::slice_strings(input, starts_column, stops_column, stream, mr);
 }
 
 }  // namespace strings
