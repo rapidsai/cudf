@@ -940,6 +940,46 @@ aggregate_reader_metadata::get_rowgroup_metadata() const
   return rg_metadata;
 }
 
+bool aggregate_reader_metadata::is_schema_index_mapped(int schema_idx, int pfm_idx) const
+{
+  // Check if schema_idx or pfm_idx is invalid
+  CUDF_EXPECTS(
+    schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
+    "Parquet reader encountered an invalid schema_idx or pfm_idx",
+    std::out_of_range);
+
+  // True if root index requested or zeroth file index or schema_idx maps doesn't exist. (i.e.
+  // schemas are identical).
+  if (schema_idx == 0 or pfm_idx == 0 or schema_idx_maps.empty()) { return true; }
+
+  // Check if mapped
+  auto const& schema_idx_map = schema_idx_maps[pfm_idx - 1];
+  return schema_idx_map.find(schema_idx) != schema_idx_map.end();
+}
+
+int aggregate_reader_metadata::map_schema_index(int schema_idx, int pfm_idx) const
+{
+  // Check if schema_idx or pfm_idx is invalid
+  CUDF_EXPECTS(
+    schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
+    "Parquet reader encountered an invalid schema_idx or pfm_idx",
+    std::out_of_range);
+
+  // Check if pfm_idx is zero or root index requested or schema_idx_maps doesn't exist (i.e.
+  // schemas are identical).
+  if (schema_idx == 0 or pfm_idx == 0 or schema_idx_maps.empty()) { return schema_idx; }
+
+  // schema_idx_maps will only have > 0 size when we are reading matching column projection from
+  // mismatched Parquet sources.
+  auto const& schema_idx_map = schema_idx_maps[pfm_idx - 1];
+  CUDF_EXPECTS(schema_idx_map.find(schema_idx) != schema_idx_map.end(),
+               "Unmapped schema index encountered in the specified source tree",
+               std::out_of_range);
+
+  // Return the mapped schema idx.
+  return schema_idx_map.at(schema_idx);
+}
+
 std::string aggregate_reader_metadata::get_pandas_index() const
 {
   // Assumes that all input files have the same metadata

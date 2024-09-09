@@ -239,50 +239,14 @@ class aggregate_reader_metadata {
    *
    * @return True if schema index is mapped
    */
-  [[nodiscard]] inline bool is_schema_index_mapped(int schema_idx, int pfm_idx) const
-  {
-    // Check if schema_idx or pfm_idx is invalid
-    CUDF_EXPECTS(
-      schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
-      "Parquet reader encountered an invalid schema_idx or pfm_idx",
-      std::out_of_range);
-
-    // True if root index requested or zeroth file index or schema_idx maps doesn't exist. (i.e.
-    // schemas are identical).
-    if (schema_idx == 0 or pfm_idx == 0 or schema_idx_maps.empty()) { return true; }
-
-    // Check if mapped
-    auto const& schema_idx_map = schema_idx_maps[pfm_idx - 1];
-    return schema_idx_map.find(schema_idx) != schema_idx_map.end();
-  }
+  [[nodiscard]] bool is_schema_index_mapped(int schema_idx, int pfm_idx) const;
 
   /**
    * @brief Maps schema index from 0th source file to the specified file index
    *
    * @return Mapped schema index
    */
-  [[nodiscard]] inline int map_schema_index(int schema_idx, int pfm_idx) const
-  {
-    // Check if schema_idx or pfm_idx is invalid
-    CUDF_EXPECTS(
-      schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
-      "Parquet reader encountered an invalid schema_idx or pfm_idx",
-      std::out_of_range);
-
-    // Check if pfm_idx is zero or root index requested or schema_idx_maps doesn't exist (i.e.
-    // schemas are identical).
-    if (schema_idx == 0 or pfm_idx == 0 or schema_idx_maps.empty()) { return schema_idx; }
-
-    // schema_idx_maps will only have > 0 size when we are reading matching column projection from
-    // mismatched Parquet sources.
-    auto const& schema_idx_map = schema_idx_maps[pfm_idx - 1];
-    CUDF_EXPECTS(schema_idx_map.find(schema_idx) != schema_idx_map.end(),
-                 "Unmapped schema index encountered in the specified source tree",
-                 std::out_of_range);
-
-    // Return the mapped schema idx.
-    return schema_idx_map.at(schema_idx);
-  }
+  [[nodiscard]] int map_schema_index(int schema_idx, int pfm_idx) const;
 
   /**
    * @brief Extracts the schema_idx'th SchemaElement from the pfm_idx'th file
