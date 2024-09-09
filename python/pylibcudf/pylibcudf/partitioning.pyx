@@ -55,7 +55,7 @@ cpdef tuple[Table, list] partition(Table t, Column partition_map, int num_partit
     ----------
     t : Table
         The table to partition
-    partition_map : list[int]
+    partition_map : Column
         Non-nullable column of integer values that map each row
         in `t` to it's partition.
     num_partitions : int
