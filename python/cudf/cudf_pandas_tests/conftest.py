@@ -1,8 +1,8 @@
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 import json
 import multiprocessing
 import os
 import sys
-from collections import defaultdict
 
 import pytest
 
