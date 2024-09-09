@@ -42,7 +42,6 @@ __device__ inline void gpuDecodeFixedWidthValues(
   static constexpr bool enable_print = false;
   static constexpr bool enable_print_range_error = false;
   static constexpr bool enable_print_large_list = false;
-  static constexpr bool enable_print_loop_check = false;
 
   if constexpr (enable_print) {
     if(t == 0) { printf("DECODE VALUES: start %d, end %d, first_row %d, leaf_level_index %d, dtype_len %u, "
@@ -52,19 +51,10 @@ __device__ inline void gpuDecodeFixedWidthValues(
     }
   }
 
-int loop_count = 0;
-
   // decode values
   int pos = start;
   while (pos < end) {
     int const batch_size = min(max_batch_size, end - pos);
-
-    if constexpr (enable_print_loop_check) {
-      ++loop_count;
-      if((loop_count > 100) && (t == 0)) {
-        printf("INFINITE LOOP IN gpuDecodeFixedWidthValues!\n");
-      }
-    }
 
     int const target_pos = pos + batch_size;
     int src_pos    = pos + t;
@@ -576,8 +566,6 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
   static constexpr bool enable_print = false;
   static constexpr bool enable_print_range_error = false;
   static constexpr bool enable_print_large_list = false;
-  static constexpr bool enable_print_loop_check = false;
-  int const printf_num_threads = 0;
 
   // how many rows we've processed in the page so far
   int input_row_count = s->input_row_count;
@@ -609,16 +597,7 @@ if constexpr (enable_print_large_list) {
   using block_scan = cub::BlockScan<int, decode_block_size>;
   __shared__ typename block_scan::TempStorage scan_storage;
 
-int loop_count = 0;
-
   while (value_count < target_value_count) {
-
-    if constexpr (enable_print_loop_check) {
-      ++loop_count;
-      if((loop_count > 100) && (t == 0)) {
-        printf("INFINITE LOOP IN LISTS!\n");
-      }
-    }
 
     if constexpr (enable_print) {
       if(t == 0) { printf("LIST VALUE COUNT: %d\n", value_count); }
@@ -700,7 +679,7 @@ if constexpr (enable_print_large_list) {
     if constexpr (enable_print) {
       if(t == 0) { printf("LIST ROWS: row_index %d, row_index_lower_bound %d, last_row %d, in_row_bounds %d, in_nesting_bounds %d\n", 
         row_index, row_index_lower_bound, last_row, in_row_bounds, in_nesting_bounds); }
-      if (t < printf_num_threads) { printf("t %d, is_new_row %d, num_prior_new_rows %d, row_index %d, in_row_bounds %d\n", 
+      if (t < 32) { printf("t %d, is_new_row %d, num_prior_new_rows %d, row_index %d, in_row_bounds %d\n", 
         t, is_new_row, num_prior_new_rows, row_index, in_row_bounds); }
     }
 
@@ -726,20 +705,12 @@ if constexpr (enable_print_large_list) {
 
     if constexpr (enable_print) {
       if (t == 0) { printf("block_value_count %d\n", block_value_count); }
-      if (t < printf_num_threads) { printf("t %d, thread_value_count %d, in_nesting_bounds %d\n", 
+      if (t < 32) { printf("t %d, thread_value_count %d, in_nesting_bounds %d\n", 
         t, thread_value_count, in_nesting_bounds); }
     }
 
-int depth_loop_count = 0;
     // column is either nullable or is a list (or both): iterate by depth
     for (int d_idx = 0; d_idx <= max_depth; d_idx++) {
-
-      if constexpr (enable_print_loop_check) {
-        ++depth_loop_count;
-        if((depth_loop_count > 100) && (t == 0)) {
-          printf("INFINITE LOOP IN LISTS DEPTH!\n");
-        }
-      }
 
       auto& ni = s->nesting_info[d_idx];
 
@@ -754,7 +725,7 @@ int depth_loop_count = 0;
       if constexpr (enable_print) {
         if (t == 0) { printf("nullable %d, depth %d, max_depth %d, max_def_level %d, value_count %d\n", 
           int(nullable), d_idx, max_depth, ni.max_def_level, value_count); }
-        if (t < printf_num_threads) { printf("t %d, def_level %d, in_nesting_bounds %d, is_valid %d\n", 
+        if (t < 32) { printf("t %d, def_level %d, in_nesting_bounds %d, is_valid %d\n", 
           t, def_level, in_nesting_bounds, is_valid); }
       }
 
@@ -813,7 +784,7 @@ if constexpr (enable_print_large_list) {
             row_index_lower_bound, last_row, input_row_count); }
 
         if (t == 0) { printf("block_valid_mask %u\n", int(block_valid_mask)); }
-        if (t < printf_num_threads) { printf("t %d, thread_valid_count %d\n", t, thread_valid_count); }
+        if (t < 32) { printf("t %d, thread_valid_count %d\n", t, thread_valid_count); }
       }
 
       // compute warp and thread value counts for the -next- nesting level. we need to
@@ -847,9 +818,9 @@ if constexpr (enable_print_large_list) {
 
         if constexpr (enable_print) {
           if (t == 0) { printf("next depth %d, next_block_value_count %d\n", d_idx + 1, next_block_value_count); }
-          if (t < printf_num_threads) { printf("t %d, start_depth %d, end_depth %d, in_row_bounds %d, next_in_nesting_bounds %d\n", 
+          if (t < 32) { printf("t %d, start_depth %d, end_depth %d, in_row_bounds %d, next_in_nesting_bounds %d\n", 
             t, start_depth, end_depth, in_row_bounds, next_in_nesting_bounds); }
-          if (t < printf_num_threads) { printf("t %d, next_thread_value_count %d\n", t, next_thread_value_count); }
+          if (t < 32) { printf("t %d, next_thread_value_count %d\n", t, next_thread_value_count); }
         }
 
         // if we're -not- at a leaf column and we're within nesting/row bounds
@@ -885,7 +856,7 @@ if constexpr (enable_print_large_list) {
 
           if constexpr (enable_print) {
             if(idx < 0) { printf("WHOA: offset index out of bounds!\n"); }
-            if (t < printf_num_threads) { printf("OFFSETS: t %d, idx %d, next value count %d, next page_start_value %d, ofs %d\n", 
+            if (t < 32) { printf("OFFSETS: t %d, idx %d, next value count %d, next page_start_value %d, ofs %d\n", 
               t, idx, next_ni.value_count, next_ni.page_start_value, ofs); }
           }
         }
@@ -962,7 +933,7 @@ if constexpr (enable_print_large_list) {
 
         if constexpr (enable_print) {
           if (t == 0) { printf("ni.value_count %d, ni.valid_count %d\n", int(ni.value_count), int(ni.valid_count)); }
-          if (t < printf_num_threads) { printf("t %d, src_pos %d, output_index %d\n", t, src_pos, output_index); }
+          if (t < 32) { printf("t %d, src_pos %d, output_index %d\n", t, src_pos, output_index); }
 
           if((t == 0) && (src_pos == 0)) {printf("SPECIAL: output_index %d, dst_pos %d, ni.value_count %d, ni.valid_count %d, thread_value_count %d, thread_valid_count %d\n", 
             output_index, dst_pos, ni.value_count, ni.valid_count, thread_value_count, thread_valid_count);}
@@ -1167,7 +1138,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   }
 
   static constexpr bool enable_print = false;
-  static constexpr bool enable_print_loop_check = false;
 
   rle_stream<uint32_t, decode_block_size_t, rolling_buf_size> dict_stream{dict_runs};
   if constexpr (has_dict_t) {
@@ -1192,6 +1162,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   if constexpr (enable_print) {
     if((t == 0) && (page_idx == 0)){
       printf("SIZES: shared_rep_size %d, shared_dict_size %d, shared_def_size %d\n", shared_rep_size, shared_dict_size, shared_def_size);
+    }
+    if constexpr (has_lists_t){
+      printf("Is fixed list page\n");
+    } else {
+      printf("Is fixed non-list page\n");
     }
   }
 
@@ -1237,16 +1212,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   if constexpr (enable_print) {
     if(t == 0) {printf("LOOP START page_idx %d\n", page_idx);}
   }
-int loop_count = 0;  
+
   while (s->error == 0 && processed_count < s->page.num_input_values) {
     int next_valid_count;
-
-    if constexpr (enable_print_loop_check) {
-      ++loop_count;
-      if((loop_count > 10000) && (t == 0)) {
-        printf("INFINITE LOOP IN MAIN!\n");
-      }
-    }
 
     if constexpr (has_lists_t){
       rep_decoder.decode_next(t);
