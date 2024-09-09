@@ -130,7 +130,7 @@ void launch_mixed_join(table_device_view left_table,
                        int64_t shmem_size_per_block,
                        rmm::cuda_stream_view stream)
 {
-  mixed_join<DEFAULT_JOIN_BLOCK_SIZE, true>
+  mixed_join<DEFAULT_JOIN_BLOCK_SIZE, has_nulls>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
       right_table,

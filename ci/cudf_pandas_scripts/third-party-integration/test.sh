@@ -72,7 +72,7 @@ main() {
             fi
         done
 
-        TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} ci/cudf_pandas_scripts/third-party-integration/ci_run_library_tests.sh ${lib}
+        TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh ${lib}
 
         rapids-logger "Test script exiting with value: ${EXITCODE}"
     done

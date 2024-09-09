@@ -577,11 +577,51 @@ def read_parquet(
         )
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
+    # Prepare remote-IO options
+    prefetch_options = kwargs.pop("prefetch_options", {})
+    if not ioutils._is_local_filesystem(fs):
+        # The default prefetch method depends on the
+        # `row_groups` argument. In most cases we will use
+        # method="all" by default, because it is fastest
+        # when we need to read most of the file(s).
+        # If a (simple) `row_groups` selection is made, we
+        # use method="parquet" to avoid transferring the
+        # entire file over the network
+        method = prefetch_options.get("method")
+        _row_groups = None
+        if method in (None, "parquet"):
+            if row_groups is None:
+                # If the user didn't specify a method, don't use
+                # 'parquet' prefetcher for column projection alone.
+                method = method or "all"
+            elif all(r == row_groups[0] for r in row_groups):
+                # Row group selection means we are probably
+                # reading half the file or less. We should
+                # avoid a full file transfer by default.
+                method = "parquet"
+                _row_groups = row_groups[0]
+            elif (method := method or "all") == "parquet":
+                raise ValueError(
+                    "The 'parquet' prefetcher requires a uniform "
+                    "row-group selection for all paths within the "
+                    "same `read_parquet` call. "
+                    "Got: {row_groups}"
+                )
+        if method == "parquet":
+            prefetch_options = prefetch_options.update(
+                {
+                    "method": method,
+                    "columns": columns,
+                    "row_groups": _row_groups,
+                }
+            )
+
     filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         fs=fs,
         storage_options=storage_options,
         bytes_per_thread=bytes_per_thread,
+        prefetch_options=prefetch_options,
     )
 
     # Warn user if they are not using cudf for IO
