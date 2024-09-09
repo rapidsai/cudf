@@ -20,6 +20,6 @@ def test_label_bins(left_inclusive, right_inclusive):
     assert result.equals(expected)
 
 
-def test_Inclusive_enum():
+def test_inclusive_enum():
     assert plc.labeling.Inclusive.YES == 0
     assert plc.labeling.Inclusive.NO == 1
