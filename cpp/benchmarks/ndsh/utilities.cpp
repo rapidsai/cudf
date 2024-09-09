@@ -139,12 +139,11 @@ void table_with_names::to_parquet(std::string const& filepath) const
   cudf::io::write_parquet(options);
 }
 
-[[nodiscard]] std::unique_ptr<cudf::table> join_and_gather(
-  cudf::table_view const& left_input,
-  cudf::table_view const& right_input,
-  std::vector<cudf::size_type> const& left_on,
-  std::vector<cudf::size_type> const& right_on,
-  cudf::null_equality compare_nulls)
+std::unique_ptr<cudf::table> join_and_gather(cudf::table_view const& left_input,
+                                             cudf::table_view const& right_input,
+                                             std::vector<cudf::size_type> const& left_on,
+                                             std::vector<cudf::size_type> const& right_on,
+                                             cudf::null_equality compare_nulls)
 {
   CUDF_FUNC_RANGE();
   constexpr auto oob_policy                          = cudf::out_of_bounds_policy::DONT_CHECK;
@@ -170,7 +169,7 @@ void table_with_names::to_parquet(std::string const& filepath) const
   return std::make_unique<cudf::table>(std::move(joined_cols));
 }
 
-[[nodiscard]] std::unique_ptr<table_with_names> apply_inner_join(
+std::unique_ptr<table_with_names> apply_inner_join(
   std::unique_ptr<table_with_names> const& left_input,
   std::unique_ptr<table_with_names> const& right_input,
   std::vector<std::string> const& left_on,
@@ -190,19 +189,22 @@ void table_with_names::to_parquet(std::string const& filepath) const
                  [&](auto const& col_name) { return right_input->col_id(col_name); });
   auto table = join_and_gather(
     left_input->table(), right_input->table(), left_on_indices, right_on_indices, compare_nulls);
-  std::vector<std::string> result;
-  result.reserve(left_input->column_names().size() + right_input->column_names().size());
-  std::copy(left_input->column_names().begin(),
-            left_input->column_names().end(),
-            std::back_inserter(result));
-  std::copy(right_input->column_names().begin(),
-            right_input->column_names().end(),
-            std::back_inserter(result));
-  return std::make_unique<table_with_names>(std::move(table), result);
+  ;
+  auto left_input_column_names  = left_input->column_names();
+  auto right_input_column_names = right_input->column_names();
+  std::vector<std::string> merged_column_names;
+  merged_column_names.reserve(left_input_column_names.size() + right_input_column_names.size());
+  std::copy(left_input_column_names.begin(),
+            left_input_column_names.end(),
+            std::back_inserter(merged_column_names));
+  std::copy(right_input_column_names.begin(),
+            right_input_column_names.end(),
+            std::back_inserter(merged_column_names));
+  return std::make_unique<table_with_names>(std::move(table), merged_column_names);
 }
 
-[[nodiscard]] std::unique_ptr<table_with_names> apply_filter(
-  std::unique_ptr<table_with_names> const& table, cudf::ast::operation const& predicate)
+std::unique_ptr<table_with_names> apply_filter(std::unique_ptr<table_with_names> const& table,
+                                               cudf::ast::operation const& predicate)
 {
   CUDF_FUNC_RANGE();
   auto const boolean_mask = cudf::compute_column(table->table(), predicate);
@@ -210,16 +212,16 @@ void table_with_names::to_parquet(std::string const& filepath) const
   return std::make_unique<table_with_names>(std::move(result_table), table->column_names());
 }
 
-[[nodiscard]] std::unique_ptr<table_with_names> apply_mask(
-  std::unique_ptr<table_with_names> const& table, std::unique_ptr<cudf::column> const& mask)
+std::unique_ptr<table_with_names> apply_mask(std::unique_ptr<table_with_names> const& table,
+                                             std::unique_ptr<cudf::column> const& mask)
 {
   CUDF_FUNC_RANGE();
   auto result_table = cudf::apply_boolean_mask(table->table(), mask->view());
   return std::make_unique<table_with_names>(std::move(result_table), table->column_names());
 }
 
-[[nodiscard]] std::unique_ptr<table_with_names> apply_groupby(
-  std::unique_ptr<table_with_names> const& table, groupby_context_t const& ctx)
+std::unique_ptr<table_with_names> apply_groupby(std::unique_ptr<table_with_names> const& table,
+                                                groupby_context_t const& ctx)
 {
   CUDF_FUNC_RANGE();
   auto const keys = table->select(ctx.keys);
@@ -261,10 +263,9 @@ void table_with_names::to_parquet(std::string const& filepath) const
   return std::make_unique<table_with_names>(std::move(result_table), result_column_names);
 }
 
-[[nodiscard]] std::unique_ptr<table_with_names> apply_orderby(
-  std::unique_ptr<table_with_names> const& table,
-  std::vector<std::string> const& sort_keys,
-  std::vector<cudf::order> const& sort_key_orders)
+std::unique_ptr<table_with_names> apply_orderby(std::unique_ptr<table_with_names> const& table,
+                                                std::vector<std::string> const& sort_keys,
+                                                std::vector<cudf::order> const& sort_key_orders)
 {
   CUDF_FUNC_RANGE();
   std::vector<cudf::column_view> column_views;
@@ -276,10 +277,9 @@ void table_with_names::to_parquet(std::string const& filepath) const
   return std::make_unique<table_with_names>(std::move(result_table), table->column_names());
 }
 
-[[nodiscard]] std::unique_ptr<table_with_names> apply_reduction(
-  cudf::column_view const& column,
-  cudf::aggregation::Kind const& agg_kind,
-  std::string const& col_name)
+std::unique_ptr<table_with_names> apply_reduction(cudf::column_view const& column,
+                                                  cudf::aggregation::Kind const& agg_kind,
+                                                  std::string const& col_name)
 {
   CUDF_FUNC_RANGE();
   auto const agg            = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
@@ -293,7 +293,7 @@ void table_with_names::to_parquet(std::string const& filepath) const
   return std::make_unique<table_with_names>(std::move(result_table), col_names);
 }
 
-[[nodiscard]] std::unique_ptr<table_with_names> read_parquet(
+std::unique_ptr<table_with_names> read_parquet(
   cudf::io::source_info const& source_info,
   std::vector<std::string> const& columns,
   std::unique_ptr<cudf::ast::operation> const& predicate)
