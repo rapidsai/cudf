@@ -26,11 +26,13 @@ cpdef Table transpose(Table input_table):
         Transposed table.
     """
     cdef pair[unique_ptr[column], table_view] c_result
+    cdef Table owner_table
 
     with nogil:
         c_result = move(cpp_transpose.transpose(input_table.view()))
 
-    owner_column = Column.from_libcudf(move(c_result.first))
-    owner_table = Table([owner_column] * c_result.second.num_columns())
+    owner_table = Table(
+        [Column.from_libcudf(move(c_result.first))] * c_result.second.num_columns()
+    )
 
     return Table.from_table_view(c_result.second, owner_table)

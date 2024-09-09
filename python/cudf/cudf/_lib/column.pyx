@@ -599,7 +599,6 @@ cdef class Column:
             children=tuple(children)
         )
 
-    #  TODO: Actually support exposed data pointers.
     @staticmethod
     def from_pylibcudf(
         col, bint data_ptr_exposed=False
@@ -616,7 +615,7 @@ cdef class Column:
         col : pylibcudf.Column
             The object to copy.
         data_ptr_exposed : bool
-            This parameter is not yet supported
+            Whether the data buffer is exposed.
 
         Returns
         -------
@@ -639,7 +638,9 @@ cdef class Column:
         dtype = dtype_from_pylibcudf_column(col)
 
         return cudf.core.column.build_column(
-            data=as_buffer(col.data().obj) if col.data() is not None else None,
+            data=as_buffer(
+                col.data().obj, exposed=data_ptr_exposed
+            ) if col.data() is not None else None,
             dtype=dtype,
             size=col.size(),
             mask=as_buffer(
