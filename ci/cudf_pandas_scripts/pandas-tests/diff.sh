@@ -26,9 +26,9 @@ aws s3 cp "s3://rapids-downloads/${COMPARE_ENV}" main-results.json
 aws s3 cp $(rapids-s3-path) . --recursive --exclude "*" --include "*-results.json"
 ls -al
 # $PR_ARTIFACT pr-results.json
-python python/cudf/cudf/pandas/scripts/merge-json-files.py -d python/cudf/cudf/pandas/scripts/ -o python/cudf/cudf/pandas/scripts/pr-results.json
+python merge-json-files.py -d . -o pr-results.json
 ls -al
-cat python/cudf/cudf/pandas/scripts/pr-results.json
+cat pr-results.json
 
 # Compute the diff and prepare job summary:
 python -m pip install pandas tabulate
