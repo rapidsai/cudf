@@ -2269,3 +2269,11 @@ def test_read_compressed_BOM(tmpdir):
         f.write(buffer)
 
     assert_eq(pd.read_csv(fname), cudf.read_csv(fname))
+
+
+def test_read_header_none_pandas_compat_column_type():
+    data = "1\n2\n"
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = cudf.read_csv(StringIO(data), header=None).columns
+    expected = pd.read_csv(StringIO(data), header=None).columns
+    pd.testing.assert_index_equal(result, expected, exact=True)
