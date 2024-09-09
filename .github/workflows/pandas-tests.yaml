@@ -18,6 +18,9 @@ jobs:
       # run the Pandas unit tests
       secrets: inherit
       uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@python-3.12
+      strategy:
+        matrix:
+          group: [1, 2, 3]
       with:
         # This selects "ARCH=amd64 + the latest supported Python + CUDA".
         matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -25,4 +28,4 @@ jobs:
         branch: ${{ inputs.branch }}
         date: ${{ inputs.date }}
         sha: ${{ inputs.sha }}
-        script: ci/cudf_pandas_scripts/pandas-tests/run.sh main
+        script: ci/cudf_pandas_scripts/pandas-tests/run.sh main ${{ matrix.group }}
