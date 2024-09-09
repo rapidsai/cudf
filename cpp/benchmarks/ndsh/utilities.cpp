@@ -90,12 +90,12 @@ cudf::table_view table_with_names::table() const { return tbl->view(); }
 
 cudf::column_view table_with_names::column(std::string const& col_name) const
 {
-  return tbl->view().column(col_id(col_name));
+  return tbl->view().column(column_id(col_name));
 }
 
 std::vector<std::string> const& table_with_names::column_names() const { return col_names; }
 
-cudf::size_type table_with_names::col_id(std::string const& col_name) const
+cudf::size_type table_with_names::column_id(std::string const& col_name) const
 {
   auto it = std::find(col_names.begin(), col_names.end(), col_name);
   if (it == col_names.end()) {
@@ -120,7 +120,7 @@ cudf::table_view table_with_names::select(std::vector<std::string> const& col_na
   CUDF_FUNC_RANGE();
   std::vector<cudf::size_type> col_indices;
   for (auto const& col_name : col_names) {
-    col_indices.push_back(col_id(col_name));
+    col_indices.push_back(column_id(col_name));
   }
   return tbl->select(col_indices);
 }
@@ -181,12 +181,12 @@ std::unique_ptr<table_with_names> apply_inner_join(
   std::vector<cudf::size_type> right_on_indices;
   std::transform(
     left_on.begin(), left_on.end(), std::back_inserter(left_on_indices), [&](auto const& col_name) {
-      return left_input->col_id(col_name);
+      return left_input->column_id(col_name);
     });
   std::transform(right_on.begin(),
                  right_on.end(),
                  std::back_inserter(right_on_indices),
-                 [&](auto const& col_name) { return right_input->col_id(col_name); });
+                 [&](auto const& col_name) { return right_input->column_id(col_name); });
   auto table = join_and_gather(
     left_input->table(), right_input->table(), left_on_indices, right_on_indices, compare_nulls);
   ;

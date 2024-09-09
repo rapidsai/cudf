@@ -95,8 +95,8 @@ void run_ndsh_q6(nvbench::state& state,
   (*lineitem).append(discout_float, "l_discount_float").append(quantity_float, "l_quantity_float");
 
   // Apply the filters
-  auto const discount_ref = cudf::ast::column_reference(lineitem->col_id("l_discount_float"));
-  auto const quantity_ref = cudf::ast::column_reference(lineitem->col_id("l_quantity_float"));
+  auto const discount_ref = cudf::ast::column_reference(lineitem->column_id("l_discount_float"));
+  auto const quantity_ref = cudf::ast::column_reference(lineitem->column_id("l_quantity_float"));
 
   auto discount_lower               = cudf::numeric_scalar<float_t>(0.05);
   auto const discount_lower_literal = cudf::ast::literal(discount_lower);
