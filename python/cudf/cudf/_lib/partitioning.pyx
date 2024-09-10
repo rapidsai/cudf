@@ -45,7 +45,7 @@ def partition(list source_columns, Column partition_map,
         if lo < 0 or hi >= num_partitions:
             raise ValueError("Partition map has invalid values")
 
-    plc_table, offsets = plc.partitioning.partitioning(
+    plc_table, offsets = plc.partitioning.partition(
         plc.Table([col.to_pylibcudf(mode="read") for col in source_columns]),
         partition_map.to_pylibcudf(mode="read"),
         num_partitions
