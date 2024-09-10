@@ -25,6 +25,9 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
+
 #include <cooperative_groups.h>
 #include <cub/cub.cuh>
 #include <thrust/iterator/discard_iterator.h>

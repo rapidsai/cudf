@@ -22,6 +22,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -43,7 +44,7 @@ TEST_F(ValidIfTest, EmptyRange)
                                        thrust::make_counting_iterator(0),
                                        odds_valid{},
                                        cudf::get_default_stream(),
-                                       rmm::mr::get_current_device_resource());
+                                       cudf::get_current_device_resource_ref());
   auto const& buffer = actual.first;
   EXPECT_EQ(0u, buffer.size());
   EXPECT_EQ(nullptr, buffer.data());
@@ -56,7 +57,7 @@ TEST_F(ValidIfTest, InvalidRange)
                                       thrust::make_counting_iterator(0),
                                       odds_valid{},
                                       cudf::get_default_stream(),
-                                      rmm::mr::get_current_device_resource()),
+                                      cudf::get_current_device_resource_ref()),
                cudf::logic_error);
 }
 
@@ -68,7 +69,7 @@ TEST_F(ValidIfTest, OddsValid)
                                        thrust::make_counting_iterator(10000),
                                        odds_valid{},
                                        cudf::get_default_stream(),
-                                       rmm::mr::get_current_device_resource());
+                                       cudf::get_current_device_resource_ref());
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.first.data(), actual.first.data(), expected.first.size());
   EXPECT_EQ(5000, actual.second);
   EXPECT_EQ(expected.second, actual.second);
@@ -82,7 +83,7 @@ TEST_F(ValidIfTest, AllValid)
                                        thrust::make_counting_iterator(10000),
                                        all_valid{},
                                        cudf::get_default_stream(),
-                                       rmm::mr::get_current_device_resource());
+                                       cudf::get_current_device_resource_ref());
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.first.data(), actual.first.data(), expected.first.size());
   EXPECT_EQ(0, actual.second);
   EXPECT_EQ(expected.second, actual.second);
@@ -96,7 +97,7 @@ TEST_F(ValidIfTest, AllNull)
                                        thrust::make_counting_iterator(10000),
                                        all_null{},
                                        cudf::get_default_stream(),
-                                       rmm::mr::get_current_device_resource());
+                                       cudf::get_current_device_resource_ref());
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.first.data(), actual.first.data(), expected.first.size());
   EXPECT_EQ(10000, actual.second);
   EXPECT_EQ(expected.second, actual.second);

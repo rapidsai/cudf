@@ -25,10 +25,10 @@
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -132,7 +132,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
     input, make_column_from_scalar(replacement, 1, stream)->view(), stream, mr);
   auto const input_view = dictionary_column_view(input_matched->view());
   auto const scalar_index =
-    get_index(input_view, replacement, stream, rmm::mr::get_current_device_resource());
+    get_index(input_view, replacement, stream, cudf::get_current_device_resource_ref());
 
   // now build the new indices by doing replace-null on the updated indices
   auto const input_indices = input_view.get_indices_annotated();

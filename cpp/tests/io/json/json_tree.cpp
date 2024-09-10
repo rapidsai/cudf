@@ -26,6 +26,7 @@
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream.hpp>
@@ -590,11 +591,11 @@ TEST_F(JsonTest, TreeRepresentation)
 
   // Parse the JSON and get the token stream
   auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
-    d_input, options, stream, rmm::mr::get_current_device_resource());
+    d_input, options, stream, cudf::get_current_device_resource_ref());
 
   // Get the JSON's tree representation
   auto gpu_tree = cuio_json::detail::get_tree_representation(
-    tokens_gpu, token_indices_gpu, false, stream, rmm::mr::get_current_device_resource());
+    tokens_gpu, token_indices_gpu, false, stream, cudf::get_current_device_resource_ref());
   // host tree generation
   auto cpu_tree = get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   compare_trees(cpu_tree, gpu_tree);
@@ -678,11 +679,11 @@ TEST_F(JsonTest, TreeRepresentation2)
 
   // Parse the JSON and get the token stream
   auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
-    d_input, options, stream, rmm::mr::get_current_device_resource());
+    d_input, options, stream, cudf::get_current_device_resource_ref());
 
   // Get the JSON's tree representation
   auto gpu_tree = cuio_json::detail::get_tree_representation(
-    tokens_gpu, token_indices_gpu, false, stream, rmm::mr::get_current_device_resource());
+    tokens_gpu, token_indices_gpu, false, stream, cudf::get_current_device_resource_ref());
   // host tree generation
   auto cpu_tree = get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   compare_trees(cpu_tree, gpu_tree);
@@ -753,11 +754,11 @@ TEST_F(JsonTest, TreeRepresentation3)
 
   // Parse the JSON and get the token stream
   auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
-    d_input, options, stream, rmm::mr::get_current_device_resource());
+    d_input, options, stream, cudf::get_current_device_resource_ref());
 
   // Get the JSON's tree representation
   auto gpu_tree = cuio_json::detail::get_tree_representation(
-    tokens_gpu, token_indices_gpu, false, stream, rmm::mr::get_current_device_resource());
+    tokens_gpu, token_indices_gpu, false, stream, cudf::get_current_device_resource_ref());
   // host tree generation
   auto cpu_tree = get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   compare_trees(cpu_tree, gpu_tree);
@@ -779,13 +780,13 @@ TEST_F(JsonTest, TreeRepresentationError)
 
   // Parse the JSON and get the token stream
   auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
-    d_input, options, stream, rmm::mr::get_current_device_resource());
+    d_input, options, stream, cudf::get_current_device_resource_ref());
 
   // Get the JSON's tree representation
   // This JSON is invalid and will raise an exception.
   EXPECT_THROW(
     cuio_json::detail::get_tree_representation(
-      tokens_gpu, token_indices_gpu, false, stream, rmm::mr::get_current_device_resource()),
+      tokens_gpu, token_indices_gpu, false, stream, cudf::get_current_device_resource_ref()),
     cudf::logic_error);
 }
 
@@ -862,7 +863,7 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
 
   // Parse the JSON and get the token stream
   auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
-    d_input, options, stream, rmm::mr::get_current_device_resource());
+    d_input, options, stream, cudf::get_current_device_resource_ref());
   // host tree generation
   auto cpu_tree = get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   bool const is_array_of_arrays =
@@ -875,7 +876,7 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
     records_orient_tree_traversal_cpu(input, cpu_tree, is_array_of_arrays, json_lines, stream);
   // gpu tree generation
   auto gpu_tree = cuio_json::detail::get_tree_representation(
-    tokens_gpu, token_indices_gpu, false, stream, rmm::mr::get_current_device_resource());
+    tokens_gpu, token_indices_gpu, false, stream, cudf::get_current_device_resource_ref());
 
 #if LIBCUDF_JSON_DEBUG_DUMP
   printf("BEFORE traversal (gpu_tree):\n");
@@ -889,7 +890,7 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
                                                      is_array_of_arrays,
                                                      json_lines,
                                                      stream,
-                                                     rmm::mr::get_current_device_resource());
+                                                     cudf::get_current_device_resource_ref());
 #if LIBCUDF_JSON_DEBUG_DUMP
   printf("AFTER  traversal (gpu_tree):\n");
   print_tree(gpu_tree);
