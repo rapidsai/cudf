@@ -176,7 +176,7 @@ ConfigureBench(COPY_IF_ELSE_BENCH copying/copy_if_else.cpp)
 ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cpp)
 
 # ##################################################################################################
-# * ndsh benchmark --------------------------------------------------------------------------------
+# * nds-h benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(NDSH_Q1 ndsh/q1.cpp ndsh/utilities.cpp)
 ConfigureNVBench(NDSH_Q5 ndsh/q5.cpp ndsh/utilities.cpp)
 ConfigureNVBench(NDSH_Q6 ndsh/q6.cpp ndsh/utilities.cpp)
