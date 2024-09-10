@@ -11,7 +11,6 @@ from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.strings.combine cimport (
     concatenate as cpp_concatenate,
     join_list_elements as cpp_join_list_elements,
-    join_strings as cpp_join_strings,
     output_if_empty_list,
     separator_on_nulls,
 )
@@ -20,6 +19,8 @@ from pylibcudf.libcudf.table.table_view cimport table_view
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport table_view_from_columns
+
+import pylibcudf as plc
 
 
 @acquire_spill_lock()
@@ -62,27 +63,12 @@ def join(Column source_strings,
     with the specified `sep` between each column and
     `na`/`None` values are replaced by `na_rep`
     """
-
-    cdef DeviceScalar separator = sep.device_value
-    cdef DeviceScalar narep = na_rep.device_value
-
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = source_strings.view()
-
-    cdef const string_scalar* scalar_separator = \
-        <const string_scalar*>(separator.get_raw_ptr())
-    cdef const string_scalar* scalar_narep = <const string_scalar*>(
-        narep.get_raw_ptr()
+    plc_column = plc.strings.combine.join_strings(
+        source_strings.to_pylibcudf(mode="read"),
+        sep.device_value.c_value,
+        na_rep.device_value.c_value,
     )
-
-    with nogil:
-        c_result = move(cpp_join_strings(
-            source_view,
-            scalar_separator[0],
-            scalar_narep[0]
-        ))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(plc_column)
 
 
 @acquire_spill_lock()
