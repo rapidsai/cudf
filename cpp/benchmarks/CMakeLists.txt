@@ -177,10 +177,10 @@ ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cpp)
 
 # ##################################################################################################
 # * nds-h benchmark --------------------------------------------------------------------------------
-ConfigureNVBench(NDSH_Q1 ndsh/q1.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q5 ndsh/q5.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q6 ndsh/q6.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q9 ndsh/q9.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q1 ndsh/q01.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q5 ndsh/q05.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q6 ndsh/q06.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q9 ndsh/q09.cpp ndsh/utilities.cpp)
 ConfigureNVBench(NDSH_Q10 ndsh/q10.cpp ndsh/utilities.cpp)
 
 # ##################################################################################################

@@ -27,7 +27,7 @@
 #include <nvbench/nvbench.cuh>
 
 /**
- * @file q9.cpp
+ * @file q09.cpp
  * @brief Implement query 9 of the NDS-H benchmark.
  *
  * create view part as select * from '/tables/scale-1/part.parquet';

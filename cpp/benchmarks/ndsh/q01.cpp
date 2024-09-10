@@ -25,7 +25,7 @@
 #include <nvbench/nvbench.cuh>
 
 /**
- * @file q1.cpp
+ * @file q01.cpp
  * @brief Implement query 1 of the NDS-H benchmark.
  *
  * create view lineitem as select * from '/tables/scale-1/lineitem.parquet';

@@ -25,7 +25,7 @@
 #include <nvbench/nvbench.cuh>
 
 /**
- * @file q5.cpp
+ * @file q05.cpp
  * @brief Implement query 5 of the NDS-H benchmark.
  *
  * create view customer as select * from '/tables/scale-1/customer.parquet';
