@@ -17,9 +17,7 @@
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace CUDF_EXPORT cudf {
 namespace dictionary {
@@ -46,7 +44,7 @@ std::unique_ptr<scalar> get_index(
   dictionary_column_view const& dictionary,
   scalar const& key,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace dictionary

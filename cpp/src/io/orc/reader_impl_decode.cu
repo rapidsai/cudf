@@ -28,13 +28,13 @@
 #include <cudf/io/config_utils.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/fill.h>
@@ -506,7 +506,7 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
     }
   }
   auto const d_prefix_sums_to_update = cudf::detail::make_device_uvector_async(
-    prefix_sums_to_update, stream, rmm::mr::get_current_device_resource());
+    prefix_sums_to_update, stream, cudf::get_current_device_resource_ref());
 
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
@@ -683,7 +683,7 @@ std::vector<range> find_table_splits(table_view const& input,
   segment_length = std::min(segment_length, input.num_rows());
 
   auto const d_segmented_sizes = cudf::detail::segmented_row_bit_count(
-    input, segment_length, stream, rmm::mr::get_current_device_resource());
+    input, segment_length, stream, cudf::get_current_device_resource_ref());
 
   auto segmented_sizes =
     cudf::detail::hostdevice_vector<cumulative_size>(d_segmented_sizes->size(), stream);
@@ -777,7 +777,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
       [](auto const& sum, auto const& cols_level) { return sum + cols_level.size(); });
 
     return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
-      num_total_cols * stripe_count, _stream, rmm::mr::get_current_device_resource());
+      num_total_cols * stripe_count, _stream, cudf::get_current_device_resource_ref());
   }();
   std::size_t num_processed_lvl_columns      = 0;
   std::size_t num_processed_prev_lvl_columns = 0;

@@ -28,10 +28,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
@@ -1939,8 +1939,8 @@ struct contiguous_split_state {
       std::transform(h_buf_sizes,
                      h_buf_sizes + num_partitions,
                      std::back_inserter(out_buffers),
-                     [stream = stream,
-                      mr = mr.value_or(rmm::mr::get_current_device_resource())](std::size_t bytes) {
+                     [stream = stream, mr = mr.value_or(cudf::get_current_device_resource_ref())](
+                       std::size_t bytes) {
                        return rmm::device_buffer{bytes, stream, mr};
                      });
     }
