@@ -1,5 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-
+from libcpp cimport bool
 from pylibcudf.libcudf.types cimport bitmask_type, data_type
 
 from .column cimport Column
@@ -18,6 +18,4 @@ cpdef Column transform(Column input, str unary_udf, DataType output_type, bool i
 
 cpdef tuple[Table, Column] encode(Table input)
 
-cpdef tuple[Column, Table] one_hot_encode(Column input_column, Column categories)
-
-cpdef Column compute_column(Table table, str expr)
+cpdef Table one_hot_encode(Column input_column, Column categories)

@@ -1,10 +1,10 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
 from libcpp.utility cimport move, pair
 from pylibcudf.libcudf cimport transform as cpp_transform
 from pylibcudf.libcudf.column.column cimport column
-# from pylibcudf.libcudf.expressions cimport expression
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport bitmask_type, size_type
@@ -112,11 +112,13 @@ cpdef Column transform(Column input, str unary_udf, DataType output_type, bool i
         The transformed column having the UDF applied to each element.
     """
     cdef unique_ptr[column] c_result
+    cdef string c_unary_udf = unary_udf.encode()
+    cdef bool c_is_ptx = is_ptx
 
     with nogil:
         c_result = move(
             cpp_transform.transform(
-                input.view(), unary_udf, output_type.c_obj, is_ptx
+                input.view(), c_unary_udf, output_type.c_obj, c_is_ptx
             )
         )
 
@@ -139,14 +141,14 @@ cpdef tuple[Table, Column] encode(Table input):
     cdef pair[unique_ptr[table], unique_ptr[column]] c_result
 
     with nogil:
-        c_result = move(cpp_transform.encode(table.view()))
+        c_result = move(cpp_transform.encode(input.view()))
 
     return (
         Table.from_libcudf(move(c_result.first)),
         Column.from_libcudf(move(c_result.second))
     )
 
-cpdef tuple[Column, Table] one_hot_encode(Column input, Column categories):
+cpdef Table one_hot_encode(Column input, Column categories):
     """Encodes `input` by generating a new column
     for each value in `categories` indicating the presence
     of that value in `input`.
@@ -160,42 +162,17 @@ cpdef tuple[Column, Table] one_hot_encode(Column input, Column categories):
 
     Returns
     -------
-    tuple[Column, Table]
-        A two-tuple containing the owner column to all the encoded data
-        and a table of the encoded values.
+    Column
+        A table of the encoded values.
     """
     cdef pair[unique_ptr[column], table_view] c_result
+    cdef Table owner_table
 
     with nogil:
-        c_result = move(cpp_transpose.one_hot_encode(input.view(), categories.view()))
+        c_result = move(cpp_transform.one_hot_encode(input.view(), categories.view()))
 
-    owner_column = Column.from_libcudf(move(c_result.first))
-    owner_table = Table([owner_column] * c_result.second.num_columns())
-
-    return (
-        owner_column,
-        Table.from_table_view(c_result.second, owner_table)
+    owner_table = Table(
+        [Column.from_libcudf(move(c_result.first))] * c_result.second.num_columns()
     )
 
-cpdef Column compute_column(Table input_table, str expr):
-    """Compute a new column by evaluating an expression tree on a table.
-
-    Parameters
-    ----------
-    input_table : Table
-        The table used for expression evaluation.
-    expr : Column
-        The root of the expression tree.
-
-    Returns
-    -------
-    Column
-        Resulting column.
-    """
-    pass
-    # cdef unique_ptr[column] c_result
-
-    # with nogil:
-    #     c_result = move(cpp_transform.compute_column(input_table.view(), expr))
-
-    # return Column.from_libcudf(move(c_result))
+    return Table.from_table_view(c_result.second, owner_table)
