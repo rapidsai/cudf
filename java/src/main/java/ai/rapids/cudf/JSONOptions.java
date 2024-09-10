@@ -34,8 +34,8 @@ public final class JSONOptions extends ColumnFilterOptions {
   private final boolean normalizeWhitespace;
   private final boolean mixedTypesAsStrings;
   private final boolean keepStringQuotes;
-  private final boolean allowLeadingZeros;
   private final boolean strictValidation;
+  private final boolean allowLeadingZeros;
   private final boolean allowNonNumericNumbers;
   private final boolean allowUnquotedControlChars;
 
