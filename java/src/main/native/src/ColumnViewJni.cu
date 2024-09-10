@@ -28,11 +28,11 @@
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/functional.h>
 #include <thrust/logical.h>
@@ -134,7 +134,7 @@ void post_process_list_overlap(cudf::column_view const& lhs,
                            validity.end(),
                            thrust::identity{},
                            cudf::get_default_stream(),
-                           rmm::mr::get_current_device_resource());
+                           cudf::get_current_device_resource_ref());
 
   if (new_null_count > 0) {
     // If the `overlap_result` column is nullable, perform `bitmask_and` of its nullmask and the
@@ -146,7 +146,7 @@ void post_process_list_overlap(cudf::column_view const& lhs,
         std::vector<cudf::size_type>{0, 0},
         overlap_cv.size(),
         stream,
-        rmm::mr::get_current_device_resource());
+        cudf::get_current_device_resource_ref());
       overlap_result->set_null_mask(std::move(null_mask), null_count);
     } else {
       // Just set the output nullmask as the new nullmask.
@@ -179,7 +179,7 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
                        cudf::null_equality::EQUAL,
                        cudf::nan_equality::ALL_EQUAL,
                        stream,
-                       rmm::mr::get_current_device_resource())
+                       cudf::get_current_device_resource_ref())
                        ->release();
   auto const out_labels = out_columns.front()->view();
 
@@ -206,7 +206,7 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
     std::move(out_offsets),
     std::move(out_structs),
     input.null_count(),
-    cudf::detail::copy_bitmask(input.parent(), stream, rmm::mr::get_current_device_resource()),
+    cudf::detail::copy_bitmask(input.parent(), stream, cudf::get_current_device_resource_ref()),
     stream);
 }
 
