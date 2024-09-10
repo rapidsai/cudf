@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <cudf/groupby.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
 using int64s_col  = cudf::test::fixed_width_column_wrapper<int64_t>;
@@ -68,7 +69,7 @@ auto groupby_histogram(cudf::column_view const& keys,
                                                    cudf::order::ASCENDING,
                                                    cudf::null_order::BEFORE,
                                                    cudf::get_default_stream(),
-                                                   rmm::mr::get_current_device_resource());
+                                                   cudf::get_current_device_resource_ref());
 
   return std::pair{std::move(sorted_keys), std::move(sorted_histograms)};
 }

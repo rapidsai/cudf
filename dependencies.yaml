@@ -352,9 +352,9 @@ dependencies:
           - librmm==24.10.*,>=0.0.0a0
           - libkvikio==24.10.*,>=0.0.0a0
           - flatbuffers==24.3.25
-          - librdkafka>=1.9.0,<1.10.0a0
+          - librdkafka>=2.5.0,<2.6.0a0
           # Align nvcomp version with rapids-cmake
-          - nvcomp==3.0.6
+          - nvcomp==4.0.1
           - spdlog>=1.12.0,<1.13
   rapids_build_skbuild:
     common:
@@ -550,8 +550,12 @@ dependencies:
             packages:
               - python=3.11
           - matrix:
+              py: "3.12"
             packages:
-              - python>=3.10,<3.12
+              - python=3.12
+          - matrix:
+            packages:
+              - python>=3.10,<3.13
   run_common:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -656,13 +660,13 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - python-confluent-kafka>=1.9.0,<1.10.0a0
+          - python-confluent-kafka>=2.5.0,<2.6.0a0
       - output_types: [conda, requirements, pyproject]
         packages:
           - streamz
       - output_types: [requirements, pyproject]
         packages:
-          - confluent-kafka>=1.9.0,<1.10.0a0
+          - confluent-kafka>=2.5.0,<2.6.0a0
   test_cpp:
     common:
       - output_types: conda
@@ -696,6 +700,28 @@ dependencies:
           - pytest<8
           - pytest-cov
           - pytest-xdist
+    specific:
+      # Define additional constraints for testing with oldest dependencies.
+      - output_types: [conda, requirements]
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - numba==0.57.*
+              - numpy==1.23.*
+              - pandas==2.0.*
+              - pyarrow==14.0.0
+              - cupy==12.0.0  # ignored as pip constraint
+          - matrix:
+            packages:
+      - output_types: requirements
+        # Using --constraints for pip install, so we list cupy multiple times
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - cupy-cuda11x==12.0.0
+              - cupy-cuda12x==12.0.0
+          - matrix:
+            packages:
   test_python_pylibcudf:
     common:
       - output_types: [conda, requirements, pyproject]

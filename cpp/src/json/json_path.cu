@@ -34,10 +34,10 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/std/optional>
 #include <thrust/pair.h>
@@ -692,7 +692,7 @@ std::pair<cuda::std::optional<rmm::device_uvector<path_operator>>, int> build_co
   auto const is_empty = h_operators.size() == 1 && h_operators[0].type == path_operator_type::END;
   return is_empty ? std::pair(cuda::std::nullopt, 0)
                   : std::pair(cuda::std::make_optional(cudf::detail::make_device_uvector_sync(
-                                h_operators, stream, rmm::mr::get_current_device_resource())),
+                                h_operators, stream, cudf::get_current_device_resource_ref())),
                               max_stack_depth);
 }
 
@@ -999,7 +999,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 
   // compute output sizes
   auto sizes =
-    rmm::device_uvector<size_type>(col.size(), stream, rmm::mr::get_current_device_resource());
+    rmm::device_uvector<size_type>(col.size(), stream, cudf::get_current_device_resource_ref());
   auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(col.offsets());
 
   constexpr int block_size = 512;
