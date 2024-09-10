@@ -14,8 +14,12 @@
  * limitations under the License.
  */
 
+#include "cub/device/device_memcpy.cuh"
+#include "cudf/utilities/span.hpp"
 #include "io/utilities/parsing_utils.cuh"
 #include "io/utilities/string_parsing.hpp"
+#include "thrust/iterator/counting_iterator.h"
+#include "thrust/iterator/transform_iterator.h"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -40,6 +44,7 @@
 #include <thrust/functional.h>
 #include <thrust/transform_reduce.h>
 
+#include <cstddef>
 #include <memory>
 #include <type_traits>
 
@@ -914,6 +919,78 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
                              chars.release(),
                              d_null_count.value(stream),
                              std::move(null_mask));
+}
+
+std::unique_ptr<column> parse_raw_strings(char const* data,
+                                          device_span<size_type> string_offsets,
+                                          device_span<size_type> string_lengths,
+                                          rmm::device_buffer&& null_mask,
+                                          size_type null_count,
+                                          bool skip_double_quotes,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  auto const col_size = string_offsets.size();
+  // auto offset_length_begin = thrust::make_zip_iterator(string_offsets.begin(),
+  // string_lengths.begin()); Prepare iterator that returns (string_ptr, string_length)-pairs needed
+  // by type conversion auto str_tuples = thrust::make_transform_iterator(offset_length_begin,
+  // to_string_view_pair{data});
+  auto buffer_sizes_it = thrust::make_transform_iterator(
+    thrust::counting_iterator<size_type>(0),
+    cuda::proclaim_return_type<size_type>(
+      [str_len_it = string_lengths.begin(),
+       _null_mask = static_cast<const cudf::bitmask_type*>(null_mask.data()),
+       skip_double_quotes] __device__(auto i) -> size_type {
+        if (bit_is_set(_null_mask, i))
+          return str_len_it[i] - (2 * skip_double_quotes);
+        else
+          return 0;
+      }));
+
+  // Convert the sizes to offsets
+  auto [offsets_column, bytes] = cudf::strings::detail::make_offsets_child_column(
+    buffer_sizes_it, buffer_sizes_it + col_size, stream, mr);
+  // Now build the chars column
+  rmm::device_uvector<char> chars(bytes, stream, mr);
+  auto output_buffer_it = thrust::make_transform_iterator(
+    cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view()),
+    cuda::proclaim_return_type<char*>([chars = chars.data()] __device__(auto i) -> char* {
+      return static_cast<char*>(chars) + i;
+      //  if(bit_is_set(_null_mask, i)) return chars+i;  else return 0;
+    }));
+  // TODO: const_cast because of issue https://github.com/NVIDIA/cccl/issues/586
+  auto input_buffer_it = thrust::make_transform_iterator(
+    string_offsets.begin(),
+    cuda::proclaim_return_type<char*>(
+      [data = const_cast<char*>(data), skip_double_quotes] __device__(auto i) -> char* {
+        return data + i + skip_double_quotes;
+        //  if(bit_is_set(_null_mask, i)) return chars+i;  else return 0;
+      }));
+  size_type num_buffers     = col_size;
+  size_t temp_storage_bytes = 0;
+
+  cub::DeviceMemcpy::Batched(nullptr,
+                             temp_storage_bytes,
+                             input_buffer_it,
+                             output_buffer_it,
+                             buffer_sizes_it,
+                             num_buffers,
+                             stream.value());
+  auto d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+  cub::DeviceMemcpy::Batched(static_cast<char*>(d_temp_storage.data()),
+                             temp_storage_bytes,
+                             input_buffer_it,
+                             output_buffer_it,
+                             buffer_sizes_it,
+                             num_buffers,
+                             stream.value());
+
+  return cudf::make_strings_column(size_type(col_size),
+                                   std::move(offsets_column),
+                                   chars.release(),
+                                   null_count,
+                                   std::move(null_mask));
 }
 
 std::unique_ptr<column> parse_data(

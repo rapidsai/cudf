@@ -17,6 +17,7 @@
 #pragma once
 
 #include "types.hpp"
+#include "new_json_object.hpp"
 
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -91,7 +92,8 @@ class json_reader_options {
   // Data types of the column; empty to infer dtypes
   std::variant<std::vector<data_type>,
                std::map<std::string, data_type>,
-               std::map<std::string, schema_element>>
+               std::map<std::string, schema_element>,
+               std::vector<json_path_t>>
     _dtypes;
   // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
@@ -127,6 +129,18 @@ class json_reader_options {
 
   // Whether to recover after an invalid JSON line
   json_recovery_mode_t _recovery_mode = json_recovery_mode_t::FAIL;
+
+  // Validation checks for spark
+  // Should the json validation be strict of not
+  bool _strict_validation = false;
+  // Allow leading zeros for numeric values.
+  bool _allow_numeric_leading_zeros = true;
+  // Allow nonnumeric numbers. NaN/Inf
+  bool _allow_nonnumeric_numbers = true;
+  // Allow unquoted control characters
+  bool _allow_unquoted_control_chars = true;
+  // Additional values to recognize as null values
+  std::vector<std::string> _na_values;
 
   /**
    * @brief Constructor from source info.
@@ -167,7 +181,8 @@ class json_reader_options {
    */
   [[nodiscard]] std::variant<std::vector<data_type>,
                              std::map<std::string, data_type>,
-                             std::map<std::string, schema_element>> const&
+                             std::map<std::string, schema_element>,
+                             std::vector<json_path_t>> const&
   get_dtypes() const
   {
     return _dtypes;
@@ -299,6 +314,50 @@ class json_reader_options {
   [[nodiscard]] json_recovery_mode_t recovery_mode() const { return _recovery_mode; }
 
   /**
+   * @brief Whether json validation should be enforced strictly or not.
+   *
+   * @return true if it should be.
+   */
+  [[nodiscard]] bool is_strict_validation() const { return _strict_validation; }
+
+  /**
+   * @brief Whether leading zeros are allowed in numeric values. strict validation
+   * must be enabled for this to work.
+   *
+   * @return true if leading zeros are allowed in numeric values
+   */
+  [[nodiscard]] bool is_allowed_numeric_leading_zeros() const
+  {
+    return _allow_numeric_leading_zeros;
+  }
+
+  /**
+   * @brief Whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity, Infinity,
+   * and -Infinity. strict validation must be enabled for this to work.
+   *
+   * @return true if leading zeros are allowed in numeric values
+   */
+  [[nodiscard]] bool is_allowed_nonnumeric_numbers() const { return _allow_nonnumeric_numbers; }
+
+  /**
+   * @brief Whether in a quoted string should characters greater than or equal to 0 and less than 32
+   * be allowed without some form of escaping. Strict validation must be enabled for this to work.
+   *
+   * @return true if unquoted control chars are allowed.
+   */
+  [[nodiscard]] bool is_allowed_unquoted_control_chars() const
+  {
+    return _allow_unquoted_control_chars;
+  }
+
+  /**
+   * @brief Returns additional values to recognize as null values.
+   *
+   * @return Additional values to recognize as null values
+   */
+  [[nodiscard]] std::vector<std::string> const& get_na_values() const { return _na_values; }
+
+  /**
    * @brief Set data types for columns to be read.
    *
    * @param types Vector of dtypes
@@ -319,6 +378,12 @@ class json_reader_options {
    */
   void set_dtypes(std::map<std::string, schema_element> types) { _dtypes = std::move(types); }
 
+  /**
+   * @brief Set data types for a potentially nested column hierarchy.
+   *
+   * @param types Map of column names to schema_element to support arbitrary nesting of data types
+   */
+  void set_dtypes(std::vector<json_path_t> types) { _dtypes = std::move(types); }
   /**
    * @brief Set the compression type.
    *
@@ -427,6 +492,45 @@ class json_reader_options {
    * @param val An enum value to indicate the JSON reader's behavior on invalid JSON lines.
    */
   void set_recovery_mode(json_recovery_mode_t val) { _recovery_mode = val; }
+
+  /**
+   * @brief Set whether strict validation is enabled or not.
+   *
+   * @param val Boolean value to indicate whether strict validation is enabled.
+   */
+  void set_strict_validation(bool val) { _strict_validation = val; }
+
+  /**
+   * @brief Set whether leading zeros are allowed in numeric values. strict validation
+   * must be enabled for this to work.
+   *
+   * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
+   */
+  void allow_numeric_leading_zeros(bool val) { _allow_numeric_leading_zeros = val; }
+
+  /**
+   * @brief Set whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity,
+   * Infinity, and -Infinity. strict validation must be enabled for this to work.
+   *
+   * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
+   */
+  void allow_nonnumeric_numbers(bool val) { _allow_nonnumeric_numbers = val; }
+
+  /**
+   * @brief Set whether in a quoted string should characters greater than or equal to 0
+   * and less than 32 be allowed without some form of escaping. Strict validation must
+   * be enabled for this to work.
+   *
+   * @param val true to indicate whether unquoted control chars are allowed.
+   */
+  void allow_unquoted_control_chars(bool val) { _allow_unquoted_control_chars = val; }
+
+  /**
+   * @brief Sets additional values to recognize as null values.
+   *
+   * @param vals Vector of values to be considered to be null
+   */
+  void set_na_values(std::vector<std::string> vals) { _na_values = std::move(vals); }
 };
 
 /**
@@ -485,7 +589,17 @@ class json_reader_options_builder {
     options._dtypes = std::move(types);
     return *this;
   }
-
+  /**
+   * @brief Set data types for columns to be read.
+   *
+   * @param types json column path, all columns are read as string
+   * @return this for chaining
+   */
+  json_reader_options_builder& dtypes(std::vector<json_path_t> types)
+  {
+    options._dtypes = std::move(types);
+    return *this;
+  }
   /**
    * @brief Set the compression type.
    *
@@ -635,6 +749,70 @@ class json_reader_options_builder {
   json_reader_options_builder& recovery_mode(json_recovery_mode_t val)
   {
     options._recovery_mode = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether json validation should be strict or not.
+   *
+   * @param val Boolean value to indicate whether json validation should be strict or not.
+   * @return this for chaining
+   */
+  json_reader_options_builder& strict_validation(bool val)
+  {
+    options.set_strict_validation(val);
+    return *this;
+  }
+
+  /**
+   * @brief Set Whether leading zeros are allowed in numeric values. strict validation must
+   * be enabled for this to have any effect.
+   *
+   * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
+   * @return this for chaining
+   */
+  json_reader_options_builder& numeric_leading_zeros(bool val)
+  {
+    options.allow_numeric_leading_zeros(val);
+    return *this;
+  }
+
+  /**
+   * @brief Set whether specific unquoted number values are valid JSON. The values are NaN,
+   * +INF, -INF, +Infinity, Infinity, and -Infinity.
+   * strict validation must be enabled for this to have any effect.
+   *
+   * @param val Boolean value to indicate if unquoted nonnumeric values are valid json or not.
+   * @return this for chaining
+   */
+  json_reader_options_builder& nonnumeric_numbers(bool val)
+  {
+    options.allow_nonnumeric_numbers(val);
+    return *this;
+  }
+
+  /**
+   * @brief Set whether chars >= 0 and < 32 are allowed in a quoted string without
+   * some form of escaping. strict validation must be enabled for this to have any effect.
+   *
+   * @param val Boolean value to indicate if unquoted control chars are allowed or not.
+   * @return this for chaining
+   */
+  json_reader_options_builder& unquoted_control_chars(bool val)
+  {
+    options.allow_unquoted_control_chars(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets additional values to recognize as null values.
+   *
+   * @param vals Vector of values to be considered to be null
+   * @return this for chaining
+   */
+  json_reader_options_builder& na_values(std::vector<std::string> vals)
+  {
+    options.set_na_values(std::move(vals));
     return *this;
   }
 

@@ -49,7 +49,7 @@ struct tree_meta_t {
 /**
  * @brief A column type
  */
-enum class json_col_t : char { ListColumn, StructColumn, StringColumn, Unknown };
+enum class json_col_t : char { ListColumn, StructColumn, StringColumn, MixedColumn, Unknown };
 
 /**
  * @brief Enum class to specify whether we just push onto and pop from the stack or whether we also
@@ -155,12 +155,15 @@ struct device_json_column {
   rmm::device_uvector<row_offset_t> child_offsets;
 
   // Validity bitmap
-  rmm::device_buffer validity;
+  rmm::device_buffer string_validity;
+  rmm::device_buffer struct_validity;
+  rmm::device_buffer  list_validity;
 
   // Map of child columns, if applicable.
   // Following "element" as the default child column's name of a list column
   // Using the struct's field names
   std::map<std::string, device_json_column> child_columns;
+  std::vector<device_json_column> list_child_columns;
   std::vector<std::string> column_order;
   // Counting the current number of items in this column
   row_offset_t num_rows = 0;
@@ -180,7 +183,9 @@ struct device_json_column {
     : string_offsets(0, stream),
       string_lengths(0, stream),
       child_offsets(0, stream, mr),
-      validity(0, stream, mr)
+      string_validity(0, stream, mr),
+      struct_validity(0, stream, mr),
+      list_validity(0, stream, mr)
   {
   }
 };
@@ -224,6 +229,21 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   device_span<PdaTokenT const> tokens,
   device_span<SymbolOffsetT const> token_indices,
   rmm::cuda_stream_view stream);
+
+/**
+ * @brief Validate the tokens conforming to behavior given in options.
+ *
+ * @param d_input The string of input characters
+ * @param tokens The tokens to be post-processed
+ * @param token_indices The tokens' corresponding indices that are post-processed
+ * @param options Parsing options specifying the parsing behaviour
+ * @param stream The cuda stream to dispatch GPU kernels to
+ */
+void validate_token_stream(device_span<char const> d_input,
+                           device_span<PdaTokenT> tokens,
+                           device_span<SymbolOffsetT> token_indices,
+                           cudf::io::json_reader_options const& options,
+                           rmm::cuda_stream_view stream);
 
 /**
  * @brief Parses the given JSON string and generates a tree representation of the given input.
@@ -327,6 +347,9 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr);
 
+// TODO: eliminate code duplication
+// std::optional<schema_element> child_schema_element(std::string const& col_name,
+//                                                    cudf::io::json_reader_options const& options);
 /**
  * @brief Get the path data type of a column by path if present in input schema
  *
