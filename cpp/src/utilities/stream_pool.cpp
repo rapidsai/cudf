@@ -147,7 +147,7 @@ rmm::cuda_device_id get_current_cuda_device()
 
 class cuda_context_checker {
  public:
-  static bool is_primary_context_active()
+  static bool is_primary_context_active() noexcept
   {
     CUcontext current_ctx{};
     CUdevice device_handle{};
