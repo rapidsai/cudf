@@ -229,7 +229,7 @@ TEST_F(JsonWSNormalizationTest, ReadJsonOption_InvalidRows_NoMixedType)
       cudf::io::source_info{host_input.data(), host_input.size()})
       .dtypes(dtype_schema)
       .lines(true)
-      .mixed_types_as_string(true)
+      .prune_columns(true)
       .normalize_whitespace(true)
       .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
 
@@ -250,7 +250,7 @@ TEST_F(JsonWSNormalizationTest, ReadJsonOption_InvalidRows_NoMixedType)
       cudf::io::source_info{expected_input.data(), expected_input.size()})
       .dtypes(dtype_schema)
       .lines(true)
-      .mixed_types_as_string(true)
+      .prune_columns(true)
       .normalize_whitespace(false)
       .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
 

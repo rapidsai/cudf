@@ -1185,7 +1185,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     // gpu tree generation
     return get_tree_representation(tokens_gpu,
                                    token_indices_gpu,
-                                   options.is_enabled_mixed_types_as_string(),
+                                   options.is_enabled_mixed_types_as_string() || options.is_enabled_prune_columns(),
                                    stream,
                                    rmm::mr::get_current_device_resource());
   }();  // IILE used to free memory of token data.
