@@ -18,9 +18,8 @@
 
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
-
-#include <rmm/resource_ref.hpp>
 
 #include <cstddef>
 

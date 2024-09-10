@@ -29,11 +29,11 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/unary.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/advance.h>
@@ -1082,7 +1082,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                                               {order::ASCENDING},
                                               {},
                                               stream,
-                                              rmm::mr::get_current_device_resource());
+                                              cudf::get_current_device_resource_ref());
                  });
 
   // generate min and max values
@@ -1143,7 +1143,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                  std::back_inserter(tdigest_views),
                  [](std::unique_ptr<table> const& t) { return t->view(); });
   auto merged =
-    cudf::detail::concatenate(tdigest_views, stream, rmm::mr::get_current_device_resource());
+    cudf::detail::concatenate(tdigest_views, stream, cudf::get_current_device_resource_ref());
 
   // generate cumulative weights
   auto merged_weights     = merged->get_column(1).view();
@@ -1220,7 +1220,7 @@ std::unique_ptr<scalar> reduce_tdigest(column_view const& col,
   // order with nulls at the end.
   table_view t({col});
   auto sorted = cudf::detail::sort(
-    t, {order::ASCENDING}, {null_order::AFTER}, stream, rmm::mr::get_current_device_resource());
+    t, {order::ASCENDING}, {null_order::AFTER}, stream, cudf::get_current_device_resource_ref());
 
   auto const delta = max_centroids;
   return cudf::type_dispatcher(

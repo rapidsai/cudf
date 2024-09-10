@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,7 @@
 #include <cudf/detail/search.hpp>
 #include <cudf/lists/list_view.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
 
@@ -58,7 +57,7 @@ static void nvbench_contains_table(nvbench::state& state, nvbench::type_list<Typ
                              cudf::null_equality::EQUAL,
                              cudf::nan_equality::ALL_EQUAL,
                              stream_view,
-                             rmm::mr::get_current_device_resource());
+                             cudf::get_current_device_resource_ref());
   });
 
   state.add_buffer_size(

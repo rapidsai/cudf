@@ -19,13 +19,13 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cub/device/device_copy.cuh>
 #include <cuda/atomic>
@@ -553,7 +553,7 @@ std::
     });
 
   auto stencil = cudf::detail::make_zeroed_device_uvector_async<int>(
-    static_cast<std::size_t>(inbuf_size), stream, rmm::mr::get_current_device_resource());
+    static_cast<std::size_t>(inbuf_size), stream, cudf::get_current_device_resource_ref());
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   thrust::make_constant_iterator(1),
                   thrust::make_constant_iterator(1) + num_deletions,

@@ -19,9 +19,9 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace CUDF_EXPORT cudf {
 namespace io::json::detail {
