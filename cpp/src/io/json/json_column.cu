@@ -826,10 +826,10 @@ void make_device_json_column(device_span<SymbolT const> input,
         column_categories[this_col_id] = NC_STR;
     }
     cudf::detail::cuda_memcpy_async(d_column_tree.node_categories.begin(),
-                    column_categories.data(),
-                    column_categories.size() * sizeof(column_categories[0]),
-                    cudf::detail::host_memory_kind::PAGEABLE,
-                    stream);
+                                    column_categories.data(),
+                                    column_categories.size() * sizeof(column_categories[0]),
+                                    cudf::detail::host_memory_kind::PAGEABLE,
+                                    stream);
   }
 
   // ignore all children of columns forced as string
@@ -845,10 +845,10 @@ void make_device_json_column(device_span<SymbolT const> input,
       column_categories[this_col_id] = NC_STR;
   }
   cudf::detail::cuda_memcpy_async(d_column_tree.node_categories.begin(),
-                  column_categories.data(),
-                  column_categories.size() * sizeof(column_categories[0]),
-                  cudf::detail::host_memory_kind::PAGEABLE,
-                  stream);
+                                  column_categories.data(),
+                                  column_categories.size() * sizeof(column_categories[0]),
+                                  cudf::detail::host_memory_kind::PAGEABLE,
+                                  stream);
 
   // restore unique_col_ids order
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
