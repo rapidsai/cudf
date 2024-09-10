@@ -369,40 +369,6 @@ void make_device_json_column(device_span<SymbolT const> input,
     input, d_column_tree.node_range_begin, d_column_tree.node_range_end, stream);
   stream.synchronize();
 
-  // 2. generate nested columns tree and its device_memory
-  // reorder unique_col_ids w.r.t. column_range_begin for order of column to be in field order.
-  std::vector<NodeIndexT> node_to_col_mapping(num_columns);
-  std::iota(node_to_col_mapping.begin(), node_to_col_mapping.end(), 0);
-  std::sort(node_to_col_mapping.begin(),
-            node_to_col_mapping.end(),
-            [&column_range_beg](auto const& a, auto const& b) {
-              return column_range_beg[a] < column_range_beg[b];
-            });
-  std::vector<NodeIndexT> col_to_node_mapping(num_columns);
-  std::iota(col_to_node_mapping.begin(), col_to_node_mapping.end(), 0);
-  std::sort(col_to_node_mapping.begin(),
-            col_to_node_mapping.end(),
-            [&node_to_col_mapping](auto const& a, auto const& b) {
-              return node_to_col_mapping[a] < node_to_col_mapping[b];
-            });
-
-  // adjacency list construction
-  // (i) remove parent_node_sentinel i.e. parent of root node
-  // (ii) parent of each node is first element of adjacency list
-  std::vector<std::vector<NodeIndexT>> adj(num_columns);
-  for (uint32_t node = 0; node < num_columns; node++) {
-    auto col    = unique_col_ids[node];
-    auto parent = column_parent_ids[node];
-    if (parent != parent_node_sentinel)
-      adj[col_to_node_mapping[col]].push_back(col_to_node_mapping[parent]);
-  }
-  for (uint32_t node = 0; node < num_columns; node++) {
-    auto col    = unique_col_ids[node];
-    auto parent = column_parent_ids[node];
-    if (parent != parent_node_sentinel)
-      adj[col_to_node_mapping[parent]].push_back(col_to_node_mapping[col]);
-  }
-
   // array of arrays column names
   if (is_array_of_arrays) {
     TreeDepthT const row_array_children_level = is_enabled_lines ? 1 : 2;
@@ -421,6 +387,23 @@ void make_device_json_column(device_span<SymbolT const> input,
                               ? std::to_string(h_values_column_indices[col_id])
                               : name;
                    });
+  }
+
+  // 2. generate nested columns tree and its device_memory
+  // reorder unique_col_ids w.r.t. column_range_begin for order of column to be in field order.
+  auto h_range_col_id_it =
+    thrust::make_zip_iterator(column_range_beg.begin(), unique_col_ids.begin());
+  std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
+    return thrust::get<0>(a) < thrust::get<0>(b);
+  });
+  // adjacency list construction
+  // (i) remove parent_node_sentinel i.e. parent of root node? why?
+  // (ii) parent of each node is first element of adjacency list? why?
+  // Build adjacency list.
+  std::map<NodeIndexT, std::vector<NodeIndexT>> adj;
+  for (auto const this_col_id : unique_col_ids) {
+    auto parent_col_id = column_parent_ids[this_col_id];
+    adj[parent_col_id].push_back(this_col_id);
   }
 
   auto to_json_col_type = [](auto category) {
@@ -454,7 +437,18 @@ void make_device_json_column(device_span<SymbolT const> input,
     col.type = to_json_col_type(column_category);
   };
 
+  // Pruning, // path as type, // mixed type.
   std::vector<bool> is_pruned(num_columns, true);
+  // Pruning: iterate through schema.
+  // vector of dtypes (array of arrays & normal) - jsonl, json
+  // map of dtypes (array of arrays & normal) - jsonl, json
+  // map of schema_element (array of arrays & normal) - jsonl, json
+
+  // not pruning: iterate through schema, then pruning for forced string columns, ignore children of them.
+  // if mixed type is string is enabled, BFS to mark mixed types?
+
+  // while creating columns, we force the type.
+
   std::queue<NodeIndexT> optq;
   if (options.is_enabled_prune_columns()) {
     optq.push(0);
