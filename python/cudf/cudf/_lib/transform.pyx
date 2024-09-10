@@ -3,41 +3,22 @@
 from numba.np import numpy_support
 
 import cudf
-from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 from cudf.core._internals.expressions import parse_expression
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.utils import cudautils
 
 from cython.operator cimport dereference
-from libc.stdint cimport uintptr_t
 from libcpp.memory cimport unique_ptr
-from libcpp.pair cimport pair
-from libcpp.string cimport string
 from libcpp.utility cimport move
 
 cimport pylibcudf.libcudf.transform as libcudf_transform
 from pylibcudf cimport transform as plc_transform
 from pylibcudf.expressions cimport Expression
 from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.expressions cimport expression
-from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
-from pylibcudf.libcudf.types cimport (
-    bitmask_type,
-    data_type,
-    size_type,
-    type_id,
-)
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf._lib.column cimport Column
-from cudf._lib.types cimport underlying_type_t_type_id
-from cudf._lib.utils cimport (
-    columns_from_unique_ptr,
-    data_from_table_view,
-    table_view_from_columns,
-)
 
 
 @acquire_spill_lock()
@@ -61,7 +42,7 @@ def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     if not isinstance(mask_buffer, cudf.core.buffer.Buffer):
         raise TypeError("mask_buffer is not an instance of "
                         "cudf.core.buffer.Buffer")
-    plc_columns = plc_transform.mask_to_bools(
+    plc_column = plc_transform.mask_to_bools(
         mask_buffer.get_ptr(mode="read"), begin_bit, end_bit
     )
     return Column.from_pylibcudf(plc_column)
@@ -97,7 +78,7 @@ def table_encode(list source_columns):
     )
 
     return (
-        [Column.from_pylibcudf(col) for col in plc_table.columns()]
+        [Column.from_pylibcudf(col) for col in plc_table.columns()],
         Column.from_pylibcudf(plc_column)
     )
 
