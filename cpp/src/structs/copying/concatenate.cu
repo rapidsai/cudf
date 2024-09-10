@@ -23,9 +23,9 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <algorithm>
 #include <memory>
