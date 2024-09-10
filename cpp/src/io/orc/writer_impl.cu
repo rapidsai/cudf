@@ -532,20 +532,20 @@ auto uncomp_block_alignment(CompressionKind compression_kind)
 {
   if (compression_kind == NONE or
       nvcomp::is_compression_disabled(to_nvcomp_compression_type(compression_kind))) {
-    return 1u;
+    return 1ul;
   }
 
-  return 1u << nvcomp::compress_input_alignment_bits(to_nvcomp_compression_type(compression_kind));
+  return nvcomp::required_alignment(to_nvcomp_compression_type(compression_kind));
 }
 
 auto comp_block_alignment(CompressionKind compression_kind)
 {
   if (compression_kind == NONE or
       nvcomp::is_compression_disabled(to_nvcomp_compression_type(compression_kind))) {
-    return 1u;
+    return 1ul;
   }
 
-  return 1u << nvcomp::compress_output_alignment_bits(to_nvcomp_compression_type(compression_kind));
+  return nvcomp::required_alignment(to_nvcomp_compression_type(compression_kind));
 }
 
 /**
