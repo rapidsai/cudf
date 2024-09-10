@@ -80,6 +80,11 @@ def test_str_series_roundtrip():
 
 
 def test_p2p_shuffle():
+    pytest.importorskip(
+        "pyarrow",
+        minversion="14.0.1",
+        reason="P2P shuffling requires pyarrow>=14.0.1",
+    )
     # Check that we can use `shuffle_method="p2p"`
     with dask_cuda.LocalCUDACluster(n_workers=1) as cluster:
         with Client(cluster):
