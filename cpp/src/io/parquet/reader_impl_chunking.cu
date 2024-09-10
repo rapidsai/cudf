@@ -25,6 +25,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -441,7 +442,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
 {
   // sort by row count
   rmm::device_uvector<cumulative_page_info> c_info_sorted =
-    make_device_uvector_async(c_info, stream, rmm::mr::get_current_device_resource());
+    make_device_uvector_async(c_info, stream, cudf::get_current_device_resource_ref());
   thrust::sort(
     rmm::exec_policy_nosync(stream), c_info_sorted.begin(), c_info_sorted.end(), row_count_less{});
 
@@ -846,9 +847,9 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     });
   }
   auto d_comp_in = cudf::detail::make_device_uvector_async(
-    comp_in, stream, rmm::mr::get_current_device_resource());
+    comp_in, stream, cudf::get_current_device_resource_ref());
   auto d_comp_out = cudf::detail::make_device_uvector_async(
-    comp_out, stream, rmm::mr::get_current_device_resource());
+    comp_out, stream, cudf::get_current_device_resource_ref());
 
   int32_t start_pos = 0;
   for (auto const& codec : codecs) {
@@ -932,9 +933,9 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   // now copy the uncompressed V2 def and rep level data
   if (not copy_in.empty()) {
     auto const d_copy_in = cudf::detail::make_device_uvector_async(
-      copy_in, stream, rmm::mr::get_current_device_resource());
+      copy_in, stream, cudf::get_current_device_resource_ref());
     auto const d_copy_out = cudf::detail::make_device_uvector_async(
-      copy_out, stream, rmm::mr::get_current_device_resource());
+      copy_out, stream, cudf::get_current_device_resource_ref());
 
     gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
     stream.synchronize();
@@ -1153,7 +1154,7 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
 
   // add to the cumulative_page_info data
   rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
-    temp_cost, stream, rmm::mr::get_current_device_resource());
+    temp_cost, stream, cudf::get_current_device_resource_ref());
   auto iter = thrust::make_counting_iterator(size_t{0});
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    iter,
@@ -1356,7 +1357,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
     [&]() -> std::tuple<rmm::device_uvector<page_span>, size_t, size_t> {
     if (!pass.has_compressed_data || _input_pass_read_limit == 0) {
       rmm::device_uvector<page_span> page_indices(
-        num_columns, _stream, rmm::mr::get_current_device_resource());
+        num_columns, _stream, cudf::get_current_device_resource_ref());
       auto iter = thrust::make_counting_iterator(0);
       thrust::transform(rmm::exec_policy_nosync(_stream),
                         iter,
