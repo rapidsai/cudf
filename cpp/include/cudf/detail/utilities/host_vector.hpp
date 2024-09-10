@@ -19,9 +19,9 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/aligned.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/host_vector.h>
 
@@ -33,7 +33,7 @@ namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
- *  that employs \c a `rmm::host_async_resource_ref` for allocation.
+ *  that employs \c a `cudf::host_async_resource_ref` for allocation.
  *
  *  \see https://en.cppreference.com/w/cpp/memory/allocator
  */
@@ -68,10 +68,10 @@ inline constexpr bool contains_property =
   (cuda::std::is_same_v<DesiredProperty, Properties> || ... || false);
 
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
- *  that employs \c `rmm::host_async_resource_ref` for allocation.
+ *  that employs \c `cudf::host_async_resource_ref` for allocation.
  *
  * The \p rmm_host_allocator provides an interface for host memory allocation through the user
- * provided \c `rmm::host_async_resource_ref`. The \p rmm_host_allocator does not take ownership of
+ * provided \c `cudf::host_async_resource_ref`. The \p rmm_host_allocator does not take ownership of
  * this reference and therefore it is the user's responsibility to ensure its lifetime for the
  * duration of the lifetime of the \p rmm_host_allocator.
  *

@@ -26,7 +26,11 @@ from packaging import version
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
+    PANDAS_VERSION,
+)
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
@@ -3561,8 +3565,11 @@ def test_dataframe_empty_sort_index():
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
 def test_dataframe_sort_index(
-    index, axis, ascending, inplace, ignore_index, na_position
+    request, index, axis, ascending, inplace, ignore_index, na_position
 ):
+    if not PANDAS_GE_220 and axis in (1, "columns") and ignore_index:
+        pytest.skip(reason="Bug fixed in pandas-2.2")
+
     pdf = pd.DataFrame(
         {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]},
         index=index,
@@ -3612,6 +3619,10 @@ def test_dataframe_sort_index(
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_dataframe_mulitindex_sort_index(
     request, axis, level, ascending, inplace, ignore_index, na_position
 ):
@@ -6746,6 +6757,10 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
         np.array("abc"),
         None,
     ],
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
 )
 def test_dataframe_assign_scalar(request, col_data, assign_val):
     request.applymarker(

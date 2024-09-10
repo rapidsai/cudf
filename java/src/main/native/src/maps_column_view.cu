@@ -18,9 +18,9 @@
 #include <cudf/lists/detail/contains.hpp>
 #include <cudf/lists/detail/extract.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <maps_column_view.hpp>
 
@@ -65,7 +65,7 @@ std::unique_ptr<column> get_values_for_impl(maps_column_view const& maps_view,
                                              lookup_keys,
                                              lists::duplicate_find_option::FIND_LAST,
                                              stream,
-                                             rmm::mr::get_current_device_resource());
+                                             cudf::get_current_device_resource_ref());
   auto constexpr absent_offset  = size_type{-1};
   auto constexpr nullity_offset = std::numeric_limits<size_type>::min();
   thrust::replace(rmm::exec_policy(stream),
@@ -103,7 +103,7 @@ std::unique_ptr<column> contains_impl(maps_column_view const& maps_view,
   CUDF_EXPECTS(lookup_keys.type().id() == keys.child().type().id(),
                "Lookup keys must have the same type as the keys of the map column.");
   auto const contains =
-    lists::detail::contains(keys, lookup_keys, stream, rmm::mr::get_current_device_resource());
+    lists::detail::contains(keys, lookup_keys, stream, cudf::get_current_device_resource_ref());
   // Replace nulls with BOOL8{false};
   auto const scalar_false = numeric_scalar<bool>{false, true, stream};
   return detail::replace_nulls(contains->view(), scalar_false, stream, mr);

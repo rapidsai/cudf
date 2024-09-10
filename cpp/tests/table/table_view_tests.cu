@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -47,7 +48,7 @@ void row_comparison(cudf::table_view input1,
   auto device_table_1 = cudf::table_device_view::create(input1, stream);
   auto device_table_2 = cudf::table_device_view::create(input2, stream);
   auto d_column_order = cudf::detail::make_device_uvector_sync(
-    column_order, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    column_order, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   auto comparator = cudf::row_lexicographic_comparator(
     cudf::nullate::NO{}, *device_table_1, *device_table_2, d_column_order.data());
