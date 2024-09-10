@@ -493,9 +493,8 @@ std::
   auto output_it = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
     cuda::proclaim_return_type<char*>(
-      [inbuf = inbuf.begin(), inbuf_offsets = inbuf_offsets.cbegin()] __device__(size_t i) -> char* {
-        return &inbuf[inbuf_offsets[i]];
-      }));
+      [inbuf = inbuf.begin(), inbuf_offsets = inbuf_offsets.cbegin()] __device__(
+        size_t i) -> char* { return &inbuf[inbuf_offsets[i]]; }));
 
   {
     // cub device batched copy
