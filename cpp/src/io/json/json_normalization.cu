@@ -488,32 +488,34 @@ std::
   auto input_it = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
     cuda::proclaim_return_type<char const*>(
-      [d_input = d_input.begin(), col_offsets = col_offsets.begin()] __device__(
+      [d_input = d_input.begin(), col_offsets = col_offsets.cbegin()] __device__(
         size_t i) -> char const* { return &d_input[col_offsets[i]]; }));
   auto output_it = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
     cuda::proclaim_return_type<char*>(
-      [inbuf = inbuf.begin(), inbuf_offsets = inbuf_offsets.begin()] __device__(size_t i) -> char* {
+      [inbuf = inbuf.begin(), inbuf_offsets = inbuf_offsets.cbegin()] __device__(size_t i) -> char* {
         return &inbuf[inbuf_offsets[i]];
       }));
 
-  // cub device batched copy
-  size_t temp_storage_bytes = 0;
-  cub::DeviceCopy::Batched(nullptr,
-                           temp_storage_bytes,
-                           input_it,
-                           output_it,
-                           col_lengths.begin(),
-                           col_lengths_size,
-                           stream.value());
-  rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-  cub::DeviceCopy::Batched(temp_storage.data(),
-                           temp_storage_bytes,
-                           input_it,
-                           output_it,
-                           col_lengths.begin(),
-                           col_lengths_size,
-                           stream.value());
+  {
+    // cub device batched copy
+    size_t temp_storage_bytes = 0;
+    cub::DeviceCopy::Batched(nullptr,
+                             temp_storage_bytes,
+                             input_it,
+                             output_it,
+                             col_lengths.begin(),
+                             col_lengths_size,
+                             stream.value());
+    rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+    cub::DeviceCopy::Batched(temp_storage.data(),
+                             temp_storage_bytes,
+                             input_it,
+                             output_it,
+                             col_lengths.begin(),
+                             col_lengths_size,
+                             stream.value());
+  }
 
   // complementary whitespace normalization : get only the indices
   auto parser = fst::detail::make_fst(
@@ -533,7 +535,7 @@ std::
                    normalize_whitespace_complement::start_state,
                    stream);
 
-  auto num_deletions = outbuf_indices_size.value(stream);
+  auto const num_deletions = outbuf_indices_size.value(stream);
   outbuf_indices.resize(num_deletions, stream);
 
   // now these indices need to be removed

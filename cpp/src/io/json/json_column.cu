@@ -627,7 +627,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   std::vector<uint8_t> is_mixed_type_column(num_columns, 0);
   std::vector<uint8_t> is_pruned(num_columns, 0);
   // for columns that are not mixed type but have been forced as string
-  std::vector<uint8_t> forced_as_string_column(num_columns, 0);
+  std::vector<bool> forced_as_string_column(num_columns, 0);
   columns.try_emplace(parent_node_sentinel, std::ref(root));
 
   std::function<void(NodeIndexT, device_json_column&)> remove_child_columns =
@@ -771,19 +771,6 @@ void make_device_json_column(device_span<SymbolT const> input,
     }
 
     auto this_column_category = column_categories[this_col_id];
-    /*
-    if (is_enabled_mixed_types_as_string) {
-      // get path of this column, check if it is a struct/list forced as string, and enforce it
-      auto const nt                             = tree_path.get_path(this_col_id);
-      std::optional<data_type> const user_dtype = get_path_data_type(nt, options);
-      if ((column_categories[this_col_id] == NC_STRUCT or
-           column_categories[this_col_id] == NC_LIST) and
-          user_dtype.has_value() and user_dtype.value().id() == type_id::STRING) {
-        is_mixed_type_column[this_col_id] = 1;
-        this_column_category              = NC_STR;
-      }
-    }
-    */
     // get path of this column, check if it is a struct/list forced as string, and enforce it
     auto const nt                             = tree_path.get_path(this_col_id);
     std::optional<data_type> const user_dtype = get_path_data_type(nt, options);
