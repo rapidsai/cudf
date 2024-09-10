@@ -66,3 +66,9 @@ def test_dataframe_agg(attr, func):
     )
 
     assert_eq(agg, pd_agg)
+
+
+def test_dataframe_agg_with_invalid_kwarg():
+    with pytest.raises(TypeError, match="Invalid keyword argument"):
+        df = cudf.DataFrame({"a": [1, 2, 1, 2], "b": [0, 0, 0, 0]})
+        df.groupby("a").agg(foo=set())

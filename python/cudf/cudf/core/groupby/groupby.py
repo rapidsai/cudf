@@ -1335,7 +1335,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 *(
                     (self.obj._data[x[0]], x[1])
                     if isinstance(x, tuple)
-                    else (_raise_invalid_type(x))
+                    else _raise_invalid_type(x)
                     for x in kwargs.values()
                 )
             )
