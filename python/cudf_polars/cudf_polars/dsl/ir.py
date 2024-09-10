@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.typing import Schema
 
+parquet_options: dict[str, Any] = {}
 
 __all__ = [
     "IR",
@@ -339,17 +340,46 @@ class Scan(IR):
                 colnames[0],
             )
         elif self.typ == "parquet":
-            tbl_w_meta = plc.io.parquet.read_parquet(
-                plc.io.SourceInfo(self.paths),
-                columns=with_columns,
-                num_rows=n_rows,
-                skip_rows=self.skip_rows,
-            )
-            df = DataFrame.from_table(
-                tbl_w_meta.tbl,
-                # TODO: consider nested column names?
-                tbl_w_meta.column_names(include_children=False),
-            )
+            if parquet_options.get("chunked", True):
+                reader = plc.io.parquet.ChunkedParquetReader(
+                    plc.io.SourceInfo(self.paths),
+                    columns=with_columns,
+                    num_rows=n_rows,
+                    skip_rows=self.skip_rows,
+                    chunk_read_limit=parquet_options.get("chunk_read_limit", 0),
+                    pass_read_limit=parquet_options.get("pass_read_limit", 1024000000),
+                )
+                chk = reader.read_chunk()
+                tbl = chk.tbl
+                names = chk.column_names()
+                concatenated_columns = tbl.columns()
+                while reader.has_next():
+                    tbl = reader.read_chunk().tbl
+
+                    for i in range(tbl.num_columns()):
+                        concatenated_columns[i] = plc.concatenate.concatenate(
+                            [concatenated_columns[i], tbl._columns[i]]
+                        )
+                        # Drop residual columns to save memory
+                        tbl._columns[i] = None
+
+                return DataFrame.from_table(
+                    plc.Table(concatenated_columns),
+                    names=names,
+                )
+            else:
+                tbl_w_meta = plc.io.parquet.read_parquet(
+                    plc.io.SourceInfo(self.paths),
+                    columns=with_columns,
+                    num_rows=n_rows,
+                    skip_rows=self.skip_rows,
+                )
+                return DataFrame.from_table(
+                    tbl_w_meta.tbl,
+                    # TODO: consider nested column names?
+                    tbl_w_meta.column_names(include_children=False),
+                )
+
         elif self.typ == "ndjson":
             json_schema: list[tuple[str, str, list]] = [
                 (name, typ, []) for name, typ in self.schema.items()
