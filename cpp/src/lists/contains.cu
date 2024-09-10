@@ -28,11 +28,11 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/execution_policy.h>
@@ -316,7 +316,7 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                       search_key,
                                       duplicate_find_option::FIND_FIRST,
                                       stream,
-                                      rmm::mr::get_current_device_resource());
+                                      cudf::get_current_device_resource_ref());
   return to_contains(std::move(key_indices), stream, mr);
 }
 
@@ -332,7 +332,7 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                       search_keys,
                                       duplicate_find_option::FIND_FIRST,
                                       stream,
-                                      rmm::mr::get_current_device_resource());
+                                      cudf::get_current_device_resource_ref());
   return to_contains(std::move(key_indices), stream, mr);
 }
 

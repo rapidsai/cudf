@@ -20,13 +20,13 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/cast_functor.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cub/device/device_reduce.cuh>
 #include <thrust/for_each.h>
