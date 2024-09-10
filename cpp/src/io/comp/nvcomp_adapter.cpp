@@ -365,7 +365,7 @@ std::optional<std::string> is_compression_disabled_impl(compression_type compres
         return "nvCOMP use is disabled through the `LIBCUDF_NVCOMP_POLICY` environment variable.";
       }
       return std::nullopt;
-    default: CUDF_FAIL("Unsupported compression type");
+    default: return "Unsupported compression type";
   }
 }
 
