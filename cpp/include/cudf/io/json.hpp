@@ -773,7 +773,7 @@ class json_reader_options_builder {
   }
 
   /**
-   * @brief Set Whether leading zeros are allowed in numeric values. strict validation must
+   * @brief Set Whether leading zeros are allowed in numeric values. Strict validation must
    * be enabled for this to have any effect.
    *
    * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
