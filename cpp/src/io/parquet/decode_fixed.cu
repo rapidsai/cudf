@@ -610,20 +610,24 @@ if constexpr (enable_print_large_list) {
     if (within_batch) {
       int const index = rolling_index<state_buf::nz_buf_size>(value_count + t);
       rep_level = static_cast<int>(rep[index]);
-      def_level = static_cast<int>(def[index]);
+      if constexpr (nullable) {
+        def_level = static_cast<int>(def[index]);
+        end_depth = s->nesting_info[def_level].end_depth;
+      } else {
+        end_depth = max_depth;
+      }
 
       //computed by generate_depth_remappings()
       if constexpr (enable_print || enable_print_range_error) {
         if((rep_level < 0) || (rep_level > max_depth)) {
           printf("WHOA: rep level %d out of bounds %d!\n", rep_level, max_depth);
         }
-        if((def_level < 0)/* || (def_level > (max_depth + 1)) */ ) {
+        if(nullable && ((def_level < 0)/* || (def_level > (max_depth + 1)) */ )) {
           printf("WHOA: def level %d out of bounds (max_depth %d) (index %d)!\n", def_level, max_depth, index);
         }
       }
 
       start_depth = s->nesting_info[rep_level].start_depth;
-      end_depth   = s->nesting_info[def_level].end_depth;
       if constexpr (enable_print || enable_print_range_error) {
         if((start_depth < 0) || (start_depth > (max_depth + 1))) {
           printf("WHOA: start_depth %d out of bounds (max_depth %d) (index %d)!\n", start_depth, max_depth, index);
@@ -736,6 +740,7 @@ if constexpr (enable_print_large_list) {
       // however not all of them will necessarily represent a value at this nesting level. so
       // the validity bit for thread t might actually represent output value t-6. the correct
       // position for thread t's bit is thread_value_count. 
+
       static_assert(decode_block_size <= 8*sizeof(__uint128_t), 
         "This code relies on bits for block threads fitting within a uint128!");
 
@@ -944,7 +949,6 @@ if constexpr (enable_print_large_list) {
         //Index from rolling buffer of values (which doesn't include nulls) to final array (which includes gaps for nulls)        
         sb->nz_idx[output_index] = dst_pos;
       }
-//      __syncthreads();  // handle modification of ni.value_count from below TODO: TRY REMOVE
 
       // update stuff
       if (t == 0) {
@@ -1091,7 +1095,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
 
   bool const nullable             = is_nullable(s);
   bool const should_process_nulls = nullable && maybe_has_nulls(s);
-  bool const should_process_def_levels = should_process_nulls || has_lists_t;
 
   // shared buffer. all shared memory is suballocated out of here
   static constexpr auto align_test = false;
@@ -1119,7 +1122,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   rle_stream<level_t, decode_block_size_t, rolling_buf_size> def_decoder{def_runs};
   level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-  if (should_process_def_levels) {
+  if (should_process_nulls) {
     def_decoder.init(s->col.level_bits[level_type::DEFINITION],
                      s->abs_lvl_start[level_type::DEFINITION],
                      s->abs_lvl_end[level_type::DEFINITION],
@@ -1187,7 +1190,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
       page_idx, int(nullable), int(should_process_nulls), int(has_lists_t), int(has_dict_t), num_rows, s->page.num_input_values); }
   }
 
-
   auto print_nestings = [&](bool is_post){
     if constexpr (enable_print) {
       auto print_nesting_level = [&](const PageNestingDecodeInfo& ni) {
@@ -1216,19 +1218,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   while (s->error == 0 && processed_count < s->page.num_input_values) {
     int next_valid_count;
 
-    if constexpr (has_lists_t){
-      rep_decoder.decode_next(t);
-      if constexpr (!align_test) {
-        __syncthreads();
-      }
-    }
-
     // only need to process definition levels if this is a nullable column
     if (should_process_nulls) {
       processed_count += def_decoder.decode_next(t);
       __syncthreads();
 
       if constexpr (has_lists_t) {
+        rep_decoder.decode_next(t);
+        __syncthreads();
+
         int value_count = s->input_value_count;
         next_valid_count = gpuUpdateValidityAndRowIndicesLists<decode_block_size_t, true, level_t>(
           processed_count, s, sb, def, rep, t);
@@ -1254,13 +1252,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
     // nz_idx.  gpuDecodeFixedWidthValues would be the only work that happens.
     else {
       if constexpr (has_lists_t) {
-        // no nulls, but if we have a list we still need the definition levels
-        processed_count += def_decoder.decode_next(t);
+        processed_count += rep_decoder.decode_next(t);
         __syncthreads();
 
         next_valid_count =
           gpuUpdateValidityAndRowIndicesLists<decode_block_size_t, false, level_t>(
-            processed_count, s, sb, def, rep, t);
+            processed_count, s, sb, nullptr, rep, t);
       } else {
         processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
 
