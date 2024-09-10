@@ -454,11 +454,11 @@ std::optional<std::string> is_decompression_disabled(compression_type compressio
 size_t required_alignment(compression_type compression)
 {
   switch (compression) {
+    case compression_type::GZIP:
     case compression_type::DEFLATE: return nvcompDeflateRequiredAlignment;
     case compression_type::SNAPPY: return nvcompSnappyRequiredAlignment;
     case compression_type::ZSTD: return nvcompZstdRequiredAlignment;
     case compression_type::LZ4: return nvcompLZ4RequiredAlignment;
-    case compression_type::GZIP: return 1;  // TODO: check if this is correct
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
