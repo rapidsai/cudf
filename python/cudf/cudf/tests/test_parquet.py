@@ -4057,7 +4057,7 @@ def test_parquet_reader_mismatched_nullability():
     # Ensure that we can faithfully read the tables with mismatched nullabilities
     df1 = cudf.DataFrame(
         {
-            "ms": cudf.Series([12, 54, 1231], dtype="timedelta64[ms]"),
+            "timedelta": cudf.Series([12, 54, 1231], dtype="timedelta64[ms]"),
             "duration_list": list(
                 [
                     [
@@ -4082,15 +4082,13 @@ def test_parquet_reader_mismatched_nullability():
             "int32": cudf.Series([1234, 123, 4123], dtype="int32"),
             "list": list([[1, 2], [1, 2], [1, 2]]),
             "datetime": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
-            "map": cudf.Series(["cat", "dog", "lion"]).map(
-                {"cat": "kitten", "dog": "puppy", "lion": "cub"}
-            ),
+            "string": cudf.Series(["kitten", "puppy", "cub"]),
         }
     )
 
     df2 = cudf.DataFrame(
         {
-            "ms": cudf.Series([None, None, None], dtype="timedelta64[ms]"),
+            "timedelta": cudf.Series([None, None, None], dtype="timedelta64[ms]"),
             "duration_list": list(
                 [
                     [
@@ -4121,9 +4119,7 @@ def test_parquet_reader_mismatched_nullability():
             "datetime": cudf.Series(
                 [1234, None, 4123], dtype="datetime64[ms]"
             ),
-            "map": cudf.Series(["cat", "dog", "lion"]).map(
-                {"cat": "kitten", "dog": None, "lion": "cub"}
-            ),
+            "string": cudf.Series(["kitten", None, "cub"]),
         }
     )
 
