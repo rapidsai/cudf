@@ -146,6 +146,9 @@ PANDAS_CI="1" timeout 600m python -m pytest -p cudf.pandas \
 
 mv *.json ..
 ls -al
+ls -al tests/
 cd ..
-
+ls -al
+ls -al pandas-testing/
+ls -al pandas-testing/pandas-tests/
 rm -rf pandas-testing/pandas-tests/
