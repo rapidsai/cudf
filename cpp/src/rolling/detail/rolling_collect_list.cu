@@ -18,9 +18,9 @@
 
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/count.h>

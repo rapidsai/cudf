@@ -24,12 +24,12 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/copy.h>
@@ -104,7 +104,7 @@ std::unique_ptr<column> concatenate_and_gather_lists(host_span<column_view const
 {
   // Concatenate all columns into a single (temporary) column.
   auto const concatenated_col =
-    cudf::detail::concatenate(columns_to_concat, stream, rmm::mr::get_current_device_resource());
+    cudf::detail::concatenate(columns_to_concat, stream, cudf::get_current_device_resource_ref());
 
   // The number of input columns is known to be non-zero thus it's safe to call `front()` here.
   auto const num_cols       = columns_to_concat.size();

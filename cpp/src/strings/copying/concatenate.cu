@@ -24,11 +24,11 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/advance.h>
 #include <thrust/binary_search.h>
@@ -87,7 +87,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
     });
   thrust::inclusive_scan(thrust::host, offset_it, input_offsets.end(), offset_it);
   auto d_input_offsets = cudf::detail::make_device_uvector_async(
-    input_offsets, stream, rmm::mr::get_current_device_resource());
+    input_offsets, stream, cudf::get_current_device_resource_ref());
   auto const output_size = input_offsets.back();
 
   // Compute the partition offsets and size of chars column
