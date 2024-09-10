@@ -1646,11 +1646,12 @@ Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource(JNIEnv* env,
         .normalize_whitespace(static_cast<bool>(normalize_whitespace))
         .mixed_types_as_string(mixed_types_as_string)
         .strict_validation(strict_validation)
-        .numeric_leading_zeros(allow_leading_zeros)
-        .nonnumeric_numbers(allow_nonnumeric_numbers)
-        .unquoted_control_chars(allow_unquoted_control)
         .keep_quotes(keep_quotes);
-
+    if (strict_validation) {
+      opt.numeric_leading_zeros(allow_leading_zeros)
+        .nonnumeric_numbers(allow_nonnumeric_numbers)
+        .unquoted_control_chars(allow_unquoted_control);
+    }
     auto result =
       std::make_unique<cudf::io::table_with_metadata>(cudf::io::read_json(opts.build()));
 
@@ -1697,11 +1698,13 @@ Java_ai_rapids_cudf_Table_readAndInferJSON(JNIEnv* env,
         .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
         .normalize_whitespace(static_cast<bool>(normalize_whitespace))
         .strict_validation(strict_validation)
-        .numeric_leading_zeros(allow_leading_zeros)
-        .nonnumeric_numbers(allow_nonnumeric_numbers)
-        .unquoted_control_chars(allow_unquoted_control)
         .mixed_types_as_string(mixed_types_as_string)
         .keep_quotes(keep_quotes);
+    if (strict_validation) {
+      opt.numeric_leading_zeros(allow_leading_zeros)
+        .nonnumeric_numbers(allow_nonnumeric_numbers)
+        .unquoted_control_chars(allow_unquoted_control);
+    }
 
     auto result =
       std::make_unique<cudf::io::table_with_metadata>(cudf::io::read_json(opts.build()));
@@ -1845,10 +1848,12 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
         .normalize_whitespace(static_cast<bool>(normalize_whitespace))
         .mixed_types_as_string(mixed_types_as_string)
         .strict_validation(strict_validation)
-        .numeric_leading_zeros(allow_leading_zeros)
-        .nonnumeric_numbers(allow_nonnumeric_numbers)
-        .unquoted_control_chars(allow_unquoted_control)
         .keep_quotes(keep_quotes);
+    if (strict_validation) {
+      opt.numeric_leading_zeros(allow_leading_zeros)
+        .nonnumeric_numbers(allow_nonnumeric_numbers)
+        .unquoted_control_chars(allow_unquoted_control);
+    }
 
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
@@ -1952,10 +1957,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
         .normalize_whitespace(static_cast<bool>(normalize_whitespace))
         .mixed_types_as_string(mixed_types_as_string)
         .strict_validation(strict_validation)
-        .numeric_leading_zeros(allow_leading_zeros)
-        .nonnumeric_numbers(allow_nonnumeric_numbers)
-        .unquoted_control_chars(allow_unquoted_control)
         .keep_quotes(keep_quotes);
+    if (strict_validation) {
+      opt.numeric_leading_zeros(allow_leading_zeros)
+        .nonnumeric_numbers(allow_nonnumeric_numbers)
+        .unquoted_control_chars(allow_unquoted_control);
+    }
 
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
