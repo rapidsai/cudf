@@ -553,6 +553,11 @@ void make_device_json_column(device_span<SymbolT const> input,
                    });
   }
 
+  /*
+  auto h_input = cudf::detail::make_host_vector_sync(input, stream);
+  print_tree(h_input, tree, stream);
+  */
+
   auto to_json_col_type = [](auto category) {
     switch (category) {
       case NC_STRUCT: return json_col_t::StructColumn;
@@ -626,6 +631,8 @@ void make_device_json_column(device_span<SymbolT const> input,
   auto ignore_vals = cudf::detail::make_host_vector<uint8_t>(num_columns, stream);
   std::vector<uint8_t> is_mixed_type_column(num_columns, 0);
   std::vector<uint8_t> is_pruned(num_columns, 0);
+  // for columns that are not mixed type but have been forced as string
+  std::vector<uint8_t> forced_as_string_column(num_columns, 0); 
   columns.try_emplace(parent_node_sentinel, std::ref(root));
 
   std::function<void(NodeIndexT, device_json_column&)> remove_child_columns =
@@ -696,11 +703,13 @@ void make_device_json_column(device_span<SymbolT const> input,
     // Struct, List, String, Value
     auto [name, parent_col_id] = name_and_parent_index(this_col_id);
 
-    // if parent is mixed type column or this column is pruned, ignore this column.
+    // if parent is mixed type column or this column is pruned or if parent 
+    // has been forced as string, ignore this column.
     if (parent_col_id != parent_node_sentinel &&
-        (is_mixed_type_column[parent_col_id] || is_pruned[this_col_id])) {
+        (is_mixed_type_column[parent_col_id] || is_pruned[this_col_id]) || forced_as_string_column[parent_col_id]) {
       ignore_vals[this_col_id] = 1;
       if (is_mixed_type_column[parent_col_id]) { is_mixed_type_column[this_col_id] = 1; }
+      if (forced_as_string_column[parent_col_id]) { forced_as_string_column[this_col_id] = 1; }
       continue;
     }
 
@@ -766,6 +775,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     }
 
     auto this_column_category = column_categories[this_col_id];
+    /*
     if (is_enabled_mixed_types_as_string) {
       // get path of this column, check if it is a struct/list forced as string, and enforce it
       auto const nt                             = tree_path.get_path(this_col_id);
@@ -777,11 +787,28 @@ void make_device_json_column(device_span<SymbolT const> input,
         this_column_category              = NC_STR;
       }
     }
+    */
+    // get path of this column, check if it is a struct/list forced as string, and enforce it
+    auto const nt                             = tree_path.get_path(this_col_id);
+    std::optional<data_type> const user_dtype = get_path_data_type(nt, options);
+    if ((column_categories[this_col_id] == NC_STRUCT or
+         column_categories[this_col_id] == NC_LIST) and
+        user_dtype.has_value() and user_dtype.value().id() == type_id::STRING) {
+      this_column_category              = NC_STR;
+    }
 
     CUDF_EXPECTS(parent_col.child_columns.count(name) == 0, "duplicate column name: " + name);
     // move into parent
     device_json_column col(stream, mr);
     initialize_json_columns(this_col_id, col, this_column_category);
+    if ((column_categories[this_col_id] == NC_STRUCT or
+         column_categories[this_col_id] == NC_LIST) and
+        user_dtype.has_value() and user_dtype.value().id() == type_id::STRING) {
+      //std::printf("this_col_id forced as string = %d\n", this_col_id);
+      col.forced_as_string_column = true;
+      forced_as_string_column[this_col_id] = 1;
+    }
+
     auto inserted = parent_col.child_columns.try_emplace(name, std::move(col)).second;
     CUDF_EXPECTS(inserted, "child column insertion failed, duplicate column name in the parent");
     if (not replaced) parent_col.column_order.push_back(name);
@@ -809,6 +836,24 @@ void make_device_json_column(device_span<SymbolT const> input,
                     cudaMemcpyDefault,
                     stream.value());
   }
+
+  // ignore all children of columns forced as string
+  for (auto const this_col_id : unique_col_ids) {
+    auto parent_col_id = column_parent_ids[this_col_id];
+    if (parent_col_id != parent_node_sentinel and forced_as_string_column[parent_col_id] == 1) {
+      forced_as_string_column[this_col_id] = 1;
+      ignore_vals[this_col_id]          = 1;
+    }
+    // Convert only mixed type columns as string (so to copy), but not its children
+    if (parent_col_id != parent_node_sentinel and forced_as_string_column[parent_col_id] == 0 and
+        forced_as_string_column[this_col_id] == 1)
+      column_categories[this_col_id] = NC_STR;
+  }
+  cudaMemcpyAsync(d_column_tree.node_categories.begin(),
+                  column_categories.data(),
+                  column_categories.size() * sizeof(column_categories[0]),
+                  cudaMemcpyDefault,
+                  stream.value());
 
   // restore unique_col_ids order
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
