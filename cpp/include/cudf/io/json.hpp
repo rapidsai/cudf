@@ -790,7 +790,7 @@ class json_reader_options_builder {
   /**
    * @brief Set whether specific unquoted number values are valid JSON. The values are NaN,
    * +INF, -INF, +Infinity, Infinity, and -Infinity.
-   * strict validation must be enabled for this to have any effect.
+   * Strict validation must be enabled for this to have any effect.
    *
    * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
    *
