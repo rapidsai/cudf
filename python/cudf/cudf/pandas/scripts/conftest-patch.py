@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import contextlib
+import json
 import multiprocessing
 import os
 import sys
@@ -87,10 +88,9 @@ def pytest_runtest_teardown(item, nextitem):
     ):
         # Write the function call counts to a file
         worker_id = os.getenv("PYTEST_XDIST_WORKER", "master")
-        output_file = f'function_call_counts_{os.path.basename(item.nodeid.split("::")[0])}_{worker_id}.txt'
+        output_file = f'function_call_counts_{os.path.basename(item.nodeid.split("::")[0])}_{worker_id}.json'
         with open(output_file, "w") as f:
-            for func, count in function_call_counts.items():
-                f.write(f"{func}: {count}\n")
+            json.dump(function_call_counts, f, indent=4)
         print(f"Function call counts have been written to {output_file}")
 
 
@@ -107,10 +107,9 @@ def pytest_unconfigure(config):
     if hasattr(config, "workerinput"):
         # Running in xdist worker
         worker_id = config.workerinput["workerid"]
-        output_file = f"function_call_counts_worker_{worker_id}.txt"
+        output_file = f"function_call_counts_worker_{worker_id}.json"
         with open(output_file, "w") as f:
-            for func, count in function_call_counts.items():
-                f.write(f"{func}: {count}\n")
+            json.dump(function_call_counts, f, indent=4)
         print(f"Function call counts have been written to {output_file}")
 
 
