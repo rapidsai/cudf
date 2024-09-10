@@ -56,6 +56,26 @@ std::size_t constexpr STREAM_POOL_SIZE = 32;
   } while (0)
 #endif
 
+#ifdef NDEBUG
+#define CUDF_ASSERT_CUDA_SUCCESS(_call) \
+  do {                                  \
+    (_call);                            \
+  } while (0);
+#else
+#define CUDF_ASSERT_CUDA_DRIVER_SUCCESS(_call)                                                \
+  do {                                                                                        \
+    CUresult const status__ = (_call);                                                        \
+    if (status__ != CUresult::CUDA_SUCCESS) {                                                 \
+      const char* err_str{};                                                                  \
+      cuGetErrorString(status__, &err_str);                                                   \
+      const char* err_name{};                                                                 \
+      cuGetErrorName(status__, &err_name);                                                    \
+      std::cerr << "CUDA driver error detected. " << err_name << " " << err_str << std::endl; \
+    }                                                                                         \
+    assert(status__ == CUresult::CUDA_SUCCESS);                                               \
+  } while (0)
+#endif
+
 /**
  * @brief Implementation of `cuda_stream_pool` that wraps an `rmm::cuda_stram_pool`.
  */
@@ -129,22 +149,23 @@ class cuda_context_checker {
  public:
   static bool is_primary_context_active()
   {
-    // TODO: Handle driver API error code
     CUcontext current_ctx{};
     CUdevice device_handle{};
 
-    cuCtxGetCurrent(&current_ctx);
+    CUDF_ASSERT_CUDA_DRIVER_SUCCESS(cuCtxGetCurrent(&current_ctx));
     if (current_ctx == nullptr) {
-      device_handle = 0;
+      int device_idx{0};
+      CUDF_ASSERT_CUDA_DRIVER_SUCCESS(cuDeviceGet(&device_handle, device_idx));
     } else {
-      cuCtxGetDevice(&device_handle);
+      CUDF_ASSERT_CUDA_DRIVER_SUCCESS(cuCtxGetDevice(&device_handle));
     }
 
     // Whether the current context, if it exists, is a primary or user-created context,
     // here we use the primary context to determine if cudaDeviceReset() has been called.
+    [[maybe_unused]] unsigned int flags{};
     int active_state{};
-    cuDevicePrimaryCtxGetState(
-      device_handle, nullptr /* do not query context flags */, &active_state);
+    CUDF_ASSERT_CUDA_DRIVER_SUCCESS(
+      cuDevicePrimaryCtxGetState(device_handle, &flags, &active_state));
 
     return static_cast<bool>(active_state);
   }
