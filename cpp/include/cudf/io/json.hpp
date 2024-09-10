@@ -133,10 +133,11 @@ class json_reader_options {
 
   // Validation checks for spark
   // Should the json validation be strict or not
+  // Note: strict validation enforces the JSON specification https://www.json.org/json-en.html
   bool _strict_validation = false;
   // Allow leading zeros for numeric values.
   bool _allow_numeric_leading_zeros = true;
-  // Allow nonnumeric numbers. NaN/Inf
+  // Allow non-numeric numbers: NaN, +INF, -INF, +Infinity, Infinity, -Infinity
   bool _allow_nonnumeric_numbers = true;
   // Allow unquoted control characters
   bool _allow_unquoted_control_chars = true;
@@ -321,10 +322,9 @@ class json_reader_options {
   [[nodiscard]] bool is_strict_validation() const { return _strict_validation; }
 
   /**
-   * @brief Whether leading zeros are allowed in numeric values. strict validation
-   * must be enabled for this to work.
+   * @brief Whether leading zeros are allowed in numeric values.
    *
-   * @note: strict_validation must be enabled for this to work.
+   * @note: This validation is enforced only if strict validation is enabled.
    *
    * @return true if leading zeros are allowed in numeric values
    */
@@ -335,9 +335,9 @@ class json_reader_options {
 
   /**
    * @brief Whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity, Infinity,
-   * and -Infinity. strict validation must be enabled for this to work.
+   * and -Infinity.
    *
-   * @note: strict_validation must be enabled for this to work.
+   * @note: This validation is enforced only if strict validation is enabled.
    *
    * @return true if leading zeros are allowed in numeric values
    */
@@ -345,9 +345,9 @@ class json_reader_options {
 
   /**
    * @brief Whether in a quoted string should characters greater than or equal to 0 and less than 32
-   * be allowed without some form of escaping. Strict validation must be enabled for this to work.
+   * be allowed without some form of escaping.
    *
-   * @note: strict_validation must be enabled for this to work.
+   * @note: This validation is enforced only if strict validation is enabled.
    *
    * @return true if unquoted control chars are allowed.
    */
