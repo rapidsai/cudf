@@ -4088,7 +4088,9 @@ def test_parquet_reader_mismatched_nullability():
 
     df2 = cudf.DataFrame(
         {
-            "timedelta": cudf.Series([None, None, None], dtype="timedelta64[ms]"),
+            "timedelta": cudf.Series(
+                [None, None, None], dtype="timedelta64[ms]"
+            ),
             "duration_list": list(
                 [
                     [
