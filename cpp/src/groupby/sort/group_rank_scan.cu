@@ -23,11 +23,11 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/functional.h>
 #include <thrust/iterator/reverse_iterator.h>
@@ -226,13 +226,13 @@ std::unique_ptr<column> average_rank_scan(column_view const& grouped_values,
                                 group_labels,
                                 group_offsets,
                                 stream,
-                                rmm::mr::get_current_device_resource());
+                                cudf::get_current_device_resource_ref());
   auto min_rank = min_rank_scan(grouped_values,
                                 value_order,
                                 group_labels,
                                 group_offsets,
                                 stream,
-                                rmm::mr::get_current_device_resource());
+                                cudf::get_current_device_resource_ref());
   auto ranks    = make_fixed_width_column(
     data_type{type_to_id<double>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
