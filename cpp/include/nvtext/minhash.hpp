@@ -73,7 +73,7 @@ std::unique_ptr<cudf::column> minhash(
  *
  * @throw std::invalid_argument if the width < 2
  * @throw std::invalid_argument if seeds is empty
- * @throw std::overflow_error if `seeds * input.size()` exceeds the column size limit
+ * @throw std::overflow_error if `seeds.size() * input.size()` exceeds the column size limit
  *
  * @param input Strings column to compute minhash
  * @param seeds Seed values used for the hash algorithm
@@ -134,7 +134,7 @@ std::unique_ptr<cudf::column> minhash64(
  *
  * @throw std::invalid_argument if the width < 2
  * @throw std::invalid_argument if seeds is empty
- * @throw std::overflow_error if `seeds * input.size()` exceeds the column size limit
+ * @throw std::overflow_error if `seeds.size() * input.size()` exceeds the column size limit
  *
  * @param input Strings column to compute minhash
  * @param seeds Seed values used for the hash algorithm
@@ -165,7 +165,7 @@ std::unique_ptr<cudf::column> minhash64(
  * Any null row entries result in corresponding null output rows.
  *
  * @throw std::invalid_argument if seeds is empty
- * @throw std::overflow_error if `seeds * input.size()` exceeds the column size limit
+ * @throw std::overflow_error if `seeds.size() * input.size()` exceeds the column size limit
  *
  * @param input Lists column of strings to compute minhash
  * @param seeds Seed values used for the hash algorithm
@@ -188,12 +188,13 @@ std::unique_ptr<cudf::column> word_minhash(
  * input row. The order of the elements in each row match the order of
  * the seeds provided in the `seeds` parameter.
  *
- * This function uses MurmurHash3_x64_128 for the hash algorithm.
+ * This function uses MurmurHash3_x64_128 for the hash algorithm though
+ * only the first 64-bits of the hash are used in computing the output.
  *
  * Any null row entries result in corresponding null output rows.
  *
  * @throw std::invalid_argument if seeds is empty
- * @throw std::overflow_error if `seeds * input.size()` exceeds the column size limit
+ * @throw std::overflow_error if `seeds.size() * input.size()` exceeds the column size limit
  *
  * @param input Lists column of strings to compute minhash
  * @param seeds Seed values used for the hash algorithm

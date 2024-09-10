@@ -40,8 +40,9 @@ static void bench_word_minhash(nvbench::state& state)
     create_random_table({cudf::type_id::STRING}, row_count{num_rows}, strings_profile);
 
   auto const num_offsets = (num_rows / row_width) + 1;
-  auto offsets           = cudf::sequence(
-    num_offsets, cudf::numeric_scalar<int32_t>(0), cudf::numeric_scalar<int32_t>(row_width));
+  auto offsets           = cudf::sequence(num_offsets,
+                                cudf::numeric_scalar<cudf::size_type>(0),
+                                cudf::numeric_scalar<cudf::size_type>(row_width));
 
   auto source = cudf::make_lists_column(num_offsets - 1,
                                         std::move(offsets),
