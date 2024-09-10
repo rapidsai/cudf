@@ -9,7 +9,20 @@ Dask cuDF (a.k.a. dask-cudf or `dask_cudf`) is an extension library for [Dask Da
 
 Please visit [the official documentation page](https://docs.rapids.ai/api/dask-cudf/stable/) for detailed information about using Dask cuDF.
 
-### Quick-start Example
+## Installation
+
+See the [RAPIDS install page](https://docs.rapids.ai/install) for the most up-to-date information and commands for installing Dask cuDF and other RAPIDS packages.
+
+## Resources
+
+- [Dask cuDF documentation](https://docs.rapids.ai/api/dask-cudf/stable/)
+- [cuDF documentation](https://docs.rapids.ai/api/cudf/stable/)
+- [10 Minutes to cuDF and Dask cuDF](https://docs.rapids.ai/api/cudf/stable/user_guide/10min/)
+- [Dask CUDA documentation](https://docs.rapids.ai/api/dask-cuda/stable/)
+- [Deployment](https://docs.rapids.ai/deployment/stable/)
+- [RAPIDS Community](https://rapids.ai/learn-more/#get-involved): Get help, contribute, and collaborate.
+
+### Quick-start example
 
 A very common Dask cuDF use case is single-node multi-GPU data processing. These workflows typically follow the pattern described in the example below:
 
@@ -48,16 +61,3 @@ if __name__ == "__main__":
 If you do not have multiple GPUs available, using `LocalCUDACluster` is optional. However, it is still a good idea to [enable cudf spilling](https://docs.rapids.ai/api/cudf/stable/developer_guide/library_design/#spilling-to-host-memory).
 
 If you wish to scale across multiple nodes, you will need to use a different mechanism to deploy your Dask CUDA workers. Please see [the RAPIDS deployment documentation](https://docs.rapids.ai/deployment/stable/) for more instructions.
-
-## Installation
-
-See the [RAPIDS install page](https://docs.rapids.ai/install) for the most up-to-date information and commands for installing Dask cuDF and other RAPIDS packages.
-
-## Resources
-
-- [Dask cuDF documentation](https://docs.rapids.ai/api/dask-cudf/stable/)
-- [cuDF documentation](https://docs.rapids.ai/api/cudf/stable/)
-- [10 Minutes to cuDF and Dask cuDF](https://docs.rapids.ai/api/cudf/stable/user_guide/10min/)
-- [Dask CUDA documentation](https://docs.rapids.ai/api/dask-cuda/stable/)
-- [Deployment](https://docs.rapids.ai/deployment/stable/)
-- [RAPIDS Community](https://rapids.ai/learn-more/#get-involved): Get help, contribute, and collaborate.
