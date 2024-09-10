@@ -2784,9 +2784,9 @@ TEST_F(JsonReaderTest, JsonDtypeSchema)
     {"a": 1, "b": {"0": "lolol  "}, "c": true}
     )";
 
-
-  std::map<std::string, cudf::io::schema_element> dtype_schema{
-    {"c", {data_type{type_id::STRING}}}, {"b", {data_type{type_id::STRING}}}, {"a", {dtype<double>()}}};
+  std::map<std::string, cudf::io::schema_element> dtype_schema{{"c", {data_type{type_id::STRING}}},
+                                                               {"b", {data_type{type_id::STRING}}},
+                                                               {"a", {dtype<double>()}}};
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
       .dtypes(dtype_schema)
@@ -2806,15 +2806,17 @@ TEST_F(JsonReaderTest, JsonDtypeSchema)
   EXPECT_EQ(result.metadata.schema_info[1].name, "b");
   EXPECT_EQ(result.metadata.schema_info[2].name, "c");
 
-  //cudf::column::contents contents = result.tbl->get_column(1).release();
+  // cudf::column::contents contents = result.tbl->get_column(1).release();
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), float64_wrapper{{1, 1, 1}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), cudf::test::strings_column_wrapper({
-    "{\"0\": \"abc\", \"1\": [\"a\", \"b\"]}", 
-    "{\"0\": \"abc\"          }",
-    "{\"0\": \"lolol  \"}"
-        }), cudf::test::debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(1),
+    cudf::test::strings_column_wrapper({"{\"0\": \"abc\", \"1\": [\"a\", \"b\"]}",
+                                        "{\"0\": \"abc\"          }",
+                                        "{\"0\": \"lolol  \"}"}),
+    cudf::test::debug_output_level::ALL_ERRORS);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
-                                 cudf::test::strings_column_wrapper({"true", "false", "true"}), cudf::test::debug_output_level::ALL_ERRORS);
+                                 cudf::test::strings_column_wrapper({"true", "false", "true"}),
+                                 cudf::test::debug_output_level::ALL_ERRORS);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
