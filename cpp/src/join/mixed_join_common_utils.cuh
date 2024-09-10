@@ -179,14 +179,14 @@ struct double_row_equality_comparator {
 };
 
 // A CUDA Cooperative Group of 4 threads for the hash set.
-auto constexpr hash_set_cg_size = 4;
+auto constexpr DEFAULT_MIXED_JOIN_CG_SIZE = 4;
 
 // The hash set type used by mixed_semi_join with the build_table.
 using hash_set_type = cuco::static_set<size_type,
                                        cuco::extent<size_t>,
                                        cuda::thread_scope_device,
                                        double_row_equality_comparator,
-                                       cuco::linear_probing<hash_set_cg_size, row_hash>,
+                                       cuco::linear_probing<DEFAULT_MIXED_JOIN_CG_SIZE, row_hash>,
                                        cudf::detail::cuco_allocator<char>,
                                        cuco::storage<1>>;
 

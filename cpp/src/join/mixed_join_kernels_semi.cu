@@ -56,7 +56,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
     reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
-    &intermediate_storage[(threadIdx.x / cg_size) * device_expression_data.num_intermediates];
+    &intermediate_storage[tile.meta_group_rank() * device_expression_data.num_intermediates];
 
   cudf::size_type const outer_num_rows  = left_table.num_rows();
   cudf::size_type const outer_row_index = (threadIdx.x + blockIdx.x * block_size) / cg_size;
