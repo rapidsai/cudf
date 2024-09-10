@@ -16,9 +16,9 @@
 #pragma once
 
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace CUDF_EXPORT cudf {
 namespace lists::detail {

@@ -20,6 +20,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <vector>
 
@@ -37,7 +39,7 @@ std::unique_ptr<cudf::column> add_calendrical_days(
   cudf::column_view const& timestamp_days,
   cudf::column_view const& days,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Perform a left join operation between two tables
@@ -56,7 +58,7 @@ std::unique_ptr<cudf::table> perform_left_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Generate the `p_retailprice` column of the `part` table
@@ -68,7 +70,7 @@ std::unique_ptr<cudf::table> perform_left_join(
 [[nodiscard]] std::unique_ptr<cudf::column> calculate_p_retailprice(
   cudf::column_view const& p_partkey,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Generate the `l_suppkey` column of the `lineitem` table
@@ -84,7 +86,7 @@ std::unique_ptr<cudf::table> perform_left_join(
   cudf::size_type scale_factor,
   cudf::size_type num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Generate the `ps_suppkey` column of the `partsupp` table
@@ -100,7 +102,7 @@ std::unique_ptr<cudf::table> perform_left_join(
   cudf::size_type scale_factor,
   cudf::size_type num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 /**
  * @brief Calculate the cardinality of the `lineitem` table
  *
@@ -111,7 +113,7 @@ std::unique_ptr<cudf::table> perform_left_join(
 [[nodiscard]] cudf::size_type calculate_l_cardinality(
   cudf::column_view const& o_rep_freqs,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 /**
  * @brief Calculate the charge column for the `lineitem` table
  *
@@ -126,7 +128,7 @@ std::unique_ptr<cudf::table> perform_left_join(
   cudf::column_view const& tax,
   cudf::column_view const& discount,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Generate a column of random addresses according to TPC-H specification clause 4.2.2.7
@@ -138,7 +140,7 @@ std::unique_ptr<cudf::table> perform_left_join(
 [[nodiscard]] std::unique_ptr<cudf::column> generate_address_column(
   cudf::size_type num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Generate a phone number column according to TPC-H specification clause 4.2.2.9
@@ -150,6 +152,6 @@ std::unique_ptr<cudf::table> perform_left_join(
 [[nodiscard]] std::unique_ptr<cudf::column> generate_phone_column(
   cudf::size_type num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 }  // namespace cudf::datagen

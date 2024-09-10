@@ -21,9 +21,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_scalar.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/std/optional>
 #include <thrust/iterator/iterator_traits.h>
