@@ -2,10 +2,9 @@
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport attributes as cpp_attributes
-
-from .. import Column
 
 
 cpdef Column count_characters(Column source_strings):

@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from .. import Column
+from pylibcudf.column cimport Column
 
 
 cpdef Column count_characters(Column source_strings)
