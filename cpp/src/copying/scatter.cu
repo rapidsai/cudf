@@ -33,10 +33,10 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/count.h>
@@ -198,7 +198,7 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
                                    mr);
     auto dict_view    = dictionary_column_view(dict_target->view());
     auto scalar_index = dictionary::detail::get_index(
-      dict_view, source.get(), stream, rmm::mr::get_current_device_resource());
+      dict_view, source.get(), stream, cudf::get_current_device_resource_ref());
     auto scalar_iter = thrust::make_permutation_iterator(
       indexalator_factory::make_input_iterator(*scalar_index), thrust::make_constant_iterator(0));
     auto new_indices = std::make_unique<column>(dict_view.get_indices_annotated(), stream, mr);
@@ -271,7 +271,7 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
     auto scatter_functor   = column_scalar_scatterer<decltype(scatter_iter)>{};
     auto fields_iter_begin = make_counting_transform_iterator(0, [&](auto const& i) {
       auto row_slr = detail::get_element(
-        typed_s->view().column(i), 0, stream, rmm::mr::get_current_device_resource());
+        typed_s->view().column(i), 0, stream, cudf::get_current_device_resource_ref());
       return type_dispatcher<dispatch_storage_type>(row_slr->type(),
                                                     scatter_functor,
                                                     *row_slr,
@@ -416,7 +416,7 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
 
   // The scatter map is actually a table with only one column, which is scatter map.
   auto scatter_map = detail::apply_boolean_mask(
-    table_view{{indices->view()}}, boolean_mask, stream, rmm::mr::get_current_device_resource());
+    table_view{{indices->view()}}, boolean_mask, stream, cudf::get_current_device_resource_ref());
   auto output_table = detail::scatter(
     table_view{{input}}, scatter_map->get_column(0).view(), table_view{{target}}, stream, mr);
 
