@@ -805,7 +805,7 @@ class json_reader_options_builder {
 
   /**
    * @brief Set whether chars >= 0 and < 32 are allowed in a quoted string without
-   * some form of escaping. strict validation must be enabled for this to have any effect.
+   * some form of escaping. Strict validation must be enabled for this to have any effect.
    *
    * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
    *
