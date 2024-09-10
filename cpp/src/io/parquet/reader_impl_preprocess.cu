@@ -47,6 +47,40 @@
 #include <limits>
 #include <numeric>
 
+class ThreadRange {
+ public:
+  static void Push(const char* name,
+                   nvtxDomainHandle_t domain = nullptr,
+                   uint32_t category         = 0,
+                   uint32_t color            = 0xff1abc9c);
+
+  static void Pop(nvtxDomainHandle_t domain = nullptr);
+};
+
+void ThreadRange::Push(const char* name,
+                       nvtxDomainHandle_t domain,
+                       uint32_t category,
+                       uint32_t color)
+{
+  nvtxEventAttributes_t eventAttrib;
+  std::memset(&eventAttrib, 0, NVTX_EVENT_ATTRIB_STRUCT_SIZE);
+  eventAttrib.version       = NVTX_VERSION;
+  eventAttrib.category      = category;
+  eventAttrib.size          = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+  eventAttrib.colorType     = nvtxColorType_t::NVTX_COLOR_ARGB;
+  eventAttrib.color         = color;
+  eventAttrib.messageType   = nvtxMessageType_t::NVTX_MESSAGE_TYPE_ASCII;
+  eventAttrib.message.ascii = name;
+  nvtxDomainRangePushEx(domain, &eventAttrib);
+}
+
+void ThreadRange::Pop(nvtxDomainHandle_t domain) { nvtxDomainRangePop(domain); }
+
+#define BIU_RANGE_PUSH(RANGE_NAME) \
+  ThreadRange::Push(RANGE_NAME, ::nvtx3::domain::get<cudf::libcudf_domain>());
+
+#define BIU_RANGE_POP() ThreadRange::Pop(::nvtx3::domain::get<cudf::libcudf_domain>());
+
 namespace cudf::io::parquet::detail {
 namespace {
 
@@ -278,8 +312,15 @@ void generate_depth_remappings(
     }
   }
   auto sync_fn = [](decltype(read_tasks) read_tasks) {
-    for (auto& task : read_tasks) {
-      task.wait();
+    std::vector<std::thread> threads;
+    for (std::size_t i = 0; i < read_tasks.size(); ++i) {
+      BIU_RANGE_PUSH("sync_fn");
+      threads.emplace_back([](std::future<size_t>& task) { task.wait(); }, std::ref(read_tasks[i]));
+    }
+
+    for (auto&& thread : threads) {
+      thread.join();
+      BIU_RANGE_POP();
     }
   };
   return std::async(std::launch::deferred, sync_fn, std::move(read_tasks));
@@ -296,6 +337,8 @@ void generate_depth_remappings(
 [[nodiscard]] size_t count_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
                                         rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   size_t total_pages = 0;
 
   kernel_error error_code(stream);
@@ -326,6 +369,8 @@ void generate_depth_remappings(
 [[nodiscard]] size_t count_page_headers_with_pgidx(
   cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks, rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   size_t total_pages = 0;
   for (auto& chunk : chunks) {
     CUDF_EXPECTS(chunk.h_chunk_info != nullptr, "Expected non-null column info struct");
@@ -971,6 +1016,10 @@ void reader::impl::allocate_level_decode_space()
 
 std::pair<bool, std::future<void>> reader::impl::read_column_chunks()
 {
+  CUDF_FUNC_RANGE();
+
+  BIU_RANGE_PUSH("read_column_chunks::1");
+
   auto const& row_groups_info = _pass_itm_data->row_groups;
 
   auto& raw_page_data = _pass_itm_data->raw_page_data;
@@ -1021,6 +1070,9 @@ std::pair<bool, std::future<void>> reader::impl::read_column_chunks()
     }
   }
 
+  BIU_RANGE_POP();
+  BIU_RANGE_PUSH("read_column_chunks::2");
+
   // Read compressed chunk data to device memory
   return {total_decompressed_size > 0,
           read_column_chunks_async(_sources,
@@ -1035,12 +1087,16 @@ std::pair<bool, std::future<void>> reader::impl::read_column_chunks()
 
 void reader::impl::read_compressed_data()
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass = *_pass_itm_data;
 
   // This function should never be called if `num_rows == 0`.
   CUDF_EXPECTS(_pass_itm_data->num_rows > 0, "Number of reading rows must not be zero.");
 
   auto& chunks = pass.chunks;
+
+  BIU_RANGE_PUSH("read_compressed_data::read_chunks_tasks wait");
 
   auto const [has_compressed_data, read_chunks_tasks] = read_column_chunks();
   pass.has_compressed_data                            = has_compressed_data;
@@ -1268,6 +1324,8 @@ struct update_pass_num_rows {
 
 void reader::impl::preprocess_file(read_mode mode)
 {
+  CUDF_FUNC_RANGE();
+
   CUDF_EXPECTS(!_file_preprocessed, "Attempted to preprocess file more than once");
 
   // if filter is not empty, then create output types as vector and pass for filtering.
