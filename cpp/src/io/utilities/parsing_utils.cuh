@@ -86,6 +86,7 @@ struct parse_options {
   bool dayfirst;
   bool skipblanklines;
   bool normalize_whitespace;
+  bool mixed_types_as_string;
   cudf::detail::optional_trie trie_true;
   cudf::detail::optional_trie trie_false;
   cudf::detail::optional_trie trie_na;

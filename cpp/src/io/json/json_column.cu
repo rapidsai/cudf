@@ -1016,6 +1016,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       data_type target_type{};
       std::unique_ptr<column> col{};
       if (options.normalize_whitespace && json_col.forced_as_string_column) {
+        CUDF_EXPECTS(prune_columns || options.mixed_types_as_string,
+                     "Whitespace normalization of nested columns requested as string requires "
+                     "either prune_columns or mixed_types_as_string to be enabled");
         auto [normalized_d_input, col_lengths, col_offsets] =
           cudf::io::json::detail::mixed_type_column_ws_normalization(
             d_input, json_col.string_lengths, json_col.string_offsets, stream, mr);
@@ -1164,11 +1167,12 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     const auto [tokens_gpu, token_indices_gpu] =
       get_token_stream(d_input, options, stream, cudf::get_current_device_resource_ref());
     // gpu tree generation
-    return get_tree_representation(tokens_gpu,
-                                   token_indices_gpu,
-                                   options.is_enabled_mixed_types_as_string() || options.is_enabled_prune_columns(),
-                                   stream,
-                                   cudf::get_current_device_resource_ref());
+    return get_tree_representation(
+      tokens_gpu,
+      token_indices_gpu,
+      options.is_enabled_mixed_types_as_string() || options.is_enabled_prune_columns(),
+      stream,
+      cudf::get_current_device_resource_ref());
   }();  // IILE used to free memory of token data.
 #ifdef NJP_DEBUG_PRINT
   auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
