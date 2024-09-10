@@ -151,20 +151,16 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                                                             preprocessed_build_condtional};
   auto const equality_build_conditional =
     row_comparator_conditional_build.equal_to<false>(build_nulls, compare_nulls);
-  double_row_equality_comparator equality_build{equality_build_equality,
-                                                equality_build_conditional};
-
-  auto const build_num_rows = compute_hash_table_size(build.num_rows());
 
   hash_set_type row_set{
-    build_num_rows,
+    {compute_hash_table_size(build.num_rows())},
     cuco::empty_key{JoinNoneValue},
-    equality_build,
+    {equality_build_equality, equality_build_conditional},
     {row_hash_build.device_hasher(build_nulls)},
     {},
     {},
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
+    {stream.value()}};
 
   auto iter = thrust::make_counting_iterator(0);
 
@@ -183,12 +179,13 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
 
   detail::grid_1d const config(outer_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block =
-    (parser.shmem_per_thread / hash_set_type::cg_size) * config.num_threads_per_block;
+    parser.shmem_per_thread *
+    cuco::detail::int_div_ceil(config.num_threads_per_block, hash_set_type::cg_size);
 
-  auto const row_hash = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  auto const hash_probe = row_hash.device_hasher(has_nulls);
 
-  hash_set_ref_type const row_set_ref =
-    row_set.ref(cuco::contains).with_hash_function(row_hash.device_hasher(has_nulls));
+  hash_set_ref_type const row_set_ref = row_set.ref(cuco::contains).with_hash_function(hash_probe);
 
   // Vector used to indicate indices from left/probe table which are present in output
   auto left_table_keep_mask = rmm::device_uvector<bool>(probe.num_rows(), stream);

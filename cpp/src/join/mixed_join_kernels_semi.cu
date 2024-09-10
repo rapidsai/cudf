@@ -65,9 +65,11 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     left_table, right_table, device_expression_data);
 
   if (outer_row_index < outer_num_rows) {
+    // Make sure to swap_tables here as hash_set will use probe table as the left one.
+    auto constexpr swap_tables = true;
     // Figure out the number of elements for this key.
     auto equality = single_expression_equality<has_nulls>{
-      evaluator, thread_intermediate_storage, false, equality_probe};
+      evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
     auto const set_ref_equality = set_ref.with_key_eq(equality);
     auto const result           = set_ref_equality.contains(tile, outer_row_index);
