@@ -2790,7 +2790,7 @@ TEST_F(JsonReaderTest, JsonDtypeSchema)
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
       .dtypes(dtype_schema)
-      .mixed_types_as_string(true)
+      .prune_columns(true)
       .lines(true);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);

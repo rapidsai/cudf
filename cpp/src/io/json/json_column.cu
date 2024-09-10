@@ -553,11 +553,6 @@ void make_device_json_column(device_span<SymbolT const> input,
                    });
   }
 
-  /*
-  auto h_input = cudf::detail::make_host_vector_sync(input, stream);
-  print_tree(h_input, tree, stream);
-  */
-
   auto to_json_col_type = [](auto category) {
     switch (category) {
       case NC_STRUCT: return json_col_t::StructColumn;
@@ -805,7 +800,6 @@ void make_device_json_column(device_span<SymbolT const> input,
     if ((column_categories[this_col_id] == NC_STRUCT or
          column_categories[this_col_id] == NC_LIST) and
         user_dtype.has_value() and user_dtype.value().id() == type_id::STRING) {
-      // std::printf("this_col_id forced as string = %d\n", this_col_id);
       col.forced_as_string_column          = true;
       forced_as_string_column[this_col_id] = 1;
     }
@@ -831,11 +825,11 @@ void make_device_json_column(device_span<SymbolT const> input,
           is_mixed_type_column[this_col_id] == 1)
         column_categories[this_col_id] = NC_STR;
     }
-    cudaMemcpyAsync(d_column_tree.node_categories.begin(),
+    cudf::detail::cuda_memcpy_async(d_column_tree.node_categories.begin(),
                     column_categories.data(),
                     column_categories.size() * sizeof(column_categories[0]),
-                    cudaMemcpyDefault,
-                    stream.value());
+                    cudf::detail::host_memory_kind::PAGEABLE,
+                    stream);
   }
 
   // ignore all children of columns forced as string
@@ -850,11 +844,11 @@ void make_device_json_column(device_span<SymbolT const> input,
         forced_as_string_column[this_col_id] == 1)
       column_categories[this_col_id] = NC_STR;
   }
-  cudaMemcpyAsync(d_column_tree.node_categories.begin(),
+  cudf::detail::cuda_memcpy_async(d_column_tree.node_categories.begin(),
                   column_categories.data(),
                   column_categories.size() * sizeof(column_categories[0]),
-                  cudaMemcpyDefault,
-                  stream.value());
+                  cudf::detail::host_memory_kind::PAGEABLE,
+                  stream);
 
   // restore unique_col_ids order
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
