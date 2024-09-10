@@ -23,7 +23,7 @@ dlpack_version:
   - ">=0.8,<1.0"
 
 librdkafka_version:
-  - ">=1.9.0,<1.10.0a0"
+  - ">=2.5.0,<2.6.0a0"
 
 fmt_version:
   - ">=10.1.1,<11"
