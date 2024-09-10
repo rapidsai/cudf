@@ -21,9 +21,9 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>

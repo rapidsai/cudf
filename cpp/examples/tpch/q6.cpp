@@ -20,6 +20,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 /**
  * @file q6.cpp
@@ -51,7 +52,7 @@
   cudf::column_view const& extendedprice,
   cudf::column_view const& discount,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   auto const revenue_type = cudf::data_type{cudf::type_id::FLOAT64};
   auto revenue            = cudf::binary_operation(
@@ -65,7 +66,7 @@ int main(int argc, char const** argv)
 
   // Use a memory pool
   auto resource = create_memory_resource(args.memory_resource_type);
-  rmm::mr::set_current_device_resource(resource.get());
+  cudf::set_current_device_resource(resource.get());
 
   cudf::examples::timer timer;
 

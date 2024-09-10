@@ -18,12 +18,12 @@
 
 #include <cudf/io/detail/json.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
 
