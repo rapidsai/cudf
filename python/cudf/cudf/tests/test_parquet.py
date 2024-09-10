@@ -4053,7 +4053,7 @@ def test_parquet_reader_with_mismatched_schemas_error():
         )
 
 
-def test_parquet_reader_mismatched_nullability(tmpdir):
+def test_parquet_reader_mismatched_nullability():
     # Ensure that we can faithfully read the tables with mismatched nullabilities
     df1 = cudf.DataFrame(
         {
@@ -4128,17 +4128,19 @@ def test_parquet_reader_mismatched_nullability(tmpdir):
     )
 
     # Write tables to parquet with arrow schema for compatibility for duration column(s)
-    fname1 = tmpdir.join("no-nulls.pq")
+    fname1 = BytesIO()
     df1.to_parquet(fname1, store_schema=True)
-    fname2 = tmpdir.join("nulls.pq")
+    fname2 = BytesIO()
     df2.to_parquet(fname2, store_schema=True)
 
     # Read tables back with cudf and arrow in either order and compare
     assert_eq(
-        cudf.read_parquet([fname1, fname2]), pq.read_table([fname1, fname2])
+        cudf.read_parquet([fname1, fname2]),
+        cudf.concat([df1, df2]).reset_index(drop=True),
     )
     assert_eq(
-        cudf.read_parquet([fname2, fname1]), pq.read_table([fname2, fname1])
+        cudf.read_parquet([fname2, fname1]),
+        cudf.concat([df2, df1]).reset_index(drop=True),
     )
 
 
@@ -4230,9 +4232,9 @@ def test_parquet_reader_mismatched_nullability_structs(tmpdir):
     # Read tables back with cudf and compare with expected.
     assert_eq(
         cudf.read_parquet([buf1, buf2]),
-        cudf.concat([df1, df2]).reset_index().drop(columns=["index"]),
+        cudf.concat([df1, df2]).reset_index(drop=True),
     )
     assert_eq(
         cudf.read_parquet([buf2, buf1]),
-        cudf.concat([df2, df1]).reset_index().drop(columns=["index"]),
+        cudf.concat([df2, df1]).reset_index(drop=True),
     )
