@@ -26,6 +26,7 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/unary.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <src/io/parquet/parquet.hpp>
 #include <src/io/parquet/parquet_common.hpp>
@@ -192,7 +193,7 @@ TEST_F(ParquetWriterTest, BufferSource)
       cudf::host_span<uint8_t const>{reinterpret_cast<uint8_t const*>(out_buffer.data()),
                                      out_buffer.size()},
       cudf::get_default_stream(),
-      rmm::mr::get_current_device_resource());
+      cudf::get_current_device_resource_ref());
     auto const d_buffer = cudf::device_span<std::byte const>(
       reinterpret_cast<std::byte const*>(d_input.data()), d_input.size());
     cudf::io::parquet_reader_options in_opts =
