@@ -776,7 +776,7 @@ class json_reader_options_builder {
    * @brief Set Whether leading zeros are allowed in numeric values. strict validation must
    * be enabled for this to have any effect.
    *
-   * @note: strict_validation must be enabled for this to work.
+   * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
    *
    * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
    * @return this for chaining
@@ -792,7 +792,7 @@ class json_reader_options_builder {
    * +INF, -INF, +Infinity, Infinity, and -Infinity.
    * strict validation must be enabled for this to have any effect.
    *
-   * @note: strict_validation must be enabled for this to work.
+   * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
    *
    * @param val Boolean value to indicate if unquoted nonnumeric values are valid json or not.
    * @return this for chaining
@@ -807,7 +807,7 @@ class json_reader_options_builder {
    * @brief Set whether chars >= 0 and < 32 are allowed in a quoted string without
    * some form of escaping. strict validation must be enabled for this to have any effect.
    *
-   * @note: strict_validation must be enabled for this to work.
+   * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
    *
    * @param val Boolean value to indicate if unquoted control chars are allowed or not.
    * @return this for chaining

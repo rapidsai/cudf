@@ -90,8 +90,8 @@ void validate_token_stream(device_span<char const> d_input,
   using token_t = cudf::io::json::token_t;
   cudf::detail::optional_trie trie_na =
     cudf::detail::create_serialized_trie(options.get_na_values(), stream);
-  auto trie_na_view            = cudf::detail::make_trie_view(trie_na);
-  auto validate_numeric_values = cuda::proclaim_return_type<bool>(
+  auto trie_na_view    = cudf::detail::make_trie_view(trie_na);
+  auto validate_values = cuda::proclaim_return_type<bool>(
     [data                        = d_input.data(),
      trie_na                     = trie_na_view,
      allow_numeric_leading_zeros = options.is_allowed_numeric_leading_zeros(),
