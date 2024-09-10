@@ -24,6 +24,7 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/fill.h>
@@ -469,15 +470,15 @@ TEST_F(TDigestMergeTest, EmptyGroups)
   int const delta = 1000;
 
   auto a = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
-    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto b = cudf::type_dispatcher(
     static_cast<cudf::column_view>(values_b).type(), tdigest_gen_grouped{}, keys, values_b, delta);
   auto c = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
-    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto d = cudf::type_dispatcher(
     static_cast<cudf::column_view>(values_d).type(), tdigest_gen_grouped{}, keys, values_d, delta);
   auto e = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
-    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   std::vector<cudf::column_view> cols;
   cols.push_back(*a);
