@@ -16,8 +16,9 @@
 
 #include "join_common_utils.cuh"
 
+#include <cudf/utilities/memory_resource.hpp>
+
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/functional.h>

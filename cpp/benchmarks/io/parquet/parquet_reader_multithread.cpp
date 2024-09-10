@@ -22,6 +22,7 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <nvtx3/nvtx3.hpp>
@@ -111,7 +112,7 @@ void BM_parquet_multithreaded_read_common(nvbench::state& state,
                  auto const stream = streams[index % num_threads];
                  cudf::io::parquet_reader_options read_opts =
                    cudf::io::parquet_reader_options::builder(source_info_vector[index]);
-                 cudf::io::read_parquet(read_opts, stream, rmm::mr::get_current_device_resource());
+                 cudf::io::read_parquet(read_opts, stream, cudf::get_current_device_resource_ref());
                };
 
                threads.pause();

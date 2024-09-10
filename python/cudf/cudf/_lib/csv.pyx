@@ -276,8 +276,10 @@ def read_csv(
                     col_name = df._data.names[index]
                     df._data[col_name] = df._data[col_name].astype(col_dtype)
 
-    if names is not None and len(names) and isinstance(names[0], (int)):
+    if names is not None and len(names) and isinstance(names[0], int):
         df.columns = [int(x) for x in df._data]
+    elif names is None and header == -1 and cudf.get_option("mode.pandas_compatible"):
+        df.columns = [int(x) for x in df._column_names]
 
     # Set index if the index_col parameter is passed
     if index_col is not None and index_col is not False:
