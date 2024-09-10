@@ -2,5 +2,5 @@
 replace
 =======
 
-.. automodule:: cudf._lib.pylibcudf.strings.replace
+.. automodule:: pylibcudf.strings.replace
    :members:

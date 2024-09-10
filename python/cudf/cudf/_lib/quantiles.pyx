@@ -13,10 +13,11 @@ from cudf._lib.types cimport (
 
 from cudf._lib.types import Interpolation
 
-from cudf._lib.pylibcudf.libcudf.types cimport interpolation, sorted
+from pylibcudf.libcudf.types cimport interpolation, sorted
+
 from cudf._lib.utils cimport columns_from_pylibcudf_table
 
-import cudf._lib.pylibcudf as plc
+import pylibcudf as plc
 
 
 @acquire_spill_lock()

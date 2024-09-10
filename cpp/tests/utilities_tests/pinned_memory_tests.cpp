@@ -25,7 +25,6 @@
 
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 class PinnedMemoryTest : public cudf::test::BaseFixture {
   size_t prev_copy_threshold;

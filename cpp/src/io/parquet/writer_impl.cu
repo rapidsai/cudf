@@ -43,6 +43,7 @@
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -185,7 +186,7 @@ struct aggregate_writer_metadata {
     std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
-  thrust::optional<std::vector<ColumnOrder>> column_orders = thrust::nullopt;
+  cuda::std::optional<std::vector<ColumnOrder>> column_orders = cuda::std::nullopt;
 };
 
 namespace {
@@ -471,7 +472,7 @@ struct leaf_schema_fn {
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
     col_schema.type           = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type = thrust::nullopt;
+    col_schema.converted_type = cuda::std::nullopt;
     col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
     if (timestamp_is_int96) {
       col_schema.ts_scale = -1000;  // negative value indicates division by absolute value
@@ -749,7 +750,7 @@ std::vector<schema_tree_node> construct_parquet_schema_tree(
           col_schema.type = Type::BYTE_ARRAY;
         }
 
-        col_schema.converted_type  = thrust::nullopt;
+        col_schema.converted_type  = cuda::std::nullopt;
         col_schema.stats_dtype     = statistics_dtype::dtype_byte_array;
         col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
         col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
@@ -1048,7 +1049,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
   // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
   // hostdevice_vector. Currently this involves a cudaMemcpyAsync for each column.
   _d_nullability = cudf::detail::make_device_uvector_async(
-    _nullability, stream, rmm::mr::get_current_device_resource());
+    _nullability, stream, cudf::get_current_device_resource_ref());
 
   _is_list = (_max_rep_level > 0);
 
@@ -1120,7 +1121,7 @@ void init_row_group_fragments(cudf::detail::hostdevice_2dvector<PageFragment>& f
                               rmm::cuda_stream_view stream)
 {
   auto d_partitions = cudf::detail::make_device_uvector_async(
-    partitions, stream, rmm::mr::get_current_device_resource());
+    partitions, stream, cudf::get_current_device_resource_ref());
   InitRowGroupFragments(frag, col_desc, d_partitions, part_frag_offset, fragment_size, stream);
   frag.device_to_host_sync(stream);
 }
@@ -1140,7 +1141,7 @@ void calculate_page_fragments(device_span<PageFragment> frag,
                               rmm::cuda_stream_view stream)
 {
   auto d_frag_sz = cudf::detail::make_device_uvector_async(
-    frag_sizes, stream, rmm::mr::get_current_device_resource());
+    frag_sizes, stream, cudf::get_current_device_resource_ref());
   CalculatePageFragments(frag, d_frag_sz, stream);
 }
 
@@ -1285,10 +1286,10 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     return std::pair(std::move(dict_data), std::move(dict_index));
   }
 
-  // Allocate slots for each chunk
-  std::vector<rmm::device_uvector<slot_type>> hash_maps_storage;
-  hash_maps_storage.reserve(h_chunks.size());
-  for (auto& chunk : h_chunks) {
+  // Variable to keep track of the current total map storage size
+  size_t total_map_storage_size = 0;
+  // Populate dict offsets and sizes for each chunk that need to build a dictionary.
+  std::for_each(h_chunks.begin(), h_chunks.end(), [&](auto& chunk) {
     auto const& chunk_col_desc = col_desc[chunk.col_desc_id];
     auto const is_requested_non_dict =
       chunk_col_desc.requested_encoding != column_encoding::USE_DEFAULT &&
@@ -1300,19 +1301,31 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
       chunk.use_dictionary = false;
     } else {
       chunk.use_dictionary = true;
-      // cuCollections suggests using a hash map of size N * (1/0.7) = num_values * 1.43
-      // https://github.com/NVIDIA/cuCollections/blob/3a49fc71/include/cuco/static_map.cuh#L190-L193
-      auto& inserted_map   = hash_maps_storage.emplace_back(chunk.num_values * 1.43, stream);
-      chunk.dict_map_slots = inserted_map.data();
-      chunk.dict_map_size  = inserted_map.size();
+      chunk.dict_map_size =
+        static_cast<cudf::size_type>(cuco::make_window_extent<map_cg_size, window_size>(
+          static_cast<cudf::size_type>(occupancy_factor * chunk.num_values)));
+      chunk.dict_map_offset = total_map_storage_size;
+      total_map_storage_size += chunk.dict_map_size;
     }
-  }
+  });
 
+  // No chunk needs to create a dictionary, exit early
+  if (total_map_storage_size == 0) { return {std::move(dict_data), std::move(dict_index)}; }
+
+  // Create a single bulk storage used by all sub-dictionaries
+  auto map_storage = storage_type{
+    total_map_storage_size,
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
+  // Create a span of non-const map_storage as map_storage_ref takes in a non-const pointer.
+  device_span<window_type> const map_storage_data{map_storage.data(), total_map_storage_size};
+
+  // Synchronize
   chunks.host_to_device_async(stream);
-
-  initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
-  populate_chunk_hash_maps(frags, stream);
-
+  // Initialize storage with the given sentinel
+  map_storage.initialize_async({KEY_SENTINEL, VALUE_SENTINEL}, {stream.value()});
+  // Populate the hash map for each chunk
+  populate_chunk_hash_maps(map_storage_data, frags, stream);
+  // Synchronize again
   chunks.device_to_host_sync(stream);
 
   // Make decision about which chunks have dictionary
@@ -1372,8 +1385,8 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     chunk.dict_index          = inserted_dict_index.data();
   }
   chunks.host_to_device_async(stream);
-  collect_map_entries(chunks.device_view().flat_view(), stream);
-  get_dictionary_indices(frags, stream);
+  collect_map_entries(map_storage_data, chunks.device_view().flat_view(), stream);
+  get_dictionary_indices(map_storage_data, frags, stream);
 
   return std::pair(std::move(dict_data), std::move(dict_index));
 }
@@ -1637,7 +1650,7 @@ std::vector<column_view> convert_decimal_columns_and_metadata(
       case type_id::DECIMAL32:
         // Convert data to decimal128 type
         d128_buffers.emplace_back(cudf::detail::convert_decimals_to_decimal128<int32_t>(
-          column, stream, rmm::mr::get_current_device_resource()));
+          column, stream, cudf::get_current_device_resource_ref()));
         // Update metadata
         metadata.set_decimal_precision(MAX_DECIMAL32_PRECISION);
         metadata.set_type_length(size_of(data_type{type_id::DECIMAL128, column.type().scale()}));
@@ -1652,7 +1665,7 @@ std::vector<column_view> convert_decimal_columns_and_metadata(
       case type_id::DECIMAL64:
         // Convert data to decimal128 type
         d128_buffers.emplace_back(cudf::detail::convert_decimals_to_decimal128<int64_t>(
-          column, stream, rmm::mr::get_current_device_resource()));
+          column, stream, cudf::get_current_device_resource_ref()));
         // Update metadata
         metadata.set_decimal_precision(MAX_DECIMAL64_PRECISION);
         metadata.set_type_length(size_of(data_type{type_id::DECIMAL128, column.type().scale()}));
@@ -1857,7 +1870,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   part_frag_offset.push_back(part_frag_offset.back() + num_frag_in_part.back());
 
   auto d_part_frag_offset = cudf::detail::make_device_uvector_async(
-    part_frag_offset, stream, rmm::mr::get_current_device_resource());
+    part_frag_offset, stream, cudf::get_current_device_resource_ref());
   cudf::detail::hostdevice_2dvector<PageFragment> row_group_fragments(
     num_columns, num_fragments, stream);
 
@@ -2230,20 +2243,20 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     bool need_sync{false};
 
     // need to fetch the histogram data from the device
-    std::vector<uint32_t> h_def_histogram;
-    std::vector<uint32_t> h_rep_histogram;
-    if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-      if (def_histogram_bfr_size > 0) {
-        h_def_histogram =
-          std::move(cudf::detail::make_std_vector_async(def_level_histogram, stream));
+    auto const h_def_histogram = [&]() {
+      if (stats_granularity == statistics_freq::STATISTICS_COLUMN && def_histogram_bfr_size > 0) {
         need_sync = true;
+        return cudf::detail::make_host_vector_async(def_level_histogram, stream);
       }
-      if (rep_histogram_bfr_size > 0) {
-        h_rep_histogram =
-          std::move(cudf::detail::make_std_vector_async(rep_level_histogram, stream));
+      return cudf::detail::make_host_vector<uint32_t>(0, stream);
+    }();
+    auto const h_rep_histogram = [&]() {
+      if (stats_granularity == statistics_freq::STATISTICS_COLUMN && rep_histogram_bfr_size > 0) {
         need_sync = true;
+        return cudf::detail::make_host_vector_async(rep_level_histogram, stream);
       }
-    }
+      return cudf::detail::make_host_vector<uint32_t>(0, stream);
+    }();
 
     for (int r = 0; r < num_rowgroups; r++) {
       int p           = rg_to_part[r];
@@ -2265,7 +2278,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         update_chunk_encoding_stats(column_chunk_meta, ck, write_v2_headers);
 
         if (ck.ck_stat_size != 0) {
-          std::vector<uint8_t> const stats_blob = cudf::detail::make_std_vector_sync(
+          auto const stats_blob = cudf::detail::make_host_vector_sync(
             device_span<uint8_t const>(dev_bfr, ck.ck_stat_size), stream);
           CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
           cp.read(&column_chunk_meta.statistics);
@@ -2776,7 +2789,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
   // See https://github.com/rapidsai/cudf/pull/14264#issuecomment-1778311615
   for (auto& se : md.schema) {
     if (se.logical_type.has_value() && se.logical_type.value().type == LogicalType::UNKNOWN) {
-      se.logical_type = thrust::nullopt;
+      se.logical_type = cuda::std::nullopt;
     }
   }
 

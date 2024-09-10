@@ -2,5 +2,5 @@
 Table
 =====
 
-.. automodule:: cudf._lib.pylibcudf.table
+.. automodule:: pylibcudf.table
    :members:

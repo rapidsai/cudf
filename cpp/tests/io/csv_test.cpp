@@ -25,8 +25,8 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/csv.hpp>
+#include <cudf/io/datasource.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -1195,30 +1195,6 @@ TEST_F(CsvReaderTest, HeaderOnlyFile)
   auto const view = result.tbl->view();
   EXPECT_EQ(0, view.num_rows());
   EXPECT_EQ(3, view.num_columns());
-}
-
-TEST_F(CsvReaderTest, ArrowFileSource)
-{
-  auto filepath = temp_env->get_temp_dir() + "ArrowFileSource.csv";
-  {
-    std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << "A\n9\n8\n7\n6\n5\n4\n3\n2\n";
-  }
-
-  std::shared_ptr<arrow::io::ReadableFile> infile;
-  ASSERT_TRUE(arrow::io::ReadableFile::Open(filepath).Value(&infile).ok());
-
-  auto arrow_source = cudf::io::arrow_io_source{infile};
-  cudf::io::csv_reader_options in_opts =
-    cudf::io::csv_reader_options::builder(cudf::io::source_info{&arrow_source})
-      .dtypes({dtype<int8_t>()});
-  auto result = cudf::io::read_csv(in_opts);
-
-  auto const view = result.tbl->view();
-  EXPECT_EQ(1, view.num_columns());
-  ASSERT_EQ(type_id::INT8, view.column(0).type().id());
-
-  expect_column_data_equal(std::vector<int8_t>{9, 8, 7, 6, 5, 4, 3, 2}, view.column(0));
 }
 
 TEST_F(CsvReaderTest, InvalidFloatingPoint)

@@ -20,9 +20,7 @@
 
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <map>
 #include <string>
@@ -675,7 +673,7 @@ class json_reader_options_builder {
 table_with_metadata read_json(
   json_reader_options options,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 
@@ -696,6 +694,8 @@ class json_writer_options_builder;
 class json_writer_options {
   // Specify the sink to use for writer output
   sink_info _sink;
+  // maximum number of rows to write in each chunk (limits memory use)
+  size_type _rows_per_chunk = std::numeric_limits<size_type>::max();
   // Set of columns to output
   table_view _table;
   // string to use for null entries
@@ -704,8 +704,6 @@ class json_writer_options {
   bool _include_nulls = false;
   // Indicates whether to use JSON lines for records format
   bool _lines = false;
-  // maximum number of rows to write in each chunk (limits memory use)
-  size_type _rows_per_chunk = std::numeric_limits<size_type>::max();
   // string to use for values != 0 in INT8 types (default 'true')
   std::string _true_value = std::string{"true"};
   // string to use for values == 0 in INT8 types (default 'false')
@@ -720,7 +718,7 @@ class json_writer_options {
    * @param table Table to be written to output
    */
   explicit json_writer_options(sink_info sink, table_view table)
-    : _sink(std::move(sink)), _table(std::move(table)), _rows_per_chunk(table.num_rows())
+    : _sink(std::move(sink)), _rows_per_chunk(table.num_rows()), _table(std::move(table))
   {
   }
 

@@ -8,7 +8,8 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.types cimport dtype_to_pylibcudf_type, is_decimal_type_id
 
-from cudf._lib import pylibcudf
+import pylibcudf
+
 from cudf._lib.aggregation import make_aggregation
 
 
@@ -61,7 +62,11 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
             result,
             dtype=col_dtype.__class__(precision, scale),
         ).value
-    return DeviceScalar.from_pylibcudf(result).value
+    scalar = DeviceScalar.from_pylibcudf(result).value
+    if isinstance(col_dtype, cudf.StructDtype):
+        # TODO: Utilize column_metadata in libcudf to maintain field labels
+        return dict(zip(col_dtype.fields.keys(), scalar.values()))
+    return scalar
 
 
 @acquire_spill_lock()

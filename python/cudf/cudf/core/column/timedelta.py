@@ -75,28 +75,33 @@ class TimeDeltaColumn(ColumnBase):
     def __init__(
         self,
         data: Buffer,
-        dtype: Dtype,
-        size: int | None = None,  # TODO: make non-optional
+        size: int | None,
+        dtype: np.dtype,
         mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
+        children: tuple = (),
     ):
-        dtype = cudf.dtype(dtype)
-        if dtype.kind != "m":
-            raise TypeError(f"{self.dtype} is not a supported duration type")
+        if not isinstance(data, Buffer):
+            raise ValueError("data must be a Buffer.")
+        if not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
+            raise ValueError("dtype must be a timedelta numpy dtype.")
 
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = data.size // dtype.itemsize
             size = size - offset
+        if len(children) != 0:
+            raise ValueError("TimedeltaColumn must have no children.")
         super().__init__(
-            data,
+            data=data,
             size=size,
             dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
 
     def __contains__(self, item: DatetimeLikeScalar) -> bool:

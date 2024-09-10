@@ -90,8 +90,9 @@ struct stripe_rowgroups {
  */
 struct encoder_decimal_info {
   std::map<uint32_t, rmm::device_uvector<uint32_t>>
-    elem_sizes;                                        ///< Column index -> per-element size map
-  std::map<uint32_t, std::vector<uint32_t>> rg_sizes;  ///< Column index -> per-rowgroup size map
+    elem_sizes;  ///< Column index -> per-element size map
+  std::map<uint32_t, cudf::detail::host_vector<uint32_t>>
+    rg_sizes;  ///< Column index -> per-rowgroup size map
 };
 
 /**

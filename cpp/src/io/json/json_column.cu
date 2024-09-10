@@ -26,12 +26,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/atomic>
 #include <cuda/functional>
@@ -430,13 +430,13 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   auto gpu_tree = [&]() {
     // Parse the JSON and get the token stream
     const auto [tokens_gpu, token_indices_gpu] =
-      get_token_stream(d_input, options, stream, rmm::mr::get_current_device_resource());
+      get_token_stream(d_input, options, stream, cudf::get_current_device_resource_ref());
     // gpu tree generation
     return get_tree_representation(tokens_gpu,
                                    token_indices_gpu,
                                    options.is_enabled_mixed_types_as_string(),
                                    stream,
-                                   rmm::mr::get_current_device_resource());
+                                   cudf::get_current_device_resource_ref());
   }();  // IILE used to free memory of token data.
 #ifdef NJP_DEBUG_PRINT
   auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
@@ -462,7 +462,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                   is_array_of_arrays,
                                   options.is_enabled_lines(),
                                   stream,
-                                  rmm::mr::get_current_device_resource());
+                                  cudf::get_current_device_resource_ref());
 
   device_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;

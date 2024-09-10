@@ -21,9 +21,8 @@
 #include <cudf/lists/detail/copying.hpp>
 #include <cudf/lists/detail/scatter_helper.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
-
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>

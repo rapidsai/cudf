@@ -2,5 +2,5 @@
 regex_program
 =============
 
-.. automodule:: cudf._lib.pylibcudf.strings.regex_program
+.. automodule:: pylibcudf.strings.regex_program
    :members:

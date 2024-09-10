@@ -30,11 +30,11 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -208,7 +208,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   } else {
     thrust::counting_iterator<cudf::size_type> stencil(0);
     auto const [row_bitmask, _] =
-      cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource());
+      cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref());
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
     // insert valid rows
@@ -227,31 +227,19 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   // Vector used to indicate indices from left/probe table which are present in output
   auto left_table_keep_mask = rmm::device_uvector<bool>(probe.num_rows(), stream);
 
-  if (has_nulls) {
-    mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_conditional_view,
-        *right_conditional_view,
-        *probe_view,
-        *build_view,
-        hash_probe,
-        equality_probe,
-        hash_table_view,
-        cudf::device_span<bool>(left_table_keep_mask),
-        parser.device_expression_data);
-  } else {
-    mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_conditional_view,
-        *right_conditional_view,
-        *probe_view,
-        *build_view,
-        hash_probe,
-        equality_probe,
-        hash_table_view,
-        cudf::device_span<bool>(left_table_keep_mask),
-        parser.device_expression_data);
-  }
+  launch_mixed_join_semi(has_nulls,
+                         *left_conditional_view,
+                         *right_conditional_view,
+                         *probe_view,
+                         *build_view,
+                         hash_probe,
+                         equality_probe,
+                         hash_table_view,
+                         cudf::device_span<bool>(left_table_keep_mask),
+                         parser.device_expression_data,
+                         config,
+                         shmem_size_per_block,
+                         stream);
 
   auto gather_map = std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, mr);
 

@@ -22,10 +22,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/reduction/detail/segmented_reduction.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/adjacent_difference.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -73,7 +72,7 @@ std::unique_ptr<column> compound_segmented_reduction(column_view const& col,
                                               offsets,
                                               null_handling,
                                               stream,
-                                              rmm::mr::get_current_device_resource());
+                                              cudf::get_current_device_resource_ref());
 
   // Run segmented reduction
   if (col.has_nulls()) {

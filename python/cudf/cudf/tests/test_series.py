@@ -2115,8 +2115,9 @@ def test_series_hasnans(data):
     ],
 )
 @pytest.mark.parametrize("keep", ["first", "last", False])
-def test_series_duplicated(data, index, keep):
-    gs = cudf.Series(data, index=index)
+@pytest.mark.parametrize("name", [None, "a"])
+def test_series_duplicated(data, index, keep, name):
+    gs = cudf.Series(data, index=index, name=name)
     ps = gs.to_pandas()
 
     assert_eq(gs.duplicated(keep=keep), ps.duplicated(keep=keep))
@@ -2287,6 +2288,13 @@ def test_series_rename(initial_name, name):
     expected = psr.rename(name)
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("index", [lambda x: x * 2, {1: 2}])
+def test_rename_index_not_supported(index):
+    ser = cudf.Series(range(2))
+    with pytest.raises(NotImplementedError):
+        ser.rename(index=index)
 
 
 @pytest.mark.parametrize(
@@ -2547,6 +2555,13 @@ def test_series_arrow_list_types_roundtrip():
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(NotImplementedError):
             cudf.from_pandas(pdf)
+
+
+@pytest.mark.parametrize("base_name", [None, "a"])
+def test_series_to_frame_none_name(base_name):
+    result = cudf.Series(range(1), name=base_name).to_frame(name=None)
+    expected = pd.Series(range(1), name=base_name).to_frame(name=None)
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("klass", [cudf.Index, cudf.Series])

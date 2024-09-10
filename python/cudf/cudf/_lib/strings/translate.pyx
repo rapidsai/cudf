@@ -8,16 +8,17 @@ from libcpp.vector cimport vector
 
 from cudf.core.buffer import acquire_spill_lock
 
-from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
-from cudf._lib.pylibcudf.libcudf.strings.translate cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from pylibcudf.libcudf.strings.translate cimport (
     filter_characters as cpp_filter_characters,
     filter_type,
     translate as cpp_translate,
 )
-from cudf._lib.pylibcudf.libcudf.types cimport char_utf8
+from pylibcudf.libcudf.types cimport char_utf8
+
+from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 
 

@@ -149,6 +149,10 @@ def test_interval_range_periods_basic_dtype(start_t, end_t, periods_t):
     assert_eq(pindex, gindex)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Does not warn on older versions of pandas",
+)
 def test_interval_range_periods_warnings():
     start_val, end_val, periods_val = 0, 4, 1.0
 
@@ -400,4 +404,16 @@ def test_from_tuples():
     data = [(1, 2), (10, 20)]
     result = cudf.IntervalIndex.from_tuples(data, closed="left", name="a")
     expected = pd.IntervalIndex.from_tuples(data, closed="left", name="a")
+    assert_eq(result, expected)
+
+
+def test_interval_range_name():
+    expected = pd.interval_range(start=0, periods=5, freq=2, name="foo")
+    result = cudf.interval_range(start=0, periods=5, freq=2, name="foo")
+    assert_eq(result, expected)
+
+
+def test_from_interval_range_indexing():
+    result = cudf.interval_range(start=0, end=1, name="a").repeat(2)
+    expected = pd.interval_range(start=0, end=1, name="a").repeat(2)
     assert_eq(result, expected)

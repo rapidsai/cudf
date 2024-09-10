@@ -47,6 +47,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -54,6 +55,8 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
+#include <arrow/api.h>
+#include <arrow/c/bridge.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
 
@@ -1037,9 +1040,9 @@ cudf::io::schema_element read_schema_element(int& index,
     // go to the next entry, so recursion can parse it.
     index++;
     for (int i = 0; i < num_children; i++) {
+      auto const name = std::string{names.get(index).get()};
       child_elems.insert(
-        std::pair{names.get(index).get(),
-                  cudf::jni::read_schema_element(index, children, names, types, scales)});
+        std::pair{name, cudf::jni::read_schema_element(index, children, names, types, scales)});
     }
     return cudf::io::schema_element{d_type, std::move(child_elems)};
   } else {
@@ -1066,6 +1069,15 @@ void append_flattened_child_names(cudf::io::column_name_info const& info,
   names.push_back(info.name);
   for (cudf::io::column_name_info const& child : info.children) {
     append_flattened_child_names(child, names);
+  }
+}
+
+// Recursively make schema and its children nullable
+void set_nullable(ArrowSchema* schema)
+{
+  schema->flags |= ARROW_FLAG_NULLABLE;
+  for (int i = 0; i < schema->n_children; ++i) {
+    set_nullable(schema->children[i]);
   }
 }
 
@@ -1830,9 +1842,9 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
       std::map<std::string, cudf::io::schema_element> data_types;
       int at = 0;
       while (at < n_types.size()) {
+        auto const name = std::string{n_col_names.get(at).get()};
         data_types.insert(std::pair{
-          n_col_names.get(at).get(),
-          cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
+          name, cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
       }
       opts.dtypes(data_types);
     } else {
@@ -1929,9 +1941,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
       std::map<std::string, cudf::io::schema_element> data_types;
       int at = 0;
       while (at < n_types.size()) {
+        auto const name = std::string{n_col_names.get(at).get()};
         data_types.insert(std::pair{
-          n_col_names.get(at).get(),
-          cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
+          name, cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
       }
       opts.dtypes(data_types);
     } else {
@@ -2635,7 +2647,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv
     // The pointer to the shared_ptr<> is returned as a jlong.
     using result_t = std::shared_ptr<arrow::Table>;
 
-    auto result = cudf::to_arrow(*tview, state->get_column_metadata(*tview));
+    auto got_arrow_schema = cudf::to_arrow_schema(*tview, state->get_column_metadata(*tview));
+    cudf::jni::set_nullable(got_arrow_schema.get());
+    auto got_arrow_array = cudf::to_arrow_host(*tview);
+    auto batch =
+      arrow::ImportRecordBatch(&got_arrow_array->array, got_arrow_schema.get()).ValueOrDie();
+    auto result = arrow::Table::FromRecordBatches({batch}).ValueOrDie();
+
     return ptr_as_jlong(new result_t{result});
   }
   CATCH_STD(env, 0)
@@ -2746,7 +2764,21 @@ Java_ai_rapids_cudf_Table_convertArrowTableToCudf(JNIEnv* env, jclass, jlong arr
 
   try {
     cudf::jni::auto_set_device(env);
-    return convert_table_for_return(env, cudf::from_arrow(*(handle->get())));
+
+    ArrowSchema sch;
+    if (!arrow::ExportSchema(*handle->get()->schema(), &sch).ok()) {
+      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowSchema", 0)
+    }
+    auto batch = handle->get()->CombineChunksToBatch().ValueOrDie();
+    ArrowArray arr;
+    if (!arrow::ExportRecordBatch(*batch, &arr).ok()) {
+      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowArray", 0)
+    }
+    auto ret = cudf::from_arrow(&sch, &arr);
+    arr.release(&arr);
+    sch.release(&sch);
+
+    return convert_table_for_return(env, ret);
   }
   CATCH_STD(env, 0)
 }
@@ -3920,7 +3952,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
                      nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL,
                      cudf::nan_equality::ALL_EQUAL,
                      cudf::get_default_stream(),
-                     rmm::mr::get_current_device_resource());
+                     cudf::get_current_device_resource_ref());
     return convert_table_for_return(env, result);
   }
   CATCH_STD(env, 0);
@@ -4085,7 +4117,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(
     // and scratch memory only.
     auto temp_mr      = memoryResourceHandle != 0
                           ? reinterpret_cast<rmm::mr::device_memory_resource*>(memoryResourceHandle)
-                          : rmm::mr::get_current_device_resource();
+                          : cudf::get_current_device_resource_ref();
     auto chunked_pack = cudf::chunked_pack::create(*n_table, bounce_buffer_size, temp_mr);
     return reinterpret_cast<jlong>(chunked_pack.release());
   }

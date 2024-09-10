@@ -5,7 +5,8 @@ from libcpp cimport bool
 from cudf._lib.column cimport Column
 from cudf._lib.utils cimport data_from_pylibcudf_table
 
-from cudf._lib import pylibcudf
+import pylibcudf
+
 from cudf.core.buffer import acquire_spill_lock
 
 
