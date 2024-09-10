@@ -130,7 +130,6 @@ rmm::cuda_device_id get_current_cuda_device()
  */
 struct cuda_event {
   cuda_event() { CUDF_CUDA_TRY(cudaEventCreateWithFlags(&e_, cudaEventDisableTiming)); }
-  virtual ~cuda_event() { CUDF_ASSERT_CUDA_SUCCESS(cudaEventDestroy(e_)); }
 
   operator cudaEvent_t() { return e_; }
 
