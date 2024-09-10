@@ -1649,7 +1649,7 @@ Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource(JNIEnv* env,
         .strict_validation(strict_validation)
         .keep_quotes(keep_quotes);
     if (strict_validation) {
-      opt.numeric_leading_zeros(allow_leading_zeros)
+      opts.numeric_leading_zeros(allow_leading_zeros)
         .nonnumeric_numbers(allow_nonnumeric_numbers)
         .unquoted_control_chars(allow_unquoted_control);
     }
@@ -1702,7 +1702,7 @@ Java_ai_rapids_cudf_Table_readAndInferJSON(JNIEnv* env,
         .mixed_types_as_string(mixed_types_as_string)
         .keep_quotes(keep_quotes);
     if (strict_validation) {
-      opt.numeric_leading_zeros(allow_leading_zeros)
+      opts.numeric_leading_zeros(allow_leading_zeros)
         .nonnumeric_numbers(allow_nonnumeric_numbers)
         .unquoted_control_chars(allow_unquoted_control);
     }
@@ -1851,7 +1851,7 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
         .strict_validation(strict_validation)
         .keep_quotes(keep_quotes);
     if (strict_validation) {
-      opt.numeric_leading_zeros(allow_leading_zeros)
+      opts.numeric_leading_zeros(allow_leading_zeros)
         .nonnumeric_numbers(allow_nonnumeric_numbers)
         .unquoted_control_chars(allow_unquoted_control);
     }
@@ -1960,7 +1960,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
         .strict_validation(strict_validation)
         .keep_quotes(keep_quotes);
     if (strict_validation) {
-      opt.numeric_leading_zeros(allow_leading_zeros)
+      opts.numeric_leading_zeros(allow_leading_zeros)
         .nonnumeric_numbers(allow_nonnumeric_numbers)
         .unquoted_control_chars(allow_unquoted_control);
     }
