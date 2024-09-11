@@ -16,7 +16,7 @@
 
 #include "reader_impl_helpers.hpp"
 
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf::io::orc::detail {
 
