@@ -50,7 +50,7 @@ environment before running your code.
 Once this is done, the public Dask DataFrame API will leverage
 ``cudf`` automatically when a new DataFrame collection is created
 from an on-disk format using any of the following ``dask.dataframe``
-functions:
+functions::
 
 * :func:`dask.dataframe.read_parquet`
 * :func:`dask.dataframe.read_json`
