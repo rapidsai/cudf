@@ -28,11 +28,11 @@
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <cuda/std/optional>
@@ -526,7 +526,7 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
 
   // move stack info to the gpu
   rmm::device_uvector<column_info> d_info =
-    cudf::detail::make_device_uvector_async(info, stream, rmm::mr::get_current_device_resource());
+    cudf::detail::make_device_uvector_async(info, stream, cudf::get_current_device_resource_ref());
 
   // each thread needs to maintain a stack of row spans of size max_branch_depth. we will use
   // shared memory to do this rather than allocating a potentially gigantic temporary buffer
