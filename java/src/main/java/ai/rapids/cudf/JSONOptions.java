@@ -38,6 +38,7 @@ public final class JSONOptions extends ColumnFilterOptions {
   private final boolean allowLeadingZeros;
   private final boolean allowNonNumericNumbers;
   private final boolean allowUnquotedControlChars;
+  private final boolean cudfPruneSchema;
 
   private JSONOptions(Builder builder) {
     super(builder);
@@ -52,6 +53,11 @@ public final class JSONOptions extends ColumnFilterOptions {
     allowLeadingZeros = builder.allowLeadingZeros;
     allowNonNumericNumbers = builder.allowNonNumericNumbers;
     allowUnquotedControlChars = builder.allowUnquotedControlChars;
+    cudfPruneSchema = builder.cudfPruneSchema;
+  }
+
+  public boolean shouldCudfPruneSchema() {
+    return cudfPruneSchema;
   }
 
   public boolean isDayFirst() {
@@ -122,6 +128,13 @@ public final class JSONOptions extends ColumnFilterOptions {
 
     private boolean mixedTypesAsStrings = false;
     private boolean keepQuotes = false;
+
+    private boolean cudfPruneSchema = false;
+
+    public Builder withCudfPruneSchema(boolean prune) {
+      cudfPruneSchema = prune;
+      return this;
+    }
 
     /**
      * Should json validation be strict or not
