@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
-#include "../utilities/timer.hpp"
-#include "utils.hpp"
+#include "utilities.hpp"
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <nvbench/nvbench.cuh>
+
 /**
- * @file q1.cpp
- * @brief Implement query 1 of the TPC-H benchmark.
+ * @file q01.cpp
+ * @brief Implement query 1 of the NDS-H benchmark.
  *
  * create view lineitem as select * from '/tables/scale-1/lineitem.parquet';
  *
@@ -59,7 +61,7 @@
  * @param stream The CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_disc_price(
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_disc_price(
   cudf::column_view const& discount,
   cudf::column_view const& extendedprice,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -86,7 +88,7 @@
  * @param stream The CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_charge(
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_charge(
   cudf::column_view const& tax,
   cudf::column_view const& disc_price,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -101,16 +103,9 @@
   return charge;
 }
 
-int main(int argc, char const** argv)
+void run_ndsh_q1(nvbench::state& state,
+                 std::unordered_map<std::string, parquet_device_buffer>& sources)
 {
-  auto const args = parse_args(argc, argv);
-
-  // Use a memory pool
-  auto resource = create_memory_resource(args.memory_resource_type);
-  cudf::set_current_device_resource(resource.get());
-
-  cudf::examples::timer timer;
-
   // Define the column projections and filter predicate for `lineitem` table
   std::vector<std::string> const lineitem_cols = {"l_returnflag",
                                                   "l_linestatus",
@@ -130,12 +125,12 @@ int main(int argc, char const** argv)
 
   // Read out the `lineitem` table from parquet file
   auto lineitem =
-    read_parquet(args.dataset_dir + "/lineitem.parquet", lineitem_cols, std::move(lineitem_pred));
+    read_parquet(sources["lineitem"].make_source_info(), lineitem_cols, std::move(lineitem_pred));
 
   // Calculate the discount price and charge columns and append to lineitem table
   auto disc_price =
-    calc_disc_price(lineitem->column("l_discount"), lineitem->column("l_extendedprice"));
-  auto charge = calc_charge(lineitem->column("l_tax"), disc_price->view());
+    calculate_disc_price(lineitem->column("l_discount"), lineitem->column("l_extendedprice"));
+  auto charge = calculate_charge(lineitem->column("l_tax"), disc_price->view());
   (*lineitem).append(disc_price, "disc_price").append(charge, "charge");
 
   // Perform the group by operation
@@ -167,9 +162,21 @@ int main(int argc, char const** argv)
                                              {"l_returnflag", "l_linestatus"},
                                              {cudf::order::ASCENDING, cudf::order::ASCENDING});
 
-  timer.print_elapsed_millis();
-
   // Write query result to a parquet file
   orderedby_table->to_parquet("q1.parquet");
-  return 0;
 }
+
+void ndsh_q1(nvbench::state& state)
+{
+  // Generate the required parquet files in device buffers
+  double const scale_factor = state.get_float64("scale_factor");
+  std::unordered_map<std::string, parquet_device_buffer> sources;
+  generate_parquet_data_sources(scale_factor, {"lineitem"}, sources);
+
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { run_ndsh_q1(state, sources); });
+}
+
+NVBENCH_BENCH(ndsh_q1).set_name("ndsh_q1").add_float64_axis("scale_factor", {0.01, 0.1, 1});
