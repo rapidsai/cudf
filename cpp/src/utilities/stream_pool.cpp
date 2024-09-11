@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "driver_types.h"
+
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -126,18 +128,6 @@ rmm::cuda_device_id get_current_cuda_device()
 }
 
 /**
- * @brief RAII struct to wrap a cuda event and ensure its proper destruction.
- */
-struct cuda_event {
-  cuda_event() { CUDF_CUDA_TRY(cudaEventCreateWithFlags(&e_, cudaEventDisableTiming)); }
-
-  operator cudaEvent_t() { return e_; }
-
- private:
-  cudaEvent_t e_;
-};
-
-/**
  * @brief Returns a cudaEvent_t for the current thread.
  *
  * The returned event is valid for the current device.
@@ -146,12 +136,13 @@ struct cuda_event {
  */
 cudaEvent_t event_for_thread()
 {
-  thread_local std::vector<std::unique_ptr<cuda_event>> thread_events(get_num_cuda_devices());
+  thread_local std::vector<cudaEvent_t> thread_events(get_num_cuda_devices());
   auto const device_id = get_current_cuda_device();
   if (not thread_events[device_id.value()]) {
-    thread_events[device_id.value()] = std::make_unique<cuda_event>();
+    CUDF_CUDA_TRY(
+      cudaEventCreateWithFlags(&thread_events[device_id.value()], cudaEventDisableTiming));
   }
-  return *thread_events[device_id.value()];
+  return thread_events[device_id.value()];
 }
 
 /**
