@@ -20,6 +20,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/scan.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
 
@@ -57,7 +58,7 @@ static void nvbench_structs_scan(nvbench::state& state)
   std::unique_ptr<cudf::column> result = nullptr;
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     result = cudf::detail::scan_inclusive(
-      input_view, *agg, null_policy, stream, rmm::mr::get_current_device_resource());
+      input_view, *agg, null_policy, stream, cudf::get_current_device_resource_ref());
   });
 
   state.add_element_count(input_view.size());

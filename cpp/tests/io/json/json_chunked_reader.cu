@@ -22,7 +22,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
 
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <fstream>
 #include <string>
@@ -63,7 +63,7 @@ TEST_F(JsonReaderTest, ByteRange_SingleSource)
                                                  json_lines_options,
                                                  chunk_size,
                                                  cudf::get_default_stream(),
-                                                 rmm::mr::get_current_device_resource());
+                                                 cudf::get_current_device_resource_ref());
 
     auto table_views = std::vector<cudf::table_view>(tables.size());
     std::transform(tables.begin(), tables.end(), table_views.begin(), [](auto& table) {
@@ -158,7 +158,7 @@ TEST_F(JsonReaderTest, ByteRange_MultiSource)
                                                  json_lines_options,
                                                  chunk_size,
                                                  cudf::get_default_stream(),
-                                                 rmm::mr::get_current_device_resource());
+                                                 cudf::get_current_device_resource_ref());
 
     auto table_views = std::vector<cudf::table_view>(tables.size());
     std::transform(tables.begin(), tables.end(), table_views.begin(), [](auto& table) {
