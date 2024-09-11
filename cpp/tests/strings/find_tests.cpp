@@ -275,12 +275,18 @@ TEST_F(StringsFindTest, MultiContainsLongStrings)
   auto sv      = cudf::strings_column_view(input);
   auto targets = cudf::test::strings_column_wrapper({" the ", "search", "", "string", "ox", "é "});
   auto results = cudf::strings::multi_contains(sv, cudf::strings_column_view(targets));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(0), cudf::test::fixed_width_column_wrapper<bool>({1,0,1,0,0,0}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(1), cudf::test::fixed_width_column_wrapper<bool>({0,1,0,0,0,0}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(2), cudf::test::fixed_width_column_wrapper<bool>({1,1,1,1,1,1}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(3), cudf::test::fixed_width_column_wrapper<bool>({0,0,0,0,1,0}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(4), cudf::test::fixed_width_column_wrapper<bool>({1,0,0,0,0,0}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(5), cudf::test::fixed_width_column_wrapper<bool>({0,0,1,0,0,0}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    results->get_column(0), cudf::test::fixed_width_column_wrapper<bool>({1, 0, 1, 0, 0, 0}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    results->get_column(1), cudf::test::fixed_width_column_wrapper<bool>({0, 1, 0, 0, 0, 0}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    results->get_column(2), cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    results->get_column(3), cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 1, 0}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    results->get_column(4), cudf::test::fixed_width_column_wrapper<bool>({1, 0, 0, 0, 0, 0}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    results->get_column(5), cudf::test::fixed_width_column_wrapper<bool>({0, 0, 1, 0, 0, 0}));
 }
 
 TEST_F(StringsFindTest, StartsWith)
