@@ -29,7 +29,6 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -229,6 +228,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -239,7 +239,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
                                  binary_predicate,
                                  compare_nulls,
                                  detail::join_kind::LEFT_SEMI_JOIN,
-                                 cudf::get_default_stream(),
+                                 stream,
                                  mr);
 }
 
@@ -250,6 +250,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -260,7 +261,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
                                  binary_predicate,
                                  compare_nulls,
                                  detail::join_kind::LEFT_ANTI_JOIN,
-                                 cudf::get_default_stream(),
+                                 stream,
                                  mr);
 }
 
