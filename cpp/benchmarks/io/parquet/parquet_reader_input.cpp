@@ -32,7 +32,8 @@ constexpr cudf::size_type num_cols = 64;
 void parquet_read_common(cudf::size_type num_rows_to_read,
                          cudf::size_type num_cols_to_read,
                          cuio_source_sink_pair& source_sink,
-                         nvbench::state& state)
+                         nvbench::state& state,
+                         size_t table_data_size = data_size)
 {
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info());
@@ -52,7 +53,7 @@ void parquet_read_common(cudf::size_type num_rows_to_read,
     });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
-  state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
+  state.add_element_count(static_cast<double>(table_data_size) / time, "bytes_per_second");
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
@@ -237,17 +238,17 @@ void BM_parquet_read_wide_tables_mixed(nvbench::state& state,
 {
   auto const d_type = get_type_or_group(static_cast<int32_t>(DataType));
 
-  auto const n_col       = static_cast<cudf::size_type>(state.get_int64("num_cols"));
-  auto const num_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
-  auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
-  auto const source_type = io_type::FILEPATH;
+  auto const n_col           = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  auto const data_size_bytes = static_cast<size_t>(state.get_int64("data_size_mb") << 20);
+  auto const cardinality     = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto const run_length      = static_cast<cudf::size_type>(state.get_int64("run_length"));
+  auto const source_type     = io_type::DEVICE_BUFFER;
   cuio_source_sink_pair source_sink(source_type);
 
-  {
+  auto const num_rows_written = [&]() {
     auto const tbl = create_random_table(
       cycle_dtypes(d_type, n_col),
-      row_count{num_rows},
+      table_size_bytes{data_size_bytes},
       data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
     auto const view = tbl->view();
 
@@ -255,9 +256,10 @@ void BM_parquet_read_wide_tables_mixed(nvbench::state& state,
       cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
         .compression(cudf::io::compression_type::NONE);
     cudf::io::write_parquet(write_opts);
-  }
+    return view.num_rows();
+  }();
 
-  parquet_read_common(num_rows, n_col, source_sink, state);
+  parquet_read_common(num_rows_written, n_col, source_sink, state, data_size_bytes);
 }
 
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
@@ -310,7 +312,7 @@ using d_type_list_wide_table = nvbench::enum_type_list<data_type::INTEGRAL,
 NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables_mixed, NVBENCH_TYPE_AXES(d_type_list_wide_table))
   .set_name("parquet_read_wide_tables_mixed")
   .set_min_samples(4)
-  .add_int64_axis("num_rows", {10'000, 100'000, 500'000, 1'000'000})
+  .add_int64_axis("data_size_mb", {512, 1024, 2048, 4095})
   .add_int64_axis("num_cols", {64, 256, 512, 1024})
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
