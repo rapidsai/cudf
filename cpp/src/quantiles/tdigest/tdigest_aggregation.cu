@@ -1182,7 +1182,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   auto const num_centroids = tdv.means().size();
   CUDF_EXPECTS(merged_centroids->num_rows() == num_centroids,
                "Unexpected number of centroids in merged result");
-    
+
   // If there are no values, we can simply return a column that has only empty tdigests.
   cudf::column_view merged_weights = merged_centroids->get_column(1).view();
   if (merged_weights.size() == 0) {
