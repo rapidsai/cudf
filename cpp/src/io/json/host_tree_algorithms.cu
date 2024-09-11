@@ -449,6 +449,21 @@ void make_device_json_column(device_span<SymbolT const> input,
 
   // while creating columns, we force the type.
 
+  {"a": {"n": 0}, "b": 2}
+  map{"a", INT}
+  map{"a", map{"n", INT, "m": STRUCT{map{"x": int}}}, "b": INT, "c": LIST{map{"element": DOUBLE}}
+  map{"a", STRUCT}
+
+  if(options.is_enabled_prune_columns()) {
+    auto mark_is_pruned = [&is_pruned, &schema]() {
+    }
+    while() {
+      auto 
+    }
+  }
+   
+
+
   std::queue<NodeIndexT> optq;
   if (options.is_enabled_prune_columns()) {
     optq.push(0);
