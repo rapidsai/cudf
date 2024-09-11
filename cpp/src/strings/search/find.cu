@@ -465,7 +465,9 @@ CUDF_KERNEL void multi_contains_warp_parallel_multi_scalars_fn(
     auto first_byte_ptr =
       thrust::lower_bound(thrust::seq, d_target_first_bytes.begin(), d_target_first_bytes.end(), c);
     if (not(first_byte_ptr != d_target_first_bytes.end() && *first_byte_ptr == c)) {
-      // first char is not matched for all targets, already set result as found
+      // first char is not matched for all targets
+      // Note: first bytes does not work for empty target.
+      // For empty target, already set result as found
       continue;
     }
 
@@ -527,7 +529,8 @@ CUDF_KERNEL void multi_contains_using_indexes_fn(
   if (d_strings.is_null(str_idx)) { return; }  // bitmask will set result to null.
   auto const d_str = d_strings.element<string_view>(str_idx);
 
-  // check empty target, the result of searching empty target is true.
+  // initialize temp result:
+  // set true if target is empty, set false otherwise
   for (auto target_idx = 0; target_idx < num_targets; ++target_idx) {
     auto const d_target            = d_targets.element<string_view>(target_idx);
     d_results[target_idx][str_idx] = d_target.size_bytes() == 0;
@@ -542,8 +545,9 @@ CUDF_KERNEL void multi_contains_using_indexes_fn(
       thrust::lower_bound(thrust::seq, d_target_first_bytes.begin(), d_target_first_bytes.end(), c);
 
     if (not(first_byte_ptr != d_target_first_bytes.end() && *first_byte_ptr == c)) {
-      // For non-empty targets: no need to search for `str_byte_idx` position, because first char is
-      // unmatched. For empty targets: already set result as found.
+      // first char is not matched for all targets
+      // Note: first bytes does not work for empty target.
+      // For empty target, already set result as found
       continue;
     }
 
@@ -574,7 +578,7 @@ CUDF_KERNEL void multi_contains_using_indexes_fn(
 }
 
 /**
- * Execute multi contains for short strings
+ * Execute multi contains.
  * First index the first char for all targets.
  * Index the first char:
  *   collect first char for all targets and do uniq and sort,
