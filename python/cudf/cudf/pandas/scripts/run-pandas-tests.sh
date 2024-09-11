@@ -149,6 +149,5 @@ ls -al
 ls -al tests/
 cd ..
 ls -al
-ls -al pandas-testing/
-ls -al pandas-testing/pandas-tests/
+ls -al pandas-tests/
 rm -rf pandas-testing/pandas-tests/
