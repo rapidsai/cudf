@@ -226,6 +226,21 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   rmm::cuda_stream_view stream);
 
 /**
+ * @brief Validate the tokens conforming to behavior given in options.
+ *
+ * @param d_input The string of input characters
+ * @param tokens The tokens to be post-processed
+ * @param token_indices The tokens' corresponding indices that are post-processed
+ * @param options Parsing options specifying the parsing behaviour
+ * @param stream The cuda stream to dispatch GPU kernels to
+ */
+void validate_token_stream(device_span<char const> d_input,
+                           device_span<PdaTokenT> tokens,
+                           device_span<SymbolOffsetT> token_indices,
+                           cudf::io::json_reader_options const& options,
+                           rmm::cuda_stream_view stream);
+
+/**
  * @brief Parses the given JSON string and generates a tree representation of the given input.
  *
  * @param tokens Vector of token types in the json string
