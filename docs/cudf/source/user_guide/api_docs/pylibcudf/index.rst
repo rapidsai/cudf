@@ -21,6 +21,7 @@ This page provides API documentation for pylibcudf.
     groupby
     interop
     join
+    labeling
     lists
     merge
     null_mask
