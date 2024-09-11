@@ -274,9 +274,11 @@ TEST_F(StringsSliceTest, MultiByteChars)
     // clang-format off
     "quick brown fox jumped over the lazy brown dog; the fat cats jump in place without moving "
     "the following code snippet demonstrates how to use search for values in an ordered range  "
+            // this placement tests proper multi-byte chars handling  ------vvvvv
     "it returns the last position where value could be inserted without the ééééé ordering ",
     "algorithms execution is parallelized as determined by an execution policy; this is a 12345"
     "continuation of previous row to make sure string boundaries are honored 012345678901234567"
+           //   v--- this one also
     "01234567890é34567890012345678901234567890"
     // clang-format on
   });
