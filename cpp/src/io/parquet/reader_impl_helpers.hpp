@@ -237,12 +237,18 @@ class aggregate_reader_metadata {
   /**
    * @brief Checks if a schema index from 0th source is mapped to the specified file index
    *
+   * @param schema_idx The index of the SchemaElement in the zeroth file.
+   * @param pfm_idx The index of the file (per_file_metadata) to check mappings for.
+   *
    * @return True if schema index is mapped
    */
   [[nodiscard]] bool is_schema_index_mapped(int schema_idx, int pfm_idx) const;
 
   /**
    * @brief Maps schema index from 0th source file to the specified file index
+   *
+   * @param schema_idx The index of the SchemaElement in the zeroth file.
+   * @param pfm_idx The index of the file (per_file_metadata) to map the schema_idx to.
    *
    * @return Mapped schema index
    */
