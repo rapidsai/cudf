@@ -16,7 +16,7 @@ as the ``"cudf"`` dataframe backend for
   Neither Dask cuDF nor Dask DataFrame provide support for multi-GPU
   or multi-node execution on their own. You must also deploy a
   `dask.distributed <https://distributed.dask.org/en/stable/>` cluster
-  to leverage multiple GPUs. We strongly recommend using `Dask CUDA
+  to leverage multiple GPUs. We strongly recommend using `Dask-CUDA
   <https://docs.rapids.ai/api/dask-cuda/stable/>`__ to simplify the
   setup of the cluster, taking advantage of all features of the GPU
   and networking hardware.
@@ -63,7 +63,7 @@ For example::
 
   import dask.dataframe as dd
 
-  # By default, we obtain a Pandas-backed dataframe
+  # By default, we obtain a pandas-backed dataframe
   df = dd.read_parquet("data.parquet", ...)
 
   import dask
@@ -80,7 +80,7 @@ depend on the inputs to those functions. For example::
   import pandas as pd
   import cudf
 
-  # This gives us a Pandas-backed dataframe
+  # This gives us a pandas-backed dataframe
   dd.from_pandas(pd.DataFrame({"a": range(10)}))
 
   # This gives us a cuDF-backed dataframe
@@ -92,7 +92,7 @@ using the :func:`dask.dataframe.DataFrame.to_backend` API::
   # This ensures that we have a cuDF-backed dataframe
   df = df.to_backend("cudf")
 
-  # This ensures that we have a Pandas-backed dataframe
+  # This ensures that we have a pandas-backed dataframe
   df = df.to_backend("pandas")
 
 The explicit Dask cuDF API
@@ -156,7 +156,7 @@ out-of-core computing. This also means that the compute tasks can be
 executed in parallel over a multi-GPU cluster.
 
 In order to execute your Dask workflow on multiple GPUs, you will
-typically need to use `Dask CUDA <https://docs.rapids.ai/api/dask-cuda/stable/>`__
+typically need to use `Dask-CUDA <https://docs.rapids.ai/api/dask-cuda/stable/>`__
 to deploy distributed Dask cluster, and
 `Distributed <https://distributed.dask.org/en/stable/client.html>`__
 to define a client object. For example::
@@ -187,7 +187,7 @@ to define a client object. For example::
   <https://distributed.dask.org/en/stable/manage-computation.html>`__
   for more details.
 
-Please see the `Dask CUDA <https://docs.rapids.ai/api/dask-cuda/stable/>`__
+Please see the `Dask-CUDA <https://docs.rapids.ai/api/dask-cuda/stable/>`__
 documentation for more information about deploying GPU-aware clusters
 (including `best practices
 <https://docs.rapids.ai/api/dask-cuda/stable/examples/best-practices/>`__).
