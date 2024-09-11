@@ -90,7 +90,7 @@ def pytest_runtest_teardown(item, nextitem):
         worker_id = os.getenv("PYTEST_XDIST_WORKER", "master")
         output_file = f'function_call_counts_{os.path.basename(item.nodeid.split("::")[0])}_{worker_id}.json'
         with open(output_file, "w") as f:
-            json.dump(function_call_counts, f, indent=4)
+            json.dump(dict(function_call_counts), f, indent=4)
         print(f"Function call counts have been written to {output_file}")
 
 
@@ -109,7 +109,7 @@ def pytest_unconfigure(config):
         worker_id = config.workerinput["workerid"]
         output_file = f"function_call_counts_worker_{worker_id}.json"
         with open(output_file, "w") as f:
-            json.dump(function_call_counts, f, indent=4)
+            json.dump(dict(function_call_counts), f, indent=4)
         print(f"Function call counts have been written to {output_file}")
 
 
