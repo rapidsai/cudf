@@ -263,6 +263,26 @@ TEST_F(StringsFindTest, MultiContainsMoreTargets)
   }
 }
 
+TEST_F(StringsFindTest, MultiContainsLongStrings)
+{
+  auto const input = cudf::test::strings_column_wrapper(
+    {"quick brown fox jumped over the lazy brown dog; the fat cats jump in place without moving",
+     "the following code snippet demonstrates how to use search for values in an ordered range",
+     "thé it returns the last position where value could be inserted without violating ordering",
+     "algorithms execution is parallelized as determined by an execution policy. t",
+     "he this is a continuation of previous row to make sure string boundaries are honored",
+     "abcdefghijklmnopqrstuvwxyz 0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ !@#$%^&*()~"});
+  auto sv      = cudf::strings_column_view(input);
+  auto targets = cudf::test::strings_column_wrapper({" the ", "search", "", "string", "ox", "é "});
+  auto results = cudf::strings::multi_contains(sv, cudf::strings_column_view(targets));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(0), cudf::test::fixed_width_column_wrapper<bool>({1,0,1,0,0,0}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(1), cudf::test::fixed_width_column_wrapper<bool>({0,1,0,0,0,0}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(2), cudf::test::fixed_width_column_wrapper<bool>({1,1,1,1,1,1}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(3), cudf::test::fixed_width_column_wrapper<bool>({0,0,0,0,1,0}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(4), cudf::test::fixed_width_column_wrapper<bool>({1,0,0,0,0,0}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(5), cudf::test::fixed_width_column_wrapper<bool>({0,0,1,0,0,0}));
+}
+
 TEST_F(StringsFindTest, StartsWith)
 {
   cudf::test::strings_column_wrapper strings({"Héllo", "thesé", "", "lease", "tést strings", ""},
