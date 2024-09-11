@@ -1,9 +1,9 @@
 # <div align="left"><img src="../../img/rapids_logo.png" width="90px"/>&nbsp;Dask cuDF - A GPU Backend for Dask DataFrame</div>
 
-Dask cuDF (a.k.a. dask-cudf or `dask_cudf`) is an extension library for [Dask DataFrame](https://docs.dask.org/en/stable/dataframe.html) that provides a Pandas-like API for parallel and larger-than-memory DataFrame computing. When installed, Dask cuDF is automatically registered as the `"cudf"` [dataframe backend](https://docs.dask.org/en/stable/how-to/selecting-the-collection-backend.html) for Dask DataFrame.
+Dask cuDF (a.k.a. dask-cudf or `dask_cudf`) is an extension library for [Dask DataFrame](https://docs.dask.org/en/stable/dataframe.html) that provides a Pandas-like API for parallel and larger-than-memory DataFrame computing on GPUs. When installed, Dask cuDF is automatically registered as the `"cudf"` [dataframe backend](https://docs.dask.org/en/stable/how-to/selecting-the-collection-backend.html) for Dask DataFrame.
 
 > [!IMPORTANT]
-> Dask cuDF does not provide support for multi-GPU or multi-node execution on its own. You must also deploy a distributed cluster (ideally with [Dask CUDA](https://docs.rapids.ai/api/dask-cuda/stable/)) to leverage multiple GPUs.
+> Dask cuDF does not provide support for multi-GPU or multi-node execution on its own. You must also deploy a distributed cluster (ideally with [Dask CUDA](https://docs.rapids.ai/api/dask-cuda/stable/)) to leverage multiple GPUs efficiently.
 
 ## Using Dask cuDF
 
@@ -24,7 +24,7 @@ See the [RAPIDS install page](https://docs.rapids.ai/install) for the most up-to
 
 ### Quick-start example
 
-A very common Dask cuDF use case is single-node multi-GPU data processing. These workflows typically follow the pattern described in the example below:
+A very common Dask cuDF use case is single-node multi-GPU data processing. These workflows typically use the following pattern:
 
 ```python
 import dask
