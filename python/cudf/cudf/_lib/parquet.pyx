@@ -438,7 +438,7 @@ def write_parquet(
     object statistics="ROWGROUP",
     object metadata_file_path=None,
     object int96_timestamps=False,
-    object row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
+    object row_group_size_bytes=None,
     object row_group_size_rows=None,
     object max_page_size_bytes=None,
     object max_page_size_rows=None,
@@ -616,9 +616,9 @@ cdef class ParquetWriter:
         Name of the compression to use. Use ``None`` for no compression.
     statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
         Level at which column statistics should be included in file.
-    row_group_size_bytes: int, default 18446744073709551615
+    row_group_size_bytes: int, default None
         Maximum size of each stripe of the output.
-        By default, an infinite value equal to uint64 max (~18446744074GB) will be used.
+        By default, no limit on row group stripe size will be used.
     row_group_size_rows: int, default 1000000
         Maximum number of rows of each stripe of the output.
         By default, 1000000 (10^6 rows) will be used.

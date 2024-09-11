@@ -275,10 +275,9 @@ int96_timestamps : bool, default False
     timestamp[us] to the int96 format, which is the number of Julian
     days and the number of nanoseconds since midnight of 1970-01-01.
     If ``False``, timestamps will not be altered.
-row_group_size_bytes: integer, default {row_group_size_bytes_val}
+row_group_size_bytes: integer, default None
     Maximum size of each stripe of the output.
-    If None, {row_group_size_bytes_val}
-    ({row_group_size_bytes_val_in_mb} MB) will be used.
+    If None, no limit on row group stripe size will be used.
 row_group_size_rows: integer or None, default None
     Maximum number of rows of each stripe of the output.
     If None, 1000000 will be used.
@@ -346,10 +345,7 @@ store_schema : bool, default False
 See Also
 --------
 cudf.read_parquet
-""".format(
-    row_group_size_bytes_val=_ROW_GROUP_SIZE_BYTES_DEFAULT,
-    row_group_size_bytes_val_in_mb=_ROW_GROUP_SIZE_BYTES_DEFAULT / 1024 / 1024,
-)
+"""
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
 _docstring_merge_parquet_filemetadata = """
