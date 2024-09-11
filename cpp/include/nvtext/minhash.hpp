@@ -176,8 +176,8 @@ std::unique_ptr<cudf::column> minhash64(
 std::unique_ptr<cudf::column> word_minhash(
   cudf::lists_column_view const& input,
   cudf::device_span<uint32_t const> seeds,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the minhash values for each row of strings per seed
@@ -205,7 +205,7 @@ std::unique_ptr<cudf::column> word_minhash(
 std::unique_ptr<cudf::column> word_minhash64(
   cudf::lists_column_view const& input,
   cudf::device_span<uint64_t const> seeds,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT nvtext

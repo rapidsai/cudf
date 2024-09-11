@@ -227,7 +227,7 @@ template <
 std::unique_ptr<cudf::column> word_minhash_fn(cudf::lists_column_view const& input,
                                               cudf::device_span<hash_value_type const> seeds,
                                               rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+                                              rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!seeds.empty(), "Parameter seeds cannot be empty", std::invalid_argument);
   CUDF_EXPECTS((static_cast<std::size_t>(input.size()) * seeds.size()) <
@@ -336,7 +336,7 @@ std::unique_ptr<cudf::column> minhash64(cudf::strings_column_view const& input,
 std::unique_ptr<cudf::column> word_minhash(cudf::lists_column_view const& input,
                                            cudf::device_span<uint32_t const> seeds,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   using HashFunction = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
   auto hashes        = detail::word_minhash_fn<HashFunction>(input, seeds, stream, mr);
@@ -346,7 +346,7 @@ std::unique_ptr<cudf::column> word_minhash(cudf::lists_column_view const& input,
 std::unique_ptr<cudf::column> word_minhash64(cudf::lists_column_view const& input,
                                              cudf::device_span<uint64_t const> seeds,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   using HashFunction = cudf::hashing::detail::MurmurHash3_x64_128<cudf::string_view>;
   auto hashes        = detail::word_minhash_fn<HashFunction>(input, seeds, stream, mr);
@@ -397,7 +397,7 @@ std::unique_ptr<cudf::column> minhash64(cudf::strings_column_view const& input,
 std::unique_ptr<cudf::column> word_minhash(cudf::lists_column_view const& input,
                                            cudf::device_span<uint32_t const> seeds,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::word_minhash(input, seeds, stream, mr);
@@ -406,7 +406,7 @@ std::unique_ptr<cudf::column> word_minhash(cudf::lists_column_view const& input,
 std::unique_ptr<cudf::column> word_minhash64(cudf::lists_column_view const& input,
                                              cudf::device_span<uint64_t const> seeds,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::word_minhash64(input, seeds, stream, mr);
