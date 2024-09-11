@@ -17,8 +17,12 @@ from pylibcudf.expressions cimport Expression
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.expressions cimport expression
 from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.column cimport Column
+from cudf._lib.utils cimport table_view_from_columns
+
+import pylibcudf as plc
 
 
 @acquire_spill_lock()
@@ -73,7 +77,7 @@ def transform(Column input, op):
 
 
 def table_encode(list source_columns):
-    plc_table, plc_column = plc_transform.transform(
+    plc_table, plc_column = plc_transform.encode(
         plc.Table([col.to_pylibcudf(mode="read") for col in source_columns])
     )
 
@@ -84,6 +88,7 @@ def table_encode(list source_columns):
 
 
 def one_hot_encode(Column input_column, Column categories):
+    pylist_categories = categories.to_arrow().to_pylist()
     plc_table = plc_transform.one_hot_encode(
         input_column.to_pylibcudf(mode="read"),
         categories.to_pylibcudf(mode="read"),
