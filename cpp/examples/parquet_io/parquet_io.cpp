@@ -123,7 +123,7 @@ int main(int argc, char const** argv)
   // Create and use a memory pool
   bool is_pool_used = true;
   auto resource     = create_memory_resource(is_pool_used);
-  rmm::mr::set_current_device_resource(resource.get());
+  cudf::set_current_device_resource(resource.get());
 
   // Read input parquet file
   // We do not want to time the initial read time as it may include

@@ -29,9 +29,9 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
@@ -180,7 +180,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
                    return *prog;
                  });
   auto d_progs =
-    cudf::detail::make_device_uvector_async(progs, stream, rmm::mr::get_current_device_resource());
+    cudf::detail::make_device_uvector_async(progs, stream, cudf::get_current_device_resource_ref());
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
   auto const d_repls   = column_device_view::create(replacements.parent(), stream);
