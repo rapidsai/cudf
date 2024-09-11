@@ -15,10 +15,11 @@
  */
 #pragma once
 
+#include <cudf/utilities/memory_resource.hpp>
+
 #include <nvtext/generate_ngrams.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace CUDF_EXPORT nvtext {
 namespace detail {

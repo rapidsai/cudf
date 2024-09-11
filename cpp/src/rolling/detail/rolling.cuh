@@ -44,13 +44,13 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/std/climits>
 #include <cuda/std/limits>
@@ -928,7 +928,7 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
                                                      min_periods,
                                                      agg._null_handling,
                                                      stream,
-                                                     rmm::mr::get_current_device_resource());
+                                                     cudf::get_current_device_resource_ref());
 
     result = lists::detail::distinct(
       lists_column_view{collected_list->view()}, agg._nulls_equal, agg._nans_equal, stream, mr);

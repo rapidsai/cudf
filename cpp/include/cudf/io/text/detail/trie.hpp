@@ -22,7 +22,6 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <algorithm>
