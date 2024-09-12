@@ -22,4 +22,12 @@ cpdef Column concatenate(
 
 cpdef Column join_strings(Column input, Scalar separator, Scalar narep)
 
-cpdef Column join_list_elements(Column source_strings)
+
+cpdef Column join_list_elements(
+    Column source_strings,
+    ColumnOrScalar separator,
+    Scalar separator_narep,
+    Scalar string_narep,
+    separator_on_nulls separate_nulls,
+    output_if_empty_list empty_list_policy,
+)
