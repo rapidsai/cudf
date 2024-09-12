@@ -31,9 +31,7 @@ def bools_to_mask(Column col):
     Given an int8 (boolean) column, compress the data from booleans to bits and
     return a Buffer
     """
-    mask, _ = plc_transform.bools_to_mask(
-        input.to_pylibcudf(mode="read")
-    )
+    mask, _ = plc_transform.bools_to_mask(col.to_pylibcudf(mode="read"))
     return as_buffer(mask)
 
 
@@ -97,7 +95,7 @@ def one_hot_encode(Column input_column, Column categories):
         Column.from_pylibcudf(col, data_ptr_exposed=True)
         for col in plc_table.columns()
     ]
-    return dict(zip(pylist_categories, result_columns)), None
+    return dict(zip(pylist_categories, result_columns))
 
 
 @acquire_spill_lock()
