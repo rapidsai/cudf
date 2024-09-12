@@ -63,7 +63,7 @@ class Timestamp(Scalar):
         return self.to_pandas().nanosecond
 
     def __repr__(self):
-        return pd.Timestamp(self.value).__repr__()
+        return self.to_pandas().__repr__()
 
     @property
     def asm8(self) -> np.datetime64:
