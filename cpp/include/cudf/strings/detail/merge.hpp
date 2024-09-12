@@ -21,6 +21,7 @@
 #include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace CUDF_EXPORT cudf {
 namespace strings::detail {

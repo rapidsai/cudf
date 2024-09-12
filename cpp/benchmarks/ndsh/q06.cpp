@@ -14,16 +14,20 @@
  * limitations under the License.
  */
 
-#include "../utilities/timer.hpp"
-#include "utils.hpp"
+#include "utilities.hpp"
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/unary.hpp>
+#include <cudf/utilities/memory_resource.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 /**
- * @file q6.cpp
- * @brief Implement query 6 of the TPC-H benchmark.
+ * @file q06.cpp
+ * @brief Implement query 6 of the NDS-H benchmark.
  *
  * create view lineitem as select * from '/tables/scale-1/lineitem.parquet';
  *
@@ -47,11 +51,11 @@
  * @param stream The CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_revenue(
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_revenue(
   cudf::column_view const& extendedprice,
   cudf::column_view const& discount,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   auto const revenue_type = cudf::data_type{cudf::type_id::FLOAT64};
   auto revenue            = cudf::binary_operation(
@@ -59,16 +63,9 @@
   return revenue;
 }
 
-int main(int argc, char const** argv)
+void run_ndsh_q6(nvbench::state& state,
+                 std::unordered_map<std::string, parquet_device_buffer>& sources)
 {
-  auto const args = parse_args(argc, argv);
-
-  // Use a memory pool
-  auto resource = create_memory_resource(args.memory_resource_type);
-  rmm::mr::set_current_device_resource(resource.get());
-
-  cudf::examples::timer timer;
-
   // Read out the `lineitem` table from parquet file
   std::vector<std::string> const lineitem_cols = {
     "l_extendedprice", "l_discount", "l_shipdate", "l_quantity"};
@@ -87,7 +84,7 @@ int main(int argc, char const** argv)
   auto const lineitem_pred = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LOGICAL_AND, shipdate_pred_a, shipdate_pred_b);
   auto lineitem =
-    read_parquet(args.dataset_dir + "/lineitem.parquet", lineitem_cols, std::move(lineitem_pred));
+    read_parquet(sources["lineitem"].make_source_info(), lineitem_cols, std::move(lineitem_pred));
 
   // Cast the discount and quantity columns to float32 and append to lineitem table
   auto discout_float =
@@ -98,8 +95,8 @@ int main(int argc, char const** argv)
   (*lineitem).append(discout_float, "l_discount_float").append(quantity_float, "l_quantity_float");
 
   // Apply the filters
-  auto const discount_ref = cudf::ast::column_reference(lineitem->col_id("l_discount_float"));
-  auto const quantity_ref = cudf::ast::column_reference(lineitem->col_id("l_quantity_float"));
+  auto const discount_ref = cudf::ast::column_reference(lineitem->column_id("l_discount_float"));
+  auto const quantity_ref = cudf::ast::column_reference(lineitem->column_id("l_quantity_float"));
 
   auto discount_lower               = cudf::numeric_scalar<float_t>(0.05);
   auto const discount_lower_literal = cudf::ast::literal(discount_lower);
@@ -122,16 +119,28 @@ int main(int argc, char const** argv)
   auto const filtered_table = apply_filter(lineitem, discount_quantity_pred);
 
   // Calculate the `revenue` column
-  auto revenue =
-    calc_revenue(filtered_table->column("l_extendedprice"), filtered_table->column("l_discount"));
+  auto revenue = calculate_revenue(filtered_table->column("l_extendedprice"),
+                                   filtered_table->column("l_discount"));
 
   // Sum the `revenue` column
   auto const revenue_view = revenue->view();
   auto const result_table = apply_reduction(revenue_view, cudf::aggregation::Kind::SUM, "revenue");
 
-  timer.print_elapsed_millis();
-
   // Write query result to a parquet file
   result_table->to_parquet("q6.parquet");
-  return 0;
 }
+
+void ndsh_q6(nvbench::state& state)
+{
+  // Generate the required parquet files in device buffers
+  double const scale_factor = state.get_float64("scale_factor");
+  std::unordered_map<std::string, parquet_device_buffer> sources;
+  generate_parquet_data_sources(scale_factor, {"lineitem"}, sources);
+
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { run_ndsh_q6(state, sources); });
+}
+
+NVBENCH_BENCH(ndsh_q6).set_name("ndsh_q6").add_float64_axis("scale_factor", {0.01, 0.1, 1});
