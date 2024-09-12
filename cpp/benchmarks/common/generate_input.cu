@@ -20,6 +20,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/filling.hpp>
 #include <cudf/null_mask.hpp>
@@ -866,6 +867,10 @@ std::vector<cudf::type_id> mix_dtype_groups(
   out_dtypes.reserve(num_cols);
   std::array<size_t, 2> inclusive_sum_sizes{dtype_groups.first.size(),
                                             dtype_groups.first.size() + dtype_groups.second.size()};
+
+  if (num_cols < static_cast<cudf::size_type>(inclusive_sum_sizes[1]))
+    CUDF_LOG_WARN("Insufficient number of input columns to mix the two dtype groups");
+
   size_t col_idx = 0;
   for (cudf::size_type col = 0; col < num_cols; ++col) {
     if (col_idx < inclusive_sum_sizes[0]) {
