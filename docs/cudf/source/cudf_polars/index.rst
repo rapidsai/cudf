@@ -7,7 +7,21 @@ and data file formats. When using the GPU engine, Polars will convert expression
 whether the plan is supported on the GPU. If it is not, the execution will transparently fall back to the standard Polars engine 
 and run on the CPU. 
 
-<TO-DO: Benchmarks>
+Benchmark
+---------
+We reproduced the `Polars Decision Support (PDS) <https://github.com/pola-rs/polars-benchmark>`_ benchmark to compare Polars GPU engine with the default CPU settings across several dataset sizes. Here are the results:
+
+.. figure:: ../_static/pds_benchmark_polars.png
+   :width: 600px
+
+
+The per-query speedups using Polars GPU Engine for the 80 GB dataset are below:
+
+
+.. figure:: ../_static/Polars_GPU_speedup_80GB.png
+   :width: 1000px
+
+You can reproduce the results by visiting the `Polars Decision Support (PDS) Github repository. <https://github.com/pola-rs/polars-benchmark>`_
 
 Learn More
 ----------------------
@@ -19,6 +33,6 @@ Launch on Google Colab
 
 .. figure:: ../_static/colab.png
    :width: 200px
-   :target: https://nvda.ws/rapids-cudf
+   :target: https://colab.research.google.com/github/rapidsai-community/showcase/blob/main/accelerated_data_processing_examples/polars_gpu_engine_demo.ipynb
 
    Take the cuDF backend for Polars for a test-drive in a free GPU-enabled notebook environment using your Google account by `launching on Colab <TBD>`_  
