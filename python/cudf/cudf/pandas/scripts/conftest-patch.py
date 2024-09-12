@@ -88,7 +88,7 @@ def pytest_runtest_teardown(item, nextitem):
     ):
         # Write the function call counts to a file
         worker_id = os.getenv("PYTEST_XDIST_WORKER", "master")
-        output_file = f'function_call_counts_{os.path.basename(item.nodeid.split("::")[0])}_{worker_id}.json'
+        output_file = f'{item.nodeid.split("::")[0].replace("/", "__")}_{worker_id}_metrics.json'
         with open(output_file, "w") as f:
             json.dump(dict(function_call_counts), f, indent=4)
         print(f"Function call counts have been written to {output_file}")

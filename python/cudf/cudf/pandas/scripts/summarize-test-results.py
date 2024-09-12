@@ -12,7 +12,9 @@ Examples:
 """
 
 import argparse
+import glob
 import json
+import os
 
 from rich.console import Console
 from rich.table import Table
@@ -57,6 +59,27 @@ def get_per_module_results(log_file_name):
                 per_module_results[module_name].setdefault(outcome, 0)
                 per_module_results[module_name]["total"] += 1
                 per_module_results[module_name][outcome] += 1
+
+    for key, value in per_module_results.items():
+        processed_name = key.replace("/", "__") + "_*_metrics.json"
+        # Assuming the directory is the same as the module name's directory
+        # directory = os.path.dirname(os.getcwd())
+        pattern = os.path.join(
+            "/nvme/0/pgali/cudf/pandas-testing", processed_name
+        )
+        matching_files = glob.glob(pattern)
+        for file in matching_files:
+            with open(file) as f:
+                function_call_counts = json.load(f)
+            per_module_results[key]["_slow_function_call"] = (
+                per_module_results[key].get("_slow_function_call", 0)
+                + function_call_counts.get("_slow_function_call", 0)
+            )
+            per_module_results[key]["_fast_function_call"] = (
+                per_module_results[key].get("_fast_function_call", 0)
+                + function_call_counts.get("_fast_function_call", 0)
+            )
+            # value["function_call_counts"] = function_call_counts
     return per_module_results
 
 
