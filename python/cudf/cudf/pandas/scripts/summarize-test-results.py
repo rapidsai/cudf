@@ -63,10 +63,8 @@ def get_per_module_results(log_file_name):
     for key, value in per_module_results.items():
         processed_name = key.replace("/", "__") + "_*_metrics.json"
         # Assuming the directory is the same as the module name's directory
-        # directory = os.path.dirname(os.getcwd())
-        pattern = os.path.join(
-            "/nvme/0/pgali/cudf/pandas-testing", processed_name
-        )
+        directory = os.path.dirname(log_file_name)
+        pattern = os.path.join(directory, processed_name)
         matching_files = glob.glob(pattern)
         for file in matching_files:
             with open(file) as f:
