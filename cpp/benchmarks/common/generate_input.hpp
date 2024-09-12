@@ -712,6 +712,18 @@ std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_
 std::vector<cudf::type_id> mix_dtypes(std::pair<cudf::type_id, cudf::type_id> const& dtype_ids,
                                       cudf::size_type num_cols,
                                       int first_num);
+
+/**
+ * @brief Repeat the given two data type groups cyclically.
+ *
+ * @param dtype_groups Pair of requested column types
+ * @param num_cols Total number of columns in the output vector
+ * @return A vector of type_ids
+ */
+std::vector<cudf::type_id> mix_dtype_groups(
+  std::pair<std::vector<cudf::type_id>, std::vector<cudf::type_id>> const& dtype_id_groups,
+  cudf::size_type num_cols);
+
 /**
  * @brief Create a random null mask object
  *

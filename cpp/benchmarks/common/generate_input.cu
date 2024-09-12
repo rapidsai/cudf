@@ -854,6 +854,32 @@ std::vector<cudf::type_id> mix_dtypes(std::pair<cudf::type_id, cudf::type_id> co
   return out_dtypes;
 }
 
+/**
+ * @brief Repeat the given two data type groups cyclically.
+ *
+ */
+std::vector<cudf::type_id> mix_dtype_groups(
+  std::pair<std::vector<cudf::type_id>, std::vector<cudf::type_id>> const& dtype_groups,
+  cudf::size_type num_cols)
+{
+  std::vector<cudf::type_id> out_dtypes;
+  out_dtypes.reserve(num_cols);
+  std::array<size_t, 2> inclusive_sum_sizes{dtype_groups.first.size(),
+                                            dtype_groups.first.size() + dtype_groups.second.size()};
+  size_t col_idx = 0;
+  for (cudf::size_type col = 0; col < num_cols; ++col) {
+    if (col_idx < inclusive_sum_sizes[0]) {
+      out_dtypes.emplace_back(dtype_groups.first[col_idx % dtype_groups.first.size()]);
+      ++col_idx;
+    } else if (col_idx < inclusive_sum_sizes[1]) {
+      out_dtypes.emplace_back(
+        dtype_groups.second[(col_idx - inclusive_sum_sizes[0]) % dtype_groups.second.size()]);
+      if (++col_idx == inclusive_sum_sizes[1]) { col_idx = 0; };
+    }
+  }
+  return out_dtypes;
+}
+
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
                                                  table_size_bytes table_bytes,
                                                  data_profile const& profile,

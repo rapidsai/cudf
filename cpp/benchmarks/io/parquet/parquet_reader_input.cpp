@@ -233,8 +233,8 @@ void BM_parquet_read_chunks(nvbench::state& state, nvbench::type_list<nvbench::e
 }
 
 template <data_type DataType>
-void BM_parquet_read_wide_tables_mixed(nvbench::state& state,
-                                       nvbench::type_list<nvbench::enum_type<DataType>> type_list)
+void BM_parquet_read_wide_tables(nvbench::state& state,
+                                 nvbench::type_list<nvbench::enum_type<DataType>> type_list)
 {
   auto const d_type = get_type_or_group(static_cast<int32_t>(DataType));
 
@@ -248,6 +248,36 @@ void BM_parquet_read_wide_tables_mixed(nvbench::state& state,
   auto const num_rows_written = [&]() {
     auto const tbl = create_random_table(
       cycle_dtypes(d_type, n_col),
+      table_size_bytes{data_size_bytes},
+      data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
+    auto const view = tbl->view();
+
+    cudf::io::parquet_writer_options write_opts =
+      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
+        .compression(cudf::io::compression_type::NONE);
+    cudf::io::write_parquet(write_opts);
+    return view.num_rows();
+  }();
+
+  parquet_read_common(num_rows_written, n_col, source_sink, state, data_size_bytes);
+}
+
+void BM_parquet_read_wide_tables_mixed(nvbench::state& state)
+{
+  auto const d_type = std::pair<std::vector<cudf::type_id>, std::vector<cudf::type_id>>{
+    get_type_or_group(static_cast<int32_t>(data_type::INTEGRAL)),
+    get_type_or_group(static_cast<int32_t>(data_type::FLOAT))};
+
+  auto const n_col           = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  auto const data_size_bytes = static_cast<size_t>(state.get_int64("data_size_mb") << 20);
+  auto const cardinality     = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto const run_length      = static_cast<cudf::size_type>(state.get_int64("run_length"));
+  auto const source_type     = io_type::DEVICE_BUFFER;
+  cuio_source_sink_pair source_sink(source_type);
+
+  auto const num_rows_written = [&]() {
+    auto const tbl = create_random_table(
+      mix_dtype_groups(d_type, n_col),
       table_size_bytes{data_size_bytes},
       data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
     auto const view = tbl->view();
@@ -303,17 +333,21 @@ NVBENCH_BENCH(BM_parquet_read_io_small_mixed)
   .add_int64_axis("run_length", {1, 32})
   .add_int64_axis("num_string_cols", {1, 2, 3});
 
-using d_type_list_wide_table = nvbench::enum_type_list<data_type::INTEGRAL,
-                                                       data_type::FLOAT,
-                                                       data_type::DECIMAL,
-                                                       data_type::TIMESTAMP,
-                                                       data_type::DURATION,
-                                                       data_type::STRING>;
-NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables_mixed, NVBENCH_TYPE_AXES(d_type_list_wide_table))
+using d_type_list_wide_table = nvbench::enum_type_list<data_type::DECIMAL, data_type::STRING>;
+NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_wide_table))
+  .set_name("parquet_read_wide_tables")
+  .set_min_samples(4)
+  .set_type_axes_names({"data_type"})
+  .add_int64_axis("data_size_mb", {512, 2048, 4095})
+  .add_int64_axis("num_cols", {64, 512, 1024})
+  .add_int64_axis("cardinality", {0, 1000})
+  .add_int64_axis("run_length", {1, 32});
+
+NVBENCH_BENCH(BM_parquet_read_wide_tables_mixed)
   .set_name("parquet_read_wide_tables_mixed")
   .set_min_samples(4)
-  .add_int64_axis("data_size_mb", {512, 1024, 2048, 4095})
-  .add_int64_axis("num_cols", {64, 256, 512, 1024})
+  .add_int64_axis("data_size_mb", {512, 2048, 4095})
+  .add_int64_axis("num_cols", {64, 512, 1024})
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
 
