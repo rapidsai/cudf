@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "driver_types.h"
-
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/utilities/default_stream.hpp>
