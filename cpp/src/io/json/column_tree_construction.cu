@@ -126,7 +126,8 @@ struct level_ordering {
            (node_levels[lhs_node_id] == node_levels[rhs_node_id] &&
             col_ids[parent_node_ids[lhs_node_id]] < col_ids[parent_node_ids[rhs_node_id]]) ||
            (node_levels[lhs_node_id] == node_levels[rhs_node_id] &&
-            col_ids[parent_node_ids[lhs_node_id]] == col_ids[parent_node_ids[rhs_node_id]] && col_ids[lhs_node_id] < col_ids[rhs_node_id]);
+            col_ids[parent_node_ids[lhs_node_id]] == col_ids[parent_node_ids[rhs_node_id]] &&
+            col_ids[lhs_node_id] < col_ids[rhs_node_id]);
   }
 };
 
@@ -251,7 +252,7 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
     static_cast<std::size_t>(num_columns + 1), stream, cudf::get_current_device_resource_ref());
   // Note that the first element of csr_parent_col_ids is -1 (parent_node_sentinel)
   // children adjacency
-  
+
   print<NodeIndexT>(parent_col_ids, "h_parent_col_ids", stream);
 
   auto num_non_leaf_columns = thrust::unique_count(
@@ -266,7 +267,11 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
                         non_leaf_nodes_children.begin(),
                         thrust::equal_to<TreeDepthT>());
 
-  thrust::scatter(rmm::exec_policy_nosync(stream), non_leaf_nodes_children.begin(), non_leaf_nodes_children.end(), non_leaf_nodes.begin(), rowidx.begin() + 1);
+  thrust::scatter(rmm::exec_policy_nosync(stream),
+                  non_leaf_nodes_children.begin(),
+                  non_leaf_nodes_children.end(),
+                  non_leaf_nodes.begin(),
+                  rowidx.begin() + 1);
 
   print<NodeIndexT>(rowidx, "h_rowidx", stream);
 

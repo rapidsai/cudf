@@ -80,61 +80,86 @@ bool check_equality(cuio_json::tree_meta_t& d_a,
   stream.synchronize();
 
   auto num_nodes = a.parent_node_ids.size();
-  if (b.rowidx.size() != num_nodes + 1) { std::printf("1\n"); return false; }
+  if (b.rowidx.size() != num_nodes + 1) {
+    std::printf("1\n");
+    return false;
+  }
 
   for (auto pos = b.rowidx[0]; pos < b.rowidx[1]; pos++) {
     auto v = b.colidx[pos];
-    if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) { std::printf("2\n"); return false; }
+    if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) {
+      std::printf("2\n");
+      return false;
+    }
   }
 
   std::printf("rowidx = \n");
-  for(size_t u = 0; u < num_nodes; u++)
+  for (size_t u = 0; u < num_nodes; u++)
     std::printf("%d ", b.rowidx[u]);
   std::printf("\n");
   std::printf("colidx = \n");
-  for(size_t u = 0; u < num_nodes; u++) {
-    for(int pos = b.rowidx[u]; pos < b.rowidx[u+1]; pos++)
+  for (size_t u = 0; u < num_nodes; u++) {
+    for (int pos = b.rowidx[u]; pos < b.rowidx[u + 1]; pos++)
       std::printf("%d ", b.colidx[pos]);
   }
   std::printf("\n");
   std::printf("a.parent_node_ids = \n");
-  for(size_t u = 0; u < num_nodes; u++)
+  for (size_t u = 0; u < num_nodes; u++)
     std::printf("%d ", a.parent_node_ids[u]);
   std::printf("\nb.column_ids = \n");
-  for(size_t u = 0; u < num_nodes; u++)
+  for (size_t u = 0; u < num_nodes; u++)
     std::printf("%d ", b.column_ids[u]);
   std::printf("\n");
 
   for (size_t u = 1; u < num_nodes; u++) {
     auto v = b.colidx[b.rowidx[u]];
-    if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) { std::printf("3\n"); return false; }
+    if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) {
+      std::printf("3\n");
+      return false;
+    }
     for (auto pos = b.rowidx[u] + 1; pos < b.rowidx[u + 1]; pos++) {
       v = b.colidx[pos];
-      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) { 
-        std::printf("u = %lu, adj_size = %d\n", u, b.rowidx[u+1] - b.rowidx[u]);
-        std::printf("4: b.column_ids[%lu] = %d, b.column_ids[%d] = %d, a.parent_node_ids[b.column_ids[%d]] = %d\n", u, b.column_ids[u], v, b.column_ids[v], v, a.parent_node_ids[b.column_ids[v]]);
-        return false; }
+      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) {
+        std::printf("u = %lu, adj_size = %d\n", u, b.rowidx[u + 1] - b.rowidx[u]);
+        std::printf(
+          "4: b.column_ids[%lu] = %d, b.column_ids[%d] = %d, a.parent_node_ids[b.column_ids[%d]] = "
+          "%d\n",
+          u,
+          b.column_ids[u],
+          v,
+          b.column_ids[v],
+          v,
+          a.parent_node_ids[b.column_ids[v]]);
+        return false;
+      }
     }
   }
   for (size_t u = 0; u < num_nodes; u++) {
-    if (a.node_categories[b.column_ids[u]] != b.categories[u]) { std::printf("5\n"); return false; }
+    if (a.node_categories[b.column_ids[u]] != b.categories[u]) {
+      std::printf("5\n");
+      return false;
+    }
   }
 
   std::printf("permuted a_max_row_offsets = ");
-  for(size_t u = 0; u < num_nodes; u++)
+  for (size_t u = 0; u < num_nodes; u++)
     std::printf("%d ", a_max_row_offsets[b.column_ids[u]]);
   std::printf("\nb_max_row_offsets = ");
-  for(size_t u = 0; u < num_nodes; u++)
+  for (size_t u = 0; u < num_nodes; u++)
     std::printf("%d ", b_max_row_offsets[u]);
   std::printf("\n");
 
   for (size_t u = 0; u < num_nodes; u++) {
-    if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) { std::printf("6\n"); return false; }
+    if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {
+      std::printf("6\n");
+      return false;
+    }
   }
   return true;
 }
 
-void run_test(std::string const &input) {
+void run_test(std::string const& input)
+{
   auto const stream = cudf::get_default_stream();
   cudf::string_scalar d_scalar(input, true, stream);
   auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
@@ -221,11 +246,11 @@ TEST_F(JsonColumnTreeTests, SimpleLines2)
     R"(  {}
     {}
  { "a": { "y" : 6, "z": [] }}
- { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }} 
+ { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }}
  { "a": { "y" : 6, "z": [] }}
- { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }} 
+ { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }}
  { "a": { "y" : 6, "z": [] }}
- { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }} 
+ { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }}
  { "a": { "y" : 6, "z": [] }}
  { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }} )";
   run_test(input);
