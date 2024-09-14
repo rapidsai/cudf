@@ -885,7 +885,6 @@ std::unique_ptr<table> multi_contains(strings_column_view const& input,
       } else {
         // Too many targets will consume more shared memory, so split targets
         std::vector<std::unique_ptr<column>> ret_columns;
-        ret_columns.resize(targets.size());
         size_type num_groups = (targets.size() + target_group_size - 1) / target_group_size;
         for (size_type group_idx = 0; group_idx < num_groups; group_idx++) {
           size_type start_target = group_idx * target_group_size;
