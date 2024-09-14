@@ -616,40 +616,28 @@ std::vector<std::unique_ptr<column>> multi_contains(bool warp_parallel,
                                  static_cast<size_t>(targets_offsets.size())},
     stream);
 
-  // 2. index the first characters in targets
-  // 2.1 collect first characters in targets
-  thrust::host_vector<char> h_first_bytes = {};
+  // 2. index the first characters for all targets
+  std::map<char, std::vector<size_type>> indexes;
   for (auto i = 0; i < targets.size(); i++) {
     auto target_begin_offset = h_targets_offsets[i];
     auto target_end_offset   = h_targets_offsets[i + 1];
     if (target_end_offset - target_begin_offset > 0) {
       char first_char = h_targets_child[target_begin_offset];
-      auto no_exist =
-        thrust::find(h_first_bytes.begin(), h_first_bytes.end(), first_char) == h_first_bytes.end();
-      if (no_exist) { h_first_bytes.push_back(first_char); }
+      auto not_exist = indexes.find(first_char) == indexes.end();
+      if (not_exist) { indexes[first_char] = std::vector<size_type>();}
+      indexes[first_char].push_back(i);
     }
   }
-
-  // 2.2 sort the first characters
-  thrust::sort(h_first_bytes.begin(), h_first_bytes.end());
-
-  // 2.3 generate indexes: map from `first char in target` to `target indexes`
+  thrust::host_vector<char> h_first_bytes = {};
   thrust::host_vector<size_type> h_offsets  = {0};
   thrust::host_vector<size_type> h_elements = {};
-  for (size_t i = 0; i < h_first_bytes.size(); i++) {
-    auto expected_first_byte = h_first_bytes[i];
-    for (auto target_idx = 0; target_idx < targets.size(); target_idx++) {
-      auto target_begin_offset = h_targets_offsets[target_idx];
-      auto target_end_offset   = h_targets_offsets[target_idx + 1];
-      if (target_end_offset - target_begin_offset > 0) {
-        char curr_first_byte = h_targets_child[target_begin_offset];
-        if (expected_first_byte == curr_first_byte) { h_elements.push_back(target_idx); }
-      }
-    }
+  for (const auto& pair : indexes) {
+    h_first_bytes.push_back(pair.first);
+    h_elements.insert(h_elements.end(), pair.second.begin(), pair.second.end());
     h_offsets.push_back(h_elements.size());
   }
 
-  // 2.4 copy first char set and first char indexes to device
+  // 3. copy first char set and first char indexes to device
   auto d_first_bytes  = cudf::detail::make_device_uvector_async(h_first_bytes, stream, mr);
   auto d_offsets      = cudf::detail::make_device_uvector_async(h_offsets, stream, mr);
   auto d_elements     = cudf::detail::make_device_uvector_async(h_elements, stream, mr);
@@ -674,7 +662,7 @@ std::vector<std::unique_ptr<column>> multi_contains(bool warp_parallel,
                                              mr);
   auto d_list_column  = column_device_view::create(list_column->view(), stream);
 
-  // 3. Create output columns.
+  // 4. Create output columns.
   auto const results_iter =
     thrust::make_transform_iterator(thrust::counting_iterator<cudf::size_type>(0), [&](int i) {
       return make_numeric_column(data_type{type_id::BOOL8},
@@ -699,6 +687,7 @@ std::vector<std::unique_ptr<column>> multi_contains(bool warp_parallel,
   auto const d_strings = column_device_view::create(input.parent(), stream);
   auto const d_targets = column_device_view::create(targets.parent(), stream);
 
+  //5. execute the kernel
   constexpr int block_size = 256;
   cudf::detail::grid_1d grid{input.size(), block_size};
 
