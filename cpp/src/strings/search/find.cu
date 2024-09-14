@@ -504,7 +504,7 @@ CUDF_KERNEL void multi_contains_warp_parallel_multi_scalars_fn(
     for (int target_idx = 0; target_idx < num_targets; target_idx++) {
       bool found = false;
       for (int lane_idx = 0; lane_idx < cudf::detail::warp_size; lane_idx++) {
-        int temp_idx = (str_idx * cudf::detail::warp_size + lane_idx) * num_targets + target_idx;
+        int temp_idx = (threadIdx.x + lane_idx) * num_targets + target_idx;
         if (shared_bools[temp_idx]) {
           found = true;
           break;
