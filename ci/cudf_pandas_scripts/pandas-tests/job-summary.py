@@ -68,8 +68,13 @@ def emoji_failed(x):
 pr_df = pd.DataFrame.from_dict(pr_results, orient="index").sort_index()
 main_df = pd.DataFrame.from_dict(main_results, orient="index").sort_index()
 diff_df = pr_df - main_df
-pr_df['Slow calls %'] = (pr_df['_slow_function_call']/(pr_df['_slow_function_call'] + pr_df['_fast_function_call']))*100.0
-pr_df['Fast calls %'] = (pr_df['_fast_function_call']/(pr_df['_slow_function_call'] + pr_df['_fast_function_call']))*100.0
+pr_df['Slow calls %'] = ((pr_df['_slow_function_call']/(pr_df['_slow_function_call'] + pr_df['_fast_function_call']))*100.0).round(2)
+pr_df['Fast calls %'] = ((pr_df['_fast_function_call']/(pr_df['_slow_function_call'] + pr_df['_fast_function_call']))*100.0).round(2)
+
+# Add '%' suffix to 'Slow calls %' and 'Fast calls %' columns
+pr_df['Slow calls %'] = pr_df['Slow calls %'].astype(str) + ' %'
+pr_df['Fast calls %'] = pr_df['Fast calls %'].astype(str) + ' %'
+
 pr_df = pr_df[["total", "passed", "failed", "skipped", 'Slow calls %', 'Fast calls %']]
 
 diff_df = diff_df[["total", "passed", "failed", "skipped"]]
