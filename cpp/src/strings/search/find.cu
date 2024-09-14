@@ -441,7 +441,6 @@ CUDF_KERNEL void multi_contains_warp_parallel_multi_scalars_fn(
   if (str_idx >= num_rows) { return; }
 
   auto const lane_idx = idx % cudf::detail::warp_size;
-  auto const str_idx  = idx / cudf::detail::warp_size;
   if (d_strings.is_null(str_idx)) { return; }  // bitmask will set result to null.
   // get the string for this warp
   auto const d_str = d_strings.element<string_view>(str_idx);
