@@ -436,8 +436,9 @@ CUDF_KERNEL void multi_contains_warp_parallel_multi_scalars_fn(
   auto const num_targets = d_targets.size();
   auto const num_rows    = d_strings.size();
 
-  auto const idx = static_cast<size_type>(threadIdx.x + blockIdx.x * blockDim.x);
-  if (idx >= (num_rows * cudf::detail::warp_size)) { return; }
+  auto const idx     = cudf::detail::grid_1d::global_thread_id();
+  auto const str_idx = idx / cudf::detail::warp_size;
+  if (str_idx >= num_rows) { return; }
 
   auto const lane_idx = idx % cudf::detail::warp_size;
   auto const str_idx  = idx / cudf::detail::warp_size;
@@ -623,12 +624,12 @@ std::vector<std::unique_ptr<column>> multi_contains(bool warp_parallel,
     auto target_end_offset   = h_targets_offsets[i + 1];
     if (target_end_offset - target_begin_offset > 0) {
       char first_char = h_targets_child[target_begin_offset];
-      auto not_exist = indexes.find(first_char) == indexes.end();
-      if (not_exist) { indexes[first_char] = std::vector<size_type>();}
+      auto not_exist  = indexes.find(first_char) == indexes.end();
+      if (not_exist) { indexes[first_char] = std::vector<size_type>(); }
       indexes[first_char].push_back(i);
     }
   }
-  thrust::host_vector<char> h_first_bytes = {};
+  thrust::host_vector<char> h_first_bytes   = {};
   thrust::host_vector<size_type> h_offsets  = {0};
   thrust::host_vector<size_type> h_elements = {};
   for (const auto& pair : indexes) {
@@ -687,7 +688,7 @@ std::vector<std::unique_ptr<column>> multi_contains(bool warp_parallel,
   auto const d_strings = column_device_view::create(input.parent(), stream);
   auto const d_targets = column_device_view::create(targets.parent(), stream);
 
-  //5. execute the kernel
+  // 5. execute the kernel
   constexpr int block_size = 256;
   cudf::detail::grid_1d grid{input.size(), block_size};
 
