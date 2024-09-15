@@ -8923,8 +8923,8 @@ public class TableTest extends CudfTestBase {
     ParquetWriterOptions options = optBuilder.build();
     ParquetWriterOptions optionsNoCompress =
       optBuilder.withCompressionType(CompressionType.NONE)
-      .withRowGroupSizeRows(4)
-      .withRowGroupSizeBytes(64)
+      .withRowGroupSizeRows(10000)
+      .withRowGroupSizeBytes(10000)
       .build();
     try (Table table0 = getExpectedFileTable(columns);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
@@ -9011,8 +9011,8 @@ public class TableTest extends CudfTestBase {
           .withDecimalColumn("_c7", 4)
           .withDecimalColumn("_c8", 6)
           .withCompressionType(CompressionType.NONE)
-          .withRowGroupSizeRows(4)
-          .withRowGroupSizeBytes(64)
+          .withRowGroupSizeRows(10000)
+          .withRowGroupSizeBytes(10000)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
