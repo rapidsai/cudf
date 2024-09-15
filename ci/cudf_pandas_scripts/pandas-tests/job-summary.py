@@ -71,6 +71,9 @@ diff_df = pr_df - main_df
 pr_df['CPU Usage'] = ((pr_df['_slow_function_call']/(pr_df['_slow_function_call'] + pr_df['_fast_function_call']))*100.0).round(1)
 pr_df['GPU Usage'] = ((pr_df['_fast_function_call']/(pr_df['_slow_function_call'] + pr_df['_fast_function_call']))*100.0).round(1)
 
+cpu_usage_mean = pr_df['CPU Usage'].mean()
+gpu_usage_mean = pr_df['GPU Usage'].mean()
+
 # Add '%' suffix to 'CPU Usage' and 'GPU Usage' columns
 pr_df['CPU Usage'] = pr_df['CPU Usage'].astype(str) + '%'
 pr_df['GPU Usage'] = pr_df['GPU Usage'].astype(str) + '%'
@@ -98,14 +101,13 @@ df = df.rename(
         "passed_diff": "Passed delta",
         "failed_diff": "Failed delta",
         "skipped_diff": "Skipped delta",
-        # "_slow_function_call" : "Slow function calls",
-        # "_fast_function_call" : "Fast function calls",
     }
 )
 df = df.sort_values(by=["Failed tests", "Skipped tests"], ascending=False)
 
 print(comment)
 print()
+print(f"Average CPU and GPU usage for the tests: {cpu_usage_mean} % and {gpu_usage_mean} %")
 print("Here are the results of running the Pandas tests against this PR:")
 print()
 print(df.to_markdown())
