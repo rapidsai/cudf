@@ -315,20 +315,22 @@ public final class Table implements AutoCloseable {
 
   /**
    * Setup everything to write parquet formatted data to a file.
-   * @param columnNames     names that correspond to the table columns
-   * @param numChildren     Children of the top level
-   * @param flatNumChildren flattened list of children per column
-   * @param nullable        true if the column can have nulls else false
-   * @param metadataKeys    Metadata key names to place in the Parquet file
-   * @param metadataValues  Metadata values corresponding to metadataKeys
-   * @param compression     native compression codec ID
-   * @param statsFreq       native statistics frequency ID
-   * @param isInt96         true if timestamp type is int96
-   * @param precisions      precision list containing all the precisions of the decimal types in
-   *                        the columns
-   * @param isMapValues     true if a column is a map
-   * @param isBinaryValues  true if a column is a binary
-   * @param filename        local output path
+   * @param columnNames       names that correspond to the table columns
+   * @param numChildren       Children of the top level
+   * @param flatNumChildren   flattened list of children per column
+   * @param nullable          true if the column can have nulls else false
+   * @param metadataKeys      Metadata key names to place in the Parquet file
+   * @param metadataValues    Metadata values corresponding to metadataKeys
+   * @param compression       native compression codec ID
+   * @param rowGroupSizeRows  max #rows in a row group
+   * @param rowGroupSizeBytes max #bytes in a row group
+   * @param statsFreq         native statistics frequency ID
+   * @param isInt96           true if timestamp type is int96
+   * @param precisions        precision list containing all the precisions of the decimal types in
+   *                          the columns
+   * @param isMapValues       true if a column is a map
+   * @param isBinaryValues    true if a column is a binary
+   * @param filename          local output path
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetFileBegin(String[] columnNames,
@@ -338,6 +340,8 @@ public final class Table implements AutoCloseable {
                                                    String[] metadataKeys,
                                                    String[] metadataValues,
                                                    int compression,
+                                                   int rowGroupSizeRows,
+                                                   long rowGroupSizeBytes,
                                                    int statsFreq,
                                                    boolean[] isInt96,
                                                    int[] precisions,
@@ -349,20 +353,22 @@ public final class Table implements AutoCloseable {
 
   /**
    * Setup everything to write parquet formatted data to a buffer.
-   * @param columnNames     names that correspond to the table columns
-   * @param numChildren     Children of the top level
-   * @param flatNumChildren flattened list of children per column
-   * @param nullable        true if the column can have nulls else false
-   * @param metadataKeys    Metadata key names to place in the Parquet file
-   * @param metadataValues  Metadata values corresponding to metadataKeys
-   * @param compression     native compression codec ID
-   * @param statsFreq       native statistics frequency ID
-   * @param isInt96         true if timestamp type is int96
-   * @param precisions      precision list containing all the precisions of the decimal types in
-   *                        the columns
-   * @param isMapValues     true if a column is a map
-   * @param isBinaryValues  true if a column is a binary
-   * @param consumer        consumer of host buffers produced.
+   * @param columnNames       names that correspond to the table columns
+   * @param numChildren       Children of the top level
+   * @param flatNumChildren   flattened list of children per column
+   * @param nullable          true if the column can have nulls else false
+   * @param metadataKeys      Metadata key names to place in the Parquet file
+   * @param metadataValues    Metadata values corresponding to metadataKeys
+   * @param compression       native compression codec ID
+   * @param rowGroupSizeRows  max #rows in a row group
+   * @param rowGroupSizeBytes max #bytes in a row group
+   * @param statsFreq         native statistics frequency ID
+   * @param isInt96           true if timestamp type is int96
+   * @param precisions        precision list containing all the precisions of the decimal types in
+   *                          the columns
+   * @param isMapValues       true if a column is a map
+   * @param isBinaryValues    true if a column is a binary
+   * @param consumer          consumer of host buffers produced.
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetBufferBegin(String[] columnNames,
@@ -372,6 +378,8 @@ public final class Table implements AutoCloseable {
                                                      String[] metadataKeys,
                                                      String[] metadataValues,
                                                      int compression,
+                                                     int rowGroupSizeRows,
+                                                     long rowGroupSizeBytes,
                                                      int statsFreq,
                                                      boolean[] isInt96,
                                                      int[] precisions,
@@ -1773,6 +1781,8 @@ public final class Table implements AutoCloseable {
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
+          options.getRowGroupSizeRows(),
+          options.getRowGroupSizeBytes(),
           options.getStatisticsFrequency().nativeId,
           options.getFlatIsTimeTypeInt96(),
           options.getFlatPrecision(),
@@ -1793,6 +1803,8 @@ public final class Table implements AutoCloseable {
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
+          options.getRowGroupSizeRows(),
+          options.getRowGroupSizeBytes(),
           options.getStatisticsFrequency().nativeId,
           options.getFlatIsTimeTypeInt96(),
           options.getFlatPrecision(),
