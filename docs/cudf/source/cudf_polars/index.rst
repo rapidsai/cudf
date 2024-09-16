@@ -15,10 +15,11 @@ We reproduced the `Polars Decision Support (PDS) <https://github.com/pola-rs/pol
    :width: 600px
 
 
-The per-query speedups using Polars GPU Engine for the 80 GB dataset are below:
+
+We see up to a 13x speed-up on our top-performing, compute-heavy queries involving complex aggregation and join operations on the 80 GB dataset.
 
 
-.. figure:: ../_static/Polars_GPU_speedup_80GB.png
+.. figure:: ../_static/compute_heavy_queries_polars.png
    :width: 1000px
 
 You can reproduce the results by visiting the `Polars Decision Support (PDS) Github repository <https://github.com/pola-rs/polars-benchmark>`__.
