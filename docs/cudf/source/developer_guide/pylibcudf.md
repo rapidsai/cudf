@@ -186,7 +186,7 @@ Here is an example of appropriate enum usage.
 
 
 ```cython
-# cpp/copying.pxd
+# pylibcudf/libcudf/copying.pxd
 cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     # cpdef here so that we export both a cdef enum class and a Python enum.Enum.
     cpdef enum class out_of_bounds_policy(bool):
@@ -194,8 +194,9 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         DONT_CHECK
 
 
-# cpp/copying.pyx
-# This file is empty, but is required to compile the Python enum in cpp/copying.pxd
+# pylibcudf/libcudf/copying.pyx
+# This file is empty, but is required to compile the Python enum in pylibcudf/libcudf/copying.pxd
+# Ensure this file is included in pylibcudf/libcudf/CMakeLists.txt
 
 
 # pylibcudf/copying.pxd
@@ -203,21 +204,21 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
 # cimport the enum using the exact name
 # Once https://github.com/cython/cython/issues/5609 is resolved,
 # this import should instead be
-# from cudf._lib.cpp.copying cimport out_of_bounds_policy as OutOfBoundsPolicy
-from cudf._lib.cpp.copying cimport out_of_bounds_policy
+# from pylibcudf.libcudf.copying cimport out_of_bounds_policy as OutOfBoundsPolicy
+from pylibcudf.libcudf.copying cimport out_of_bounds_policy
 
 
 # pylibcudf/copying.pyx
 # Access cpp.copying members that aren't part of this module's public API via
 # this module alias
-from cudf._lib.cpp cimport copying as cpp_copying
-from cudf._lib.cpp.copying cimport out_of_bounds_policy
+from pylibcudf.libcudf cimport copying as cpp_copying
+from pylibcudf.libcudf.copying cimport out_of_bounds_policy
 
 # This import exposes the enum in the public API of this module.
 # It requires a no-cython-lint tag because it will be unused: all typing of
 # parameters etc will need to use the Cython name `out_of_bounds_policy` until
 # the Cython bug is resolved.
-from cudf._lib.cpp.copying import \
+from pylibcudf.libcudf.copying import \
     out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
 ```
 

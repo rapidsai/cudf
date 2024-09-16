@@ -22,6 +22,7 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 struct JsonLargeReaderTest : public cudf::test::StringsLargeTest {};
@@ -81,7 +82,7 @@ TEST_F(JsonLargeReaderTest, MultiBatch)
                                              json_lines_options,
                                              chunk_size,
                                              cudf::get_default_stream(),
-                                             rmm::mr::get_current_device_resource());
+                                             cudf::get_current_device_resource_ref());
 
     auto table_views = std::vector<cudf::table_view>(tables.size());
     std::transform(tables.begin(), tables.end(), table_views.begin(), [](auto& table) {
