@@ -43,6 +43,8 @@ jobs:
       needs: ${{ toJSON(needs) }}
   changed-files:
     secrets: inherit
+    # TODO: Change this back to @branch-24.10 once
+    # https://github.com/rapidsai/shared-workflows/pull/239 is merged
     uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@changed-files
     with:
       files_yaml: |
