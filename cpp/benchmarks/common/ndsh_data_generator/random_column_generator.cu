@@ -216,7 +216,8 @@ std::unique_ptr<cudf::column> generate_sentence(cudf::size_type num_rows,
                                                    cudf::string_scalar(""),
                                                    cudf::string_scalar("", false),
                                                    cudf::strings::separator_on_nulls::NO);
-  return cudf::strings::join_strings(sentence->view());
+  return cudf::strings::join_strings(
+    sentence->view(), cudf::string_scalar(""), cudf::string_scalar("", false), stream, mr);
 }
 
 cudf::string_view generate_text_corpus(rmm::cuda_stream_view stream,
