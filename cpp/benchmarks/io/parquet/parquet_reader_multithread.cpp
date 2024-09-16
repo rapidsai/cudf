@@ -50,7 +50,7 @@ std::string get_label(std::string const& test_name, nvbench::state const& state)
 }
 
 std::tuple<std::vector<cuio_source_sink_pair>, size_t, size_t> write_file_data(
-  nvbench::state& state, std::vector<cudf::type_id> const& d_types, io_type const io_source_type)
+  nvbench::state& state, std::vector<cudf::type_id> const& d_types, io_type io_source_type)
 {
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
