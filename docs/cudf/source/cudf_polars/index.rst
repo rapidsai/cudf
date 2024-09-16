@@ -16,7 +16,7 @@ We reproduced the `Polars Decision Support (PDS) <https://github.com/pola-rs/pol
 
 
 
-We see up to a 13x speed-up on our top-performing, compute-heavy queries involving complex aggregation and join operations on the 80 GB dataset.
+You can see up to a 13x speed-up on the top-performing, compute-heavy PDS queries involving complex aggregation and join operations on the 80 GB dataset.
 
 
 .. figure:: ../_static/compute_heavy_queries_polars.png
