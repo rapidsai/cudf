@@ -94,7 +94,9 @@ struct random_number_generator {
 
 }  // namespace
 
-std::unique_ptr<cudf::column> generate_verb_phrase(cudf::size_type num_rows)
+std::unique_ptr<cudf::column> generate_verb_phrase(cudf::size_type num_rows,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   constexpr std::array verbs = {"sleep",
@@ -141,7 +143,9 @@ std::unique_ptr<cudf::column> generate_verb_phrase(cudf::size_type num_rows)
     cudf::host_span<const char* const>(verbs.data(), verbs.size()), num_rows);
 }
 
-std::unique_ptr<cudf::column> generate_noun_phrase(cudf::size_type num_rows)
+std::unique_ptr<cudf::column> generate_noun_phrase(cudf::size_type num_rows,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   constexpr std::array nouns = {"foxes",
@@ -188,7 +192,9 @@ std::unique_ptr<cudf::column> generate_noun_phrase(cudf::size_type num_rows)
     cudf::host_span<const char* const>(nouns.data(), nouns.size()), num_rows);
 }
 
-std::unique_ptr<cudf::column> generate_terminator(cudf::size_type num_rows)
+std::unique_ptr<cudf::column> generate_terminator(cudf::size_type num_rows,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   constexpr std::array terminators = {".", ";", ":", "?", "!", "--"};
@@ -196,12 +202,14 @@ std::unique_ptr<cudf::column> generate_terminator(cudf::size_type num_rows)
     cudf::host_span<const char* const>(terminators.data(), terminators.size()), num_rows);
 }
 
-std::unique_ptr<cudf::column> generate_sentence(cudf::size_type num_rows)
+std::unique_ptr<cudf::column> generate_sentence(cudf::size_type num_rows,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto const verb_phrase = generate_verb_phrase(num_rows);
-  auto const noun_phrase = generate_noun_phrase(num_rows);
-  auto const terminator  = generate_terminator(num_rows);
+  auto const verb_phrase = generate_verb_phrase(num_rows, stream, mr);
+  auto const noun_phrase = generate_noun_phrase(num_rows, stream, mr);
+  auto const terminator  = generate_terminator(num_rows, stream, mr);
   auto const sentence_parts =
     cudf::table_view({verb_phrase->view(), noun_phrase->view(), terminator->view()});
   auto const sentence = cudf::strings::concatenate(sentence_parts,
@@ -211,11 +219,12 @@ std::unique_ptr<cudf::column> generate_sentence(cudf::size_type num_rows)
   return cudf::strings::join_strings(sentence->view());
 }
 
-cudf::string_view generate_text_corpus()
+cudf::string_view generate_text_corpus(rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   constexpr cudf::size_type num_rows       = 10'000;
-  auto text_corpus_column                  = generate_sentence(num_rows);
+  auto text_corpus_column                  = generate_sentence(num_rows, stream, mr);
   auto text_corpus_contents                = text_corpus_column->release();
   std::unique_ptr<rmm::device_buffer> buff = std::move(text_corpus_contents.data);
   return cudf::string_view((char*)buff->data(), buff->size());
@@ -228,7 +237,7 @@ std::unique_ptr<cudf::column> generate_random_string_column(cudf::size_type lowe
                                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto const text_corpus = generate_text_corpus();
+  auto const text_corpus = generate_text_corpus(stream, mr);
 
   auto offsets_begin = cudf::detail::make_counting_transform_iterator(
     0, random_number_generator<cudf::size_type>(lower, upper));
