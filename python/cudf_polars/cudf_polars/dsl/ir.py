@@ -363,7 +363,7 @@ class Scan(IR):
                         # Drop residual columns to save memory
                         tbl._columns[i] = None
 
-                return DataFrame.from_table(
+                df = DataFrame.from_table(
                     plc.Table(concatenated_columns),
                     names=names,
                 )
@@ -374,7 +374,7 @@ class Scan(IR):
                     num_rows=n_rows,
                     skip_rows=self.skip_rows,
                 )
-                return DataFrame.from_table(
+                df = DataFrame.from_table(
                     tbl_w_meta.tbl,
                     # TODO: consider nested column names?
                     tbl_w_meta.column_names(include_children=False),
