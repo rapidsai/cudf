@@ -143,29 +143,28 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
                                             rmm::device_async_resource_ref mr);
 
 /**
- * @brief Create a tdigest column of empty clusters.
+ * @brief Create an empty tdigest column.
  *
- * The column created contains the specified number of rows of empty clusters.
+ * An empty tdigest column contains a single row of length 0
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
- * @returns A tdigest column of empty clusters.
+ * @returns An empty tdigest column.
  */
 CUDF_EXPORT
-std::unique_ptr<column> make_tdigest_column_of_empty_clusters(size_type num_rows,
-                                                              rmm::cuda_stream_view stream,
-                                                              rmm::device_async_resource_ref mr);
+std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr);
 
 /**
- * @brief Create a scalar of an empty tdigest cluster.
+ * @brief Create an empty tdigest scalar.
  *
- * The returned scalar is a struct_scalar that contains a single row of an empty cluster.
+ * An empty tdigest scalar is a struct_scalar that contains a single row of length 0
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
- * @returns A scalar of an empty tdigest cluster.
+ * @returns An empty tdigest scalar.
  */
 std::unique_ptr<scalar> make_empty_tdigest_scalar(rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr);
