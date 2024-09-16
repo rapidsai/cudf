@@ -22,6 +22,8 @@ You can see up to 13x speedup using the GPU backend on the compute-heavy PDS que
 .. figure:: ../_static/compute_heavy_queries_polars.png
    :width: 1000px
 
+:emphasis:`PDS-H benchmark | GPU: NVIDIA H100 | CPU: Intel Xeon W9-3495X (Sapphire Rapids) | Storage: Local NVMe`
+
 You can reproduce the results by visiting the `Polars Decision Support (PDS) Github repository <https://github.com/pola-rs/polars-benchmark>`__.
 
 Learn More
