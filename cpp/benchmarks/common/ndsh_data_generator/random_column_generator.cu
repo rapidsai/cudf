@@ -22,7 +22,9 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/filling.hpp>
+#include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/string_view.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -39,22 +41,29 @@ namespace {
 // Functor for generating random strings
 struct random_string_generator {
   char* chars;
-  thrust::default_random_engine engine;
-  thrust::uniform_int_distribution<unsigned char> char_dist;
+  cudf::string_view corpus;
 
-  CUDF_HOST_DEVICE random_string_generator(char* c) : chars(c), char_dist(44, 122) {}
+  CUDF_HOST_DEVICE random_string_generator(char* c, cudf::string_view crps) : chars(c), corpus(crps)
+  {
+  }
 
   __device__ void operator()(thrust::tuple<int64_t, int64_t> str_begin_end)
   {
+    // Get the begin and end offsets
     auto begin = thrust::get<0>(str_begin_end);
     auto end   = thrust::get<1>(str_begin_end);
+
+    // Define the thrust random engine
+    thrust::default_random_engine engine;
+    thrust::uniform_int_distribution<int> dist(0, 8000);
     engine.discard(begin);
-    for (auto i = begin; i < end; ++i) {
-      auto ch = char_dist(engine);
-      if (i == end - 1 && ch >= '\x7F') ch = ' ';  // last element ASCII only.
-      if (ch >= '\x7F')                            // x7F is at the top edge of ASCII
-        chars[i++] = '\xC4';                       // these characters are assigned two bytes
-      chars[i] = static_cast<char>(ch + (ch >= '\x7F'));
+    engine.discard(end);
+
+    // Generate a random offset
+    auto offset = dist(engine);
+    for (auto idx = begin; idx < end; idx++) {
+      chars[idx] = corpus[offset];
+      offset += 1;
     }
   }
 };
@@ -85,6 +94,133 @@ struct random_number_generator {
 
 }  // namespace
 
+std::unique_ptr<cudf::column> generate_verb_phrase(cudf::size_type num_rows)
+{
+  CUDF_FUNC_RANGE();
+  constexpr std::array verbs = {"sleep",
+                                "wake",
+                                "are",
+                                "cajole"
+                                "haggle",
+                                "nag",
+                                "use",
+                                "boost",
+                                "affix",
+                                "detect",
+                                "integrate",
+                                "maintain"
+                                "nod",
+                                "was",
+                                "lose",
+                                "sublate",
+                                "solve",
+                                "thrash",
+                                "promise",
+                                "engage",
+                                "hinder",
+                                "print",
+                                "x-ray",
+                                "breach",
+                                "eat",
+                                "grow",
+                                "impress",
+                                "mold",
+                                "poach",
+                                "serve",
+                                "run",
+                                "dazzle",
+                                "snooze",
+                                "doze",
+                                "unwind",
+                                "kindle",
+                                "play",
+                                "hang",
+                                "believe",
+                                "doubt"};
+  return generate_random_string_column_from_set(
+    cudf::host_span<const char* const>(verbs.data(), verbs.size()), num_rows);
+}
+
+std::unique_ptr<cudf::column> generate_noun_phrase(cudf::size_type num_rows)
+{
+  CUDF_FUNC_RANGE();
+  constexpr std::array nouns = {"foxes",
+                                "ideas",
+                                "theodolites",
+                                "pinto beans",
+                                "instructions",
+                                "dependencies",
+                                "excuses",
+                                "platelets",
+                                "asymptotes",
+                                "courts",
+                                "dolphins",
+                                "multipliers",
+                                "sauternes",
+                                "warthogs",
+                                "frets",
+                                "dinos",
+                                "attainments",
+                                "somas",
+                                "Tiresias' patterns",
+                                "forges",
+                                "braids",
+                                "hockey players",
+                                "frays",
+                                "warhorses",
+                                "dugouts",
+                                "notornis",
+                                "epitaphs",
+                                "pearls",
+                                "tithes",
+                                "waters",
+                                "orbits",
+                                "gifts",
+                                "sheaves",
+                                "depths",
+                                "sentiments",
+                                "decoys",
+                                "realms",
+                                "pains",
+                                "grouches",
+                                "escapades"};
+  return generate_random_string_column_from_set(
+    cudf::host_span<const char* const>(nouns.data(), nouns.size()), num_rows);
+}
+
+std::unique_ptr<cudf::column> generate_terminator(cudf::size_type num_rows)
+{
+  CUDF_FUNC_RANGE();
+  constexpr std::array terminators = {".", ";", ":", "?", "!", "--"};
+  return generate_random_string_column_from_set(
+    cudf::host_span<const char* const>(terminators.data(), terminators.size()), num_rows);
+}
+
+std::unique_ptr<cudf::column> generate_sentence(cudf::size_type num_rows)
+{
+  CUDF_FUNC_RANGE();
+  auto const verb_phrase = generate_verb_phrase(num_rows);
+  auto const noun_phrase = generate_noun_phrase(num_rows);
+  auto const terminator  = generate_terminator(num_rows);
+  auto const sentence_parts =
+    cudf::table_view({verb_phrase->view(), noun_phrase->view(), terminator->view()});
+  auto const sentence = cudf::strings::concatenate(sentence_parts,
+                                                   cudf::string_scalar(""),
+                                                   cudf::string_scalar("", false),
+                                                   cudf::strings::separator_on_nulls::NO);
+  return cudf::strings::join_strings(sentence->view());
+}
+
+cudf::string_view generate_text_corpus()
+{
+  CUDF_FUNC_RANGE();
+  constexpr cudf::size_type num_rows       = 10'000;
+  auto text_corpus_column                  = generate_sentence(num_rows);
+  auto text_corpus_contents                = text_corpus_column->release();
+  std::unique_ptr<rmm::device_buffer> buff = std::move(text_corpus_contents.data);
+  return cudf::string_view((char*)buff->data(), buff->size());
+}
+
 std::unique_ptr<cudf::column> generate_random_string_column(cudf::size_type lower,
                                                             cudf::size_type upper,
                                                             cudf::size_type num_rows,
@@ -92,6 +228,8 @@ std::unique_ptr<cudf::column> generate_random_string_column(cudf::size_type lowe
                                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
+  auto const text_corpus = generate_text_corpus();
+
   auto offsets_begin = cudf::detail::make_counting_transform_iterator(
     0, random_number_generator<cudf::size_type>(lower, upper));
   auto [offsets_column, computed_bytes] = cudf::strings::detail::make_offsets_child_column(
@@ -106,7 +244,7 @@ std::unique_ptr<cudf::column> generate_random_string_column(cudf::size_type lowe
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_zip_iterator(offset_itr, offset_itr + 1),
                      num_rows,
-                     random_string_generator(chars.data()));
+                     random_string_generator(chars.data(), text_corpus));
 
   return cudf::make_strings_column(
     num_rows, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
