@@ -16,7 +16,7 @@ We reproduced the `Polars Decision Support (PDS) <https://github.com/pola-rs/pol
 
 
 
-You can see up to 13x speed-up on the compute-heavy PDS queries involving complex aggregation and join operations. Below are the speed-ups on the top performing PDS queries:
+You can see up to 13x speedup using the GPU backend on the compute-heavy PDS queries involving complex aggregation and join operations. Below are the speedups for the top performing queries:
 
 
 .. figure:: ../_static/compute_heavy_queries_polars.png
