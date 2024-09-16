@@ -94,6 +94,13 @@ def _(
         cloud_options = None
     else:
         reader_options, cloud_options = map(json.loads, options)
+    if (
+        typ == "csv"
+        and visitor.version()[0] == 1
+        and reader_options["schema"] is not None
+    ):
+        # Polars 1.7 renames the inner slot from "inner" to "fields".
+        reader_options["schema"] = {"fields": reader_options["schema"]["inner"]}
     file_options = node.file_options
     with_columns = file_options.with_columns
     n_rows = file_options.n_rows
@@ -310,8 +317,8 @@ def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
     # IR is versioned with major.minor, minor is bumped for backwards
     # compatible changes (e.g. adding new nodes), major is bumped for
     # incompatible changes (e.g. renaming nodes).
-    # Polars 1.4 changes definition of PythonScan.
-    if (version := visitor.version()) >= (2, 0):
+    # Polars 1.7 changes definition of the CSV reader options schema name.
+    if (version := visitor.version()) >= (3, 0):
         raise NotImplementedError(
             f"No support for polars IR {version=}"
         )  # pragma: no cover; no such version for now.
@@ -419,12 +426,29 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
             *(translate_expr(visitor, n=n) for n in node.input),
         )
     elif isinstance(name, pl_expr.TemporalFunction):
-        return expr.TemporalFunction(
+        # functions for which evaluation of the expression may not return
+        # the same dtype as polars, either due to libcudf returning a different
+        # dtype, or due to our internal processing affecting what libcudf returns
+        needs_cast = {
+            pl_expr.TemporalFunction.Year,
+            pl_expr.TemporalFunction.Month,
+            pl_expr.TemporalFunction.Day,
+            pl_expr.TemporalFunction.WeekDay,
+            pl_expr.TemporalFunction.Hour,
+            pl_expr.TemporalFunction.Minute,
+            pl_expr.TemporalFunction.Second,
+            pl_expr.TemporalFunction.Millisecond,
+        }
+        result_expr = expr.TemporalFunction(
             dtype,
             name,
             options,
             *(translate_expr(visitor, n=n) for n in node.input),
         )
+        if name in needs_cast:
+            return expr.Cast(dtype, result_expr)
+        return result_expr
+
     elif isinstance(name, str):
         children = (translate_expr(visitor, n=n) for n in node.input)
         if name == "log":

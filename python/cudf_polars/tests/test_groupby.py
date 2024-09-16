@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 
 import pytest
+from packaging import version
 
 import polars as pl
 
@@ -168,7 +169,13 @@ def test_groupby_nan_minmax_raises(op):
     "expr",
     [
         pl.lit(1).alias("value"),
-        pl.lit([[4, 5, 6]]).alias("value"),
+        pytest.param(
+            pl.lit([[4, 5, 6]]).alias("value"),
+            marks=pytest.mark.xfail(
+                condition=version.parse(pl.__version__) >= version.parse("1.7.1"),
+                reason="Broken in polars 1.7.1",
+            ),
+        ),
         pl.col("float") * (1 - pl.col("int")),
         [pl.lit(2).alias("value"), pl.col("float") * 2],
     ],

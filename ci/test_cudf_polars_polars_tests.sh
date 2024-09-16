@@ -31,9 +31,15 @@ rapids-logger "Install cudf"
 python -m pip install ./local-cudf-dep/cudf*.whl
 
 rapids-logger "Install cudf_polars"
-python -m pip install $(echo ./dist/cudf_polars*.whl)[test]
+python -m pip install $(echo ./dist/cudf_polars*.whl)
 
-rapids-logger "Run cudf_polars tests"
+TAG=$(python -c 'import polars; print(f"py-{polars.__version__}")')
+rapids-logger "Clone polars to ${TAG}"
+git clone https://github.com/pola-rs/polars.git --branch ${TAG} --depth 1
+
+# Install requirements for running polars tests
+rapids-logger "Install polars test requirements"
+python -m pip install -r polars/py-polars/requirements-dev.txt -r polars/py-polars/requirements-ci.txt
 
 function set_exitcode()
 {
@@ -43,19 +49,16 @@ EXITCODE=0
 trap set_exitcode ERR
 set +e
 
-./ci/run_cudf_polars_pytests.sh \
-       --cov cudf_polars \
-       --cov-fail-under=100 \
-       --cov-config=./pyproject.toml \
-       --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml"
+rapids-logger "Run polars tests"
+./ci/run_cudf_polars_polars_tests.sh
 
 trap ERR
 set -e
 
 if [ ${EXITCODE} != 0 ]; then
-    rapids-logger "Testing FAILED: exitcode ${EXITCODE}"
+    rapids-logger "Running polars test suite FAILED: exitcode ${EXITCODE}"
 else
-    rapids-logger "Testing PASSED"
+    rapids-logger "Running polars test suite PASSED"
 fi
 
 if [ ${HAS_CHANGES} == 1 ]; then
