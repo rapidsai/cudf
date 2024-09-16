@@ -22,6 +22,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
@@ -38,7 +39,7 @@ template <class TypeParam, bool coalesce>
 void BM_lists_scatter(::benchmark::State& state)
 {
   auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto mr     = cudf::get_current_device_resource_ref();
 
   cudf::size_type const base_size{(cudf::size_type)state.range(0)};
   cudf::size_type const num_elements_per_row{(cudf::size_type)state.range(1)};

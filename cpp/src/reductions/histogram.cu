@@ -20,8 +20,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <cuda/atomic>
 #include <cuda/functional>
@@ -223,7 +222,7 @@ compute_row_frequencies(table_view const& input,
       partial_counts ? partial_counts.value().begin<histogram_count_type>() : nullptr},
     histogram_count_type{0},
     stream,
-    rmm::mr::get_current_device_resource());
+    cudf::get_current_device_resource_ref());
 
   auto const input_it = thrust::make_zip_iterator(
     thrust::make_tuple(thrust::make_counting_iterator(0), reduction_results.begin()));
