@@ -20,9 +20,8 @@
 
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <map>
 #include <string>
@@ -129,6 +128,19 @@ class json_reader_options {
 
   // Whether to recover after an invalid JSON line
   json_recovery_mode_t _recovery_mode = json_recovery_mode_t::FAIL;
+
+  // Validation checks for spark
+  // Should the json validation be strict or not
+  // Note: strict validation enforces the JSON specification https://www.json.org/json-en.html
+  bool _strict_validation = false;
+  // Allow leading zeros for numeric values.
+  bool _allow_numeric_leading_zeros = true;
+  // Allow non-numeric numbers: NaN, +INF, -INF, +Infinity, Infinity, -Infinity
+  bool _allow_nonnumeric_numbers = true;
+  // Allow unquoted control characters
+  bool _allow_unquoted_control_chars = true;
+  // Additional values to recognize as null values
+  std::vector<std::string> _na_values;
 
   /**
    * @brief Constructor from source info.
@@ -301,6 +313,55 @@ class json_reader_options {
   [[nodiscard]] json_recovery_mode_t recovery_mode() const { return _recovery_mode; }
 
   /**
+   * @brief Whether json validation should be enforced strictly or not.
+   *
+   * @return true if it should be.
+   */
+  [[nodiscard]] bool is_strict_validation() const { return _strict_validation; }
+
+  /**
+   * @brief Whether leading zeros are allowed in numeric values.
+   *
+   * @note: This validation is enforced only if strict validation is enabled.
+   *
+   * @return true if leading zeros are allowed in numeric values
+   */
+  [[nodiscard]] bool is_allowed_numeric_leading_zeros() const
+  {
+    return _allow_numeric_leading_zeros;
+  }
+
+  /**
+   * @brief Whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity, Infinity,
+   * and -Infinity.
+   *
+   * @note: This validation is enforced only if strict validation is enabled.
+   *
+   * @return true if leading zeros are allowed in numeric values
+   */
+  [[nodiscard]] bool is_allowed_nonnumeric_numbers() const { return _allow_nonnumeric_numbers; }
+
+  /**
+   * @brief Whether in a quoted string should characters greater than or equal to 0 and less than 32
+   * be allowed without some form of escaping.
+   *
+   * @note: This validation is enforced only if strict validation is enabled.
+   *
+   * @return true if unquoted control chars are allowed.
+   */
+  [[nodiscard]] bool is_allowed_unquoted_control_chars() const
+  {
+    return _allow_unquoted_control_chars;
+  }
+
+  /**
+   * @brief Returns additional values to recognize as null values.
+   *
+   * @return Additional values to recognize as null values
+   */
+  [[nodiscard]] std::vector<std::string> const& get_na_values() const { return _na_values; }
+
+  /**
    * @brief Set data types for columns to be read.
    *
    * @param types Vector of dtypes
@@ -429,6 +490,63 @@ class json_reader_options {
    * @param val An enum value to indicate the JSON reader's behavior on invalid JSON lines.
    */
   void set_recovery_mode(json_recovery_mode_t val) { _recovery_mode = val; }
+
+  /**
+   * @brief Set whether strict validation is enabled or not.
+   *
+   * @param val Boolean value to indicate whether strict validation is enabled.
+   */
+  void set_strict_validation(bool val) { _strict_validation = val; }
+
+  /**
+   * @brief Set whether leading zeros are allowed in numeric values. Strict validation
+   * must be enabled for this to work.
+   *
+   * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
+   *
+   * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
+   */
+  void allow_numeric_leading_zeros(bool val)
+  {
+    CUDF_EXPECTS(_strict_validation, "Strict validation must be enabled for this to work.");
+    _allow_numeric_leading_zeros = val;
+  }
+
+  /**
+   * @brief Set whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity,
+   * Infinity, and -Infinity. Strict validation must be enabled for this to work.
+   *
+   * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
+   *
+   * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
+   */
+  void allow_nonnumeric_numbers(bool val)
+  {
+    CUDF_EXPECTS(_strict_validation, "Strict validation must be enabled for this to work.");
+    _allow_nonnumeric_numbers = val;
+  }
+
+  /**
+   * @brief Set whether in a quoted string should characters greater than or equal to 0
+   * and less than 32 be allowed without some form of escaping. Strict validation must
+   * be enabled for this to work.
+   *
+   * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
+   *
+   * @param val true to indicate whether unquoted control chars are allowed.
+   */
+  void allow_unquoted_control_chars(bool val)
+  {
+    CUDF_EXPECTS(_strict_validation, "Strict validation must be enabled for this to work.");
+    _allow_unquoted_control_chars = val;
+  }
+
+  /**
+   * @brief Sets additional values to recognize as null values.
+   *
+   * @param vals Vector of values to be considered to be null
+   */
+  void set_na_values(std::vector<std::string> vals) { _na_values = std::move(vals); }
 };
 
 /**
@@ -641,6 +759,76 @@ class json_reader_options_builder {
   }
 
   /**
+   * @brief Set whether json validation should be strict or not.
+   *
+   * @param val Boolean value to indicate whether json validation should be strict or not.
+   * @return this for chaining
+   */
+  json_reader_options_builder& strict_validation(bool val)
+  {
+    options.set_strict_validation(val);
+    return *this;
+  }
+
+  /**
+   * @brief Set Whether leading zeros are allowed in numeric values. Strict validation must
+   * be enabled for this to have any effect.
+   *
+   * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
+   *
+   * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
+   * @return this for chaining
+   */
+  json_reader_options_builder& numeric_leading_zeros(bool val)
+  {
+    options.allow_numeric_leading_zeros(val);
+    return *this;
+  }
+
+  /**
+   * @brief Set whether specific unquoted number values are valid JSON. The values are NaN,
+   * +INF, -INF, +Infinity, Infinity, and -Infinity.
+   * Strict validation must be enabled for this to have any effect.
+   *
+   * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
+   *
+   * @param val Boolean value to indicate if unquoted nonnumeric values are valid json or not.
+   * @return this for chaining
+   */
+  json_reader_options_builder& nonnumeric_numbers(bool val)
+  {
+    options.allow_nonnumeric_numbers(val);
+    return *this;
+  }
+
+  /**
+   * @brief Set whether chars >= 0 and < 32 are allowed in a quoted string without
+   * some form of escaping. Strict validation must be enabled for this to have any effect.
+   *
+   * @throw cudf::logic_error if `strict_validation` is not enabled before setting this option.
+   *
+   * @param val Boolean value to indicate if unquoted control chars are allowed or not.
+   * @return this for chaining
+   */
+  json_reader_options_builder& unquoted_control_chars(bool val)
+  {
+    options.allow_unquoted_control_chars(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets additional values to recognize as null values.
+   *
+   * @param vals Vector of values to be considered to be null
+   * @return this for chaining
+   */
+  json_reader_options_builder& na_values(std::vector<std::string> vals)
+  {
+    options.set_na_values(std::move(vals));
+    return *this;
+  }
+
+  /**
    * @brief move json_reader_options member once it's built.
    */
   operator json_reader_options&&() { return std::move(options); }
@@ -675,7 +863,7 @@ class json_reader_options_builder {
 table_with_metadata read_json(
   json_reader_options options,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 
