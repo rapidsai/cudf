@@ -235,6 +235,26 @@ class aggregate_reader_metadata {
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
 
   /**
+   * @brief Checks if a schema index from 0th source is mapped to the specified file index
+   *
+   * @param schema_idx The index of the SchemaElement in the zeroth file.
+   * @param pfm_idx The index of the file (per_file_metadata) to check mappings for.
+   *
+   * @return True if schema index is mapped
+   */
+  [[nodiscard]] bool is_schema_index_mapped(int schema_idx, int pfm_idx) const;
+
+  /**
+   * @brief Maps schema index from 0th source file to the specified file index
+   *
+   * @param schema_idx The index of the SchemaElement in the zeroth file.
+   * @param pfm_idx The index of the file (per_file_metadata) to map the schema_idx to.
+   *
+   * @return Mapped schema index
+   */
+  [[nodiscard]] int map_schema_index(int schema_idx, int pfm_idx) const;
+
+  /**
    * @brief Extracts the schema_idx'th SchemaElement from the pfm_idx'th file
    *
    * @param schema_idx The index of the SchemaElement to be extracted.
@@ -248,7 +268,7 @@ class aggregate_reader_metadata {
     CUDF_EXPECTS(
       schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
       "Parquet reader encountered an invalid schema_idx or pfm_idx",
-      std::invalid_argument);
+      std::out_of_range);
     return per_file_metadata[pfm_idx].schema[schema_idx];
   }
 
@@ -256,7 +276,10 @@ class aggregate_reader_metadata {
   [[nodiscard]] auto&& get_key_value_metadata() && { return std::move(keyval_maps); }
 
   /**
-   * @brief Gets the concrete nesting depth of output cudf columns
+   * @brief Gets the concrete nesting depth of output cudf columns.
+   *
+   * Gets the nesting depth of the output cudf column for the given schema.
+   * The nesting depth must be equal for the given schema_index across all sources.
    *
    * @param schema_index Schema index of the input column
    *
