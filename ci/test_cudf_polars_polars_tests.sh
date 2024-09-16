@@ -33,7 +33,8 @@ python -m pip install ./local-cudf-dep/cudf*.whl
 rapids-logger "Install cudf_polars"
 python -m pip install $(echo ./dist/cudf_polars*.whl)
 
-TAG=$(python -c 'import polars; print(f"py-{polars.__version__}")')
+# TAG=$(python -c 'import polars; print(f"py-{polars.__version__}")')
+TAG="py-1.7.0"
 rapids-logger "Clone polars to ${TAG}"
 git clone https://github.com/pola-rs/polars.git --branch ${TAG} --depth 1
 

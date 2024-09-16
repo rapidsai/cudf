@@ -33,6 +33,9 @@ python -m pip install ./local-cudf-dep/cudf*.whl
 rapids-logger "Install cudf_polars"
 python -m pip install $(echo ./dist/cudf_polars*.whl)[test]
 
+rapids-logger "Pin to 1.7.0 Temporarily"
+python -m pip install polars==1.7.0
+
 rapids-logger "Run cudf_polars tests"
 
 function set_exitcode()
