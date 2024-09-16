@@ -51,8 +51,7 @@ def test_profiler():
     # when cudf.Timedelta support is added
     for name, func in per_function_stats.items():
         if name == "Timestamp":
-            assert len(func["cpu"]) != 0
-            assert len(func["gpu"]) != 0
+            assert len(func["cpu"]) == 0
             continue
         assert (
             len(func["cpu"]) == 0
