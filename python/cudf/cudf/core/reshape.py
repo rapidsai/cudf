@@ -738,7 +738,8 @@ def get_dummies(
     sparse : boolean, optional
         Right now this is NON-FUNCTIONAL argument in rapids.
     drop_first : boolean, optional
-        Whether to get k-1 dummies out of k categorical levels by removing the first level.
+        Whether to get k-1 dummies out of k categorical levels by removing the
+        first level.
     columns : sequence of str, optional
         Names of columns to encode. If not provided, will attempt to encode all
         columns. Note this is different from pandas default behavior, which
