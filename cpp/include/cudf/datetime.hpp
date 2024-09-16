@@ -40,7 +40,7 @@ namespace datetime {
 /**
  * @brief Types of datetime components that may be extracted.
  */
-enum class datetime_component {
+enum class datetime_component : uint8_t {
   INVALID = 0,
   YEAR,
   MONTH,
@@ -205,7 +205,7 @@ std::unique_ptr<cudf::column> extract_nanosecond_fraction(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Extracts the specified datetime component from any datetime type and
+ * @brief Extracts the specified datetime component from any datetime type and
  * returns an int16_t cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
@@ -218,7 +218,7 @@ std::unique_ptr<cudf::column> extract_nanosecond_fraction(
 std::unique_ptr<cudf::column> extract_datetime_component(
   cudf::column_view const& column,
   datetime_component component,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 /**

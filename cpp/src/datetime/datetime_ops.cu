@@ -630,7 +630,7 @@ std::unique_ptr<column> extract_second(column_view const& column, rmm::device_as
 
 std::unique_ptr<cudf::column> extract_datetime_component(cudf::column_view const& column,
                                                          datetime_component component,
-                                                         rmm::mr::device_memory_resource* mr)
+                                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   switch (component) {
