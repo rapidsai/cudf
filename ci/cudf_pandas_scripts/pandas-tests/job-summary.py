@@ -107,7 +107,7 @@ df = df.sort_values(by=["Failed tests", "Skipped tests"], ascending=False)
 
 print(comment)
 print()
-print(f"Average CPU and GPU usage for the tests: {cpu_usage_mean} % and {gpu_usage_mean} %")
+print(f"Average CPU and GPU usage for the tests: {cpu_usage_mean}% and {gpu_usage_mean}%")
 print()
 print("Here are the results of running the Pandas tests against this PR:")
 print()
