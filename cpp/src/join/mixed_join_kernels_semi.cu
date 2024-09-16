@@ -59,7 +59,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     &intermediate_storage[tile.meta_group_rank() * device_expression_data.num_intermediates];
 
   cudf::size_type const outer_num_rows  = left_table.num_rows();
-  cudf::size_type const outer_row_index = (threadIdx.x + blockIdx.x * block_size) / cg_size;
+  auto const outer_row_index = cudf::detail::grid_1d::global_thread_id<block_size>() / cg_size;
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
