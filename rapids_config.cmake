@@ -27,6 +27,8 @@ else()
 endif()
 
 if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS-${RAPIDS_VERSION_MAJOR_MINOR}.cmake")
+  set(rapids-cmake-repo jameslamb/rapids-cmake)
+  set(rapids-cmake-branch fmt-and-spdlog)
   file(
     DOWNLOAD
     "https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-${RAPIDS_VERSION_MAJOR_MINOR}/RAPIDS.cmake"
