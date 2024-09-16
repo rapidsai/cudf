@@ -882,11 +882,17 @@ def _assert_fast_slow_eq(left, right):
 
 
 def _fast_function_call():
-    return 1
+    """
+    Placeholder fast function for pytest profiling purposes.
+    """
+    return None
 
 
 def _slow_function_call():
-    return 1
+    """
+    Placeholder slow function for pytest profiling purposes.
+    """
+    return None
 
 
 def _fast_slow_function_call(

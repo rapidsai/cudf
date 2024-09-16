@@ -145,13 +145,5 @@ PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
     "$@" || [ $? = 1 ]  # Exit success if exit code was 1 (permit test failures but not other errors)
 
 mv *.json ..
-pwd
-ls -al
-pwd
-ls -al tests/
 cd ..
-pwd
-ls -al
-pwd
-ls -al pandas-tests/
 rm -rf pandas-testing/pandas-tests/

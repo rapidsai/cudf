@@ -77,7 +77,6 @@ def get_per_module_results(log_file_name):
                 per_module_results[key].get("_fast_function_call", 0)
                 + function_call_counts.get("_fast_function_call", 0)
             )
-            # value["function_call_counts"] = function_call_counts
     return per_module_results
 
 
