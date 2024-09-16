@@ -1,5 +1,5 @@
 cuDF-based GPU backend for Polars [Open Beta]
-================================
+=============================================
 
 cuDF supports an in-memory, GPU-accelerated execution engine for Python users of the Polars Lazy API. 
 The engine supports most of the core expressions and data types as well as a growing set of more advanced dataframe manipulations 
@@ -24,7 +24,7 @@ The per-query speedups using Polars GPU Engine for the 80 GB dataset are below:
 You can reproduce the results by visiting the `Polars Decision Support (PDS) Github repository. <https://github.com/pola-rs/polars-benchmark>`_
 
 Learn More
-----------------------
+----------
 
 The GPU backend for Polars is now available in Open Beta and the engine is undergoing rapid development. To learn more, visit the `GPU Support page <https://docs.pola.rs/user-guide/gpu-support/>`_ on the Polars website.
 
