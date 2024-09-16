@@ -65,10 +65,6 @@
 namespace cudf {
 namespace jni {
 
-// cuDF has updated the default row group size to infinity in PR:
-// https://github.com/rapidsai/cudf/pull/16750 but we are keeping it 128MB for JNI for now.
-size_t constexpr jni_parquet_writer_default_row_group_size = 128 * 1024 * 1024;
-
 /**
  * @brief The base class for table writer.
  *
@@ -2208,7 +2204,6 @@ Java_ai_rapids_cudf_Table_writeParquetBufferBegin(JNIEnv* env,
     chunked_parquet_writer_options opts =
       chunked_parquet_writer_options::builder(sink)
         .metadata(std::move(metadata))
-        .row_group_size_bytes(jni_parquet_writer_default_row_group_size)
         .compression(static_cast<compression_type>(j_compression))
         .stats_level(static_cast<statistics_freq>(j_stats_freq))
         .key_value_metadata({kv_metadata})
@@ -2284,7 +2279,6 @@ Java_ai_rapids_cudf_Table_writeParquetFileBegin(JNIEnv* env,
     chunked_parquet_writer_options opts =
       chunked_parquet_writer_options::builder(sink)
         .metadata(std::move(metadata))
-        .row_group_size_bytes(jni_parquet_writer_default_row_group_size)
         .compression(static_cast<compression_type>(j_compression))
         .stats_level(static_cast<statistics_freq>(j_stats_freq))
         .key_value_metadata({kv_metadata})
