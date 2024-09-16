@@ -86,7 +86,6 @@ def table_encode(list source_columns):
 
 
 def one_hot_encode(Column input_column, Column categories):
-    pylist_categories = categories.to_arrow().to_pylist()
     plc_table = plc_transform.one_hot_encode(
         input_column.to_pylibcudf(mode="read"),
         categories.to_pylibcudf(mode="read"),
@@ -95,7 +94,11 @@ def one_hot_encode(Column input_column, Column categories):
         Column.from_pylibcudf(col, data_ptr_exposed=True)
         for col in plc_table.columns()
     ]
-    return dict(zip(pylist_categories, result_columns))
+    result_labels = [
+        x if x is not None else '<NA>'
+        for x in categories.to_arrow().to_pylist()
+    ]
+    return dict(zip(result_labels, result_columns))
 
 
 @acquire_spill_lock()
