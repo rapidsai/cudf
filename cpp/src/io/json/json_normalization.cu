@@ -17,6 +17,7 @@
 #include "io/fst/lookup_tables.cuh"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -304,6 +305,7 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& inda
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   static constexpr std::int32_t min_out = 0;
   static constexpr std::int32_t max_out = 2;
   auto parser =
