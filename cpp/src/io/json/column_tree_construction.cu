@@ -102,6 +102,7 @@ void max_row_offsets_col_categories(InputIterator1 keys_first,
                         });
 }
 
+// debug printing
 template <typename T>
 void print(device_span<T const> d_vec, std::string name, rmm::cuda_stream_view stream)
 {
@@ -178,11 +179,11 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
                              level_ordered_col_ids.begin(),
                              level_ordering{tree.node_levels, col_ids, tree.parent_node_ids});
 
-  /*
+#ifdef CSR_DEBUG_PRINT
   print<NodeIndexT>(level_ordered_node_ids, "h_level_ordered_node_ids", stream);
   print<NodeIndexT>(col_ids, "h_col_ids", stream);
   print<NodeIndexT>(level_ordered_col_ids, "h_level_ordered_col_ids", stream);
-  */
+#endif
 
   // 1. get the number of columns in tree, mapping between node tree col ids and csr col ids, and
   // the node id of first row in each column
@@ -209,9 +210,11 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
                       mapped_col_ids_copy.end(),
                       rev_mapped_col_ids.begin());
 
+#ifdef CSR_DEBUG_PRINT
   print<NodeIndexT>(mapped_col_ids, "h_mapped_col_ids", stream);
   print<NodeIndexT>(level_ordered_unique_node_ids, "h_level_ordered_unique_node_ids", stream);
   print<NodeIndexT>(rev_mapped_col_ids, "h_rev_mapped_col_ids", stream);
+#endif
 
   // 2. maximum number of rows per column: computed with reduce_by_key {col_id}, {row_offset}, max.
   // 3. category for each column node by aggregating all nodes in node tree corresponding to same
@@ -253,7 +256,9 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   // Note that the first element of csr_parent_col_ids is -1 (parent_node_sentinel)
   // children adjacency
 
+#ifdef CSR_DEBUG_PRINT
   print<NodeIndexT>(parent_col_ids, "h_parent_col_ids", stream);
+#endif
 
   auto num_non_leaf_columns = thrust::unique_count(
     rmm::exec_policy_nosync(stream), parent_col_ids.begin() + 1, parent_col_ids.end());
@@ -273,8 +278,6 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
                   non_leaf_nodes.begin(),
                   rowidx.begin() + 1);
 
-  print<NodeIndexT>(rowidx, "h_rowidx", stream);
-
   thrust::transform_inclusive_scan(
     rmm::exec_policy_nosync(stream),
     thrust::make_zip_iterator(thrust::make_counting_iterator(1), rowidx.begin() + 1),
@@ -287,15 +290,8 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
     }),
     thrust::plus<NodeIndexT>{});
 
-  print<NodeIndexT>(rowidx, "h_rowidx", stream);
-
   rmm::device_uvector<NodeIndexT> colidx((num_columns - 1) * 2, stream);
-  // Skip the parent of root node
-  thrust::scatter(rmm::exec_policy_nosync(stream),
-                  parent_col_ids.begin() + 1,
-                  parent_col_ids.end(),
-                  rowidx.begin() + 1,
-                  colidx.begin());
+  thrust::fill(rmm::exec_policy(stream), colidx.begin(), colidx.end(), -1);
   // excluding root node, construct scatter map
   rmm::device_uvector<NodeIndexT> map(num_columns - 1, stream);
   thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
@@ -321,15 +317,23 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
                   map.begin(),
                   colidx.begin());
 
+#ifdef CSR_DEBUG_PRINT
+  print<NodeIndexT>(colidx, "h_pre_colidx", stream);
   print<size_type>(max_row_offsets, "h_max_row_offsets", stream);
+#endif
 
   // Mixed types in List children go to different columns,
   // so all immediate children of list column should have same max_row_offsets.
   //   create list's children max_row_offsets array
   //   gather the max_row_offsets from children row offset array.
   {
-    auto max_row_offsets_it =
-      thrust::make_permutation_iterator(max_row_offsets.begin(), colidx.begin());
+    auto max_row_offsets_it = thrust::make_transform_iterator(thrust::make_counting_iterator(0), 
+      cuda::proclaim_return_type<row_offset_t>(
+      [colidx = colidx.begin(),
+       max_row_offsets = max_row_offsets.begin()] __device__ (size_t i) {
+        if(colidx[i] == -1) return -1;
+        else return max_row_offsets[colidx[i]];
+    }));
     rmm::device_uvector<row_offset_t> max_children_max_row_offsets(num_columns, stream);
     size_t temp_storage_bytes = 0;
     cub::DeviceSegmentedReduce::Max(nullptr,
@@ -350,6 +354,14 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
                                     rowidx.begin() + 1,
                                     stream.value());
 
+    // Skip the parent of root node
+    thrust::scatter(rmm::exec_policy_nosync(stream),
+                    parent_col_ids.begin() + 1,
+                    parent_col_ids.end(),
+                    rowidx.begin() + 1,
+                    colidx.begin());
+
+
     rmm::device_uvector<NodeIndexT> list_ancestors(num_columns, stream);
     thrust::for_each_n(
       rmm::exec_policy_nosync(stream),
@@ -361,21 +373,17 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
        dev_num_levels_ptr,
        list_ancestors = list_ancestors.begin()] __device__(NodeIndexT node) {
         auto num_levels      = *dev_num_levels_ptr;
-        list_ancestors[node] = node;
-        for (int level = 0; level <= num_levels; level++) {
-          if (list_ancestors[node] > 0) list_ancestors[node] = colidx[rowidx[list_ancestors[node]]];
-          if (list_ancestors[node] == 0 || column_categories[list_ancestors[node]] == NC_LIST)
-            break;
+        list_ancestors[node] = colidx[rowidx[node]];
+        for (int level = 0; level <= num_levels && list_ancestors[node] && column_categories[list_ancestors[node]] != NC_LIST; level++) {
+          list_ancestors[node] = colidx[rowidx[list_ancestors[node]]];
         }
       });
 
-    thrust::gather_if(rmm::exec_policy_nosync(stream),
-                      list_ancestors.begin(),
-                      list_ancestors.end(),
-                      list_ancestors.begin(),
-                      max_children_max_row_offsets.begin(),
-                      max_row_offsets.begin(),
-                      [] __device__(auto ancestor) { return ancestor != -1; });
+    thrust::gather(rmm::exec_policy_nosync(stream),
+        list_ancestors.begin(),
+        list_ancestors.end(),
+        max_children_max_row_offsets.begin(),
+        max_row_offsets.begin());
   }
 
   return std::tuple{
@@ -416,11 +424,11 @@ reduce_to_column_tree(tree_meta_t& tree,
   auto const num_columns =
     thrust::unique_count(rmm::exec_policy(stream), sorted_col_ids.begin(), sorted_col_ids.end());
 
-  /*
+#ifdef CSR_DEBUG_PRINT
   print<NodeIndexT>(original_col_ids, "h_original_col_ids", stream);
   print<NodeIndexT>(sorted_col_ids, "h_sorted_col_ids", stream);
   print<NodeIndexT>(ordered_node_ids, "h_ordered_node_ids", stream);
-  */
+#endif
 
   // 2. reduce_by_key {col_id}, {row_offset}, max.
   rmm::device_uvector<NodeIndexT> unique_col_ids(num_columns, stream);
@@ -450,10 +458,10 @@ reduce_to_column_tree(tree_meta_t& tree,
                              thrust::make_discard_iterator(),
                              unique_node_ids.begin());
 
-  /*
+#ifdef CSR_DEBUG_PRINT
   print<NodeIndexT>(unique_col_ids, "h_unique_col_ids", stream);
   print<size_type>(unique_node_ids, "h_unique_node_ids", stream);
-  */
+#endif
 
   thrust::copy_n(
     rmm::exec_policy(stream),
@@ -489,8 +497,6 @@ reduce_to_column_tree(tree_meta_t& tree,
            (is_array_of_arrays == true && parent_col_id == row_array_parent_col_id);
   };
 
-  print<size_type>(max_row_offsets, "old h_max_row_offsets", stream);
-
   // Mixed types in List children go to different columns,
   // so all immediate children of list column should have same max_row_offsets.
   //   create list's children max_row_offsets array. (initialize to zero)
@@ -518,6 +524,7 @@ reduce_to_column_tree(tree_meta_t& tree,
                          ref.fetch_max(max_row_offsets[col_id], cuda::std::memory_order_relaxed);
                        }
                      });
+
     thrust::gather_if(
       rmm::exec_policy(stream),
       parent_col_ids.begin(),
@@ -529,6 +536,7 @@ reduce_to_column_tree(tree_meta_t& tree,
         return parent_col_id != parent_node_sentinel and
                column_categories[parent_col_id] == node_t::NC_LIST;
       });
+
   }
 
   // copy lists' max_row_offsets to children.

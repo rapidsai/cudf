@@ -55,6 +55,17 @@ struct h_column_tree {
   std::vector<cuio_json::NodeIndexT> column_ids;
 };
 
+// debug printing
+template <typename T>
+void print(cudf::host_span<T const> vec, std::string name, rmm::cuda_stream_view stream)
+{
+  std::cout << name << " = ";
+  for (auto e : vec) {
+    std::cout << e << " ";
+  }
+  std::cout << std::endl;
+}
+
 bool check_equality(cuio_json::tree_meta_t& d_a,
                     cudf::device_span<cudf::size_type const> d_a_max_row_offsets,
                     cuio_json::experimental::csr& d_b_csr,
@@ -81,77 +92,36 @@ bool check_equality(cuio_json::tree_meta_t& d_a,
 
   auto num_nodes = a.parent_node_ids.size();
   if (b.rowidx.size() != num_nodes + 1) {
-    std::printf("1\n");
     return false;
   }
 
   for (auto pos = b.rowidx[0]; pos < b.rowidx[1]; pos++) {
     auto v = b.colidx[pos];
     if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) {
-      std::printf("2\n");
       return false;
     }
   }
 
-  std::printf("rowidx = \n");
-  for (size_t u = 0; u < num_nodes; u++)
-    std::printf("%d ", b.rowidx[u]);
-  std::printf("\n");
-  std::printf("colidx = \n");
-  for (size_t u = 0; u < num_nodes; u++) {
-    for (int pos = b.rowidx[u]; pos < b.rowidx[u + 1]; pos++)
-      std::printf("%d ", b.colidx[pos]);
-  }
-  std::printf("\n");
-  std::printf("a.parent_node_ids = \n");
-  for (size_t u = 0; u < num_nodes; u++)
-    std::printf("%d ", a.parent_node_ids[u]);
-  std::printf("\nb.column_ids = \n");
-  for (size_t u = 0; u < num_nodes; u++)
-    std::printf("%d ", b.column_ids[u]);
-  std::printf("\n");
-
   for (size_t u = 1; u < num_nodes; u++) {
     auto v = b.colidx[b.rowidx[u]];
     if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) {
-      std::printf("3\n");
       return false;
     }
     for (auto pos = b.rowidx[u] + 1; pos < b.rowidx[u + 1]; pos++) {
       v = b.colidx[pos];
       if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) {
-        std::printf("u = %lu, adj_size = %d\n", u, b.rowidx[u + 1] - b.rowidx[u]);
-        std::printf(
-          "4: b.column_ids[%lu] = %d, b.column_ids[%d] = %d, a.parent_node_ids[b.column_ids[%d]] = "
-          "%d\n",
-          u,
-          b.column_ids[u],
-          v,
-          b.column_ids[v],
-          v,
-          a.parent_node_ids[b.column_ids[v]]);
         return false;
       }
     }
   }
   for (size_t u = 0; u < num_nodes; u++) {
     if (a.node_categories[b.column_ids[u]] != b.categories[u]) {
-      std::printf("5\n");
       return false;
     }
   }
 
-  std::printf("permuted a_max_row_offsets = ");
-  for (size_t u = 0; u < num_nodes; u++)
-    std::printf("%d ", a_max_row_offsets[b.column_ids[u]]);
-  std::printf("\nb_max_row_offsets = ");
-  for (size_t u = 0; u < num_nodes; u++)
-    std::printf("%d ", b_max_row_offsets[u]);
-  std::printf("\n");
-
   for (size_t u = 0; u < num_nodes; u++) {
     if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {
-      std::printf("6\n");
       return false;
     }
   }
@@ -219,6 +189,7 @@ void run_test(std::string const& input)
                                                   row_array_parent_col_id,
                                                   stream);
 
+  std::printf("\n========================================================================================\n");
   auto [d_column_tree_csr, d_column_tree_properties] =
     cudf::io::json::experimental::detail::reduce_to_column_tree(
       gpu_tree, gpu_col_id, gpu_row_offsets, false, row_array_parent_col_id, stream);
@@ -264,4 +235,41 @@ TEST_F(JsonColumnTreeTests, SimpleLines3)
   { "Root": { "Key": [{ "YY": 1}] } }
   )";
   run_test(input);
+}
+
+TEST_F(JsonColumnTreeTests, SimpleLines4)
+{
+  std::string json_stringl = R"(
+    {"a": 1, "b": {"0": "abc", "1": [-1.]}, "c": true}
+    {"a": 1, "b": {"0": "abc"          }, "c": false}
+    {"a": 1, "b": {}}
+    {"a": 1,                              "c": null}
+    )";
+  run_test(json_stringl);
+}
+
+TEST_F(JsonColumnTreeTests, SimpleLines5)
+{
+  std::string json_stringl = R"(
+    { "foo1": [1,2,3], "bar": 123 }
+    { "foo2": { "a": 1 }, "bar": 456 }
+    { "foo1": [1,2,3], "bar": 123 }
+    { "foo2": { "a": 1 }, "bar": 456 }
+    { "foo1": [1,2,3], "bar": 123 }
+    { "foo2": { "a": 1 }, "bar": 456 }
+    )";
+  run_test(json_stringl);
+}
+
+TEST_F(JsonColumnTreeTests, SimpleLines6)
+{
+  std::string json_stringl = R"(
+    { "foo1": [1,2,3], "bar": 123 }
+    { "foo2": { "a": 1 }, "bar": 456 }
+    { "foo1": ["123","456"], "bar": 123 }
+    { "foo2": { "b": 5 }, "car": 456 }
+    { "foo1": [1,2,3], "bar": 123 }
+    { "foo2": { "a": 1 }, "bar": 456 }
+    )";
+  run_test(json_stringl);
 }
