@@ -1,6 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+from cython.operator import dereference
+
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
@@ -36,10 +38,10 @@ cpdef Column contains_re(
     cdef unique_ptr[column] result
 
     with nogil:
-        result = cpp_contains.contains_re(
+        result = move(cpp_contains.contains_re(
             input.view(),
             prog.c_obj.get()[0]
-        )
+        ))
 
     return Column.from_libcudf(move(result))
 
@@ -69,10 +71,10 @@ cpdef Column count_re(
     cdef unique_ptr[column] result
 
     with nogil:
-        result = cpp_contains.count_re(
+        result = move(cpp_contains.count_re(
             input.view(),
             prog.c_obj.get()[0]
-        )
+        ))
 
     return Column.from_libcudf(move(result))
 
@@ -103,15 +105,15 @@ cpdef Column matches_re(
     cdef unique_ptr[column] result
 
     with nogil:
-        result = cpp_contains.matches_re(
+        result = move(cpp_contains.matches_re(
             input.view(),
             prog.c_obj.get()[0]
-        )
+        ))
 
     return Column.from_libcudf(move(result))
 
 
-cpdef Column like(Column input, Column pattern, Scalar escape_character=None):
+cpdef Column like(Column input, ColumnOrScalar pattern, Scalar escape_character=None):
     """
     Returns a boolean column identifying rows which
     match the given like pattern.
@@ -122,7 +124,7 @@ cpdef Column like(Column input, Column pattern, Scalar escape_character=None):
     ----------
     input : Column
         The input strings
-    pattern : Column
+    pattern : Column or Scalar
         Like patterns to match within each string
     escape_character : Scalar
         Optional character specifies the escape prefix.
@@ -140,15 +142,27 @@ cpdef Column like(Column input, Column pattern, Scalar escape_character=None):
             cpp_make_string_scalar("".encode())
         )
 
-    cdef const string_scalar* c_escape_character = <string_scalar*>(
+    cdef const string_scalar* c_escape_character = <const string_scalar*>(
         escape_character.c_obj.get()
     )
+    cdef const string_scalar* c_pattern
 
-    with nogil:
-        result = cpp_contains.like(
-            input.view(),
-            pattern.view(),
-            c_escape_character[0]
-        )
+    if ColumnOrScalar is Column:
+        with nogil:
+            result = move(cpp_contains.like(
+                input.view(),
+                pattern.view(),
+                dereference(c_escape_character)
+            ))
+    elif ColumnOrScalar is Scalar:
+        c_pattern = <const string_scalar*>(pattern.c_obj.get())
+        with nogil:
+            result = move(cpp_contains.like(
+                input.view(),
+                dereference(c_pattern),
+                dereference(c_escape_character)
+            ))
+    else:
+        raise ValueError("pattern must be a Column or a Scalar")
 
     return Column.from_libcudf(move(result))

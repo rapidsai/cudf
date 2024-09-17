@@ -6,7 +6,6 @@ from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
 
-import pylibcudf as plc
 from pylibcudf.strings import contains
 from pylibcudf.strings.regex_program import RegexProgram
 
@@ -55,7 +54,7 @@ def like(Column source_strings, object py_pattern, object py_escape):
     """
     plc_column = contains.like(
         source_strings.to_pylibcudf(mode="read"),
-        plc.Column.from_scalar(py_escape.device_value.c_value, source_strings.size),
+        py_pattern.device_value.c_value,
         py_escape.device_value.c_value,
     )
     return Column.from_pylibcudf(plc_column)
