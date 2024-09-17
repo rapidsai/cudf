@@ -28,10 +28,10 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
@@ -122,11 +122,13 @@ CUDF_KERNEL void substring_from_kernel(column_device_view const d_strings,
       break;
     }
     size_type const cc = (itr < end) && is_begin_utf8_char(*itr);
-    size_type const bc = (itr < end);
+    size_type const bc = (itr < end) ? bytes_in_utf8_byte(*itr) : 0;
     char_count += cg::reduce(warp, cc, cg::plus<int>());
     byte_count += cg::reduce(warp, bc, cg::plus<int>());
     itr += cudf::detail::warp_size;
   }
+
+  __syncwarp();
 
   if (warp.thread_rank() == 0) {
     if (start >= char_count) {
@@ -134,14 +136,14 @@ CUDF_KERNEL void substring_from_kernel(column_device_view const d_strings,
       return;
     }
 
-    // we are just below start/stop and must now increment up to it from here
+    // we are just below start/stop and must now increment up to them from here
     auto first_byte = start_counts.second;
     if (start_counts.first < start) {
       auto const sub_str = string_view(d_str.data() + first_byte, d_str.size_bytes() - first_byte);
       first_byte += std::get<0>(bytes_to_character_position(sub_str, start - start_counts.first));
     }
 
-    stop           = max(stop, char_count);
+    stop           = min(stop, char_count);
     auto last_byte = stop_counts.second;
     if (stop_counts.first < stop) {
       auto const sub_str = string_view(d_str.data() + last_byte, d_str.size_bytes() - last_byte);
