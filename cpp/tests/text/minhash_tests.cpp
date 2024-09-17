@@ -139,6 +139,41 @@ TEST_F(MinHashTest, MultiSeedWithNullInputRow)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
 }
 
+TEST_F(MinHashTest, WordsMinHash)
+{
+  using LCWS    = cudf::test::lists_column_wrapper<cudf::string_view>;
+  auto validity = cudf::test::iterators::null_at(1);
+
+  LCWS input(
+    {LCWS({"hello", "abcdéfgh"}),
+     LCWS{},
+     LCWS({"rapids", "moré", "test", "text"}),
+     LCWS({"The", "quick", "brown", "fox", "jumpéd", "over", "the", "lazy", "brown", "dog"})},
+    validity);
+
+  auto view = cudf::lists_column_view(input);
+
+  auto seeds   = cudf::test::fixed_width_column_wrapper<uint32_t>({1, 2});
+  auto results = nvtext::word_minhash(view, cudf::column_view(seeds));
+  using LCW32  = cudf::test::lists_column_wrapper<uint32_t>;
+  LCW32 expected({LCW32{2069617641u, 1975382903u},
+                  LCW32{},
+                  LCW32{657297235u, 1010955999u},
+                  LCW32{644643885u, 310002789u}},
+                 validity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto seeds64   = cudf::test::fixed_width_column_wrapper<uint64_t>({11, 22});
+  auto results64 = nvtext::word_minhash64(view, cudf::column_view(seeds64));
+  using LCW64    = cudf::test::lists_column_wrapper<uint64_t>;
+  LCW64 expected64({LCW64{1940333969930105370ul, 272615362982418219ul},
+                    LCW64{},
+                    LCW64{5331949571924938590ul, 2088583894581919741ul},
+                    LCW64{3400468157617183341ul, 2398577492366130055ul}},
+                   validity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
+}
+
 TEST_F(MinHashTest, EmptyTest)
 {
   auto input   = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
