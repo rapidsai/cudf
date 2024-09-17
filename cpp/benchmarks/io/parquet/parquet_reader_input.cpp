@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "cudf/types.hpp"
+
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/io/cuio_common.hpp>
@@ -264,9 +266,13 @@ void BM_parquet_read_wide_tables(nvbench::state& state,
 
 void BM_parquet_read_wide_tables_mixed(nvbench::state& state)
 {
-  auto const d_type = std::pair<std::vector<cudf::type_id>, std::vector<cudf::type_id>>{
-    get_type_or_group(static_cast<int32_t>(data_type::INTEGRAL)),
-    get_type_or_group(static_cast<int32_t>(data_type::FLOAT))};
+  auto const d_type = []() {
+    auto d_type1 = get_type_or_group(static_cast<int32_t>(data_type::INTEGRAL));
+    auto d_type2 = get_type_or_group(static_cast<int32_t>(data_type::FLOAT));
+    d_type1.reserve(d_type1.size() + d_type2.size());
+    std::move(d_type2.begin(), d_type2.end(), std::back_inserter(d_type1));
+    return d_type1;
+  }();
 
   auto const n_col           = static_cast<cudf::size_type>(state.get_int64("num_cols"));
   auto const data_size_bytes = static_cast<size_t>(state.get_int64("data_size_mb") << 20);
@@ -277,7 +283,7 @@ void BM_parquet_read_wide_tables_mixed(nvbench::state& state)
 
   auto const num_rows_written = [&]() {
     auto const tbl = create_random_table(
-      mix_dtype_groups(d_type, n_col),
+      cycle_dtypes(d_type, n_col),
       table_size_bytes{data_size_bytes},
       data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
     auto const view = tbl->view();
@@ -338,16 +344,16 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_w
   .set_name("parquet_read_wide_tables")
   .set_min_samples(4)
   .set_type_axes_names({"data_type"})
-  .add_int64_axis("data_size_mb", {512, 2048, 4095})
-  .add_int64_axis("num_cols", {64, 512, 1024})
+  .add_int64_axis("data_size_mb", {1024, 2048, 4096})
+  .add_int64_axis("num_cols", {256, 512, 1024})
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
 
 NVBENCH_BENCH(BM_parquet_read_wide_tables_mixed)
   .set_name("parquet_read_wide_tables_mixed")
   .set_min_samples(4)
-  .add_int64_axis("data_size_mb", {512, 2048, 4095})
-  .add_int64_axis("num_cols", {64, 512, 1024})
+  .add_int64_axis("data_size_mb", {1024, 2048, 4096})
+  .add_int64_axis("num_cols", {256, 512, 1024})
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
 

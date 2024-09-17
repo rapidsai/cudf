@@ -20,7 +20,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/filling.hpp>
 #include <cudf/null_mask.hpp>
@@ -29,10 +28,10 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
@@ -508,7 +507,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                            null_mask.end(),
                            thrust::identity<bool>{},
                            cudf::get_default_stream(),
-                           cudf::get_current_device_resource_ref());
+                           rmm::mr::get_current_device_resource());
 
   return std::make_unique<cudf::column>(
     dtype,
@@ -592,7 +591,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
                            null_mask.end() - 1,
                            thrust::identity<bool>{},
                            cudf::get_default_stream(),
-                           cudf::get_current_device_resource_ref());
+                           rmm::mr::get_current_device_resource());
   return cudf::make_strings_column(
     num_rows,
     std::make_unique<cudf::column>(std::move(offsets), rmm::device_buffer{}, 0),
@@ -627,7 +626,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
                                         cudf::out_of_bounds_policy::DONT_CHECK,
                                         cudf::detail::negative_index_policy::NOT_ALLOWED,
                                         cudf::get_default_stream(),
-                                        cudf::get_current_device_resource_ref());
+                                        rmm::mr::get_current_device_resource());
   return std::move(str_table->release()[0]);
 }
 
@@ -689,7 +688,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
                                         valids.end(),
                                         thrust::identity<bool>{},
                                         cudf::get_default_stream(),
-                                        cudf::get_current_device_resource_ref());
+                                        rmm::mr::get_current_device_resource());
         }
         return std::pair<rmm::device_buffer, cudf::size_type>{};
       }();
@@ -783,7 +782,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
                                                           valids.end(),
                                                           thrust::identity<bool>{},
                                                           cudf::get_default_stream(),
-                                                          cudf::get_current_device_resource_ref());
+                                                          rmm::mr::get_current_device_resource());
     list_column                  = cudf::make_lists_column(
       current_num_rows,
       std::move(offsets_column),
@@ -852,36 +851,6 @@ std::vector<cudf::type_id> mix_dtypes(std::pair<cudf::type_id, cudf::type_id> co
     out_dtypes.push_back(dtype_ids.first);
   for (cudf::size_type col = first_num; col < num_cols; ++col)
     out_dtypes.push_back(dtype_ids.second);
-  return out_dtypes;
-}
-
-/**
- * @brief Repeat the given two data type groups cyclically.
- *
- */
-std::vector<cudf::type_id> mix_dtype_groups(
-  std::pair<std::vector<cudf::type_id>, std::vector<cudf::type_id>> const& dtype_groups,
-  cudf::size_type num_cols)
-{
-  std::vector<cudf::type_id> out_dtypes;
-  out_dtypes.reserve(num_cols);
-  std::array<size_t, 2> inclusive_sum_sizes{dtype_groups.first.size(),
-                                            dtype_groups.first.size() + dtype_groups.second.size()};
-
-  if (num_cols < static_cast<cudf::size_type>(inclusive_sum_sizes[1]))
-    CUDF_LOG_WARN("Insufficient number of input columns to mix the two dtype groups");
-
-  size_t col_idx = 0;
-  for (cudf::size_type col = 0; col < num_cols; ++col) {
-    if (col_idx < inclusive_sum_sizes[0]) {
-      out_dtypes.emplace_back(dtype_groups.first[col_idx % dtype_groups.first.size()]);
-      ++col_idx;
-    } else if (col_idx < inclusive_sum_sizes[1]) {
-      out_dtypes.emplace_back(
-        dtype_groups.second[(col_idx - inclusive_sum_sizes[0]) % dtype_groups.second.size()]);
-      if (++col_idx == inclusive_sum_sizes[1]) { col_idx = 0; };
-    }
-  }
   return out_dtypes;
 }
 
@@ -964,7 +933,7 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
                                   thrust::make_counting_iterator<cudf::size_type>(size),
                                   bool_generator{seed, 1.0 - *null_probability},
                                   cudf::get_default_stream(),
-                                  cudf::get_current_device_resource_ref());
+                                  rmm::mr::get_current_device_resource());
   }
 }
 
