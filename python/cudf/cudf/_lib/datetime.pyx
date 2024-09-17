@@ -17,7 +17,7 @@ from pylibcudf.libcudf.types cimport size_type
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 
-import cudf._lib.pylibcudf as plc
+import pylibcudf as plc
 
 
 @acquire_spill_lock()

@@ -3,16 +3,15 @@
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-
-from cudf._lib.pylibcudf.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
-from cudf._lib.pylibcudf.libcudf.scalar.scalar_factories cimport (
+from pylibcudf.column cimport Column
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_string_scalar as cpp_make_string_scalar,
 )
-from cudf._lib.pylibcudf.libcudf.strings cimport strip as cpp_strip
-from cudf._lib.pylibcudf.scalar cimport Scalar
-from cudf._lib.pylibcudf.strings.side_type cimport side_type
+from pylibcudf.libcudf.strings cimport strip as cpp_strip
+from pylibcudf.scalar cimport Scalar
+from pylibcudf.strings.side_type cimport side_type
 
 
 cpdef Column strip(

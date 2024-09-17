@@ -2,5 +2,5 @@
 strip
 =====
 
-.. automodule:: cudf._lib.pylibcudf.strings.strip
+.. automodule:: pylibcudf.strings.strip
    :members:

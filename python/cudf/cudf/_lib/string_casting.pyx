@@ -42,8 +42,10 @@ from pylibcudf.libcudf.types cimport data_type, type_id
 
 from cudf._lib.types cimport underlying_type_t_type_id
 
+import pylibcudf as plc
+
 import cudf
-import cudf._lib.pylibcudf as plc
+
 from cudf._lib.types cimport dtype_to_pylibcudf_type
 
 

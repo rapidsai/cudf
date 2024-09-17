@@ -3,14 +3,13 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
-
-from cudf._lib.pylibcudf.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.strings.convert cimport (
+from pylibcudf.column cimport Column
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.strings.convert cimport (
     convert_durations as cpp_convert_durations,
 )
 
-from cudf._lib.pylibcudf.types import DataType
+from pylibcudf.types import DataType
 
 
 cpdef Column to_durations(

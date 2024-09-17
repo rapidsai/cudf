@@ -3,10 +3,9 @@
 from datetime import datetime
 
 import pyarrow as pa
+import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
-
-import cudf._lib.pylibcudf as plc
 
 
 @pytest.fixture(
