@@ -738,7 +738,8 @@ def get_dummies(
     sparse : boolean, optional
         Right now this is NON-FUNCTIONAL argument in rapids.
     drop_first : boolean, optional
-        Right now this is NON-FUNCTIONAL argument in rapids.
+        Whether to get k-1 dummies out of k categorical levels by removing the
+        first level.
     columns : sequence of str, optional
         Names of columns to encode. If not provided, will attempt to encode all
         columns. Note this is different from pandas default behavior, which
@@ -806,9 +807,6 @@ def get_dummies(
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 
-    if drop_first:
-        raise NotImplementedError("drop_first is not supported yet")
-
     if isinstance(data, cudf.DataFrame):
         encode_fallback_dtypes = ["object", "category"]
 
@@ -862,6 +860,7 @@ def get_dummies(
                     prefix=prefix_map.get(name, prefix),
                     prefix_sep=prefix_sep_map.get(name, prefix_sep),
                     dtype=dtype,
+                    drop_first=drop_first,
                 )
                 result_data.update(col_enc_data)
             return cudf.DataFrame._from_data(result_data, index=data.index)
@@ -874,6 +873,7 @@ def get_dummies(
             prefix=prefix,
             prefix_sep=prefix_sep,
             dtype=dtype,
+            drop_first=drop_first,
         )
         return cudf.DataFrame._from_data(data, index=ser.index)
 
@@ -1256,6 +1256,7 @@ def _one_hot_encode_column(
     prefix: str | None,
     prefix_sep: str | None,
     dtype: Dtype | None,
+    drop_first: bool,
 ) -> dict[str, ColumnBase]:
     """Encode a single column with one hot encoding. The return dictionary
     contains pairs of (category, encodings). The keys may be prefixed with
@@ -1276,6 +1277,8 @@ def _one_hot_encode_column(
         )
     data = one_hot_encode(column, categories)
 
+    if drop_first and len(data):
+        data.pop(next(iter(data)))
     if prefix is not None and prefix_sep is not None:
         data = {f"{prefix}{prefix_sep}{col}": enc for col, enc in data.items()}
     if dtype:
