@@ -124,7 +124,7 @@ std::size_t launch_compute_mixed_join_output_size(
   // Allocate storage for the counter used to get the size of the join output
   rmm::device_scalar<std::size_t> size(0, stream, mr);
 
-  compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
+  compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, has_nulls>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
       right_table,

@@ -24,7 +24,7 @@
 namespace CUDF_EXPORT cudf {
 namespace io::nvcomp {
 
-enum class compression_type { SNAPPY, ZSTD, DEFLATE, LZ4 };
+enum class compression_type { SNAPPY, ZSTD, DEFLATE, LZ4, GZIP };
 
 /**
  * @brief Set of parameters that impact whether nvCOMP features are enabled.
@@ -36,33 +36,20 @@ struct feature_status_parameters {
   int lib_patch_version;                 ///< patch version
   bool are_all_integrations_enabled;     ///< all integrations
   bool are_stable_integrations_enabled;  ///< stable integrations
-  int compute_capability_major;          ///< cuda compute major version
 
   /**
-   * @brief Default Constructor
+   * @brief Default constructor using the current version of nvcomp and current environment
+   * variables
    */
   feature_status_parameters();
 
   /**
-   * @brief feature_status_parameters Constructor
+   * @brief Constructor using the current version of nvcomp
    *
-   * @param major positive integer representing major value of nvcomp
-   * @param minor positive integer representing minor value of nvcomp
-   * @param patch positive integer representing patch value of nvcomp
    * @param all_enabled if all integrations are enabled
    * @param stable_enabled if stable integrations are enabled
-   * @param cc_major CUDA compute capability
    */
-  feature_status_parameters(
-    int major, int minor, int patch, bool all_enabled, bool stable_enabled, int cc_major)
-    : lib_major_version{major},
-      lib_minor_version{minor},
-      lib_patch_version{patch},
-      are_all_integrations_enabled{all_enabled},
-      are_stable_integrations_enabled{stable_enabled},
-      compute_capability_major{cc_major}
-  {
-  }
+  feature_status_parameters(bool all_enabled, bool stable_enabled);
 };
 
 /**
@@ -74,8 +61,7 @@ inline bool operator==(feature_status_parameters const& lhs, feature_status_para
          lhs.lib_minor_version == rhs.lib_minor_version and
          lhs.lib_patch_version == rhs.lib_patch_version and
          lhs.are_all_integrations_enabled == rhs.are_all_integrations_enabled and
-         lhs.are_stable_integrations_enabled == rhs.are_stable_integrations_enabled and
-         lhs.compute_capability_major == rhs.compute_capability_major;
+         lhs.are_stable_integrations_enabled == rhs.are_stable_integrations_enabled;
 }
 
 /**

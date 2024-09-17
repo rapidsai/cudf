@@ -26,9 +26,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
@@ -55,7 +55,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
     });
 
   auto const q_device =
-    cudf::detail::make_device_uvector_async(q, stream, rmm::mr::get_current_device_resource());
+    cudf::detail::make_device_uvector_async(q, stream, cudf::get_current_device_resource_ref());
 
   auto quantile_idx_iter = thrust::make_transform_iterator(q_device.begin(), quantile_idx_lookup);
 
@@ -90,7 +90,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
       input, thrust::make_counting_iterator<size_type>(0), q, interp, stream, mr);
   } else {
     auto sorted_idx = detail::sorted_order(
-      input, column_order, null_precedence, stream, rmm::mr::get_current_device_resource());
+      input, column_order, null_precedence, stream, cudf::get_current_device_resource_ref());
     return detail::quantiles(input, sorted_idx->view().data<size_type>(), q, interp, stream, mr);
   }
 }

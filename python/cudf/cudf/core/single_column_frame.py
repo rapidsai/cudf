@@ -158,6 +158,17 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.to_arrow()
 
+    def _to_frame(
+        self, name: Hashable, index: cudf.Index | None
+    ) -> cudf.DataFrame:
+        """Helper function for Series.to_frame, Index.to_frame"""
+        if name is no_default:
+            col_name = 0 if self.name is None else self.name
+        else:
+            col_name = name
+        ca = ColumnAccessor({col_name: self._column}, verify=False)
+        return cudf.DataFrame._from_data(ca, index=index)
+
     @property  # type: ignore
     @_performance_tracking
     def is_unique(self) -> bool:

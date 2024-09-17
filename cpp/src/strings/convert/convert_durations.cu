@@ -21,10 +21,10 @@
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>

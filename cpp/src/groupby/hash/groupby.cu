@@ -42,11 +42,11 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.cuh>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -396,7 +396,7 @@ void sparse_to_dense_results(table_view const& keys,
                              rmm::device_async_resource_ref mr)
 {
   auto row_bitmask =
-    cudf::detail::bitmask_and(keys, stream, rmm::mr::get_current_device_resource()).first;
+    cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first;
   bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
   bitmask_type const* row_bitmask_ptr =
     skip_key_rows_with_nulls ? static_cast<bitmask_type*>(row_bitmask.data()) : nullptr;
@@ -595,8 +595,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                                                          stream);
   // prepare to launch kernel to do the actual aggregation
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
-
-  auto d_values = table_device_view::create(flattened_values, stream);
+  auto d_values       = table_device_view::create(flattened_values, stream);
 
   compute_aggregations(grid_size,
                        num_input_rows,

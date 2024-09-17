@@ -29,12 +29,12 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvtext/detail/generate_ngrams.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
@@ -122,7 +122,7 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
                              return !d_strings.element<cudf::string_view>(idx).empty();
                            },
                            stream,
-                           rmm::mr::get_current_device_resource())
+                           cudf::get_current_device_resource_ref())
                            ->release();
     strings_count = table_offsets.front()->size() - 1;
     auto result   = std::move(table_offsets.front());

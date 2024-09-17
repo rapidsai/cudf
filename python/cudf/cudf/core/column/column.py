@@ -1483,22 +1483,6 @@ def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
     )
 
 
-def column_empty_like_same_mask(
-    column: ColumnBase, dtype: Dtype
-) -> ColumnBase:
-    """Create a new empty Column with the same length and the same mask.
-
-    Parameters
-    ----------
-    dtype : np.dtype like
-        The dtype of the data buffer.
-    """
-    result = column_empty_like(column, dtype)
-    if column.nullable:
-        result = result.set_mask(column.mask)
-    return result
-
-
 def column_empty(
     row_count: int, dtype: Dtype = "object", masked: bool = False
 ) -> ColumnBase:
