@@ -331,8 +331,8 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& inda
 std::
   tuple<rmm::device_uvector<char>, rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
   normalize_whitespace(device_span<char const> d_input,
-                       rmm::device_uvector<size_type>& col_offsets,
-                       rmm::device_uvector<size_type>& col_lengths,
+      device_span<size_type const> col_offsets,
+      device_span<size_type const> col_lengths,
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr)
 {
@@ -346,21 +346,22 @@ std::
     4. Remove characters at output indices from concatenated buffer.
     5. Return updated buffer, segment lengths and updated segment offsets
    */
-  size_t col_lengths_size = col_lengths.size();
+  auto inbuf_lengths = cudf::detail::make_device_uvector_async(col_lengths, stream, cudf::get_current_device_resource_ref());
+  size_t inbuf_lengths_size = inbuf_lengths.size();
   size_type inbuf_size =
-    thrust::reduce(rmm::exec_policy_nosync(stream), col_lengths.begin(), col_lengths.end());
+    thrust::reduce(rmm::exec_policy_nosync(stream), inbuf_lengths.begin(), inbuf_lengths.end());
   rmm::device_uvector<char> inbuf(inbuf_size, stream);
-  rmm::device_uvector<size_type> inbuf_offsets(col_lengths_size, stream);
+  rmm::device_uvector<size_type> inbuf_offsets(inbuf_lengths_size, stream);
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
-                         col_lengths.begin(),
-                         col_lengths.end(),
+                         inbuf_lengths.begin(),
+                         inbuf_lengths.end(),
                          inbuf_offsets.begin(),
                          0);
 
   auto input_it = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
     cuda::proclaim_return_type<char const*>(
-      [d_input = d_input.begin(), col_offsets = col_offsets.cbegin()] __device__(
+      [d_input = d_input.begin(), col_offsets = col_offsets.begin()] __device__(
         size_t i) -> char const* { return &d_input[col_offsets[i]]; }));
   auto output_it = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
@@ -375,16 +376,16 @@ std::
                              temp_storage_bytes,
                              input_it,
                              output_it,
-                             col_lengths.begin(),
-                             col_lengths_size,
+                             inbuf_lengths.begin(),
+                             inbuf_lengths_size,
                              stream.value());
     rmm::device_buffer temp_storage(temp_storage_bytes, stream);
     cub::DeviceCopy::Batched(temp_storage.data(),
                              temp_storage_bytes,
                              input_it,
                              output_it,
-                             col_lengths.begin(),
-                             col_lengths_size,
+                             inbuf_lengths.begin(),
+                             inbuf_lengths_size,
                              stream.value());
   }
 
@@ -417,10 +418,10 @@ std::
     outbuf_indices.end(),
     [inbuf_offsets_begin = inbuf_offsets.begin(),
      inbuf_offsets_end   = inbuf_offsets.end(),
-     col_lengths         = col_lengths.begin()] __device__(size_type idx) {
+     inbuf_lengths         = inbuf_lengths.begin()] __device__(size_type idx) {
       auto it  = thrust::upper_bound(thrust::seq, inbuf_offsets_begin, inbuf_offsets_end, idx);
       auto pos = thrust::distance(inbuf_offsets_begin, it) - 1;
-      cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(col_lengths + pos)};
+      cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(inbuf_lengths + pos)};
       ref.fetch_add(-1, cuda::std::memory_order_relaxed);
     });
 
@@ -439,13 +440,13 @@ std::
   inbuf.resize(inbuf_size - num_deletions, stream);
 
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
-                         col_lengths.begin(),
-                         col_lengths.end(),
+                         inbuf_lengths.begin(),
+                         inbuf_lengths.end(),
                          inbuf_offsets.begin(),
                          0);
 
   stream.synchronize();
-  return std::tuple{std::move(inbuf), std::move(col_lengths), std::move(inbuf_offsets)};
+  return std::tuple{std::move(inbuf), std::move(inbuf_offsets), std::move(inbuf_lengths)};
 }
 
 }  // namespace detail
