@@ -74,13 +74,14 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& inda
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  *
- * @returns Tuple of the normalized column, offsets to each row in column, and lengths of contents of each row
+ * @returns Tuple of the normalized column, offsets to each row in column, and lengths of contents
+ * of each row
  */
 std::
   tuple<rmm::device_uvector<char>, rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
   normalize_whitespace(device_span<char const> d_input,
-      device_span<size_type const> col_offsets,
-      device_span<size_type const> col_lengths,
+                       device_span<size_type const> col_offsets,
+                       device_span<size_type const> col_lengths,
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr);
 

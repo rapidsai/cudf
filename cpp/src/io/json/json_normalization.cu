@@ -331,8 +331,8 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& inda
 std::
   tuple<rmm::device_uvector<char>, rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
   normalize_whitespace(device_span<char const> d_input,
-      device_span<size_type const> col_offsets,
-      device_span<size_type const> col_lengths,
+                       device_span<size_type const> col_offsets,
+                       device_span<size_type const> col_lengths,
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr)
 {
@@ -346,7 +346,8 @@ std::
     4. Remove characters at output indices from concatenated buffer.
     5. Return updated buffer, segment lengths and updated segment offsets
    */
-  auto inbuf_lengths = cudf::detail::make_device_uvector_async(col_lengths, stream, cudf::get_current_device_resource_ref());
+  auto inbuf_lengths = cudf::detail::make_device_uvector_async(
+    col_lengths, stream, cudf::get_current_device_resource_ref());
   size_t inbuf_lengths_size = inbuf_lengths.size();
   size_type inbuf_size =
     thrust::reduce(rmm::exec_policy_nosync(stream), inbuf_lengths.begin(), inbuf_lengths.end());
@@ -418,7 +419,7 @@ std::
     outbuf_indices.end(),
     [inbuf_offsets_begin = inbuf_offsets.begin(),
      inbuf_offsets_end   = inbuf_offsets.end(),
-     inbuf_lengths         = inbuf_lengths.begin()] __device__(size_type idx) {
+     inbuf_lengths       = inbuf_lengths.begin()] __device__(size_type idx) {
       auto it  = thrust::upper_bound(thrust::seq, inbuf_offsets_begin, inbuf_offsets_end, idx);
       auto pos = thrust::distance(inbuf_offsets_begin, it) - 1;
       cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(inbuf_lengths + pos)};
