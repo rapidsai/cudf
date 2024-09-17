@@ -1497,7 +1497,7 @@ AGG_KIND_MAPPING(aggregation::VARIANCE, var_aggregation);
  *
  * @tparam F Type of callable
  * @param k The `aggregation::Kind` value to dispatch
- * aram f The callable that accepts an `aggregation::Kind` non-type template
+ * @param f The callable that accepts an `aggregation::Kind` non-type template
  * argument.
  * @param args Parameter pack forwarded to the `operator()` invocation
  * @return Forwards the return value of the callable.
@@ -1626,6 +1626,8 @@ struct dispatch_source {
  * parameter of the callable `F`
  * @param k The `aggregation::Kind` used to dispatch an `aggregation::Kind`
  * non-type template parameter for the second template parameter of the callable
+ * @param f The callable that accepts `data_type` and `aggregation::Kind` non-type template
+ * arguments.
  * @param args Parameter pack forwarded to the `operator()` invocation
  * `F`.
  */
@@ -1644,8 +1646,8 @@ CUDF_HOST_DEVICE inline constexpr decltype(auto) dispatch_type_and_aggregation(d
  * @brief Returns the target `data_type` for the specified aggregation  k
  * performed on elements of type  source_type.
  *
- * aram source_type The element type to be aggregated
- * aram k The aggregation
+ * @param source_type The element type to be aggregated
+ * @param k The aggregation
  * @return data_type The target_type of  k performed on  source_type
  * elements
  */
