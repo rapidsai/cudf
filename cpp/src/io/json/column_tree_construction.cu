@@ -327,13 +327,15 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
   //   create list's children max_row_offsets array
   //   gather the max_row_offsets from children row offset array.
   {
-    auto max_row_offsets_it = thrust::make_transform_iterator(thrust::make_counting_iterator(0), 
+    auto max_row_offsets_it = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
       cuda::proclaim_return_type<row_offset_t>(
-      [colidx = colidx.begin(),
-       max_row_offsets = max_row_offsets.begin()] __device__ (size_t i) {
-        if(colidx[i] == -1) return -1;
-        else return max_row_offsets[colidx[i]];
-    }));
+        [colidx = colidx.begin(), max_row_offsets = max_row_offsets.begin()] __device__(size_t i) {
+          if (colidx[i] == -1)
+            return -1;
+          else
+            return max_row_offsets[colidx[i]];
+        }));
     rmm::device_uvector<row_offset_t> max_children_max_row_offsets(num_columns, stream);
     size_t temp_storage_bytes = 0;
     cub::DeviceSegmentedReduce::Max(nullptr,
@@ -361,29 +363,29 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
                     rowidx.begin() + 1,
                     colidx.begin());
 
-
     rmm::device_uvector<NodeIndexT> list_ancestors(num_columns, stream);
-    thrust::for_each_n(
-      rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator(0),
-      num_columns,
-      [rowidx            = rowidx.begin(),
-       colidx            = colidx.begin(),
-       column_categories = column_categories.begin(),
-       dev_num_levels_ptr,
-       list_ancestors = list_ancestors.begin()] __device__(NodeIndexT node) {
-        auto num_levels      = *dev_num_levels_ptr;
-        list_ancestors[node] = colidx[rowidx[node]];
-        for (int level = 0; level <= num_levels && list_ancestors[node] && column_categories[list_ancestors[node]] != NC_LIST; level++) {
-          list_ancestors[node] = colidx[rowidx[list_ancestors[node]]];
-        }
-      });
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       thrust::make_counting_iterator(0),
+                       num_columns,
+                       [rowidx            = rowidx.begin(),
+                        colidx            = colidx.begin(),
+                        column_categories = column_categories.begin(),
+                        dev_num_levels_ptr,
+                        list_ancestors = list_ancestors.begin()] __device__(NodeIndexT node) {
+                         auto num_levels      = *dev_num_levels_ptr;
+                         list_ancestors[node] = colidx[rowidx[node]];
+                         for (int level = 0; level <= num_levels && list_ancestors[node] &&
+                                             column_categories[list_ancestors[node]] != NC_LIST;
+                              level++) {
+                           list_ancestors[node] = colidx[rowidx[list_ancestors[node]]];
+                         }
+                       });
 
     thrust::gather(rmm::exec_policy_nosync(stream),
-        list_ancestors.begin(),
-        list_ancestors.end(),
-        max_children_max_row_offsets.begin(),
-        max_row_offsets.begin());
+                   list_ancestors.begin(),
+                   list_ancestors.end(),
+                   max_children_max_row_offsets.begin(),
+                   max_row_offsets.begin());
   }
 
   return std::tuple{
@@ -536,7 +538,6 @@ reduce_to_column_tree(tree_meta_t& tree,
         return parent_col_id != parent_node_sentinel and
                column_categories[parent_col_id] == node_t::NC_LIST;
       });
-
   }
 
   // copy lists' max_row_offsets to children.
