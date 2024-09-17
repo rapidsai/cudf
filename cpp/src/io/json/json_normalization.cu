@@ -331,11 +331,19 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& inda
 std::
   tuple<rmm::device_uvector<char>, rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
   normalize_whitespace(device_span<char const> d_input,
-                       rmm::device_uvector<size_type>& col_lengths,
                        rmm::device_uvector<size_type>& col_offsets,
+                       rmm::device_uvector<size_type>& col_lengths,
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr)
 {
+  /*
+   * Algorithm:
+    1. Create a single buffer by concatenating the rows of the string column. Create segment offsets and lengths array for concatenated buffer
+    2. Run a 'complementary' whitespace normalization FST i.e. NOP for non-whitespace and quoted whitespace characters, and output indices of unquoted whitespace characters
+    3. Update segment lengths based on the number of output indices between segment offsets
+    4. Remove characters at output indices from concatenated buffer.
+    5. Return updated buffer, segment lengths and updated segment offsets
+   */
   size_t col_lengths_size = col_lengths.size();
   size_type inbuf_size =
     thrust::reduce(rmm::exec_policy_nosync(stream), col_lengths.begin(), col_lengths.end());

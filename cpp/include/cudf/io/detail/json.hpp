@@ -69,8 +69,8 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& inda
  * @brief Normalize unquoted whitespace (space and tab characters) using FST
  *
  * @param indata Input device buffer
- * @param col_lengths Length of contents of each row in column
  * @param col_offsets Offsets to column contents in input buffer
+ * @param col_lengths Length of contents of each row in column
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  *
@@ -79,8 +79,8 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& inda
 std::
   tuple<rmm::device_uvector<char>, rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
   normalize_whitespace(device_span<char const> d_input,
-                       rmm::device_uvector<size_type>& col_lengths,
                        rmm::device_uvector<size_type>& col_offsets,
+                       rmm::device_uvector<size_type>& col_lengths,
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr);
 

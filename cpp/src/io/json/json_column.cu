@@ -1021,7 +1021,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                      "either prune_columns or mixed_types_as_string to be enabled");
         auto [normalized_d_input, col_lengths, col_offsets] =
           cudf::io::json::detail::normalize_whitespace(
-            d_input, json_col.string_lengths, json_col.string_offsets, stream, mr);
+            d_input, json_col.string_offsets, json_col.string_lengths, stream, mr);
         auto offset_length_it = thrust::make_zip_iterator(col_offsets.begin(), col_lengths.begin());
         target_type           = data_type{type_id::STRING};
         // Convert strings to the inferred data type
