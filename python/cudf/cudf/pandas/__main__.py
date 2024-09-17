@@ -104,7 +104,7 @@ def main():
             runpy.run_path(args.args[0], run_name="__main__")
         else:
             if sys.stdin.isatty():
-                banner = "Python %s on %s" % (sys.version, sys.platform)
+                banner = f"Python {sys.version} on {sys.platform}"
                 site_import = not sys.flags.no_site
                 if site_import:
                     cprt = 'Type "help", "copyright", "credits" or "license" for more information.'
