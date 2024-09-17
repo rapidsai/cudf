@@ -16,10 +16,10 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cub/device/device_copy.cuh>
 #include <cuda/functional>
@@ -50,7 +50,7 @@ void batched_memset(std::vector<cudf::device_span<T>> const& bufs,
 
   // copy bufs into device memory and then get sizes
   auto gpu_bufs =
-    cudf::detail::make_device_uvector_async(bufs, stream, rmm::mr::get_current_device_resource());
+    cudf::detail::make_device_uvector_async(bufs, stream, cudf::get_current_device_resource_ref());
 
   // get a vector with the sizes of all buffers
   auto sizes = cudf::detail::make_counting_transform_iterator(
@@ -72,7 +72,7 @@ void batched_memset(std::vector<cudf::device_span<T>> const& bufs,
   cub::DeviceCopy::Batched(nullptr, temp_storage_bytes, iter_in, iter_out, sizes, num_bufs, stream);
 
   rmm::device_buffer d_temp_storage(
-    temp_storage_bytes, stream, rmm::mr::get_current_device_resource());
+    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
 
   cub::DeviceCopy::Batched(
     d_temp_storage.data(), temp_storage_bytes, iter_in, iter_out, sizes, num_bufs, stream);

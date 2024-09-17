@@ -21,10 +21,10 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -591,7 +591,7 @@ table struct_scalar::init_data(table&& data,
 
   // push validity mask down
   auto const validity = cudf::detail::create_null_mask(
-    1, mask_state::ALL_NULL, stream, rmm::mr::get_current_device_resource());
+    1, mask_state::ALL_NULL, stream, cudf::get_current_device_resource_ref());
   for (auto& col : data_cols) {
     col = cudf::structs::detail::superimpose_nulls(
       static_cast<bitmask_type const*>(validity.data()), 1, std::move(col), stream, mr);
