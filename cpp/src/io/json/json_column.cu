@@ -627,7 +627,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   std::vector<uint8_t> is_mixed_type_column(num_columns, 0);
   std::vector<uint8_t> is_pruned(num_columns, 0);
   // for columns that are not mixed type but have been forced as string
-  std::vector<bool> forced_as_string_column(num_columns, 0);
+  std::vector<bool> forced_as_string_column(num_columns);
   columns.try_emplace(parent_node_sentinel, std::ref(root));
 
   std::function<void(NodeIndexT, device_json_column&)> remove_child_columns =
@@ -705,7 +705,7 @@ void make_device_json_column(device_span<SymbolT const> input,
         forced_as_string_column[parent_col_id]) {
       ignore_vals[this_col_id] = 1;
       if (is_mixed_type_column[parent_col_id]) { is_mixed_type_column[this_col_id] = 1; }
-      if (forced_as_string_column[parent_col_id]) { forced_as_string_column[this_col_id] = 1; }
+      if (forced_as_string_column[parent_col_id]) { forced_as_string_column[this_col_id] = true; }
       continue;
     }
 
@@ -788,7 +788,7 @@ void make_device_json_column(device_span<SymbolT const> input,
          column_categories[this_col_id] == NC_LIST) and
         user_dtype.has_value() and user_dtype.value().id() == type_id::STRING) {
       col.forced_as_string_column          = true;
-      forced_as_string_column[this_col_id] = 1;
+      forced_as_string_column[this_col_id] = true;
     }
 
     auto inserted = parent_col.child_columns.try_emplace(name, std::move(col)).second;
@@ -822,13 +822,13 @@ void make_device_json_column(device_span<SymbolT const> input,
   // ignore all children of columns forced as string
   for (auto const this_col_id : unique_col_ids) {
     auto parent_col_id = column_parent_ids[this_col_id];
-    if (parent_col_id != parent_node_sentinel and forced_as_string_column[parent_col_id] == 1) {
-      forced_as_string_column[this_col_id] = 1;
+    if (parent_col_id != parent_node_sentinel and forced_as_string_column[parent_col_id]) {
+      forced_as_string_column[this_col_id] = true;
       ignore_vals[this_col_id]             = 1;
     }
     // Convert only mixed type columns as string (so to copy), but not its children
-    if (parent_col_id != parent_node_sentinel and forced_as_string_column[parent_col_id] == 0 and
-        forced_as_string_column[this_col_id] == 1)
+    if (parent_col_id != parent_node_sentinel and not forced_as_string_column[parent_col_id] and
+        forced_as_string_column[this_col_id])
       column_categories[this_col_id] = NC_STR;
   }
   cudf::detail::cuda_memcpy_async(d_column_tree.node_categories.begin(),
@@ -1167,6 +1167,8 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     const auto [tokens_gpu, token_indices_gpu] =
       get_token_stream(d_input, options, stream, cudf::get_current_device_resource_ref());
     // gpu tree generation
+    // Note that to normalize whitespaces in nested columns coerced to be string, we need the column to either be of
+    // mixed type or we need to request the column to be returned as string by pruning it with the STRING dtype
     return get_tree_representation(
       tokens_gpu,
       token_indices_gpu,

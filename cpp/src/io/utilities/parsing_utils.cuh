@@ -67,6 +67,8 @@ struct parse_options_view {
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
+  bool normalize_whitespace;
+  bool mixed_types_as_string;
   cudf::detail::trie_view trie_true;
   cudf::detail::trie_view trie_false;
   cudf::detail::trie_view trie_na;
@@ -113,6 +115,8 @@ struct parse_options {
             doublequote,
             dayfirst,
             skipblanklines,
+            normalize_whitespace,
+            mixed_types_as_string,
             cudf::detail::make_trie_view(trie_true),
             cudf::detail::make_trie_view(trie_false),
             cudf::detail::make_trie_view(trie_na),
