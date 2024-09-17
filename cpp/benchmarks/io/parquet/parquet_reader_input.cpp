@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "cudf/types.hpp"
-
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/io/cuio_common.hpp>
