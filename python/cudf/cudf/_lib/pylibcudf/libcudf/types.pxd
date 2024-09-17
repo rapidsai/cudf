@@ -98,3 +98,5 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         HIGHER
         MIDPOINT
         NEAREST
+
+    cdef size_type size_of(data_type t) except +

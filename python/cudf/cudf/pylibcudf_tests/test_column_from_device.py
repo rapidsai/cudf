@@ -4,7 +4,8 @@ import pyarrow as pa
 import pytest
 from utils import assert_column_eq
 
-import cudf
+import rmm
+
 from cudf._lib import pylibcudf as plc
 
 VALID_TYPES = [
@@ -35,17 +36,39 @@ def valid_type(request):
     return request.param
 
 
+class DataBuffer:
+    def __init__(self, obj, dtype):
+        self.obj = rmm.DeviceBuffer.to_device(obj)
+        self.dtype = dtype
+        self.shape = (int(len(self.obj) / self.dtype.itemsize),)
+        self.strides = (self.dtype.itemsize,)
+        self.typestr = self.dtype.str
+
+    @property
+    def __cuda_array_interface__(self):
+        return {
+            "data": self.obj.__cuda_array_interface__["data"],
+            "shape": self.shape,
+            "strides": self.strides,
+            "typestr": self.typestr,
+            "version": 0,
+        }
+
+
 @pytest.fixture
-def valid_column(valid_type):
+def input_column(valid_type):
     if valid_type == pa.bool_():
         return pa.array([True, False, True], type=valid_type)
     return pa.array([1, 2, 3], type=valid_type)
 
 
-def test_from_cuda_array_interface(valid_column):
-    col = plc.column.Column.from_cuda_array_interface_obj(
-        cudf.Series(valid_column)
-    )
-    expect = valid_column
+@pytest.fixture
+def iface_obj(input_column):
+    data = input_column.to_numpy(zero_copy_only=False)
+    return DataBuffer(data.view("uint8"), data.dtype)
 
-    assert_column_eq(expect, col)
+
+def test_from_cuda_array_interface(input_column, iface_obj):
+    col = plc.column.Column.from_cuda_array_interface_obj(iface_obj)
+
+    assert_column_eq(input_column, col)

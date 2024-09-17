@@ -14,7 +14,7 @@ import polars as pl
 
 import cudf._lib.pylibcudf as plc
 
-__all__ = ["from_polars", "downcast_arrow_lists"]
+__all__ = ["from_polars", "downcast_arrow_lists", "can_cast"]
 
 
 def downcast_arrow_lists(typ: pa.DataType) -> pa.DataType:
@@ -44,6 +44,28 @@ def downcast_arrow_lists(typ: pa.DataType) -> pa.DataType:
     # since those are always NotImplemented before we get here.
     assert not isinstance(typ, pa.StructType)
     return typ
+
+
+def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
+    """
+    Can we cast (via :func:`~.pylibcudf.unary.cast`) between two datatypes.
+
+    Parameters
+    ----------
+    from_
+        Source datatype
+    to
+        Target datatype
+
+    Returns
+    -------
+    True if casting is supported, False otherwise
+    """
+    return (
+        plc.traits.is_fixed_width(to)
+        and plc.traits.is_fixed_width(from_)
+        and plc.unary.is_supported_cast(from_, to)
+    )
 
 
 @cache
