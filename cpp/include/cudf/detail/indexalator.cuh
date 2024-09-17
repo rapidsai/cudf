@@ -93,7 +93,7 @@ struct input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
    */
   __device__ inline cudf::size_type operator[](size_type idx) const
   {
-    void const* tp = p_ + (idx * this->width_);
+    void const* tp = p_ + (static_cast<std::ptrdiff_t>(idx) * this->width_);
     return type_dispatcher(this->dtype_, normalize_type{}, tp);
   }
 
@@ -109,7 +109,7 @@ struct input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
   CUDF_HOST_DEVICE input_indexalator(void const* data, data_type dtype, cudf::size_type offset = 0)
     : base_normalator<input_indexalator, cudf::size_type>(dtype), p_{static_cast<char const*>(data)}
   {
-    p_ += offset * this->width_;
+    p_ += static_cast<std::ptrdiff_t>(offset) * this->width_;
   }
 
  protected:
@@ -165,7 +165,7 @@ struct output_indexalator : base_normalator<output_indexalator, cudf::size_type>
   __device__ inline output_indexalator const operator[](size_type idx) const
   {
     output_indexalator tmp{*this};
-    tmp.p_ += (idx * this->width_);
+    tmp.p_ += static_cast<std::ptrdiff_t>(idx) * this->width_;
     return tmp;
   }
 

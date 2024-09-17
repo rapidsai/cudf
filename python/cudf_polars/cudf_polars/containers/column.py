@@ -84,6 +84,34 @@ class Column:
             is_sorted=like.is_sorted, order=like.order, null_order=like.null_order
         )
 
+    # TODO: Return Column once #16272 is fixed.
+    def astype(self, dtype: plc.DataType) -> plc.Column:
+        """
+        Return the backing column as the requested dtype.
+
+        Parameters
+        ----------
+        dtype
+            Datatype to cast to.
+
+        Returns
+        -------
+        Column of requested type.
+
+        Raises
+        ------
+        RuntimeError
+            If the cast is unsupported.
+
+        Notes
+        -----
+        This only produces a copy if the requested dtype doesn't match
+        the current one.
+        """
+        if self.obj.type() != dtype:
+            return plc.unary.cast(self.obj, dtype)
+        return self.obj
+
     def copy_metadata(self, from_: pl.Series, /) -> Self:
         """
         Copy metadata from a host series onto self.
