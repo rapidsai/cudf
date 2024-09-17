@@ -15,7 +15,7 @@ as the ``"cudf"`` dataframe backend for
 .. note::
   Neither Dask cuDF nor Dask DataFrame provide support for multi-GPU
   or multi-node execution on their own. You must also deploy a
-  `dask.distributed <https://distributed.dask.org/en/stable/>` cluster
+  `dask.distributed <https://distributed.dask.org/en/stable/>`__ cluster
   to leverage multiple GPUs. We strongly recommend using `Dask-CUDA
   <https://docs.rapids.ai/api/dask-cuda/stable/>`__ to simplify the
   setup of the cluster, taking advantage of all features of the GPU
@@ -29,6 +29,10 @@ minutes to Dask
 by `10 minutes to cuDF and Dask cuDF
 <https://docs.rapids.ai/api/cudf/stable/user_guide/10min.html>`__.
 
+After reviewing the sections below, please see the
+:ref:`Best Practices <best-practices>` page for further guidance on
+using Dask cuDF effectively.
+
 
 Using Dask cuDF
 ---------------
@@ -36,7 +40,7 @@ Using Dask cuDF
 The Dask DataFrame API (Recommended)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Simply use the `Dask configuration <dask:configuration>` system to
+Simply use the `Dask configuration <dask:configuration>`__ system to
 set the ``"dataframe.backend"`` option to ``"cudf"``. From Python,
 this can be achieved like so::
 
@@ -112,8 +116,8 @@ performance benefit over the CPU/GPU-portable ``dask.dataframe`` API.
 Also, using some parts of the explicit API are incompatible with
 automatic query planning (see the next section).
 
-The explicit Dask cuDF API
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Query Planning
+~~~~~~~~~~~~~~
 
 Dask cuDF now provides automatic query planning by default (RAPIDS 24.06+).
 As long as the ``"dataframe.query-planning"`` configuration is set to
