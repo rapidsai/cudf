@@ -4,7 +4,6 @@
 
 import contextlib
 import json
-import multiprocessing
 import os
 import sys
 from functools import wraps
@@ -39,10 +38,9 @@ def patch_testing_functions():
 
 
 # Dictionary to store function call counts
-manager = multiprocessing.Manager()
-function_call_counts = manager.dict()
+function_call_counts = {}  # type: ignore
 
-# The specific function to track
+# The specific functions to track
 FUNCTION_NAME = {"_slow_function_call", "_fast_function_call"}
 
 
@@ -70,46 +68,46 @@ def pytest_sessionfinish(session, exitstatus):
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_setup(item):
     # Check if this is the first test in the file
-    if item.nodeid.split("::")[0] != getattr(
-        pytest_runtest_setup, "current_file", None
-    ):
+    current_file = getattr(pytest_runtest_setup, "current_file", None)
+    test_file = item.nodeid.split("::")[0]
+    if test_file != current_file:
         # If it's a new file, reset the function call counts
         global function_call_counts
-        function_call_counts = manager.dict()
-        pytest_runtest_setup.current_file = item.nodeid.split("::")[0]
+        function_call_counts = {}
+        pytest_runtest_setup.current_file = test_file
 
 
 @pytest.hookimpl(trylast=True)
 def pytest_runtest_teardown(item, nextitem):
     # Check if this is the last test in the file
-    if (
-        nextitem is None
-        or nextitem.nodeid.split("::")[0] != item.nodeid.split("::")[0]
-    ):
+    current_file = item.nodeid.split("::")[0]
+    if nextitem is None or nextitem.nodeid.split("::")[0] != current_file:
         # Write the function call counts to a file
         worker_id = os.getenv("PYTEST_XDIST_WORKER", "master")
-        output_file = f'{item.nodeid.split("::")[0].replace("/", "__")}_{worker_id}_metrics.json'
+        output_file = (
+            f'{current_file.replace("/", "__")}_{worker_id}_metrics.json'
+        )
         with open(output_file, "w") as f:
-            json.dump(dict(function_call_counts), f, indent=4)
+            json.dump(function_call_counts, f, indent=4)
         print(f"Function call counts have been written to {output_file}")
 
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_configure(config):
     if hasattr(config, "workerinput"):
-        # Running in xdist worker
+        # Running in xdist worker, ensure each worker has its own counts
         global function_call_counts
-        function_call_counts = manager.dict()
+        function_call_counts = {}
 
 
 @pytest.hookimpl(trylast=True)
 def pytest_unconfigure(config):
     if hasattr(config, "workerinput"):
-        # Running in xdist worker
+        # Running in xdist worker, write the counts before exiting
         worker_id = config.workerinput["workerid"]
         output_file = f"function_call_counts_worker_{worker_id}.json"
         with open(output_file, "w") as f:
-            json.dump(dict(function_call_counts), f, indent=4)
+            json.dump(function_call_counts, f, indent=4)
         print(f"Function call counts have been written to {output_file}")
 
 
