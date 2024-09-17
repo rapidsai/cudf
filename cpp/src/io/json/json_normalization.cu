@@ -338,8 +338,10 @@ std::
 {
   /*
    * Algorithm:
-    1. Create a single buffer by concatenating the rows of the string column. Create segment offsets and lengths array for concatenated buffer
-    2. Run a 'complementary' whitespace normalization FST i.e. NOP for non-whitespace and quoted whitespace characters, and output indices of unquoted whitespace characters
+    1. Create a single buffer by concatenating the rows of the string column. Create segment offsets
+   and lengths array for concatenated buffer
+    2. Run a 'complementary' whitespace normalization FST i.e. NOP for non-whitespace and quoted
+   whitespace characters, and output indices of unquoted whitespace characters
     3. Update segment lengths based on the number of output indices between segment offsets
     4. Remove characters at output indices from concatenated buffer.
     5. Return updated buffer, segment lengths and updated segment offsets
