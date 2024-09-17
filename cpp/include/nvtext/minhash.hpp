@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/export.hpp>
@@ -72,7 +73,7 @@ std::unique_ptr<cudf::column> minhash(
  *
  * @throw std::invalid_argument if the width < 2
  * @throw std::invalid_argument if seeds is empty
- * @throw std::overflow_error if `seeds * input.size()` exceeds the column size limit
+ * @throw std::overflow_error if `seeds.size() * input.size()` exceeds the column size limit
  *
  * @param input Strings column to compute minhash
  * @param seeds Seed values used for the hash algorithm
@@ -133,7 +134,7 @@ std::unique_ptr<cudf::column> minhash64(
  *
  * @throw std::invalid_argument if the width < 2
  * @throw std::invalid_argument if seeds is empty
- * @throw std::overflow_error if `seeds * input.size()` exceeds the column size limit
+ * @throw std::overflow_error if `seeds.size() * input.size()` exceeds the column size limit
  *
  * @param input Strings column to compute minhash
  * @param seeds Seed values used for the hash algorithm
@@ -150,5 +151,61 @@ std::unique_ptr<cudf::column> minhash64(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief Returns the minhash values for each row of strings per seed
+ *
+ * Hash values are computed from each string in each row and the
+ * minimum hash value is returned for each row for each seed.
+ * Each row of the output list column are seed results for the corresponding
+ * input row. The order of the elements in each row match the order of
+ * the seeds provided in the `seeds` parameter.
+ *
+ * This function uses MurmurHash3_x86_32 for the hash algorithm.
+ *
+ * Any null row entries result in corresponding null output rows.
+ *
+ * @throw std::invalid_argument if seeds is empty
+ * @throw std::overflow_error if `seeds.size() * input.size()` exceeds the column size limit
+ *
+ * @param input Lists column of strings to compute minhash
+ * @param seeds Seed values used for the hash algorithm
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return List column of minhash values for each string per seed
+ */
+std::unique_ptr<cudf::column> word_minhash(
+  cudf::lists_column_view const& input,
+  cudf::device_span<uint32_t const> seeds,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Returns the minhash values for each row of strings per seed
+ *
+ * Hash values are computed from each string in each row and the
+ * minimum hash value is returned for each row for each seed.
+ * Each row of the output list column are seed results for the corresponding
+ * input row. The order of the elements in each row match the order of
+ * the seeds provided in the `seeds` parameter.
+ *
+ * This function uses MurmurHash3_x64_128 for the hash algorithm though
+ * only the first 64-bits of the hash are used in computing the output.
+ *
+ * Any null row entries result in corresponding null output rows.
+ *
+ * @throw std::invalid_argument if seeds is empty
+ * @throw std::overflow_error if `seeds.size() * input.size()` exceeds the column size limit
+ *
+ * @param input Lists column of strings to compute minhash
+ * @param seeds Seed values used for the hash algorithm
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return List column of minhash values for each string per seed
+ */
+std::unique_ptr<cudf::column> word_minhash64(
+  cudf::lists_column_view const& input,
+  cudf::device_span<uint64_t const> seeds,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT nvtext
