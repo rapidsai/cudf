@@ -39,7 +39,7 @@ namespace io {
  * @file
  */
 
-constexpr auto default_row_group_size_bytes =
+constexpr size_t default_row_group_size_bytes =
   std::numeric_limits<size_t>::max();                          ///< Infinite bytes per row group
 constexpr size_type default_row_group_size_rows = 1'000'000;   ///< 1 million rows per row group
 constexpr size_t default_max_page_size_bytes    = 512 * 1024;  ///< 512KB per page

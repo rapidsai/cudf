@@ -1825,7 +1825,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         std::min<size_t>(std::numeric_limits<size_type>::max(),
                          util::div_rounding_up_safe(max_row_group_size, avg_row_len));
       // Safe comparison as rg_frag_size fits in size_type
-      max_page_fragment_size = std::min<size_type>(rg_frag_size, max_page_fragment_size);
+      max_page_fragment_size =
+        std::min<size_type>(static_cast<size_type>(rg_frag_size), max_page_fragment_size);
     }
 
     // dividing page size by average row length will tend to overshoot the desired
