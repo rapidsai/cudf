@@ -5,9 +5,12 @@ from . cimport (
     case,
     char_types,
     contains,
+    convert,
     find,
     regex_flags,
     regex_program,
     replace,
     slice,
+    strip,
 )
+from .side_type cimport side_type

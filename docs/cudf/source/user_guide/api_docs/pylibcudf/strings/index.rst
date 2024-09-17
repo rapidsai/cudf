@@ -12,3 +12,4 @@ strings
     regex_program
     replace
     slice
+    strip
