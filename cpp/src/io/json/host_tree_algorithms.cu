@@ -435,6 +435,10 @@ void make_device_json_column(device_span<SymbolT const> input,
 
   auto initialize_json_columns = [&](auto i, auto& col_ref, auto column_category) {
     auto& col = col_ref.get();
+    col.id = i;
+    if(col.type != json_col_t::Unknown) {
+      CUDF_FAIL("Column already initialized");
+    }
     if (column_category == NC_ERR || column_category == NC_FN) {
       return;
     } else if (column_category == NC_VAL || column_category == NC_STR) {
@@ -457,6 +461,12 @@ void make_device_json_column(device_span<SymbolT const> input,
     col.validity =
       cudf::detail::create_null_mask(col.num_rows, cudf::mask_state::ALL_NULL, stream, mr);
     col.type = to_json_col_type(column_category);
+    if(col.type != json_col_t::StringColumn and 
+       col.type != json_col_t::ListColumn and
+        col.type != json_col_t::StructColumn) {
+          std::cout<<int(column_category)<<std::endl;
+          std::cout<<"init probably failed. Unknown type\n";
+        }
   };
 
   // 2. generate nested columns tree and its device_memory
@@ -492,20 +502,11 @@ void make_device_json_column(device_span<SymbolT const> input,
   // map{"a", INT}
   // map{"a", map{"n", INT, "m": STRUCT{map{"x": int}}}, "b": INT, "c": LIST{map{"element": DOUBLE}}
   // map{"a", STRUCT}
-  schema_element u_schema{data_type{type_id::STRUCT}};
-  u_schema.child_types = unified_schema(options);
 
   // TODO write conditions for is_array_of_arrays, is_enabled_lines and root_node.
   // if normal, jsonl= child of sentinel., json=child of child of sentinel;
   if(adj[parent_node_sentinel].empty()) return; // for empty file
   CUDF_EXPECTS(adj[parent_node_sentinel].size()==1, "Should be 1");
-  auto root_struct_col_id = is_enabled_lines ? adj[parent_node_sentinel][0] : adj[adj[parent_node_sentinel][0]][0];
-  // TODO: mark these col_id as not pruned.
-  if(!is_enabled_lines) {
-    auto top_level_list_id = adj[parent_node_sentinel][0];
-    // is_pruned[top_level_list_id]=true;
-  }
-  // is_pruned[root_struct_col_id]=true;
   std::vector<node_t> expected_types(num_columns, NUM_NODE_CLASSES);
 
   //options.is_enabled_prune_columns()
@@ -525,7 +526,7 @@ void make_device_json_column(device_span<SymbolT const> input,
       (schema.type == data_type{type_id::LIST} and column_categories[root] == NC_LIST) or
       (schema.type != data_type{type_id::STRUCT} and schema.type != data_type{type_id::LIST} and column_categories[root] != NC_FN);
       std::cout<<root<<":"<<pass<<std::endl;
-      // TODO: mixmatched type's children need to be pruned as well
+      // TODO: mixmatched type's children need to be pruned as well, TODO unit tests for this.
       if (!pass) { is_pruned[root]=true; return; }
       is_pruned[root]=false;
       auto expected_type = [](auto type, auto cat) {
@@ -567,7 +568,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     cudf::detail::visitor_overload{
       [&root_list_col_id, &adj, &mark_is_pruned](std::vector<data_type> const& user_dtypes) -> void {
         for(size_t i=0; i< adj[root_list_col_id].size() && i<user_dtypes.size(); i++) {
-          NodeIndexT const first_child_id = adj[root_list_col_id][i];
+          NodeIndexT const first_child_id = adj[root_list_col_id][i]; //TODO could mixed type happen here?
           mark_is_pruned(first_child_id, schema_element{user_dtypes[i]});
         }
       },
@@ -590,9 +591,37 @@ void make_device_json_column(device_span<SymbolT const> input,
     options.get_dtypes());
   } else {
     std::cout<<"struct tree\n";
+    auto root_struct_col_id = is_enabled_lines ? adj[parent_node_sentinel][0] : adj[adj[parent_node_sentinel][0]][0];
+    // TODO: mark these col_id as not pruned.
+    if(!is_enabled_lines) {
+      auto top_level_list_id = adj[parent_node_sentinel][0];
+      is_pruned[top_level_list_id]=false;
+    }
+    is_pruned[root_struct_col_id]=false;
     // expected_types[root_struct_col_id]=NC_STRUCT; //? could be list for array of arrays
+    schema_element u_schema{data_type{type_id::STRUCT}};
+    u_schema.child_types = unified_schema(options);
+    std::visit(
+    cudf::detail::visitor_overload{
+      [&is_pruned, &root_struct_col_id, &adj, &mark_is_pruned](std::vector<data_type> const& user_dtypes) -> void {
+        for(size_t i=0; i< adj[root_struct_col_id].size() && i<user_dtypes.size(); i++) {
+          NodeIndexT const first_field_id = adj[root_struct_col_id][i];
+          is_pruned[first_field_id]=false;
+            for(auto child_id : adj[first_field_id]) //children of field (>1 if mixed)
+              mark_is_pruned(child_id, schema_element{user_dtypes[i]});
+        }
+      },
+      [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](
+        std::map<std::string, data_type> const& user_dtypes) -> void {        
+        mark_is_pruned(root_struct_col_id, u_schema);
+      },
+      [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](
+        std::map<std::string, schema_element> const& user_dtypes) -> void {
+        mark_is_pruned(root_struct_col_id, u_schema);
+      }},
+    options.get_dtypes());
     // for(auto child_id : adj[root])
-    mark_is_pruned(root_struct_col_id, u_schema);
+    // mark_is_pruned(root_struct_col_id, u_schema);
   }
   std::cout<<"is_pruned:\n";
   for(size_t i=0ul; i<num_columns; i++) std::cout<<i<<",";   std::cout<<"\n";
@@ -609,8 +638,23 @@ void make_device_json_column(device_span<SymbolT const> input,
   // std::vector<bool> ignore_vals(num_columns, false);
   // if (options.is_enabled_mixed_types_as_string()) {
   // }
+
+  auto const is_str_column_all_nulls = [&, &column_tree = d_column_tree]() {
+    // if (is_enabled_mixed_types_as_string) {
+      return cudf::detail::make_host_vector_sync(
+        is_all_nulls_each_column(input, column_tree, tree, col_ids, options, stream), stream);
+    // }
+    // return cudf::detail::make_empty_host_vector<uint8_t>(0, stream);
+  }();
+
+  // auto handle_mixed_types = [&](std::vector<NodeIndexT>& child_ids) {
+  //   // column_categories, is_str_column_all_nulls, is_pruned, expected_types
+  //   // Remove pruned and check for 
+  // };
+
   using dev_ref = std::reference_wrapper<device_json_column>;
   std::unordered_map<NodeIndexT, dev_ref> columns;
+  root.id = -2; //DEBUG (todo remove)
   columns.try_emplace(parent_node_sentinel, std::ref(root));
   // convert adjaceny list to tree.
   dev_ref parent_ref = std::ref(root);
@@ -634,9 +678,19 @@ void make_device_json_column(device_span<SymbolT const> input,
           std::cout<<"after at\n";
           // TODO: Mixed type? how to handle?
           // TODO: what if all children are pruned? won't happen?
+          // if(adj[field_id].size()>1) { 
+          //   CUDF_FAIL("Mixed Type in Struct");
+          // }
           for(auto child_id : adj[field_id]) //children of field (>1 if mixed)
           {
             if(is_pruned[child_id]) continue;
+            if (column_categories[child_id] == NC_VAL ||
+                column_categories[child_id] == NC_STR)
+            if(is_str_column_all_nulls[child_id]) {
+              // ignore_vals[child_id] = true;
+              is_pruned[child_id] = true;
+              continue;
+            }
             columns.try_emplace(child_id, this_ref);
             construct_tree(child_id, this_ref);
             //FIXME: initialized 2nd time for mixed types?
@@ -648,6 +702,7 @@ void make_device_json_column(device_span<SymbolT const> input,
         std::cout<<"array of arrays\n";
         // initialize_json_columns(root, ref, column_categories[root]); // To avoid OOM error for name level list.
         for(auto child_id : child_ids) {
+          // TODO: could mixed tpes happen here?
           if(is_pruned[child_id]) continue;
           auto name = column_names[child_id];
           auto inserted = ref.get().child_columns.try_emplace(name, device_json_column(stream, mr)).second;
@@ -658,11 +713,33 @@ void make_device_json_column(device_span<SymbolT const> input,
           //FIXME: initialized 2nd time for mixed types?
         }
       } else {
+        if(child_ids.empty()) return;
         auto inserted = ref.get().child_columns.try_emplace(list_child_name, device_json_column(stream, mr)).second;
         CUDF_EXPECTS(inserted, "list child column insertion failed, duplicate column name in the parent");
+        ref.get().column_order.emplace_back(list_child_name);
         auto this_ref = std::ref(ref.get().child_columns.at(list_child_name));
+        // if(child_ids.size()>1) { 
+        //   CUDF_FAIL("Mixed Type in List");
+        // }
+        // TODO prune it if only other type is present and not pruned.
+        // conditions for mixed type handling!
+        // if mixedtype is not enabled, then ignore string column if struc/list is present.
+        // if mixed type is enabled, how to mixed them? forcing expected type to STR.
+
+        // do these on unpruned columns only.
+        // if str col is all null, ignore, then only one column, do nothing
+        // if str col is all null, both struct & list, ERROR out
+        // if mixed type is enabled, then force string type on all columns.
+        // handle_mixed_types(child_ids, column_categories, is_str_column_all_nulls, is_pruned, expected_types);
         for(auto child_id : child_ids) {
           if(is_pruned[child_id]) continue;
+          if (column_categories[child_id] == NC_VAL ||
+              column_categories[child_id] == NC_STR)
+          if(is_str_column_all_nulls[child_id]) {
+            // ignore_vals[child_id] = true;
+            is_pruned[child_id] = true;
+            continue;
+          }
           columns.try_emplace(child_id, this_ref);
           construct_tree(child_id, this_ref);
           //FIXME: initialized 2nd time for mixed types?
@@ -808,6 +885,10 @@ void make_device_json_column(device_span<SymbolT const> input,
                              col.child_offsets.end(),
                              col.child_offsets.begin(),
                              thrust::maximum<json_column::row_offset_t>{});
+    } else if (col.type == json_col_t::StructColumn) {
+      std::cout<<id<<" struct noscan\n";
+    } else {
+      std::cout<<id<<"----- unknown scan\n";
     }
   }
   stream.synchronize();

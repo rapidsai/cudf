@@ -166,6 +166,7 @@ struct device_json_column {
   row_offset_t num_rows = 0;
   // Force as string column
   bool forced_as_string_column{false};
+  int id=-1;
 
   /**
    * @brief Construct a new d json column object
