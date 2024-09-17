@@ -42,7 +42,7 @@ def match_re(Column source_strings, object reg_ex, uint32_t flags):
     """
     prog = RegexProgram.create(str(reg_ex), flags)
     return Column.from_pylibcudf(
-        contains.match_re(source_strings.to_pylibcudf(mode="read"), prog)
+        contains.matches_re(source_strings.to_pylibcudf(mode="read"), prog)
     )
 
 
