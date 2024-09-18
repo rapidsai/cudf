@@ -33,6 +33,7 @@
 #include <cooperative_groups.h>
 #include <cub/block/block_scan.cuh>
 #include <cuco/static_set.cuh>
+#include <thrust/distance.h>
 #include <thrust/fill.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/sequence.h>
@@ -259,7 +260,7 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
                                                               build_indices_begin,
                                                               {stream.value()});
 
-      auto const actual_size = std::distance(probe_indices_begin, probe_indices_end);
+      auto const actual_size = thrust::distance(probe_indices_begin, probe_indices_end);
       build_indices->resize(actual_size, stream);
       probe_indices->resize(actual_size, stream);
     },
