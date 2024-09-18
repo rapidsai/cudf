@@ -75,6 +75,7 @@ struct write_fn {
   cudf::io::compression_type const compression;
   std::optional<cudf::io::statistics_freq> const stats_level;
   int const thread_id;
+  rmm::cuda_stream_view stream;
 
   void operator()()
   {
@@ -92,8 +93,12 @@ struct write_fn {
 
     builder.metadata(table_metadata);
     auto options = builder.build();
+
     // Write parquet data
-    cudf::io::write_parquet(options);
+    cudf::io::write_parquet(options, stream);
+
+    // Done with this stream
+    stream.synchronize_no_throw();
   }
 };
 
@@ -189,7 +194,7 @@ int main(int argc, char const** argv)
   rmm::mr::set_current_device_resource(&stats_mr);
 
   // Lambda function to setup and launch multithread parquet read
-  auto const read_parquet_multithreaded = [&]() {
+  auto const read_parquet_multithreaded = [&](std::vector<std::string> const& files) {
     // Tables read by each thread
     std::vector<table_t> tables(thread_count);
 
@@ -200,7 +205,7 @@ int main(int argc, char const** argv)
                   thrust::make_counting_iterator(thread_count),
                   [&](auto tid) {
                     read_tasks.emplace_back(
-                      read_fn{input_files, tables, tid, thread_count, stream_pool.get_stream()});
+                      read_fn{files, tables, tid, thread_count, stream_pool.get_stream()});
                   });
 
     std::vector<std::thread> threads;
@@ -219,12 +224,13 @@ int main(int argc, char const** argv)
     // Tasks to read each parquet file
     std::vector<write_fn> write_tasks;
     write_tasks.reserve(thread_count);
-    std::for_each(thrust::make_counting_iterator(0),
-                  thrust::make_counting_iterator(thread_count),
-                  [&](auto tid) {
-                    write_tasks.emplace_back(
-                      write_fn{output_path, tables, encoding, compression, page_stats, tid});
-                  });
+    std::for_each(
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(thread_count),
+      [&](auto tid) {
+        write_tasks.emplace_back(write_fn{
+          output_path, tables, encoding, compression, page_stats, tid, stream_pool.get_stream()});
+      });
 
     std::vector<std::thread> threads;
     threads.reserve(thread_count);
@@ -244,7 +250,7 @@ int main(int argc, char const** argv)
               << std::endl;
 
     // tables read by each thread
-    auto const tables = read_parquet_multithreaded();
+    auto const tables = read_parquet_multithreaded(input_files);
 
     // In case some kernels are still running on the default stre
     default_stream.synchronize();
@@ -265,12 +271,11 @@ int main(int argc, char const** argv)
     timer.print_elapsed_millis();
   }
 
-  // Re-read the parquet files with multiple threads
+  // Re-read the same parquet files with multiple threads
   {
     std::cout << "Reading for the second time using " << thread_count << " threads..." << std::endl;
     cudf::examples::timer timer;
-    auto tables = read_parquet_multithreaded();
-
+    auto tables = read_parquet_multithreaded(input_files);
     // Construct the final table
     auto table = std::move(tables[0]);
     std::for_each(tables.begin() + 1, tables.end(), [&](auto& tbl) {
