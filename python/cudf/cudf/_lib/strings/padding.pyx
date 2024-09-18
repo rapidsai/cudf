@@ -1,6 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from cudf.core.buffer import acquire_spill_lock
 
+from pylibcudf.libcudf.types cimport size_type
+
 from cudf._lib.column cimport Column
 
 import pylibcudf as plc
@@ -20,8 +22,8 @@ def pad(Column source_strings,
     plc_result = plc.strings.padding.pad(
         source_strings.to_pylibcudf(mode="read"),
         width,
+        side,
         fill_char,
-        side
     )
     return Column.from_pylibcudf(plc_result)
 
