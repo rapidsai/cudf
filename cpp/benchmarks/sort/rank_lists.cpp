@@ -21,6 +21,7 @@
 #include <cudf_test/column_utilities.hpp>
 
 #include <cudf/sorting.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
 
@@ -39,7 +40,7 @@ void nvbench_rank_lists(nvbench::state& state, nvbench::type_list<nvbench::enum_
                cudf::null_order::AFTER,
                false,
                cudf::get_default_stream(),
-               rmm::mr::get_current_device_resource());
+               cudf::get_current_device_resource_ref());
   });
 }
 

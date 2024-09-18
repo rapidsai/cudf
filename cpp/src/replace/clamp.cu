@@ -34,11 +34,11 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/for_each.h>
@@ -258,7 +258,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
     return result;
   }();
   auto matched_view = dictionary_column_view(matched_column->view());
-  auto default_mr   = rmm::mr::get_current_device_resource();
+  auto default_mr   = cudf::get_current_device_resource_ref();
 
   // get the indexes for lo_replace and for hi_replace
   auto lo_replace_index =

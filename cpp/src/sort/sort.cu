@@ -24,9 +24,9 @@
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/functional.h>
 #include <thrust/sort.h>
@@ -53,7 +53,7 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
                "Mismatch in number of rows for values and keys");
 
   auto sorted_order = detail::sorted_order(
-    keys, column_order, null_precedence, stream, rmm::mr::get_current_device_resource());
+    keys, column_order, null_precedence, stream, cudf::get_current_device_resource_ref());
 
   return detail::gather(values,
                         sorted_order->view(),

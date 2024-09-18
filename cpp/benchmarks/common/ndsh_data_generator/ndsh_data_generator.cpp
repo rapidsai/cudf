@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "tpch_data_generator.hpp"
+#include "ndsh_data_generator.hpp"
 
 #include "random_column_generator.hpp"
 #include "table_helpers.hpp"
@@ -35,6 +35,9 @@
 #include <cudf/strings/padding.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <array>
 #include <string>
@@ -432,45 +435,36 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
   columns.push_back(std::move(l_quantity));
   columns.push_back(std::move(l_discount));
   columns.push_back(std::move(l_tax));
+  columns.push_back(std::move(l_returnflag));
+  columns.push_back(std::move(l_linestatus));
   columns.push_back(std::move(l_shipdate_ts));
   columns.push_back(std::move(l_commitdate_ts));
   columns.push_back(std::move(l_receiptdate_ts));
-  columns.push_back(std::move(l_returnflag));
-  columns.push_back(std::move(l_linestatus));
   columns.push_back(std::move(l_shipinstruct));
   columns.push_back(std::move(l_shipmode));
   columns.push_back(std::move(l_comment));
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& lineitem,
+/**
+ * @brief Generate the part of the `orders` table dependent on the `lineitem` table
+ *
+ * @param lineitem_partial The partially generated `lineitem` table
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& lineitem_partial,
                                                        rmm::cuda_stream_view stream,
                                                        rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto const l_linestatus_mask = lineitem.column(0);
-  auto const l_orderkey        = lineitem.column(1);
-  auto const l_discount        = lineitem.column(6);
-  auto const l_tax             = lineitem.column(7);
-  auto const l_extendedprice   = lineitem.column(16);
+  auto const l_linestatus_mask = lineitem_partial.column(0);
+  auto const l_orderkey        = lineitem_partial.column(1);
+  auto const l_extendedprice   = lineitem_partial.column(6);
+  auto const l_discount        = lineitem_partial.column(7);
+  auto const l_tax             = lineitem_partial.column(8);
 
   std::vector<std::unique_ptr<cudf::column>> orders_dependent_columns;
-
-  // Generate the `o_totalprice` column
-  // We calculate the `charge` column, which is a function of `l_extendedprice`,
-  // `l_tax`, and `l_discount` and then group by `l_orderkey` and sum the `charge`
-  auto const l_charge = calculate_charge(l_extendedprice, l_tax, l_discount, stream, mr);
-  auto o_totalprice   = [&]() {
-    auto const keys = cudf::table_view({l_orderkey});
-    cudf::groupby::groupby gb(keys);
-    std::vector<cudf::groupby::aggregation_request> requests;
-    requests.push_back(cudf::groupby::aggregation_request());
-    requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-    requests[0].values = l_charge->view();
-    auto agg_result    = gb.aggregate(requests);
-    return cudf::round(agg_result.second[0].results[0]->view(), 2);
-  }();
-  orders_dependent_columns.push_back(std::move(o_totalprice));
 
   // Generate the `o_orderstatus` column
   auto o_orderstatus = [&]() {
@@ -526,6 +520,22 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
       cudf::string_scalar("P"), o_orderstatus_intermediate->view(), mask_b->view());
   }();
   orders_dependent_columns.push_back(std::move(o_orderstatus));
+
+  // Generate the `o_totalprice` column
+  // We calculate the `charge` column, which is a function of `l_extendedprice`,
+  // `l_tax`, and `l_discount` and then group by `l_orderkey` and sum the `charge`
+  auto const l_charge = calculate_charge(l_extendedprice, l_tax, l_discount, stream, mr);
+  auto o_totalprice   = [&]() {
+    auto const keys = cudf::table_view({l_orderkey});
+    cudf::groupby::groupby gb(keys);
+    std::vector<cudf::groupby::aggregation_request> requests;
+    requests.push_back(cudf::groupby::aggregation_request());
+    requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+    requests[0].values = l_charge->view();
+    auto agg_result    = gb.aggregate(requests);
+    return cudf::round(agg_result.second[0].results[0]->view(), 2);
+  }();
+  orders_dependent_columns.push_back(std::move(o_totalprice));
   return std::make_unique<cudf::table>(std::move(orders_dependent_columns));
 }
 
@@ -727,9 +737,7 @@ generate_orders_lineitem_part(double scale_factor,
   // Generate the `part` table
   auto part = generate_part(scale_factor, stream, mr);
 
-  // Join the `part` and partial `lineitem` tables, then calculate the `l_extendedprice` column,
-  // add the column to the `lineitem` table, and write the `lineitem` table to a parquet file
-
+  // Join the `part` and partial `lineitem` tables, then calculate the `l_extendedprice` column
   auto l_extendedprice = [&]() {
     auto const left = cudf::table_view(
       {lineitem_partial->get_column(2).view(), lineitem_partial->get_column(5).view()});
@@ -749,8 +757,9 @@ generate_orders_lineitem_part(double scale_factor,
     return cudf::round(col->view(), 2);
   }();
 
+  // Insert the `l_extendedprice` column into the partial columns of the `lineitem` table
   auto lineitem_partial_columns = lineitem_partial->release();
-  lineitem_partial_columns.push_back(std::move(l_extendedprice));
+  lineitem_partial_columns.insert(lineitem_partial_columns.begin() + 6, std::move(l_extendedprice));
   auto lineitem_temp = std::make_unique<cudf::table>(std::move(lineitem_partial_columns));
 
   // Generate the dependent columns of the `orders` table
@@ -759,7 +768,7 @@ generate_orders_lineitem_part(double scale_factor,
 
   auto orders_independent_columns = orders_independent->release();
   auto orders_dependent_columns   = orders_dependent->release();
-  orders_independent_columns.insert(orders_independent_columns.end(),
+  orders_independent_columns.insert(orders_independent_columns.begin() + 2,
                                     std::make_move_iterator(orders_dependent_columns.begin()),
                                     std::make_move_iterator(orders_dependent_columns.end()));
 
