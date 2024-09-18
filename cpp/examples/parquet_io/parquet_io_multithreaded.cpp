@@ -128,7 +128,7 @@ int main(int argc, char const** argv)
       output_path  = std::string{argv[2]};
       encoding     = get_encoding_type(argv[3]);
       compression  = get_compression_type(argv[4]);
-      thread_count = std::stoi(std::string(argv[5]));
+      thread_count = std::max(thread_count, std::stoi(std::string{argv[5]}));
       break;
     default:
       throw std::runtime_error(
