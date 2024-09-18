@@ -71,35 +71,31 @@ def get_per_module_results(log_file_name):
             function_call_counts.update(function_call_count)
         else:
             for key, value in function_call_count.items():
-                function_call_counts[key]["_slow_function_call"] += value.get(
-                    "_slow_function_call", 0
-                )
-                function_call_counts[key]["_fast_function_call"] += value.get(
-                    "_fast_function_call", 0
-                )
-            # per_module_results[key]["_slow_function_call"] = (
-            #     per_module_results[key].get("_slow_function_call", 0)
-            #     + function_call_counts.get("_slow_function_call", 0)
-            # )
-            # per_module_results[key]["_fast_function_call"] = (
-            #     per_module_results[key].get("_fast_function_call", 0)
-            #     + function_call_counts.get("_fast_function_call", 0)
-            # )
+                if key not in function_call_counts:
+                    function_call_counts[key] = value
+                else:
+                    if "_slow_function_call" not in function_call_counts[key]:
+                        function_call_counts[key]["_slow_function_call"] = 0
+                    if "_fast_function_call" not in function_call_counts[key]:
+                        function_call_counts[key]["_fast_function_call"] = 0
+                    function_call_counts[key]["_slow_function_call"] += (
+                        value.get("_slow_function_call", 0)
+                    )
+                    function_call_counts[key]["_fast_function_call"] += (
+                        value.get("_fast_function_call", 0)
+                    )
+
     for key, value in per_module_results.items():
-        # processed_name = key.replace("/", "__") + "_*_metrics.json"
-        # # Assuming the directory is the same as the module name's directory
-        # directory = os.path.dirname(log_file_name)
-        # pattern = os.path.join(directory, processed_name)
-        # matching_files = glob.glob(pattern)
-        # for file in matching_files:
-        #     with open(file) as f:
-        #         function_call_counts = json.load(f)
-        per_module_results[key]["_slow_function_call"] = function_call_counts[
-            key
-        ].get("_slow_function_call", 0)
-        per_module_results[key]["_fast_function_call"] = function_call_counts[
-            key
-        ].get("_fast_function_call", 0)
+        if key in function_call_counts:
+            per_module_results[key]["_slow_function_call"] = (
+                function_call_counts[key].get("_slow_function_call", 0)
+            )
+            per_module_results[key]["_fast_function_call"] = (
+                function_call_counts[key].get("_fast_function_call", 0)
+            )
+        else:
+            per_module_results[key]["_slow_function_call"] = 0
+            per_module_results[key]["_fast_function_call"] = 0
     return per_module_results
 
 
