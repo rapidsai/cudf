@@ -197,7 +197,7 @@ struct TransduceToNormalizedQuotes {
 
 }  // namespace normalize_quotes
 
-namespace normalize_whitespace_complement {
+namespace normalize_whitespace {
 
 enum class dfa_symbol_group_id : uint32_t {
   DOUBLE_QUOTE_CHAR,   ///< Quote character SG: "
@@ -297,7 +297,7 @@ struct TransduceToNormalizedWS {
   }
 };
 
-}  // namespace normalize_whitespace_complement
+}  // namespace normalize_whitespace
 
 namespace detail {
 
@@ -342,8 +342,8 @@ std::
    * Algorithm:
     1. Create a single buffer by concatenating the rows of the string column. Create segment offsets
    and lengths array for concatenated buffer
-    2. Run a 'complementary' whitespace normalization FST i.e. NOP for non-whitespace and quoted
-   whitespace characters, and output indices of unquoted whitespace characters
+    2. Run a whitespace normalization FST that performs NOP for non-whitespace and quoted
+   whitespace characters, and outputs indices of unquoted whitespace characters
     3. Update segment lengths based on the number of output indices between segment offsets
     4. Remove characters at output indices from concatenated buffer.
     5. Return updated buffer, segment lengths and updated segment offsets
@@ -392,13 +392,13 @@ std::
                              stream.value());
   }
 
-  // complementary whitespace normalization : get only the indices
-  auto parser = fst::detail::make_fst(
-    fst::detail::make_symbol_group_lut(normalize_whitespace_complement::wna_sgs),
-    fst::detail::make_transition_table(normalize_whitespace_complement::wna_state_tt),
-    fst::detail::make_translation_functor<SymbolT, 0, 2>(
-      normalize_whitespace_complement::TransduceToNormalizedWS{}),
-    stream);
+  // whitespace normalization : get the indices of the unquoted whitespace characters
+  auto parser =
+    fst::detail::make_fst(fst::detail::make_symbol_group_lut(normalize_whitespace::wna_sgs),
+                          fst::detail::make_transition_table(normalize_whitespace::wna_state_tt),
+                          fst::detail::make_translation_functor<SymbolT, 0, 2>(
+                            normalize_whitespace::TransduceToNormalizedWS{}),
+                          stream);
 
   rmm::device_uvector<size_type> outbuf_indices(inbuf.size(), stream, mr);
   rmm::device_scalar<SymbolOffsetT> outbuf_indices_size(stream, mr);
@@ -407,7 +407,7 @@ std::
                    thrust::make_discard_iterator(),
                    outbuf_indices.data(),
                    outbuf_indices_size.data(),
-                   normalize_whitespace_complement::start_state,
+                   normalize_whitespace::start_state,
                    stream);
 
   auto const num_deletions = outbuf_indices_size.value(stream);
