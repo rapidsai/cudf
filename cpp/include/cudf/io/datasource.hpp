@@ -88,12 +88,16 @@ class datasource {
    *
    * @param[in] filepath Path to the file to use
    * @param[in] offset Bytes from the start of the file (the default is zero)
-   * @param[in] size Bytes from the offset; use zero for entire file (the default is zero)
+   * @param[in] max_size_estimate Maximum size of the input within the file (the default is zero,
+   * which means the whole file after `offset`)
+   * @param[in] min_size_estimate Minimum size of the input within the file (the default is zero,
+   * which means the whole file after `offset`)
    * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(std::string const& filepath,
-                                            size_t offset = 0,
-                                            size_t size   = 0);
+                                            size_t offset            = 0,
+                                            size_t max_size_estimate = 0,
+                                            size_t min_size_estimate = 0);
 
   /**
    * @brief Creates a source from a host memory buffer.
