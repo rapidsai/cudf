@@ -48,6 +48,17 @@ documentation for detailed information.
   Please see `RAPIDS-deployment documentation <https://docs.rapids.ai/deployment/stable/>`__
   for further details and examples.
 
+
+Use diagnostic tools
+~~~~~~~~~~~~~~~~~~~~
+
+The Dask ecosystem includes several diagnostic tools that you should absolutely use.
+These tools include an intuitive `browser dashboard
+<https://docs.dask.org/en/stable/dashboard.html>`__ as well as a dedicated
+`API for collecting performance profiles
+<https://distributed.dask.org/en/latest/diagnosing-performance.html#performance-reports>`__.
+
+
 Enable cuDF spilling
 ~~~~~~~~~~~~~~~~~~~~
 
