@@ -881,6 +881,12 @@ def _assert_fast_slow_eq(left, right):
         assert_eq(left, right)
 
 
+class ProxyFallbackError(Exception):
+    """Raised when fallback occurs"""
+
+    pass
+
+
 def _fast_slow_function_call(
     func: Callable,
     /,
@@ -942,6 +948,10 @@ def _fast_slow_function_call(
                             f"The exception was {e}."
                         )
     except Exception as err:
+        if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
+            raise ProxyFallbackError(
+                f"The operation failed with cuDF, the reason was {type(err)}: {err}."
+            )
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
