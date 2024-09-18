@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
-#include "../utilities/timer.hpp"
-#include "utils.hpp"
+#include "utilities.hpp"
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <nvbench/nvbench.cuh>
+
 /**
- * @file q5.cpp
- * @brief Implement query 5 of the TPC-H benchmark.
+ * @file q05.cpp
+ * @brief Implement query 5 of the NDS-H benchmark.
  *
  * create view customer as select * from '/tables/scale-1/customer.parquet';
  * create view orders as select * from '/tables/scale-1/orders.parquet';
@@ -67,7 +69,7 @@
  * @param stream The CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calc_revenue(
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_revenue(
   cudf::column_view const& extendedprice,
   cudf::column_view const& discount,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -86,16 +88,9 @@
   return revenue;
 }
 
-int main(int argc, char const** argv)
+void run_ndsh_q5(nvbench::state& state,
+                 std::unordered_map<std::string, parquet_device_buffer>& sources)
 {
-  auto const args = parse_args(argc, argv);
-
-  // Use a memory pool
-  auto resource = create_memory_resource(args.memory_resource_type);
-  cudf::set_current_device_resource(resource.get());
-
-  cudf::examples::timer timer;
-
   // Define the column projection and filter predicate for the `orders` table
   std::vector<std::string> const orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
   auto const o_orderdate_ref                 = cudf::ast::column_reference(std::distance(
@@ -125,17 +120,17 @@ int main(int argc, char const** argv)
   // Read out the tables from parquet files
   // while pushing down the column projections and filter predicates
   auto const customer =
-    read_parquet(args.dataset_dir + "/customer.parquet", {"c_custkey", "c_nationkey"});
+    read_parquet(sources["customer"].make_source_info(), {"c_custkey", "c_nationkey"});
   auto const orders =
-    read_parquet(args.dataset_dir + "/orders.parquet", orders_cols, std::move(orders_pred));
-  auto const lineitem = read_parquet(args.dataset_dir + "/lineitem.parquet",
+    read_parquet(sources["orders"].make_source_info(), orders_cols, std::move(orders_pred));
+  auto const lineitem = read_parquet(sources["lineitem"].make_source_info(),
                                      {"l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"});
   auto const supplier =
-    read_parquet(args.dataset_dir + "/supplier.parquet", {"s_suppkey", "s_nationkey"});
+    read_parquet(sources["supplier"].make_source_info(), {"s_suppkey", "s_nationkey"});
   auto const nation =
-    read_parquet(args.dataset_dir + "/nation.parquet", {"n_nationkey", "n_regionkey", "n_name"});
+    read_parquet(sources["nation"].make_source_info(), {"n_nationkey", "n_regionkey", "n_name"});
   auto const region =
-    read_parquet(args.dataset_dir + "/region.parquet", region_cols, std::move(region_pred));
+    read_parquet(sources["region"].make_source_info(), region_cols, std::move(region_pred));
 
   // Perform the joins
   auto const join_a = apply_inner_join(region, nation, {"r_regionkey"}, {"n_regionkey"});
@@ -147,7 +142,7 @@ int main(int argc, char const** argv)
 
   // Calculate and append the `revenue` column
   auto revenue =
-    calc_revenue(joined_table->column("l_extendedprice"), joined_table->column("l_discount"));
+    calculate_revenue(joined_table->column("l_extendedprice"), joined_table->column("l_discount"));
   (*joined_table).append(revenue, "revenue");
 
   // Perform the groupby operation
@@ -162,9 +157,22 @@ int main(int argc, char const** argv)
   auto const orderedby_table =
     apply_orderby(groupedby_table, {"revenue"}, {cudf::order::DESCENDING});
 
-  timer.print_elapsed_millis();
-
   // Write query result to a parquet file
   orderedby_table->to_parquet("q5.parquet");
-  return 0;
 }
+
+void ndsh_q5(nvbench::state& state)
+{
+  // Generate the required parquet files in device buffers
+  double const scale_factor = state.get_float64("scale_factor");
+  std::unordered_map<std::string, parquet_device_buffer> sources;
+  generate_parquet_data_sources(
+    scale_factor, {"customer", "orders", "lineitem", "supplier", "nation", "region"}, sources);
+
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { run_ndsh_q5(state, sources); });
+}
+
+NVBENCH_BENCH(ndsh_q5).set_name("ndsh_q5").add_float64_axis("scale_factor", {0.01, 0.1, 1});

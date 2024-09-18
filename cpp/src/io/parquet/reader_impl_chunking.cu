@@ -865,8 +865,18 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
 
     switch (codec.compression_type) {
       case GZIP:
-        gpuinflate(
-          d_comp_in_view, d_comp_out_view, d_comp_res_view, gzip_header_included::YES, stream);
+        if (cudf::io::nvcomp_integration::is_all_enabled()) {
+          nvcomp::batched_decompress(nvcomp::compression_type::GZIP,
+                                     d_comp_in_view,
+                                     d_comp_out_view,
+                                     d_comp_res_view,
+                                     codec.max_decompressed_size,
+                                     codec.total_decomp_size,
+                                     stream);
+        } else {
+          gpuinflate(
+            d_comp_in_view, d_comp_out_view, d_comp_res_view, gzip_header_included::YES, stream);
+        }
         break;
       case SNAPPY:
         if (cudf::io::nvcomp_integration::is_stable_enabled()) {
@@ -1501,10 +1511,13 @@ void reader::impl::create_global_chunk_info()
     std::transform(
       _input_columns.begin(), _input_columns.end(), column_mapping.begin(), [&](auto const& col) {
         // translate schema_idx into something we can use for the page indexes
-        if (auto it = std::find_if(
-              columns.begin(),
-              columns.end(),
-              [&col](auto const& col_chunk) { return col_chunk.schema_idx == col.schema_idx; });
+        if (auto it = std::find_if(columns.begin(),
+                                   columns.end(),
+                                   [&](auto const& col_chunk) {
+                                     return col_chunk.schema_idx ==
+                                            _metadata->map_schema_index(col.schema_idx,
+                                                                        rg.source_index);
+                                   });
             it != columns.end()) {
           return std::distance(columns.begin(), it);
         }
@@ -1525,7 +1538,8 @@ void reader::impl::create_global_chunk_info()
       auto col = _input_columns[i];
       // look up metadata
       auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
-      auto& schema   = _metadata->get_schema(col.schema_idx);
+      auto& schema   = _metadata->get_schema(
+        _metadata->map_schema_index(col.schema_idx, rg.source_index), rg.source_index);
 
       auto [clock_rate, logical_type] =
         conversion_info(to_type_id(schema, _strings_to_categorical, _options.timestamp_type.id()),
@@ -1564,9 +1578,9 @@ void reader::impl::create_global_chunk_info()
                                        col.schema_idx,
                                        chunk_info,
                                        list_bytes_per_row_est,
-                                       schema.type == BYTE_ARRAY and _strings_to_categorical));
+                                       schema.type == BYTE_ARRAY and _strings_to_categorical,
+                                       rg.source_index));
     }
-
     // Adjust for skip_rows when updating the remaining rows after the first group
     remaining_rows -=
       (skip_rows) ? std::min<int>(rg.start_row + row_group.num_rows - skip_rows, remaining_rows)
