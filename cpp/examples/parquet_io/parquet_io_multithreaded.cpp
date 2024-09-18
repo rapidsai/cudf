@@ -181,7 +181,7 @@ int main(int argc, char const** argv)
   };
 
   // Concatenate a vector of tables and return
-  auto const concatenate_tables = [](std::vector<table_t>& tables, rmm::cuda_stream_view stream) {
+  auto const concatenate_tables = [](std::vector<table_t> tables, rmm::cuda_stream_view stream) {
     // Construct the final table
     auto table = std::move(tables[0]);
     std::for_each(tables.begin() + 1, tables.end(), [&](auto& tbl) {
@@ -275,10 +275,8 @@ int main(int argc, char const** argv)
                  "times for nvcomp, cufile loading and RMM growth."
               << std::endl
               << std::endl;
-
-    // tables read by each thread
+    // Tables read by each thread
     auto const tables = read_parquet_multithreaded(input_files);
-
     // In case some kernels are still running on the default stre
     default_stream.synchronize();
 
@@ -290,10 +288,8 @@ int main(int argc, char const** argv)
     // Write tables using multiple threads
     cudf::examples::timer timer;
     write_parquet_multithreaded(tables);
-
     // In case some kernels are still running on the default stream
     default_stream.synchronize();
-
     // Print elapsed time
     timer.print_elapsed_millis();
   }
@@ -302,8 +298,8 @@ int main(int argc, char const** argv)
   {
     std::cout << "Reading for the second time using " << thread_count << " threads..." << std::endl;
     cudf::examples::timer timer;
-    auto tables      = read_parquet_multithreaded(input_files);
-    auto const table = concatenate_tables(tables, default_stream);
+    auto const input_table =
+      concatenate_tables(read_parquet_multithreaded(input_files), default_stream);
     // In case some kernels are still running on the default stream
     default_stream.synchronize();
     // Print elapsed time and peak memory
@@ -311,31 +307,17 @@ int main(int argc, char const** argv)
 
     std::cout << "Reading transcoded files using " << thread_count << " threads..." << std::endl;
     timer.reset();
-    auto transcoded_tables      = read_parquet_multithreaded(extract_input_files(output_path));
-    auto const transcoded_table = concatenate_tables(transcoded_tables, default_stream);
-    // Print elapsed time and peak memory
-    timer.print_elapsed_millis();
-
+    auto const transcoded_table = concatenate_tables(
+      read_parquet_multithreaded(extract_input_files(output_path)), default_stream);
     // In case some kernels are still running on the default stream
     default_stream.synchronize();
+    // Print elapsed time and peak memory
+    timer.print_elapsed_millis();
 
     std::cout << "Peak memory: " << (stats_mr.get_bytes_counter().peak / 1048576.0) << " MB\n\n";
 
     // Check for validity
-    try {
-      // Left anti-join the original and transcoded tables
-      // identical tables should not throw an exception and
-      // return an empty indices vector
-      auto const indices = cudf::left_anti_join(
-        table->view(), transcoded_table->view(), cudf::null_equality::EQUAL, resource.get());
-
-      // No exception thrown, check indices
-      auto const valid = indices->size() == 0;
-      std::cout << "Transcoding valid: " << std::boolalpha << valid << std::endl;
-    } catch (std::exception& e) {
-      std::cerr << e.what() << std::endl << std::endl;
-      std::cout << "Transcoding valid: false" << std::endl;
-    }
+    check_identical_tables(input_table->view(), transcoded_table->view());
   }
 
   return 0;

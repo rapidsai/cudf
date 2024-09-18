@@ -128,3 +128,27 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
 
   return std::nullopt;
 }
+
+/**
+ * @brief Check if two tables are identical, throw an error otherwise
+ *
+ * @param lhs_table View to lhs table
+ * @param rhs_table View to rhs table
+ */
+inline void check_identical_tables(cudf::table_view const& lhs_table,
+                                   cudf::table_view const& rhs_table)
+{
+  try {
+    // Left anti-join the original and transcoded tables
+    // identical tables should not throw an exception and
+    // return an empty indices vector
+    auto const indices = cudf::left_anti_join(lhs_table, rhs_table, cudf::null_equality::EQUAL);
+
+    // No exception thrown, check indices
+    auto const valid = indices->size() == 0;
+    std::cout << "Transcoding valid: " << std::boolalpha << valid << std::endl;
+  } catch (std::exception& e) {
+    std::cerr << e.what() << std::endl << std::endl;
+    throw std::runtime_error("Transcoding valid: false\n");
+  }
+}
