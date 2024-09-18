@@ -1553,8 +1553,7 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>() and
-                             (not has_nested_columns or not cudf::is_nested<Element>()) and
-                             not cuda::std::is_void_v<Element>),
+                             not cudf::is_nested<Element>() and not cuda::std::is_void_v<Element>),
               typename... Args>
     __device__ bool operator()(Args...)
     {
@@ -1562,8 +1561,7 @@ class device_row_comparator {
     }
 
     template <typename Element,
-              CUDF_ENABLE_IF(has_nested_columns and cudf::is_nested<Element>() and
-                             not cuda::std::is_void_v<Element>)>
+              CUDF_ENABLE_IF(cudf::is_nested<Element>() and not cuda::std::is_void_v<Element>)>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
     {
