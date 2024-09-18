@@ -109,7 +109,7 @@ int main(int argc, char const** argv)
   switch (argc) {
     case 1:
       input_paths  = "example.parquet";
-      output_path  = "output.parquet";
+      output_path  = std::filesystem::current_path().string();
       encoding     = get_encoding_type("DELTA_BINARY_PACKED");
       compression  = get_compression_type("ZSTD");
       thread_count = 2;
