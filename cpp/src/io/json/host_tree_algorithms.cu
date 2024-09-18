@@ -254,6 +254,18 @@ rmm::device_uvector<uint8_t> is_all_nulls_each_column(device_span<SymbolT const>
   return is_all_nulls;
 }
 
+void scatter_offsets(
+  tree_meta_t& tree,
+  device_span<NodeIndexT> col_ids,
+  device_span<size_type> row_offsets,
+  device_span<size_type> node_ids,
+  device_span<size_type> sorted_col_ids,
+
+  tree_meta_t& d_column_tree,
+  host_span<const uint8_t> ignore_vals,
+  std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>& columns,
+  rmm::cuda_stream_view stream);
+
 /**
  * @brief Holds member data pointers of `d_json_column`
  *
@@ -267,32 +279,6 @@ struct json_column_data {
 };
 
 namespace experimental {
-
-std::optional<schema_element> child_schema_element(std::string const& col_name,
-                                                   cudf::io::json_reader_options const& options)
-{
-  return std::visit(
-    cudf::detail::visitor_overload{
-      [col_name](std::vector<data_type> const& user_dtypes) -> std::optional<schema_element> {
-        auto column_index = atol(col_name.data());
-        return (static_cast<std::size_t>(column_index) < user_dtypes.size())
-                 ? std::optional<schema_element>{{user_dtypes[column_index]}}
-                 : std::optional<schema_element>{};
-      },
-      [col_name](
-        std::map<std::string, data_type> const& user_dtypes) -> std::optional<schema_element> {
-        return (user_dtypes.find(col_name) != std::end(user_dtypes))
-                 ? std::optional<schema_element>{{user_dtypes.find(col_name)->second}}
-                 : std::optional<schema_element>{};
-      },
-      [col_name](
-        std::map<std::string, schema_element> const& user_dtypes) -> std::optional<schema_element> {
-        return (user_dtypes.find(col_name) != std::end(user_dtypes))
-                 ? user_dtypes.find(col_name)->second
-                 : std::optional<schema_element>{};
-      }},
-    options.get_dtypes());
-}
 
 std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_options const& options)
 {
@@ -889,149 +875,17 @@ void make_device_json_column(device_span<SymbolT const> input,
                   cudaMemcpyDefault,
                   stream.value());
 
-  // move columns data to device.
-  std::cout << "col_id:\n";
-  auto columns_data = std::vector<json_column_data>(
-    num_columns);  // = cudf::detail::make_host_vector<json_column_data>(num_columns, stream);
-  for (auto& [col_id, col_ref] : columns) {
-    if (col_id == parent_node_sentinel) continue;
-    auto& col = col_ref.get();
-    std::cout << col_id << ",";
-    columns_data[col_id] = json_column_data{col.string_offsets.data(),
-                                            col.string_lengths.data(),
-                                            col.child_offsets.data(),
-                                            static_cast<bitmask_type*>(col.validity.data())};
-  }
-  std::cout << "\n";
-
-  auto d_ignore_vals = cudf::detail::make_device_uvector_async(
-    is_pruned, stream, cudf::get_current_device_resource_ref());
-  auto d_columns_data = cudf::detail::make_device_uvector_async(
-    columns_data, stream, cudf::get_current_device_resource_ref());
-
   // TODO: use this common code for both functions.
-  // 3. scatter string offsets to respective columns, set validity bits
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::counting_iterator<size_type>(0),
-    num_nodes,
-    [column_categories = d_column_tree.node_categories.begin(),
-     col_ids           = col_ids.begin(),
-     row_offsets       = row_offsets.begin(),
-     range_begin       = tree.node_range_begin.begin(),
-     range_end         = tree.node_range_end.begin(),
-     d_ignore_vals     = d_ignore_vals.begin(),
-     d_columns_data    = d_columns_data.begin()] __device__(size_type i) {
-      if (d_ignore_vals[col_ids[i]]) return;
-      auto const node_category = column_categories[col_ids[i]];
-      switch (node_category) {
-        case NC_STRUCT: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
-        case NC_LIST: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
-        case NC_STR: [[fallthrough]];
-        case NC_VAL:
-          set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
-          d_columns_data[col_ids[i]].string_offsets[row_offsets[i]] = range_begin[i];
-          d_columns_data[col_ids[i]].string_lengths[row_offsets[i]] = range_end[i] - range_begin[i];
-          break;
-        default: break;
-      }
-    });
-  std::cout << "After 1st for_each_n\n";
-
-  // 4. scatter List offset
-  // copy_if only node's whose parent is list, (node_id, parent_col_id)
-  // stable_sort by parent_col_id of {node_id}.
-  // For all unique parent_node_id of (i==0, i-1!=i), write start offset.
-  //                                  (i==last, i+1!=i), write end offset.
-  //    unique_copy_by_key {parent_node_id} {row_offset} to
-  //    col[parent_col_id].child_offsets[row_offset[parent_node_id]]
-
-  auto& parent_col_ids = sorted_col_ids;  // reuse sorted_col_ids
-  auto parent_col_id   = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0),
-    cuda::proclaim_return_type<NodeIndexT>(
-      [col_ids         = col_ids.begin(),
-       parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
-        return parent_node_ids[node_id] == parent_node_sentinel ? parent_node_sentinel
-                                                                  : col_ids[parent_node_ids[node_id]];
-      }));
-  auto const list_children_end = thrust::copy_if(
-    rmm::exec_policy(stream),
-    thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id),
-    thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id) +
-      num_nodes,
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin()),
-    [d_ignore_vals     = d_ignore_vals.begin(),
-     parent_node_ids   = tree.parent_node_ids.begin(),
-     column_categories = d_column_tree.node_categories.begin(),
-     col_ids           = col_ids.begin()] __device__(size_type node_id) {
-      auto parent_node_id = parent_node_ids[node_id];
-      return parent_node_id != parent_node_sentinel and
-             column_categories[col_ids[parent_node_id]] == NC_LIST and
-             (!d_ignore_vals[col_ids[parent_node_id]]);
-    });
-
-  auto const num_list_children =
-    list_children_end - thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin());
-  thrust::stable_sort_by_key(rmm::exec_policy(stream),
-                             parent_col_ids.begin(),
-                             parent_col_ids.begin() + num_list_children,
-                             node_ids.begin());
-  std::cout << "Before 2nd for_each_n\n";
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    num_list_children,
-    [node_ids        = node_ids.begin(),
-     parent_node_ids = tree.parent_node_ids.begin(),
-     parent_col_ids  = parent_col_ids.begin(),
-     row_offsets     = row_offsets.begin(),
-     d_columns_data  = d_columns_data.begin(),
-     num_list_children] __device__(size_type i) {
-      auto const node_id        = node_ids[i];
-      auto const parent_node_id = parent_node_ids[node_id];
-      // scatter to list_offset
-      if (i == 0 or parent_node_ids[node_ids[i - 1]] != parent_node_id) {
-        d_columns_data[parent_col_ids[i]].child_offsets[row_offsets[parent_node_id]] =
-          row_offsets[node_id];
-      }
-      // last value of list child_offset is its size.
-      if (i == num_list_children - 1 or parent_node_ids[node_ids[i + 1]] != parent_node_id) {
-        d_columns_data[parent_col_ids[i]].child_offsets[row_offsets[parent_node_id] + 1] =
-          row_offsets[node_id] + 1;
-      }
-    });
-  std::cout << "After 2nd for_each_n\n";
-
-  // 5. scan on offsets.
-  for (auto& [id, col_ref] : columns) {
-    auto& col = col_ref.get();
-    if (col.type == json_col_t::StringColumn) {
-      std::cout << id << " string scan\n";
-      thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
-                             col.string_offsets.begin(),
-                             col.string_offsets.end(),
-                             col.string_offsets.begin(),
-                             thrust::maximum<json_column::row_offset_t>{});
-    } else if (col.type == json_col_t::ListColumn) {
-      if (id == parent_node_sentinel) continue;
-      std::cout << id << " list scan\n";
-      thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
-                             col.child_offsets.begin(),
-                             col.child_offsets.end(),
-                             col.child_offsets.begin(),
-                             thrust::maximum<json_column::row_offset_t>{});
-    } else if (col.type == json_col_t::StructColumn) {
-      std::cout << id << " struct noscan\n";
-    } else {
-      std::cout << id << "----- unknown scan\n";
-    }
-  }
-  stream.synchronize();
-  std::cout << "After ... scans\n";
+  scatter_offsets(tree,
+                  col_ids,
+                  row_offsets,
+                  node_ids,
+                  sorted_col_ids,
+                  d_column_tree,
+                  is_pruned,
+                  columns,
+                  stream);
 }
-
 }  // namespace experimental
 
 /**
@@ -1392,16 +1246,46 @@ void make_device_json_column(device_span<SymbolT const> input,
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
     return thrust::get<1>(a) < thrust::get<1>(b);
   });
+  scatter_offsets(tree,
+                  col_ids,
+                  row_offsets,
+                  node_ids,
+                  sorted_col_ids,
+                  d_column_tree,
+                  ignore_vals,
+                  columns,
+                  stream);
+}
+
+void scatter_offsets(
+  tree_meta_t& tree,
+  device_span<NodeIndexT> col_ids,
+  device_span<size_type> row_offsets,
+  device_span<size_type> node_ids,
+  device_span<size_type> sorted_col_ids,  // Reuse
+
+  tree_meta_t& d_column_tree,
+  host_span<const uint8_t> ignore_vals,
+  std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>& columns,
+  rmm::cuda_stream_view stream)
+{
+  auto num_nodes   = col_ids.size();
+  auto num_columns = d_column_tree.node_categories.size();
+
   // move columns data to device.
-  auto columns_data = cudf::detail::make_host_vector<json_column_data>(num_columns, stream);
+  std::cout << "col_id:\n";
+  auto columns_data = std::vector<json_column_data>(
+    num_columns);  // = cudf::detail::make_host_vector<json_column_data>(num_columns, stream);
   for (auto& [col_id, col_ref] : columns) {
     if (col_id == parent_node_sentinel) continue;
-    auto& col            = col_ref.get();
+    auto& col = col_ref.get();
+    std::cout << col_id << ",";
     columns_data[col_id] = json_column_data{col.string_offsets.data(),
                                             col.string_lengths.data(),
                                             col.child_offsets.data(),
                                             static_cast<bitmask_type*>(col.validity.data())};
   }
+  std::cout << "\n";
 
   auto d_ignore_vals = cudf::detail::make_device_uvector_async(
     ignore_vals, stream, cudf::get_current_device_resource_ref());
@@ -1427,7 +1311,6 @@ void make_device_json_column(device_span<SymbolT const> input,
         case NC_LIST: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
         case NC_STR: [[fallthrough]];
         case NC_VAL:
-          if (d_ignore_vals[col_ids[i]]) break;
           set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
           d_columns_data[col_ids[i]].string_offsets[row_offsets[i]] = range_begin[i];
           d_columns_data[col_ids[i]].string_lengths[row_offsets[i]] = range_end[i] - range_begin[i];
@@ -1435,6 +1318,7 @@ void make_device_json_column(device_span<SymbolT const> input,
         default: break;
       }
     });
+  std::cout << "After 1st for_each_n\n";
 
   // 4. scatter List offset
   // copy_if only node's whose parent is list, (node_id, parent_col_id)
@@ -1476,6 +1360,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                              parent_col_ids.begin(),
                              parent_col_ids.begin() + num_list_children,
                              node_ids.begin());
+  std::cout << "Before 2nd for_each_n\n";
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
@@ -1499,25 +1384,33 @@ void make_device_json_column(device_span<SymbolT const> input,
           row_offsets[node_id] + 1;
       }
     });
+  std::cout << "After 2nd for_each_n\n";
 
   // 5. scan on offsets.
   for (auto& [id, col_ref] : columns) {
     auto& col = col_ref.get();
     if (col.type == json_col_t::StringColumn) {
+      std::cout << id << " string scan\n";
       thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                              col.string_offsets.begin(),
                              col.string_offsets.end(),
                              col.string_offsets.begin(),
                              thrust::maximum<json_column::row_offset_t>{});
     } else if (col.type == json_col_t::ListColumn) {
+      if (id == parent_node_sentinel) continue;
+      std::cout << id << " list scan\n";
       thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                              col.child_offsets.begin(),
                              col.child_offsets.end(),
                              col.child_offsets.begin(),
                              thrust::maximum<json_column::row_offset_t>{});
+    } else if (col.type == json_col_t::StructColumn) {
+      std::cout << id << " struct noscan\n";
+    } else {
+      std::cout << id << "----- unknown scan\n";
     }
   }
   stream.synchronize();
+  std::cout << "After ... scans\n";
 }
-
 }  // namespace cudf::io::json::detail
