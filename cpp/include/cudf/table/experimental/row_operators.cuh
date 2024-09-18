@@ -1412,6 +1412,8 @@ struct nan_equal_physical_equality_comparator {
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual values
  * rather than logical elements, defaults to a comparator for which `NaN == NaN`.
+ * @tparam dispatch_conditional_t A type to describe a type transformation.
+ *
  */
 template <bool has_nested_columns,
           typename Nullate,
@@ -1755,6 +1757,7 @@ class self_comparator {
    *         `cudf::has_nested_columns(input)`. `true` compiles operator
    *         overloads for nested types, while `false` only compiles operator
    *         overloads for primitive types.
+   * @tparam dispatch_conditional_t A type to desribe a type transformation.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual
    * values rather than logical elements, defaults to a comparator for which `NaN == NaN`.
@@ -1928,6 +1931,7 @@ class two_table_comparator {
    *         `cudf::has_nested_columns(input)`. `true` compiles operator
    *         overloads for nested types, while `false` only compiles operator
    *         overloads for primitive types.
+   * @tparam dispatch_conditional_t A type to describe a type transformation.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual
    * values rather than logical elements, defaults to a `NaN == NaN` equality comparator.
@@ -2091,6 +2095,7 @@ class element_hasher {
  *
  * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+ * @tparam dispatch_conditional_t A type to describe a type transformation.
  */
 template <template <typename> class hash_function,
           typename Nullate,
@@ -2288,6 +2293,9 @@ class row_hasher {
    *
    * `F(i)` returns the hash of row i.
    *
+   * @tparam hash_function Hash functor to use for hashing elements.
+   * @tparam DeviceRowHasher Device functor which computes the hash value of a row in the given
+   * table.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls
    * @param column_types Column types in the row, determined at runtime
    * @param nullate Indicates if any input column contains nulls
