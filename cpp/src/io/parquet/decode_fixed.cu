@@ -248,6 +248,8 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
   auto& max_depth_ni  = s->nesting_info[max_depth];
   int valid_count     = max_depth_ni.valid_count;
 
+  __syncthreads();
+
   while (value_count < capped_target_value_count) {
     int const batch_size = min(max_batch_size, capped_target_value_count - value_count);
 
@@ -361,6 +363,8 @@ static __device__ int gpuUpdateValidityAndRowIndicesFlat(
 
   int const valid_map_offset      = ni.valid_map_offset;
   int const row_index_lower_bound = s->row_index_lower_bound;
+
+  __syncthreads();
 
   while (value_count < capped_target_value_count) {
     int const batch_size = min(max_batch_size, capped_target_value_count - value_count);
@@ -480,16 +484,16 @@ static __device__ int gpuUpdateValidityAndRowIndicesNonNullable(int32_t target_v
     int const row_index     = thread_value_count + value_count;
     int const in_row_bounds = (row_index >= row_index_lower_bound) && (row_index < last_row);
 
-    int is_valid = in_row_bounds;
-
+    int is_valid           = in_row_bounds;
     int thread_valid_count = thread_value_count;
     int block_valid_count  = block_value_count;
 
     // if this is valid and we're at the leaf, output dst_pos
     if (is_valid) {
       // for non-list types, the value count is always the same across
-      int const dst_pos                                          = value_count + thread_value_count;
-      int const src_pos                                          = valid_count + thread_valid_count;
+      int const dst_pos = value_count + thread_value_count;
+      int const src_pos = valid_count + thread_valid_count;
+
       sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)] = dst_pos;
     }
 
