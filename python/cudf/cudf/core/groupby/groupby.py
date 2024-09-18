@@ -76,6 +76,34 @@ def _is_row_of(chunk, obj):
     )
 
 
+NamedAgg = pd.NamedAgg
+
+
+NamedAgg.__doc__ = """
+Helper for column specific aggregation with control over output column names.
+
+Subclass of typing.NamedTuple.
+
+Parameters
+----------
+column : Hashable
+    Column label in the DataFrame to apply aggfunc.
+aggfunc : function or str
+    Function to apply to the provided column.
+
+Examples
+--------
+>>> df = cudf.DataFrame({"key": [1, 1, 2], "a": [-1, 0, 1], 1: [10, 11, 12]})
+>>> agg_a = cudf.NamedAgg(column="a", aggfunc="min")
+>>> agg_1 = cudf.NamedAgg(column=1, aggfunc=lambda x: x.mean())
+>>> df.groupby("key").agg(result_a=agg_a, result_1=agg_1)
+        result_a  result_1
+key
+1          -1      10.5
+2           1      12.0
+"""
+
+
 groupby_doc_template = textwrap.dedent(
     """Group using a mapper or by a Series of columns.
 
@@ -1296,9 +1324,21 @@ class GroupBy(Serializable, Reducible, Scannable):
                 columns = values._columns
                 aggs_per_column = (aggs,) * len(columns)
         elif not aggs and kwargs:
-            column_names, aggs_per_column = kwargs.keys(), kwargs.values()
-            columns = tuple(self.obj._data[x[0]] for x in kwargs.values())
-            aggs_per_column = tuple(x[1] for x in kwargs.values())
+            column_names = kwargs.keys()
+
+            def _raise_invalid_type(x):
+                raise TypeError(
+                    f"Invalid keyword argument {x} of type {type(x)} was passed to agg"
+                )
+
+            columns, aggs_per_column = zip(
+                *(
+                    (self.obj._data[x[0]], x[1])
+                    if isinstance(x, tuple)
+                    else _raise_invalid_type(x)
+                    for x in kwargs.values()
+                )
+            )
         else:
             raise TypeError("Must provide at least one aggregation function.")
 
