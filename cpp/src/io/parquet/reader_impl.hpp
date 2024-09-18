@@ -191,7 +191,7 @@ class reader::impl {
    * @return pair of boolean indicating if compressed chunks were found and a vector of futures for
    * read completion
    */
-  std::pair<bool, std::vector<std::future<void>>> read_column_chunks();
+  std::pair<bool, std::future<void>> read_column_chunks();
 
   /**
    * @brief Read compressed data and page information for the current pass.
