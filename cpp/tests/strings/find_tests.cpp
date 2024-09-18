@@ -268,9 +268,9 @@ TEST_F(StringsFindTest, MultiContainsMoreTargets)
   expects.push_back(cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1}));
 
   std::vector<std::string> match_targets;
-  int max_num_targets = 20;
+  int max_num_targets = 50;
 
-  for (int num_targets = 19; num_targets < max_num_targets; num_targets++) {
+  for (int num_targets = 1; num_targets < max_num_targets; num_targets++) {
     match_targets.clear();
     for (int i = 0; i < num_targets; i++) {
       match_targets.push_back(targets[i % targets.size()]);
