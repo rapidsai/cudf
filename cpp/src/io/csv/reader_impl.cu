@@ -270,23 +270,30 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
 
     auto const previous_data_size = d_data.size();
     d_data.resize(target_pos - input_pos, stream);
+
+    auto const read_offset = byte_range_offset + input_pos + previous_data_size;
+    auto const read_size   = target_pos - input_pos - previous_data_size;
     if (data.has_value()) {
-      CUDF_CUDA_TRY(
-        cudaMemcpyAsync(d_data.begin() + previous_data_size,
-                        data->begin() + byte_range_offset + input_pos + previous_data_size,
-                        target_pos - input_pos - previous_data_size,
-                        cudaMemcpyDefault,
-                        stream.value()));
-    } else {
-      // TODO use device_read
-      auto const buffer = source->host_read(input_pos + byte_range_offset + previous_data_size,
-                                            target_pos - input_pos - previous_data_size);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(d_data.begin() + previous_data_size,
-                                    buffer->data(),
-                                    buffer->size(),
+      CUDF_CUDA_TRY(cudaMemcpyAsync(d_data.data() + previous_data_size,
+                                    data->data() + read_offset,
+                                    target_pos - input_pos - previous_data_size,
                                     cudaMemcpyDefault,
                                     stream.value()));
-      stream.synchronize();
+    } else {
+      if (source->is_device_read_preferred(read_size)) {
+        source->device_read_async(read_offset,
+                                  read_size,
+                                  reinterpret_cast<uint8_t*>(d_data.data() + previous_data_size),
+                                  stream);
+      } else {
+        auto const buffer = source->host_read(read_offset, read_size);
+        CUDF_CUDA_TRY(cudaMemcpyAsync(d_data.data() + previous_data_size,
+                                      buffer->data(),
+                                      buffer->size(),
+                                      cudaMemcpyDefault,
+                                      stream.value()));
+        stream.synchronize();
+      }
     }
 
     // Pass 1: Count the potential number of rows in each character block for each
