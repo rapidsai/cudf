@@ -12,8 +12,8 @@
 # the License.
 # =============================================================================
 
-set(cython_sources capitalize.pyx case.pyx char_types.pyx contains.pyx find.pyx regex_flags.pyx
-                   regex_program.pyx replace.pyx slice.pyx
+set(cython_sources capitalize.pyx case.pyx char_types.pyx contains.pyx find.pyx padding.pyx
+                   regex_flags.pyx regex_program.pyx replace.pyx side_type.pyx slice.pyx
 )
 
 set(linked_libraries cudf::cudf)

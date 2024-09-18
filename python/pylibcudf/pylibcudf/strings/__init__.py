@@ -6,8 +6,10 @@ from . import (
     char_types,
     contains,
     find,
+    padding,
     regex_flags,
     regex_program,
     replace,
+    side_type,
     slice,
 )
