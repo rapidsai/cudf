@@ -39,18 +39,17 @@ namespace strings {
 namespace detail {
 
 std::pair<std::vector<std::unique_ptr<column>>, std::vector<int64_t>> make_offsets_child_column_batch(
-  std::vector<thrust::transform_iterator<size_type> offsets_transformer_itr,
-  std::vector<size_type> strings_sizes,
+  std::vector<cudf::device_span<thrust::pair<char const*, size_type> const>> strings_batch,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   std::vector<std::unique_ptr<column>> offsets_columns;
   rmm::device_uvector<rmm::device_scalar<int64_t>> total_bytes(offsets_transformer_itr.size(), stream, mr);
   auto constexpr size_type_max = static_cast<int64_t>(std::numeric_limits<size_type>::max());
-
+    
   std::transform (
-    thrust::make_zip_iterator(thrust::make_tuple(offsets_transformer_itr.begin(), strings_sizes.begin())),
-    thrust::make_zip_iterator(thrust::make_tuple(offsets_transformer_itr.end(), strings_sizes.end())),
+    strings_sizes.begin(),
+    strings_sizes.end(),
     std::back_inserter(offsets_columns),
     [stream, mr] (auto &elem) {
       auto const lcount = static_cast<int64_t>(thrust::get<1>(elem));
@@ -60,13 +59,18 @@ std::pair<std::vector<std::unique_ptr<column>>, std::vector<int64_t>> make_offse
   );
 
   std::transform (
-    thrust::make_zip_iterator(thrust::make_tuple(offsets_transformer_itr.begin(), strings_sizes.begin(), offsets_columns.begin())),
-    thrust::make_zip_iterator(thrust::make_tuple(offsets_transformer_itr.end(), strings_sizes.end(), offsets_columns.end())),
+    thrust::make_zip_iterator(thrust::make_tuple(strings_batch.begin(), strings_sizes.begin(), offsets_columns.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(strings_batch.end(), strings_sizes.end(), offsets_columns.end())),
     std::back_inserter(total_bytes),
     [] (auto &elem) {
+      auto offsets_transformer =
+        cuda::proclaim_return_type<size_type>([] __device__(string_index_pair item) -> size_type {
+          return (item.first != nullptr ? static_cast<size_type>(item.second) : size_type{0});
+        });
+      auto offsets_transformer_itr = thrust::make_transform_iterator(thrust::get<0>(elem), offsets_transformer);
       auto d_offsets = thrust::get<2>(elem)->mutable_view().template data<int32_t>();
       auto map_fn = cuda::proclaim_return_type<size_type>(
-        [begin = thrust::get<0>(elem), strings_count = thrust::get<1>(elem)] __device__(size_type idx) -> size_type {
+        [begin = offsets_transformer_itr, strings_count = thrust::get<1>(elem)] __device__(size_type idx) -> size_type {
           return idx < strings_count ? static_cast<size_type>(begin[idx]) : size_type{0};
         }
       );
@@ -79,16 +83,21 @@ std::pair<std::vector<std::unique_ptr<column>>, std::vector<int64_t>> make_offse
 
   auto const threshold = cudf::strings::get_offset64_threshold();
   std::for_each (
-    thrust::make_zip_iterator(thrust::make_tuple(host_total_bytes.begin(), strings_sizes.begin(), offsets_columns.begin(), offsets_transformer_itr.begin())),
-    thrust::make_zip_iterator(thrust::make_tuple(host_total_bytes.end(), strings_sizes.end(), offsets_columns.end(), offsets_transformer_itr.end())),
+    thrust::make_zip_iterator(thrust::make_tuple(host_total_bytes.begin(), strings_sizes.begin(), offsets_columns.begin(), strings_batch.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(host_total_bytes.end(), strings_sizes.end(), offsets_columns.end(), strings_batch.end())),
     [threshold, stream, mr] (auto &elem) {
+      auto offsets_transformer =
+        cuda::proclaim_return_type<size_type>([] __device__(string_index_pair item) -> size_type {
+          return (item.first != nullptr ? static_cast<size_type>(item.second) : size_type{0});
+        });
+      auto offsets_transformer_itr = thrust::make_transform_iterator(thrust::get<0>(elem), offsets_transformer);
       CUDF_EXPECTS(cudf::strings::is_large_strings_enabled() || (thrust::get<0>(elem) < threshold),
               "Size of output exceeds the column size limit",
               std::overflow_error);
       if (thrust::get<0>(elem) >= cudf::strings::get_offset64_threshold()) {
         // recompute as int64 offsets when above the threshold
         auto map_fn = cuda::proclaim_return_type<size_type>(
-          [begin = thrust::get<3>(elem), strings_count = thrust::get<1>(elem)] __device__(size_type idx) -> size_type {
+          [begin = offsets_transformer_itr, strings_count = thrust::get<1>(elem)] __device__(size_type idx) -> size_type {
             return idx < strings_count ? static_cast<size_type>(begin[idx]) : size_type{0};
           }
         );

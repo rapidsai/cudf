@@ -42,51 +42,23 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
   std::vector<std::unique_ptr<column>>> offset_columns;
   std::vector<size_type> total_bytes;
   std::vector<size_type> strings_sizes;
-  std::vector<thrust::transform_iterator<size_type> offsets_transformer_itr;
   std::vector<int64_t> chars_sizes;
   std::vector<rmm::device_buffer> null_masks;
   std::vector<size_type> null_counts;
 
-  std::transform(
-    strings_batch.begin(),
-    strings_batch.end(),
-    std::back_inserter(strings_sizes),
-    [] (auto &strings) {
-      return thrust::distance(strings.begin(), strings.end());
-    }
-  );
+  [offset_columns, total_bytes] = cudf::strings::detail::make_offsets_child_column_batch(strings_batch, stream, mr);
 
-  std::transform(
-    strings_batch.begin(),
-    strings_batch.end(),
-    std::back_inserter(offsets_transformer_itr),
-    [stream, mr] (auto &strings) {
-      size_type strings_count = thrust::distance(strings.begin(), strings.end());
-      auto offsets_transformer =
-        cuda::proclaim_return_type<size_type>([] __device__(string_index_pair item) -> size_type {
-          return (item.first != nullptr ? static_cast<size_type>(item.second) : size_type{0});
-        });
-      return thrust::make_transform_iterator(strings.begin(), offsets_transformer);
-    }
-  );
-
-  [offset_columns, total_bytes] = cudf::strings::detail::make_offsets_child_column_batch(
-    offsets_transformer_itr, strings_sizes, stream, mr);
-
-  
 
   // create null mask
+  rmm::device_uvector<size_type> valid_counts(strings.size(), stream);
+  std::vector<bitmask_type*> null_masks(strings.size(), stream);
   auto validator = [] __device__(string_index_pair const item) { return item.first != nullptr; };
-  [] = cudf::detail::valid_if_n_kernel(strings_batch, sizes, validator, stream, mr);
-  auto const null_count = new_nulls.second;
-  auto null_mask =
-    (null_count > 0) ? std::move(new_nulls.first) : rmm::device_buffer{0, stream, mr};
-
+  [null_masks, valid_counts] = cudf::detail::valid_if_n_kernel(strings_batch, sizes, validator, stream, mr);
 
   // build chars column
   std::transform(
-    thrust::make_zip_iterator(thrust::make_tuple(offset_columns.begin(), total_bytes.begin(), strings_sizes.begin(), strings_batch.begin(), nu))
-
+    thrust::make_zip_iterator(thrust::make_tuple(offset_columns.begin(), total_bytes.begin(), strings_sizes.begin(), strings_batch.begin(), null_masks.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(offset_columns.end(), total_bytes.end(), strings_sizes.end(), strings_batch.end(), null_masks.end()))
     std::back_inserter(output),
     [] (auto &elem) {
       auto strings_count = thrust::get<2>(elem)
