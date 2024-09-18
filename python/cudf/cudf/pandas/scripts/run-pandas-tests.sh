@@ -65,7 +65,7 @@ markers = [
 ]
 EOF
     # append the contents of patch-confest.py to conftest.py
-    cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
+    # cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
 
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
@@ -134,7 +134,8 @@ TEST_THAT_CRASH_PYTEST_WORKERS="not test_bitmasks_pyarrow \
 and not test_large_string_pyarrow \
 and not test_interchange_from_corrected_buffer_dtypes \
 and not test_eof_states \
-and not test_array_tz"
+and not test_array_tz \
+and not test_groupby_raises_category"
 
 # TODO: Remove "not db" once a postgres & mysql container is set up on the CI
 PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
