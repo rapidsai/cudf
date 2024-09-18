@@ -9,5 +9,5 @@ from pylibcudf.libcudf.strings.regex_program cimport regex_program
 cdef extern from "cudf/strings/findall.hpp" namespace "cudf::strings" nogil:
 
     cdef unique_ptr[column] findall(
-        column_view source_strings,
-        regex_program) except +
+        column_view input,
+        regex_program prog) except +

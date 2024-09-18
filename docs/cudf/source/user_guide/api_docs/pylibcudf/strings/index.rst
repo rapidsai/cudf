@@ -8,6 +8,7 @@ strings
     char_types
     contains
     find
+    findall
     regex_flags
     regex_program
     replace
