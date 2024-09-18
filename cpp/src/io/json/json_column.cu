@@ -257,6 +257,73 @@ struct json_column_data {
   bitmask_type* validity;
 };
 
+struct h_tree_meta_t {
+  std::vector<NodeT> node_categories;
+  std::vector<NodeIndexT> parent_node_ids;
+  std::vector<SymbolOffsetT> node_range_begin;
+  std::vector<SymbolOffsetT> node_range_end;
+};
+
+struct h_column_tree {
+  // position of nnzs
+  std::vector<NodeIndexT> rowidx;
+  std::vector<NodeIndexT> colidx;
+  // node properties
+  std::vector<NodeT> categories;
+  std::vector<NodeIndexT> column_ids;
+};
+
+
+bool check_equality(tree_meta_t& d_a,
+                    cudf::device_span<cudf::size_type const> d_a_max_row_offsets,
+                    experimental::csr& d_b_csr,
+                    experimental::column_tree_properties& d_b_ctp,
+                    rmm::cuda_stream_view stream)
+{
+  // convert from tree_meta_t to column_tree_csr
+  stream.synchronize();
+
+  h_tree_meta_t a{cudf::detail::make_std_vector_async(d_a.node_categories, stream),
+                  cudf::detail::make_std_vector_async(d_a.parent_node_ids, stream),
+                  cudf::detail::make_std_vector_async(d_a.node_range_begin, stream),
+                  cudf::detail::make_std_vector_async(d_a.node_range_end, stream)};
+
+  h_column_tree b{cudf::detail::make_std_vector_async(d_b_csr.rowidx, stream),
+                  cudf::detail::make_std_vector_async(d_b_csr.colidx, stream),
+                  cudf::detail::make_std_vector_async(d_b_ctp.categories, stream),
+                  cudf::detail::make_std_vector_async(d_b_ctp.mapped_ids, stream)};
+
+  auto a_max_row_offsets = cudf::detail::make_std_vector_async(d_a_max_row_offsets, stream);
+  auto b_max_row_offsets = cudf::detail::make_std_vector_async(d_b_ctp.max_row_offsets, stream);
+
+  stream.synchronize();
+
+  auto num_nodes = a.parent_node_ids.size();
+  if (b.rowidx.size() != num_nodes + 1) { return false; }
+
+  for (auto pos = b.rowidx[0]; pos < b.rowidx[1]; pos++) {
+    auto v = b.colidx[pos];
+    if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) {printf("1\n"); return false; }
+  }
+  for (size_t u = 1; u < num_nodes; u++) {
+    auto v = b.colidx[b.rowidx[u]];
+    if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) {printf("2\n"); return false; }
+    
+    for (auto pos = b.rowidx[u] + 1; pos < b.rowidx[u + 1]; pos++) {
+      v = b.colidx[pos];
+      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) {printf("3\n"); return false; }
+    }
+  }
+  for (size_t u = 0; u < num_nodes; u++) {
+    if (a.node_categories[b.column_ids[u]] != b.categories[u]) {printf("4\n"); return false; }
+  }
+
+  for (size_t u = 0; u < num_nodes; u++) {
+    if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {printf("5\n"); return false; }
+  }
+  return true;
+}
+
 /**
  * @brief Constructs `d_json_column` from node tree representation
  * Newly constructed columns are insert into `root`'s children.
@@ -324,6 +391,15 @@ void make_device_json_column(device_span<SymbolT const> input,
                           is_array_of_arrays,
                           row_array_parent_col_id,
                           stream);
+  auto [d_column_tree_csr, d_column_tree_properties] =
+    cudf::io::json::experimental::detail::reduce_to_column_tree(
+      tree, col_ids, row_offsets, is_array_of_arrays, row_array_parent_col_id, stream);
+
+  auto iseq = check_equality(
+    d_column_tree, d_max_row_offsets, d_column_tree_csr, d_column_tree_properties, stream);
+  // assert equality between csr and meta formats
+  CUDF_EXPECTS(iseq, "OH NO!");
+
   auto num_columns    = d_unique_col_ids.size();
   auto unique_col_ids = cudf::detail::make_host_vector_async(d_unique_col_ids, stream);
   auto column_categories =
