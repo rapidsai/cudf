@@ -428,11 +428,11 @@ std::
       ref.fetch_add(-1, cuda::std::memory_order_relaxed);
     });
 
-  auto stencil = cudf::detail::make_zeroed_device_uvector_async<int>(
+  auto stencil = cudf::detail::make_zeroed_device_uvector_async<bool>(
     static_cast<std::size_t>(inbuf_size), stream, cudf::get_current_device_resource_ref());
   thrust::scatter(rmm::exec_policy_nosync(stream),
-                  thrust::make_constant_iterator(1),
-                  thrust::make_constant_iterator(1) + num_deletions,
+                  thrust::make_constant_iterator(true),
+                  thrust::make_constant_iterator(true) + num_deletions,
                   outbuf_indices.begin(),
                   stencil.begin());
   thrust::remove_if(rmm::exec_policy_nosync(stream),
