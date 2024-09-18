@@ -285,6 +285,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
     return {};
   };
 
+  auto get_list_child_schema = [schema]() -> std::optional<schema_element> {
+    if (schema.has_value()) {
+      if (schema.value().child_types.size() > 0) return schema.value().child_types.begin()->second;
+    }
+    return {};
+  };
+
   switch (json_col.type) {
     case json_col_t::StringColumn: {
       // move string_offsets to GPU and transform to string column
@@ -380,9 +387,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                                                      rmm::device_buffer{},
                                                      0);
       // Create children column
-      auto child_schema_element = json_col.child_columns.empty()
-                                    ? std::optional<schema_element>{}
-                                    : get_child_schema(json_col.child_columns.begin()->first);
+      auto child_schema_element =
+        json_col.child_columns.empty() ? std::optional<schema_element>{} : get_list_child_schema();
       auto [child_column, names] =
         json_col.child_columns.empty() or (prune_columns and !child_schema_element.has_value())
           ? std::pair<std::unique_ptr<column>,
