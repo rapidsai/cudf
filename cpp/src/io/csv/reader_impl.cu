@@ -237,7 +237,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   constexpr size_t max_chunk_bytes = 64 * 1024 * 1024;  // 64MB
 
   auto const data_size      = data.has_value() ? data->size() : source->size();
-  size_t const buffer_size  = std::min(max_chunk_bytes, data_size);
+  auto const buffer_size    = std::min(max_chunk_bytes, data_size);
   auto const max_input_size = [&]() {
     if (range_end == data_size) {
       return data_size - byte_range_offset;
@@ -246,27 +246,27 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
                               data_size - byte_range_offset);
     }
   }();
-
-  size_t pos = range_begin;
-  // When using byta range, need the line terminator of last line before the range
-  size_t input_pos   = byte_range_offset == 0 ? pos : pos - 1;
-  size_t header_rows = (reader_opts.get_header() >= 0) ? reader_opts.get_header() + 1 : 0;
-  uint64_t ctx       = 0;
+  auto const header_rows = (reader_opts.get_header() >= 0) ? reader_opts.get_header() + 1 : 0;
 
   // For compatibility with the previous parser, a row is considered in-range if the
   // previous row terminator is within the given range
   range_end += (range_end < data_size);
 
+  auto pos = range_begin;
+  // When using byta range, need the line terminator of last line before the range
+  auto input_pos = byte_range_offset == 0 ? pos : pos - 1;
+  uint64_t ctx   = 0;
+
   rmm::device_uvector<char> d_data{0, stream};
   d_data.reserve((load_whole_file) ? data_size : std::min(buffer_size * 2, max_input_size), stream);
   rmm::device_uvector<uint64_t> all_row_offsets{0, stream};
 
-  size_t const max_blocks =
+  auto const max_blocks =
     std::max<size_t>((buffer_size / cudf::io::csv::gpu::rowofs_block_bytes) + 1, 2);
   cudf::detail::hostdevice_vector<uint64_t> row_ctx(max_blocks, stream);
   do {
-    size_t target_pos = std::min(pos + max_chunk_bytes, max_input_size);
-    size_t chunk_size = target_pos - pos;
+    auto const target_pos = std::min(pos + max_chunk_bytes, max_input_size);
+    auto const chunk_size = target_pos - pos;
 
     auto const previous_data_size = d_data.size();
     d_data.resize(target_pos - input_pos, stream);
@@ -291,18 +291,18 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
 
     // Pass 1: Count the potential number of rows in each character block for each
     // possible parser state at the beginning of the block.
-    uint32_t num_blocks = cudf::io::csv::gpu::gather_row_offsets(parse_opts.view(),
-                                                                 row_ctx.device_ptr(),
-                                                                 device_span<uint64_t>(),
-                                                                 d_data,
-                                                                 chunk_size,
-                                                                 pos,
-                                                                 input_pos,
-                                                                 max_input_size,
-                                                                 range_begin,
-                                                                 range_end,
-                                                                 skip_rows,
-                                                                 stream);
+    auto const num_blocks = cudf::io::csv::gpu::gather_row_offsets(parse_opts.view(),
+                                                                   row_ctx.device_ptr(),
+                                                                   device_span<uint64_t>(),
+                                                                   d_data,
+                                                                   chunk_size,
+                                                                   pos,
+                                                                   input_pos,
+                                                                   max_input_size,
+                                                                   range_begin,
+                                                                   range_end,
+                                                                   skip_rows,
+                                                                   stream);
     CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                   row_ctx.device_ptr(),
                                   num_blocks * sizeof(uint64_t),
@@ -391,7 +391,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   auto row_offsets = selected_rows_offsets{std::move(all_row_offsets), non_blank_row_offsets};
 
   // Remove header rows and extract header
-  size_t const header_row_index = std::max<size_t>(header_rows, 1) - 1;
+  auto const header_row_index = std::max<size_t>(header_rows, 1) - 1;
   if (header_row_index + 1 < row_offsets.size()) {
     CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                   row_offsets.data() + header_row_index,
