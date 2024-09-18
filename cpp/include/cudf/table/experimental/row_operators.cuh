@@ -1757,7 +1757,7 @@ class self_comparator {
    *         `cudf::has_nested_columns(input)`. `true` compiles operator
    *         overloads for nested types, while `false` only compiles operator
    *         overloads for primitive types.
-   * @tparam dispatch_conditional_t A type to desribe a type transformation.
+   * @tparam dispatch_conditional_t A type to describe a type transformation.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual
    * values rather than logical elements, defaults to a comparator for which `NaN == NaN`.
