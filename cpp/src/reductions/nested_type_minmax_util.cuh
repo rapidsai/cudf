@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/reduction/detail/reduction_operators.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf {
 namespace reduction {
@@ -104,7 +105,7 @@ class comparison_binop_generator {
         std::vector<null_order>{DEFAULT_NULL_ORDER},
         cudf::structs::detail::column_nullability::MATCH_INCOMING,
         stream,
-        rmm::mr::get_current_device_resource())},
+        cudf::get_current_device_resource_ref())},
       row_comparator{[&input_,
                       &input_tview     = input_tview,
                       &flattened_input = flattened_input,

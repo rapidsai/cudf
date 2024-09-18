@@ -27,12 +27,12 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvtext/tokenize.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -148,7 +148,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   // the indices may not be in order so we need to build a sorted map
   auto sorted_rows = cudf::detail::stable_sorted_order(
-    cudf::table_view({row_indices}), {}, {}, stream, rmm::mr::get_current_device_resource());
+    cudf::table_view({row_indices}), {}, {}, stream, cudf::get_current_device_resource_ref());
   auto const d_row_map = sorted_rows->view().data<cudf::size_type>();
 
   // create offsets for the tokens for each output string

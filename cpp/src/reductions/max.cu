@@ -18,9 +18,9 @@
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/reduction/detail/reduction_functions.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace reduction {

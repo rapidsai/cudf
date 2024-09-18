@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include "trie.cuh"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <cuda_runtime.h>
@@ -104,7 +105,7 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(std::vector<std::st
     if (has_children) { nodes.push_back(serial_trie_node(trie_terminating_character)); }
   }
   return cudf::detail::make_device_uvector_sync(
-    nodes, stream, rmm::mr::get_current_device_resource());
+    nodes, stream, cudf::get_current_device_resource_ref());
 }
 
 }  // namespace detail

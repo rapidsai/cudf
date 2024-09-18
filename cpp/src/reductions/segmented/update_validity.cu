@@ -18,9 +18,8 @@
 
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
-
-#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace reduction {
