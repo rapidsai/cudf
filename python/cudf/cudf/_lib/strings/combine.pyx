@@ -59,8 +59,8 @@ def join_lists_with_scalar(
     plc_column = plc.strings.combine.join_list_elements(
         source_strings.to_pylibcudf(mode="read"),
         py_separator.device_value.c_value,
-        cudf._lib.scalar.DeviceScalar("", cudf.dtype("object")).c_value,
         py_narep.device_value.c_value,
+        cudf._lib.scalar.DeviceScalar("", cudf.dtype("object")).c_value,
         plc.strings.combine.SeparatorOnNulls.YES,
         plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
     )
