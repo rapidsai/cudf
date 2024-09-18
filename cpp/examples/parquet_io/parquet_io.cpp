@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-#include "parquet_io.hpp"
-
-#include "../utilities/timer.hpp"
+#include "common.hpp"
 
 /**
  * @file parquet_io.cpp

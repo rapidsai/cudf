@@ -16,12 +16,16 @@
 
 #pragma once
 
+#include "../utilities/timer.hpp"
+
+#include <cudf/concatenate.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_device.hpp>
+#include <rmm/cuda_stream_pool.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
