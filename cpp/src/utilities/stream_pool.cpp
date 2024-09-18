@@ -132,6 +132,13 @@ struct cuda_event {
   cuda_event() { CUDF_CUDA_TRY(cudaEventCreateWithFlags(&e_, cudaEventDisableTiming)); }
   virtual ~cuda_event() { CUDF_ASSERT_CUDA_SUCCESS(cudaEventDestroy(e_)); }
 
+  // Moveable but not copyable.
+  cuda_event(const cuda_event&)            = delete;
+  cuda_event& operator=(const cuda_event&) = delete;
+
+  cuda_event(cuda_event&&)            = default;
+  cuda_event& operator=(cuda_event&&) = default;
+
   operator cudaEvent_t() { return e_; }
 
  private:
