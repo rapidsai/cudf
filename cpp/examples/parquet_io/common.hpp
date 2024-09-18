@@ -31,6 +31,8 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
+#include <fmt/color.h>
+
 #include <chrono>
 #include <iostream>
 #include <optional>
@@ -146,9 +148,11 @@ inline void check_identical_tables(cudf::table_view const& lhs_table,
 
     // No exception thrown, check indices
     auto const valid = indices->size() == 0;
-    std::cout << "Transcoding valid: " << std::boolalpha << valid << std::endl;
+    fmt::print(
+      fmt::emphasis::bold | fg(fmt::color::green_yellow), "Transcoding valid: {}\n", valid);
   } catch (std::exception& e) {
     std::cerr << e.what() << std::endl << std::endl;
-    throw std::runtime_error("Transcoding valid: false\n");
+    throw std::runtime_error(
+      fmt::format(fmt::emphasis::bold | fg(fmt::color::red), "Transcoding valid: false\n"));
   }
 }
