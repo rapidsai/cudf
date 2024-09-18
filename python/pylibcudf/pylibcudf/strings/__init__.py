@@ -10,6 +10,7 @@ from . import (
     find,
     find_multiple,
     findall,
+    find_multiple,
     regex_flags,
     regex_program,
     repeat,
