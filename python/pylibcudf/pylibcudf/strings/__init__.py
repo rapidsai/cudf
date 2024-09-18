@@ -6,6 +6,7 @@ from . import (
     char_types,
     contains,
     find,
+    find_multiple,
     regex_flags,
     regex_program,
     replace,
