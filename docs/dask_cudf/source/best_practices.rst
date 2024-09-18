@@ -116,20 +116,20 @@ local memory on the client process.
   in the memory of a single GPU!
 
 :func:`persist`: Like :func:`compute`, calling ``ddf.persist()`` will
-executing the entire task graph associated with ``ddf``. The important difference
+execute the entire task graph associated with ``ddf``. The important difference
 is that the computed partitions will remain in distributed worker memory instead
 of being concatenated together on the client process.
 
 .. note::
   Avoid calling :func:`persist` on a large collection that cannot fit comfortably
-  in the global worker memory. If the total sum of the partition sizes is larger
+  in global worker memory. If the total sum of the partition sizes is larger
   than the sum of all GPU memory, calling persist will result in significant
   spilling from device memory. If the individual partition sizes are large, this
   is likely to produce an OOM error.
 
 :func:`len` / :func:`head` / :func:`tail`: Although these operations are used
-often within pandas/cuDF code to quickly inspect the data, it is best to avoid
-them in Dask DataFrame. In most cases, these operations need execute a portion
+often within pandas/cuDF code to quickly inspect data, it is best to avoid
+them in Dask DataFrame. In most cases, these operations will execute some or all
 of the underlying task graph to materialize the collection.
 
 :func:`sort_values` / :func:`set_index` : These operations both require Dask to
@@ -145,10 +145,10 @@ Avoid Sorting
 
 `The design of Dask DataFrame <https://docs.dask.org/en/stable/dataframe-design.html#dask-dataframe-design>`__
 makes it advantageous to work with data that is already sorted along its index at
-creation time. For most other cases, it's best to avoid sorting unless the logic
-of your workflow makes global ordering absolutely necessary.
+creation time. For most other cases, it is best to avoid sorting unless the logic
+of the workflow makes global ordering absolutely necessary.
 
-If the purpose of your :func:`sort_values` operation is to ensure that all unique
+If the purpose of a :func:`sort_values` operation is to ensure that all unique
 values in ``by`` will be moved to the same output partition, then `shuffle
 <https://docs.dask.org/en/stable/generated/dask.dataframe.DataFrame.shuffle.html>`__
 is often the better option.
@@ -224,7 +224,7 @@ Use :func:`from_map`
 ~~~~~~~~~~~~~~~~~~~~
 
 To implement custom DataFrame-creation logic that is not covered by
-existing APIs (like :func:`read_parquet`),  use :func:`dask.dataframe.from_map`
+existing APIs (like :func:`read_parquet`), use :func:`dask.dataframe.from_map`
 whenever possible. The :func:`from_map` API has several advantages
 over :func:`from_delayed`::
 
@@ -236,10 +236,10 @@ for more details.
 
 .. note::
   Whenever possible, be sure to specify the ``meta`` argument to
-  :func:`from_map`. Dask will need to materialize the first partition
-  eagerly if this argument is excluded. If a large RMM pool is in use
-  on the first visible device, this eager execution on the client can
-  lead to a surprising OOM error.
+  :func:`from_map`. If this argument is excluded, Dask will need to
+  materialize the first partition eagerly. If a large RMM pool is in
+  use on the first visible device, this eager execution on the client
+  may lead to an OOM error.
 
 
 Sorting, Joining and Grouping
@@ -263,7 +263,7 @@ are often recommended::
 * `Use UCX <https://docs.rapids.ai/api/dask-cuda/nightly/examples/ucx/>`__ if communication is a bottleneck.
 
 .. note::
-  UCX enables Dask-CUDA workers to communicate with high-performance
+  UCX enables Dask-CUDA workers to communicate using high-performance
   tansport technologies like `NVLink <https://www.nvidia.com/en-us/data-center/nvlink/>`__
   and Infiniband. Without UCX, inter-process communication will rely
   on TCP sockets.
