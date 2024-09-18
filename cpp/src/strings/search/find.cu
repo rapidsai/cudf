@@ -610,10 +610,13 @@ std::vector<std::unique_ptr<column>> multi_contains(bool warp_parallel,
   // 1. copy targets from device to host
   auto const h_targets_child = cudf::detail::make_std_vector_sync<char>(
     cudf::device_span<char const>(targets.chars_begin(stream), targets.chars_size(stream)), stream);
+
+  // Note: targets may be sliced, so should find the correct first offset
+  auto first_offset            = targets.offset();
   auto const targets_offsets   = targets.offsets();
   auto const h_targets_offsets = cudf::detail::make_std_vector_sync(
-    cudf::device_span<int const>{targets_offsets.data<int>(),
-                                 static_cast<size_t>(targets_offsets.size())},
+    cudf::device_span<int const>{targets_offsets.data<int>() + first_offset,
+                                 static_cast<size_t>(targets.size() + 1)},
     stream);
 
   // 2. index the first characters for all targets
@@ -689,9 +692,9 @@ std::vector<std::unique_ptr<column>> multi_contains(bool warp_parallel,
 
   // 5. execute the kernel
   constexpr int block_size = 256;
-  cudf::detail::grid_1d grid{input.size(), block_size};
 
   if (warp_parallel) {
+    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
     int shared_mem_size = block_size * targets.size();
     multi_contains_warp_parallel_multi_scalars_fn<<<grid.num_blocks,
                                                     grid.num_threads_per_block,
@@ -699,6 +702,7 @@ std::vector<std::unique_ptr<column>> multi_contains(bool warp_parallel,
                                                     stream.value()>>>(
       *d_strings, *d_targets, d_first_bytes, *d_list_column, device_results_list);
   } else {
+    cudf::detail::grid_1d grid{input.size(), block_size};
     multi_contains_using_indexes_fn<<<grid.num_blocks,
                                       grid.num_threads_per_block,
                                       0,

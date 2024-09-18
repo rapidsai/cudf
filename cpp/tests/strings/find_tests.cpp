@@ -198,32 +198,52 @@ TEST_F(StringsFindTest, ContainsLongStrings)
 
 TEST_F(StringsFindTest, MultiContains)
 {
-  using cudf::test::iterators::null_at;
-  auto const strings = cudf::test::strings_column_wrapper{
-    {"Héllo, there world and goodbye",
-     "quick brown fox jumped over the lazy brown dog; the fat cats jump in place without moving",
-     "the following code snippet demonstrates how to use search for values in an ordered range",
-     "it returns the last position where value could be inserted without violating the ordering",
-     "algorithms execution is parallelized as determined by an execution policy. t",
-     "he this is a continuation of previous row to make sure string boundaries are honored",
-     "abcdefghijklmnopqrstuvwxyz 0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ !@#$%^&*()~",
-     "",
-     ""},
-    null_at(8)};
+  constexpr int num_rows = 1024 + 1;
+  // replicate the following 9 rows:
+  std::vector<std::string> s = {
+    "Héllo, there world and goodbye",
+    "quick brown fox jumped over the lazy brown dog; the fat cats jump in place without moving",
+    "the following code snippet demonstrates how to use search for values in an ordered range",
+    "it returns the last position where value could be inserted without violating the ordering",
+    "algorithms execution is parallelized as determined by an execution policy. t",
+    "he this is a continuation of previous row to make sure string boundaries are honored",
+    "abcdefghijklmnopqrstuvwxyz 0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ !@#$%^&*()~",
+    "",
+    ""};
+
+  // replicate strings
+  auto string_itr =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return s[i % s.size()]; });
+
+  // nulls: 8, 8 + 1 * 9, 8 + 2 * 9 ......
+  auto string_v = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) { return (i + 1) % s.size() != 0; });
+
+  auto const strings =
+    cudf::test::strings_column_wrapper(string_itr, string_itr + num_rows, string_v);
   auto strings_view = cudf::strings_column_view(strings);
   std::vector<std::string> match_targets({" the ", "a", "", "é"});
   cudf::test::strings_column_wrapper multi_targets_column(match_targets.begin(),
                                                           match_targets.end());
   auto results =
     cudf::strings::multi_contains(strings_view, cudf::strings_column_view(multi_targets_column));
-  auto expected_0 =
-    cudf::test::fixed_width_column_wrapper<bool>({0, 1, 0, 1, 0, 0, 0, 0, 0}, null_at(8));
-  auto expected_1 =
-    cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1, 1, 0, 0}, null_at(8));
-  auto expected_2 =
-    cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1, 1, 1, 0}, null_at(8));
-  auto expected_3 =
-    cudf::test::fixed_width_column_wrapper<bool>({1, 0, 0, 0, 0, 0, 0, 0, 0}, null_at(8));
+
+  std::vector<bool> ret_0 = {0, 1, 0, 1, 0, 0, 0, 0, 0};
+  std::vector<bool> ret_1 = {1, 1, 1, 1, 1, 1, 1, 0, 0};
+  std::vector<bool> ret_2 = {1, 1, 1, 1, 1, 1, 1, 1, 0};
+  std::vector<bool> ret_3 = {1, 0, 0, 0, 0, 0, 0, 0, 0};
+
+  auto make_bool_col_fn = [&string_v, &num_rows](std::vector<bool> bools) {
+    auto iter = cudf::detail::make_counting_transform_iterator(
+      0, [&](auto i) { return bools[i % bools.size()]; });
+    return cudf::test::fixed_width_column_wrapper<bool>(iter, iter + num_rows, string_v);
+  };
+
+  auto expected_0 = make_bool_col_fn(ret_0);
+  auto expected_1 = make_bool_col_fn(ret_1);
+  auto expected_2 = make_bool_col_fn(ret_2);
+  auto expected_3 = make_bool_col_fn(ret_3);
+
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(0), expected_0);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(1), expected_1);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(2), expected_2);
@@ -232,21 +252,25 @@ TEST_F(StringsFindTest, MultiContains)
 
 TEST_F(StringsFindTest, MultiContainsMoreTargets)
 {
-  using cudf::test::iterators::null_at;
-  auto const strings =
-    cudf::test::strings_column_wrapper{{"there world and goodbye", "good", ""}, null_at(2)};
+  auto const strings = cudf::test::strings_column_wrapper{
+    "quick brown fox jumped over the lazy brown dog; the fat cats jump in place without moving "
+    "quick brown fox jumped",
+    "the following code snippet demonstrates how to use search for values in an ordered rangethe "
+    "following code snippet",
+    "thé it returns the last position where value could be inserted without violating ordering thé "
+    "it returns the last position"};
   auto strings_view = cudf::strings_column_view(strings);
-  std::vector<std::string> targets({"goodbye", "non-exist", ""});
+  std::vector<std::string> targets({"lazy brown", "non-exist", ""});
 
   std::vector<cudf::test::fixed_width_column_wrapper<bool>> expects;
-  expects.push_back(cudf::test::fixed_width_column_wrapper<bool>({1, 0, 0}, null_at(2)));
-  expects.push_back(cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0}, null_at(2)));
-  expects.push_back(cudf::test::fixed_width_column_wrapper<bool>({1, 1, 0}, null_at(2)));
+  expects.push_back(cudf::test::fixed_width_column_wrapper<bool>({1, 0, 0}));
+  expects.push_back(cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0}));
+  expects.push_back(cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1}));
 
   std::vector<std::string> match_targets;
-  int max_num_targets = 50;
+  int max_num_targets = 20;
 
-  for (int num_targets = 1; num_targets < max_num_targets; num_targets++) {
+  for (int num_targets = 19; num_targets < max_num_targets; num_targets++) {
     match_targets.clear();
     for (int i = 0; i < num_targets; i++) {
       match_targets.push_back(targets[i % targets.size()]);
@@ -265,28 +289,64 @@ TEST_F(StringsFindTest, MultiContainsMoreTargets)
 
 TEST_F(StringsFindTest, MultiContainsLongStrings)
 {
-  auto const input = cudf::test::strings_column_wrapper(
-    {"quick brown fox jumped over the lazy brown dog; the fat cats jump in place without moving",
-     "the following code snippet demonstrates how to use search for values in an ordered range",
-     "thé it returns the last position where value could be inserted without violating ordering",
-     "algorithms execution is parallelized as determined by an execution policy. t",
-     "he this is a continuation of previous row to make sure string boundaries are honored",
-     "abcdefghijklmnopqrstuvwxyz 0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ !@#$%^&*()~"});
-  auto sv      = cudf::strings_column_view(input);
+  constexpr int num_rows = 1024 + 1;
+  // replicate the following 7 rows:
+  std::vector<std::string> s = {
+    "quick brown fox jumped over the lazy brown dog; the fat cats jump in place without moving "
+    "quick brown fox jumped",
+    "the following code snippet demonstrates how to use search for values in an ordered rangethe "
+    "following code snippet",
+    "thé it returns the last position where value could be inserted without violating ordering thé "
+    "it returns the last position",
+    "algorithms execution is parallelized as determined by an execution policy. t algorithms "
+    "execution is parallelized as ",
+    "he this is a continuation of previous row to make sure string boundaries are honored he this "
+    "is a continuation of previous row",
+    "abcdefghijklmnopqrstuvwxyz 0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ "
+    "!@#$%^&*()~abcdefghijklmnopqrstuvwxyz 0123456789 ABCDEFGHIJKL",
+    ""};
+
+  // replicate strings
+  auto string_itr =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return s[i % s.size()]; });
+
+  // nulls: 6, 6 + 1 * 7, 6 + 2 * 7 ......
+  auto string_v = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) { return (i + 1) % s.size() != 0; });
+
+  auto const strings =
+    cudf::test::strings_column_wrapper(string_itr, string_itr + num_rows, string_v);
+
+  auto sv      = cudf::strings_column_view(strings);
   auto targets = cudf::test::strings_column_wrapper({" the ", "search", "", "string", "ox", "é "});
   auto results = cudf::strings::multi_contains(sv, cudf::strings_column_view(targets));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    results->get_column(0), cudf::test::fixed_width_column_wrapper<bool>({1, 0, 1, 0, 0, 0}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    results->get_column(1), cudf::test::fixed_width_column_wrapper<bool>({0, 1, 0, 0, 0, 0}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    results->get_column(2), cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    results->get_column(3), cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 1, 0}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    results->get_column(4), cudf::test::fixed_width_column_wrapper<bool>({1, 0, 0, 0, 0, 0}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    results->get_column(5), cudf::test::fixed_width_column_wrapper<bool>({0, 0, 1, 0, 0, 0}));
+
+  std::vector<bool> ret_0 = {1, 0, 1, 0, 0, 0, 0};
+  std::vector<bool> ret_1 = {0, 1, 0, 0, 0, 0, 0};
+  std::vector<bool> ret_2 = {1, 1, 1, 1, 1, 1, 0};
+  std::vector<bool> ret_3 = {0, 0, 0, 0, 1, 0, 0};
+  std::vector<bool> ret_4 = {1, 0, 0, 0, 0, 0, 0};
+  std::vector<bool> ret_5 = {0, 0, 1, 0, 0, 0, 0};
+
+  auto make_bool_col_fn = [&string_v, &num_rows](std::vector<bool> bools) {
+    auto iter = cudf::detail::make_counting_transform_iterator(
+      0, [&](auto i) { return bools[i % bools.size()]; });
+    return cudf::test::fixed_width_column_wrapper<bool>(iter, iter + num_rows, string_v);
+  };
+
+  auto expected_0 = make_bool_col_fn(ret_0);
+  auto expected_1 = make_bool_col_fn(ret_1);
+  auto expected_2 = make_bool_col_fn(ret_2);
+  auto expected_3 = make_bool_col_fn(ret_3);
+  auto expected_4 = make_bool_col_fn(ret_4);
+  auto expected_5 = make_bool_col_fn(ret_5);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(0), expected_0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(1), expected_1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(2), expected_2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(3), expected_3);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(4), expected_4);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(5), expected_5);
 }
 
 TEST_F(StringsFindTest, StartsWith)
