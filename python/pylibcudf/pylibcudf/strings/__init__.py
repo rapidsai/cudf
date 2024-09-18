@@ -4,6 +4,7 @@ from . import (
     capitalize,
     case,
     char_types,
+    combine,
     contains,
     find,
     regex_flags,
