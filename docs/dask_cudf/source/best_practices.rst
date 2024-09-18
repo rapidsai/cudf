@@ -9,34 +9,27 @@ effectively.
 .. note::
   Since Dask cuDF is a backend extension for
   `Dask DataFrame <https://docs.dask.org/en/stable/dataframe.html>`__,
-  many of the details discussed in the `Dask DataFrames Best Practices
+  the guidelines discussed in the `Dask DataFrames Best Practices
   <https://docs.dask.org/en/stable/dataframe-best-practices.html>`__
-  documentation also apply to Dask cuDF.
+  documentation also apply to Dask cuDF (excluding any pandas-specific
+  details).
 
 
 Deployment and Configuration
 ----------------------------
 
-Use Dask DataFrame Directly
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Although Dask cuDF provides a public ``dask_cudf`` Python module, we
-strongly recommended that you use the CPU/GPU portable ``dask.dataframe``
-API instead. Simply use the `Dask configuration <dask:configuration>`__
-system to set the ``"dataframe.backend"`` option to ``"cudf"``, and
-the ``dask_cudf`` module will be imported and used implicitly.
-
 Use Dask-CUDA
 ~~~~~~~~~~~~~
 
-In order to execute a Dask workflow on multiple GPUs, a Dask "cluster" must
+In order to execute a Dask workflow on multiple GPUs, a Dask cluster must
 be deployed with `Dask-CUDA <https://docs.rapids.ai/api/dask-cuda/stable/>`__
 and/or `Dask.distributed <https://distributed.dask.org/en/stable/>`__.
 
 When running on a single machine, the `LocalCUDACluster <https://docs.rapids.ai/api/dask-cuda/stable/api/#dask_cuda.LocalCUDACluster>`__
 convenience function is strongly recommended. No matter how many GPUs are
-available on the machine (even one!), using Dask-CUDA has important advantages
-over default (threaded) execution::
+available on the machine (even one!), using `Dask-CUDA has many advantages
+<https://docs.rapids.ai/api/dask-cuda/stable/#motivation>`__
+over default (threaded) execution. Just to list a few::
 
 * Dask-CUDA makes it easy to pin workers to specific devices.
 * Dask-CUDA makes it easy to configure memory-spilling options.
@@ -71,6 +64,14 @@ JIT unspilling is likely to produce better protection from out-of-memory
 <https://docs.rapids.ai/api/dask-cuda/24.10/spilling/>`__ for further details
 and guidance.
 
+Use the Dask DataFrame API
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Although Dask cuDF provides a public ``dask_cudf`` Python module, we
+strongly recommended that you use the CPU/GPU portable ``dask.dataframe``
+API instead. Simply use the `Dask configuration <dask:configuration>`__
+system to set the ``"dataframe.backend"`` option to ``"cudf"``, and
+the ``dask_cudf`` module will be imported and used implicitly.
 
 Reading Data
 ------------
@@ -78,11 +79,16 @@ Reading Data
 Tune the partition size
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-The ideal partition size is typically between 2-10% of the memory capacity
-of a single GPU. Increasing the partition size will typically reduce the
-number of tasks in your workflow and improve the GPU utilization for each
-task. However, if the partitions are too large, the risk of OOM errors can
-become significant.
+The ideal partition size is usually between 1/16 and 1/8 the memory
+capacity of a single GPU. Increasing the partition size will typically
+reduce the number of tasks in your workflow and improve the GPU utilization
+for each task. However, if the partitions are too large, the risk of OOM
+errors can become significant.
+
+.. note::
+  As a general rule of thumb, aim for 1/16 within shuffle-intensive workflows
+  (e.g. large-scale sorting and joining), and 1/8 otherwise. For pathologically
+  skewed data distributions, it may be necessary to target 1/32 or smaller.
 
 The best way to tune the partition size is to begin with appropriate sized
 partitions when the DataFrame collection is first created by a function
@@ -107,11 +113,11 @@ The most important arguments to :func:`read_parquet` are ``blocksize`` and
 ``aggregate_files``::
 
 ``blocksize``: Use this argument to specify the maximum partition size.
-The default is `"256 MiB"`, but larger values are usually more performant
-(e.g. `1 GiB` is usually safe). Dask will use the ``blocksize`` value to map
-a discrete number of Parquet row-groups (or files) to each output partition.
-This mapping will only account for the uncompressed storage size of each
-row group, which is usually smaller than the correspondng ``cudf.DataFrame``.
+The default is `"256 MiB"`, but larger values are usually more performant.
+Dask will use the ``blocksize`` value to map a discrete number of Parquet
+row-groups (or files) to each output partition. This mapping will only
+account for the uncompressed storage size of each row group, which is
+usually smaller than the correspondng ``cudf.DataFrame``.
 
 ``aggregate_files``: Use this argument to specify whether Dask is allowed
 to map multiple files to the same DataFrame partition. The default is ``False``,
