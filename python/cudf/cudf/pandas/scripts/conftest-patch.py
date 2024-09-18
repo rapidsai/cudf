@@ -53,7 +53,7 @@ def find_pytest_file(frame):
         if "pandas-testing/pandas-tests/tests" in file and file.rsplit("/", 1)[
             -1
         ].startswith("test_"):
-            return str(file).rsplit("pandas-testing/", 1)[-1]
+            return str(file).rsplit("pandas-tests/", 1)[-1]
     return None
 
 
