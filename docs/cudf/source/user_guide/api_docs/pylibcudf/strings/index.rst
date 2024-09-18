@@ -12,4 +12,6 @@ strings
     regex_flags
     regex_program
     replace
+    side_type
     slice
+    strip
