@@ -226,7 +226,9 @@ for more details.
 .. note::
   Whenever possible, be sure to specify the ``meta`` argument to
   :func:`from_map`. Dask will need to materialize the first partition
-  eagerly if this argument is excluded.
+  eagerly if this argument is excluded. If a large RMM pool is in use
+  on the first visible device, this eager execution on the client can
+  lead to a surprising OOM error.
 
 
 Sorting, Joining and Grouping
