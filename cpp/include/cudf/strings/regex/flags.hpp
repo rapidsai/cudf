@@ -35,10 +35,11 @@ namespace strings {
  * and to match the Python flag values.
  */
 enum regex_flags : uint32_t {
-  DEFAULT   = 0,   ///< default
-  MULTILINE = 8,   ///< the '^' and '$' honor new-line characters
-  DOTALL    = 16,  ///< the '.' matching includes new-line characters
-  ASCII     = 256  ///< use only ASCII when matching built-in character classes
+  DEFAULT     = 0,    ///< default
+  MULTILINE   = 8,    ///< the '^' and '$' honor new-line characters
+  DOTALL      = 16,   ///< the '.' matching includes new-line characters
+  ASCII       = 256,  ///< use only ASCII when matching built-in character classes
+  EXT_NEWLINE = 512   ///< new-line matches extended characters
 };
 
 /**
@@ -72,6 +73,17 @@ constexpr bool is_dotall(regex_flags const f)
 constexpr bool is_ascii(regex_flags const f)
 {
   return (f & regex_flags::ASCII) == regex_flags::ASCII;
+}
+
+/**
+ * @brief Returns true if the given flags contain EXT_NEWLINE
+ *
+ * @param f Regex flags to check
+ * @return true if `f` includes EXT_NEWLINE
+ */
+constexpr bool is_ext_newline(regex_flags const f)
+{
+  return (f & regex_flags::EXT_NEWLINE) == regex_flags::EXT_NEWLINE;
 }
 
 /**
