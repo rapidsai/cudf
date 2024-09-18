@@ -12,4 +12,5 @@ from . cimport (
     replace,
     side_type,
     slice,
+    strip,
 )

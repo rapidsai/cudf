@@ -12,4 +12,5 @@ from . import (
     replace,
     side_type,
     slice,
+    strip,
 )
