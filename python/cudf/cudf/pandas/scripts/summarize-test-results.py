@@ -71,6 +71,10 @@ def get_per_module_results(log_file_name):
             function_call_counts.update(function_call_count)
         else:
             for key, value in function_call_count.items():
+                if "_slow_function_call" not in function_call_counts[key]:
+                    function_call_counts[key]["_slow_function_call"] = 0
+                if "_fast_function_call" not in function_call_counts[key]:
+                    function_call_counts[key]["_fast_function_call"] = 0
                 function_call_counts[key]["_slow_function_call"] += value.get(
                     "_slow_function_call", 0
                 )
