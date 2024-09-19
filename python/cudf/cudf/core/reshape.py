@@ -12,6 +12,7 @@ import cudf
 from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
+from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column_accessor import ColumnAccessor
@@ -738,7 +739,8 @@ def get_dummies(
     sparse : boolean, optional
         Right now this is NON-FUNCTIONAL argument in rapids.
     drop_first : boolean, optional
-        Right now this is NON-FUNCTIONAL argument in rapids.
+        Whether to get k-1 dummies out of k categorical levels by removing the
+        first level.
     columns : sequence of str, optional
         Names of columns to encode. If not provided, will attempt to encode all
         columns. Note this is different from pandas default behavior, which
@@ -806,9 +808,6 @@ def get_dummies(
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 
-    if drop_first:
-        raise NotImplementedError("drop_first is not supported yet")
-
     if isinstance(data, cudf.DataFrame):
         encode_fallback_dtypes = ["object", "category"]
 
@@ -862,6 +861,7 @@ def get_dummies(
                     prefix=prefix_map.get(name, prefix),
                     prefix_sep=prefix_sep_map.get(name, prefix_sep),
                     dtype=dtype,
+                    drop_first=drop_first,
                 )
                 result_data.update(col_enc_data)
             return cudf.DataFrame._from_data(result_data, index=data.index)
@@ -874,6 +874,7 @@ def get_dummies(
             prefix=prefix,
             prefix_sep=prefix_sep,
             dtype=dtype,
+            drop_first=drop_first,
         )
         return cudf.DataFrame._from_data(data, index=ser.index)
 
@@ -1227,13 +1228,24 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         )
         return res
     else:
-        df = df.copy(deep=False)
-        columns = df.index._poplevels(level)
-        index = df.index
-    result = _pivot(df, index, columns)
-    if result.index.nlevels == 1:
-        result.index = result.index.get_level_values(result.index.names[0])
-    return result
+        index = df.index.droplevel(level)
+        if is_scalar(level):
+            columns = df.index.get_level_values(level)
+        else:
+            new_names = []
+            ca_data = {}
+            for lev in level:
+                ca_level, level_idx = df.index._level_to_ca_label(lev)
+                new_names.append(df.index.names[level_idx])
+                ca_data[ca_level] = df.index._data[ca_level]
+            columns = type(df.index)._from_data(
+                ColumnAccessor(ca_data, verify=False)
+            )
+            columns.names = new_names
+        result = _pivot(df, index, columns)
+        if result.index.nlevels == 1:
+            result.index = result.index.get_level_values(result.index.names[0])
+        return result
 
 
 def _get_unique(column: ColumnBase, dummy_na: bool) -> ColumnBase:
@@ -1256,6 +1268,7 @@ def _one_hot_encode_column(
     prefix: str | None,
     prefix_sep: str | None,
     dtype: Dtype | None,
+    drop_first: bool,
 ) -> dict[str, ColumnBase]:
     """Encode a single column with one hot encoding. The return dictionary
     contains pairs of (category, encodings). The keys may be prefixed with
@@ -1276,6 +1289,8 @@ def _one_hot_encode_column(
         )
     data = one_hot_encode(column, categories)
 
+    if drop_first and len(data):
+        data.pop(next(iter(data)))
     if prefix is not None and prefix_sep is not None:
         data = {f"{prefix}{prefix_sep}{col}": enc for col, enc in data.items()}
     if dtype:
