@@ -1024,32 +1024,19 @@ struct group_key_func {
 // merges all the tdigests within each group. returns a table containing 2 columns:
 // the sorted means and weights.
 template <typename GroupOffsetIter>
-std::unique_ptr<table> generate_merged_centroids(tdigest_column_view const& tdv,
+std::pair<rmm::device_uvector<double>, rmm::device_uvector<double>> generate_merged_centroids(tdigest_column_view const& tdv,
                                                  GroupOffsetIter group_offsets,
                                                  size_type num_groups,
                                                  rmm::cuda_stream_view stream)
 {
-  auto temp_mr = rmm::mr::get_current_device_resource();
+  auto temp_mr = cudf::get_current_device_resource_ref();
 
   auto const total_merged_centroids = tdv.means().size();
 
-  // output table is the merged centroids (means, weights)
-  std::vector<std::unique_ptr<cudf::column>> cols;
-  cols.reserve(2);
-  cols.push_back(std::make_unique<cudf::column>(
-    data_type{type_id::FLOAT64},
-    total_merged_centroids,
-    rmm::device_buffer{sizeof(double) * total_merged_centroids, stream, temp_mr},
-    rmm::device_buffer{0, stream, temp_mr},
-    0));
-  cols.push_back(std::make_unique<cudf::column>(
-    data_type{type_id::FLOAT64},
-    total_merged_centroids,
-    rmm::device_buffer{sizeof(double) * total_merged_centroids, stream, temp_mr},
-    rmm::device_buffer{0, stream, temp_mr},
-    0));
-  auto result = std::make_unique<cudf::table>(std::move(cols));
-
+  // output is the merged centroids (means, weights)
+  rmm::device_uvector<double> output_means(total_merged_centroids, stream, temp_mr);
+  rmm::device_uvector<double> output_weights(total_merged_centroids, stream, temp_mr);
+  
   // each group represents a collection of tdigest columns. each row is 1 tdigest.
   // within each group, we want to sort all the centroids within all the tdigests
   // in that group, using the means as the key. the "outer offsets" represent the indices of the
@@ -1079,10 +1066,10 @@ std::unique_ptr<table> generate_merged_centroids(tdigest_column_view const& tdv,
     cub::DeviceSegmentedSort::SortPairs(nullptr,
                                         temp_size,
                                         tdv.means().begin<double>(),
-                                        result->get_column(0).mutable_view().begin<double>(),
+                                        output_means.begin(),
                                         tdv.weights().begin<double>(),
-                                        result->get_column(1).mutable_view().begin<double>(),
-                                        result->num_rows(),
+                                        output_weights.begin(),
+                                        total_merged_centroids,
                                         num_groups,
                                         centroid_offsets,
                                         centroid_offsets + 1,
@@ -1093,16 +1080,16 @@ std::unique_ptr<table> generate_merged_centroids(tdigest_column_view const& tdv,
     cub::DeviceSegmentedSort::SortPairs(temp_mem.data(),
                                         temp_size,
                                         tdv.means().begin<double>(),
-                                        result->get_column(0).mutable_view().begin<double>(),
+                                        output_means.begin(),
                                         tdv.weights().begin<double>(),
-                                        result->get_column(1).mutable_view().begin<double>(),
-                                        result->num_rows(),
+                                        output_weights.begin(),
+                                        total_merged_centroids,
                                         num_groups,
                                         centroid_offsets,
                                         centroid_offsets + 1,
                                         stream.value()));
 
-  return result;
+  return {std::move(output_means), std::move(output_weights)};
 }
 
 template <typename HGroupOffsetIter, typename GroupOffsetIter, typename GroupLabelIter>
@@ -1166,18 +1153,16 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                      group_is_empty{},
                      0);
 
-  auto temp_mr = rmm::mr::get_current_device_resource();
+  auto temp_mr = cudf::get_current_device_resource_ref();
 
   // merge the centroids
-  auto merged_centroids    = generate_merged_centroids(tdv, group_offsets, num_groups, stream);
-  auto const num_centroids = tdv.means().size();
-  CUDF_EXPECTS(merged_centroids->num_rows() == num_centroids,
+  auto [merged_means, merged_weights] = generate_merged_centroids(tdv, group_offsets, num_groups, stream);
+  size_t const num_centroids = tdv.means().size();
+  CUDF_EXPECTS(merged_means.size() == num_centroids,
                "Unexpected number of centroids in merged result");
 
   // generate cumulative weights
-  cudf::column_view merged_weights     = merged_centroids->get_column(1).view();
-  auto cumulative_weights = cudf::make_numeric_column(
-    data_type{type_id::FLOAT64}, merged_weights.size(), mask_state::UNALLOCATED, stream);
+  rmm::device_uvector<double> cumulative_weights(merged_weights.size(), stream, temp_mr);
 
   // generate group keys for all centroids in the entire column
   rmm::device_uvector<size_type> group_keys(num_centroids, stream, temp_mr);
@@ -1192,8 +1177,8 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 group_keys.begin(),
                                 group_keys.begin() + num_centroids,
-                                merged_weights.begin<double>(),
-                                cumulative_weights->mutable_view().begin<double>());
+                                merged_weights.begin(),
+                                cumulative_weights.begin());
 
   auto const delta = max_centroids;
 
@@ -1202,11 +1187,11 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
     delta,
     num_groups,
     nearest_value_centroid_weights<decltype(group_offsets)>{
-      cumulative_weights->view().begin<double>(), group_offsets, inner_offsets.begin<size_type>()},
+      cumulative_weights.begin(), group_offsets, inner_offsets.begin<size_type>()},
     centroid_group_info<decltype(group_offsets)>{
-      cumulative_weights->view().begin<double>(), group_offsets, inner_offsets.begin<size_type>()},
+      cumulative_weights.begin(), group_offsets, inner_offsets.begin<size_type>()},
     cumulative_centroid_weight<decltype(group_labels), decltype(group_offsets)>{
-      cumulative_weights->view().begin<double>(),
+      cumulative_weights.begin(),
       group_labels,
       group_offsets,
       {inner_offsets.begin<size_type>(), static_cast<size_t>(inner_offsets.size())}},
@@ -1217,17 +1202,15 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   // input centroid values
   auto centroids = cudf::detail::make_counting_transform_iterator(
     0,
-    make_weighted_centroid{
-      static_cast<cudf::column_view>(merged_centroids->get_column(0)).begin<double>(),
-      merged_weights.begin<double>()});
+    make_weighted_centroid{merged_means.begin(), merged_weights.begin()});
 
   // compute the tdigest
   return compute_tdigests(
     delta,
     centroids,
-    centroids + merged_centroids->num_rows(),
+    centroids + merged_means.size(),
     cumulative_centroid_weight<decltype(group_labels), decltype(group_offsets)>{
-      cumulative_weights->view().begin<double>(),
+      cumulative_weights.begin(),
       group_labels,
       group_offsets,
       {inner_offsets.begin<size_type>(), static_cast<size_t>(inner_offsets.size())}},
