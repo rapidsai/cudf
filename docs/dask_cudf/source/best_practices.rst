@@ -23,7 +23,7 @@ Use Dask-CUDA
 
 In order to execute a Dask workflow on multiple GPUs, a Dask cluster must
 be deployed with `Dask-CUDA <https://docs.rapids.ai/api/dask-cuda/stable/>`__
-and/or `Dask.distributed <https://distributed.dask.org/en/stable/>`__.
+and `Dask.distributed <https://distributed.dask.org/en/stable/>`__.
 
 When running on a single machine, the `LocalCUDACluster <https://docs.rapids.ai/api/dask-cuda/stable/api/#dask_cuda.LocalCUDACluster>`__
 convenience function is strongly recommended. No matter how many GPUs are
@@ -58,6 +58,13 @@ These tools include an intuitive `browser dashboard
 `API for collecting performance profiles
 <https://distributed.dask.org/en/latest/diagnosing-performance.html#performance-reports>`__.
 
+No matter the workflow, using the diagnostic dashboard dashboard is
+strongly recommended. It provides a visual representation of the worker
+resources and compute progress. It also shows basic GPU memory and
+utilization metrics (under the ``GPU`` tab). In order to visualize
+further GPU metrics in JupyterLab, use  `NVDashboard
+<https://github.com/rapidsai/jupyterlab-nvdashboard>`__.
+
 
 Enable cuDF spilling
 ~~~~~~~~~~~~~~~~~~~~
@@ -70,8 +77,9 @@ setting ``enable_cudf_spill=True``.
 
 When a Dask cuDF workflow includes conversion between DataFrame and Array
 representations, native cuDF spilling may be insufficient. For these cases,
-JIT unspilling is likely to produce better protection from out-of-memory
-(OOM) errors. Please see `Dask-CUDA's spilling documentation
+`JIT-unspill <https://docs.rapids.ai/api/dask-cuda/nightly/spilling/#jit-unspill>`__
+is likely to produce better protection from out-of-memory (OOM) errors.
+Please see `Dask-CUDA's spilling documentation
 <https://docs.rapids.ai/api/dask-cuda/24.10/spilling/>`__ for further details
 and guidance.
 
@@ -170,6 +178,9 @@ errors can become significant.
   As a general rule of thumb, aim for 1/16 in shuffle-intensive workflows
   (e.g. large-scale sorting and joining), and 1/8 otherwise. For pathologically
   skewed data distributions, it may be necessary to target 1/32 or smaller.
+  This rule of thumb comes from anecdotal optimization and OOM-debugging
+  experience. Since every workflow is different, choosing the best partition
+  size is both an art and a science.
 
 The easiest way to tune the partition size is when the DataFrame collection
 is first created by a function like :func:`read_parquet`, :func:`read_csv`,
