@@ -3,8 +3,8 @@
 Dask cuDF Best Practices
 ========================
 
-This page outlines several important guidelines for using Dask cuDF
-effectively.
+This page outlines several important guidelines for using `Dask cuDF
+<https://docs.rapids.ai/api/dask-cudf/stable/>`__ effectively.
 
 .. note::
   Since Dask cuDF is a backend extension for
@@ -37,9 +37,9 @@ over default (threaded) execution. Just to list a few::
 
 Please see `Dask-CUDA's API <https://docs.rapids.ai/api/dask-cuda/stable/>`__
 and `Best Practices <https://docs.rapids.ai/api/dask-cuda/stable/examples/best-practices/>`__
-documentation for detailed information. Typical ``LocalCUDACluster`` usage is
-also illustrated in the `Dask cuDF quick-start example
-<https://github.com/rapidsai/cudf/tree/main/python/dask_cudf#quick-start-example>`__.
+documentation for detailed information. Typical ``LocalCUDACluster`` usage
+is also illustrated within the multi-GPU section of `Dask cuDF's
+<https://docs.rapids.ai/api/dask-cudf/stable/>`__ documentation.
 
 .. note::
   When running on cloud infrastructure or HPC systems, it is usually best to
