@@ -10,9 +10,9 @@ cdef extern from "cudf/strings/repeat_strings.hpp" namespace "cudf::strings" \
         nogil:
 
     cdef unique_ptr[column] repeat_strings(
-        column_view strings,
-        size_type repeat) except +
+        column_view input,
+        size_type repeat_times) except +
 
     cdef unique_ptr[column] repeat_strings(
-        column_view strings,
-        column_view repeats) except +
+        column_view input,
+        column_view repeat_times) except +
