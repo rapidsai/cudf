@@ -620,7 +620,7 @@ struct identity_initializer {
   }
 
   template <typename T, aggregation::Kind k>
-  T get_identity()
+  constexpr T get_identity()
   {
     if (k == aggregation::ARGMAX || k == aggregation::ARGMIN) {
       if constexpr (cudf::is_timestamp<T>())
