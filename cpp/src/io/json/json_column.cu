@@ -538,15 +538,15 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                0);
 
   // Get internal JSON column
-  make_device_json_column(d_input,
-                          gpu_tree,
-                          gpu_col_id,
-                          gpu_row_offsets,
-                          root_column,
-                          is_array_of_arrays,
-                          options,
-                          stream,
-                          mr);
+  experimental::make_device_json_column(d_input,
+                                        gpu_tree,
+                                        gpu_col_id,
+                                        gpu_row_offsets,
+                                        root_column,
+                                        is_array_of_arrays,
+                                        options,
+                                        stream,
+                                        mr);
 
   // data_root refers to the root column of the data represented by the given JSON string
   auto& data_root =
