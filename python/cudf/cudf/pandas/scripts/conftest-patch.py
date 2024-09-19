@@ -6,6 +6,8 @@ import contextlib
 import json
 import os
 import sys
+import traceback
+from collections import defaultdict
 from functools import wraps
 
 import pytest
@@ -44,15 +46,30 @@ function_call_counts = {}  # type: ignore
 FUNCTION_NAME = {"_slow_function_call", "_fast_function_call"}
 
 
+def find_pytest_file(frame):
+    stack = traceback.extract_stack()
+    absolute_paths = [frame.filename for frame in stack]
+    for file in absolute_paths:
+        if "pandas-testing/pandas-tests/tests" in file and file.rsplit("/", 1)[
+            -1
+        ].startswith("test_"):
+            return str(file).rsplit("pandas-tests/", 1)[-1]
+    return None
+
+
 def trace_calls(frame, event, arg):
     if event != "call":
         return
     code = frame.f_code
     func_name = code.co_name
+
     if func_name in FUNCTION_NAME:
-        function_call_counts[func_name] = (
-            function_call_counts.get(func_name, 0) + 1
-        )
+        filename = find_pytest_file(frame)
+        if filename is None:
+            return
+        if filename not in function_call_counts:
+            function_call_counts[filename] = defaultdict(int)
+        function_call_counts[filename][func_name] += 1
 
 
 def pytest_sessionstart(session):
@@ -63,41 +80,6 @@ def pytest_sessionstart(session):
 def pytest_sessionfinish(session, exitstatus):
     # Remove the profile function
     sys.setprofile(None)
-
-
-@pytest.hookimpl(tryfirst=True)
-def pytest_runtest_setup(item):
-    # Check if this is the first test in the file
-    current_file = getattr(pytest_runtest_setup, "current_file", None)
-    test_file = item.nodeid.split("::")[0]
-    if test_file != current_file:
-        # If it's a new file, reset the function call counts
-        global function_call_counts
-        function_call_counts = {}
-        pytest_runtest_setup.current_file = test_file
-
-
-@pytest.hookimpl(trylast=True)
-def pytest_runtest_teardown(item, nextitem):
-    # Check if this is the last test in the file
-    current_file = item.nodeid.split("::")[0]
-    if nextitem is None or nextitem.nodeid.split("::")[0] != current_file:
-        # Write the function call counts to a file
-        worker_id = os.getenv("PYTEST_XDIST_WORKER", "master")
-        output_file = (
-            f'{current_file.replace("/", "__")}_{worker_id}_metrics.json'
-        )
-        with open(output_file, "w") as f:
-            json.dump(function_call_counts, f, indent=4)
-        print(f"Function call counts have been written to {output_file}")
-
-
-@pytest.hookimpl(tryfirst=True)
-def pytest_configure(config):
-    if hasattr(config, "workerinput"):
-        # Running in xdist worker, ensure each worker has its own counts
-        global function_call_counts
-        function_call_counts = {}
 
 
 @pytest.hookimpl(trylast=True)

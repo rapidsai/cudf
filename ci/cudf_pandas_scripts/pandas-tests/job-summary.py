@@ -68,18 +68,16 @@ def emoji_failed(x):
 pr_df = pd.DataFrame.from_dict(pr_results, orient="index").sort_index()
 main_df = pd.DataFrame.from_dict(main_results, orient="index").sort_index()
 diff_df = pr_df - main_df
-pr_df['CPU Usage'] = ((pr_df['_slow_function_call']/(pr_df['_slow_function_call'] + pr_df['_fast_function_call']))*100.0).round(1)
-pr_df['GPU Usage'] = ((pr_df['_fast_function_call']/(pr_df['_slow_function_call'] + pr_df['_fast_function_call']))*100.0).round(1)
+total_usage = pr_df['_slow_function_call'] + pr_df['_fast_function_call']
+pr_df['CPU Usage'] = ((pr_df['_slow_function_call']/total_usage)*100.0).round(1)
+pr_df['GPU Usage'] = ((pr_df['_fast_function_call']/total_usage)*100.0).round(1)
 
 cpu_usage_mean = pr_df['CPU Usage'].mean().round(2)
 gpu_usage_mean = pr_df['GPU Usage'].mean().round(2)
 
 # Add '%' suffix to 'CPU Usage' and 'GPU Usage' columns
-pr_df['CPU Usage'] = pr_df['CPU Usage'].astype(str) + '%'
-pr_df['GPU Usage'] = pr_df['GPU Usage'].astype(str) + '%'
-
-pr_df['CPU Usage'] = pr_df['CPU Usage'].replace('nan%', '0%')
-pr_df['GPU Usage'] = pr_df['GPU Usage'].replace('nan%', '0%')
+pr_df['CPU Usage'] = pr_df['CPU Usage'].fillna(0).astype(str) + '%'
+pr_df['GPU Usage'] = pr_df['GPU Usage'].fillna(0).astype(str) + '%'
 
 pr_df = pr_df[["total", "passed", "failed", "skipped", 'CPU Usage', 'GPU Usage']]
 diff_df = diff_df[["total", "passed", "failed", "skipped"]]

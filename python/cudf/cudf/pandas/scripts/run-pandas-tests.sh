@@ -64,8 +64,6 @@ markers = [
   "skip_ubsan: Tests known to fail UBSAN check",
 ]
 EOF
-    # append the contents of patch-confest.py to conftest.py
-    cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
 
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
