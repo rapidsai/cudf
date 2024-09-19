@@ -205,19 +205,23 @@ map multiple files to the same DataFrame partition. The default is
 ``False``, but ``aggregate_files=True`` is usually more performant when
 the dataset contains many files that are smaller than half of ``blocksize``.
 
-.. note::
-  Metadata collection can be extremely slow when reading from remote
-  storage (e.g. S3 and GCS). When reading many remote files that all
-  correspond to a reasonable partition size, it's usually best to set
-  ``blocksize=None``. In most cases, this setting allows Dask to skip
-  the metadata-collection stage altogether.
+If you know that your files correspond to a reasonable partition size
+before splitting or aggregation, set ``blocksize=None`` to disallow
+file splitting. In the absence of column-projection pushdown, this will
+result in a simple 1-to-1 mapping between files and output partitions.
 
 .. note::
   If your workflow requires a strict 1-to-1 mapping between files and
   partitions, use :func:`from_map` to manually construct your partitions
   with ``cudf.read_parquet``. When :func:`dd.read_parquet` is used,
   query-planning optimizations may automatically aggregate distinct files
-  into the same partition (even if ``aggregate_files=False``).
+  into the same partition (even when ``aggregate_files=False``).
+
+.. note::
+  Metadata collection can be extremely slow when reading from remote
+  storage (e.g. S3 and GCS). When reading many remote files that all
+  correspond to a reasonable partition size, use ``blocksize=None``
+  to avoid unnecessary metadata collection.
 
 
 Use :func:`from_map`
