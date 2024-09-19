@@ -27,18 +27,21 @@ DASK_DATAFRAME__QUERY_PLANNING=True ./ci/run_dask_cudf_pytests.sh \
   --cov-config=../.coveragerc \
   --cov=dask_cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/dask-cudf-coverage.xml" \
-  --cov-report=term
+  --cov-report=term \
+  --tb=native
 
 rapids-logger "pytest dask_cudf (legacy)"
 DASK_DATAFRAME__QUERY_PLANNING=False ./ci/run_dask_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-legacy.xml" \
   --numprocesses=8 \
   --dist=loadscope \
+  --tb=native \
   .
 
 rapids-logger "pytest cudf_kafka"
 ./ci/run_cudf_kafka_pytests.sh \
-  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-kafka.xml"
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-kafka.xml" \
+  --tb=native
 
 rapids-logger "pytest custreamz"
 ./ci/run_custreamz_pytests.sh \
@@ -48,7 +51,8 @@ rapids-logger "pytest custreamz"
   --cov-config=../.coveragerc \
   --cov=custreamz \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
-  --cov-report=term
+  --cov-report=term \
+  --tb=native
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

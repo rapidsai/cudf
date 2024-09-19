@@ -39,7 +39,9 @@ rapids-logger "pytest pylibcudf"
 pushd python/pylibcudf/pylibcudf/tests
 python -m pytest \
   --cache-clear \
+  --numprocesses=8 \
   --dist=worksteal \
+  --tb=native
   .
 popd
 
@@ -50,5 +52,6 @@ python -m pytest \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
   --numprocesses=8 \
   --dist=worksteal \
+  --tb=native
   .
 popd

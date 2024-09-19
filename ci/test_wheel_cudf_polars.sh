@@ -57,7 +57,8 @@ set +e
        --cov cudf_polars \
        --cov-fail-under=100 \
        --cov-config=./pyproject.toml \
-       --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml"
+       --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
+       --tb=native
 
 trap ERR
 set -e

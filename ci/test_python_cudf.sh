@@ -19,6 +19,7 @@ pushd python/pylibcudf/pylibcudf/tests
 python -m pytest \
   --cache-clear \
   --dist=worksteal \
+  --tb=native \
   .
 popd
 
@@ -30,7 +31,8 @@ rapids-logger "pytest cudf"
   --cov-config=../.coveragerc \
   --cov=cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-coverage.xml" \
-  --cov-report=term
+  --cov-report=term \
+  --tb=native
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
 # Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.
@@ -44,7 +46,8 @@ rapids-logger "pytest for cudf benchmarks"
   --cov-config=.coveragerc \
   --cov=cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-coverage.xml" \
-  --cov-report=term
+  --cov-report=term \
+  --tb=native
 
 rapids-logger "pytest for cudf benchmarks using pandas"
 ./ci/run_cudf_pandas_pytest_benchmarks.sh \
@@ -53,7 +56,8 @@ rapids-logger "pytest for cudf benchmarks using pandas"
   --cov-config=.coveragerc \
   --cov=cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-pandas-coverage.xml" \
-  --cov-report=term
+  --cov-report=term \
+  --tb=native
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
