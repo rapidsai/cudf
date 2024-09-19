@@ -34,8 +34,7 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
@@ -399,7 +398,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv* env
     return release_as_jlong(
       is_lists_column
         ? cudf::lists::detail::concatenate(
-            columns, cudf::get_default_stream(), rmm::mr::get_current_device_resource())
+            columns, cudf::get_default_stream(), cudf::get_current_device_resource_ref())
         : cudf::concatenate(columns));
   }
   CATCH_STD(env, 0);

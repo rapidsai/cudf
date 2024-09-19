@@ -22,6 +22,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -295,7 +296,7 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   h_integers.push_back(std::numeric_limits<TypeParam>::min());
   h_integers.push_back(std::numeric_limits<TypeParam>::max());
   auto const d_integers = cudf::detail::make_device_uvector_sync(
-    h_integers, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    h_integers, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto integers      = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                             (cudf::size_type)d_integers.size());
   auto integers_view = integers->mutable_view();

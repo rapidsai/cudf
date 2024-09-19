@@ -29,10 +29,10 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
@@ -312,7 +312,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
 
   // create a vector of offsets to each string's set of target positions
   auto const targets_offsets = create_offsets_from_positions(
-    input, targets_positions, stream, rmm::mr::get_current_device_resource());
+    input, targets_positions, stream, cudf::get_current_device_resource_ref());
   auto const d_targets_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(targets_offsets->view());
 

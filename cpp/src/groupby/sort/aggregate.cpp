@@ -35,9 +35,9 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <unordered_map>
@@ -435,7 +435,7 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
                                                     helper.num_groups(stream),
                                                     null_handling,
                                                     stream,
-                                                    rmm::mr::get_current_device_resource());
+                                                    cudf::get_current_device_resource_ref());
   auto const nulls_equal =
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nulls_equal;
   auto const nans_equal =
@@ -507,7 +507,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation c
                                                        helper.group_offsets(stream),
                                                        helper.num_groups(stream),
                                                        stream,
-                                                       rmm::mr::get_current_device_resource());
+                                                       cudf::get_current_device_resource_ref());
   auto const& merge_sets_agg = dynamic_cast<cudf::detail::merge_sets_aggregation const&>(agg);
   cache.add_result(values,
                    agg,
