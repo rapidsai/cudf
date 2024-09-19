@@ -49,8 +49,24 @@ class CudfFrameBase(FrameBase):
 
         return self.to_backend("pandas", **kwargs)
 
+    def _prepare_cov_corr(self, min_periods, numeric_only):
+        # Upstream version of this method sets min_periods
+        # to 2 by default (which is not supported by cudf)
+        # TODO: Remove when cudf supports both min_periods
+        # and numeric_only
+        # See: https://github.com/rapidsai/cudf/issues/12626
+        # See: https://github.com/rapidsai/cudf/issues/9009
+        self._meta.cov(min_periods=min_periods)
+
+        frame = self
+        if numeric_only:
+            numerics = self._meta._get_numeric_data()
+            if len(numerics.columns) != len(self.columns):
+                frame = frame[list(numerics.columns)]
+        return frame, min_periods
+
     # var can be removed if cudf#15179 is addressed.
-    # See: https://github.com/rapidsai/cudf/issues/15179
+    # See: https://github.com/rapidsai/cudf/issues/14935
     def var(
         self,
         axis=0,
