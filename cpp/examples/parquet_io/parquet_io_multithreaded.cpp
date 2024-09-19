@@ -309,7 +309,7 @@ int main(int argc, char const** argv)
     fmt::print("Reading for the second time using {} threads...\n", thread_count);
     cudf::examples::timer timer;
     auto const input_table =
-      concatenate_tables(read_parquet_multithreaded(input_files), default_stream);
+      concatenate_tables(std::move(read_parquet_multithreaded(input_files)), default_stream);
     // In case some kernels are still running on the default stream
     default_stream.synchronize();
     // Print elapsed time and peak memory
@@ -318,7 +318,7 @@ int main(int argc, char const** argv)
     fmt::print("Reading transcoded files using {} threads...\n", thread_count);
     timer.reset();
     auto const transcoded_table = concatenate_tables(
-      read_parquet_multithreaded(extract_input_files(output_path)), default_stream);
+      std::move(read_parquet_multithreaded(extract_input_files(output_path))), default_stream);
     // In case some kernels are still running on the default stream
     default_stream.synchronize();
     // Print elapsed time and peak memory
