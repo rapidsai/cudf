@@ -203,8 +203,8 @@ get_collection_type.register(cudf.BaseIndex, lambda _: Index)
 
 
 def _create_array_collection_with_meta(expr):
-    # NOTE: This is the CPU/GPU compatible version of
-    # `dask_expr._backends.create_array_collection`.
+    # NOTE: This is the GPU compatible version of
+    # `new_dd_object` for DataFrame -> Array conversion.
     # This can be removed if dask#11017 is resolved
     # (See: https://github.com/dask/dask/issues/11017)
     import numpy as np
