@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
+#include "compute_single_pass_aggs.cuh"
+#include "compute_single_pass_aggs.hpp"
 #include "groupby/common/utils.hpp"
 #include "helpers.cuh"
-#include "kernels.cuh"
 #include "multi_pass_functors.cuh"
 #include "single_pass_functors.cuh"
 
@@ -52,7 +53,6 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <memory>
-#include <unordered_set>
 #include <utility>
 
 namespace cudf {
@@ -104,76 +104,6 @@ bool constexpr is_hash_aggregation(aggregation::Kind t)
 {
   return array_contains(hash_aggregations, t);
 }
-
-class groupby_simple_aggregations_collector final
-  : public cudf::detail::simple_aggregations_collector {
- public:
-  using cudf::detail::simple_aggregations_collector::visit;
-
-  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::min_aggregation const&) override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(col_type.id() == type_id::STRING ? make_argmin_aggregation()
-                                                    : make_min_aggregation());
-    return aggs;
-  }
-
-  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::max_aggregation const&) override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(col_type.id() == type_id::STRING ? make_argmax_aggregation()
-                                                    : make_max_aggregation());
-    return aggs;
-  }
-
-  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::mean_aggregation const&) override
-  {
-    (void)col_type;
-    CUDF_EXPECTS(is_fixed_width(col_type), "MEAN aggregation expects fixed width type");
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(make_sum_aggregation());
-    // COUNT_VALID
-    aggs.push_back(make_count_aggregation());
-
-    return aggs;
-  }
-
-  std::vector<std::unique_ptr<aggregation>> visit(data_type,
-                                                  cudf::detail::var_aggregation const&) override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(make_sum_aggregation());
-    // COUNT_VALID
-    aggs.push_back(make_count_aggregation());
-
-    return aggs;
-  }
-
-  std::vector<std::unique_ptr<aggregation>> visit(data_type,
-                                                  cudf::detail::std_aggregation const&) override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(make_sum_aggregation());
-    // COUNT_VALID
-    aggs.push_back(make_count_aggregation());
-
-    return aggs;
-  }
-
-  std::vector<std::unique_ptr<aggregation>> visit(
-    data_type, cudf::detail::correlation_aggregation const&) override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(make_sum_aggregation());
-    // COUNT_VALID
-    aggs.push_back(make_count_aggregation());
-
-    return aggs;
-  }
-};
 
 template <typename SetType>
 class hash_compound_agg_finalizer final : public cudf::detail::aggregation_finalizer {
@@ -342,40 +272,6 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     dense_results->add_result(col, agg, std::move(result));
   }
 };
-// flatten aggs to filter in single pass aggs
-std::tuple<table_view, std::vector<aggregation::Kind>, std::vector<std::unique_ptr<aggregation>>>
-flatten_single_pass_aggs(host_span<aggregation_request const> requests)
-{
-  std::vector<column_view> columns;
-  std::vector<std::unique_ptr<aggregation>> aggs;
-  std::vector<aggregation::Kind> agg_kinds;
-
-  for (auto const& request : requests) {
-    auto const& agg_v = request.aggregations;
-
-    std::unordered_set<aggregation::Kind> agg_kinds_set;
-    auto insert_agg = [&](column_view const& request_values, std::unique_ptr<aggregation>&& agg) {
-      if (agg_kinds_set.insert(agg->kind).second) {
-        agg_kinds.push_back(agg->kind);
-        aggs.push_back(std::move(agg));
-        columns.push_back(request_values);
-      }
-    };
-
-    auto values_type = cudf::is_dictionary(request.values.type())
-                         ? cudf::dictionary_column_view(request.values).keys().type()
-                         : request.values.type();
-    for (auto&& agg : agg_v) {
-      groupby_simple_aggregations_collector collector;
-
-      for (auto& agg_s : agg->get_simple_aggregations(values_type, collector)) {
-        insert_agg(request.values, std::move(agg_s));
-      }
-    }
-  }
-
-  return std::make_tuple(table_view(columns), std::move(agg_kinds), std::move(aggs));
-}
 
 /**
  * @brief Gather sparse results into dense using `gather_map` and add to
@@ -413,239 +309,6 @@ void sparse_to_dense_results(table_view const& keys,
       agg->finalize(finalizer);
     }
   }
-}
-
-template <typename SetType>
-void extract_populated_keys(SetType const& key_set,
-                            rmm::device_uvector<cudf::size_type>& populated_keys,
-                            rmm::cuda_stream_view stream)
-{
-  auto const keys_end = key_set.retrieve_all(populated_keys.begin(), stream.value());
-
-  populated_keys.resize(std::distance(populated_keys.begin(), keys_end), stream);
-}
-
-// make table that will hold sparse results
-template <typename GlobalSetType>
-auto create_sparse_results_table(cudf::table_view const& flattened_values,
-                                 const cudf::aggregation::Kind* d_aggs,
-                                 std::vector<cudf::aggregation::Kind> aggs,
-                                 bool direct_aggregations,
-                                 GlobalSetType const& global_set,
-                                 rmm::device_uvector<cudf::size_type>& populated_keys,
-                                 rmm::cuda_stream_view stream)
-{
-  // TODO single allocation - room for performance improvement
-  std::vector<std::unique_ptr<cudf::column>> sparse_columns;
-  std::transform(
-    flattened_values.begin(),
-    flattened_values.end(),
-    aggs.begin(),
-    std::back_inserter(sparse_columns),
-    [stream](auto const& col, auto const& agg) {
-      bool nullable = (agg == cudf::aggregation::COUNT_VALID or agg == cudf::aggregation::COUNT_ALL)
-                        ? false
-                        : (col.has_nulls() or agg == cudf::aggregation::VARIANCE or
-                           agg == cudf::aggregation::STD);
-      auto mask_flag = (nullable) ? cudf::mask_state::ALL_NULL : cudf::mask_state::UNALLOCATED;
-      auto col_type  = cudf::is_dictionary(col.type())
-                         ? cudf::dictionary_column_view(col).keys().type()
-                         : col.type();
-      return make_fixed_width_column(
-        cudf::detail::target_type(col_type, agg), col.size(), mask_flag, stream);
-    });
-  cudf::table sparse_table(std::move(sparse_columns));
-  // If no direct aggregations, initialize the sparse table
-  // only for the keys inserted in global hash set
-  if (!direct_aggregations) {
-    auto d_sparse_table = cudf::mutable_table_device_view::create(sparse_table, stream);
-    extract_populated_keys(global_set, populated_keys, stream);
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator(0),
-                       populated_keys.size(),
-                       initialize_sparse_table{populated_keys.data(), *d_sparse_table, d_aggs});
-  }
-  // Else initialise the whole table
-  else {
-    cudf::mutable_table_view sparse_table_view = sparse_table.mutable_view();
-    cudf::detail::initialize_with_identity(sparse_table_view, aggs, stream);
-  }
-  return sparse_table;
-}
-
-template <typename Kernel>
-int max_occupancy_grid_size(Kernel kernel, cudf::size_type n)
-{
-  int max_active_blocks{-1};
-  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &max_active_blocks, kernel, GROUPBY_BLOCK_SIZE, 0));
-  auto const grid_size  = max_active_blocks * cudf::detail::num_multiprocessors();
-  auto const num_blocks = cudf::util::div_rounding_up_safe(n, GROUPBY_BLOCK_SIZE);
-  return std::min(grid_size, num_blocks);
-}
-
-size_t get_previous_multiple_of_8(size_t number) { return number / 8 * 8; }
-
-template <typename Kernel>
-size_t compute_shared_memory_size(Kernel kernel, int grid_size)
-{
-  auto const active_blocks_per_sm =
-    cudf::util::div_rounding_up_safe(grid_size, cudf::detail::num_multiprocessors());
-
-  size_t dynamic_shmem_size;
-  CUDF_CUDA_TRY(cudaOccupancyAvailableDynamicSMemPerBlock(
-    &dynamic_shmem_size, kernel, active_blocks_per_sm, GROUPBY_BLOCK_SIZE));
-  return get_previous_multiple_of_8(0.5 * dynamic_shmem_size);
-}
-
-void compute_aggregations(int grid_size,
-                          cudf::size_type num_input_rows,
-                          cudf::size_type* local_mapping_index,
-                          cudf::size_type* global_mapping_index,
-                          cudf::size_type* block_cardinality,
-                          cudf::table_device_view input_values,
-                          cudf::mutable_table_device_view output_values,
-                          cudf::aggregation::Kind const* aggs,
-                          rmm::cuda_stream_view stream)
-{
-  auto const shmem_size = compute_shared_memory_size(compute_aggs_kernel, grid_size);
-  // For each aggregation, need two pointers to arrays in shmem
-  // One where the aggregation is performed, one indicating the validity of the aggregation
-  auto shmem_agg_pointer_size =
-    round_to_multiple_of_8(sizeof(std::byte*) * output_values.num_columns());
-  // The rest of shmem is utilized for the actual arrays in shmem
-  auto shmem_agg_size = shmem_size - shmem_agg_pointer_size * 2;
-  compute_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, shmem_size, stream>>>(
-    num_input_rows,
-    local_mapping_index,
-    global_mapping_index,
-    block_cardinality,
-    input_values,
-    output_values,
-    aggs,
-    shmem_agg_size,
-    shmem_agg_pointer_size);
-}
-
-/**
- * @brief Computes all aggregations from `requests` that require a single pass
- * over the data and stores the results in `sparse_results`
- */
-template <typename SetType>
-rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
-  cudf::table_view const& keys,
-  cudf::host_span<cudf::groupby::aggregation_request const> requests,
-  cudf::detail::result_cache* sparse_results,
-  SetType& global_set,
-  rmm::cuda_stream_view stream)
-{
-  // GROUPBY_SHM_MAX_ELEMENTS with 0.7 occupancy
-  auto constexpr shared_set_capacity =
-    static_cast<std::size_t>(static_cast<double>(GROUPBY_SHM_MAX_ELEMENTS) * 1.43);
-  using extent_type            = cuco::extent<cudf::size_type, shared_set_capacity>;
-  using shared_set_type        = cuco::static_set<cudf::size_type,
-                                           extent_type,
-                                           cuda::thread_scope_block,
-                                           typename SetType::key_equal,
-                                           probing_scheme_type,
-                                           cuco::cuda_allocator<cudf::size_type>,
-                                           cuco::storage<GROUPBY_WINDOW_SIZE>>;
-  using shared_set_ref_type    = typename shared_set_type::ref_type<>;
-  auto constexpr window_extent = cuco::make_window_extent<shared_set_ref_type>(extent_type{});
-
-  auto const num_input_rows = keys.num_rows();
-
-  auto global_set_ref  = global_set.ref(cuco::op::insert_and_find);
-  auto const grid_size = max_occupancy_grid_size(
-    compute_mapping_indices<shared_set_ref_type, decltype(global_set_ref), decltype(window_extent)>,
-    num_input_rows);
-  // 'local_mapping_index' maps from the global row index of the input table to the row index of
-  // the local pre-aggregate table
-  rmm::device_uvector<cudf::size_type> local_mapping_index(num_input_rows, stream);
-  // 'global_mapping_index' maps from  the local pre-aggregate table to the row index of
-  // global aggregate table
-  rmm::device_uvector<cudf::size_type> global_mapping_index(grid_size * GROUPBY_SHM_MAX_ELEMENTS,
-                                                            stream);
-  rmm::device_uvector<cudf::size_type> block_cardinality(grid_size, stream);
-  rmm::device_scalar<bool> direct_aggregations(false, stream);
-  compute_mapping_indices<shared_set_ref_type>
-    <<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream>>>(global_set_ref,
-                                                   num_input_rows,
-                                                   window_extent,
-                                                   local_mapping_index.data(),
-                                                   global_mapping_index.data(),
-                                                   block_cardinality.data(),
-                                                   direct_aggregations.data());
-  stream.synchronize();
-
-  // 'populated_keys' contains inserted row_indices (keys) of global hash set
-  rmm::device_uvector<cudf::size_type> populated_keys(keys.num_rows(), stream);
-
-  // flatten the aggs to a table that can be operated on by aggregate_row
-  auto const [flattened_values, agg_kinds, aggs] = flatten_single_pass_aggs(requests);
-  auto const d_aggs                              = cudf::detail::make_device_uvector_async(
-    agg_kinds, stream, rmm::mr::get_current_device_resource());
-  // make table that will hold sparse results
-  cudf::table sparse_table = create_sparse_results_table(flattened_values,
-                                                         d_aggs.data(),
-                                                         agg_kinds,
-                                                         direct_aggregations.value(stream),
-                                                         global_set,
-                                                         populated_keys,
-                                                         stream);
-  // prepare to launch kernel to do the actual aggregation
-  auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
-  auto d_values       = table_device_view::create(flattened_values, stream);
-
-  compute_aggregations(grid_size,
-                       num_input_rows,
-                       local_mapping_index.data(),
-                       global_mapping_index.data(),
-                       block_cardinality.data(),
-                       *d_values,
-                       *d_sparse_table,
-                       d_aggs.data(),
-                       stream);
-
-  if (direct_aggregations.value(stream)) {
-    int stride = GROUPBY_BLOCK_SIZE * grid_size;
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator(0),
-                       keys.num_rows(),
-                       compute_direct_aggregates{global_set_ref,
-                                                 *d_values,
-                                                 *d_sparse_table,
-                                                 d_aggs.data(),
-                                                 block_cardinality.data(),
-                                                 stride});
-    extract_populated_keys(global_set, populated_keys, stream);
-  }
-
-  // Add results back to sparse_results cache
-  auto sparse_result_cols = sparse_table.release();
-  for (size_t i = 0; i < aggs.size(); i++) {
-    // Note that the cache will make a copy of this temporary aggregation
-    sparse_results->add_result(
-      flattened_values.column(i), *aggs[i], std::move(sparse_result_cols[i]));
-  }
-
-  return populated_keys;
-}
-
-/**
- * @brief Computes and returns a device vector containing all populated keys in
- * `key_set`.
- */
-template <typename SetType>
-rmm::device_uvector<size_type> extract_populated_keys(SetType const& key_set,
-                                                      size_type num_keys,
-                                                      rmm::cuda_stream_view stream)
-{
-  rmm::device_uvector<size_type> populated_keys(num_keys, stream);
-  auto const keys_end = key_set.retrieve_all(populated_keys.begin(), stream.value());
-
-  populated_keys.resize(std::distance(populated_keys.begin(), keys_end), stream);
-  return populated_keys;
 }
 
 /**
