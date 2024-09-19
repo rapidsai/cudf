@@ -54,6 +54,30 @@ class file_source : public datasource {
     }
   }
 
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    lseek(_file.desc(), offset, SEEK_SET);
+
+    // Clamp length to available data
+    ssize_t const read_size = std::min(size, _file.size() - offset);
+
+    std::vector<uint8_t> v(read_size);
+    CUDF_EXPECTS(read(_file.desc(), v.data(), read_size) == read_size, "read failed");
+    return buffer::create(std::move(v));
+  }
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    lseek(_file.desc(), offset, SEEK_SET);
+
+    // Clamp length to available data
+    auto const read_size = std::min(size, _file.size() - offset);
+
+    CUDF_EXPECTS(read(_file.desc(), dst, read_size) == static_cast<ssize_t>(read_size),
+                 "read failed");
+    return read_size;
+  }
+
   ~file_source() override = default;
 
   [[nodiscard]] bool supports_device_read() const override
@@ -196,7 +220,7 @@ class memory_mapped_source : public file_source {
     auto const actual_register_size =
       std::min(register_size != 0 ? register_size : _file.size() - _map_offset, _map_size);
 
-    auto const result = cudaHostRegister(_map_addr, actual_register_size, cudaHostRegisterDefault);
+    auto const result = cudaHostRegister(_map_addr, actual_register_size, cudaHostRegisterReadOnly);
     if (result == cudaSuccess) {
       _is_map_registered = true;
     } else {
@@ -243,41 +267,6 @@ class memory_mapped_source : public file_source {
   size_t _map_size        = 0;
   void* _map_addr         = nullptr;
   bool _is_map_registered = false;
-};
-
-/**
- * @brief Implementation class for reading from a file using `read` calls
- *
- * Potentially faster than `memory_mapped_source` when only a small portion of the file is read
- * through the host.
- */
-class direct_read_source : public file_source {
- public:
-  explicit direct_read_source(char const* filepath) : file_source(filepath) {}
-
-  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
-  {
-    lseek(_file.desc(), offset, SEEK_SET);
-
-    // Clamp length to available data
-    ssize_t const read_size = std::min(size, _file.size() - offset);
-
-    std::vector<uint8_t> v(read_size);
-    CUDF_EXPECTS(read(_file.desc(), v.data(), read_size) == read_size, "read failed");
-    return buffer::create(std::move(v));
-  }
-
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
-  {
-    lseek(_file.desc(), offset, SEEK_SET);
-
-    // Clamp length to available data
-    auto const read_size = std::min(size, _file.size() - offset);
-
-    CUDF_EXPECTS(read(_file.desc(), dst, read_size) == static_cast<ssize_t>(read_size),
-                 "read failed");
-    return read_size;
-  }
 };
 
 /**
@@ -443,7 +432,7 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
 #ifdef CUFILE_FOUND
   if (cufile_integration::is_always_enabled()) {
     // avoid mmap as GDS is expected to be used for most reads
-    return std::make_unique<direct_read_source>(filepath.c_str());
+    return std::make_unique<file_source>(filepath.c_str());
   }
 #endif
   // Use our own memory mapping implementation for direct file reads
