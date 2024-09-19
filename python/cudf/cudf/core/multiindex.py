@@ -36,7 +36,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Hashable
 
     from typing_extensions import Self
 
@@ -1041,9 +1041,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
 
     @_performance_tracking
-    def get_level_values(self, level) -> cudf.Index:
+    def _level_to_ca_label(self, level) -> tuple[Hashable, int]:
         """
-        Return the values at the requested level
+        Convert a level to a ColumAccessor label and an integer position.
+
+        Useful if self._column_names != self.names.
 
         Parameters
         ----------
@@ -1051,10 +1053,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         Returns
         -------
-        An Index containing the values at the requested level.
+        tuple[Hashable, int]
+            (ColumnAccessor label corresponding to level, integer position of the level)
         """
-        colnames = self._data.names
-        if level not in colnames:
+        colnames = self._column_names
+        try:
+            level_idx = colnames.index(level)
+        except ValueError:
             if isinstance(level, int):
                 if level < 0:
                     level = level + len(colnames)
@@ -1067,8 +1072,22 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 level = colnames[level_idx]
             else:
                 raise KeyError(f"Level not found: '{level}'")
-        else:
-            level_idx = colnames.index(level)
+        return level, level_idx
+
+    @_performance_tracking
+    def get_level_values(self, level) -> cudf.Index:
+        """
+        Return the values at the requested level
+
+        Parameters
+        ----------
+        level : int or label
+
+        Returns
+        -------
+        An Index containing the values at the requested level.
+        """
+        level, level_idx = self._level_to_ca_label(level)
         level_values = cudf.Index._from_column(
             self._data[level], name=self.names[level_idx]
         )
@@ -1421,57 +1440,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
 
     @_performance_tracking
-    def _poplevels(self, level) -> None | MultiIndex | cudf.Index:
-        """
-        Remove and return the specified levels from self.
-
-        Parameters
-        ----------
-        level : level name or index, list
-            One or more levels to remove
-
-        Returns
-        -------
-        Index composed of the removed levels. If only a single level
-        is removed, a flat index is returned. If no levels are specified
-        (empty list), None is returned.
-        """
-        if not pd.api.types.is_list_like(level):
-            level = (level,)
-
-        ilevels = sorted(self._level_index_from_level(lev) for lev in level)
-
-        if not ilevels:
-            return None
-
-        popped_data = {}
-        popped_names = []
-        names = list(self.names)
-
-        # build the popped data and names
-        for i in ilevels:
-            n = self._data.names[i]
-            popped_data[n] = self._data[n]
-            popped_names.append(self.names[i])
-
-        # pop the levels out from self
-        # this must be done iterating backwards
-        for i in reversed(ilevels):
-            n = self._data.names[i]
-            names.pop(i)
-            popped_data[n] = self._data.pop(n)
-
-        # construct the popped result
-        popped = cudf.core.index._index_from_data(popped_data)
-        popped.names = popped_names
-
-        # update self
-        self.names = names
-        self._levels, self._codes = _compute_levels_and_codes(self._data)
-
-        return popped
-
-    @_performance_tracking
     def swaplevel(self, i=-2, j=-1) -> Self:
         """
         Swap level i with level j.
@@ -1523,7 +1491,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return midx
 
     @_performance_tracking
-    def droplevel(self, level=-1) -> MultiIndex | cudf.Index:
+    def droplevel(self, level=-1) -> Self | cudf.Index:
         """
         Removes the specified levels from the MultiIndex.
 
@@ -1578,11 +1546,24 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         >>> idx.droplevel(["first", "second"])
         Index([0, 1, 2, 0, 1, 2], dtype='int64', name='third')
         """
-        mi = self.copy(deep=False)
-        mi._poplevels(level)
-        if mi.nlevels == 1:
-            return mi.get_level_values(mi.names[0])
+        if is_scalar(level):
+            level = (level,)
+        elif len(level) == 0:
+            return self
+
+        new_names = list(self.names)
+        new_data = self._data.copy(deep=False)
+        for i in sorted(
+            (self._level_index_from_level(lev) for lev in level), reverse=True
+        ):
+            new_names.pop(i)
+            new_data.pop(self._data.names[i])
+
+        if len(new_data) == 1:
+            return cudf.core.index._index_from_data(new_data)
         else:
+            mi = MultiIndex._from_data(new_data)
+            mi.names = new_names
             return mi
 
     @_performance_tracking
@@ -1886,7 +1867,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         else:
             return NotImplemented
 
-    def _level_index_from_level(self, level):
+    def _level_index_from_level(self, level) -> int:
         """
         Return level index from given level name or index
         """
