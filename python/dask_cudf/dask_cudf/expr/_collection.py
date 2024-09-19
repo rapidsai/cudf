@@ -202,27 +202,56 @@ get_collection_type.register(cudf.BaseIndex, lambda _: Index)
 ##
 
 
-try:
-    from dask_expr._backends import create_array_collection
+def _create_array_collection_with_meta(expr):
+    # NOTE: This is the CPU/GPU compatible version of
+    # `dask_expr._backends.create_array_collection`.
+    # This can be removed if dask#11017 is resolved
+    # (See: https://github.com/dask/dask/issues/11017)
+    import numpy as np
 
-    @get_collection_type.register_lazy("cupy")
-    def _register_cupy():
-        import cupy
+    import dask.array as da
+    from dask.blockwise import Blockwise
+    from dask.highlevelgraph import HighLevelGraph
 
-        @get_collection_type.register(cupy.ndarray)
-        def get_collection_type_cupy_array(_):
-            return create_array_collection
+    result = expr.optimize()
+    dsk = result.__dask_graph__()
+    name = result._name
+    meta = result._meta
+    divisions = result.divisions
+    chunks = ((np.nan,) * (len(divisions) - 1),) + tuple(
+        (d,) for d in meta.shape[1:]
+    )
+    if len(chunks) > 1:
+        if isinstance(dsk, HighLevelGraph):
+            layer = dsk.layers[name]
+        else:
+            # dask-expr provides a dict only
+            layer = dsk
+        if isinstance(layer, Blockwise):
+            layer.new_axes["j"] = chunks[1][0]
+            layer.output_indices = layer.output_indices + ("j",)
+        else:
+            suffix = (0,) * (len(chunks) - 1)
+            for i in range(len(chunks[0])):
+                layer[(name, i) + suffix] = layer.pop((name, i))
 
-    @get_collection_type.register_lazy("cupyx")
-    def _register_cupyx():
-        # Needed for cuml
-        from cupyx.scipy.sparse import spmatrix
+    return da.Array(dsk, name=name, chunks=chunks, meta=meta)
 
-        @get_collection_type.register(spmatrix)
-        def get_collection_type_csr_matrix(_):
-            return create_array_collection
 
-except ImportError:
-    # Older version of dask-expr.
-    # Implicit conversion to array wont work.
-    pass
+@get_collection_type.register_lazy("cupy")
+def _register_cupy():
+    import cupy
+
+    @get_collection_type.register(cupy.ndarray)
+    def get_collection_type_cupy_array(_):
+        return _create_array_collection_with_meta
+
+
+@get_collection_type.register_lazy("cupyx")
+def _register_cupyx():
+    # Needed for cuml
+    from cupyx.scipy.sparse import spmatrix
+
+    @get_collection_type.register(spmatrix)
+    def get_collection_type_csr_matrix(_):
+        return _create_array_collection_with_meta
