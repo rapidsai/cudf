@@ -371,6 +371,7 @@ build_tree(device_json_column& root,
            rmm::cuda_stream_view stream,
            rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
   auto unique_col_ids = cudf::detail::make_host_vector_async(d_unique_col_ids, stream);
   auto column_categories =
@@ -676,6 +677,7 @@ void scatter_offsets(
   std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>& columns,
   rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   auto const num_nodes   = col_ids.size();
   auto const num_columns = d_column_tree.node_categories.size();
   // move columns data to device.
@@ -979,6 +981,7 @@ build_tree2(device_json_column& root,
             rmm::cuda_stream_view stream,
             rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   // TODO: cleanup: is_enabled_lines processing should be at earlier stage in this file.
   bool const is_enabled_lines                 = options.is_enabled_lines();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
