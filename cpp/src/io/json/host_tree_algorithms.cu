@@ -310,6 +310,20 @@ std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_optio
     options.get_dtypes());
 }
 
+std::pair<thrust::host_vector<uint8_t>,
+          std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>>
+build_tree2(device_json_column& root,
+            std::vector<uint8_t> const& is_str_column_all_nulls,
+            tree_meta_t& d_column_tree,
+            std::vector<NodeIndexT>& unique_col_ids,
+            std::vector<size_type> const& max_row_offsets,
+            std::vector<std::string> const& column_names,
+            NodeIndexT row_array_parent_col_id,
+            bool is_array_of_arrays,
+            cudf::io::json_reader_options const& options,
+            rmm::cuda_stream_view stream,
+            rmm::device_async_resource_ref mr);
+
 /**
  * @brief Constructs `d_json_column` from node tree representation
  * Newly constructed columns are insert into `root`'s children.
@@ -385,9 +399,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     cudf::detail::make_std_vector_async(d_column_tree.node_categories, stream);
   auto column_parent_ids =
     cudf::detail::make_std_vector_async(d_column_tree.parent_node_ids, stream);
-  auto column_levels = cudf::detail::make_std_vector_async(d_column_tree.node_levels, stream);
-  auto column_range_beg =
-    cudf::detail::make_std_vector_async(d_column_tree.node_range_begin, stream);
+  auto column_levels    = cudf::detail::make_std_vector_async(d_column_tree.node_levels, stream);
   auto column_range_end = cudf::detail::make_std_vector_async(d_column_tree.node_range_end, stream);
   auto max_row_offsets  = cudf::detail::make_std_vector_async(d_max_row_offsets, stream);
   std::vector<std::string> column_names = copy_strings_to_host_sync(
@@ -413,6 +425,60 @@ void make_device_json_column(device_span<SymbolT const> input,
                               : name;
                    });
   }
+
+  std::vector<uint8_t> is_str_column_all_nulls{};
+  if (is_enabled_mixed_types_as_string) {
+    is_str_column_all_nulls = cudf::detail::make_std_vector_sync(
+      is_all_nulls_each_column(input, d_column_tree, tree, col_ids, options, stream), stream);
+  }
+  auto [ignore_vals, columns] = build_tree2(root,
+                                            is_str_column_all_nulls,
+                                            d_column_tree,
+                                            unique_col_ids,
+                                            max_row_offsets,
+                                            column_names,
+                                            row_array_parent_col_id,
+                                            is_array_of_arrays,
+                                            options,
+                                            stream,
+                                            mr);
+  if (ignore_vals.empty()) return;
+  // TODO: use this common code for both functions.
+  scatter_offsets(tree,
+                  col_ids,
+                  row_offsets,
+                  node_ids,
+                  sorted_col_ids,
+                  d_column_tree,
+                  ignore_vals,
+                  columns,
+                  stream);
+}
+
+std::pair<thrust::host_vector<uint8_t>,
+          std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>>
+build_tree2(device_json_column& root,
+            std::vector<uint8_t> const& is_str_column_all_nulls,
+            tree_meta_t& d_column_tree,
+            std::vector<NodeIndexT>& unique_col_ids,
+            std::vector<size_type> const& max_row_offsets,
+            std::vector<std::string> const& column_names,
+            NodeIndexT row_array_parent_col_id,
+            bool is_array_of_arrays,
+            cudf::io::json_reader_options const& options,
+            rmm::cuda_stream_view stream,
+            rmm::device_async_resource_ref mr)
+{
+  // TODO: cleanup: is_enabled_lines processing should be at earlier stage in this file.
+  bool const is_enabled_lines                 = options.is_enabled_lines();
+  bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
+  auto num_columns                            = d_column_tree.node_categories.size();
+  auto column_categories =
+    cudf::detail::make_std_vector_async(d_column_tree.node_categories, stream);
+  auto column_parent_ids =
+    cudf::detail::make_std_vector_async(d_column_tree.parent_node_ids, stream);
+  auto column_range_beg =
+    cudf::detail::make_std_vector_async(d_column_tree.node_range_begin, stream);
 
   auto to_json_col_type = [](auto category) {
     switch (category) {
@@ -506,7 +572,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   // Pruning: iterate through schema and mark only those columns and enforce type.
   // NoPruning: iterate through schema and enforce type.
 
-  if (adj[parent_node_sentinel].empty()) return;  // for empty file
+  if (adj[parent_node_sentinel].empty()) return {};  // for empty file
   CUDF_EXPECTS(adj[parent_node_sentinel].size() == 1, "Should be 1");
   std::vector<NodeT> expected_types(num_columns, NUM_NODE_CLASSES);
 
@@ -586,7 +652,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   };
   if (is_array_of_arrays) {
     std::cout << "list tree\n";
-    if (adj[adj[parent_node_sentinel][0]].empty()) return;  // TODO: verify if needed?
+    if (adj[adj[parent_node_sentinel][0]].empty()) return {};  // TODO: verify if needed?
     auto root_list_col_id =
       is_enabled_lines ? adj[parent_node_sentinel][0] : adj[adj[parent_node_sentinel][0]][0];
     std::visit(cudf::detail::visitor_overload{
@@ -672,13 +738,13 @@ void make_device_json_column(device_span<SymbolT const> input,
       : (adj[adj[parent_node_sentinel][0]].empty() ? -1 : adj[adj[parent_node_sentinel][0]][0]);
   // expected_types[named_level] = NC_STRUCT;
 
-  auto const is_str_column_all_nulls = [&, &column_tree = d_column_tree]() {
-    if (is_enabled_mixed_types_as_string) {
-      return cudf::detail::make_host_vector_sync(
-        is_all_nulls_each_column(input, column_tree, tree, col_ids, options, stream), stream);
-    }
-    return cudf::detail::make_empty_host_vector<uint8_t>(0, stream);
-  }();
+  // auto const is_str_column_all_nulls = [&, &column_tree = d_column_tree]() {
+  //   if (is_enabled_mixed_types_as_string) {
+  //     return cudf::detail::make_host_vector_sync(
+  //       is_all_nulls_each_column(input, column_tree, tree, col_ids, options, stream), stream);
+  //   }
+  //   return cudf::detail::make_empty_host_vector<uint8_t>(0, stream);
+  // }();
 
   auto handle_mixed_types = [&column_categories,
                              &is_str_column_all_nulls,
@@ -875,16 +941,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                   cudaMemcpyDefault,
                   stream.value());
 
-  // TODO: use this common code for both functions.
-  scatter_offsets(tree,
-                  col_ids,
-                  row_offsets,
-                  node_ids,
-                  sorted_col_ids,
-                  d_column_tree,
-                  is_pruned,
-                  columns,
-                  stream);
+  return {is_pruned, columns};
 }
 }  // namespace experimental
 
