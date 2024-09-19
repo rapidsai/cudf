@@ -44,3 +44,11 @@ def test_ewma(data, params, adjust):
     got = gsr.ewm(**params).mean()
 
     assert_eq(expect, got)
+
+    gdf = cudf.DataFrame({"foo": data, "bar": data}, dtype="float64")
+    pdf = gdf.to_pandas()
+
+    expect = gdf.ewm(**params).mean()
+    got = pdf.ewm(**params).mean()
+
+    assert_eq(expect, got)

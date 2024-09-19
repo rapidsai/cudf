@@ -190,8 +190,8 @@ class ExponentialMovingWindow(_RollingBase):
         # passing them in.
         to_libcudf_column = sr._column.astype("float64").nans_to_nulls()
 
-        return self.obj._from_data_like_self(
-            self.obj._data._from_columns_like_self(
+        return sr._from_data_like_self(
+            sr._data._from_columns_like_self(
                 [
                     scan(
                         agg_name,
