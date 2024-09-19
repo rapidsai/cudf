@@ -12,7 +12,6 @@
 # the License.
 # =============================================================================
 
-
 set(cython_sources capitalize.pyx case.pyx char_types.pyx contains.pyx extract.pyx find.pyx
                    regex_flags.pyx regex_program.pyx repeat.pyx replace.pyx slice.pyx
 )
