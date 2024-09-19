@@ -57,7 +57,7 @@ struct h_column_tree {
 
 // debug printing
 template <typename T>
-void print(cudf::host_span<T const> vec, std::string name, rmm::cuda_stream_view stream)
+void print(cudf::host_span<T const> vec, std::string name)
 {
   std::cout << name << " = ";
   for (auto e : vec) {
@@ -91,65 +91,41 @@ bool check_equality(cuio_json::tree_meta_t& d_a,
   stream.synchronize();
 
   auto num_nodes = a.parent_node_ids.size();
-  if (b.rowidx.size() != num_nodes + 1) { return false; }
+  if(num_nodes > 1) {
+    if (b.rowidx.size() != num_nodes + 1) { return false; }
 
-  for (auto pos = b.rowidx[0]; pos < b.rowidx[1]; pos++) {
-    auto v = b.colidx[pos];
-    if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) {printf("1\n"); return false; }
-  }
-  for (size_t u = 1; u < num_nodes; u++) {
-    auto v = b.colidx[b.rowidx[u]];
-    if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) {printf("2\n"); return false; }
-    
-    for (auto pos = b.rowidx[u] + 1; pos < b.rowidx[u + 1]; pos++) {
-      v = b.colidx[pos];
-      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) {printf("3\n"); return false; }
+    for (auto pos = b.rowidx[0]; pos < b.rowidx[1]; pos++) {
+      auto v = b.colidx[pos];
+      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) {printf("1\n"); return false; }
+    }
+    for (size_t u = 1; u < num_nodes; u++) {
+      auto v = b.colidx[b.rowidx[u]];
+      if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) {printf("2\n"); return false; }
+      
+      for (auto pos = b.rowidx[u] + 1; pos < b.rowidx[u + 1]; pos++) {
+        v = b.colidx[pos];
+        if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) {printf("3\n"); return false; }
+      }
+    }
+    for (size_t u = 0; u < num_nodes; u++) {
+      if (a.node_categories[b.column_ids[u]] != b.categories[u]) {printf("4\n"); return false; }
+    }
+    for (size_t u = 0; u < num_nodes; u++) {
+      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {printf("5\n"); return false; }
     }
   }
-  for (size_t u = 0; u < num_nodes; u++) {
-    if (a.node_categories[b.column_ids[u]] != b.categories[u]) {printf("4\n"); return false; }
-  }
+  else if (num_nodes == 1) {
+    if (b.rowidx.size() != num_nodes + 1) { return false; }
 
-  std::printf("rowidx = \n");
-  for (size_t u = 0; u < num_nodes; u++)
-    std::printf("%d ", b.rowidx[u]);
-  std::printf("\n");
-  std::printf("colidx = \n");
-  for (size_t u = 0; u < num_nodes; u++) {
-    for (int pos = b.rowidx[u]; pos < b.rowidx[u + 1]; pos++)
-      std::printf("%d ", b.colidx[pos]);
-  }
-  std::printf("\n");
-  std::printf("a.parent_node_ids = \n");
-  for (size_t u = 0; u < num_nodes; u++)
-    std::printf("%d ", a.parent_node_ids[u]);
-  std::printf("\nb.column_ids = \n");
-  for (size_t u = 0; u < num_nodes; u++)
-    std::printf("%d ", b.column_ids[u]);
-  std::printf("\n");
+    if(b.rowidx[0] != 0 || b.rowidx[1] != 1) return false;
+    if(!b.colidx.empty()) return false;
+    for (size_t u = 0; u < num_nodes; u++) {
+      if (a.node_categories[b.column_ids[u]] != b.categories[u]) {printf("4\n"); return false; }
+    }
 
-  std::printf("a.node_categories = \n");
-  for (size_t u = 0; u < num_nodes; u++)
-    std::printf("%d ", a.node_categories[b.column_ids[u]]);
-  std::printf("\nb.categories = \n");
-  for (size_t u = 0; u < num_nodes; u++)
-    std::printf("%d ", b.categories[u]);
-  std::printf("\n");
-
-  std::printf("a_max_row_offsets = ");
-  for (size_t u = 0; u < num_nodes; u++)
-    std::printf("%d ", a_max_row_offsets[u]);
-  std::printf("\n");
-  std::printf("permuted a_max_row_offsets = ");
-  for (size_t u = 0; u < num_nodes; u++)
-    std::printf("%d ", a_max_row_offsets[b.column_ids[u]]);
-  std::printf("\nb_max_row_offsets = ");
-  for (size_t u = 0; u < num_nodes; u++)
-    std::printf("%d ", b_max_row_offsets[u]);
-  std::printf("\n");
-
-  for (size_t u = 0; u < num_nodes; u++) {
-    if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {printf("5\n"); return false; }
+    for (size_t u = 0; u < num_nodes; u++) {
+      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {printf("5\n"); return false; }
+    }
   }
   return true;
 }
@@ -229,8 +205,6 @@ void run_test(std::string const& input, bool enable_lines = true)
                                                   row_array_parent_col_id,
                                                   stream);
 
-  std::printf(
-    "\n========================================================================================\n");
   auto [d_column_tree_csr, d_column_tree_properties] =
     cudf::io::json::experimental::detail::reduce_to_column_tree(
       gpu_tree, gpu_col_id, gpu_row_offsets, is_array_of_arrays, row_array_parent_col_id, stream);
@@ -243,7 +217,7 @@ void run_test(std::string const& input, bool enable_lines = true)
 
 struct JsonColumnTreeTests : public cudf::test::BaseFixture {};
 
-TEST_F(JsonColumnTreeTests, SimpleLines1)
+TEST_F(JsonColumnTreeTests, JSONL1)
 {
   std::string const input =
     R"(  {}
@@ -252,7 +226,7 @@ TEST_F(JsonColumnTreeTests, SimpleLines1)
   run_test(input);
 }
 
-TEST_F(JsonColumnTreeTests, SimpleLines2)
+TEST_F(JsonColumnTreeTests, JSONL2)
 {
   std::string const input =
     R"(  {}
@@ -268,7 +242,7 @@ TEST_F(JsonColumnTreeTests, SimpleLines2)
   run_test(input);
 }
 
-TEST_F(JsonColumnTreeTests, SimpleLines3)
+TEST_F(JsonColumnTreeTests, JSONL3)
 {
   std::string const input = R"(
   { "Root": { "Key": [ { "EE": "A" } ] } }
@@ -278,7 +252,7 @@ TEST_F(JsonColumnTreeTests, SimpleLines3)
   run_test(input);
 }
 
-TEST_F(JsonColumnTreeTests, SimpleLines4)
+TEST_F(JsonColumnTreeTests, JSONL4)
 {
   std::string json_stringl = R"(
     {"a": 1, "b": {"0": "abc", "1": [-1.]}, "c": true}
@@ -289,7 +263,7 @@ TEST_F(JsonColumnTreeTests, SimpleLines4)
   run_test(json_stringl);
 }
 
-TEST_F(JsonColumnTreeTests, SimpleLines5)
+TEST_F(JsonColumnTreeTests, JSONL5)
 {
   std::string json_stringl = R"(
     { "foo1": [1,2,3], "bar": 123 }
@@ -302,7 +276,7 @@ TEST_F(JsonColumnTreeTests, SimpleLines5)
   run_test(json_stringl);
 }
 
-TEST_F(JsonColumnTreeTests, SimpleLines6)
+TEST_F(JsonColumnTreeTests, JSONL6)
 {
   std::string json_stringl = R"(
     { "foo1": [1,2,3], "bar": 123 }
@@ -337,3 +311,53 @@ TEST_F(JsonColumnTreeTests, JSON2)
   run_test(json_string, false);
 }
 
+TEST_F(JsonColumnTreeTests, JSONLA1)
+{
+  std::string json_string = 
+    R"([123, [1,2,3]]
+       [456, null,  { "a": 1 }])";
+  run_test(json_string);
+}
+
+TEST_F(JsonColumnTreeTests, JSONA1)
+{
+  std::string json_string = R"([[[1,2,3], null, 123],
+              [null, { "a": 1 }, 456 ]])";
+  run_test(json_string, false);
+}
+
+TEST_F(JsonColumnTreeTests, CornerCase1)
+{
+  std::string json_string = R"([])";
+  run_test(json_string, false);
+}
+
+TEST_F(JsonColumnTreeTests, CornerCase2)
+{
+  std::string json_string = R"([123])";
+  run_test(json_string, true);
+}
+
+TEST_F(JsonColumnTreeTests, CornerCase3)
+{
+  std::string json_string = R"([[[]]])";
+  run_test(json_string, false);
+}
+
+TEST_F(JsonColumnTreeTests, CornerCase4)
+{
+  std::string json_string = R"([[], [], []])";
+  run_test(json_string, false);
+}
+
+TEST_F(JsonColumnTreeTests, CornerCase5)
+{
+  std::string json_string = R"([[1, 2, 3], [4, 5, null], []])";
+  run_test(json_string, true);
+}
+
+TEST_F(JsonColumnTreeTests, CornerCase6)
+{
+  std::string json_string = R"([[]])";
+  run_test(json_string, true);
+}
