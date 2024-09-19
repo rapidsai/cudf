@@ -14,10 +14,6 @@
  * limitations under the License.
  */
 
-#include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
-
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/detail/tdigest/tdigest.hpp>
@@ -26,17 +22,16 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <nvbench/nvbench.cuh>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 
-class TDigest : public cudf::benchmark {};
-
-static void BM_tdigest_merge(benchmark::State& state)
+void bm_tdigest_merge(nvbench::state& state)
 {
-  cudf::size_type const num_tdigests{(cudf::size_type)state.range(0)};
-  cudf::size_type const tdigest_size{(cudf::size_type)state.range(1)};
-  cudf::size_type const tdigests_per_group{(cudf::size_type)state.range(2)};
-  cudf::size_type const max_centroids{(cudf::size_type)state.range(3)};
+  cudf::size_type const num_tdigests = state.get_int64("num_tdigests");
+  cudf::size_type const tdigest_size = state.get_int64("tdigest_size");  
+  cudf::size_type const tdigests_per_group = state.get_int64("tdigests_per_group");
+  cudf::size_type const max_centroids = state.get_int64("max_centroids");
   auto const num_groups      = num_tdigests / tdigests_per_group;
   auto const total_centroids = num_tdigests * tdigest_size;
 
@@ -48,7 +43,7 @@ static void BM_tdigest_merge(benchmark::State& state)
   // construct inner means/weights
   auto val_iter = cudf::detail::make_counting_transform_iterator(
     0, cuda::proclaim_return_type<double>([tdigest_size](cudf::size_type i) {
-      return static_cast<double>(base_value + i % tdigest_size);
+      return static_cast<double>(base_value + (i % tdigest_size));
     }));
   auto one_iter = thrust::make_constant_iterator(1);
   cudf::test::fixed_width_column_wrapper<double> means(val_iter, val_iter + total_centroids);
@@ -99,26 +94,28 @@ static void BM_tdigest_merge(benchmark::State& state)
                group_label_iter + num_tdigests,
                group_labels.begin());
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, stream);
+  state.add_element_count(total_centroids);
 
-    auto result = cudf::tdigest::detail::group_merge_tdigest(
-      tdigest, group_offsets, group_labels, num_groups, max_centroids, stream, mr);
-  }
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
+  [&](nvbench::launch& launch, auto& timer) {
+      timer.start();
+      auto result = cudf::tdigest::detail::group_merge_tdigest(
+        tdigest, group_offsets, group_labels, num_groups, max_centroids, stream, mr);
+      timer.stop();
+    });  
 }
 
-#define TDIGEST_BENCHMARK_DEFINE(                                           \
-  name, num_tdigests, tdigest_size, tdigests_per_group, max_centroids)      \
-  BENCHMARK_DEFINE_F(TDigest, name)                                         \
-  (::benchmark::State & st) { BM_tdigest_merge(st); }                       \
-  BENCHMARK_REGISTER_F(TDigest, name)                                       \
-    ->Args({num_tdigests, tdigest_size, tdigests_per_group, max_centroids}) \
-    ->Unit(benchmark::kMillisecond)                                         \
-    ->UseManualTime()                                                       \
-    ->Iterations(8)
+NVBENCH_BENCH(bm_tdigest_merge)
+  .set_name("TDigest many tiny groups")
+  .add_int64_axis("num_tdigests", {500'000})
+  .add_int64_axis("tdigest_size", {1, 1000})
+  .add_int64_axis("tdigests_per_group", {1})
+  .add_int64_axis("max_centroids", {10000, 1000});
 
-TDIGEST_BENCHMARK_DEFINE(many_tiny_groups, 1'000'000, 1, 1, 10000);
-TDIGEST_BENCHMARK_DEFINE(many_tiny_groups2, 1'000'000, 1, 1, 1000);
-
-TDIGEST_BENCHMARK_DEFINE(many_small_groups, 3'000'000, 3, 3, 10000);
-TDIGEST_BENCHMARK_DEFINE(many_small_groups2, 3'000'000, 3, 3, 1000);
+NVBENCH_BENCH(bm_tdigest_merge)
+  .set_name("TDigest many small groups")
+  .add_int64_axis("num_tdigests", {500'000})
+  .add_int64_axis("tdigest_size", {1, 1000})
+  .add_int64_axis("tdigests_per_group", {3})
+  .add_int64_axis("max_centroids", {10000, 1000});
