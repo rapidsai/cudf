@@ -37,7 +37,9 @@ over default (threaded) execution. Just to list a few::
 
 Please see `Dask-CUDA's API <https://docs.rapids.ai/api/dask-cuda/stable/>`__
 and `Best Practices <https://docs.rapids.ai/api/dask-cuda/stable/examples/best-practices/>`__
-documentation for detailed information.
+documentation for detailed information. Typical ``LocalCUDACluster`` usage is
+also illustrated in the `Dask cuDF quick-start example
+<https://github.com/rapidsai/cudf/tree/main/python/dask_cudf#quick-start-example>`__.
 
 .. note::
   When running on cloud infrastructure or HPC systems, it is usually best to
@@ -58,12 +60,11 @@ These tools include an intuitive `browser dashboard
 `API for collecting performance profiles
 <https://distributed.dask.org/en/latest/diagnosing-performance.html#performance-reports>`__.
 
-No matter the workflow, using the diagnostic dashboard dashboard is
-strongly recommended. It provides a visual representation of the worker
-resources and compute progress. It also shows basic GPU memory and
-utilization metrics (under the ``GPU`` tab). In order to visualize
-further GPU metrics in JupyterLab, use  `NVDashboard
-<https://github.com/rapidsai/jupyterlab-nvdashboard>`__.
+No matter the workflow, using the dashboard is strongly recommended.
+It provides a visual representation of the worker resources and compute
+progress. It also shows basic GPU memory and utilization metrics (under
+the ``GPU`` tab). In order to visualize further GPU metrics in JupyterLab,
+use `NVDashboard <https://github.com/rapidsai/jupyterlab-nvdashboard>`__.
 
 
 Enable cuDF spilling
