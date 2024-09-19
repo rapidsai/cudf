@@ -846,7 +846,8 @@ build_tree2(device_json_column& root,
             std::vector<uint8_t> const& is_str_column_all_nulls,
             tree_meta_t& d_column_tree,
             device_span<NodeIndexT const> d_unique_col_ids,
-            device_span<size_type const> d_max_row_offsets,            std::vector<std::string> const& column_names,
+            device_span<size_type const> d_max_row_offsets,
+            std::vector<std::string> const& column_names,
             NodeIndexT row_array_parent_col_id,
             bool is_array_of_arrays,
             cudf::io::json_reader_options const& options,
@@ -911,7 +912,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                           stream);
   // auto h_input = cudf::detail::make_host_vector_async(input, stream);
   // print_tree(h_input, d_column_tree, stream);
-  auto num_columns    = d_unique_col_ids.size();
+  auto num_columns                      = d_unique_col_ids.size();
   std::vector<std::string> column_names = copy_strings_to_host_sync(
     input, d_column_tree.node_range_begin, d_column_tree.node_range_end, stream);
   // array of arrays column names
@@ -1362,7 +1363,13 @@ build_tree2(device_json_column& root,
         // if(value_col_ids.size()>1) {
         //   CUDF_FAIL("Mixed Type in Struct");
         // }
-        for (auto child_id : adj[field_id])  // children of field (>1 if mixed)
+        if (value_col_ids.empty()) {
+          // If no column is present, remove the uninitialized column.
+          ref.get().child_columns.erase(name);
+          ref.get().column_order.pop_back();
+          continue;
+        }
+        for (auto child_id : value_col_ids)  // children of field (>1 if mixed)
         {
           if (is_pruned[child_id]) continue;
           columns.try_emplace(child_id, this_ref);
@@ -1396,6 +1403,12 @@ build_tree2(device_json_column& root,
           auto this_ref = std::ref(ref.get().child_columns.at(name));
           std::cout << "after at\n";
           handle_mixed_types(value_col_ids);
+          if (value_col_ids.empty()) {
+            // If no column is present, remove the uninitialized column.
+            ref.get().child_columns.erase(name);
+            ref.get().column_order.pop_back();
+            continue;
+          }
           for (auto child_id : value_col_ids)  // children of field (>1 if mixed)
           {
             if (is_pruned[child_id]) continue;
@@ -1420,6 +1433,10 @@ build_tree2(device_json_column& root,
         // if(child_ids.size()>1) {
         //   CUDF_FAIL("Mixed Type in List");
         // }
+        if (child_ids.empty()) {
+          // If no column is present, remove the uninitialized column.
+          ref.get().child_columns.erase(list_child_name);
+        }
         for (auto child_id : child_ids) {
           if (is_pruned[child_id]) continue;
           columns.try_emplace(child_id, this_ref);
