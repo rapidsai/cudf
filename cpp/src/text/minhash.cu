@@ -47,6 +47,9 @@ namespace nvtext {
 namespace detail {
 namespace {
 
+constexpr cudf::thread_index_type block_size = 256;
+constexpr cudf::thread_index_type tile_size  = block_size;  // cudf::detail::warp_size;
+
 /**
  * @brief Compute the minhash of each string for each seed
  *
@@ -72,21 +75,20 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
                                 hash_value_type* d_hashes)
 {
   auto const idx     = cudf::detail::grid_1d::global_thread_id();
-  auto const str_idx = idx / cudf::detail::warp_size;
+  auto const str_idx = idx / tile_size;
   if (str_idx >= d_strings.size()) { return; }
 
   if (d_strings.is_null(str_idx)) { return; }
 
   auto const d_str    = d_strings.element<cudf::string_view>(str_idx);
   auto const init     = d_str.empty() ? 0 : std::numeric_limits<hash_value_type>::max();
-  auto const lane_idx = idx % cudf::detail::warp_size;
+  auto const lane_idx = idx % tile_size;
 
-  auto warp_hashes = working_memory + (str_idx * cudf::detail::warp_size * seeds.size());
+  auto warp_hashes = working_memory + (str_idx * tile_size * seeds.size());
 
-  for (std::size_t seed_idx = lane_idx; seed_idx < seeds.size();
-       seed_idx += cudf::detail::warp_size) {
-    auto begin = warp_hashes + (seed_idx * cudf::detail::warp_size);
-    thrust::uninitialized_fill(thrust::seq, begin, begin + cudf::detail::warp_size, init);
+  for (std::size_t seed_idx = lane_idx; seed_idx < seeds.size(); seed_idx += tile_size) {
+    auto begin = warp_hashes + (seed_idx * tile_size);
+    thrust::uninitialized_fill(thrust::seq, begin, begin + tile_size, init);
   }
   __syncwarp();
 
@@ -96,7 +98,7 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
   auto const end   = d_str.data() + d_str.size_bytes();
 
   // each lane hashes 'width' substrings of d_str
-  for (auto itr = begin; itr < end; itr += cudf::detail::warp_size) {
+  for (auto itr = begin; itr < end; itr += tile_size) {
     if (cudf::strings::detail::is_utf8_continuation_char(*itr)) { continue; }
     auto const check_str =  // used for counting 'width' characters
       cudf::string_view(itr, static_cast<cudf::size_type>(thrust::distance(itr, end)));
@@ -112,18 +114,17 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
       } else {
         hv = thrust::get<0>(hasher(hash_str));
       }
-      warp_hashes[(seed_idx * cudf::detail::warp_size) + lane_idx] =
-        min(hv, warp_hashes[(seed_idx * cudf::detail::warp_size) + lane_idx]);
+      warp_hashes[(seed_idx * tile_size) + lane_idx] =
+        cuda::std::min(hv, warp_hashes[(seed_idx * tile_size) + lane_idx]);
     }
   }
-  __syncwarp();
+  //__syncwarp();
+  __syncthreads();
 
   // compute final result
-  for (std::size_t seed_idx = lane_idx; seed_idx < seeds.size();
-       seed_idx += cudf::detail::warp_size) {
-    auto begin = warp_hashes + (seed_idx * cudf::detail::warp_size);
-    auto hv =
-      thrust::reduce(thrust::seq, begin, begin + cudf::detail::warp_size, init, thrust::minimum{});
+  for (std::size_t seed_idx = lane_idx; seed_idx < seeds.size(); seed_idx += tile_size) {
+    auto begin = warp_hashes + (seed_idx * tile_size);
+    auto hv    = thrust::reduce(thrust::seq, begin, begin + tile_size, init, thrust::minimum{});
     d_output[seed_idx] = hv;
   }
 }
@@ -159,14 +160,12 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
                                           mr);
   auto d_hashes = hashes->mutable_view().data<hash_value_type>();
 
-  constexpr cudf::thread_index_type block_size = 256;
-
-  auto const wm_size = cudf::util::round_up_safe(
-    seeds.size() * cudf::detail::warp_size * input.size(), static_cast<std::size_t>(block_size));
+  auto const wm_size  = cudf::util::round_up_safe(seeds.size() * tile_size * input.size(),
+                                                 static_cast<std::size_t>(block_size));
   auto working_memory = rmm::device_uvector<hash_value_type>(wm_size, stream);
 
-  cudf::detail::grid_1d grid{
-    static_cast<cudf::thread_index_type>(input.size()) * cudf::detail::warp_size, block_size};
+  cudf::detail::grid_1d grid{static_cast<cudf::thread_index_type>(input.size()) * tile_size,
+                             block_size};
   minhash_kernel<HashFunction><<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     *d_strings, seeds, width, working_memory.data(), d_hashes);
 
