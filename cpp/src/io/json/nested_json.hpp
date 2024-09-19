@@ -339,28 +339,6 @@ reduce_to_column_tree(tree_meta_t& tree,
                       bool is_array_of_arrays,
                       NodeIndexT const row_array_parent_col_id,
                       rmm::cuda_stream_view stream);
-
-/**
- * @brief Retrieves the parse_options to be used for type inference and type casting
- *
- * @param options The reader options to influence the relevant type inference and type casting
- * options
- * @param stream The CUDA stream to which kernels are dispatched
- */
-cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
-                                        rmm::cuda_stream_view stream);
-
-void make_device_json_column(device_span<SymbolT const> input,
-                             tree_meta_t& tree,
-                             device_span<NodeIndexT> col_ids,
-                             device_span<size_type> row_offsets,
-                             device_json_column& root,
-                             bool is_array_of_arrays,
-                             cudf::io::json_reader_options const& options,
-                             rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr);
-
-namespace experimental {
 /**
  * @brief Constructs `d_json_column` from node tree representation
  * Newly constructed columns are insert into `root`'s children.
@@ -389,7 +367,27 @@ void make_device_json_column(device_span<SymbolT const> input,
                              cudf::io::json_reader_options const& options,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr);
+namespace experimental {
+
+void make_device_json_column(device_span<SymbolT const> input,
+                             tree_meta_t& tree,
+                             device_span<NodeIndexT> col_ids,
+                             device_span<size_type> row_offsets,
+                             device_json_column& root,
+                             bool is_array_of_arrays,
+                             cudf::io::json_reader_options const& options,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr);
 }  // namespace experimental
+/**
+ * @brief Retrieves the parse_options to be used for type inference and type casting
+ *
+ * @param options The reader options to influence the relevant type inference and type casting
+ * options
+ * @param stream The CUDA stream to which kernels are dispatched
+ */
+cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
+                                        rmm::cuda_stream_view stream);
 
 /**
  * @brief Parses the given JSON string and generates table from the given input.
