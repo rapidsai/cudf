@@ -42,7 +42,6 @@ DASK_DATAFRAME__QUERY_PLANNING=True python -m pytest \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
   --dist=worksteal \
-  --tb=native \
   .
 popd
 
@@ -53,6 +52,5 @@ DASK_DATAFRAME__QUERY_PLANNING=False python -m pytest \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-legacy.xml" \
   --numprocesses=8 \
   --dist=worksteal \
-  --tb=native \
   .
 popd
