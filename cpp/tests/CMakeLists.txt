@@ -20,6 +20,10 @@ enable_testing()
 include(rapids-test)
 rapids_test_init()
 
+add_library(cudftests_common OBJECT common/cudf_test_impl.cpp common/cudf_test_impl.cu)
+target_link_libraries(cudftests_common PUBLIC cudftestutil GTest::gtest GTest::gmock)
+target_compile_definitions(cudftests_common PUBLIC CUDF_TEST_EXCLUDE_GTEST=0)
+
 # This function takes in a test name and test source and handles setting all of the associated
 # properties and linking to build the test
 function(ConfigureTest CMAKE_TEST_NAME)
@@ -41,9 +45,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
     set(_CUDF_TEST_STREAM_MODE cudf)
   endif()
 
-  add_executable(
-    ${CMAKE_TEST_NAME} ${_CUDF_TEST_UNPARSED_ARGUMENTS} cudf_test_impl.cu cudf_test_impl.cpp
-  )
+  add_executable(${CMAKE_TEST_NAME} ${_CUDF_TEST_UNPARSED_ARGUMENTS})
   set_target_properties(
     ${CMAKE_TEST_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
@@ -58,10 +60,9 @@ function(ConfigureTest CMAKE_TEST_NAME)
 
   target_link_libraries(
     ${CMAKE_TEST_NAME}
-    PRIVATE cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
-            nvtx3::nvtx3-cpp $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
+    PRIVATE cudftestutil cudftests_common GTest::gmock_main GTest::gtest_main nvtx3::nvtx3-cpp
+            $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
   )
-  target_compile_definitions(${CMAKE_TEST_NAME} PRIVATE CUDF_TEST_EXCLUDE_GTEST=0)
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
     NAME ${CMAKE_TEST_NAME}
