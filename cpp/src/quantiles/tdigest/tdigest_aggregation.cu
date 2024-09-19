@@ -1024,10 +1024,11 @@ struct group_key_func {
 // merges all the tdigests within each group. returns a table containing 2 columns:
 // the sorted means and weights.
 template <typename GroupOffsetIter>
-std::pair<rmm::device_uvector<double>, rmm::device_uvector<double>> generate_merged_centroids(tdigest_column_view const& tdv,
-                                                 GroupOffsetIter group_offsets,
-                                                 size_type num_groups,
-                                                 rmm::cuda_stream_view stream)
+std::pair<rmm::device_uvector<double>, rmm::device_uvector<double>> generate_merged_centroids(
+  tdigest_column_view const& tdv,
+  GroupOffsetIter group_offsets,
+  size_type num_groups,
+  rmm::cuda_stream_view stream)
 {
   auto temp_mr = cudf::get_current_device_resource_ref();
 
@@ -1036,7 +1037,7 @@ std::pair<rmm::device_uvector<double>, rmm::device_uvector<double>> generate_mer
   // output is the merged centroids (means, weights)
   rmm::device_uvector<double> output_means(total_merged_centroids, stream, temp_mr);
   rmm::device_uvector<double> output_weights(total_merged_centroids, stream, temp_mr);
-  
+
   // each group represents a collection of tdigest columns. each row is 1 tdigest.
   // within each group, we want to sort all the centroids within all the tdigests
   // in that group, using the means as the key. the "outer offsets" represent the indices of the
@@ -1062,32 +1063,30 @@ std::pair<rmm::device_uvector<double>, rmm::device_uvector<double>> generate_mer
 
   // perform the sort using the means as the key
   size_t temp_size;
-  CUDF_CUDA_TRY(
-    cub::DeviceSegmentedSort::SortPairs(nullptr,
-                                        temp_size,
-                                        tdv.means().begin<double>(),
-                                        output_means.begin(),
-                                        tdv.weights().begin<double>(),
-                                        output_weights.begin(),
-                                        total_merged_centroids,
-                                        num_groups,
-                                        centroid_offsets,
-                                        centroid_offsets + 1,
-                                        stream.value()));
+  CUDF_CUDA_TRY(cub::DeviceSegmentedSort::SortPairs(nullptr,
+                                                    temp_size,
+                                                    tdv.means().begin<double>(),
+                                                    output_means.begin(),
+                                                    tdv.weights().begin<double>(),
+                                                    output_weights.begin(),
+                                                    total_merged_centroids,
+                                                    num_groups,
+                                                    centroid_offsets,
+                                                    centroid_offsets + 1,
+                                                    stream.value()));
 
   rmm::device_buffer temp_mem(temp_size, stream, temp_mr);
-  CUDF_CUDA_TRY(
-    cub::DeviceSegmentedSort::SortPairs(temp_mem.data(),
-                                        temp_size,
-                                        tdv.means().begin<double>(),
-                                        output_means.begin(),
-                                        tdv.weights().begin<double>(),
-                                        output_weights.begin(),
-                                        total_merged_centroids,
-                                        num_groups,
-                                        centroid_offsets,
-                                        centroid_offsets + 1,
-                                        stream.value()));
+  CUDF_CUDA_TRY(cub::DeviceSegmentedSort::SortPairs(temp_mem.data(),
+                                                    temp_size,
+                                                    tdv.means().begin<double>(),
+                                                    output_means.begin(),
+                                                    tdv.weights().begin<double>(),
+                                                    output_weights.begin(),
+                                                    total_merged_centroids,
+                                                    num_groups,
+                                                    centroid_offsets,
+                                                    centroid_offsets + 1,
+                                                    stream.value()));
 
   return {std::move(output_means), std::move(output_weights)};
 }
@@ -1156,7 +1155,8 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   auto temp_mr = cudf::get_current_device_resource_ref();
 
   // merge the centroids
-  auto [merged_means, merged_weights] = generate_merged_centroids(tdv, group_offsets, num_groups, stream);
+  auto [merged_means, merged_weights] =
+    generate_merged_centroids(tdv, group_offsets, num_groups, stream);
   size_t const num_centroids = tdv.means().size();
   CUDF_EXPECTS(merged_means.size() == num_centroids,
                "Unexpected number of centroids in merged result");
@@ -1201,8 +1201,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
 
   // input centroid values
   auto centroids = cudf::detail::make_counting_transform_iterator(
-    0,
-    make_weighted_centroid{merged_means.begin(), merged_weights.begin()});
+    0, make_weighted_centroid{merged_means.begin(), merged_weights.begin()});
 
   // compute the tdigest
   return compute_tdigests(

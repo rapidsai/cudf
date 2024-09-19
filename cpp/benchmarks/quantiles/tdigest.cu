@@ -22,18 +22,19 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <nvbench/nvbench.cuh>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 
+#include <nvbench/nvbench.cuh>
+
 void bm_tdigest_merge(nvbench::state& state)
 {
-  cudf::size_type const num_tdigests = state.get_int64("num_tdigests");
-  cudf::size_type const tdigest_size = state.get_int64("tdigest_size");  
+  cudf::size_type const num_tdigests       = state.get_int64("num_tdigests");
+  cudf::size_type const tdigest_size       = state.get_int64("tdigest_size");
   cudf::size_type const tdigests_per_group = state.get_int64("tdigests_per_group");
-  cudf::size_type const max_centroids = state.get_int64("max_centroids");
-  auto const num_groups      = num_tdigests / tdigests_per_group;
-  auto const total_centroids = num_tdigests * tdigest_size;
+  cudf::size_type const max_centroids      = state.get_int64("max_centroids");
+  auto const num_groups                    = num_tdigests / tdigests_per_group;
+  auto const total_centroids               = num_tdigests * tdigest_size;
 
   auto stream = cudf::get_default_stream();
   auto mr     = rmm::mr::get_current_device_resource();
@@ -98,12 +99,12 @@ void bm_tdigest_merge(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
-  [&](nvbench::launch& launch, auto& timer) {
-      timer.start();
-      auto result = cudf::tdigest::detail::group_merge_tdigest(
-        tdigest, group_offsets, group_labels, num_groups, max_centroids, stream, mr);
-      timer.stop();
-    });  
+             [&](nvbench::launch& launch, auto& timer) {
+               timer.start();
+               auto result = cudf::tdigest::detail::group_merge_tdigest(
+                 tdigest, group_offsets, group_labels, num_groups, max_centroids, stream, mr);
+               timer.stop();
+             });
 }
 
 NVBENCH_BENCH(bm_tdigest_merge)
