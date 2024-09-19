@@ -636,6 +636,25 @@ struct identity_initializer {
   }
 
  public:
+  template <typename Target, cudf::aggregation::Kind k>
+  __device__ std::enable_if_t<is_supported<Target, k>(), void> operator()(
+    cudf::mutable_column_device_view target, cudf::size_type target_index)
+  {
+    using DeviceType = device_storage_type_t<Target>;
+    using ElementType =
+      cuda::std::conditional_t<cudf::is_fixed_width<Target>() && !cudf::is_fixed_point<Target>(),
+                               Target,
+                               DeviceType>;
+    target.element<ElementType>(target_index) = get_identity<DeviceType, k>();
+  }
+
+  template <typename Target, cudf::aggregation::Kind k>
+  __device__ std::enable_if_t<!is_supported<Target, k>(), void> operator()(
+    cudf::mutable_column_device_view target, cudf::size_type target_index)
+  {
+    CUDF_UNREACHABLE("Unsupported aggregation for initializing values");
+  }
+
   template <typename T, aggregation::Kind k>
   std::enable_if_t<is_supported<T, k>(), void> operator()(mutable_column_view const& col,
                                                           rmm::cuda_stream_view stream)
