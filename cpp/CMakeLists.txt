@@ -861,15 +861,7 @@ if(CUDF_BUILD_TESTUTIL)
 
   add_library(cudf::cudftest_default_stream ALIAS cudftest_default_stream)
 
-  add_library(
-    cudftestutil SHARED
-    tests/io/metadata_utilities.cpp
-    tests/utilities/column_utilities.cu
-    tests/utilities/debug_utilities.cu
-    tests/utilities/random_seed.cpp
-    tests/utilities/table_utilities.cu
-    tests/utilities/tdigest_utilities.cu
-  )
+  add_library(cudftestutil INTERFACE)
 
   set_target_properties(
     cudftestutil
@@ -878,28 +870,23 @@ if(CUDF_BUILD_TESTUTIL)
                # set target compile options
                CXX_STANDARD 17
                CXX_STANDARD_REQUIRED ON
-               CXX_VISIBILITY_PRESET hidden
                CUDA_STANDARD 17
                CUDA_STANDARD_REQUIRED ON
-               CUDA_VISIBILITY_PRESET hidden
-               POSITION_INDEPENDENT_CODE ON
-               INTERFACE_POSITION_INDEPENDENT_CODE ON
   )
 
   target_compile_options(
-    cudftestutil PUBLIC "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
-                        "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
+    cudftestutil INTERFACE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
+                           "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
   )
 
   target_link_libraries(
-    cudftestutil
-    PUBLIC Threads::Threads cudf cudftest_default_stream
-    PRIVATE GTest::gmock GTest::gtest $<TARGET_NAME_IF_EXISTS:conda_env>
+    cudftestutil INTERFACE Threads::Threads cudf cudftest_default_stream
+                           $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
   target_include_directories(
-    cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
-                        "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+    cudftestutil INTERFACE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+                           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
   )
   rapids_cuda_set_runtime(cudftestutil USE_STATIC ${CUDA_STATIC_RUNTIME})
   add_library(cudf::cudftestutil ALIAS cudftestutil)

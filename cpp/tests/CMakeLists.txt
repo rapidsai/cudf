@@ -41,7 +41,9 @@ function(ConfigureTest CMAKE_TEST_NAME)
     set(_CUDF_TEST_STREAM_MODE cudf)
   endif()
 
-  add_executable(${CMAKE_TEST_NAME} ${_CUDF_TEST_UNPARSED_ARGUMENTS})
+  add_executable(
+    ${CMAKE_TEST_NAME} ${_CUDF_TEST_UNPARSED_ARGUMENTS} cudf_test_impl.cu cudf_test_impl.cpp
+  )
   set_target_properties(
     ${CMAKE_TEST_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
@@ -59,6 +61,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
     PRIVATE cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
             nvtx3::nvtx3-cpp $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
   )
+  target_compile_definitions(${CMAKE_TEST_NAME} PRIVATE CUDF_TEST_EXCLUDE_GTEST=0)
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
     NAME ${CMAKE_TEST_NAME}

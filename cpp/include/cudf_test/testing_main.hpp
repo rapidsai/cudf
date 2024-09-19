@@ -18,6 +18,7 @@
 
 #include <cudf_test/cxxopts.hpp>
 #include <cudf_test/stream_checking_resource_adaptor.hpp>
+#include <cudf_test/testing_api.hpp>
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
@@ -192,21 +193,29 @@ inline auto make_stream_mode_adaptor(cxxopts::ParseResult const& cmd_opts)
 }
 
 /**
+ * @brief Should be called in every test program that uses rmm allocators since it maintains the
+ * lifespan of the rmm default memory resource. this function parses the command line to customize
+ * test behavior, like the allocation mode used for creating the default memory resource.
+ *
+ */
+inline void init_cudf_test(int argc, char** argv)
+{
+  // static lifetime to keep rmm resource alive till tests end
+  auto const cmd_opts                  = parse_cudf_test_opts(argc, argv);
+  [[maybe_unused]] static auto mr      = make_memory_resource_adaptor(cmd_opts);
+  [[maybe_unused]] static auto adaptor = make_stream_mode_adaptor(cmd_opts);
+}
+
+/**
  * @brief Macro that defines main function for gtest programs that use rmm
  *
- * Should be included in every test program that uses rmm allocators since
- * it maintains the lifespan of the rmm default memory resource.
  * This `main` function is a wrapper around the google test generated `main`,
- * maintaining the original functionality. In addition, this custom `main`
- * function parses the command line to customize test behavior, like the
- * allocation mode used for creating the default memory resource.
+ * maintaining the original functionality.
  */
-#define CUDF_TEST_PROGRAM_MAIN()                                            \
-  int main(int argc, char** argv)                                           \
-  {                                                                         \
-    ::testing::InitGoogleTest(&argc, argv);                                 \
-    auto const cmd_opts           = parse_cudf_test_opts(argc, argv);       \
-    [[maybe_unused]] auto mr      = make_memory_resource_adaptor(cmd_opts); \
-    [[maybe_unused]] auto adaptor = make_stream_mode_adaptor(cmd_opts);     \
-    return RUN_ALL_TESTS();                                                 \
+#define CUDF_TEST_PROGRAM_MAIN()            \
+  int main(int argc, char** argv)           \
+  {                                         \
+    ::testing::InitGoogleTest(&argc, argv); \
+    init_cudf_test(argc, argv);             \
+    return RUN_ALL_TESTS();                 \
   }
