@@ -303,41 +303,46 @@ bool check_equality(tree_meta_t& d_a,
   stream.synchronize();
 
   auto num_nodes = a.parent_node_ids.size();
-  if(num_nodes > 1) {
+  if (num_nodes > 1) {
     if (b.rowidx.size() != num_nodes + 1) { return false; }
 
     for (auto pos = b.rowidx[0]; pos < b.rowidx[1]; pos++) {
       auto v = b.colidx[pos];
-      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) {return false; }
+      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) { return false; }
     }
     for (size_t u = 1; u < num_nodes; u++) {
       auto v = b.colidx[b.rowidx[u]];
-      if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) {return false; }
-      
+      if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) { return false; }
+
       for (auto pos = b.rowidx[u] + 1; pos < b.rowidx[u + 1]; pos++) {
         v = b.colidx[pos];
-        if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) {return false; }
+        if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) { return false; }
       }
     }
     for (size_t u = 0; u < num_nodes; u++) {
-      if (a.node_categories[b.column_ids[u]] != b.categories[u]) {return false; }
+      if (a.node_categories[b.column_ids[u]] != b.categories[u]) { return false; }
     }
 
     for (size_t u = 0; u < num_nodes; u++) {
-      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {return false; }
+      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) { return false; }
     }
-  }
-  else if (num_nodes == 1) {
+  } else if (num_nodes == 1) {
     if (b.rowidx.size() != num_nodes + 1) { return false; }
 
-    if(b.rowidx[0] != 0 || b.rowidx[1] != 1) return false;
-    if(!b.colidx.empty()) return false;
+    if (b.rowidx[0] != 0 || b.rowidx[1] != 1) return false;
+    if (!b.colidx.empty()) return false;
     for (size_t u = 0; u < num_nodes; u++) {
-      if (a.node_categories[b.column_ids[u]] != b.categories[u]) {printf("4\n"); return false; }
+      if (a.node_categories[b.column_ids[u]] != b.categories[u]) {
+        printf("4\n");
+        return false;
+      }
     }
 
     for (size_t u = 0; u < num_nodes; u++) {
-      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {printf("5\n"); return false; }
+      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {
+        printf("5\n");
+        return false;
+      }
     }
   }
   return true;

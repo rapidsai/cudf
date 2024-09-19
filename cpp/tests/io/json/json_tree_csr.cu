@@ -91,40 +91,60 @@ bool check_equality(cuio_json::tree_meta_t& d_a,
   stream.synchronize();
 
   auto num_nodes = a.parent_node_ids.size();
-  if(num_nodes > 1) {
+  if (num_nodes > 1) {
     if (b.rowidx.size() != num_nodes + 1) { return false; }
 
     for (auto pos = b.rowidx[0]; pos < b.rowidx[1]; pos++) {
       auto v = b.colidx[pos];
-      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) {printf("1\n"); return false; }
+      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) {
+        printf("1\n");
+        return false;
+      }
     }
     for (size_t u = 1; u < num_nodes; u++) {
       auto v = b.colidx[b.rowidx[u]];
-      if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) {printf("2\n"); return false; }
-      
+      if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) {
+        printf("2\n");
+        return false;
+      }
+
       for (auto pos = b.rowidx[u] + 1; pos < b.rowidx[u + 1]; pos++) {
         v = b.colidx[pos];
-        if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) {printf("3\n"); return false; }
+        if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) {
+          printf("3\n");
+          return false;
+        }
       }
     }
     for (size_t u = 0; u < num_nodes; u++) {
-      if (a.node_categories[b.column_ids[u]] != b.categories[u]) {printf("4\n"); return false; }
+      if (a.node_categories[b.column_ids[u]] != b.categories[u]) {
+        printf("4\n");
+        return false;
+      }
     }
     for (size_t u = 0; u < num_nodes; u++) {
-      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {printf("5\n"); return false; }
+      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {
+        printf("5\n");
+        return false;
+      }
     }
-  }
-  else if (num_nodes == 1) {
+  } else if (num_nodes == 1) {
     if (b.rowidx.size() != num_nodes + 1) { return false; }
 
-    if(b.rowidx[0] != 0 || b.rowidx[1] != 1) return false;
-    if(!b.colidx.empty()) return false;
+    if (b.rowidx[0] != 0 || b.rowidx[1] != 1) return false;
+    if (!b.colidx.empty()) return false;
     for (size_t u = 0; u < num_nodes; u++) {
-      if (a.node_categories[b.column_ids[u]] != b.categories[u]) {printf("4\n"); return false; }
+      if (a.node_categories[b.column_ids[u]] != b.categories[u]) {
+        printf("4\n");
+        return false;
+      }
     }
 
     for (size_t u = 0; u < num_nodes; u++) {
-      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {printf("5\n"); return false; }
+      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {
+        printf("5\n");
+        return false;
+      }
     }
   }
   return true;
@@ -146,12 +166,16 @@ void run_test(std::string const& input, bool enable_lines = true)
     d_input, options, stream, cudf::get_current_device_resource_ref());
 
   // Get the JSON's tree representation
-  auto gpu_tree = cuio_json::detail::get_tree_representation(
-    tokens_gpu, token_indices_gpu, options.is_enabled_mixed_types_as_string(), stream, cudf::get_current_device_resource_ref());
+  auto gpu_tree =
+    cuio_json::detail::get_tree_representation(tokens_gpu,
+                                               token_indices_gpu,
+                                               options.is_enabled_mixed_types_as_string(),
+                                               stream,
+                                               cudf::get_current_device_resource_ref());
 
   bool const is_array_of_arrays = [&]() {
     std::array<cuio_json::node_t, 2> h_node_categories = {cuio_json::NC_ERR, cuio_json::NC_ERR};
-    auto const size_to_copy                 = std::min(size_t{2}, gpu_tree.node_categories.size());
+    auto const size_to_copy = std::min(size_t{2}, gpu_tree.node_categories.size());
     CUDF_CUDA_TRY(cudaMemcpyAsync(h_node_categories.data(),
                                   gpu_tree.node_categories.data(),
                                   sizeof(cuio_json::node_t) * size_to_copy,
@@ -159,7 +183,8 @@ void run_test(std::string const& input, bool enable_lines = true)
                                   stream.value()));
     stream.synchronize();
     if (options.is_enabled_lines()) return h_node_categories[0] == cuio_json::NC_LIST;
-    return h_node_categories[0] == cuio_json::NC_LIST and h_node_categories[1] == cuio_json::NC_LIST;
+    return h_node_categories[0] == cuio_json::NC_LIST and
+           h_node_categories[1] == cuio_json::NC_LIST;
   }();
 
   auto tup =
@@ -302,7 +327,7 @@ TEST_F(JsonColumnTreeTests, JSON1)
 
 TEST_F(JsonColumnTreeTests, JSON2)
 {
-  std::string json_string = 
+  std::string json_string =
     R"([
     {},
     { "a": { "y" : 6, "z": [] }},
@@ -313,7 +338,7 @@ TEST_F(JsonColumnTreeTests, JSON2)
 
 TEST_F(JsonColumnTreeTests, JSONLA1)
 {
-  std::string json_string = 
+  std::string json_string =
     R"([123, [1,2,3]]
        [456, null,  { "a": 1 }])";
   run_test(json_string);
