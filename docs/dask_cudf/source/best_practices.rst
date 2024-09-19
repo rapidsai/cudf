@@ -281,12 +281,11 @@ Most real-world Dask DataFrame workflows use `map_partitions
 to map user-defined functions across every partition of the underlying data.
 This API is a fantastic way to apply custom operations in an intuitive and
 scalable way. With that said, the :func:`map_partitions` method will produce
-in an opaque DataFrame expression that blocks the query-planning `optimizer
+an opaque DataFrame expression that blocks the query-planning `optimizer
 <https://docs.dask.org/en/stable/dataframe-optimizer.html>`__ from performing
 useful optimizations (like projection and filter pushdown).
 
 Since column-projection pushdown is often the most important optimization,
-you can mitigate the loss of these optimizations by explicitly selecting
-the necessary columns both before and after calling :func:`map_partitions`.
-Adding explicit filter operations may further mitigate the loss of filter
-pushdown.
+it is important to select the necessary columns both before and after calling
+:func:`map_partitions`. You can also add explicit filter operations to further
+mitigate the loss of filter pushdown.
