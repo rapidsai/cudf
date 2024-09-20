@@ -56,12 +56,12 @@ Once this is done, the public Dask DataFrame API will leverage
 from an on-disk format using any of the following ``dask.dataframe``
 functions:
 
-* :func:`dask.dataframe.read_parquet`
-* :func:`dask.dataframe.read_json`
-* :func:`dask.dataframe.read_csv`
-* :func:`dask.dataframe.read_orc`
-* :func:`dask.dataframe.read_hdf`
-* :func:`dask.dataframe.from_dict`
+* read_parquet
+* read_json
+* read_csv
+* read_orc
+* read_hdf
+* from_dict
 
 For example::
 
