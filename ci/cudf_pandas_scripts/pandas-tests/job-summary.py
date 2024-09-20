@@ -105,7 +105,7 @@ df = df.rename(
         "GPU Usage_diff": "GPU Usage delta",
     }
 )
-df = df.sort_values(by=["Failed tests", "Skipped tests"], ascending=False)
+df = df.sort_values(by=["CPU Usage delta", "Failed tests"], ascending=False)
 df = df[["Total tests", "CPU Usage delta", "GPU Usage delta", "Passed tests", "Failed tests", "Skipped tests", "CPU Usage", "GPU Usage", "Total delta", "Passed delta", "Failed delta", "Skipped delta"]]
 print(comment)
 print()
