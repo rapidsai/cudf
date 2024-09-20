@@ -100,7 +100,7 @@ def _(
     ):
         reader_options["schema"] = {
             "fields": reader_options["schema"]["inner"]
-        } # pragma: no cover; CI tests 1.7
+        }  # pragma: no cover; CI tests 1.7
     file_options = node.file_options
     with_columns = file_options.with_columns
     n_rows = file_options.n_rows
