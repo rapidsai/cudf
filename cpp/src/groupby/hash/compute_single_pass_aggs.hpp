@@ -37,6 +37,8 @@ CUDF_EXPORT rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   cudf::host_span<cudf::groupby::aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   SetType& global_set,
+  bool keys_have_nulls,
+  null_policy include_null_keys,
   rmm::cuda_stream_view stream);
 
 }  // namespace hash

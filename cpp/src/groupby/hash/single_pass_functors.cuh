@@ -877,25 +877,33 @@ struct compute_direct_aggregates {
   cudf::aggregation::Kind const* __restrict__ aggs;
   cudf::size_type* block_cardinality;
   int stride;
+  bitmask_type const* __restrict__ row_bitmask;
+  bool skip_rows_with_nulls;
+
   compute_direct_aggregates(SetType set,
                             cudf::table_device_view input_values,
                             cudf::mutable_table_device_view output_values,
                             cudf::aggregation::Kind const* aggs,
                             cudf::size_type* block_cardinality,
-                            int stride)
+                            int stride,
+                            bitmask_type const* row_bitmask,
+                            bool skip_rows_with_nulls)
     : set(set),
       input_values(input_values),
       output_values(output_values),
       aggs(aggs),
       block_cardinality(block_cardinality),
-      stride(stride)
+      stride(stride),
+      row_bitmask(row_bitmask),
+      skip_rows_with_nulls(skip_rows_with_nulls)
   {
   }
 
   __device__ void operator()(cudf::size_type i)
   {
     int block_id = (i % stride) / GROUPBY_BLOCK_SIZE;
-    if (block_cardinality[block_id] >= GROUPBY_CARDINALITY_THRESHOLD) {
+    if (block_cardinality[block_id] >= GROUPBY_CARDINALITY_THRESHOLD and
+        (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i))) {
       auto const result = set.insert_and_find(i);
       cudf::detail::aggregate_row<true, true>(output_values, *result.first, input_values, i, aggs);
     }

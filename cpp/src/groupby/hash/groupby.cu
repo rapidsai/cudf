@@ -19,7 +19,6 @@
 #include "groupby/common/utils.hpp"
 #include "helpers.cuh"
 #include "multi_pass_functors.cuh"
-#include "single_pass_functors.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
@@ -286,14 +285,12 @@ void sparse_to_dense_results(table_view const& keys,
                              cudf::detail::result_cache* dense_results,
                              device_span<size_type const> gather_map,
                              SetType set,
-                             bool keys_have_nulls,
-                             null_policy include_null_keys,
+                             bool skip_key_rows_with_nulls,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
   auto row_bitmask =
     cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first;
-  bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
   bitmask_type const* row_bitmask_ptr =
     skip_key_rows_with_nulls ? static_cast<bitmask_type*>(row_bitmask.data()) : nullptr;
 
@@ -349,6 +346,8 @@ std::unique_ptr<table> groupby(table_view const& keys,
   auto const num_keys            = static_cast<int64_t>(keys.num_rows());
   auto const null_keys_are_equal = null_equality::EQUAL;
   auto const has_null            = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
+  auto const skip_key_rows_with_nulls =
+    keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
   auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
   auto const comparator  = cudf::experimental::row::equality::self_comparator{preprocessed_keys};
@@ -372,7 +371,8 @@ std::unique_ptr<table> groupby(table_view const& keys,
       stream.value()};
 
     // Compute all single pass aggs first
-    auto gather_map = compute_single_pass_aggs(keys, requests, &sparse_results, set, stream);
+    auto gather_map = compute_single_pass_aggs(
+      keys, requests, &sparse_results, set, skip_key_rows_with_nulls, stream);
 
     // Compact all results from sparse_results and insert into cache
     sparse_to_dense_results(keys,
@@ -381,8 +381,7 @@ std::unique_ptr<table> groupby(table_view const& keys,
                             cache,
                             gather_map,
                             set.ref(cuco::find),
-                            keys_have_nulls,
-                            include_null_keys,
+                            skip_key_rows_with_nulls,
                             stream,
                             mr);
 

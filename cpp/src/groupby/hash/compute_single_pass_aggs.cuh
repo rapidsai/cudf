@@ -21,6 +21,7 @@
 
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/groupby.hpp>
@@ -92,6 +93,8 @@ template <class SetRef, typename GlobalSetType, class WindowExtent>
 CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
                                          cudf::size_type num_input_rows,
                                          WindowExtent window_extent,
+                                         bitmask_type const* row_bitmask,
+                                         bool skip_rows_with_nulls,
                                          cudf::size_type* local_mapping_index,
                                          cudf::size_type* global_mapping_index,
                                          cudf::size_type* block_cardinality,
@@ -379,6 +382,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   cudf::host_span<cudf::groupby::aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   SetType& global_set,
+  bool skip_key_rows_with_nulls,
   rmm::cuda_stream_view stream)
 {
   // GROUPBY_SHM_MAX_ELEMENTS with 0.7 occupancy
@@ -397,6 +401,11 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
 
   auto const num_input_rows = keys.num_rows();
 
+  auto row_bitmask =
+    skip_key_rows_with_nulls
+      ? cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first
+      : rmm::device_buffer{};
+
   auto global_set_ref  = global_set.ref(cuco::op::insert_and_find);
   auto const grid_size = max_occupancy_grid_size(
     compute_mapping_indices<shared_set_ref_type, decltype(global_set_ref), decltype(window_extent)>,
@@ -414,6 +423,8 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
     <<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream>>>(global_set_ref,
                                                    num_input_rows,
                                                    window_extent,
+                                                   static_cast<bitmask_type*>(row_bitmask.data()),
+                                                   skip_key_rows_with_nulls,
                                                    local_mapping_index.data(),
                                                    global_mapping_index.data(),
                                                    block_cardinality.data(),
@@ -459,7 +470,9 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                                                  *d_sparse_table,
                                                  d_aggs.data(),
                                                  block_cardinality.data(),
-                                                 stride});
+                                                 stride,
+                                                 static_cast<bitmask_type*>(row_bitmask.data()),
+                                                 skip_key_rows_with_nulls});
     extract_populated_keys(global_set, populated_keys, stream);
   }
 
