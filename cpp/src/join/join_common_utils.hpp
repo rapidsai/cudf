@@ -22,6 +22,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
+#include <cuco/static_map.cuh>
 #include <cuco/static_multimap.cuh>
 #include <cuda/atomic>
 
@@ -49,6 +50,11 @@ using mixed_multimap_type =
                         cuda::thread_scope_device,
                         cudf::detail::cuco_allocator<char>,
                         cuco::legacy::double_hashing<1, hash_type, hash_type>>;
+
+using semi_map_type = cuco::legacy::static_map<hash_value_type,
+                                               size_type,
+                                               cuda::thread_scope_device,
+                                               cudf::detail::cuco_allocator<char>>;
 
 using row_hash_legacy =
   cudf::row_hasher<cudf::hashing::detail::default_hash, cudf::nullate::DYNAMIC>;

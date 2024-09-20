@@ -12,6 +12,7 @@ import cudf
 from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
+from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column_accessor import ColumnAccessor
@@ -409,7 +410,7 @@ def concat(
         result_columns = None
         if keys_objs is None:
             for o in objs:
-                for name, col in o._data.items():
+                for name, col in o._column_labels_and_values:
                     if name in result_data:
                         raise NotImplementedError(
                             f"A Column with duplicate name found: {name}, cuDF "
@@ -437,7 +438,7 @@ def concat(
         else:
             # All levels in the multiindex label must have the same type
             has_multiple_level_types = (
-                len({type(name) for o in objs for name in o._data.keys()}) > 1
+                len({type(name) for o in objs for name in o._column_names}) > 1
             )
             if has_multiple_level_types:
                 raise NotImplementedError(
@@ -446,7 +447,7 @@ def concat(
                     "the labels to the same type."
                 )
             for k, o in zip(keys_objs, objs):
-                for name, col in o._data.items():
+                for name, col in o._column_labels_and_values:
                     # if only series, then only keep keys_objs as column labels
                     # if the existing column is multiindex, prepend it
                     # to handle cases where dfs and srs are concatenated
@@ -842,7 +843,7 @@ def get_dummies(
         else:
             result_data = {
                 col_name: col
-                for col_name, col in data._data.items()
+                for col_name, col in data._column_labels_and_values
                 if col_name not in columns
             }
 
@@ -942,7 +943,7 @@ def _merge_sorted(
 
     columns = [
         [
-            *(obj.index._data.columns if not ignore_index else ()),
+            *(obj.index._columns if not ignore_index else ()),
             *obj._columns,
         ]
         for obj in objs
@@ -984,7 +985,7 @@ def _pivot(df, index, columns):
             return x if isinstance(x, tuple) else (x,)
 
         nrows = len(index_labels)
-        for col_label, col in df._data.items():
+        for col_label, col in df._column_labels_and_values:
             names = [
                 as_tuple(col_label) + as_tuple(name) for name in column_labels
             ]
@@ -1008,7 +1009,7 @@ def _pivot(df, index, columns):
     ca = ColumnAccessor(
         result,
         multiindex=True,
-        level_names=(None,) + columns._data.names,
+        level_names=(None,) + columns._column_names,
         verify=False,
     )
     return cudf.DataFrame._from_data(
@@ -1086,11 +1087,7 @@ def pivot(data, columns=None, index=no_default, values=no_default):
     # Create a DataFrame composed of columns from both
     # columns and index
     ca = ColumnAccessor(
-        dict(
-            enumerate(
-                itertools.chain(index._data.columns, columns._data.columns)
-            )
-        ),
+        dict(enumerate(itertools.chain(index._columns, columns._columns))),
         verify=False,
     )
     columns_index = cudf.DataFrame._from_data(ca)
@@ -1227,13 +1224,24 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         )
         return res
     else:
-        df = df.copy(deep=False)
-        columns = df.index._poplevels(level)
-        index = df.index
-    result = _pivot(df, index, columns)
-    if result.index.nlevels == 1:
-        result.index = result.index.get_level_values(result.index.names[0])
-    return result
+        index = df.index.droplevel(level)
+        if is_scalar(level):
+            columns = df.index.get_level_values(level)
+        else:
+            new_names = []
+            ca_data = {}
+            for lev in level:
+                ca_level, level_idx = df.index._level_to_ca_label(lev)
+                new_names.append(df.index.names[level_idx])
+                ca_data[ca_level] = df.index._data[ca_level]
+            columns = type(df.index)._from_data(
+                ColumnAccessor(ca_data, verify=False)
+            )
+            columns.names = new_names
+        result = _pivot(df, index, columns)
+        if result.index.nlevels == 1:
+            result.index = result.index.get_level_values(result.index.names[0])
+        return result
 
 
 def _get_unique(column: ColumnBase, dummy_na: bool) -> ColumnBase:
@@ -1548,7 +1556,7 @@ def pivot_table(
     if values_passed and not values_multi and table._data.multiindex:
         column_names = table._data.level_names[1:]
         table_columns = tuple(
-            map(lambda column: column[1:], table._data.names)
+            map(lambda column: column[1:], table._column_names)
         )
         table.columns = pd.MultiIndex.from_tuples(
             tuples=table_columns, names=column_names
