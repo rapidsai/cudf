@@ -235,16 +235,16 @@ cdef object _process_metadata(object df,
             df._index = idx
         elif set(index_col).issubset(names):
             index_data = df[index_col]
-            actual_index_names = list(index_col_names.values())
-            if len(index_data._data) == 1:
+            actual_index_names = iter(index_col_names.values())
+            if index_data._num_columns == 1:
                 idx = cudf.Index._from_column(
-                    index_data._data.columns[0],
-                    name=actual_index_names[0]
+                    index_data._columns[0],
+                    name=next(actual_index_names)
                 )
             else:
                 idx = cudf.MultiIndex.from_frame(
                     index_data,
-                    names=actual_index_names
+                    names=list(actual_index_names)
                 )
             df.drop(columns=index_col, inplace=True)
             df._index = idx
@@ -252,7 +252,7 @@ cdef object _process_metadata(object df,
             if use_pandas_metadata:
                 df.index.names = index_col
 
-    if len(df._data.names) == 0 and column_index_type is not None:
+    if df._num_columns == 0 and column_index_type is not None:
         df._data.label_dtype = cudf.dtype(column_index_type)
 
     return df
@@ -438,7 +438,7 @@ def write_parquet(
     object statistics="ROWGROUP",
     object metadata_file_path=None,
     object int96_timestamps=False,
-    object row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
+    object row_group_size_bytes=None,
     object row_group_size_rows=None,
     object max_page_size_bytes=None,
     object max_page_size_rows=None,
@@ -616,9 +616,9 @@ cdef class ParquetWriter:
         Name of the compression to use. Use ``None`` for no compression.
     statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
         Level at which column statistics should be included in file.
-    row_group_size_bytes: int, default 134217728
+    row_group_size_bytes: int, default ``uint64 max``
         Maximum size of each stripe of the output.
-        By default, 134217728 (128MB) will be used.
+        By default, a virtually infinite size equal to ``uint64 max`` will be used.
     row_group_size_rows: int, default 1000000
         Maximum number of rows of each stripe of the output.
         By default, 1000000 (10^6 rows) will be used.
@@ -661,11 +661,11 @@ cdef class ParquetWriter:
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
                   object compression="snappy", str statistics="ROWGROUP",
-                  int row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
-                  int row_group_size_rows=1000000,
-                  int max_page_size_bytes=524288,
-                  int max_page_size_rows=20000,
-                  int max_dictionary_size=1048576,
+                  size_t row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
+                  size_type row_group_size_rows=1000000,
+                  size_t max_page_size_bytes=524288,
+                  size_type max_page_size_rows=20000,
+                  size_t max_dictionary_size=1048576,
                   bool use_dictionary=True,
                   bool store_schema=False):
         filepaths_or_buffers = (

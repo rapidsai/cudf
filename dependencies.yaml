@@ -710,7 +710,16 @@ dependencies:
               - numpy==1.23.*
               - pandas==2.0.*
               - pyarrow==14.0.0
-              - cupy==12.0.0  # ignored as pip constraint
+          - matrix:
+            packages:
+      - output_types: conda
+        matrices:
+          - matrix: {dependencies: "oldest", arch: "aarch64", cuda: "12.*"}
+            packages:
+              - cupy==12.2.0  # cupy 12.2.0 is the earliest with CUDA 12 ARM packages.
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - cupy==12.0.0
           - matrix:
             packages:
       - output_types: requirements

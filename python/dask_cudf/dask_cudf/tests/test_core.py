@@ -1007,3 +1007,20 @@ def test_to_backend_simplify():
         df2 = df.to_backend("cudf")[["y"]].simplify()
         df3 = df[["y"]].to_backend("cudf").to_backend("cudf").simplify()
         assert df2._name == df3._name
+
+
+@pytest.mark.parametrize("numeric_only", [True, False])
+@pytest.mark.parametrize("op", ["corr", "cov"])
+def test_cov_corr(op, numeric_only):
+    df = cudf.DataFrame.from_dict(
+        {
+            "x": np.random.randint(0, 5, size=10),
+            "y": np.random.normal(size=10),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    res = getattr(ddf, op)(numeric_only=numeric_only)
+    # Use to_pandas until cudf supports numeric_only
+    # (See: https://github.com/rapidsai/cudf/issues/12626)
+    expect = getattr(df.to_pandas(), op)(numeric_only=numeric_only)
+    dd.assert_eq(res, expect)
