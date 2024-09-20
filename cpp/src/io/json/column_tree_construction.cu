@@ -214,10 +214,14 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
     num_columns = thrust::unique_count(
       rmm::exec_policy_nosync(stream), level_ordered_col_ids.begin(), level_ordered_col_ids.end());
 
-    return std::tuple{num_columns, std::move(level_ordered_node_ids), std::move(level_ordered_col_ids)};
+    return std::tuple{
+      num_columns, std::move(level_ordered_node_ids), std::move(level_ordered_col_ids)};
   };
 
-  auto col_tree_adjs = [&tree, &col_ids, &stream](NodeIndexT num_columns, device_span<NodeIndexT const> level_ordered_col_ids, device_span<NodeIndexT const> level_ordered_node_ids) {
+  auto col_tree_adjs = [&tree, &col_ids, &stream](
+                         NodeIndexT num_columns,
+                         device_span<NodeIndexT const> level_ordered_col_ids,
+                         device_span<NodeIndexT const> level_ordered_node_ids) {
     rmm::device_uvector<NodeIndexT> mapped_col_ids(num_columns, stream);
     rmm::device_uvector<NodeIndexT> parent_col_ids(num_columns, stream);
     rmm::device_uvector<NodeIndexT> rev_mapped_col_ids(num_columns, stream);
@@ -252,10 +256,14 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
                    num_columns,
                    parent_col_ids_it);
 
-    return std::tuple{std::move(mapped_col_ids), std::move(parent_col_ids), std::move(rev_mapped_col_ids)};
+    return std::tuple{
+      std::move(mapped_col_ids), std::move(parent_col_ids), std::move(rev_mapped_col_ids)};
   };
 
-  auto col_tree_props = [&tree, &row_offsets, &stream](NodeIndexT num_columns, device_span<NodeIndexT const> level_ordered_col_ids, device_span<NodeIndexT const> level_ordered_node_ids) {
+  auto col_tree_props = [&tree, &row_offsets, &stream](
+                          NodeIndexT num_columns,
+                          device_span<NodeIndexT const> level_ordered_col_ids,
+                          device_span<NodeIndexT const> level_ordered_node_ids) {
     rmm::device_uvector<row_offset_t> max_row_offsets(num_columns, stream);
     rmm::device_uvector<NodeT> column_categories(num_columns, stream);
 
@@ -278,7 +286,8 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
     return std::tuple{std::move(max_row_offsets), std::move(column_categories)};
   };
 
-  auto construct_rowidx = [&stream](NodeIndexT num_columns, device_span<NodeIndexT const> parent_col_ids) {
+  auto construct_rowidx = [&stream](NodeIndexT num_columns,
+                                    device_span<NodeIndexT const> parent_col_ids) {
     auto rowidx = cudf::detail::make_zeroed_device_uvector_async<NodeIndexT>(
       static_cast<std::size_t>(num_columns + 1), stream, cudf::get_current_device_resource_ref());
     // Note that the first element of csr_parent_col_ids is -1 (parent_node_sentinel)
@@ -330,7 +339,9 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
     return rowidx;
   };
 
-  auto partially_construct_colidx = [&stream](NodeIndexT num_columns, device_span<NodeIndexT const> parent_col_ids, device_span<NodeIndexT const> rowidx) {
+  auto partially_construct_colidx = [&stream](NodeIndexT num_columns,
+                                              device_span<NodeIndexT const> parent_col_ids,
+                                              device_span<NodeIndexT const> rowidx) {
     rmm::device_uvector<NodeIndexT> colidx((num_columns - 1) * 2, stream);
     thrust::fill(rmm::exec_policy_nosync(stream), colidx.begin(), colidx.end(), -1);
     // excluding root node, construct scatter map
@@ -367,8 +378,10 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   };
 
   auto [num_columns, level_ordered_node_ids, level_ordered_col_ids] = level_orderings();
-  auto [mapped_col_ids, parent_col_ids, rev_mapped_col_ids] = col_tree_adjs(num_columns, level_ordered_col_ids, level_ordered_node_ids);
-  auto [max_row_offsets, column_categories] = col_tree_props(num_columns, level_ordered_col_ids, level_ordered_node_ids);
+  auto [mapped_col_ids, parent_col_ids, rev_mapped_col_ids] =
+    col_tree_adjs(num_columns, level_ordered_col_ids, level_ordered_node_ids);
+  auto [max_row_offsets, column_categories] =
+    col_tree_props(num_columns, level_ordered_col_ids, level_ordered_node_ids);
 
   /*
     5. CSR construction:
@@ -380,7 +393,6 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   */
   auto rowidx = construct_rowidx(num_columns, parent_col_ids);
   auto colidx = partially_construct_colidx(num_columns, parent_col_ids, rowidx);
-
 
   // Mixed types in List children go to different columns,
   // so all immediate children of list column should have same max_row_offsets.
