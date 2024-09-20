@@ -18,6 +18,8 @@
 
 #include "../utilities/timer.hpp"
 
+#include <cudf/utilities/default_stream.hpp>
+
 /**
  * @file parquet_io.cpp
  * @brief Demonstrates usage of the libcudf APIs to read and write
@@ -159,8 +161,11 @@ int main(int argc, char const** argv)
     // Left anti-join the original and transcoded tables
     // identical tables should not throw an exception and
     // return an empty indices vector
-    auto const indices = cudf::left_anti_join(
-      input->view(), transcoded_input->view(), cudf::null_equality::EQUAL, resource.get());
+    auto const indices = cudf::left_anti_join(input->view(),
+                                              transcoded_input->view(),
+                                              cudf::null_equality::EQUAL,
+                                              cudf::get_default_stream(),
+                                              resource.get());
 
     // No exception thrown, check indices
     auto const valid = indices->size() == 0;
