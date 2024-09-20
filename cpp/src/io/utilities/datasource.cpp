@@ -32,6 +32,7 @@
 #include <unistd.h>
 
 #include <unordered_map>
+#include <vector>
 
 namespace cudf {
 namespace io {
@@ -170,35 +171,51 @@ class memory_mapped_source : public file_source {
   {
     if (_file.size() != 0) {
       map(_file.desc(), offset, map_size);
-      register_mmap_buffer(register_size);
+      register_mmap_buffer(offset, register_size);
     }
   }
 
   ~memory_mapped_source() override
   {
     if (_map_addr != nullptr) {
-      munmap(_map_addr, _map_size);
+      unmap();
       unregister_mmap_buffer();
     }
   }
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    CUDF_EXPECTS(offset >= _map_offset, "Requested offset is outside mapping");
+    // Clamp length to available data
+    auto const read_size = std::min(size, +_file.size() - offset);
 
-    // Clamp length to available data in the mapped region
-    auto const read_size = std::min(size, _map_size - (offset - _map_offset));
+    // If the requested range is outside of the mapped region, read from the file
+    if (offset < _map_offset or offset + read_size > (_map_offset + _map_size)) {
+      file_source::host_read(offset, read_size);
+    }
+
+    // If the requested range is only partially within the mapped region, copy to a new
+    // host buffer to make the data safe to copy to the device
+    if (_reg_addr != nullptr and
+        (offset < _reg_offset or offset + read_size > (_reg_offset + _reg_size))) {
+      auto const src = static_cast<uint8_t*>(_map_addr) + (offset - _map_offset);
+
+      return std::make_unique<owning_buffer<std::vector<uint8_t>>>(
+        std::vector<uint8_t>(src, src + read_size));
+    }
 
     return std::make_unique<non_owning_buffer>(
-      static_cast<uint8_t*>(_map_addr) + (offset - _map_offset), read_size);
+      static_cast<uint8_t*>(_map_addr) + offset - _map_offset, read_size);
   }
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
-    CUDF_EXPECTS(offset >= _map_offset, "Requested offset is outside mapping");
+    // Clamp length to available data
+    auto const read_size = std::min(size, +_file.size() - offset);
 
-    // Clamp length to available data in the mapped region
-    auto const read_size = std::min(size, _map_size - (offset - _map_offset));
+    // If the requested range is outside of the mapped region, read from the file
+    if (offset < _map_offset or offset + read_size > (_map_offset + _map_size)) {
+      return file_source::host_read(offset, read_size, dst);
+    }
 
     auto const src = static_cast<uint8_t*>(_map_addr) + (offset - _map_offset);
     std::memcpy(dst, src, read_size);
@@ -211,19 +228,18 @@ class memory_mapped_source : public file_source {
    *
    * Fixes nvbugs/4215160
    */
-  void register_mmap_buffer(size_t register_size)
+  void register_mmap_buffer(size_t offset, size_t size)
   {
-    if (_map_addr == nullptr or _map_size == 0 or not pageableMemoryAccessUsesHostPageTables()) {
-      return;
-    }
+    if (_map_addr == nullptr or not pageableMemoryAccessUsesHostPageTables()) { return; }
 
-    auto const actual_register_size =
-      std::min(register_size != 0 ? register_size : _file.size() - _map_offset, _map_size);
+    // Registered region must be within the mapped region
+    _reg_offset = std::max(offset, _map_offset);
+    _reg_size   = std::min(size != 0 ? size : _map_size, (_map_offset + _map_size) - _reg_offset);
 
-    auto const result = cudaHostRegister(_map_addr, actual_register_size, cudaHostRegisterReadOnly);
-    if (result == cudaSuccess) {
-      _is_map_registered = true;
-    } else {
+    _reg_addr         = static_cast<std::byte*>(_map_addr) - _map_offset + _reg_offset;
+    auto const result = cudaHostRegister(_reg_addr, _reg_size, cudaHostRegisterReadOnly);
+    if (result != cudaSuccess) {
+      _reg_addr = nullptr;
       CUDF_LOG_WARN("cudaHostRegister failed with {} ({})",
                     static_cast<int>(result),
                     cudaGetErrorString(result));
@@ -235,10 +251,12 @@ class memory_mapped_source : public file_source {
    */
   void unregister_mmap_buffer()
   {
-    if (not _is_map_registered) { return; }
+    if (_reg_addr == nullptr) { return; }
 
-    auto const result = cudaHostUnregister(_map_addr);
-    if (result != cudaSuccess) {
+    auto const result = cudaHostUnregister(_reg_addr);
+    if (result == cudaSuccess) {
+      _reg_addr = nullptr;
+    } else {
       CUDF_LOG_WARN("cudaHostUnregister failed with {} ({})",
                     static_cast<int>(result),
                     cudaGetErrorString(result));
@@ -256,17 +274,30 @@ class memory_mapped_source : public file_source {
 
     // Size for `mmap()` needs to include the page padding
     _map_size = size + (offset - _map_offset);
+    if (_map_size == 0) { return; }
 
     // Check if accessing a region within already mapped area
     _map_addr = mmap(nullptr, _map_size, PROT_READ, MAP_PRIVATE, fd, _map_offset);
     CUDF_EXPECTS(_map_addr != MAP_FAILED, "Cannot create memory mapping");
   }
 
+  void unmap()
+  {
+    if (_map_addr != nullptr) {
+      auto const result = munmap(_map_addr, _map_size);
+      if (result != 0) { CUDF_LOG_WARN("munmap failed with {}", result); }
+      _map_addr = nullptr;
+    }
+  }
+
  private:
-  size_t _map_offset      = 0;
-  size_t _map_size        = 0;
-  void* _map_addr         = nullptr;
-  bool _is_map_registered = false;
+  size_t _map_offset = 0;
+  size_t _map_size   = 0;
+  void* _map_addr    = nullptr;
+
+  size_t _reg_offset = 0;
+  size_t _reg_size   = 0;
+  void* _reg_addr    = nullptr;
 };
 
 /**
