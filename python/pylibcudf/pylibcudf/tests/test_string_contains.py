@@ -48,3 +48,40 @@ def test_contains_re(target_col, pa_target_scalar, plc_target_pat):
         pa_target_col, pa_target_scalar.as_py()
     )
     assert_column_eq(got, expected)
+
+
+def test_count_re():
+    pattern = "[1-9][a-z]"
+    arr = pa.array(["A1a2A3a4", "A1A2A3", None])
+    result = plc.strings.contains.count_re(
+        plc.interop.from_arrow(arr),
+        plc.strings.regex_program.RegexProgram.create(
+            pattern, plc.strings.regex_flags.RegexFlags.DEFAULT
+        ),
+    )
+    expected = pc.count_substring_regex(arr, pattern)
+    assert_column_eq(result, expected)
+
+
+def test_match_re():
+    pattern = "[1-9][a-z]"
+    arr = pa.array(["1a2b", "b1a2", None])
+    result = plc.strings.contains.matches_re(
+        plc.interop.from_arrow(arr),
+        plc.strings.regex_program.RegexProgram.create(
+            pattern, plc.strings.regex_flags.RegexFlags.DEFAULT
+        ),
+    )
+    expected = pc.match_substring_regex(arr, f"^{pattern}")
+    assert_column_eq(result, expected)
+
+
+def test_like():
+    pattern = "%a"
+    arr = pa.array(["1a2aa3aaa"])
+    result = plc.strings.contains.like(
+        plc.interop.from_arrow(arr),
+        plc.interop.from_arrow(pa.array([pattern])),
+    )
+    expected = pc.match_like(arr, pattern)
+    assert_column_eq(result, expected)
