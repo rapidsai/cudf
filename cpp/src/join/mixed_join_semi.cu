@@ -166,7 +166,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
 
   // skip rows that are null here.
   if ((compare_nulls == null_equality::EQUAL) or (not nullable(build))) {
-    row_set.insert(iter, iter + right_num_rows, stream.value());
+    row_set.insert_async(iter, iter + right_num_rows, stream.value());
   } else {
     thrust::counting_iterator<cudf::size_type> stencil(0);
     auto const [row_bitmask, _] =
@@ -174,7 +174,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
     // insert valid rows
-    row_set.insert_if(iter, iter + right_num_rows, stencil, pred, stream.value());
+    row_set.insert_if_async(iter, iter + right_num_rows, stencil, pred, stream.value());
   }
 
   detail::grid_1d const config(outer_num_rows * hash_set_type::cg_size, DEFAULT_JOIN_BLOCK_SIZE);
