@@ -187,16 +187,16 @@ Reading Data
 Tune the partition size
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-The ideal partition size is usually between 1/16 and 1/8 the memory
+The ideal partition size is usually between 1/32 and 1/8 the memory
 capacity of a single GPU. Increasing the partition size will typically
 reduce the number of tasks in your workflow and improve the GPU utilization
 for each task. However, if the partitions are too large, the risk of OOM
 errors can become significant.
 
 .. note::
-  As a general rule of thumb, aim for 1/16 in shuffle-intensive workflows
-  (e.g. large-scale sorting and joining), and 1/8 otherwise. For pathologically
-  skewed data distributions, it may be necessary to target 1/32 or smaller.
+  As a general rule of thumb, start with 1/32-1/16 in shuffle-intensive workflows
+  (e.g. large-scale sorting and joining), and 1/16-1/8 otherwise. For pathologically
+  skewed data distributions, it may be necessary to target 1/64 or smaller.
   This rule of thumb comes from anecdotal optimization and OOM-debugging
   experience. Since every workflow is different, choosing the best partition
   size is both an art and a science.
