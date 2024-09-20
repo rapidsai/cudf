@@ -86,7 +86,7 @@ diff_df["passed_diff"] = diff_df["passed_diff"].map(emoji_passed)
 diff_df["failed_diff"] = diff_df["failed_diff"].map(emoji_failed)
 diff_df["skipped_diff"] = diff_df["skipped_diff"].map(emoji_failed)
 diff_df["CPU Usage_diff"] = diff_df["CPU Usage_diff"].map(emoji_failed)
-diff_df["GPU Usage_diff"] = diff_df["GPU Usage_diff"].map(emoji_failed)
+diff_df["GPU Usage_diff"] = diff_df["GPU Usage_diff"].map(emoji_passed)
 
 df = pd.concat([pr_df, diff_df], axis=1)
 df = df.rename_axis("Test module")
