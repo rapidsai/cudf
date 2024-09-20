@@ -177,11 +177,11 @@ ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cpp)
 
 # ##################################################################################################
 # * nds-h benchmark --------------------------------------------------------------------------------
-ConfigureNVBench(NDSH_Q1 ndsh/q01.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q5 ndsh/q05.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q6 ndsh/q06.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q9 ndsh/q09.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q10 ndsh/q10.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q01_NVBENCH ndsh/q01.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q05_NVBENCH ndsh/q05.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q06_NVBENCH ndsh/q06.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q09_NVBENCH ndsh/q09.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q10_NVBENCH ndsh/q10.cpp ndsh/utilities.cpp)
 
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
@@ -337,7 +337,7 @@ ConfigureBench(TEXT_BENCH text/ngrams.cpp text/subword.cpp)
 
 ConfigureNVBench(
   TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
-  text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp
+  text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp text/word_minhash.cpp
 )
 
 # ##################################################################################################
