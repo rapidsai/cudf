@@ -9,6 +9,21 @@
     }
   },
   "runArgs": [
+    "--ipc",
+    "host",
+    "-v",
+    "/run/udev:/run/udev",
+    "-v",
+    "/sys/kernel/config:/sys/kernel/config",
+    "-v",
+    "/dev:/dev",
+    "-v",
+    "/lib/modules/6.5.0-1019-nvidia-64k:/lib/modules/6.5.0-1019-nvidia-64k",
+    "-v",
+    "/usr/local/cuda/gds:/mnt/gds",
+    "-v",
+    "/opt/nvidia/nsight-systems-cli:/mnt/nsight-systems-cli",
+    "--privileged",
     "--rm",
     "--name",
     "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-25.02-cuda12.5-conda"
@@ -60,5 +75,6 @@
         "nvidia.nsight-vscode-edition"
       ]
     }
-  }
+  },
+  "postCreateCommand":"/bin/bash /home/coder/cudf/.devcontainer/cuda12.5-conda/post_create_command.sh"
 }
