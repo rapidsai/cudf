@@ -795,53 +795,52 @@ TYPED_TEST(MixedLeftSemiJoinTest, MixedLeftSemiJoinGatherMap)
 
 TYPED_TEST(MixedLeftSemiJoinTest, MixedLeftSemiJoinGatherMapLarge)
 {
-  using T = double;
+  using T1 = double;
 
   auto const random_data = [](size_t size) {
-    std::vector<T> values(size);
+    std::vector<T1> values(size);
     using uniform_distribution =
-      typename std::conditional_t<std::is_same_v<T, bool>,
+      typename std::conditional_t<std::is_same_v<T1, bool>,
                                   std::bernoulli_distribution,
-                                  std::conditional_t<std::is_floating_point_v<T>,
-                                                     std::uniform_real_distribution<T>,
-                                                     std::uniform_int_distribution<T>>>;
+                                  std::conditional_t<std::is_floating_point_v<T1>,
+                                                     std::uniform_real_distribution<T1>,
+                                                     std::uniform_int_distribution<T1>>>;
 
     static constexpr auto seed = 0xf00d;
     static std::mt19937 engine{seed};
     static uniform_distribution dist{};
-    std::generate_n(values.begin(), size, [&]() { return T{dist(engine)}; });
+    std::generate(values.begin(), values.end(), [&]() { return T1{dist(engine)}; });
 
     return values;
   };
 
   auto const random_validity = [&](size_t size) {
     std::vector<bool> validity(size);
-    std::generate_n(validity.begin(), size, [&]() {
-      constexpr auto seed = 0xcafe;
-      std::mt19937 engine{seed};
-      std::bernoulli_distribution dist{};
-      return dist(engine);
-    });
+    static constexpr auto seed = 0xcafe;
+    static std::mt19937 engine{seed};
+    static std::bernoulli_distribution dist{};
+    std::generate(validity.begin(), validity.end(), [&]() { return dist(engine); });
+
     return validity;
   };
 
-  std::vector<std::pair<std::vector<T>, std::vector<bool>>> lefts = {
+  std::vector<std::pair<std::vector<T1>, std::vector<bool>>> lefts = {
     {random_data(500), random_validity(500)}, {random_data(500), random_validity(500)}};
-  std::vector<cudf::test::fixed_width_column_wrapper<T>> left_wrappers;
+  std::vector<cudf::test::fixed_width_column_wrapper<T1>> left_wrappers;
   std::vector<cudf::column_view> left_columns;
   for (auto [data, valids] : lefts) {
     left_wrappers.emplace_back(
-      cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end(), valids.begin()));
+      cudf::test::fixed_width_column_wrapper<T1>(data.begin(), data.end(), valids.begin()));
     left_columns.emplace_back(left_wrappers.back());
   };
 
-  std::vector<std::pair<std::vector<T>, std::vector<bool>>> rights = {
+  std::vector<std::pair<std::vector<T1>, std::vector<bool>>> rights = {
     {random_data(250), random_validity(250)}, {random_data(250), random_validity(250)}};
-  std::vector<cudf::test::fixed_width_column_wrapper<T>> right_wrappers;
+  std::vector<cudf::test::fixed_width_column_wrapper<T1>> right_wrappers;
   std::vector<cudf::column_view> right_columns;
   for (auto [data, valids] : rights) {
     right_wrappers.emplace_back(
-      cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end(), valids.begin()));
+      cudf::test::fixed_width_column_wrapper<T1>(data.begin(), data.end(), valids.begin()));
     right_columns.emplace_back(left_wrappers.back());
   };
 
