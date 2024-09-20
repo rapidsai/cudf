@@ -1310,6 +1310,10 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readJSON(Schema schema, JSONOptions opts, File path) {
+    // only prune the schema if one is provided
+    boolean cudfPruneSchema = schema.getColumnNames() != null &&
+        schema.getColumnNames().length != 0 &&
+        opts.shouldCudfPruneSchema();
     try (TableWithMeta twm = new TableWithMeta(
             readJSON(schema.getFlattenedNumChildren(), schema.getFlattenedColumnNames(),
                     schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(),
@@ -1324,7 +1328,7 @@ public final class Table implements AutoCloseable {
                     opts.leadingZerosAllowed(),
                     opts.nonNumericNumbersAllowed(),
                     opts.unquotedControlChars(),
-                    true))) {
+                    cudfPruneSchema))) {
 
       return gatherJSONColumns(schema, twm, -1);
     }
