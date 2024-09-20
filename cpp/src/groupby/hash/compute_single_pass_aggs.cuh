@@ -42,22 +42,28 @@ namespace detail {
 namespace hash {
 
 template <typename SetType>
+// TODO pass block
 __device__ void find_local_mapping(cudf::size_type cur_idx,
                                    cudf::size_type num_input_rows,
-                                   cudf::size_type* cardinality,
                                    SetType shared_set,
+                                   bitmask_type const* row_bitmask,
+                                   bool skip_rows_with_nulls,
+                                   cudf::size_type* cardinality,
                                    cudf::size_type* local_mapping_index,
                                    cudf::size_type* shared_set_indices)
 {
   cudf::size_type result_idx;
+  // TODO: un-init
   bool inserted;
-  if (cur_idx < num_input_rows) {
+  if (cur_idx < num_input_rows
+      // and (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, cur_idx))
+  ) {
     auto const result = shared_set.insert_and_find(cur_idx);
     result_idx        = *result.first;
     inserted          = result.second;
     // inserted a new element
     if (result.second) {
-      auto shared_set_index                = atomicAdd(cardinality, 1);
+      auto const shared_set_index          = atomicAdd(cardinality, 1);
       shared_set_indices[shared_set_index] = cur_idx;
       local_mapping_index[cur_idx]         = shared_set_index;
     }
@@ -65,7 +71,9 @@ __device__ void find_local_mapping(cudf::size_type cur_idx,
   // Syncing the thread block is needed so that updates in `local_mapping_index` are visible to all
   // threads in the thread block.
   __syncthreads();
-  if (cur_idx < num_input_rows) {
+  if (cur_idx < num_input_rows
+      // and (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, cur_idx))
+  ) {
     // element was already in set
     if (!inserted) { local_mapping_index[cur_idx] = local_mapping_index[result_idx]; }
   }
@@ -77,9 +85,9 @@ __device__ void find_global_mapping(cudf::size_type cur_idx,
                                     cudf::size_type* shared_set_indices,
                                     cudf::size_type* global_mapping_index)
 {
-  auto input_idx = shared_set_indices[cur_idx];
-  auto result    = global_set.insert_and_find(input_idx);
-  global_mapping_index[blockIdx.x * GROUPBY_SHM_MAX_ELEMENTS + cur_idx] = *result.first;
+  auto const input_idx = shared_set_indices[cur_idx];
+  global_mapping_index[blockIdx.x * GROUPBY_SHM_MAX_ELEMENTS + cur_idx] =
+    *global_set.insert_and_find(input_idx).first;
 }
 
 /*
@@ -100,6 +108,7 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
                                          cudf::size_type* block_cardinality,
                                          bool* direct_aggregations)
 {
+  // TODO: indices inserted in each shared memory set
   __shared__ cudf::size_type shared_set_indices[GROUPBY_SHM_MAX_ELEMENTS];
 
   // Shared set initialization
@@ -112,14 +121,11 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
                            storage);
   auto const block = cooperative_groups::this_thread_block();
   shared_set.initialize(block);
-  block.sync();
 
   auto shared_insert_ref = std::move(shared_set).with(cuco::insert_and_find);
 
   __shared__ cudf::size_type cardinality;
-
   if (block.thread_rank() == 0) { cardinality = 0; }
-
   block.sync();
 
   auto const stride = cudf::detail::grid_1d::grid_stride();
@@ -129,8 +135,10 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
        cur_idx += stride) {
     find_local_mapping(cur_idx,
                        num_input_rows,
-                       &cardinality,
                        shared_insert_ref,
+                       row_bitmask,
+                       skip_rows_with_nulls,
+                       &cardinality,
                        local_mapping_index,
                        shared_set_indices);
 
@@ -382,7 +390,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   cudf::host_span<cudf::groupby::aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   SetType& global_set,
-  bool skip_key_rows_with_nulls,
+  bool skip_rows_with_nulls,
   rmm::cuda_stream_view stream)
 {
   // GROUPBY_SHM_MAX_ELEMENTS with 0.7 occupancy
@@ -402,7 +410,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   auto const num_input_rows = keys.num_rows();
 
   auto row_bitmask =
-    skip_key_rows_with_nulls
+    skip_rows_with_nulls
       ? cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first
       : rmm::device_buffer{};
 
@@ -424,7 +432,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                                                    num_input_rows,
                                                    window_extent,
                                                    static_cast<bitmask_type*>(row_bitmask.data()),
-                                                   skip_key_rows_with_nulls,
+                                                   skip_rows_with_nulls,
                                                    local_mapping_index.data(),
                                                    global_mapping_index.data(),
                                                    block_cardinality.data(),
@@ -472,7 +480,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                                                  block_cardinality.data(),
                                                  stride,
                                                  static_cast<bitmask_type*>(row_bitmask.data()),
-                                                 skip_key_rows_with_nulls});
+                                                 skip_rows_with_nulls});
     extract_populated_keys(global_set, populated_keys, stream);
   }
 
