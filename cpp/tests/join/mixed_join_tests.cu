@@ -793,6 +793,116 @@ TYPED_TEST(MixedLeftSemiJoinTest, MixedLeftSemiJoinGatherMap)
              {2, 7, 8});
 }
 
+TYPED_TEST(MixedLeftSemiJoinTest, MixedLeftSemiJoinGatherMapLarge)
+{
+  using T = double;
+
+  auto const random_data = [](size_t size) {
+    std::vector<T> values(size);
+    using uniform_distribution =
+      typename std::conditional_t<std::is_same_v<T, bool>,
+                                  std::bernoulli_distribution,
+                                  std::conditional_t<std::is_floating_point_v<T>,
+                                                     std::uniform_real_distribution<T>,
+                                                     std::uniform_int_distribution<T>>>;
+
+    static constexpr auto seed = 0xf00d;
+    static std::mt19937 engine{seed};
+    static uniform_distribution dist{};
+    std::generate_n(values.begin(), size, [&]() { return T{dist(engine)}; });
+
+    return values;
+  };
+
+  auto const random_validity = [&](size_t size) {
+    std::vector<bool> validity(size);
+    std::generate_n(validity.begin(), size, [&]() {
+      constexpr auto seed = 0xcafe;
+      std::mt19937 engine{seed};
+      std::bernoulli_distribution dist{};
+      return dist(engine);
+    });
+    return validity;
+  };
+
+  std::vector<std::pair<std::vector<T>, std::vector<bool>>> lefts = {
+    {random_data(500), random_validity(500)}, {random_data(500), random_validity(500)}};
+  std::vector<cudf::test::fixed_width_column_wrapper<T>> left_wrappers;
+  std::vector<cudf::column_view> left_columns;
+  for (auto [data, valids] : lefts) {
+    left_wrappers.emplace_back(
+      cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end(), valids.begin()));
+    left_columns.emplace_back(left_wrappers.back());
+  };
+
+  std::vector<std::pair<std::vector<T>, std::vector<bool>>> rights = {
+    {random_data(250), random_validity(250)}, {random_data(250), random_validity(250)}};
+  std::vector<cudf::test::fixed_width_column_wrapper<T>> right_wrappers;
+  std::vector<cudf::column_view> right_columns;
+  for (auto [data, valids] : rights) {
+    right_wrappers.emplace_back(
+      cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end(), valids.begin()));
+    right_columns.emplace_back(left_wrappers.back());
+  };
+
+  // Left and right table views.
+  auto const left_table  = cudf::table_view{left_columns};
+  auto const right_table = cudf::table_view{right_columns};
+
+  // Use the zeroth column for equality.
+  auto const left_equality  = left_table.select({0});
+  auto const right_equality = right_table.select({0});
+
+  // Column references for equality column.
+  auto const col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto left_zero_eq_right_zero =
+    cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
+
+  // Expected size of left_semi_join with only zeroth column equality.
+  auto const expected_num_idx_left_zero_eq_right_zero =
+    cudf::conditional_left_semi_join_size(left_table, right_table, left_zero_eq_right_zero);
+
+  // Actual size of mixed_left_semi_join with only zeroth column equality.
+  auto const num_idx_left_zero_eq_right_zero =
+    cudf::mixed_left_semi_join(left_equality,
+                               right_equality,
+                               left_table,
+                               right_table,
+                               left_zero_eq_right_zero,
+                               cudf::null_equality::UNEQUAL)
+      ->size();
+
+  // Expected and actual sizes must match.
+  EXPECT_EQ(expected_num_idx_left_zero_eq_right_zero, num_idx_left_zero_eq_right_zero);
+
+  // Common column references for conditional column.
+  auto const col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+  auto left_one_gt_right_one =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, col_ref_right_1);
+
+  auto combined_condition = cudf::ast::operation(
+    cudf::ast::ast_operator::LOGICAL_AND, left_zero_eq_right_zero, left_one_gt_right_one);
+
+  // Expected size of left_semi_join with zeroth col equality and first col conditional.
+  auto const expected_num_idx_left_one_greater_right_one =
+    cudf::conditional_left_semi_join_size(left_table, right_table, combined_condition);
+
+  // Actual size of left_semi_join with zeroth col equality and first col conditional.
+  auto const num_idx_left_one_greater_right_one =
+    cudf::mixed_left_semi_join(left_equality,
+                               right_equality,
+                               left_table,
+                               right_table,
+                               left_one_gt_right_one,
+                               cudf::null_equality::UNEQUAL)
+      ->size();
+
+  // Expected and actual sizes must match.
+  EXPECT_EQ(expected_num_idx_left_one_greater_right_one, num_idx_left_one_greater_right_one);
+}
+
 TYPED_TEST(MixedLeftSemiJoinTest, BasicEqualityDuplicates)
 {
   this->test({{0, 1, 2, 1}, {3, 4, 5, 6}, {10, 20, 30, 40}},

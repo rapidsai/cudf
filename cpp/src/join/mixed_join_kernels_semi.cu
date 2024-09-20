@@ -59,20 +59,23 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     &intermediate_storage[tile.meta_group_rank() * device_expression_data.num_intermediates];
 
   cudf::size_type const outer_num_rows = left_table.num_rows();
-  auto const outer_row_index = cudf::detail::grid_1d::global_thread_id<block_size>() / cg_size;
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
-  if (outer_row_index < outer_num_rows) {
-    // Make sure to swap_tables here as hash_set will use probe table as the left one.
-    auto constexpr swap_tables = true;
-    // Figure out the number of elements for this key.
-    auto equality = single_expression_equality<has_nulls>{
-      evaluator, thread_intermediate_storage, swap_tables, equality_probe};
+  // Make sure to swap_tables here as hash_set will use probe table as the left one.
+  auto constexpr swap_tables = true;
+  auto equality              = single_expression_equality<has_nulls>{
+    evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
-    auto const set_ref_equality = set_ref.with_key_eq(equality);
-    auto const result           = set_ref_equality.contains(tile, outer_row_index);
+  // Create set ref with the new equality comparator.
+  auto const set_ref_equality = set_ref.with_key_eq(equality);
+
+  // Find all the rows in the left table that are in the hash table.
+  for (auto outer_row_index = cudf::detail::grid_1d::global_thread_id<block_size>() / cg_size;
+       outer_row_index < outer_num_rows;
+       outer_row_index += cudf::detail::grid_1d::grid_stride<block_size>() / cg_size) {
+    auto const result = set_ref_equality.contains(tile, outer_row_index);
     if (tile.thread_rank() == 0) left_table_keep_mask[outer_row_index] = result;
   }
 }
