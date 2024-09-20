@@ -5,9 +5,11 @@ from . import (
     case,
     char_types,
     contains,
+    extract,
     find,
     regex_flags,
     regex_program,
+    repeat,
     replace,
     slice,
 )

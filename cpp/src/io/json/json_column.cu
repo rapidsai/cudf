@@ -23,6 +23,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
+#include <cudf/io/detail/json.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -625,6 +626,8 @@ void make_device_json_column(device_span<SymbolT const> input,
   auto ignore_vals = cudf::detail::make_host_vector<uint8_t>(num_columns, stream);
   std::vector<uint8_t> is_mixed_type_column(num_columns, 0);
   std::vector<uint8_t> is_pruned(num_columns, 0);
+  // for columns that are not mixed type but have been forced as string
+  std::vector<bool> forced_as_string_column(num_columns);
   columns.try_emplace(parent_node_sentinel, std::ref(root));
 
   std::function<void(NodeIndexT, device_json_column&)> remove_child_columns =
@@ -695,11 +698,14 @@ void make_device_json_column(device_span<SymbolT const> input,
     // Struct, List, String, Value
     auto [name, parent_col_id] = name_and_parent_index(this_col_id);
 
-    // if parent is mixed type column or this column is pruned, ignore this column.
+    // if parent is mixed type column or this column is pruned or if parent
+    // has been forced as string, ignore this column.
     if (parent_col_id != parent_node_sentinel &&
-        (is_mixed_type_column[parent_col_id] || is_pruned[this_col_id])) {
+          (is_mixed_type_column[parent_col_id] || is_pruned[this_col_id]) ||
+        forced_as_string_column[parent_col_id]) {
       ignore_vals[this_col_id] = 1;
       if (is_mixed_type_column[parent_col_id]) { is_mixed_type_column[this_col_id] = 1; }
+      if (forced_as_string_column[parent_col_id]) { forced_as_string_column[this_col_id] = true; }
       continue;
     }
 
@@ -765,22 +771,26 @@ void make_device_json_column(device_span<SymbolT const> input,
     }
 
     auto this_column_category = column_categories[this_col_id];
-    if (is_enabled_mixed_types_as_string) {
-      // get path of this column, check if it is a struct/list forced as string, and enforce it
-      auto const nt                             = tree_path.get_path(this_col_id);
-      std::optional<data_type> const user_dtype = get_path_data_type(nt, options);
-      if ((column_categories[this_col_id] == NC_STRUCT or
-           column_categories[this_col_id] == NC_LIST) and
-          user_dtype.has_value() and user_dtype.value().id() == type_id::STRING) {
-        is_mixed_type_column[this_col_id] = 1;
-        this_column_category              = NC_STR;
-      }
+    // get path of this column, check if it is a struct/list forced as string, and enforce it
+    auto const nt                             = tree_path.get_path(this_col_id);
+    std::optional<data_type> const user_dtype = get_path_data_type(nt, options);
+    if ((column_categories[this_col_id] == NC_STRUCT or
+         column_categories[this_col_id] == NC_LIST) and
+        user_dtype.has_value() and user_dtype.value().id() == type_id::STRING) {
+      this_column_category = NC_STR;
     }
 
     CUDF_EXPECTS(parent_col.child_columns.count(name) == 0, "duplicate column name: " + name);
     // move into parent
     device_json_column col(stream, mr);
     initialize_json_columns(this_col_id, col, this_column_category);
+    if ((column_categories[this_col_id] == NC_STRUCT or
+         column_categories[this_col_id] == NC_LIST) and
+        user_dtype.has_value() and user_dtype.value().id() == type_id::STRING) {
+      col.forced_as_string_column          = true;
+      forced_as_string_column[this_col_id] = true;
+    }
+
     auto inserted = parent_col.child_columns.try_emplace(name, std::move(col)).second;
     CUDF_EXPECTS(inserted, "child column insertion failed, duplicate column name in the parent");
     if (not replaced) parent_col.column_order.push_back(name);
@@ -802,12 +812,30 @@ void make_device_json_column(device_span<SymbolT const> input,
           is_mixed_type_column[this_col_id] == 1)
         column_categories[this_col_id] = NC_STR;
     }
-    cudaMemcpyAsync(d_column_tree.node_categories.begin(),
-                    column_categories.data(),
-                    column_categories.size() * sizeof(column_categories[0]),
-                    cudaMemcpyDefault,
-                    stream.value());
+    cudf::detail::cuda_memcpy_async(d_column_tree.node_categories.begin(),
+                                    column_categories.data(),
+                                    column_categories.size() * sizeof(column_categories[0]),
+                                    cudf::detail::host_memory_kind::PAGEABLE,
+                                    stream);
   }
+
+  // ignore all children of columns forced as string
+  for (auto const this_col_id : unique_col_ids) {
+    auto parent_col_id = column_parent_ids[this_col_id];
+    if (parent_col_id != parent_node_sentinel and forced_as_string_column[parent_col_id]) {
+      forced_as_string_column[this_col_id] = true;
+      ignore_vals[this_col_id]             = 1;
+    }
+    // Convert only mixed type columns as string (so to copy), but not its children
+    if (parent_col_id != parent_node_sentinel and not forced_as_string_column[parent_col_id] and
+        forced_as_string_column[this_col_id])
+      column_categories[this_col_id] = NC_STR;
+  }
+  cudf::detail::cuda_memcpy_async(d_column_tree.node_categories.begin(),
+                                  column_categories.data(),
+                                  column_categories.size() * sizeof(column_categories[0]),
+                                  cudf::detail::host_memory_kind::PAGEABLE,
+                                  stream);
 
   // restore unique_col_ids order
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
@@ -982,38 +1010,57 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                    "string offset, string length mismatch");
       rmm::device_uvector<char_length_pair_t> d_string_data(col_size, stream);
       // TODO how about directly storing pair<char*, size_t> in json_column?
-      auto offset_length_it =
-        thrust::make_zip_iterator(json_col.string_offsets.begin(), json_col.string_lengths.begin());
-
-      data_type target_type{};
-
-      if (schema.has_value()) {
-#ifdef NJP_DEBUG_PRINT
-        std::cout << "-> explicit type: "
-                  << (schema.has_value() ? std::to_string(static_cast<int>(schema->type.id()))
-                                         : "n/a");
-#endif
-        target_type = schema.value().type;
-      } else if (json_col.forced_as_string_column) {
-        target_type = data_type{type_id::STRING};
-      }
-      // Infer column type, if we don't have an explicit type for it
-      else {
-        target_type = cudf::io::detail::infer_data_type(
-          options.json_view(), d_input, offset_length_it, col_size, stream);
-      }
 
       auto [result_bitmask, null_count] = make_validity(json_col);
-      // Convert strings to the inferred data type
-      auto col = parse_data(d_input.data(),
-                            offset_length_it,
-                            col_size,
-                            target_type,
-                            std::move(result_bitmask),
-                            null_count,
-                            options.view(),
-                            stream,
-                            mr);
+
+      data_type target_type{};
+      std::unique_ptr<column> col{};
+      if (options.normalize_whitespace && json_col.forced_as_string_column) {
+        CUDF_EXPECTS(prune_columns || options.mixed_types_as_string,
+                     "Whitespace normalization of nested columns requested as string requires "
+                     "either prune_columns or mixed_types_as_string to be enabled");
+        auto [normalized_d_input, col_offsets, col_lengths] =
+          cudf::io::json::detail::normalize_whitespace(
+            d_input, json_col.string_offsets, json_col.string_lengths, stream, mr);
+        auto offset_length_it = thrust::make_zip_iterator(col_offsets.begin(), col_lengths.begin());
+        target_type           = data_type{type_id::STRING};
+        // Convert strings to the inferred data type
+        col = parse_data(normalized_d_input.data(),
+                         offset_length_it,
+                         col_size,
+                         target_type,
+                         std::move(result_bitmask),
+                         null_count,
+                         options.view(),
+                         stream,
+                         mr);
+      } else {
+        auto offset_length_it = thrust::make_zip_iterator(json_col.string_offsets.begin(),
+                                                          json_col.string_lengths.begin());
+        if (schema.has_value()) {
+#ifdef NJP_DEBUG_PRINT
+          std::cout << "-> explicit type: "
+                    << (schema.has_value() ? std::to_string(static_cast<int>(schema->type.id()))
+                                           : "n/a");
+#endif
+          target_type = schema.value().type;
+        }
+        // Infer column type, if we don't have an explicit type for it
+        else {
+          target_type = cudf::io::detail::infer_data_type(
+            options.json_view(), d_input, offset_length_it, col_size, stream);
+        }
+        // Convert strings to the inferred data type
+        col = parse_data(d_input.data(),
+                         offset_length_it,
+                         col_size,
+                         target_type,
+                         std::move(result_bitmask),
+                         null_count,
+                         options.view(),
+                         stream,
+                         mr);
+      }
 
       // Reset nullable if we do not have nulls
       // This is to match the existing JSON reader's behaviour:
@@ -1120,11 +1167,15 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     const auto [tokens_gpu, token_indices_gpu] =
       get_token_stream(d_input, options, stream, cudf::get_current_device_resource_ref());
     // gpu tree generation
-    return get_tree_representation(tokens_gpu,
-                                   token_indices_gpu,
-                                   options.is_enabled_mixed_types_as_string(),
-                                   stream,
-                                   cudf::get_current_device_resource_ref());
+    // Note that to normalize whitespaces in nested columns coerced to be string, we need the column
+    // to either be of mixed type or we need to request the column to be returned as string by
+    // pruning it with the STRING dtype
+    return get_tree_representation(
+      tokens_gpu,
+      token_indices_gpu,
+      options.is_enabled_mixed_types_as_string() || options.is_enabled_prune_columns(),
+      stream,
+      cudf::get_current_device_resource_ref());
   }();  // IILE used to free memory of token data.
 #ifdef NJP_DEBUG_PRINT
   auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
