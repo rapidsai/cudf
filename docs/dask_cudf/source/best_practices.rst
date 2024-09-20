@@ -108,6 +108,16 @@ API instead. Simply `use the Dask configuration system
 to set the ``"dataframe.backend"`` option to ``"cudf"``, and the
 ``dask_cudf`` module will be imported and used implicitly.
 
+Be sure to use the :func:`to_backend` method if you need to convert
+between the different DataFrame backends. For example::
+
+  df = df.to_backend("pandas")  # This gives us a pandas-backed collection
+
+.. note::
+  Although :func:`to_backend` makes it easy to move data between pandas
+  and cuDF, repetitive CPU-GPU data movement can degrade performance
+  significantly.
+
 Avoid eager execution
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -128,6 +138,13 @@ local memory on the client process.
 execute the entire task graph associated with ``ddf``. The important difference
 is that the computed partitions will remain in distributed worker memory instead
 of being concatenated together on the client process.
+
+It is important to note that :func:`persist` will return immediately when
+executing on a distributed cluster. If you need a blocking synchronization
+point in your workflow, simply use the :func:`wait` function::
+
+  ddf = ddf.persist()
+  wait(ddf)
 
 .. note::
   Avoid calling :func:`persist` on a large collection that cannot fit comfortably
