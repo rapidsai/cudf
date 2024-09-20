@@ -116,7 +116,8 @@ between the different DataFrame backends. For example::
 .. note::
   Although :func:`to_backend` makes it easy to move data between pandas
   and cuDF, repetitive CPU-GPU data movement can degrade performance
-  significantly.
+  significantly. For optimal results, keep your data on the GPU as often
+  as possible.
 
 Avoid eager execution
 ~~~~~~~~~~~~~~~~~~~~~
