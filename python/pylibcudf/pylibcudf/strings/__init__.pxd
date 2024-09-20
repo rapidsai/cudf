@@ -5,6 +5,7 @@ from . cimport (
     case,
     char_types,
     contains,
+    extract,
     find,
     regex_flags,
     regex_program,
