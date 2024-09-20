@@ -60,12 +60,12 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   cudf::size_type const outer_num_rows = left_table.num_rows();
 
-  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
+  auto const evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
   // Make sure to swap_tables here as hash_set will use probe table as the left one.
   auto constexpr swap_tables = true;
-  auto equality              = single_expression_equality<has_nulls>{
+  auto const equality        = single_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
   // Create set ref with the new equality comparator.
