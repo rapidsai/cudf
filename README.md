@@ -97,5 +97,7 @@ See the [RAPIDS installation guide](https://docs.rapids.ai/install) for more OS 
 See build [instructions](CONTRIBUTING.md#setting-up-your-build-environment).
 
 ## Contributing
+[![Open in DevZero](https://assets.devzero.io/open-in-devzero.svg)](https://www.devzero.io/dashboard/recipes/new?repo-url=https://github.com/rapidsai/cudf)
 
 Please see our [guide for contributing to cuDF](CONTRIBUTING.md).
+
