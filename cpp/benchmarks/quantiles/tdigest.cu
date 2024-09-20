@@ -31,8 +31,9 @@ void bm_tdigest_merge(nvbench::state& state)
 {
   auto const num_tdigests = static_cast<cudf::size_type>(state.get_int64("num_tdigests"));
   auto const tdigest_size = static_cast<cudf::size_type>(state.get_int64("tdigest_size"));
-  auto const tdigests_per_group = static_cast<cudf::size_type>(state.get_int64("tdigests_per_group"));
-  auto const max_centroids = static_cast<cudf::size_type>(state.get_int64("max_centroids"));
+  auto const tdigests_per_group =
+    static_cast<cudf::size_type>(state.get_int64("tdigests_per_group"));
+  auto const max_centroids   = static_cast<cudf::size_type>(state.get_int64("max_centroids"));
   auto const num_groups      = num_tdigests / tdigests_per_group;
   auto const total_centroids = num_tdigests * tdigest_size;
 
