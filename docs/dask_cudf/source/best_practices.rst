@@ -194,7 +194,7 @@ for each task. However, if the partitions are too large, the risk of OOM
 errors can become significant.
 
 .. note::
-  As a general rule of thumb, start with 1/32-1/16 in shuffle-intensive workflows
+  As a general rule of thumb, start with 1/32-1/16 for shuffle-intensive workflows
   (e.g. large-scale sorting and joining), and 1/16-1/8 otherwise. For pathologically
   skewed data distributions, it may be necessary to target 1/64 or smaller.
   This rule of thumb comes from anecdotal optimization and OOM-debugging
