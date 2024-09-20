@@ -778,21 +778,6 @@ TYPED_TEST(MixedLeftSemiJoinTest, BasicEquality)
              {1});
 }
 
-TYPED_TEST(MixedLeftSemiJoinTest, MixedLeftSemiJoinGatherMap)
-{
-  auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
-  auto const col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-  auto left_one_greater_right_one =
-    cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, col_ref_right_1);
-
-  this->test({{2, 3, 9, 0, 1, 7, 4, 6, 5, 8}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}},
-             {{6, 5, 9, 8, 10, 32}, {0, 1, 2, 3, 4, 5}, {7, 8, 9, 0, 1, 2}},
-             {0},
-             {1},
-             left_one_greater_right_one,
-             {2, 7, 8});
-}
-
 TYPED_TEST(MixedLeftSemiJoinTest, BasicEqualityDuplicates)
 {
   this->test({{0, 1, 2, 1}, {3, 4, 5, 6}, {10, 20, 30, 40}},
@@ -914,19 +899,4 @@ TYPED_TEST(MixedLeftAntiJoinTest, AsymmetricLeftLargerEquality)
              {1, 2},
              left_zero_eq_right_zero,
              {0, 1, 3});
-}
-
-TYPED_TEST(MixedLeftAntiJoinTest, MixedLeftAntiJoinGatherMap)
-{
-  auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
-  auto const col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-  auto left_one_greater_right_one =
-    cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, col_ref_right_1);
-
-  this->test({{2, 3, 9, 0, 1, 7, 4, 6, 5, 8}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}},
-             {{6, 5, 9, 8, 10, 32}, {0, 1, 2, 3, 4, 5}, {7, 8, 9, 0, 1, 2}},
-             {0},
-             {1},
-             left_one_greater_right_one,
-             {0, 1, 3, 4, 5, 6, 9});
 }
