@@ -656,6 +656,24 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private static final byte[] CR_JSON_TEST_BUFFER = ("{\"a\":\"12\n3\"}\0" +
+      "{\"a\":\"AB\nC\"}\0").getBytes(StandardCharsets.UTF_8);
+
+  @Test
+  void testReadJSONDelim() {
+    Schema schema = Schema.builder().addColumn(DType.STRING, "a").build();
+    JSONOptions opts = JSONOptions.builder()
+        .withLines(true)
+        .withDelim('\0')
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column("12\n3", "AB\nC")
+        .build();
+        Table found = Table.readJSON(schema, opts, CR_JSON_TEST_BUFFER)) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
   private static final byte[] NESTED_JSON_DATA_BUFFER = ("{\"a\":{\"c\":\"C1\"}}\n" +
       "{\"a\":{\"c\":\"C2\", \"b\":\"B2\"}}\n" +
       "{\"d\":[1,2,3]}\n" +
