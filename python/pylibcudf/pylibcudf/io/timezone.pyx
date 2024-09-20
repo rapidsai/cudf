@@ -20,7 +20,6 @@ cpdef Table make_timezone_transition_table(str tzif_dir, str timezone_name):
     ----------
     tzif_dir : str
         The directory where the TZif files are located
-
     timezone_name : str
         standard timezone name
 
