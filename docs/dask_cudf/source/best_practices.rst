@@ -21,7 +21,7 @@ Deployment and Configuration
 Use Dask-CUDA
 ~~~~~~~~~~~~~
 
-In order to execute a Dask workflow on multiple GPUs, a Dask cluster must
+To execute a Dask workflow on multiple GPUs, a Dask cluster must
 be deployed with `Dask-CUDA <https://docs.rapids.ai/api/dask-cuda/stable/>`__
 and `Dask.distributed <https://distributed.dask.org/en/stable/>`__.
 
@@ -47,7 +47,7 @@ is also illustrated within the multi-GPU section of `Dask cuDF's
   <https://docs.dask.org/en/latest/deploying-kubernetes.html>`__ and `Dask-Jobqueue
   <https://jobqueue.dask.org/en/latest/>`__.
 
-  Please see `RAPIDS-deployment documentation <https://docs.rapids.ai/deployment/stable/>`__
+  Please see `the RAPIDS deployment documentation <https://docs.rapids.ai/deployment/stable/>`__
   for further details and examples.
 
 
@@ -63,7 +63,7 @@ These tools include an intuitive `browser dashboard
 No matter the workflow, using the dashboard is strongly recommended.
 It provides a visual representation of the worker resources and compute
 progress. It also shows basic GPU memory and utilization metrics (under
-the ``GPU`` tab). In order to visualize further GPU metrics in JupyterLab,
+the ``GPU`` tab). To visualize more detailed GPU metrics in JupyterLab,
 use `NVDashboard <https://github.com/rapidsai/jupyterlab-nvdashboard>`__.
 
 
@@ -89,7 +89,7 @@ Use RMM
 
 Memory allocations in cuDF are significantly faster and more efficient when
 the `RAPIDS Memory Manager (RMM) <https://docs.rapids.ai/api/rmm/stable/>`__
-library is used on worker processes. In most cases, the best way to manage
+library is configured appropriately on worker processes. In most cases, the best way to manage
 memory is by initializing an RMM pool on each worker before executing a
 workflow. When using :func:`LocalCUDACluster`, this is easily accomplished
 by setting ``rmm_pool_size`` to a large fraction (e.g. ``0.9``).
@@ -116,7 +116,7 @@ between the different DataFrame backends. For example::
 .. note::
   Although :func:`to_backend` makes it easy to move data between pandas
   and cuDF, repetitive CPU-GPU data movement can degrade performance
-  significantly. For optimal results, keep your data on the GPU as often
+  significantly. For optimal results, keep your data on the GPU as much
   as possible.
 
 Avoid eager execution
@@ -275,10 +275,10 @@ for more details.
   may lead to an OOM error.
 
 
-Sorting, Joining and Grouping
------------------------------
+Sorting, Joining, and Grouping
+------------------------------
 
-Sorting, joining and grouping operations all have the potential to
+Sorting, joining, and grouping operations all have the potential to
 require the global shuffling of data between distinct partitions.
 When the initial data fits comfortably in global GPU memory, these
 "all-to-all" operations are typically bound by worker-to-worker
