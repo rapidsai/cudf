@@ -2156,6 +2156,8 @@ Java_ai_rapids_cudf_Table_writeParquetBufferBegin(JNIEnv* env,
                                                   jobjectArray j_metadata_keys,
                                                   jobjectArray j_metadata_values,
                                                   jint j_compression,
+                                                  jint j_row_group_size_rows,
+                                                  jlong j_row_group_size_bytes,
                                                   jint j_stats_freq,
                                                   jbooleanArray j_isInt96,
                                                   jintArray j_precisions,
@@ -2211,6 +2213,8 @@ Java_ai_rapids_cudf_Table_writeParquetBufferBegin(JNIEnv* env,
       chunked_parquet_writer_options::builder(sink)
         .metadata(std::move(metadata))
         .compression(static_cast<compression_type>(j_compression))
+        .row_group_size_rows(j_row_group_size_rows)
+        .row_group_size_bytes(j_row_group_size_bytes)
         .stats_level(static_cast<statistics_freq>(j_stats_freq))
         .key_value_metadata({kv_metadata})
         .compression_statistics(stats)
@@ -2233,6 +2237,8 @@ Java_ai_rapids_cudf_Table_writeParquetFileBegin(JNIEnv* env,
                                                 jobjectArray j_metadata_keys,
                                                 jobjectArray j_metadata_values,
                                                 jint j_compression,
+                                                jint j_row_group_size_rows,
+                                                jlong j_row_group_size_bytes,
                                                 jint j_stats_freq,
                                                 jbooleanArray j_isInt96,
                                                 jintArray j_precisions,
@@ -2286,6 +2292,8 @@ Java_ai_rapids_cudf_Table_writeParquetFileBegin(JNIEnv* env,
       chunked_parquet_writer_options::builder(sink)
         .metadata(std::move(metadata))
         .compression(static_cast<compression_type>(j_compression))
+        .row_group_size_rows(j_row_group_size_rows)
+        .row_group_size_bytes(j_row_group_size_bytes)
         .stats_level(static_cast<statistics_freq>(j_stats_freq))
         .key_value_metadata({kv_metadata})
         .compression_statistics(stats)
