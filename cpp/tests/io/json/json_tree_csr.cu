@@ -68,7 +68,7 @@ void print(cudf::host_span<T const> vec, std::string name)
 
 bool check_equality(cuio_json::tree_meta_t& d_a,
                     cudf::device_span<cudf::size_type const> d_a_max_row_offsets,
-                    cuio_json::experimental::csr& d_b_csr,
+                    cuio_json::experimental::compressed_sparse_row& d_b_csr,
                     cuio_json::experimental::column_tree_properties& d_b_ctp,
                     rmm::cuda_stream_view stream)
 {

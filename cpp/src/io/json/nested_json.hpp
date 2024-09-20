@@ -189,7 +189,7 @@ namespace experimental {
 /*
  * @brief Sparse graph adjacency matrix stored in Compressed Sparse Row (CSR) format.
  */
-struct csr {
+struct compressed_sparse_row {
   rmm::device_uvector<NodeIndexT> rowidx;
   rmm::device_uvector<NodeIndexT> colidx;
 };
@@ -205,16 +205,14 @@ struct column_tree_properties {
 };
 
 /*
- * @brief Unvalidated column tree stored in Compressed Sparse Row (CSR) format. The device json
+ * @brief Unverified column tree stored in Compressed Sparse Row (CSR) format. The device json
  * column subtree - the subgraph that conforms to column tree properties - is extracted and further
  * processed according to the JSON reader options passed. Only the final processed subgraph is
  * annotated with information required to construct cuDF columns.
  */
 struct column_tree {
-  // position of nnzs
-  csr adjacency;
-  rmm::device_uvector<NodeIndexT> rowidx;
-  rmm::device_uvector<NodeIndexT> colidx;
+  // concatenated adjacency list
+  compressed_sparse_row adjacency;
   // device_json_column properties
   using row_offset_t = size_type;
   // Indicator array for the device column subtree
@@ -241,7 +239,7 @@ namespace detail {
  * in each column
  */
 CUDF_EXPORT
-std::tuple<csr, column_tree_properties> reduce_to_column_tree(
+std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   tree_meta_t& tree,
   device_span<NodeIndexT const> original_col_ids,
   device_span<size_type const> row_offsets,

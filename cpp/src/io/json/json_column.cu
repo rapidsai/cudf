@@ -269,7 +269,7 @@ struct h_tree_meta_t {
 };
 
 struct h_column_tree {
-  // position of nnzs
+  // concatenated adjacency list
   std::vector<NodeIndexT> rowidx;
   std::vector<NodeIndexT> colidx;
   // node properties
@@ -280,7 +280,7 @@ struct h_column_tree {
 #ifdef CSR_DEBUG_EQ
 bool check_equality(tree_meta_t& d_a,
                     cudf::device_span<cudf::size_type const> d_a_max_row_offsets,
-                    experimental::csr& d_b_csr,
+                    experimental::compressed_sparse_row& d_b_csr,
                     experimental::column_tree_properties& d_b_ctp,
                     rmm::cuda_stream_view stream)
 {
@@ -332,17 +332,11 @@ bool check_equality(tree_meta_t& d_a,
     if (b.rowidx[0] != 0 || b.rowidx[1] != 1) return false;
     if (!b.colidx.empty()) return false;
     for (size_t u = 0; u < num_nodes; u++) {
-      if (a.node_categories[b.column_ids[u]] != b.categories[u]) {
-        printf("4\n");
-        return false;
-      }
+      if (a.node_categories[b.column_ids[u]] != b.categories[u]) { return false; }
     }
 
     for (size_t u = 0; u < num_nodes; u++) {
-      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {
-        printf("5\n");
-        return false;
-      }
+      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) { return false; }
     }
   }
   return true;
