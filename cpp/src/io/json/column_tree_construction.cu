@@ -339,7 +339,7 @@ std::tuple<csr, column_tree_properties> reduce_to_column_tree(
 #endif
 
   rmm::device_uvector<NodeIndexT> colidx((num_columns - 1) * 2, stream);
-  thrust::fill(rmm::exec_policy(stream), colidx.begin(), colidx.end(), -1);
+  thrust::fill(rmm::exec_policy_nosync(stream), colidx.begin(), colidx.end(), -1);
   // excluding root node, construct scatter map
   rmm::device_uvector<NodeIndexT> map(num_columns - 1, stream);
   thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
@@ -543,8 +543,8 @@ reduce_to_column_tree(tree_meta_t& tree,
 {
   CUDF_FUNC_RANGE();
   // 1. column count for allocation
-  auto const num_columns =
-    thrust::unique_count(rmm::exec_policy(stream), sorted_col_ids.begin(), sorted_col_ids.end());
+  auto const num_columns = thrust::unique_count(
+    rmm::exec_policy_nosync(stream), sorted_col_ids.begin(), sorted_col_ids.end());
 
   // 2. reduce_by_key {col_id}, {row_offset}, max.
   rmm::device_uvector<NodeIndexT> unique_col_ids(num_columns, stream);
@@ -567,7 +567,7 @@ reduce_to_column_tree(tree_meta_t& tree,
   rmm::device_uvector<SymbolOffsetT> col_range_begin(num_columns, stream);  // Field names
   rmm::device_uvector<SymbolOffsetT> col_range_end(num_columns, stream);
   rmm::device_uvector<size_type> unique_node_ids(num_columns, stream);
-  thrust::unique_by_key_copy(rmm::exec_policy(stream),
+  thrust::unique_by_key_copy(rmm::exec_policy_nosync(stream),
                              sorted_col_ids.begin(),
                              sorted_col_ids.end(),
                              ordered_node_ids.begin(),
@@ -575,7 +575,7 @@ reduce_to_column_tree(tree_meta_t& tree,
                              unique_node_ids.begin());
 
   thrust::copy_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_zip_iterator(
       thrust::make_permutation_iterator(tree.parent_node_ids.begin(), unique_node_ids.begin()),
       thrust::make_permutation_iterator(tree.node_range_begin.begin(), unique_node_ids.begin()),
@@ -586,7 +586,7 @@ reduce_to_column_tree(tree_meta_t& tree,
 
   // convert parent_node_ids to parent_col_ids
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     parent_col_ids.begin(),
     parent_col_ids.end(),
     parent_col_ids.begin(),
@@ -621,11 +621,11 @@ reduce_to_column_tree(tree_meta_t& tree,
   //   gather the max_row_offsets from children row offset array.
   {
     rmm::device_uvector<NodeIndexT> list_parents_children_max_row_offsets(num_columns, stream);
-    thrust::fill(rmm::exec_policy(stream),
+    thrust::fill(rmm::exec_policy_nosync(stream),
                  list_parents_children_max_row_offsets.begin(),
                  list_parents_children_max_row_offsets.end(),
                  0);
-    thrust::for_each(rmm::exec_policy(stream),
+    thrust::for_each(rmm::exec_policy_nosync(stream),
                      unique_col_ids.begin(),
                      unique_col_ids.end(),
                      [column_categories = column_categories.begin(),
@@ -643,7 +643,7 @@ reduce_to_column_tree(tree_meta_t& tree,
                      });
 
     thrust::gather_if(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       parent_col_ids.begin(),
       parent_col_ids.end(),
       parent_col_ids.begin(),
@@ -662,7 +662,7 @@ reduce_to_column_tree(tree_meta_t& tree,
   // copy lists' max_row_offsets to children.
   // all structs should have same size.
   thrust::transform_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     unique_col_ids.begin(),
     unique_col_ids.end(),
     max_row_offsets.begin(),
@@ -692,7 +692,7 @@ reduce_to_column_tree(tree_meta_t& tree,
 
   // For Struct and List (to avoid copying entire strings when mixed type as string is enabled)
   thrust::transform_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     col_range_begin.begin(),
     col_range_begin.end(),
     column_categories.begin(),
