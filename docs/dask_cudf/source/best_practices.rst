@@ -29,7 +29,7 @@ When running on a single machine, the `LocalCUDACluster <https://docs.rapids.ai/
 convenience function is strongly recommended. No matter how many GPUs are
 available on the machine (even one!), using `Dask-CUDA has many advantages
 <https://docs.rapids.ai/api/dask-cuda/stable/#motivation>`__
-over default (threaded) execution. Just to list a few::
+over default (threaded) execution. Just to list a few:
 
 * Dask-CUDA makes it easy to pin workers to specific devices.
 * Dask-CUDA makes it easy to configure memory-spilling options.
@@ -136,11 +136,10 @@ local memory on the client process.
   in the memory of a single GPU!
 
 :func:`persist`: Like :func:`compute`, calling ``ddf.persist()`` will
-execute the entire task graph associated with ``ddf``. The important difference
-is that the computed partitions will remain in distributed worker memory instead
-of being concatenated together on the client process.
-
-It is important to note that :func:`persist` will return immediately when
+execute the entire task graph associated with ``ddf``. The most important
+difference is that the computed partitions will remain in distributed
+worker memory instead of being concatenated together on the client process.
+Another difference is that :func:`persist` will return immediately when
 executing on a distributed cluster. If you need a blocking synchronization
 point in your workflow, simply use the :func:`wait` function::
 
@@ -315,7 +314,7 @@ an opaque DataFrame expression that blocks the query-planning `optimizer
 <https://docs.dask.org/en/stable/dataframe-optimizer.html>`__ from performing
 useful optimizations (like projection and filter pushdown).
 
-Since column-projection pushdown is often the most important optimization,
+Since column-projection pushdown is often the most effective optimization,
 it is important to select the necessary columns both before and after calling
 :func:`map_partitions`. You can also add explicit filter operations to further
 mitigate the loss of filter pushdown.
