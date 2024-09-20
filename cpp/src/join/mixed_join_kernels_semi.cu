@@ -53,7 +53,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   // used to circumvent conflicts between arrays of different types between
   // different template instantiations due to the extern specifier.
   extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
+  auto intermediate_storage =
     reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
     &intermediate_storage[tile.meta_group_rank() * device_expression_data.num_intermediates];
