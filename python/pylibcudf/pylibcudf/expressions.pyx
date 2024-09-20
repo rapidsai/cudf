@@ -198,8 +198,8 @@ cdef class ColumnNameReference(Expression):
         Name of this column in the table metadata
         (provided when the expression is evaluated).
     """
-    def __cinit__(self, str name):
+    def __cinit__(self, str colmun_name):
         self.c_obj = <expression_ptr> \
             move(make_unique[libcudf_exp.column_name_reference](
-                <string>(name.encode("utf-8"))
+                <string>(column_name.encode("utf-8"))
             ))

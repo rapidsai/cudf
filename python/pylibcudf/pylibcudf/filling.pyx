@@ -89,7 +89,7 @@ cpdef void fill_in_place(
             dereference(value.c_obj)
         )
 
-cpdef Column sequence(size_type size, Scalar init, Scalar step):
+cpdef Column sequence(int size, Scalar init, Scalar step):
     """Create a sequence column of size ``size`` with initial value ``init`` and step
     ``step``.
 

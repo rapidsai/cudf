@@ -14,6 +14,8 @@ from .gpumemoryview cimport gpumemoryview
 cpdef tuple[gpumemoryview, int] nans_to_nulls(Column input):
     """Create a null mask preserving existing nulls and converting nans to null.
 
+    For details, see :cpp:func:`nans_to_nulls`.
+
     Parameters
     ----------
     input : Column
