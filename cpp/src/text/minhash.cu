@@ -90,7 +90,8 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
     auto begin = warp_hashes + (seed_idx * tile_size);
     thrust::uninitialized_fill(thrust::seq, begin, begin + tile_size, init);
   }
-  __syncwarp();
+  //__syncwarp();
+  __syncthreads();
 
   auto const d_output = d_hashes + (str_idx * seeds.size());
 
