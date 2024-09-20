@@ -41,6 +41,7 @@ pushd python/dask_cudf/dask_cudf
 DASK_DATAFRAME__QUERY_PLANNING=True python -m pytest \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
+  --dist=worksteal \
   .
 popd
 
@@ -50,5 +51,6 @@ pushd python/dask_cudf/dask_cudf
 DASK_DATAFRAME__QUERY_PLANNING=False python -m pytest \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-legacy.xml" \
   --numprocesses=8 \
+  --dist=worksteal \
   .
 popd
