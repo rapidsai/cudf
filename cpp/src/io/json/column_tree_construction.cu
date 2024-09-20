@@ -394,11 +394,7 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   auto rowidx = construct_rowidx(num_columns, parent_col_ids);
   auto colidx = partially_construct_colidx(num_columns, parent_col_ids, rowidx);
 
-  // Mixed types in List children go to different columns,
-  // so all immediate children of list column should have same max_row_offsets.
-  //   create list's children max_row_offsets array
-  //   gather the max_row_offsets from children row offset array.
-  if (num_columns > 1) {
+  auto max_children_max_row_offsets_colidx_update = [&colidx, &stream](NodeIndexT num_columns, device_span<NodeIndexT const> rowidx, device_span<NodeIndexT const> parent_col_ids, device_span<row_offset_t const> max_row_offsets) {
     auto max_row_offsets_it = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
       cuda::proclaim_return_type<row_offset_t>(
@@ -468,25 +464,23 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
     print<NodeIndexT>(colidx, "h_colidx", stream);
 #endif
 
+    return max_children_max_row_offsets;
+  };
+
+  row_array_parent_col_id = rev_mapped_col_ids.element(row_array_parent_col_id, stream);
+  auto root_node = (column_categories.element(0, stream) == NC_LIST && !is_array_of_arrays) ||
+                       (is_array_of_arrays && row_array_parent_col_id)
+                     ? 1
+                     : 0;
+
+  auto update_max_row_offsets = [&tree, row_array_parent_col_id, is_array_of_arrays, root_node, &stream](NodeIndexT num_columns, device_span<NodeIndexT const> rowidx, device_span<NodeIndexT const> colidx, device_span<NodeT const> column_categories, device_span<row_offset_t> max_row_offsets, device_span<row_offset_t const> max_children_max_row_offsets) {
     // Vector to store the latest ancestor of LIST type. If no such ancestor is found,
     // store the root node of tree. Note that a node cannot be an ancestor of itself
     auto list_ancestors = cudf::detail::make_zeroed_device_uvector_async<NodeIndexT>(
       static_cast<std::size_t>(num_columns), stream, cudf::get_current_device_resource_ref());
     auto* dev_num_levels_ptr = thrust::max_element(
       rmm::exec_policy_nosync(stream), tree.node_levels.begin(), tree.node_levels.end());
-    row_array_parent_col_id = rev_mapped_col_ids.element(row_array_parent_col_id, stream);
-    auto root_node = (column_categories.element(0, stream) == NC_LIST && !is_array_of_arrays) ||
-                         (is_array_of_arrays && row_array_parent_col_id)
-                       ? 1
-                       : 0;
-    // root_node = (is_array_of_arrays && row_array_parent_col_id && num_columns == 2) ? 0 :
-    // root_node;
     if (root_node) list_ancestors.set_element_async(root_node, root_node, stream);
-    /*
-    std::cout << "root_node = " << root_node << std::endl;
-    std::cout << "row_array_parent_col_id = " << row_array_parent_col_id << std::endl;
-    std::cout << "is_array_of_arrays = " << is_array_of_arrays << std::endl;
-    */
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator(root_node + 1),
                        num_columns - root_node - 1,
@@ -522,6 +516,15 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
 #ifdef CSR_DEBUG_PRINT
     print<size_type>(max_row_offsets, "h_max_row_offsets", stream);
 #endif
+  };
+
+  // Mixed types in List children go to different columns,
+  // so all immediate children of list column should have same max_row_offsets.
+  //   create list's children max_row_offsets array
+  //   gather the max_row_offsets from children row offset array.
+  if (num_columns > 1) {
+    auto max_children_max_row_offsets = max_children_max_row_offsets_colidx_update(num_columns, rowidx, parent_col_ids, max_row_offsets);
+    update_max_row_offsets(num_columns, rowidx, colidx, column_categories, max_row_offsets, max_children_max_row_offsets);
   }
 
   return std::tuple{
