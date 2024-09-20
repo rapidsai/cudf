@@ -1171,6 +1171,12 @@ build_tree2(device_json_column& root,
     if (adj[adj[parent_node_sentinel][0]].empty()) return {};  // TODO: verify if needed?
     auto root_list_col_id =
       is_enabled_lines ? adj[parent_node_sentinel][0] : adj[adj[parent_node_sentinel][0]][0];
+    // mark these col_id as not pruned.
+    if (!is_enabled_lines) {
+      auto top_level_list_id       = adj[parent_node_sentinel][0];
+      is_pruned[top_level_list_id] = false;
+    }
+    is_pruned[root_list_col_id] = false;
     std::visit(cudf::detail::visitor_overload{
                  [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
                    std::vector<data_type> const& user_dtypes) -> void {
