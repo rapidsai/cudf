@@ -76,6 +76,8 @@ __device__ void initialize_shared_memory_aggregates(int col_start,
 
 __device__ void compute_pre_aggregrates(int col_start,
                                         int col_end,
+                                        bitmask_type const* row_bitmask,
+                                        bool skip_rows_with_nulls,
                                         cudf::table_device_view input_values,
                                         cudf::size_type num_input_rows,
                                         cudf::size_type* local_mapping_index,
@@ -83,21 +85,24 @@ __device__ void compute_pre_aggregrates(int col_start,
                                         bool** s_aggregates_valid_pointer,
                                         cudf::aggregation::Kind const* aggs)
 {
+  // TODO grid_1d utility
   for (auto cur_idx = blockDim.x * blockIdx.x + threadIdx.x; cur_idx < num_input_rows;
        cur_idx += blockDim.x * gridDim.x) {
-    auto map_idx = local_mapping_index[cur_idx];
+    if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, cur_idx)) {
+      auto map_idx = local_mapping_index[cur_idx];
 
-    for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
-      auto input_col = input_values.column(col_idx);
+      for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
+        auto input_col = input_values.column(col_idx);
 
-      cudf::detail::dispatch_type_and_aggregation(input_col.type(),
-                                                  aggs[col_idx],
-                                                  shmem_element_aggregator{},
-                                                  s_aggregates_pointer[col_idx],
-                                                  map_idx,
-                                                  s_aggregates_valid_pointer[col_idx],
-                                                  input_col,
-                                                  cur_idx);
+        cudf::detail::dispatch_type_and_aggregation(input_col.type(),
+                                                    aggs[col_idx],
+                                                    shmem_element_aggregator{},
+                                                    s_aggregates_pointer[col_idx],
+                                                    map_idx,
+                                                    s_aggregates_valid_pointer[col_idx],
+                                                    input_col,
+                                                    cur_idx);
+      }
     }
   }
 }
@@ -133,6 +138,8 @@ __device__ void compute_final_aggregates(int col_start,
 /* Takes the local_mapping_index and global_mapping_index to compute
  * pre (shared) and final (global) aggregates*/
 CUDF_KERNEL void compute_aggs_kernel(cudf::size_type num_rows,
+                                     bitmask_type const* row_bitmask,
+                                     bool skip_rows_with_nulls,
                                      cudf::size_type* local_mapping_index,
                                      cudf::size_type* global_mapping_index,
                                      cudf::size_type* block_cardinality,
@@ -183,6 +190,8 @@ CUDF_KERNEL void compute_aggs_kernel(cudf::size_type num_rows,
     block.sync();
     compute_pre_aggregrates(col_start,
                             col_end,
+                            row_bitmask,
+                            skip_rows_with_nulls,
                             input_values,
                             num_rows,
                             local_mapping_index,

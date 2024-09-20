@@ -55,9 +55,8 @@ __device__ void find_local_mapping(cudf::size_type cur_idx,
   cudf::size_type result_idx;
   // TODO: un-init
   bool inserted;
-  if (cur_idx < num_input_rows
-      // and (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, cur_idx))
-  ) {
+  if (cur_idx < num_input_rows and
+      (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, cur_idx))) {
     auto const result = shared_set.insert_and_find(cur_idx);
     result_idx        = *result.first;
     inserted          = result.second;
@@ -71,9 +70,8 @@ __device__ void find_local_mapping(cudf::size_type cur_idx,
   // Syncing the thread block is needed so that updates in `local_mapping_index` are visible to all
   // threads in the thread block.
   __syncthreads();
-  if (cur_idx < num_input_rows
-      // and (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, cur_idx))
-  ) {
+  if (cur_idx < num_input_rows and
+      (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, cur_idx))) {
     // element was already in set
     if (!inserted) { local_mapping_index[cur_idx] = local_mapping_index[result_idx]; }
   }
@@ -295,6 +293,8 @@ size_t compute_shared_memory_size(Kernel kernel, int grid_size)
 
 void compute_aggregations(int grid_size,
                           cudf::size_type num_input_rows,
+                          bitmask_type const* row_bitmask,
+                          bool skip_rows_with_nulls,
                           cudf::size_type* local_mapping_index,
                           cudf::size_type* global_mapping_index,
                           cudf::size_type* block_cardinality,
@@ -312,6 +312,8 @@ void compute_aggregations(int grid_size,
   auto shmem_agg_size = shmem_size - shmem_agg_pointer_size * 2;
   compute_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, shmem_size, stream>>>(
     num_input_rows,
+    row_bitmask,
+    skip_rows_with_nulls,
     local_mapping_index,
     global_mapping_index,
     block_cardinality,
@@ -460,6 +462,8 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
 
   compute_aggregations(grid_size,
                        num_input_rows,
+                       static_cast<bitmask_type*>(row_bitmask.data()),
+                       skip_rows_with_nulls,
                        local_mapping_index.data(),
                        global_mapping_index.data(),
                        block_cardinality.data(),
