@@ -124,7 +124,7 @@ Avoid eager execution
 
 Although Dask DataFrame collections are lazy by default, there are several
 notable methods that will result in the immediate execution of the
-underlying task graph::
+underlying task graph:
 
 :func:`compute`: Calling ``ddf.compute()`` will materialize the result of
 ``ddf`` and return a single cuDF object. This is done by executing the entire
@@ -219,7 +219,7 @@ Dask to perform valuable query optimizations like column projection and
 predicate pushdown.
 
 The most important arguments to :func:`read_parquet` are ``blocksize`` and
-``aggregate_files``::
+``aggregate_files``:
 
 ``blocksize``: Use this argument to specify the maximum partition size.
 The default is `"256 MiB"`, but larger values are usually more performant
@@ -259,7 +259,7 @@ Use :func:`from_map`
 To implement custom DataFrame-creation logic that is not covered by
 existing APIs (like :func:`read_parquet`), use :func:`dask.dataframe.from_map`
 whenever possible. The :func:`from_map` API has several advantages
-over :func:`from_delayed`::
+over :func:`from_delayed`:
 
 * It allows proper lazy execution of your custom logic
 * It enables column projection (as long as the mapped function supports a ``columns`` key-word argument)
@@ -286,7 +286,7 @@ communication. When the data is larger than global GPU memory, the
 bottleneck is typically device-to-host memory spilling.
 
 Although every workflow is different, the following guidelines
-are often recommended::
+are often recommended:
 
 * `Use a distributed cluster with Dask-CUDA workers <Use Dask-CUDA>`_
 * `Use native cuDF spilling whenever possible <Enable cuDF Spilling>`_
