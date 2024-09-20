@@ -23,6 +23,7 @@
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -32,105 +33,6 @@
 
 // Base test fixture for tests
 struct JsonWSNormalizationTest : public cudf::test::BaseFixture {};
-
-void run_test(std::string const& host_input, std::string const& expected_host_output)
-{
-  // Prepare cuda stream for data transfers & kernels
-  auto stream_view = cudf::test::get_default_stream();
-
-  auto device_input = rmm::device_buffer(
-    host_input.c_str(), host_input.size(), stream_view, rmm::mr::get_current_device_resource());
-
-  // Preprocessing FST
-  cudf::io::datasource::owning_buffer<rmm::device_buffer> device_data(std::move(device_input));
-  cudf::io::json::detail::normalize_whitespace(
-    device_data, stream_view, rmm::mr::get_current_device_resource());
-
-  std::string preprocessed_host_output(device_data.size(), 0);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(preprocessed_host_output.data(),
-                                device_data.data(),
-                                preprocessed_host_output.size(),
-                                cudaMemcpyDeviceToHost,
-                                stream_view.value()));
-
-  stream_view.synchronize();
-  ASSERT_EQ(preprocessed_host_output.size(), expected_host_output.size());
-  CUDF_TEST_EXPECT_VECTOR_EQUAL(
-    preprocessed_host_output, expected_host_output, preprocessed_host_output.size());
-}
-
-TEST_F(JsonWSNormalizationTest, GroundTruth_Spaces)
-{
-  std::string input  = R"({ "A" : "TEST" })";
-  std::string output = R"({"A":"TEST"})";
-  run_test(input, output);
-}
-
-TEST_F(JsonWSNormalizationTest, GroundTruth_MoreSpaces)
-{
-  std::string input  = R"({"a": [1, 2, 3, 4, 5, 6, 7, 8], "b": {"c": "d"}})";
-  std::string output = R"({"a":[1,2,3,4,5,6,7,8],"b":{"c":"d"}})";
-  run_test(input, output);
-}
-
-TEST_F(JsonWSNormalizationTest, GroundTruth_SpacesInString)
-{
-  std::string input  = R"({" a ":50})";
-  std::string output = R"({" a ":50})";
-  run_test(input, output);
-}
-
-TEST_F(JsonWSNormalizationTest, GroundTruth_NewlineInString)
-{
-  std::string input  = "{\"a\" : \"x\ny\"}\n{\"a\" : \"x\\ny\"}";
-  std::string output = "{\"a\":\"x\ny\"}\n{\"a\":\"x\\ny\"}";
-  run_test(input, output);
-}
-
-TEST_F(JsonWSNormalizationTest, GroundTruth_Tabs)
-{
-  std::string input  = "{\"a\":\t\"b\"}";
-  std::string output = R"({"a":"b"})";
-  run_test(input, output);
-}
-
-TEST_F(JsonWSNormalizationTest, GroundTruth_SpacesAndTabs)
-{
-  std::string input  = "{\"A\" : \t\"TEST\" }";
-  std::string output = R"({"A":"TEST"})";
-  run_test(input, output);
-}
-
-TEST_F(JsonWSNormalizationTest, GroundTruth_MultilineJSONWithSpacesAndTabs)
-{
-  std::string input =
-    "{ \"foo rapids\": [1,2,3], \"bar\trapids\": 123 }\n\t{ \"foo rapids\": { \"a\": 1 }, "
-    "\"bar\trapids\": 456 }";
-  std::string output =
-    "{\"foo rapids\":[1,2,3],\"bar\trapids\":123}\n{\"foo rapids\":{\"a\":1},\"bar\trapids\":456}";
-  run_test(input, output);
-}
-
-TEST_F(JsonWSNormalizationTest, GroundTruth_PureJSONExample)
-{
-  std::string input  = R"([{"a":50}, {"a" : 60}])";
-  std::string output = R"([{"a":50},{"a":60}])";
-  run_test(input, output);
-}
-
-TEST_F(JsonWSNormalizationTest, GroundTruth_NoNormalizationRequired)
-{
-  std::string input  = R"({"a\\n\r\a":50})";
-  std::string output = R"({"a\\n\r\a":50})";
-  run_test(input, output);
-}
-
-TEST_F(JsonWSNormalizationTest, GroundTruth_InvalidInput)
-{
-  std::string input  = "{\"a\" : \"b }\n{ \"c \" :\t\"d\"}";
-  std::string output = "{\"a\":\"b }\n{\"c \":\"d\"}";
-  run_test(input, output);
-}
 
 TEST_F(JsonWSNormalizationTest, ReadJsonOption)
 {
@@ -156,6 +58,103 @@ TEST_F(JsonWSNormalizationTest, ReadJsonOption)
       .lines(true)
       .mixed_types_as_string(true)
       .normalize_whitespace(false);
+
+  cudf::io::table_with_metadata expected_table = cudf::io::read_json(expected_input_options);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table.tbl->view(), processed_table.tbl->view());
+}
+
+TEST_F(JsonWSNormalizationTest, ReadJsonOption_InvalidRows)
+{
+  // When mixed type fields are read as strings, the table read will differ depending the
+  // value of normalize_whitespace
+
+  // Test input
+  std::string const host_input = R"(
+  { "Root": { "Key": [ { "EE": tr ue } ] } }
+  { "Root": { "Key": "abc" } }
+  { "Root": { "Key": [ { "EE": 12 34 } ] } }
+  { "Root": { "Key": [{ "YY": 1}] } }
+  { "Root": { "Key": [ { "EE": 12. 34 } ] } }
+  { "Root": { "Key": [ { "EE": "efg" } ] } }
+  )";
+  cudf::io::json_reader_options input_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{host_input.data(), host_input.size()})
+      .lines(true)
+      .mixed_types_as_string(true)
+      .normalize_whitespace(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+  cudf::io::table_with_metadata processed_table = cudf::io::read_json(input_options);
+
+  // Expected table
+  std::string const expected_input = R"(
+  { "Root": { "Key": [ { "EE": tr ue } ] } }
+  { "Root": { "Key": "abc" } }
+  { "Root": { "Key": [ { "EE": 12 34 } ] } }
+  { "Root": { "Key": [{"YY":1}] } }
+  { "Root": { "Key": [ { "EE": 12. 34 } ] } }
+  { "Root": { "Key": [{"EE":"efg"}] } }
+  )";
+  cudf::io::json_reader_options expected_input_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{expected_input.data(), expected_input.size()})
+      .lines(true)
+      .mixed_types_as_string(true)
+      .normalize_whitespace(false)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+  cudf::io::table_with_metadata expected_table = cudf::io::read_json(expected_input_options);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table.tbl->view(), processed_table.tbl->view());
+}
+
+TEST_F(JsonWSNormalizationTest, ReadJsonOption_InvalidRows_NoMixedType)
+{
+  // When mixed type fields are read as strings, the table read will differ depending the
+  // value of normalize_whitespace
+
+  // Test input
+  std::string const host_input = R"(
+  { "Root": { "Key": [ { "EE": tr ue } ] } }
+  { "Root": { "Key": [ { "EE": 12 34 } ] } }
+  { "Root": { "Key": [{ "YY": 1}] } }
+  { "Root": { "Key": [ { "EE": 12. 34 } ] } }
+  { "Root": { "Key": [ { "EE": "efg" }, { "YY" :   "abc" }    ] } }
+  { "Root": { "Key": [  { "YY" :   "abc" }    ] } }
+  )";
+
+  std::map<std::string, cudf::io::schema_element> dtype_schema{
+    {"Key", {cudf::data_type{cudf::type_id::STRING}}}};
+
+  cudf::io::json_reader_options input_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{host_input.data(), host_input.size()})
+      .dtypes(dtype_schema)
+      .lines(true)
+      .prune_columns(true)
+      .normalize_whitespace(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+  cudf::io::table_with_metadata processed_table = cudf::io::read_json(input_options);
+
+  // Expected table
+  std::string const expected_input = R"(
+  { "Root": { "Key": [ { "EE": tr ue } , { "YY" :    2 } ] } }
+  { "Root": { "Key": [ { "EE": 12 34 } ] } }
+  { "Root": { "Key": [{"YY":1}] } }
+  { "Root": { "Key": [ { "EE": 12. 34 } ] } }
+  { "Root": { "Key": [{"EE":"efg"},{"YY":"abc"}] } }
+  { "Root": { "Key": [{"YY":"abc"}] } }
+  )";
+
+  cudf::io::json_reader_options expected_input_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{expected_input.data(), expected_input.size()})
+      .dtypes(dtype_schema)
+      .lines(true)
+      .prune_columns(true)
+      .normalize_whitespace(false)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
 
   cudf::io::table_with_metadata expected_table = cudf::io::read_json(expected_input_options);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table.tbl->view(), processed_table.tbl->view());

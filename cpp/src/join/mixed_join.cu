@@ -28,12 +28,11 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/scan.h>
@@ -138,7 +137,7 @@ mixed_join(
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
   auto const row_bitmask =
-    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
+    cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref()).first;
   auto const preprocessed_build =
     experimental::row::equality::preprocessed_table::create(build, stream);
   build_join_hash_table(build,
@@ -404,7 +403,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
   auto const row_bitmask =
-    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
+    cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref()).first;
   auto const preprocessed_build =
     experimental::row::equality::preprocessed_table::create(build, stream);
   build_join_hash_table(build,
@@ -484,6 +483,7 @@ mixed_inner_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> const output_size_data,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -495,7 +495,7 @@ mixed_inner_join(
                             compare_nulls,
                             detail::join_kind::INNER_JOIN,
                             output_size_data,
-                            cudf::get_default_stream(),
+                            stream,
                             mr);
 }
 
@@ -506,6 +506,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -516,7 +517,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
                                                 binary_predicate,
                                                 compare_nulls,
                                                 detail::join_kind::INNER_JOIN,
-                                                cudf::get_default_stream(),
+                                                stream,
                                                 mr);
 }
 
@@ -530,6 +531,7 @@ mixed_left_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> const output_size_data,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -541,7 +543,7 @@ mixed_left_join(
                             compare_nulls,
                             detail::join_kind::LEFT_JOIN,
                             output_size_data,
-                            cudf::get_default_stream(),
+                            stream,
                             mr);
 }
 
@@ -552,6 +554,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -562,7 +565,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
                                                 binary_predicate,
                                                 compare_nulls,
                                                 detail::join_kind::LEFT_JOIN,
-                                                cudf::get_default_stream(),
+                                                stream,
                                                 mr);
 }
 
@@ -576,6 +579,7 @@ mixed_full_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> const output_size_data,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -587,7 +591,7 @@ mixed_full_join(
                             compare_nulls,
                             detail::join_kind::FULL_JOIN,
                             output_size_data,
-                            cudf::get_default_stream(),
+                            stream,
                             mr);
 }
 

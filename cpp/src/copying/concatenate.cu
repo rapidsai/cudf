@@ -32,11 +32,11 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/advance.h>
 #include <thrust/binary_search.h>
@@ -82,7 +82,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
                  [](auto const& col) { return *col; });
 
   auto d_views =
-    make_device_uvector_async(device_views, stream, rmm::mr::get_current_device_resource());
+    make_device_uvector_async(device_views, stream, cudf::get_current_device_resource_ref());
 
   // Compute the partition offsets
   auto offsets = cudf::detail::make_host_vector<size_t>(views.size() + 1, stream);
@@ -94,7 +94,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     [](auto const& col) { return col.size(); },
     thrust::plus{});
   auto d_offsets =
-    make_device_uvector_async(offsets, stream, rmm::mr::get_current_device_resource());
+    make_device_uvector_async(offsets, stream, cudf::get_current_device_resource_ref());
   auto const output_size = offsets.back();
 
   return std::make_tuple(

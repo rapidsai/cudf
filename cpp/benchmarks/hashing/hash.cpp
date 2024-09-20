@@ -50,7 +50,7 @@ static void bench_hash(nvbench::state& state)
   state.add_global_memory_reads<nvbench::int64_t>(num_rows);
   // add memory read from bitmaks
   if (!no_nulls) {
-    state.add_global_memory_reads<nvbench::int8_t>(2 *
+    state.add_global_memory_reads<nvbench::int8_t>(2L *
                                                    cudf::bitmask_allocation_size_bytes(num_rows));
   }
   // memory written depends on used hash
@@ -63,37 +63,37 @@ static void bench_hash(nvbench::state& state)
     });
   } else if (hash_name == "md5") {
     // md5 creates a 32-byte string
-    state.add_global_memory_writes<nvbench::int8_t>(32 * num_rows);
+    state.add_global_memory_writes<nvbench::int8_t>(32L * num_rows);
 
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { auto result = cudf::hashing::md5(data->view()); });
   } else if (hash_name == "sha1") {
     // sha1 creates a 40-byte string
-    state.add_global_memory_writes<nvbench::int8_t>(40 * num_rows);
+    state.add_global_memory_writes<nvbench::int8_t>(40L * num_rows);
 
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { auto result = cudf::hashing::sha1(data->view()); });
   } else if (hash_name == "sha224") {
     // sha224 creates a 56-byte string
-    state.add_global_memory_writes<nvbench::int8_t>(56 * num_rows);
+    state.add_global_memory_writes<nvbench::int8_t>(56L * num_rows);
 
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { auto result = cudf::hashing::sha224(data->view()); });
   } else if (hash_name == "sha256") {
     // sha256 creates a 64-byte string
-    state.add_global_memory_writes<nvbench::int8_t>(64 * num_rows);
+    state.add_global_memory_writes<nvbench::int8_t>(64L * num_rows);
 
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { auto result = cudf::hashing::sha256(data->view()); });
   } else if (hash_name == "sha384") {
     // sha384 creates a 96-byte string
-    state.add_global_memory_writes<nvbench::int8_t>(96 * num_rows);
+    state.add_global_memory_writes<nvbench::int8_t>(96L * num_rows);
 
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { auto result = cudf::hashing::sha384(data->view()); });
   } else if (hash_name == "sha512") {
     // sha512 creates a 128-byte string
-    state.add_global_memory_writes<nvbench::int8_t>(128 * num_rows);
+    state.add_global_memory_writes<nvbench::int8_t>(128L * num_rows);
 
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { auto result = cudf::hashing::sha512(data->view()); });

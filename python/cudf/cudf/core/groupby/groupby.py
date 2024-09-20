@@ -76,6 +76,34 @@ def _is_row_of(chunk, obj):
     )
 
 
+NamedAgg = pd.NamedAgg
+
+
+NamedAgg.__doc__ = """
+Helper for column specific aggregation with control over output column names.
+
+Subclass of typing.NamedTuple.
+
+Parameters
+----------
+column : Hashable
+    Column label in the DataFrame to apply aggfunc.
+aggfunc : function or str
+    Function to apply to the provided column.
+
+Examples
+--------
+>>> df = cudf.DataFrame({"key": [1, 1, 2], "a": [-1, 0, 1], 1: [10, 11, 12]})
+>>> agg_a = cudf.NamedAgg(column="a", aggfunc="min")
+>>> agg_1 = cudf.NamedAgg(column=1, aggfunc=lambda x: x.mean())
+>>> df.groupby("key").agg(result_a=agg_a, result_1=agg_1)
+        result_a  result_1
+key
+1          -1      10.5
+2           1      12.0
+"""
+
+
 groupby_doc_template = textwrap.dedent(
     """Group using a mapper or by a Series of columns.
 
@@ -723,10 +751,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             ) and not libgroupby._is_all_scan_aggregate(normalized_aggs):
                 # Even with `sort=False`, pandas guarantees that
                 # groupby preserves the order of rows within each group.
-                left_cols = list(
-                    self.grouping.keys.drop_duplicates()._data.columns
-                )
-                right_cols = list(result_index._data.columns)
+                left_cols = list(self.grouping.keys.drop_duplicates()._columns)
+                right_cols = list(result_index._columns)
                 join_keys = [
                     _match_join_keys(lcol, rcol, "left")
                     for lcol, rcol in zip(left_cols, right_cols)
@@ -1296,9 +1322,21 @@ class GroupBy(Serializable, Reducible, Scannable):
                 columns = values._columns
                 aggs_per_column = (aggs,) * len(columns)
         elif not aggs and kwargs:
-            column_names, aggs_per_column = kwargs.keys(), kwargs.values()
-            columns = tuple(self.obj._data[x[0]] for x in kwargs.values())
-            aggs_per_column = tuple(x[1] for x in kwargs.values())
+            column_names = kwargs.keys()
+
+            def _raise_invalid_type(x):
+                raise TypeError(
+                    f"Invalid keyword argument {x} of type {type(x)} was passed to agg"
+                )
+
+            columns, aggs_per_column = zip(
+                *(
+                    (self.obj._data[x[0]], x[1])
+                    if isinstance(x, tuple)
+                    else _raise_invalid_type(x)
+                    for x in kwargs.values()
+                )
+            )
         else:
             raise TypeError("Must provide at least one aggregation function.")
 
@@ -1443,7 +1481,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     # the column name should be, especially if we applied
                     # a nameless UDF.
                     result = result.to_frame(
-                        name=grouped_values._data.names[0]
+                        name=grouped_values._column_names[0]
                     )
                 else:
                     index_data = group_keys._data.copy(deep=True)
@@ -1592,7 +1630,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             if func in {"sum", "product"}:
                 # For `sum` & `product`, boolean types
                 # will need to result in `int64` type.
-                for name, col in res._data.items():
+                for name, col in res._column_labels_and_values:
                     if col.dtype.kind == "b":
                         res._data[name] = col.astype("int")
             return res
@@ -2675,11 +2713,8 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
     def _reduce_numeric_only(self, op: str):
         columns = list(
             name
-            for name in self.obj._data.names
-            if (
-                is_numeric_dtype(self.obj._data[name].dtype)
-                and name not in self.grouping.names
-            )
+            for name, dtype in self.obj._dtypes
+            if (is_numeric_dtype(dtype) and name not in self.grouping.names)
         )
         return self[columns].agg(op)
 
@@ -3169,7 +3204,7 @@ class _Grouping(Serializable):
         """
         # If the key columns are in `obj`, filter them out
         value_column_names = [
-            x for x in self._obj._data.names if x not in self._named_columns
+            x for x in self._obj._column_names if x not in self._named_columns
         ]
         value_columns = self._obj._data.select_by_label(value_column_names)
         return self._obj.__class__._from_data(value_columns)
@@ -3184,8 +3219,8 @@ class _Grouping(Serializable):
         self.names.append(by.name)
 
     def _handle_index(self, by):
-        self._key_columns.extend(by._data.columns)
-        self.names.extend(by._data.names)
+        self._key_columns.extend(by._columns)
+        self.names.extend(by._column_names)
 
     def _handle_mapping(self, by):
         by = cudf.Series(by.values(), index=by.keys())

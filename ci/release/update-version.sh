@@ -45,6 +45,8 @@ sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" ci/test_wheel_dask_cudf.sh
 DEPENDENCIES=(
   cudf
   cudf_kafka
+  cugraph
+  cuml
   custreamz
   dask-cuda
   dask-cudf
@@ -57,7 +59,7 @@ DEPENDENCIES=(
   rmm
 )
 for DEP in "${DEPENDENCIES[@]}"; do
-  for FILE in dependencies.yaml conda/environments/*.yaml; do
+  for FILE in dependencies.yaml conda/environments/*.yaml python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml; do
     sed_runner "/-.* ${DEP}\(-cu[[:digit:]]\{2\}\)\{0,1\}==/ s/==.*/==${NEXT_SHORT_TAG_PEP440}.*,>=0.0.0a0/g" "${FILE}"
   done
   for FILE in python/*/pyproject.toml; do

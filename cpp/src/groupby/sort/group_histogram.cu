@@ -23,10 +23,10 @@
 #include <cudf/reduction/detail/histogram.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_buffer.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/gather.h>
 

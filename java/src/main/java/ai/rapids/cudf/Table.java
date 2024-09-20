@@ -254,7 +254,11 @@ public final class Table implements AutoCloseable {
                                         boolean normalizeSingleQuotes,
                                         boolean normalizeWhitespace,
                                         boolean mixedTypesAsStrings,
-                                        boolean keepStringQuotes) throws CudfException;
+                                        boolean keepStringQuotes,
+                                        boolean strictValidation,
+                                        boolean allowLeadingZeros,
+                                        boolean allowNonNumericNumbers,
+                                        boolean allowUnquotedControl) throws CudfException;
 
   private static native long readJSONFromDataSource(int[] numChildren, String[] columnNames,
                                       int[] dTypeIds, int[] dTypeScales,
@@ -264,6 +268,10 @@ public final class Table implements AutoCloseable {
                                       boolean normalizeWhitespace,
                                       boolean mixedTypesAsStrings,
                                       boolean keepStringQuotes,
+                                      boolean strictValidation,
+                                      boolean allowLeadingZeros,
+                                      boolean allowNonNumericNumbers,
+                                      boolean allowUnquotedControl,
                                       long dsHandle) throws CudfException;
 
   private static native long readAndInferJSONFromDataSource(boolean dayFirst, boolean lines,
@@ -272,7 +280,12 @@ public final class Table implements AutoCloseable {
                                       boolean normalizeWhitespace,
                                       boolean mixedTypesAsStrings,
                                       boolean keepStringQuotes,
+                                      boolean strictValidation,
+                                      boolean allowLeadingZeros,
+                                      boolean allowNonNumericNumbers,
+                                      boolean allowUnquotedControl,
                                       long dsHandle) throws CudfException;
+
   private static native long readAndInferJSON(long address, long length,
                                               boolean dayFirst,
                                               boolean lines,
@@ -280,7 +293,11 @@ public final class Table implements AutoCloseable {
                                               boolean normalizeSingleQuotes,
                                               boolean normalizeWhitespace,
                                               boolean mixedTypesAsStrings,
-                                              boolean keepStringQuotes) throws CudfException;
+                                              boolean keepStringQuotes,
+                                              boolean strictValidation,
+                                              boolean allowLeadingZeros,
+                                              boolean allowNonNumericNumbers,
+                                              boolean allowUnquotedControl) throws CudfException;
 
   /**
    * Read in Parquet formatted data.
@@ -315,20 +332,22 @@ public final class Table implements AutoCloseable {
 
   /**
    * Setup everything to write parquet formatted data to a file.
-   * @param columnNames     names that correspond to the table columns
-   * @param numChildren     Children of the top level
-   * @param flatNumChildren flattened list of children per column
-   * @param nullable        true if the column can have nulls else false
-   * @param metadataKeys    Metadata key names to place in the Parquet file
-   * @param metadataValues  Metadata values corresponding to metadataKeys
-   * @param compression     native compression codec ID
-   * @param statsFreq       native statistics frequency ID
-   * @param isInt96         true if timestamp type is int96
-   * @param precisions      precision list containing all the precisions of the decimal types in
-   *                        the columns
-   * @param isMapValues     true if a column is a map
-   * @param isBinaryValues  true if a column is a binary
-   * @param filename        local output path
+   * @param columnNames       names that correspond to the table columns
+   * @param numChildren       Children of the top level
+   * @param flatNumChildren   flattened list of children per column
+   * @param nullable          true if the column can have nulls else false
+   * @param metadataKeys      Metadata key names to place in the Parquet file
+   * @param metadataValues    Metadata values corresponding to metadataKeys
+   * @param compression       native compression codec ID
+   * @param rowGroupSizeRows  max #rows in a row group
+   * @param rowGroupSizeBytes max #bytes in a row group
+   * @param statsFreq         native statistics frequency ID
+   * @param isInt96           true if timestamp type is int96
+   * @param precisions        precision list containing all the precisions of the decimal types in
+   *                          the columns
+   * @param isMapValues       true if a column is a map
+   * @param isBinaryValues    true if a column is a binary
+   * @param filename          local output path
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetFileBegin(String[] columnNames,
@@ -338,6 +357,8 @@ public final class Table implements AutoCloseable {
                                                    String[] metadataKeys,
                                                    String[] metadataValues,
                                                    int compression,
+                                                   int rowGroupSizeRows,
+                                                   long rowGroupSizeBytes,
                                                    int statsFreq,
                                                    boolean[] isInt96,
                                                    int[] precisions,
@@ -349,20 +370,22 @@ public final class Table implements AutoCloseable {
 
   /**
    * Setup everything to write parquet formatted data to a buffer.
-   * @param columnNames     names that correspond to the table columns
-   * @param numChildren     Children of the top level
-   * @param flatNumChildren flattened list of children per column
-   * @param nullable        true if the column can have nulls else false
-   * @param metadataKeys    Metadata key names to place in the Parquet file
-   * @param metadataValues  Metadata values corresponding to metadataKeys
-   * @param compression     native compression codec ID
-   * @param statsFreq       native statistics frequency ID
-   * @param isInt96         true if timestamp type is int96
-   * @param precisions      precision list containing all the precisions of the decimal types in
-   *                        the columns
-   * @param isMapValues     true if a column is a map
-   * @param isBinaryValues  true if a column is a binary
-   * @param consumer        consumer of host buffers produced.
+   * @param columnNames       names that correspond to the table columns
+   * @param numChildren       Children of the top level
+   * @param flatNumChildren   flattened list of children per column
+   * @param nullable          true if the column can have nulls else false
+   * @param metadataKeys      Metadata key names to place in the Parquet file
+   * @param metadataValues    Metadata values corresponding to metadataKeys
+   * @param compression       native compression codec ID
+   * @param rowGroupSizeRows  max #rows in a row group
+   * @param rowGroupSizeBytes max #bytes in a row group
+   * @param statsFreq         native statistics frequency ID
+   * @param isInt96           true if timestamp type is int96
+   * @param precisions        precision list containing all the precisions of the decimal types in
+   *                          the columns
+   * @param isMapValues       true if a column is a map
+   * @param isBinaryValues    true if a column is a binary
+   * @param consumer          consumer of host buffers produced.
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetBufferBegin(String[] columnNames,
@@ -372,6 +395,8 @@ public final class Table implements AutoCloseable {
                                                      String[] metadataKeys,
                                                      String[] metadataValues,
                                                      int compression,
+                                                     int rowGroupSizeRows,
+                                                     long rowGroupSizeBytes,
                                                      int statsFreq,
                                                      boolean[] isInt96,
                                                      int[] precisions,
@@ -1292,7 +1317,11 @@ public final class Table implements AutoCloseable {
                     opts.isNormalizeSingleQuotes(),
                     opts.isNormalizeWhitespace(),
                     opts.isMixedTypesAsStrings(),
-                opts.keepStringQuotes()))) {
+                    opts.keepStringQuotes(),
+                    opts.strictValidation(),
+                    opts.leadingZerosAllowed(),
+                    opts.nonNumericNumbersAllowed(),
+                    opts.unquotedControlChars()))) {
 
       return gatherJSONColumns(schema, twm, -1);
     }
@@ -1370,7 +1399,12 @@ public final class Table implements AutoCloseable {
         opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull(),
         opts.isNormalizeSingleQuotes(),
         opts.isNormalizeWhitespace(),
-        opts.isMixedTypesAsStrings(), opts.keepStringQuotes()));
+        opts.isMixedTypesAsStrings(),
+        opts.keepStringQuotes(),
+        opts.strictValidation(),
+        opts.leadingZerosAllowed(),
+        opts.nonNumericNumbersAllowed(),
+        opts.unquotedControlChars()));
   }
 
   /**
@@ -1388,6 +1422,10 @@ public final class Table implements AutoCloseable {
           opts.isNormalizeWhitespace(),
           opts.isMixedTypesAsStrings(),
           opts.keepStringQuotes(),
+          opts.strictValidation(),
+          opts.leadingZerosAllowed(),
+          opts.nonNumericNumbersAllowed(),
+          opts.unquotedControlChars(),
           dsHandle));
         return twm;
       } finally {
@@ -1430,10 +1468,18 @@ public final class Table implements AutoCloseable {
     try (TableWithMeta twm = new TableWithMeta(readJSON(
             schema.getFlattenedNumChildren(), schema.getFlattenedColumnNames(),
             schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), null,
-            buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines(),
-            opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
+            buffer.getAddress() + offset, len,
+            opts.isDayFirst(),
+            opts.isLines(),
+            opts.isRecoverWithNull(),
+            opts.isNormalizeSingleQuotes(),
             opts.isNormalizeWhitespace(),
-            opts.isMixedTypesAsStrings(), opts.keepStringQuotes()))) {
+            opts.isMixedTypesAsStrings(),
+            opts.keepStringQuotes(),
+            opts.strictValidation(),
+            opts.leadingZerosAllowed(),
+            opts.nonNumericNumbersAllowed(),
+            opts.unquotedControlChars()))) {
       return gatherJSONColumns(schema, twm, emptyRowCount);
     }
   }
@@ -1454,17 +1500,26 @@ public final class Table implements AutoCloseable {
    * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
    * @param opts various JSON parsing options.
    * @param ds the DataSource to read from.
-   * @param emtpyRowCount the number of rows to return if no columns were read.
+   * @param emptyRowCount the number of rows to return if no columns were read.
    * @return the data parsed as a table on the GPU.
    */
-  public static Table readJSON(Schema schema, JSONOptions opts, DataSource ds, int emtpyRowCount) {
+  public static Table readJSON(Schema schema, JSONOptions opts, DataSource ds, int emptyRowCount) {
     long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
     try (TableWithMeta twm = new TableWithMeta(readJSONFromDataSource(schema.getFlattenedNumChildren(),
-        schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), opts.isDayFirst(),
-        opts.isLines(), opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
+        schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(),
+        opts.isDayFirst(),
+        opts.isLines(),
+        opts.isRecoverWithNull(),
+        opts.isNormalizeSingleQuotes(),
         opts.isNormalizeWhitespace(),
-        opts.isMixedTypesAsStrings(), opts.keepStringQuotes(), dsHandle))) {
-      return gatherJSONColumns(schema, twm, emtpyRowCount);
+        opts.isMixedTypesAsStrings(),
+        opts.keepStringQuotes(),
+        opts.strictValidation(),
+        opts.leadingZerosAllowed(),
+        opts.nonNumericNumbersAllowed(),
+        opts.unquotedControlChars(),
+        dsHandle))) {
+      return gatherJSONColumns(schema, twm, emptyRowCount);
     } finally {
       DataSourceHelper.destroyWrapperDataSource(dsHandle);
     }
@@ -1773,6 +1828,8 @@ public final class Table implements AutoCloseable {
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
+          options.getRowGroupSizeRows(),
+          options.getRowGroupSizeBytes(),
           options.getStatisticsFrequency().nativeId,
           options.getFlatIsTimeTypeInt96(),
           options.getFlatPrecision(),
@@ -1793,6 +1850,8 @@ public final class Table implements AutoCloseable {
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
+          options.getRowGroupSizeRows(),
+          options.getRowGroupSizeBytes(),
           options.getStatisticsFrequency().nativeId,
           options.getFlatIsTimeTypeInt96(),
           options.getFlatPrecision(),
