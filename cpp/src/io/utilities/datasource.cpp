@@ -190,7 +190,7 @@ class memory_mapped_source : public file_source {
 
     // If the requested range is outside of the mapped region, read from the file
     if (offset < _map_offset or offset + read_size > (_map_offset + _map_size)) {
-      file_source::host_read(offset, read_size);
+      return file_source::host_read(offset, read_size);
     }
 
     // If the requested range is only partially within the mapped region, copy to a new
