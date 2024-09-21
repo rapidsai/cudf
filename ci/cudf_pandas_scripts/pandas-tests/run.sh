@@ -33,7 +33,7 @@ bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
   -m "not slow" \
   --max-worker-restart=3 \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas.xml" \
-  --dist loadfile \
+  --dist loadscope \
   --report-log=${PANDAS_TESTS_BRANCH}.json 2>&1
 
 SUMMARY_FILE_NAME=${PANDAS_TESTS_BRANCH}-${RAPIDS_FULL_VERSION}-results.json
