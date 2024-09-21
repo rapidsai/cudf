@@ -79,4 +79,53 @@ std::pair<rmm::device_uvector<KeyType>, rmm::device_uvector<IndexType>> stable_s
                                                                   : std::move(order_buffer2)};
 }
 
+template <typename InputIterator1,
+          typename InputIterator2,
+          typename OutputIterator1,
+          typename OutputIterator2>
+void max_row_offsets_col_categories(InputIterator1 keys_first,
+                                    InputIterator1 keys_last,
+                                    InputIterator2 values_first,
+                                    OutputIterator1 keys_output,
+                                    OutputIterator2 values_output,
+                                    rmm::cuda_stream_view stream)
+{
+  using row_offset_t = size_type;
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
+                        keys_first,
+                        keys_last,
+                        values_first,
+                        keys_output,
+                        values_output,
+                        thrust::equal_to<NodeIndexT>(),
+                        [] __device__(auto a, auto b) {
+                          auto row_offset_a = thrust::get<0>(a);
+                          auto row_offset_b = thrust::get<0>(b);
+                          auto type_a       = thrust::get<1>(a);
+                          auto type_b       = thrust::get<1>(b);
+
+                          NodeT ctg;
+                          auto is_a_leaf = (type_a == NC_VAL || type_a == NC_STR);
+                          auto is_b_leaf = (type_b == NC_VAL || type_b == NC_STR);
+                          // (v+v=v, *+*=*,  *+v=*, *+#=E, NESTED+VAL=NESTED)
+                          // *+*=*, v+v=v
+                          if (type_a == type_b) {
+                            ctg = type_a;
+                          } else if (is_a_leaf) {
+                            // *+v=*, N+V=N
+                            // STRUCT/LIST + STR/VAL = STRUCT/LIST, STR/VAL + FN = ERR, STR/VAL +
+                            // STR = STR
+                            ctg = (type_b == NC_FN ? NC_ERR : (is_b_leaf ? NC_STR : type_b));
+                          } else if (is_b_leaf) {
+                            ctg = (type_a == NC_FN ? NC_ERR : (is_a_leaf ? NC_STR : type_a));
+                          } else {
+                            ctg = NC_ERR;
+                          }
+
+                          return thrust::make_pair(
+                            thrust::maximum<row_offset_t>{}(row_offset_a, row_offset_b), ctg);
+                        });
+}
+
+
 }  // namespace cudf::io::json::detail
