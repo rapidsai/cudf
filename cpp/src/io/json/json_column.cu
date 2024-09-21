@@ -60,7 +60,7 @@ namespace cudf::io::json::detail {
 #define CSR_DEBUG_EQ
 #endif
 #ifndef CSR_DEBUG_PRINT
-//#define CSR_DEBUG_PRINT
+// #define CSR_DEBUG_PRINT
 #endif
 
 #ifdef CSR_DEBUG_PRINT

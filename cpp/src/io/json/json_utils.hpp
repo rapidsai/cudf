@@ -127,5 +127,4 @@ void max_row_offsets_col_categories(InputIterator1 keys_first,
                         });
 }
 
-
 }  // namespace cudf::io::json::detail
