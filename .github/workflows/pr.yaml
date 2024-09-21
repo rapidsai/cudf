@@ -99,7 +99,7 @@ jobs:
       build_type: pull-request
       # Use the wheel container so we can skip conda solves and since our
       # primary static consumers (Spark) are not in conda anyway.
-      container_image: "rapidsai/ci-wheel:cuda12.5.1-ubuntu22.04-py3.11"
+      container_image: "rapidsai/ci-wheel:latest"
       run_script: "ci/configure_cpp_static.sh"
   conda-notebook-tests:
     needs: conda-python-build
@@ -109,7 +109,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-wheel:cuda12.5.1-ubuntu22.04-py3.11"
+      container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
       run_script: "ci/test_notebooks.sh"
   docs-build:
     needs: conda-python-build
@@ -119,7 +119,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-wheel:cuda12.5.1-ubuntu22.04-py3.11"
+      container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
       run_script: "ci/build_docs.sh"
   wheel-build-cudf:
     needs: checks
