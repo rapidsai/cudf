@@ -346,23 +346,24 @@ auto create_sparse_results_table(cudf::table_view const& flattened_values,
 {
   // TODO single allocation - room for performance improvement
   std::vector<std::unique_ptr<cudf::column>> sparse_columns;
-  std::transform(
-    flattened_values.begin(),
-    flattened_values.end(),
-    aggs.begin(),
-    std::back_inserter(sparse_columns),
-    [stream](auto const& col, auto const& agg) {
-      bool nullable = (agg == cudf::aggregation::COUNT_VALID or agg == cudf::aggregation::COUNT_ALL)
-                        ? false
-                        : (col.has_nulls() or agg == cudf::aggregation::VARIANCE or
-                           agg == cudf::aggregation::STD);
-      auto mask_flag = (nullable) ? cudf::mask_state::ALL_NULL : cudf::mask_state::UNALLOCATED;
-      auto col_type  = cudf::is_dictionary(col.type())
-                         ? cudf::dictionary_column_view(col).keys().type()
-                         : col.type();
-      return make_fixed_width_column(
-        cudf::detail::target_type(col_type, agg), col.size(), mask_flag, stream);
-    });
+  std::transform(flattened_values.begin(),
+                 flattened_values.end(),
+                 aggs.begin(),
+                 std::back_inserter(sparse_columns),
+                 [stream](auto const& col, auto const& agg) {
+                   auto const nullable =
+                     (agg == cudf::aggregation::COUNT_VALID or agg == cudf::aggregation::COUNT_ALL)
+                       ? false
+                       : (col.has_nulls() or agg == cudf::aggregation::VARIANCE or
+                          agg == cudf::aggregation::STD);
+                   auto mask_flag =
+                     (nullable) ? cudf::mask_state::ALL_NULL : cudf::mask_state::UNALLOCATED;
+                   auto const col_type = cudf::is_dictionary(col.type())
+                                           ? cudf::dictionary_column_view(col).keys().type()
+                                           : col.type();
+                   return make_fixed_width_column(
+                     cudf::detail::target_type(col_type, agg), col.size(), mask_flag, stream);
+                 });
   cudf::table sparse_table(std::move(sparse_columns));
   // If no direct aggregations, initialize the sparse table
   // only for the keys inserted in global hash set
