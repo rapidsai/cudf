@@ -17,9 +17,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 

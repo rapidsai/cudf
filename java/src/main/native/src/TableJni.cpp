@@ -47,6 +47,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -1622,6 +1623,10 @@ Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource(JNIEnv* env,
                                                          jboolean normalize_whitespace,
                                                          jboolean mixed_types_as_string,
                                                          jboolean keep_quotes,
+                                                         jboolean strict_validation,
+                                                         jboolean allow_leading_zeros,
+                                                         jboolean allow_nonnumeric_numbers,
+                                                         jboolean allow_unquoted_control,
                                                          jlong ds_handle)
 {
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
@@ -1641,8 +1646,13 @@ Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource(JNIEnv* env,
         .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
         .normalize_whitespace(static_cast<bool>(normalize_whitespace))
         .mixed_types_as_string(mixed_types_as_string)
+        .strict_validation(strict_validation)
         .keep_quotes(keep_quotes);
-
+    if (strict_validation) {
+      opts.numeric_leading_zeros(allow_leading_zeros)
+        .nonnumeric_numbers(allow_nonnumeric_numbers)
+        .unquoted_control_chars(allow_unquoted_control);
+    }
     auto result =
       std::make_unique<cudf::io::table_with_metadata>(cudf::io::read_json(opts.build()));
 
@@ -1651,17 +1661,22 @@ Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource(JNIEnv* env,
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(JNIEnv* env,
-                                                                   jclass,
-                                                                   jlong buffer,
-                                                                   jlong buffer_length,
-                                                                   jboolean day_first,
-                                                                   jboolean lines,
-                                                                   jboolean recover_with_null,
-                                                                   jboolean normalize_single_quotes,
-                                                                   jboolean normalize_whitespace,
-                                                                   jboolean mixed_types_as_string,
-                                                                   jboolean keep_quotes)
+JNIEXPORT jlong JNICALL
+Java_ai_rapids_cudf_Table_readAndInferJSON(JNIEnv* env,
+                                           jclass,
+                                           jlong buffer,
+                                           jlong buffer_length,
+                                           jboolean day_first,
+                                           jboolean lines,
+                                           jboolean recover_with_null,
+                                           jboolean normalize_single_quotes,
+                                           jboolean normalize_whitespace,
+                                           jboolean mixed_types_as_string,
+                                           jboolean keep_quotes,
+                                           jboolean strict_validation,
+                                           jboolean allow_leading_zeros,
+                                           jboolean allow_nonnumeric_numbers,
+                                           jboolean allow_unquoted_control)
 {
   JNI_NULL_CHECK(env, buffer, "buffer cannot be null", 0);
   if (buffer_length <= 0) {
@@ -1683,8 +1698,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(JNIEnv* env,
         .recovery_mode(recovery_mode)
         .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
         .normalize_whitespace(static_cast<bool>(normalize_whitespace))
+        .strict_validation(strict_validation)
         .mixed_types_as_string(mixed_types_as_string)
         .keep_quotes(keep_quotes);
+    if (strict_validation) {
+      opts.numeric_leading_zeros(allow_leading_zeros)
+        .nonnumeric_numbers(allow_nonnumeric_numbers)
+        .unquoted_control_chars(allow_unquoted_control);
+    }
 
     auto result =
       std::make_unique<cudf::io::table_with_metadata>(cudf::io::read_json(opts.build()));
@@ -1789,6 +1810,10 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
                                                  jboolean normalize_whitespace,
                                                  jboolean mixed_types_as_string,
                                                  jboolean keep_quotes,
+                                                 jboolean strict_validation,
+                                                 jboolean allow_leading_zeros,
+                                                 jboolean allow_nonnumeric_numbers,
+                                                 jboolean allow_unquoted_control,
                                                  jlong ds_handle)
 {
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
@@ -1823,7 +1848,13 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
         .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
         .normalize_whitespace(static_cast<bool>(normalize_whitespace))
         .mixed_types_as_string(mixed_types_as_string)
+        .strict_validation(strict_validation)
         .keep_quotes(keep_quotes);
+    if (strict_validation) {
+      opts.numeric_leading_zeros(allow_leading_zeros)
+        .nonnumeric_numbers(allow_nonnumeric_numbers)
+        .unquoted_control_chars(allow_unquoted_control);
+    }
 
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
@@ -1873,7 +1904,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
                                                            jboolean normalize_single_quotes,
                                                            jboolean normalize_whitespace,
                                                            jboolean mixed_types_as_string,
-                                                           jboolean keep_quotes)
+                                                           jboolean keep_quotes,
+                                                           jboolean strict_validation,
+                                                           jboolean allow_leading_zeros,
+                                                           jboolean allow_nonnumeric_numbers,
+                                                           jboolean allow_unquoted_control)
 {
   bool read_buffer = true;
   if (buffer == 0) {
@@ -1922,7 +1957,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
         .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
         .normalize_whitespace(static_cast<bool>(normalize_whitespace))
         .mixed_types_as_string(mixed_types_as_string)
+        .strict_validation(strict_validation)
         .keep_quotes(keep_quotes);
+    if (strict_validation) {
+      opts.numeric_leading_zeros(allow_leading_zeros)
+        .nonnumeric_numbers(allow_nonnumeric_numbers)
+        .unquoted_control_chars(allow_unquoted_control);
+    }
 
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
@@ -2109,6 +2150,8 @@ Java_ai_rapids_cudf_Table_writeParquetBufferBegin(JNIEnv* env,
                                                   jobjectArray j_metadata_keys,
                                                   jobjectArray j_metadata_values,
                                                   jint j_compression,
+                                                  jint j_row_group_size_rows,
+                                                  jlong j_row_group_size_bytes,
                                                   jint j_stats_freq,
                                                   jbooleanArray j_isInt96,
                                                   jintArray j_precisions,
@@ -2164,6 +2207,8 @@ Java_ai_rapids_cudf_Table_writeParquetBufferBegin(JNIEnv* env,
       chunked_parquet_writer_options::builder(sink)
         .metadata(std::move(metadata))
         .compression(static_cast<compression_type>(j_compression))
+        .row_group_size_rows(j_row_group_size_rows)
+        .row_group_size_bytes(j_row_group_size_bytes)
         .stats_level(static_cast<statistics_freq>(j_stats_freq))
         .key_value_metadata({kv_metadata})
         .compression_statistics(stats)
@@ -2186,6 +2231,8 @@ Java_ai_rapids_cudf_Table_writeParquetFileBegin(JNIEnv* env,
                                                 jobjectArray j_metadata_keys,
                                                 jobjectArray j_metadata_values,
                                                 jint j_compression,
+                                                jint j_row_group_size_rows,
+                                                jlong j_row_group_size_bytes,
                                                 jint j_stats_freq,
                                                 jbooleanArray j_isInt96,
                                                 jintArray j_precisions,
@@ -2239,6 +2286,8 @@ Java_ai_rapids_cudf_Table_writeParquetFileBegin(JNIEnv* env,
       chunked_parquet_writer_options::builder(sink)
         .metadata(std::move(metadata))
         .compression(static_cast<compression_type>(j_compression))
+        .row_group_size_rows(j_row_group_size_rows)
+        .row_group_size_bytes(j_row_group_size_bytes)
         .stats_level(static_cast<statistics_freq>(j_stats_freq))
         .key_value_metadata({kv_metadata})
         .compression_statistics(stats)
@@ -3951,7 +4000,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
                      nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL,
                      cudf::nan_equality::ALL_EQUAL,
                      cudf::get_default_stream(),
-                     rmm::mr::get_current_device_resource());
+                     cudf::get_current_device_resource_ref());
     return convert_table_for_return(env, result);
   }
   CATCH_STD(env, 0);
@@ -4116,7 +4165,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(
     // and scratch memory only.
     auto temp_mr      = memoryResourceHandle != 0
                           ? reinterpret_cast<rmm::mr::device_memory_resource*>(memoryResourceHandle)
-                          : rmm::mr::get_current_device_resource();
+                          : cudf::get_current_device_resource_ref();
     auto chunked_pack = cudf::chunked_pack::create(*n_table, bounce_buffer_size, temp_mr);
     return reinterpret_cast<jlong>(chunked_pack.release());
   }

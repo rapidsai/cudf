@@ -111,10 +111,6 @@ ConfigureTest(SCALAR_TEST scalar/scalar_test.cpp scalar/scalar_device_view_test.
 ConfigureTest(TIMESTAMPS_TEST wrappers/timestamps_test.cu)
 
 # ##################################################################################################
-# * cudf tests ------------------------------------------------------------------------------------
-ConfigureTest(ERROR_TEST error/error_handling_test.cu)
-
-# ##################################################################################################
 # * groupby tests ---------------------------------------------------------------------------------
 ConfigureTest(
   GROUPBY_TEST
@@ -695,6 +691,7 @@ ConfigureTest(STREAM_DICTIONARY_TEST streams/dictionary_test.cpp STREAM_MODE tes
 ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_JOIN_TEST streams/join_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LABELING_BINS_TEST streams/labeling_bins_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)

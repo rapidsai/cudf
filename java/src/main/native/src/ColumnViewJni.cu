@@ -28,11 +28,11 @@
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/functional.h>
 #include <thrust/logical.h>
@@ -42,37 +42,6 @@
 #include <vector>
 
 namespace cudf::jni {
-
-std::unique_ptr<cudf::column> new_column_with_boolean_column_as_validity(
-  cudf::column_view const& exemplar, cudf::column_view const& validity_column)
-{
-  CUDF_EXPECTS(validity_column.type().id() == type_id::BOOL8,
-               "Validity column must be of type bool");
-  CUDF_EXPECTS(validity_column.size() == exemplar.size(),
-               "Exemplar and validity columns must have the same size");
-
-  auto validity_device_view = cudf::column_device_view::create(validity_column);
-  auto validity_begin       = cudf::detail::make_optional_iterator<bool>(
-    *validity_device_view, cudf::nullate::DYNAMIC{validity_column.has_nulls()});
-  auto validity_end            = validity_begin + validity_device_view->size();
-  auto [null_mask, null_count] = cudf::detail::valid_if(
-    validity_begin,
-    validity_end,
-    [] __device__(auto optional_bool) { return optional_bool.value_or(false); },
-    cudf::get_default_stream(),
-    rmm::mr::get_current_device_resource());
-  auto const exemplar_without_null_mask =
-    cudf::column_view{exemplar.type(),
-                      exemplar.size(),
-                      exemplar.head<void>(),
-                      nullptr,
-                      0,
-                      exemplar.offset(),
-                      std::vector<cudf::column_view>{exemplar.child_begin(), exemplar.child_end()}};
-  auto deep_copy = std::make_unique<cudf::column>(exemplar_without_null_mask);
-  deep_copy->set_null_mask(std::move(null_mask), null_count);
-  return deep_copy;
-}
 
 std::unique_ptr<cudf::column> generate_list_offsets(cudf::column_view const& list_length,
                                                     rmm::cuda_stream_view stream)
@@ -165,7 +134,7 @@ void post_process_list_overlap(cudf::column_view const& lhs,
                            validity.end(),
                            thrust::identity{},
                            cudf::get_default_stream(),
-                           rmm::mr::get_current_device_resource());
+                           cudf::get_current_device_resource_ref());
 
   if (new_null_count > 0) {
     // If the `overlap_result` column is nullable, perform `bitmask_and` of its nullmask and the
@@ -177,7 +146,7 @@ void post_process_list_overlap(cudf::column_view const& lhs,
         std::vector<cudf::size_type>{0, 0},
         overlap_cv.size(),
         stream,
-        rmm::mr::get_current_device_resource());
+        cudf::get_current_device_resource_ref());
       overlap_result->set_null_mask(std::move(null_mask), null_count);
     } else {
       // Just set the output nullmask as the new nullmask.
@@ -210,7 +179,7 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
                        cudf::null_equality::EQUAL,
                        cudf::nan_equality::ALL_EQUAL,
                        stream,
-                       rmm::mr::get_current_device_resource())
+                       cudf::get_current_device_resource_ref())
                        ->release();
   auto const out_labels = out_columns.front()->view();
 
@@ -237,7 +206,7 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
     std::move(out_offsets),
     std::move(out_structs),
     input.null_count(),
-    cudf::detail::copy_bitmask(input.parent(), stream, rmm::mr::get_current_device_resource()),
+    cudf::detail::copy_bitmask(input.parent(), stream, cudf::get_current_device_resource_ref()),
     stream);
 }
 

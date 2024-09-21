@@ -28,6 +28,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -90,7 +91,7 @@ rmm::device_uvector<cudf::bitmask_type> make_mask(cudf::size_type size, bool fil
 {
   if (!fill_valid) {
     return cudf::detail::make_zeroed_device_uvector_sync<cudf::bitmask_type>(
-      size, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+      size, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   } else {
     auto ret = rmm::device_uvector<cudf::bitmask_type>(size, cudf::get_default_stream());
     CUDF_CUDA_TRY(cudaMemsetAsync(ret.data(),

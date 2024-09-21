@@ -79,11 +79,11 @@ pip install --extra-index-url=https://pypi.nvidia.com cudf-cu12
 
 ### Conda
 
-cuDF can be installed with conda (via [miniconda](https://docs.conda.io/projects/miniconda/en/latest/) or the full [Anaconda distribution](https://www.anaconda.com/download) from the `rapidsai` channel:
+cuDF can be installed with conda (via [miniforge](https://github.com/conda-forge/miniforge)) from the `rapidsai` channel:
 
 ```bash
 conda install -c rapidsai -c conda-forge -c nvidia \
-    cudf=24.10 python=3.11 cuda-version=12.5
+    cudf=24.10 python=3.12 cuda-version=12.5
 ```
 
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD
