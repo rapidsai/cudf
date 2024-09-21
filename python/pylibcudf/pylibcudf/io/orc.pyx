@@ -26,7 +26,7 @@ from pylibcudf.libcudf.io.orc_metadata cimport (
     timestamp_statistics,
 )
 from pylibcudf.libcudf.io.types cimport table_with_metadata
-from pylibcudf.libcudf.types cimport size_type, type_id
+from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.types cimport DataType
 from pylibcudf.variant cimport get_if, holds_alternative
 
@@ -219,7 +219,7 @@ cpdef TableWithMetadata read_orc(
     size_type nrows = -1,
     bool use_index = True,
     bool use_np_dtypes = True,
-    DataType timestamp_type = DataType(type_id.EMPTY),
+    DataType timestamp_type = None,
     list decimal128_columns = None,
 ):
     """Reads an ORC file into a :py:class:`~.types.TableWithMetadata`.
@@ -264,7 +264,7 @@ cpdef TableWithMetadata read_orc(
     if stripes is not None:
         c_stripes = stripes
         opts.set_stripes(c_stripes)
-    if timestamp_type.id() is not None:
+    if timestamp_type is not None:
         opts.set_timestamp_type(timestamp_type.c_obj)
 
     cdef vector[string] c_decimal128_columns
