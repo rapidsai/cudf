@@ -194,3 +194,18 @@ for testing or benchmarking purposes. To do so, set the
 ```bash
 CUDF_PANDAS_FALLBACK_MODE=1 python -m cudf.pandas some_script.py
 ```
+
+## What is the recommended range of dataset size that I can process using `cudf.pandas`?
+
+cudf.pandas can process a wide range of dataset size. On the lower end, as a 
+_very rough_ rule of thumb,`cudf.pandas` shines on workflows with more than 
+10,000 - 100,000 rows of data, depending on the algorithms, data types, and other factors.
+Going below the range, workflow execution may be slower on GPU than CPU, because of the 
+cost of data transfers.The upper end is harder to estimate because with managed memory pool 
+enabled by default in `cudf.pandas`, you can process datasets that are larger than GPU memory 
+up to a theoretical limit of CPU and GPU memory. However, its possible to see performance degradation 
+at values lower than the theoretical limit depending on the data and workflow. For example, 
+executing the famous 1 billion row challenge using `cudf.pandas` on a T4 GPU, 
+the processing time using pandas and cudf-pandas 24.08 starts converging at 
+XX% of the combined CPU and GPU Memory (i.e system memory). Similarly, for a higher memory GPU 
+such as an A100 80GB, the convergence happens at YY% of the sytem memory.
