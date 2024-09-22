@@ -358,7 +358,7 @@ struct rle_stream {
           // space available in the output buffer (for that last run at the end of
           // a call to decode_next).
           int const batch_len = min(remaining, max_count - last_run_pos);
-          printf("GERA_DEBUG batch_len=%d\n");
+          printf("GERA_DEBUG thread=%d warp_id=%d warp_lane=%d => batch_len=%d\n", t, warp_id, warp_lane, batch_len);
           decode<level_t, max_output_values>(output,
                                              run.level_run,
                                              run.start,
