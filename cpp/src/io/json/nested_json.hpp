@@ -366,7 +366,7 @@ get_array_children_indices(TreeDepthT row_array_children_level,
                            rmm::cuda_stream_view stream);
 
 /**
- * @brief Reduce node tree into column tree by aggregating each property of column.
+ * @brief Reduces node tree representation to column tree representation.
  *
  * @param tree Node tree representation of JSON string
  * @param original_col_ids Column ids of nodes
@@ -389,7 +389,34 @@ reduce_to_column_tree(tree_meta_t& tree,
                       bool is_array_of_arrays,
                       NodeIndexT const row_array_parent_col_id,
                       rmm::cuda_stream_view stream);
-
+/**
+ * @brief Constructs `d_json_column` from node tree representation
+ * Newly constructed columns are insert into `root`'s children.
+ * `root` must be a list type.
+ *
+ * @param input Input JSON string device data
+ * @param tree Node tree representation of the JSON string
+ * @param col_ids Column ids of the nodes in the tree
+ * @param row_offsets Row offsets of the nodes in the tree
+ * @param root Root node of the `d_json_column` tree
+ * @param is_array_of_arrays Whether the tree is an array of arrays
+ * @param options Parsing options specifying the parsing behaviour
+ * options affecting behaviour are
+ *   is_enabled_lines: Whether the input is a line-delimited JSON
+ *   is_enabled_mixed_types_as_string: Whether to enable reading mixed types as string
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the device memory
+ * of child_offets and validity members of `d_json_column`
+ */
+void make_device_json_column(device_span<SymbolT const> input,
+                             tree_meta_t& tree,
+                             device_span<NodeIndexT> col_ids,
+                             device_span<size_type> row_offsets,
+                             device_json_column& root,
+                             bool is_array_of_arrays,
+                             cudf::io::json_reader_options const& options,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr);
 /**
  * @brief Retrieves the parse_options to be used for type inference and type casting
  *

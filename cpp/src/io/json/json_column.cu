@@ -24,7 +24,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
-#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/io/detail/json.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -36,22 +36,15 @@
 
 #include <cuda/atomic>
 #include <cuda/functional>
-#include <thrust/count.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
-#include <thrust/scan.h>
-#include <thrust/sort.h>
 #include <thrust/transform.h>
 #include <thrust/unique.h>
-
-#include <algorithm>
-#include <cstdint>
 
 namespace cudf::io::json::detail {
 
@@ -1088,38 +1081,57 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                    "string offset, string length mismatch");
       rmm::device_uvector<char_length_pair_t> d_string_data(col_size, stream);
       // TODO how about directly storing pair<char*, size_t> in json_column?
-      auto offset_length_it =
-        thrust::make_zip_iterator(json_col.string_offsets.begin(), json_col.string_lengths.begin());
-
-      data_type target_type{};
-
-      if (schema.has_value()) {
-#ifdef NJP_DEBUG_PRINT
-        std::cout << "-> explicit type: "
-                  << (schema.has_value() ? std::to_string(static_cast<int>(schema->type.id()))
-                                         : "n/a");
-#endif
-        target_type = schema.value().type;
-      } else if (json_col.forced_as_string_column) {
-        target_type = data_type{type_id::STRING};
-      }
-      // Infer column type, if we don't have an explicit type for it
-      else {
-        target_type = cudf::io::detail::infer_data_type(
-          options.json_view(), d_input, offset_length_it, col_size, stream);
-      }
 
       auto [result_bitmask, null_count] = make_validity(json_col);
-      // Convert strings to the inferred data type
-      auto col = parse_data(d_input.data(),
-                            offset_length_it,
-                            col_size,
-                            target_type,
-                            std::move(result_bitmask),
-                            null_count,
-                            options.view(),
-                            stream,
-                            mr);
+
+      data_type target_type{};
+      std::unique_ptr<column> col{};
+      if (options.normalize_whitespace && json_col.forced_as_string_column) {
+        CUDF_EXPECTS(prune_columns || options.mixed_types_as_string,
+                     "Whitespace normalization of nested columns requested as string requires "
+                     "either prune_columns or mixed_types_as_string to be enabled");
+        auto [normalized_d_input, col_offsets, col_lengths] =
+          cudf::io::json::detail::normalize_whitespace(
+            d_input, json_col.string_offsets, json_col.string_lengths, stream, mr);
+        auto offset_length_it = thrust::make_zip_iterator(col_offsets.begin(), col_lengths.begin());
+        target_type           = data_type{type_id::STRING};
+        // Convert strings to the inferred data type
+        col = parse_data(normalized_d_input.data(),
+                         offset_length_it,
+                         col_size,
+                         target_type,
+                         std::move(result_bitmask),
+                         null_count,
+                         options.view(),
+                         stream,
+                         mr);
+      } else {
+        auto offset_length_it = thrust::make_zip_iterator(json_col.string_offsets.begin(),
+                                                          json_col.string_lengths.begin());
+        if (schema.has_value()) {
+#ifdef NJP_DEBUG_PRINT
+          std::cout << "-> explicit type: "
+                    << (schema.has_value() ? std::to_string(static_cast<int>(schema->type.id()))
+                                           : "n/a");
+#endif
+          target_type = schema.value().type;
+        }
+        // Infer column type, if we don't have an explicit type for it
+        else {
+          target_type = cudf::io::detail::infer_data_type(
+            options.json_view(), d_input, offset_length_it, col_size, stream);
+        }
+        // Convert strings to the inferred data type
+        col = parse_data(d_input.data(),
+                         offset_length_it,
+                         col_size,
+                         target_type,
+                         std::move(result_bitmask),
+                         null_count,
+                         options.view(),
+                         stream,
+                         mr);
+      }
 
       // Reset nullable if we do not have nulls
       // This is to match the existing JSON reader's behaviour:
@@ -1226,11 +1238,15 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     const auto [tokens_gpu, token_indices_gpu] =
       get_token_stream(d_input, options, stream, cudf::get_current_device_resource_ref());
     // gpu tree generation
-    return get_tree_representation(tokens_gpu,
-                                   token_indices_gpu,
-                                   options.is_enabled_mixed_types_as_string(),
-                                   stream,
-                                   cudf::get_current_device_resource_ref());
+    // Note that to normalize whitespaces in nested columns coerced to be string, we need the column
+    // to either be of mixed type or we need to request the column to be returned as string by
+    // pruning it with the STRING dtype
+    return get_tree_representation(
+      tokens_gpu,
+      token_indices_gpu,
+      options.is_enabled_mixed_types_as_string() || options.is_enabled_prune_columns(),
+      stream,
+      cudf::get_current_device_resource_ref());
   }();  // IILE used to free memory of token data.
 #ifdef NJP_DEBUG_PRINT
   auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
