@@ -14,3 +14,4 @@ strings
     repeat
     replace
     slice
+    strip

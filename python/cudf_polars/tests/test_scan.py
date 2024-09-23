@@ -12,7 +12,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils import versions
 
 
 @pytest.fixture(
@@ -58,6 +57,22 @@ def mask(request):
     return request.param
 
 
+@pytest.fixture(
+    params=[
+        None,
+        (1, 1),
+    ],
+    ids=[
+        "no-slice",
+        "slice-second",
+    ],
+)
+def slice(request):
+    # For use in testing that we handle
+    # polars slice pushdown correctly
+    return request.param
+
+
 def make_source(df, path, format):
     """
     Writes the passed polars df to a file of
@@ -79,7 +94,9 @@ def make_source(df, path, format):
         ("parquet", pl.scan_parquet),
     ],
 )
-def test_scan(tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask, request):
+def test_scan(
+    tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask, slice, request
+):
     name, offset = row_index
     make_source(df, tmp_path / "file", format)
     request.applymarker(
@@ -94,21 +111,23 @@ def test_scan(tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask, r
         row_index_offset=offset,
         n_rows=n_rows,
     )
+    if slice is not None:
+        q = q.slice(*slice)
     if mask is not None:
         q = q.filter(mask)
     if columns is not None:
         q = q.select(*columns)
-    polars_collect_kwargs = {}
-    if versions.POLARS_VERSION_LT_12:
-        # https://github.com/pola-rs/polars/issues/17553
-        polars_collect_kwargs = {"projection_pushdown": False}
-    assert_gpu_result_equal(
-        q,
-        polars_collect_kwargs=polars_collect_kwargs,
-        # This doesn't work in polars < 1.2 since the row-index
-        # is in the wrong order in previous polars releases
-        check_column_order=versions.POLARS_VERSION_LT_12,
-    )
+    assert_gpu_result_equal(q)
+
+
+def test_negative_slice_pushdown_raises(tmp_path):
+    df = pl.DataFrame({"a": [1, 2, 3]})
+
+    df.write_parquet(tmp_path / "df.parquet")
+    q = pl.scan_parquet(tmp_path / "df.parquet")
+    # Take the last row
+    q = q.slice(-1, 1)
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_scan_unsupported_raises(tmp_path):
@@ -127,10 +146,6 @@ def test_scan_ndjson_nrows_notimplemented(tmp_path, df):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-@pytest.mark.xfail(
-    versions.POLARS_VERSION_LT_11,
-    reason="https://github.com/pola-rs/polars/issues/15730",
-)
 def test_scan_row_index_projected_out(tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
 
@@ -169,15 +184,25 @@ def test_scan_csv_column_renames_projection_schema(tmp_path):
         ("test*.csv", False),
     ],
 )
-def test_scan_csv_multi(tmp_path, filename, glob):
+@pytest.mark.parametrize(
+    "nrows_skiprows",
+    [
+        (None, 0),
+        (1, 1),
+        (3, 0),
+        (4, 2),
+    ],
+)
+def test_scan_csv_multi(tmp_path, filename, glob, nrows_skiprows):
+    n_rows, skiprows = nrows_skiprows
     with (tmp_path / "test1.csv").open("w") as f:
-        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+        f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
     with (tmp_path / "test2.csv").open("w") as f:
-        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+        f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
     with (tmp_path / "test*.csv").open("w") as f:
-        f.write("""foo,bar,baz\n1,2\n3,4,5""")
+        f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
     os.chdir(tmp_path)
-    q = pl.scan_csv(filename, glob=glob)
+    q = pl.scan_csv(filename, glob=glob, n_rows=n_rows, skip_rows=skiprows)
 
     assert_gpu_result_equal(q)
 
@@ -279,4 +304,25 @@ def test_scan_ndjson_schema(df, tmp_path, schema):
 def test_scan_ndjson_unsupported(df, tmp_path):
     make_source(df, tmp_path / "file", "ndjson")
     q = pl.scan_ndjson(tmp_path / "file", ignore_errors=True)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_parquet_nested_null_raises(tmp_path):
+    df = pl.DataFrame({"a": pl.Series([None], dtype=pl.List(pl.Null))})
+
+    df.write_parquet(tmp_path / "file.pq")
+
+    q = pl.scan_parquet(tmp_path / "file.pq")
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_parquet_only_row_index_raises(df, tmp_path):
+    make_source(df, tmp_path / "file", "parquet")
+    q = pl.scan_parquet(tmp_path / "file", row_index_name="index").select("index")
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_hf_url_raises():
+    q = pl.scan_csv("hf://datasets/scikit-learn/iris/Iris.csv")
     assert_ir_translation_raises(q, NotImplementedError)
