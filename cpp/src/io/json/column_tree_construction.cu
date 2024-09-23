@@ -129,12 +129,12 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   CUDF_FUNC_RANGE();
 
   if (original_col_ids.empty()) {
-    rmm::device_uvector<NodeIndexT> empty_rowidx(0, stream);
-    rmm::device_uvector<NodeIndexT> empty_colidx(0, stream);
+    rmm::device_uvector<NodeIndexT> empty_row_idx(0, stream);
+    rmm::device_uvector<NodeIndexT> empty_col_idx(0, stream);
     rmm::device_uvector<NodeT> empty_column_categories(0, stream);
     rmm::device_uvector<row_offset_t> empty_max_row_offsets(0, stream);
     rmm::device_uvector<NodeIndexT> empty_mapped_col_ids(0, stream);
-    return std::tuple{compressed_sparse_row{std::move(empty_rowidx), std::move(empty_colidx)},
+    return std::tuple{compressed_sparse_row{std::move(empty_row_idx), std::move(empty_col_idx)},
                       column_tree_properties{std::move(empty_column_categories),
                                              std::move(empty_max_row_offsets),
                                              std::move(empty_mapped_col_ids)}};
@@ -204,16 +204,12 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   print<row_offset_t>(max_row_offsets, "h_max_row_offsets", stream);
 #endif
 
-  auto construct_rowidx = [&stream](NodeIndexT num_columns,
-                                    device_span<NodeIndexT const> parent_col_ids) {
-    auto rowidx = cudf::detail::make_zeroed_device_uvector_async<NodeIndexT>(
+  auto construct_row_idx = [&stream](NodeIndexT num_columns,
+                                     device_span<NodeIndexT const> parent_col_ids) {
+    auto row_idx = cudf::detail::make_zeroed_device_uvector_async<NodeIndexT>(
       static_cast<std::size_t>(num_columns + 1), stream, cudf::get_current_device_resource_ref());
     // Note that the first element of csr_parent_col_ids is -1 (parent_node_sentinel)
     // children adjacency
-
-#ifdef CSR_DEBUG_PRINT
-    print<NodeIndexT>(parent_col_ids, "h_parent_col_ids", stream);
-#endif
 
     auto num_non_leaf_columns = thrust::unique_count(
       rmm::exec_policy_nosync(stream), parent_col_ids.begin() + 1, parent_col_ids.end());
@@ -231,14 +227,14 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
                     non_leaf_nodes_children.begin(),
                     non_leaf_nodes_children.end(),
                     non_leaf_nodes.begin(),
-                    rowidx.begin() + 1);
+                    row_idx.begin() + 1);
 
     if (num_columns > 1) {
       thrust::transform_inclusive_scan(
         rmm::exec_policy_nosync(stream),
-        thrust::make_zip_iterator(thrust::make_counting_iterator(1), rowidx.begin() + 1),
-        thrust::make_zip_iterator(thrust::make_counting_iterator(1) + num_columns, rowidx.end()),
-        rowidx.begin() + 1,
+        thrust::make_zip_iterator(thrust::make_counting_iterator(1), row_idx.begin() + 1),
+        thrust::make_zip_iterator(thrust::make_counting_iterator(1) + num_columns, row_idx.end()),
+        row_idx.begin() + 1,
         cuda::proclaim_return_type<NodeIndexT>([] __device__(auto a) {
           auto n   = thrust::get<0>(a);
           auto idx = thrust::get<1>(a);
@@ -248,20 +244,20 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
         thrust::plus<NodeIndexT>{});
     } else {
       auto single_node = 1;
-      rowidx.set_element_async(1, single_node, stream);
+      row_idx.set_element_async(1, single_node, stream);
     }
 
 #ifdef CSR_DEBUG_PRINT
-    print<NodeIndexT>(rowidx, "h_rowidx", stream);
+    print<NodeIndexT>(row_idx, "h_row_idx", stream);
 #endif
-    return rowidx;
+    return row_idx;
   };
 
-  auto construct_colidx = [&stream](NodeIndexT num_columns,
-                                    device_span<NodeIndexT const> parent_col_ids,
-                                    device_span<NodeIndexT const> rowidx) {
-    rmm::device_uvector<NodeIndexT> colidx((num_columns - 1) * 2, stream);
-    thrust::fill(rmm::exec_policy_nosync(stream), colidx.begin(), colidx.end(), -1);
+  auto construct_col_idx = [&stream](NodeIndexT num_columns,
+                                     device_span<NodeIndexT const> parent_col_ids,
+                                     device_span<NodeIndexT const> row_idx) {
+    rmm::device_uvector<NodeIndexT> col_idx((num_columns - 1) * 2, stream);
+    thrust::fill(rmm::exec_policy_nosync(stream), col_idx.begin(), col_idx.end(), -1);
     // excluding root node, construct scatter map
     rmm::device_uvector<NodeIndexT> map(num_columns - 1, stream);
     thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
@@ -272,33 +268,33 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator(1),
                        num_columns - 1,
-                       [rowidx         = rowidx.begin(),
+                       [row_idx        = row_idx.begin(),
                         map            = map.begin(),
                         parent_col_ids = parent_col_ids.begin()] __device__(auto i) {
                          auto parent_col_id = parent_col_ids[i];
                          if (parent_col_id == 0)
                            --map[i - 1];
                          else
-                           map[i - 1] += rowidx[parent_col_id];
+                           map[i - 1] += row_idx[parent_col_id];
                        });
     thrust::scatter(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator(1),
                     thrust::make_counting_iterator(1) + num_columns - 1,
                     map.begin(),
-                    colidx.begin());
-
-#ifdef CSR_DEBUG_PRINT
-    print<NodeIndexT>(colidx, "h_colidx", stream);
-#endif
+                    col_idx.begin());
 
     // Skip the parent of root node
     thrust::scatter(rmm::exec_policy_nosync(stream),
                     parent_col_ids.begin() + 1,
                     parent_col_ids.end(),
-                    rowidx.begin() + 1,
-                    colidx.begin());
+                    row_idx.begin() + 1,
+                    col_idx.begin());
 
-    return colidx;
+#ifdef CSR_DEBUG_PRINT
+    print<NodeIndexT>(col_idx, "h_col_idx", stream);
+#endif
+
+    return col_idx;
   };
 
   /*
@@ -309,11 +305,11 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
           ii. row idx[coln] = size of adj_coln + 1
           iii. col idx[coln] = adj_coln U {parent_col_id[coln]}
   */
-  auto rowidx = construct_rowidx(num_columns, parent_col_ids);
-  auto colidx = construct_colidx(num_columns, parent_col_ids, rowidx);
+  auto row_idx = construct_row_idx(num_columns, parent_col_ids);
+  auto col_idx = construct_col_idx(num_columns, parent_col_ids, row_idx);
 
   return std::tuple{
-    compressed_sparse_row{std::move(rowidx), std::move(colidx)},
+    compressed_sparse_row{std::move(row_idx), std::move(col_idx)},
     column_tree_properties{
       std::move(column_categories), std::move(max_row_offsets), std::move(mapped_col_ids)}};
 }

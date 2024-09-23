@@ -48,8 +48,8 @@ struct h_tree_meta_t {
 
 struct h_column_tree {
   // position of nnzs
-  std::vector<cuio_json::NodeIndexT> rowidx;
-  std::vector<cuio_json::NodeIndexT> colidx;
+  std::vector<cuio_json::NodeIndexT> row_idx;
+  std::vector<cuio_json::NodeIndexT> col_idx;
   // node properties
   std::vector<cuio_json::NodeT> categories;
   std::vector<cuio_json::NodeIndexT> column_ids;
@@ -80,8 +80,8 @@ bool check_equality(cuio_json::tree_meta_t& d_a,
                   cudf::detail::make_std_vector_async(d_a.node_range_begin, stream),
                   cudf::detail::make_std_vector_async(d_a.node_range_end, stream)};
 
-  h_column_tree b{cudf::detail::make_std_vector_async(d_b_csr.rowidx, stream),
-                  cudf::detail::make_std_vector_async(d_b_csr.colidx, stream),
+  h_column_tree b{cudf::detail::make_std_vector_async(d_b_csr.row_idx, stream),
+                  cudf::detail::make_std_vector_async(d_b_csr.col_idx, stream),
                   cudf::detail::make_std_vector_async(d_b_ctp.categories, stream),
                   cudf::detail::make_std_vector_async(d_b_ctp.mapped_ids, stream)};
 
@@ -92,27 +92,27 @@ bool check_equality(cuio_json::tree_meta_t& d_a,
 
   auto num_nodes = a.parent_node_ids.size();
   if (num_nodes > 1) {
-    if (b.rowidx.size() != num_nodes + 1) {
+    if (b.row_idx.size() != num_nodes + 1) {
       std::cout << "1\n";
       return false;
     }
 
-    for (auto pos = b.rowidx[0]; pos < b.rowidx[1]; pos++) {
-      auto v = b.colidx[pos];
+    for (auto pos = b.row_idx[0]; pos < b.row_idx[1]; pos++) {
+      auto v = b.col_idx[pos];
       if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) {
         std::cout << "2\n";
         return false;
       }
     }
     for (size_t u = 1; u < num_nodes; u++) {
-      auto v = b.colidx[b.rowidx[u]];
+      auto v = b.col_idx[b.row_idx[u]];
       if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) {
         std::cout << "3\n";
         return false;
       }
 
-      for (auto pos = b.rowidx[u] + 1; pos < b.rowidx[u + 1]; pos++) {
-        v = b.colidx[pos];
+      for (auto pos = b.row_idx[u] + 1; pos < b.row_idx[u + 1]; pos++) {
+        v = b.col_idx[pos];
         if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) {
           std::cout << "4\n";
           return false;
@@ -132,10 +132,10 @@ bool check_equality(cuio_json::tree_meta_t& d_a,
       }
     }
   } else if (num_nodes == 1) {
-    if (b.rowidx.size() != num_nodes + 1) { return false; }
+    if (b.row_idx.size() != num_nodes + 1) { return false; }
 
-    if (b.rowidx[0] != 0 || b.rowidx[1] != 1) return false;
-    if (!b.colidx.empty()) return false;
+    if (b.row_idx[0] != 0 || b.row_idx[1] != 1) return false;
+    if (!b.col_idx.empty()) return false;
     for (size_t u = 0; u < num_nodes; u++) {
       if (a.node_categories[b.column_ids[u]] != b.categories[u]) { return false; }
     }

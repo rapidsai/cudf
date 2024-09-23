@@ -190,8 +190,8 @@ namespace experimental {
  * @brief Sparse graph adjacency matrix stored in Compressed Sparse Row (CSR) format.
  */
 struct compressed_sparse_row {
-  rmm::device_uvector<NodeIndexT> rowidx;
-  rmm::device_uvector<NodeIndexT> colidx;
+  rmm::device_uvector<NodeIndexT> row_idx;
+  rmm::device_uvector<NodeIndexT> col_idx;
 };
 
 /*
