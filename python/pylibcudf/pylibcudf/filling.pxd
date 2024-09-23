@@ -24,7 +24,7 @@ cpdef void fill_in_place(
 )
 
 cpdef Column sequence(
-    int size,
+    size_type size,
     Scalar init,
     Scalar step,
 )
