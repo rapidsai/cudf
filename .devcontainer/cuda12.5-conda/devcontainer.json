@@ -24,6 +24,7 @@
     "-v",
     "/opt/nvidia/nsight-systems-cli:/mnt/nsight-systems-cli",
     "--privileged",
+    "--cap-add=SYS_ADMIN",
     "--rm",
     "--name",
     "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-25.02-cuda12.5-conda"
