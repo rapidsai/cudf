@@ -58,7 +58,7 @@ using row_offset_t = size_type;
 
 // debug printing
 #ifndef CSR_DEBUG_PRINT
-//#define CSR_DEBUG_PRINT
+// #define CSR_DEBUG_PRINT
 #endif
 
 #ifdef CSR_DEBUG_PRINT
@@ -143,13 +143,13 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
 
   auto [unpermuted_tree, unpermuted_col_ids, unpermuted_max_row_offsets] =
     cudf::io::json::detail::reduce_to_column_tree(node_tree,
-                          original_col_ids,
-                          sorted_col_ids,
-                          ordered_node_ids,
-                          row_offsets,
-                          is_array_of_arrays,
-                          row_array_parent_col_id,
-                          stream);
+                                                  original_col_ids,
+                                                  sorted_col_ids,
+                                                  ordered_node_ids,
+                                                  row_offsets,
+                                                  is_array_of_arrays,
+                                                  row_array_parent_col_id,
+                                                  stream);
 
   NodeIndexT num_columns = unpermuted_col_ids.size();
 
@@ -158,38 +158,41 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   rmm::device_uvector<NodeIndexT> rev_mapped_col_ids(num_columns, stream);
   rmm::device_uvector<NodeIndexT> reordering_index(unpermuted_col_ids.size(), stream);
 
-  thrust::sequence(rmm::exec_policy_nosync(stream),
-                   reordering_index.begin(),
-                   reordering_index.end());
+  thrust::sequence(
+    rmm::exec_policy_nosync(stream), reordering_index.begin(), reordering_index.end());
   // Reorder nodes and column ids in level-wise fashion
-  thrust::sort_by_key(rmm::exec_policy_nosync(stream),
-                      reordering_index.begin(),
-                      reordering_index.end(),
-                      mapped_col_ids.begin(),
-                      level_ordering{unpermuted_tree.node_levels, unpermuted_col_ids, unpermuted_tree.parent_node_ids});
+  thrust::sort_by_key(
+    rmm::exec_policy_nosync(stream),
+    reordering_index.begin(),
+    reordering_index.end(),
+    mapped_col_ids.begin(),
+    level_ordering{
+      unpermuted_tree.node_levels, unpermuted_col_ids, unpermuted_tree.parent_node_ids});
 
   {
     auto mapped_col_ids_copy = cudf::detail::make_device_uvector_async(
-        mapped_col_ids, stream, cudf::get_current_device_resource_ref());
-      thrust::sequence(
-        rmm::exec_policy_nosync(stream), rev_mapped_col_ids.begin(), rev_mapped_col_ids.end());
-      thrust::sort_by_key(rmm::exec_policy_nosync(stream),
-                          mapped_col_ids_copy.begin(),
-                          mapped_col_ids_copy.end(),
-                          rev_mapped_col_ids.begin());
+      mapped_col_ids, stream, cudf::get_current_device_resource_ref());
+    thrust::sequence(
+      rmm::exec_policy_nosync(stream), rev_mapped_col_ids.begin(), rev_mapped_col_ids.end());
+    thrust::sort_by_key(rmm::exec_policy_nosync(stream),
+                        mapped_col_ids_copy.begin(),
+                        mapped_col_ids_copy.end(),
+                        rev_mapped_col_ids.begin());
   }
 
   rmm::device_uvector<NodeIndexT> parent_col_ids(num_columns, stream);
-  thrust::transform_output_iterator parent_col_ids_it(
-    parent_col_ids.begin(), parent_nodeids_to_colids{rev_mapped_col_ids});
+  thrust::transform_output_iterator parent_col_ids_it(parent_col_ids.begin(),
+                                                      parent_nodeids_to_colids{rev_mapped_col_ids});
   rmm::device_uvector<row_offset_t> max_row_offsets(num_columns, stream);
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
   thrust::copy_n(
     rmm::exec_policy_nosync(stream),
-    thrust::make_zip_iterator(
-      thrust::make_permutation_iterator(unpermuted_tree.parent_node_ids.begin(), reordering_index.begin()),
-      thrust::make_permutation_iterator(unpermuted_max_row_offsets.begin(), reordering_index.begin()),
-      thrust::make_permutation_iterator(unpermuted_tree.node_categories.begin(), reordering_index.begin())),
+    thrust::make_zip_iterator(thrust::make_permutation_iterator(
+                                unpermuted_tree.parent_node_ids.begin(), reordering_index.begin()),
+                              thrust::make_permutation_iterator(unpermuted_max_row_offsets.begin(),
+                                                                reordering_index.begin()),
+                              thrust::make_permutation_iterator(
+                                unpermuted_tree.node_categories.begin(), reordering_index.begin())),
     num_columns,
     thrust::make_zip_iterator(
       parent_col_ids_it, max_row_offsets.begin(), column_categories.begin()));
@@ -256,8 +259,8 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   };
 
   auto construct_colidx = [&stream](NodeIndexT num_columns,
-                                              device_span<NodeIndexT const> parent_col_ids,
-                                              device_span<NodeIndexT const> rowidx) {
+                                    device_span<NodeIndexT const> parent_col_ids,
+                                    device_span<NodeIndexT const> rowidx) {
     rmm::device_uvector<NodeIndexT> colidx((num_columns - 1) * 2, stream);
     thrust::fill(rmm::exec_policy_nosync(stream), colidx.begin(), colidx.end(), -1);
     // excluding root node, construct scatter map
@@ -289,12 +292,12 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
     print<NodeIndexT>(colidx, "h_colidx", stream);
 #endif
 
-      // Skip the parent of root node
-      thrust::scatter(rmm::exec_policy_nosync(stream),
-                      parent_col_ids.begin() + 1,
-                      parent_col_ids.end(),
-                      rowidx.begin() + 1,
-                      colidx.begin());
+    // Skip the parent of root node
+    thrust::scatter(rmm::exec_policy_nosync(stream),
+                    parent_col_ids.begin() + 1,
+                    parent_col_ids.end(),
+                    rowidx.begin() + 1,
+                    colidx.begin());
 
     return colidx;
   };

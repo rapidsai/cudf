@@ -53,7 +53,7 @@ namespace cudf::io::json::detail {
 #define CSR_DEBUG_EQ
 #endif
 #ifndef CSR_DEBUG_PRINT
-//#define CSR_DEBUG_PRINT
+// #define CSR_DEBUG_PRINT
 #endif
 
 #ifdef CSR_DEBUG_PRINT
@@ -137,7 +137,7 @@ reduce_to_column_tree(tree_meta_t& tree,
                       rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  
+
   // 1. column count for allocation
   auto const num_columns = thrust::unique_count(
     rmm::exec_policy_nosync(stream), sorted_col_ids.begin(), sorted_col_ids.end());
@@ -205,8 +205,10 @@ reduce_to_column_tree(tree_meta_t& tree,
       thrust::make_permutation_iterator(tree.node_range_begin.begin(), unique_node_ids.begin()),
       thrust::make_permutation_iterator(tree.node_range_end.begin(), unique_node_ids.begin())),
     unique_node_ids.size(),
-    thrust::make_zip_iterator(
-      column_levels.begin(), parent_col_ids.begin(), col_range_begin.begin(), col_range_end.begin()));
+    thrust::make_zip_iterator(column_levels.begin(),
+                              parent_col_ids.begin(),
+                              col_range_begin.begin(),
+                              col_range_end.begin()));
 
   // convert parent_node_ids to parent_col_ids
   thrust::transform(
