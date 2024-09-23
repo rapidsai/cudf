@@ -47,25 +47,6 @@
 
 namespace cudf::io::json::detail {
 
-// DEBUG prints
-#ifndef CSR_DEBUG_PRINT
-// #define CSR_DEBUG_PRINT
-#endif
-
-#ifdef CSR_DEBUG_PRINT
-template <typename T>
-void print(device_span<T const> d_vec, std::string name, rmm::cuda_stream_view stream)
-{
-  stream.synchronize();
-  auto h_vec = cudf::detail::make_std_vector_sync(d_vec, stream);
-  std::cout << name << " = ";
-  for (auto e : h_vec) {
-    std::cout << e << " ";
-  }
-  std::cout << std::endl;
-}
-#endif
-
 auto to_cat = [](auto v) -> std::string {
   switch (v) {
     case NC_STRUCT: return " S";
@@ -217,11 +198,6 @@ reduce_to_column_tree(tree_meta_t& tree,
                                                     : col_ids[parent_node_id];
     });
 
-#ifdef CSR_DEBUG_PRINT
-  print<NodeIndexT>(unique_col_ids, "h_unique_col_ids", stream);
-  print<NodeIndexT>(parent_col_ids, "h_parent_col_ids", stream);
-#endif
-
   // condition is true if parent is not a list, or sentinel/root
   // Special case to return true if parent is a list and is_array_of_arrays is true
   auto is_non_list_parent = [column_categories = column_categories.begin(),
@@ -231,10 +207,6 @@ reduce_to_column_tree(tree_meta_t& tree,
              column_categories[parent_col_id] == NC_LIST &&
                (!is_array_of_arrays || parent_col_id != row_array_parent_col_id));
   };
-
-#ifdef CSR_DEBUG_PRINT
-  print<size_type>(max_row_offsets, "h_max_row_offsets", stream);
-#endif
 
   // Mixed types in List children go to different columns,
   // so all immediate children of list column should have same max_row_offsets.
@@ -275,10 +247,6 @@ reduce_to_column_tree(tree_meta_t& tree,
       });
   }
 
-#ifdef CSR_DEBUG_PRINT
-  print<size_type>(max_row_offsets, "h_max_row_offsets", stream);
-#endif
-
   // copy lists' max_row_offsets to children.
   // all structs should have same size.
   thrust::transform_if(
@@ -305,10 +273,6 @@ reduce_to_column_tree(tree_meta_t& tree,
       // condition is true if parent is not a list, or sentinel/root
       return is_non_list_parent(parent_col_id);
     });
-
-#ifdef CSR_DEBUG_PRINT
-  print<size_type>(max_row_offsets, "h_max_row_offsets", stream);
-#endif
 
   // For Struct and List (to avoid copying entire strings when mixed type as string is enabled)
   thrust::transform_if(
