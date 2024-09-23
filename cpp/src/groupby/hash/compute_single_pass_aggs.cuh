@@ -19,12 +19,12 @@
 #include "compute_aggregations.hpp"
 #include "compute_single_pass_aggs.hpp"
 #include "helpers.cuh"
-#include "kernels.cuh"
 #include "single_pass_functors.cuh"
 
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/groupby.hpp>
