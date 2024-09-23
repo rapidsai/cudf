@@ -3,41 +3,26 @@
 from numba.np import numpy_support
 
 import cudf
-from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 from cudf.core._internals.expressions import parse_expression
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.utils import cudautils
 
 from cython.operator cimport dereference
-from libc.stdint cimport uintptr_t
 from libcpp.memory cimport unique_ptr
-from libcpp.pair cimport pair
-from libcpp.string cimport string
 from libcpp.utility cimport move
 
 cimport pylibcudf.libcudf.transform as libcudf_transform
 from pylibcudf cimport transform as plc_transform
 from pylibcudf.expressions cimport Expression
 from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.expressions cimport expression
-from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
-from pylibcudf.libcudf.types cimport (
-    bitmask_type,
-    data_type,
-    size_type,
-    type_id,
-)
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.column cimport Column
-from cudf._lib.types cimport underlying_type_t_type_id
-from cudf._lib.utils cimport (
-    columns_from_unique_ptr,
-    data_from_table_view,
-    table_view_from_columns,
-)
+from cudf._lib.utils cimport table_view_from_columns
+
+import pylibcudf as plc
 
 
 @acquire_spill_lock()
@@ -46,17 +31,8 @@ def bools_to_mask(Column col):
     Given an int8 (boolean) column, compress the data from booleans to bits and
     return a Buffer
     """
-    cdef column_view col_view = col.view()
-    cdef pair[unique_ptr[device_buffer], size_type] cpp_out
-    cdef unique_ptr[device_buffer] up_db
-
-    with nogil:
-        cpp_out = move(libcudf_transform.bools_to_mask(col_view))
-        up_db = move(cpp_out.first)
-
-    rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_buffer(rmm_db)
-    return buf
+    mask, _ = plc_transform.bools_to_mask(col.to_pylibcudf(mode="read"))
+    return as_buffer(mask)
 
 
 @acquire_spill_lock()
@@ -68,22 +44,15 @@ def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     if not isinstance(mask_buffer, cudf.core.buffer.Buffer):
         raise TypeError("mask_buffer is not an instance of "
                         "cudf.core.buffer.Buffer")
-    cdef bitmask_type* bit_mask = <bitmask_type*><uintptr_t>(
-        mask_buffer.get_ptr(mode="read")
+    plc_column = plc_transform.mask_to_bools(
+        mask_buffer.get_ptr(mode="read"), begin_bit, end_bit
     )
-
-    cdef unique_ptr[column] result
-    with nogil:
-        result = move(
-            libcudf_transform.mask_to_bools(bit_mask, begin_bit, end_bit)
-        )
-
-    return Column.from_unique_ptr(move(result))
+    return Column.from_pylibcudf(plc_column)
 
 
 @acquire_spill_lock()
 def nans_to_nulls(Column input):
-    (mask, _) = plc_transform.nans_to_nulls(
+    mask, _ = plc_transform.nans_to_nulls(
         input.to_pylibcudf(mode="read")
     )
     return as_buffer(mask)
@@ -91,80 +60,45 @@ def nans_to_nulls(Column input):
 
 @acquire_spill_lock()
 def transform(Column input, op):
-    cdef column_view c_input = input.view()
-    cdef string c_str
-    cdef type_id c_tid
-    cdef data_type c_dtype
-
     nb_type = numpy_support.from_dtype(input.dtype)
     nb_signature = (nb_type,)
     compiled_op = cudautils.compile_udf(op, nb_signature)
-    c_str = compiled_op[0].encode('UTF-8')
     np_dtype = cudf.dtype(compiled_op[1])
 
-    try:
-        c_tid = <type_id> (
-            <underlying_type_t_type_id> SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[
-                np_dtype
-            ]
-        )
-        c_dtype = data_type(c_tid)
-
-    except KeyError:
-        raise TypeError(
-            "Result of window function has unsupported dtype {}"
-            .format(np_dtype)
-        )
-
-    with nogil:
-        c_output = move(libcudf_transform.transform(
-            c_input,
-            c_str,
-            c_dtype,
-            True
-        ))
-
-    return Column.from_unique_ptr(move(c_output))
+    plc_column = plc_transform.transform(
+        input.to_pylibcudf(mode="read"),
+        compiled_op[0],
+        plc.column._datatype_from_dtype_desc(np_dtype.str[1:]),
+        True
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def table_encode(list source_columns):
-    cdef table_view c_input = table_view_from_columns(source_columns)
-    cdef pair[unique_ptr[table], unique_ptr[column]] c_result
-
-    with nogil:
-        c_result = move(libcudf_transform.encode(c_input))
+    plc_table, plc_column = plc_transform.encode(
+        plc.Table([col.to_pylibcudf(mode="read") for col in source_columns])
+    )
 
     return (
-        columns_from_unique_ptr(move(c_result.first)),
-        Column.from_unique_ptr(move(c_result.second))
+        [Column.from_pylibcudf(col) for col in plc_table.columns()],
+        Column.from_pylibcudf(plc_column)
     )
 
 
 def one_hot_encode(Column input_column, Column categories):
-    cdef column_view c_view_input = input_column.view()
-    cdef column_view c_view_categories = categories.view()
-    cdef pair[unique_ptr[column], table_view] c_result
-
-    with nogil:
-        c_result = move(
-            libcudf_transform.one_hot_encode(c_view_input, c_view_categories)
-        )
-
-    # Notice, the data pointer of `owner` has been exposed
-    # through `c_result.second` at this point.
-    owner = Column.from_unique_ptr(
-        move(c_result.first), data_ptr_exposed=True
+    plc_table = plc_transform.one_hot_encode(
+        input_column.to_pylibcudf(mode="read"),
+        categories.to_pylibcudf(mode="read"),
     )
-
-    pylist_categories = categories.to_arrow().to_pylist()
-    encodings, _ = data_from_table_view(
-        move(c_result.second),
-        owner=owner,
-        column_names=[
-            x if x is not None else '<NA>' for x in pylist_categories
-        ]
-    )
-    return encodings
+    result_columns = [
+        Column.from_pylibcudf(col, data_ptr_exposed=True)
+        for col in plc_table.columns()
+    ]
+    result_labels = [
+        x if x is not None else '<NA>'
+        for x in categories.to_arrow().to_pylist()
+    ]
+    return dict(zip(result_labels, result_columns))
 
 
 @acquire_spill_lock()

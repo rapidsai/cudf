@@ -120,3 +120,23 @@ To profile a script being run from the command line, pass the
 ```bash
 python -m cudf.pandas --profile script.py
 ```
+
+### cudf.pandas CLI Features
+
+Several of the ways to provide input to the `python` interpreter also work with `python -m cudf.pandas`, such as the REPL, the `-c` flag, and reading from stdin.
+
+Executing `python -m cudf.pandas` with no script name will enter a REPL (read-eval-print loop) similar to the behavior of the normal `python` interpreter.
+
+The `-c` flag accepts a code string to run, like this:
+
+```bash
+$ python -m cudf.pandas -c "import pandas; print(pandas)"
+<module 'pandas' (ModuleAccelerator(fast=cudf, slow=pandas))>
+```
+
+Users can also provide code to execute from stdin, like this:
+
+```bash
+$ echo "import pandas; print(pandas)" | python -m cudf.pandas
+<module 'pandas' (ModuleAccelerator(fast=cudf, slow=pandas))>
+```

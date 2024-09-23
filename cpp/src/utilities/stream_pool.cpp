@@ -132,6 +132,13 @@ struct cuda_event {
   cuda_event() { CUDF_CUDA_TRY(cudaEventCreateWithFlags(&e_, cudaEventDisableTiming)); }
   virtual ~cuda_event() { CUDF_ASSERT_CUDA_SUCCESS(cudaEventDestroy(e_)); }
 
+  // Moveable but not copyable.
+  cuda_event(const cuda_event&)            = delete;
+  cuda_event& operator=(const cuda_event&) = delete;
+
+  cuda_event(cuda_event&&)            = default;
+  cuda_event& operator=(cuda_event&&) = default;
+
   operator cudaEvent_t() { return e_; }
 
  private:
@@ -147,11 +154,12 @@ struct cuda_event {
  */
 cudaEvent_t event_for_thread()
 {
-  thread_local std::vector<std::unique_ptr<cuda_event>> thread_events(get_num_cuda_devices());
+  // The program may crash if this function is called from the main thread and user application
+  // subsequently calls cudaDeviceReset().
+  // As a workaround, here we intentionally disable RAII and leak cudaEvent_t.
+  thread_local std::vector<cuda_event*> thread_events(get_num_cuda_devices());
   auto const device_id = get_current_cuda_device();
-  if (not thread_events[device_id.value()]) {
-    thread_events[device_id.value()] = std::make_unique<cuda_event>();
-  }
+  if (not thread_events[device_id.value()]) { thread_events[device_id.value()] = new cuda_event(); }
   return *thread_events[device_id.value()];
 }
 
