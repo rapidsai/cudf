@@ -32,7 +32,7 @@ namespace hash {
  * over the data and stores the results in `sparse_results`
  */
 template <typename SetType>
-CUDF_EXPORT rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
+rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   cudf::table_view const& keys,
   cudf::host_span<cudf::groupby::aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,

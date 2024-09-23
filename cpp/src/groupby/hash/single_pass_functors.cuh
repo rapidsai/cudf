@@ -16,7 +16,10 @@
 
 #pragma once
 
+#include "helpers.cuh"
+
 #include <cudf/detail/aggregation/aggregation.cuh>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/utilities/traits.cuh>
 

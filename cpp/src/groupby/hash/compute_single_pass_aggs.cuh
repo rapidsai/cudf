@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#pragma once
+
+#include "compute_aggregations.hpp"
 #include "compute_single_pass_aggs.hpp"
 #include "helpers.cuh"
 #include "kernels.cuh"
@@ -32,6 +35,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cooperative_groups.h>
 #include <cuco/static_set.cuh>
 
 #include <unordered_set>
@@ -275,53 +279,6 @@ int max_occupancy_grid_size(Kernel kernel, cudf::size_type n)
   auto const grid_size  = max_active_blocks * cudf::detail::num_multiprocessors();
   auto const num_blocks = cudf::util::div_rounding_up_safe(n, GROUPBY_BLOCK_SIZE);
   return std::min(grid_size, num_blocks);
-}
-
-size_t get_previous_multiple_of_8(size_t number) { return number / 8 * 8; }
-
-template <typename Kernel>
-size_t compute_shared_memory_size(Kernel kernel, int grid_size)
-{
-  auto const active_blocks_per_sm =
-    cudf::util::div_rounding_up_safe(grid_size, cudf::detail::num_multiprocessors());
-
-  size_t dynamic_shmem_size;
-  CUDF_CUDA_TRY(cudaOccupancyAvailableDynamicSMemPerBlock(
-    &dynamic_shmem_size, kernel, active_blocks_per_sm, GROUPBY_BLOCK_SIZE));
-  return get_previous_multiple_of_8(0.5 * dynamic_shmem_size);
-}
-
-void compute_aggregations(int grid_size,
-                          cudf::size_type num_input_rows,
-                          bitmask_type const* row_bitmask,
-                          bool skip_rows_with_nulls,
-                          cudf::size_type* local_mapping_index,
-                          cudf::size_type* global_mapping_index,
-                          cudf::size_type* block_cardinality,
-                          cudf::table_device_view input_values,
-                          cudf::mutable_table_device_view output_values,
-                          cudf::aggregation::Kind const* aggs,
-                          rmm::cuda_stream_view stream)
-{
-  auto const shmem_size = compute_shared_memory_size(compute_aggs_kernel, grid_size);
-  // For each aggregation, need two pointers to arrays in shmem
-  // One where the aggregation is performed, one indicating the validity of the aggregation
-  auto const shmem_agg_pointer_size =
-    round_to_multiple_of_8(sizeof(std::byte*) * output_values.num_columns());
-  // The rest of shmem is utilized for the actual arrays in shmem
-  auto const shmem_agg_size = shmem_size - shmem_agg_pointer_size * 2;
-  compute_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, shmem_size, stream>>>(
-    num_input_rows,
-    row_bitmask,
-    skip_rows_with_nulls,
-    local_mapping_index,
-    global_mapping_index,
-    block_cardinality,
-    input_values,
-    output_values,
-    aggs,
-    shmem_agg_size,
-    shmem_agg_pointer_size);
 }
 
 template <typename SetType>

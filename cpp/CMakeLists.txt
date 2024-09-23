@@ -314,6 +314,7 @@ add_library(
   src/filling/repeat.cu
   src/filling/sequence.cu
   src/groupby/groupby.cu
+  src/groupby/hash/compute_aggregations.cu
   src/groupby/hash/groupby.cu
   src/groupby/sort/aggregate.cpp
   src/groupby/sort/group_argmax.cu
