@@ -16,12 +16,8 @@
 
 #include "nested_json.hpp"
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/detail/utilities/visitor_overload.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -31,16 +27,12 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cub/device/device_segmented_reduce.cuh>
-#include <cuda/atomic>
 #include <cuda/functional>
 #include <thrust/count.h>
 #include <thrust/for_each.h>
-#include <thrust/functional.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -82,10 +74,12 @@ struct level_ordering {
   device_span<NodeIndexT const> parent_node_ids;
   __device__ bool operator()(NodeIndexT lhs_node_id, NodeIndexT rhs_node_id) const
   {
-    auto lhs_parent_col_id =
-      parent_node_ids[lhs_node_id] == -1 ? -1 : col_ids[parent_node_ids[lhs_node_id]];
-    auto rhs_parent_col_id =
-      parent_node_ids[rhs_node_id] == -1 ? -1 : col_ids[parent_node_ids[rhs_node_id]];
+    auto lhs_parent_col_id = parent_node_ids[lhs_node_id] == parent_node_sentinel
+                               ? parent_node_sentinel
+                               : col_ids[parent_node_ids[lhs_node_id]];
+    auto rhs_parent_col_id = parent_node_ids[rhs_node_id] == parent_node_sentinel
+                               ? parent_node_sentinel
+                               : col_ids[parent_node_ids[rhs_node_id]];
 
     return (node_levels[lhs_node_id] < node_levels[rhs_node_id]) ||
            (node_levels[lhs_node_id] == node_levels[rhs_node_id] &&
