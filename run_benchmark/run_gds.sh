@@ -13,14 +13,14 @@ export LIBCUDF_CUFILE_POLICY
 # compression_type: "SNAPPY", "NONE"
 # cardinality: 0, 1000
 # run_length: 1, 32
-parquet_reader_bench_bin=${HOME}/cudf/cpp/build/latest/benchmarks/PARQUET_READER_NVBENCH
+parquet_reader_bench_bin=/home/coder/cudf/cpp/build/latest/benchmarks/PARQUET_READER_NVBENCH
 parquet_benchmark_name=parquet_read_io_compression
 
 # Default axis set in the bench:
 # compression_type: "SNAPPY", "NONE"
 # cardinality: 0, 1000
 # run_length: 1, 32
-orc_reader_bench_bin=${HOME}/cudf/cpp/build/latest/benchmarks/ORC_READER_NVBENCH
+orc_reader_bench_bin=/home/coder/cudf/cpp/build/latest/benchmarks/ORC_READER_NVBENCH
 orc_benchmark_name=orc_read_io_compression
 
 
