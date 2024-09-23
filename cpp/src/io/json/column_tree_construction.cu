@@ -94,7 +94,7 @@ struct parent_nodeids_to_colids {
 /**
  * @brief Reduces node tree representation to column tree CSR representation.
  *
- * @param tree Node tree representation of JSON string
+ * @param node_tree Node tree representation of JSON string
  * @param original_col_ids Column ids of nodes
  * @param row_offsets Row offsets of nodes
  * @param is_array_of_arrays Whether the tree is an array of arrays

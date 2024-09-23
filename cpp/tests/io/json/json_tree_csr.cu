@@ -245,7 +245,7 @@ void run_test(std::string const& input, bool enable_lines = true)
 
 struct JsonColumnTreeTests : public cudf::test::BaseFixture {};
 
-TEST_F(JsonColumnTreeTests, JSONL1)
+TEST_F(JsonColumnTreeTests, JSONL_Small)
 {
   std::string const input =
     R"(  {}
@@ -254,7 +254,7 @@ TEST_F(JsonColumnTreeTests, JSONL1)
   run_test(input);
 }
 
-TEST_F(JsonColumnTreeTests, JSONL2)
+TEST_F(JsonColumnTreeTests, JSONL_Large)
 {
   std::string const input =
     R"(  {}
@@ -270,7 +270,7 @@ TEST_F(JsonColumnTreeTests, JSONL2)
   run_test(input);
 }
 
-TEST_F(JsonColumnTreeTests, JSONL3)
+TEST_F(JsonColumnTreeTests, JSONL_ListofStruct)
 {
   std::string const input = R"(
   { "Root": { "Key": [ { "EE": "A" } ] } }
@@ -280,7 +280,7 @@ TEST_F(JsonColumnTreeTests, JSONL3)
   run_test(input);
 }
 
-TEST_F(JsonColumnTreeTests, JSONL4)
+TEST_F(JsonColumnTreeTests, JSONL_MissingEntries)
 {
   std::string json_stringl = R"(
     {"a": 1, "b": {"0": "abc", "1": [-1.]}, "c": true}
@@ -291,7 +291,7 @@ TEST_F(JsonColumnTreeTests, JSONL4)
   run_test(json_stringl);
 }
 
-TEST_F(JsonColumnTreeTests, JSONL5)
+TEST_F(JsonColumnTreeTests, JSONL_MoreMissingEntries)
 {
   std::string json_stringl = R"(
     { "foo1": [1,2,3], "bar": 123 }
@@ -304,7 +304,7 @@ TEST_F(JsonColumnTreeTests, JSONL5)
   run_test(json_stringl);
 }
 
-TEST_F(JsonColumnTreeTests, JSONL6)
+TEST_F(JsonColumnTreeTests, JSONL_StillMoreMissingEntries)
 {
   std::string json_stringl = R"(
     { "foo1": [1,2,3], "bar": 123 }
@@ -317,7 +317,7 @@ TEST_F(JsonColumnTreeTests, JSONL6)
   run_test(json_stringl);
 }
 
-TEST_F(JsonColumnTreeTests, JSON1)
+TEST_F(JsonColumnTreeTests, JSON_MissingEntries)
 {
   std::string json_string = R"([
     {"a": 1, "b": {"0": "abc", "1": [-1.]}, "c": true},
@@ -328,7 +328,7 @@ TEST_F(JsonColumnTreeTests, JSON1)
   run_test(json_string, false);
 }
 
-TEST_F(JsonColumnTreeTests, JSON2)
+TEST_F(JsonColumnTreeTests, JSON_StructOfStructs)
 {
   std::string json_string =
     R"([
@@ -339,7 +339,7 @@ TEST_F(JsonColumnTreeTests, JSON2)
   run_test(json_string, false);
 }
 
-TEST_F(JsonColumnTreeTests, JSONLA1)
+TEST_F(JsonColumnTreeTests, JSONL_ArrayOfArrays_NestedList)
 {
   std::string json_string =
     R"([123, [1,2,3]]
@@ -347,44 +347,44 @@ TEST_F(JsonColumnTreeTests, JSONLA1)
   run_test(json_string);
 }
 
-TEST_F(JsonColumnTreeTests, JSONA1)
+TEST_F(JsonColumnTreeTests, JSON_ArrayofArrays_NestedList)
 {
   std::string json_string = R"([[[1,2,3], null, 123],
               [null, { "a": 1 }, 456 ]])";
   run_test(json_string, false);
 }
 
-TEST_F(JsonColumnTreeTests, CornerCase1)
+TEST_F(JsonColumnTreeTests, JSON_CornerCase_Empty)
 {
   std::string json_string = R"([])";
   run_test(json_string, false);
 }
 
-TEST_F(JsonColumnTreeTests, CornerCase2)
+TEST_F(JsonColumnTreeTests, JSONL_CornerCase_List)
 {
   std::string json_string = R"([123])";
   run_test(json_string, true);
 }
 
-TEST_F(JsonColumnTreeTests, CornerCase3)
+TEST_F(JsonColumnTreeTests, JSON_CornerCase_EmptyNestedList)
 {
   std::string json_string = R"([[[]]])";
   run_test(json_string, false);
 }
 
-TEST_F(JsonColumnTreeTests, CornerCase4)
+TEST_F(JsonColumnTreeTests, JSON_CornerCase_EmptyNestedLists)
 {
   std::string json_string = R"([[], [], []])";
   run_test(json_string, false);
 }
 
-TEST_F(JsonColumnTreeTests, CornerCase5)
+TEST_F(JsonColumnTreeTests, JSONL_CornerCase_ListofLists)
 {
   std::string json_string = R"([[1, 2, 3], [4, 5, null], []])";
   run_test(json_string, true);
 }
 
-TEST_F(JsonColumnTreeTests, CornerCase6)
+TEST_F(JsonColumnTreeTests, JSONL_CornerCase_EmptyListOfLists)
 {
   std::string json_string = R"([[]])";
   run_test(json_string, true);
