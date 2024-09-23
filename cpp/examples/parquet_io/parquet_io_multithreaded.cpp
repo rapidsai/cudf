@@ -180,15 +180,16 @@ int main(int argc, char const** argv)
     return parquet_files;
   };
 
-  // Concatenate a vector of tables and return
+  // Lambda to concatenate a vector of tables
   auto const concatenate_tables = [](std::vector<table_t> tables, rmm::cuda_stream_view stream) {
+    std::vector<cudf::table_view> table_views;
+    table_views.reserve(tables.size());
+    std::transform(
+      tables.begin(), tables.end(), std::back_inserter(table_views), [&](auto const& tbl) {
+        return tbl->view();
+      });
     // Construct the final table
-    auto table = std::move(tables[0]);
-    std::for_each(tables.begin() + 1, tables.end(), [&](auto& tbl) {
-      std::vector<cudf::table_view> const table_views{table->view(), tbl->view()};
-      table = cudf::concatenate(table_views, stream);
-    });
-    return table;
+    return cudf::concatenate(table_views, stream);
   };
 
   // make input files from the input_paths string.
