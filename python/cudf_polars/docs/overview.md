@@ -15,8 +15,10 @@ You will need:
 
 ## Installing polars
 
-We will need to build polars from source. Until things settle down,
-live at `HEAD`.
+`cudf-polars` works with polars >= 1.3, as long as the internal IR
+version doesn't get a major version bump. So `pip install polars>=1.3`
+should work. For development, if we're adding things to the polars
+side of things, we will need to build polars from source:
 
 ```sh
 git clone https://github.com/pola-rs/polars
@@ -59,7 +61,7 @@ The executor for the polars logical plan lives in the cudf repo, in
 
 ```sh
 cd cudf/python/cudf_polars
-uv pip install --no-build-isolation --no-deps -e .
+pip install --no-build-isolation --no-deps -e .
 ```
 
 You should now be able to run the tests in the `cudf_polars` package:
@@ -69,16 +71,18 @@ pytest -v tests
 
 # Executor design
 
-The polars `LazyFrame.collect` functionality offers a
-"post-optimization" callback that may be used by a third party library
-to replace a node (or more, though we only replace a single node) in the
-optimized logical plan with a Python callback that is to deliver the
-result of evaluating the plan. This splits the execution of the plan
-into two phases. First, a symbolic phase which translates to our
-internal representation (IR). Second, an execution phase which executes
-using our IR.
+The polars `LazyFrame.collect` functionality offers configuration of
+the engine to use for collection through the `engine` argument. At a
+low level, this provides for configuration of a "post-optimization"
+callback that may be used by a third party library to replace a node
+(or more, though we only replace a single node) in the optimized
+logical plan with a Python callback that is to deliver the result of
+evaluating the plan. This splits the execution of the plan into two
+phases. First, a symbolic phase which translates to our internal
+representation (IR). Second, an execution phase which executes using
+our IR.
 
-The translation phase receives the a low-level Rust `NodeTraverse`
+The translation phase receives the a low-level Rust `NodeTraverser`
 object which delivers Python representations of the plan nodes (and
 expressions) one at a time. During translation, we endeavour to raise
 `NotImplementedError` for any unsupported functionality. This way, if
@@ -86,32 +90,59 @@ we can't execute something, we just don't modify the logical plan at
 all: if we can translate the IR, it is assumed that evaluation will
 later succeed.
 
-The usage of the cudf-based executor is therefore, at present:
+The usage of the cudf-based executor is therefore selected with the
+gpu engine:
 
 ```python
-from cudf_polars.callback import execute_with_cudf
+import polars as pl
 
-result = q.collect(post_opt_callback=execute_with_cudf)
+result = q.collect(engine="gpu")
 ```
 
 This should either transparently run on the GPU and deliver a polars
 dataframe, or else fail (but be handled) and just run the normal CPU
-execution.
+execution. If `POLARS_VERBOSE` is true, then fallback is logged with a
+`PerformanceWarning`.
 
-If you want to fail during translation, set the keyword argument
-`raise_on_fail` to `True`:
+As well as a string argument, the engine can also be specified with a
+polars `GPUEngine` object. This allows passing more configuration in.
+Currently, the public properties are `device`, to select the device,
+and `memory_resource`, to select the RMM memory resource used for
+allocations during the collection phase.
+
+For example:
+```python
+import polars as pl
+
+result = q.collect(engine=pl.GPUEngine(device=1, memory_resource=mr))
+```
+
+Uses device-1, and the given memory resource. Note that the memory
+resource provided _must_ be valid for allocations on the specified
+device, no checking is performed.
+
+For debugging purposes, we can also pass undocumented keyword
+arguments, at the moment, `raise_on_fail` is also supported, which
+raises, rather than falling back, during translation:
 
 ```python
-from functools import partial
-from cudf_polars.callback import execute_with_cudf
 
-result = q.collect(
-    post_opt_callback=partial(execute_with_cudf, raise_on_fail=True)
-)
+result = q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 ```
 
 This is mostly useful when writing tests, since in that case we want
 any failures to propagate, rather than falling back to the CPU mode.
+
+## IR versioning
+
+On the polars side, the `NodeTraverser` object advertises an internal
+version (via `NodeTraverser.version()` as a `(major, minor)` tuple).
+`minor` version bumps are for backwards compatible changes (e.g.
+exposing new nodes), whereas `major` bumps are for incompatible
+changes. We can therefore attempt to detect the IR version
+(independently of the polars version) and dispatch, or error
+appropriately. This should be done during IR translation in
+`translate.py`.
 
 ## Adding a handler for a new plan node
 
@@ -175,7 +206,7 @@ around their pylibcudf counterparts. We have four (in
 
 1. `Scalar` (a wrapper around a pylibcudf `Scalar`)
 2. `Column` (a wrapper around a pylibcudf `Column`)
-3. `NamedColumn` a `Column` with an additional name
+3. `NamedColumn` (a `Column` with an additional name)
 4. `DataFrame` (a wrapper around a pylibcudf `Table`)
 
 The interfaces offered by these are somewhat in flux, but broadly

@@ -13,9 +13,13 @@ set -eou pipefail
 if [ -n "$(git diff --name-only origin/branch-24.10...HEAD -- python/cudf_polars/ python/pylibcudf/)" ];
 then
     HAS_CHANGES=1
+    rapids-logger "PR has changes in cudf-polars/pylibcudf, test fails treated as failure"
 else
     HAS_CHANGES=0
+    rapids-logger "PR does not have changes in cudf-polars/pylibcudf, test fails NOT treated as failure"
 fi
+
+rapids-logger "Download wheels"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-s3 python ./dist
@@ -42,6 +46,9 @@ python -m pip install \
     "$(echo ./dist/cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test]" \
     "$(echo ./dist/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \
     "$(echo ./dist/pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
+
+rapids-logger "Pin to 1.7.0 Temporarily"
+python -m pip install polars==1.7.0
 
 rapids-logger "Run cudf_polars tests"
 
