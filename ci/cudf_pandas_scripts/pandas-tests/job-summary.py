@@ -76,6 +76,8 @@ pr_df["CPU Usage"] = ((pr_df["_slow_function_call"]/total_usage)*100.0).round(1)
 pr_df["GPU Usage"] = ((pr_df["_fast_function_call"]/total_usage)*100.0).round(1)
 
 diff_df = pr_df - main_df
+diff_df["CPU Usage_diff"] = diff_df["CPU Usage_diff"].round(1).fillna(0)
+diff_df["GPU Usage_diff"] = diff_df["GPU Usage_diff"].round(1).fillna(0)
 
 cpu_usage_mean = pr_df["CPU Usage"].mean().round(2)
 gpu_usage_mean = pr_df["GPU Usage"].mean().round(2)
@@ -90,8 +92,6 @@ diff_df.columns = diff_df.columns + "_diff"
 diff_df["passed_diff"] = diff_df["passed_diff"].map(emoji_passed)
 diff_df["failed_diff"] = diff_df["failed_diff"].map(emoji_failed)
 diff_df["skipped_diff"] = diff_df["skipped_diff"].map(emoji_failed)
-diff_df["CPU Usage_diff"] = diff_df["CPU Usage_diff"].map(emoji_failed)
-diff_df["GPU Usage_diff"] = diff_df["GPU Usage_diff"].map(emoji_passed)
 
 df = pd.concat([pr_df, diff_df], axis=1)
 df = df.rename_axis("Test module")
@@ -111,6 +111,8 @@ df = df.rename(
     }
 )
 df = df.sort_values(by=["CPU Usage delta", "Failed tests"], ascending=False)
+df["CPU Usage delta"] = df["CPU Usage delta"].map(emoji_failed)
+df["GPU Usage delta"] = df["GPU Usage delta"].map(emoji_passed)
 df = df[["Total tests", "CPU Usage delta", "GPU Usage delta", "Passed tests", "Failed tests", "Skipped tests", "CPU Usage", "GPU Usage", "Total delta", "Passed delta", "Failed delta", "Skipped delta"]]
 print(comment)
 print()
