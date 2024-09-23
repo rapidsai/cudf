@@ -107,6 +107,7 @@ jobs:
               - '!img/**'
               - '!java/**'
               - '!notebooks/**'
+              - '!ci/cudf_pandas_scripts/**'
             cudf_pandas:
               - '**'
               - 'ci/cudf_pandas_scripts/**'
@@ -302,7 +303,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
-    if: needs.changed-files.outputs.test_python == 'true'
+    if: needs.changed-files.outputs.test_python == 'true' || needs.changed-files.outputs.test_cudf_pandas == 'true'
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -313,7 +314,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
-    if: needs.changed-files.outputs.test_python == 'true' && needs.changed-files.outputs.test_cudf_pandas == 'true'
+    if: needs.changed-files.outputs.test_python == 'true' || needs.changed-files.outputs.test_cudf_pandas == 'true'
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
