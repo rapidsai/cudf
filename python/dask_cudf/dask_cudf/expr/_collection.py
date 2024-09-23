@@ -242,9 +242,10 @@ def _create_array_collection_with_meta(expr):
 def _register_cupy():
     import cupy
 
-    @get_collection_type.register(cupy.ndarray)
-    def get_collection_type_cupy_array(_):
-        return _create_array_collection_with_meta
+    get_collection_type.register(
+        cupy.ndarray,
+        lambda x: _create_array_collection_with_meta,
+    )
 
 
 @get_collection_type.register_lazy("cupyx")
@@ -252,6 +253,7 @@ def _register_cupyx():
     # Needed for cuml
     from cupyx.scipy.sparse import spmatrix
 
-    @get_collection_type.register(spmatrix)
-    def get_collection_type_csr_matrix(_):
-        return _create_array_collection_with_meta
+    get_collection_type.register(
+        spmatrix,
+        lambda x: _create_array_collection_with_meta,
+    )
