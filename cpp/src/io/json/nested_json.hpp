@@ -247,6 +247,17 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   NodeIndexT row_array_parent_col_id,
   rmm::cuda_stream_view stream);
 
+CUDF_EXPORT
+std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
+  tree_meta_t& node_tree,
+  device_span<NodeIndexT const> original_col_ids,
+  device_span<NodeIndexT const> sorted_col_ids,
+  device_span<NodeIndexT const> ordered_node_ids,
+  device_span<size_type const> row_offsets,
+  bool is_array_of_arrays,
+  NodeIndexT row_array_parent_col_id,
+  rmm::cuda_stream_view stream);
+
 }  // namespace detail
 }  // namespace experimental
 
