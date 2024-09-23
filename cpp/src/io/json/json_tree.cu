@@ -33,6 +33,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/device/device_radix_sort.cuh>
 #include <cuco/static_set.cuh>
 #include <cuda/functional>
 #include <thrust/binary_search.h>
@@ -169,8 +170,8 @@ std::pair<rmm::device_uvector<KeyType>, rmm::device_uvector<IndexType>> stable_s
     nullptr, temp_storage_bytes, keys_buffer, order_buffer, keys.size());
   rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
 
-  thrust::copy(rmm::exec_policy_nosync(stream), keys.begin(), keys.end(), keys_buffer1.begin());
-  thrust::sequence(rmm::exec_policy_nosync(stream), order_buffer1.begin(), order_buffer1.end());
+  thrust::copy(rmm::exec_policy(stream), keys.begin(), keys.end(), keys_buffer1.begin());
+  thrust::sequence(rmm::exec_policy(stream), order_buffer1.begin(), order_buffer1.end());
 
   cub::DeviceRadixSort::SortPairs(d_temp_storage.data(),
                                   temp_storage_bytes,
