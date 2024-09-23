@@ -16,7 +16,6 @@
 
 #include "io/utilities/parsing_utils.cuh"
 #include "io/utilities/string_parsing.hpp"
-#include "json_utils.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/column/column_factories.hpp>
@@ -49,9 +48,6 @@
 namespace cudf::io::json::detail {
 
 // DEBUG prints
-#ifndef CSR_DEBUG_EQ
-#define CSR_DEBUG_EQ
-#endif
 #ifndef CSR_DEBUG_PRINT
 // #define CSR_DEBUG_PRINT
 #endif
@@ -332,100 +328,6 @@ reduce_to_column_tree(tree_meta_t& tree,
                     std::move(unique_col_ids),
                     std::move(max_row_offsets)};
 }
-
-/**
- * @brief Holds member data pointers of `d_json_column`
- *
- */
-struct json_column_data {
-  using row_offset_t = json_column::row_offset_t;
-  row_offset_t* string_offsets;
-  row_offset_t* string_lengths;
-  row_offset_t* child_offsets;
-  bitmask_type* validity;
-};
-
-struct h_tree_meta_t {
-  std::vector<NodeT> node_categories;
-  std::vector<NodeIndexT> parent_node_ids;
-  std::vector<SymbolOffsetT> node_range_begin;
-  std::vector<SymbolOffsetT> node_range_end;
-};
-
-struct h_column_tree {
-  // concatenated adjacency list
-  std::vector<NodeIndexT> rowidx;
-  std::vector<NodeIndexT> colidx;
-  // node properties
-  std::vector<NodeT> categories;
-  std::vector<NodeIndexT> column_ids;
-};
-
-#ifdef CSR_DEBUG_EQ
-bool check_equality(tree_meta_t& d_a,
-                    cudf::device_span<cudf::size_type const> d_a_max_row_offsets,
-                    experimental::compressed_sparse_row& d_b_csr,
-                    experimental::column_tree_properties& d_b_ctp,
-                    rmm::cuda_stream_view stream)
-{
-  // convert from tree_meta_t to column_tree_csr
-  stream.synchronize();
-
-  h_tree_meta_t a{cudf::detail::make_std_vector_async(d_a.node_categories, stream),
-                  cudf::detail::make_std_vector_async(d_a.parent_node_ids, stream),
-                  cudf::detail::make_std_vector_async(d_a.node_range_begin, stream),
-                  cudf::detail::make_std_vector_async(d_a.node_range_end, stream)};
-
-  h_column_tree b{cudf::detail::make_std_vector_async(d_b_csr.rowidx, stream),
-                  cudf::detail::make_std_vector_async(d_b_csr.colidx, stream),
-                  cudf::detail::make_std_vector_async(d_b_ctp.categories, stream),
-                  cudf::detail::make_std_vector_async(d_b_ctp.mapped_ids, stream)};
-
-  auto a_max_row_offsets = cudf::detail::make_std_vector_async(d_a_max_row_offsets, stream);
-  auto b_max_row_offsets = cudf::detail::make_std_vector_async(d_b_ctp.max_row_offsets, stream);
-
-  stream.synchronize();
-
-  auto num_nodes = a.parent_node_ids.size();
-  if (num_nodes > 1) {
-    if (b.rowidx.size() != num_nodes + 1) { return false; }
-
-    for (auto pos = b.rowidx[0]; pos < b.rowidx[1]; pos++) {
-      auto v = b.colidx[pos];
-      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) { return false; }
-    }
-    for (size_t u = 1; u < num_nodes; u++) {
-      auto v = b.colidx[b.rowidx[u]];
-      if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) { return false; }
-
-      for (auto pos = b.rowidx[u] + 1; pos < b.rowidx[u + 1]; pos++) {
-        v = b.colidx[pos];
-        if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) { return false; }
-      }
-    }
-    for (size_t u = 0; u < num_nodes; u++) {
-      if (a.node_categories[b.column_ids[u]] != b.categories[u]) { return false; }
-    }
-
-    for (size_t u = 0; u < num_nodes; u++) {
-      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) { return false; }
-    }
-  } else if (num_nodes == 1) {
-    if (b.rowidx.size() != num_nodes + 1) { return false; }
-
-    if (b.rowidx[0] != 0 || b.rowidx[1] != 1) return false;
-    if (!b.colidx.empty()) return false;
-    for (size_t u = 0; u < num_nodes; u++) {
-      if (a.node_categories[b.column_ids[u]] != b.categories[u]) { return false; }
-    }
-
-    for (size_t u = 0; u < num_nodes; u++) {
-      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) { return false; }
-    }
-  }
-  return true;
-}
-#endif
 
 std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_column_to_cudf_column(
   device_json_column& json_col,

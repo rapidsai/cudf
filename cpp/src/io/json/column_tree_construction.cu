@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "json_utils.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/column/column_factories.hpp>

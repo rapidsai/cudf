@@ -46,6 +46,14 @@
 
 namespace cudf::io::json::detail {
 
+// DEBUG prints
+#ifndef CSR_DEBUG_EQ
+#define CSR_DEBUG_EQ
+#endif
+#ifndef CSR_DEBUG_PRINT
+// #define CSR_DEBUG_PRINT
+#endif
+
 /**
  * @brief Get the column indices for the values column for array of arrays rows
  *
@@ -245,6 +253,89 @@ void scatter_offsets(
   std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>& columns,
   rmm::cuda_stream_view stream);
 
+#ifdef CSR_DEBUG_EQ
+struct h_tree_meta_t {
+  std::vector<NodeT> node_categories;
+  std::vector<NodeIndexT> parent_node_ids;
+  std::vector<SymbolOffsetT> node_range_begin;
+  std::vector<SymbolOffsetT> node_range_end;
+};
+
+struct h_column_tree {
+  // concatenated adjacency list
+  std::vector<NodeIndexT> rowidx;
+  std::vector<NodeIndexT> colidx;
+  // node properties
+  std::vector<NodeT> categories;
+  std::vector<NodeIndexT> column_ids;
+};
+
+bool check_equality(tree_meta_t& d_a,
+                    cudf::device_span<cudf::size_type const> d_a_max_row_offsets,
+                    experimental::compressed_sparse_row& d_b_csr,
+                    experimental::column_tree_properties& d_b_ctp,
+                    rmm::cuda_stream_view stream)
+{
+  // convert from tree_meta_t to column_tree_csr
+  stream.synchronize();
+
+  h_tree_meta_t a{cudf::detail::make_std_vector_async(d_a.node_categories, stream),
+                  cudf::detail::make_std_vector_async(d_a.parent_node_ids, stream),
+                  cudf::detail::make_std_vector_async(d_a.node_range_begin, stream),
+                  cudf::detail::make_std_vector_async(d_a.node_range_end, stream)};
+
+  h_column_tree b{cudf::detail::make_std_vector_async(d_b_csr.rowidx, stream),
+                  cudf::detail::make_std_vector_async(d_b_csr.colidx, stream),
+                  cudf::detail::make_std_vector_async(d_b_ctp.categories, stream),
+                  cudf::detail::make_std_vector_async(d_b_ctp.mapped_ids, stream)};
+
+  auto a_max_row_offsets = cudf::detail::make_std_vector_async(d_a_max_row_offsets, stream);
+  auto b_max_row_offsets = cudf::detail::make_std_vector_async(d_b_ctp.max_row_offsets, stream);
+
+  stream.synchronize();
+
+  auto num_nodes = a.parent_node_ids.size();
+  if (num_nodes > 1) {
+    if (b.rowidx.size() != num_nodes + 1) { return false; }
+
+    for (auto pos = b.rowidx[0]; pos < b.rowidx[1]; pos++) {
+      auto v = b.colidx[pos];
+      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) { return false; }
+    }
+    for (size_t u = 1; u < num_nodes; u++) {
+      auto v = b.colidx[b.rowidx[u]];
+      if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) { return false; }
+
+      for (auto pos = b.rowidx[u] + 1; pos < b.rowidx[u + 1]; pos++) {
+        v = b.colidx[pos];
+        if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) { return false; }
+      }
+    }
+    for (size_t u = 0; u < num_nodes; u++) {
+      if (a.node_categories[b.column_ids[u]] != b.categories[u]) { return false; }
+    }
+
+    for (size_t u = 0; u < num_nodes; u++) {
+      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) { return false; }
+    }
+  } else if (num_nodes == 1) {
+    if (b.rowidx.size() != num_nodes + 1) { return false; }
+
+    if (b.rowidx[0] != 0 || b.rowidx[1] != 1) return false;
+    if (!b.colidx.empty()) return false;
+    for (size_t u = 0; u < num_nodes; u++) {
+      if (a.node_categories[b.column_ids[u]] != b.categories[u]) { return false; }
+    }
+
+    for (size_t u = 0; u < num_nodes; u++) {
+      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) { return false; }
+    }
+  }
+  return true;
+}
+#endif
+
+
 /**
  * @brief Constructs `d_json_column` from node tree representation
  * Newly constructed columns are insert into `root`'s children.
@@ -301,6 +392,21 @@ void make_device_json_column(device_span<SymbolT const> input,
                           is_array_of_arrays,
                           row_array_parent_col_id,
                           stream);
+#ifdef CSR_DEBUG_EQ
+  auto [d_column_tree_csr, d_column_tree_properties] =
+    cudf::io::json::experimental::detail::reduce_to_column_tree(tree,
+                                                                col_ids,
+                                                                sorted_col_ids,
+                                                                node_ids,
+                                                                row_offsets,
+                                                                is_array_of_arrays,
+                                                                row_array_parent_col_id,
+                                                                stream);
+
+  auto iseq = check_equality(
+    d_column_tree, d_max_row_offsets, d_column_tree_csr, d_column_tree_properties, stream);
+  CUDF_EXPECTS(iseq, "OH NO");
+#endif
   auto num_columns                      = d_unique_col_ids.size();
   std::vector<std::string> column_names = copy_strings_to_host_sync(
     input, d_column_tree.node_range_begin, d_column_tree.node_range_end, stream);

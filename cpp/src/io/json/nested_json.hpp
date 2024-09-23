@@ -231,22 +231,17 @@ namespace detail {
 /**
  * @brief Reduce node tree into column tree by aggregating each property of column.
  *
- * @param tree json node tree to reduce (modified in-place, but restored to original state)
- * @param col_ids column ids of each node (modified in-place, but restored to original state)
- * @param row_offsets row offsets of each node (modified in-place, but restored to original state)
- * @param stream The CUDA stream to which kernels are dispatched
+ * @param tree Node tree representation of JSON string
+ * @param original_col_ids Column ids of nodes
+ * @param sorted_col_ids Sorted column ids of nodes
+ * @param ordered_node_ids Node ids of nodes sorted by column ids
+ * @param row_offsets Row offsets of nodes
+ * @param is_array_of_arrays Whether the tree is an array of arrays
+ * @param row_array_parent_col_id Column id of row array, if is_array_of_arrays is true
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A tuple containing the column tree, identifier for each column and the maximum row index
  * in each column
  */
-CUDF_EXPORT
-std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
-  tree_meta_t& tree,
-  device_span<NodeIndexT const> original_col_ids,
-  device_span<size_type const> row_offsets,
-  bool is_array_of_arrays,
-  NodeIndexT row_array_parent_col_id,
-  rmm::cuda_stream_view stream);
-
 CUDF_EXPORT
 std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   tree_meta_t& node_tree,
