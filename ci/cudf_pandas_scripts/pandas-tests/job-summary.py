@@ -67,10 +67,15 @@ def emoji_failed(x):
 # convert pr_results to a pandas DataFrame and then a markdown table
 pr_df = pd.DataFrame.from_dict(pr_results, orient="index").sort_index()
 main_df = pd.DataFrame.from_dict(main_results, orient="index").sort_index()
-diff_df = pr_df - main_df
+total_usage = main_df["_slow_function_call"] + main_df["_fast_function_call"]
+main_df["CPU Usage"] = ((main_df["_slow_function_call"]/total_usage)*100.0).round(1)
+main_df["GPU Usage"] = ((main_df["_fast_function_call"]/total_usage)*100.0).round(1)
+
 total_usage = pr_df["_slow_function_call"] + pr_df["_fast_function_call"]
 pr_df["CPU Usage"] = ((pr_df["_slow_function_call"]/total_usage)*100.0).round(1)
 pr_df["GPU Usage"] = ((pr_df["_fast_function_call"]/total_usage)*100.0).round(1)
+
+diff_df = pr_df - main_df
 
 cpu_usage_mean = pr_df["CPU Usage"].mean().round(2)
 gpu_usage_mean = pr_df["GPU Usage"].mean().round(2)
