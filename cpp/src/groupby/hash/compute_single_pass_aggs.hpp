@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_view.hpp>
