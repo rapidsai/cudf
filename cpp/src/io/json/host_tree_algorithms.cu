@@ -911,8 +911,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                           is_array_of_arrays,
                           row_array_parent_col_id,
                           stream);
-  // auto h_input = cudf::detail::make_host_vector_async(input, stream);
-  // print_tree(h_input, d_column_tree, stream);
+
   auto num_columns                      = d_unique_col_ids.size();
   std::vector<std::string> column_names = copy_strings_to_host_sync(
     input, d_column_tree.node_range_begin, d_column_tree.node_range_end, stream);
@@ -1009,17 +1008,13 @@ build_tree2(device_json_column& root,
 
   auto initialize_json_columns = [&](auto i, auto& col_ref, auto column_category) {
     auto& col = col_ref.get();
-    col.id    = i;
     if (col.type != json_col_t::Unknown) {
-      std::vector<std::string> v{"ListColumn", "StructColumn", "StringColumn", "Unknown"};
-      std::cout << v[int(col.type)] << std::endl;
       return;
       // CUDF_FAIL("Column already initialized");
     }
     if (column_category == NC_ERR || column_category == NC_FN) {
       return;
     } else if (column_category == NC_VAL || column_category == NC_STR) {
-      std::cout << "init " << i << " as STR\n";
       col.string_offsets.resize(max_row_offsets[i] + 1, stream);
       col.string_lengths.resize(max_row_offsets[i] + 1, stream);
       thrust::uninitialized_fill(
@@ -1027,22 +1022,14 @@ build_tree2(device_json_column& root,
       thrust::uninitialized_fill(
         rmm::exec_policy_nosync(stream), col.string_lengths.begin(), col.string_lengths.end(), 0);
     } else if (column_category == NC_LIST) {
-      std::cout << "init " << i << " as LIST\n";
       col.child_offsets.resize(max_row_offsets[i] + 2, stream);
       thrust::uninitialized_fill(
         rmm::exec_policy_nosync(stream), col.child_offsets.begin(), col.child_offsets.end(), 0);
-    } else {
-      std::cout << "init " << i << " as STRUCT\n";
     }
     col.num_rows = max_row_offsets[i] + 1;
     col.validity =
       cudf::detail::create_null_mask(col.num_rows, cudf::mask_state::ALL_NULL, stream, mr);
     col.type = to_json_col_type(column_category);
-    if (col.type != json_col_t::StringColumn and col.type != json_col_t::ListColumn and
-        col.type != json_col_t::StructColumn) {
-      std::cout << int(column_category) << std::endl;
-      std::cout << "init probably failed. Unknown type\n";
-    }
   };
 
   // 2. generate nested columns tree and its device_memory
@@ -1076,7 +1063,6 @@ build_tree2(device_json_column& root,
     while (!offspring.empty()) {
       auto this_id = offspring.front();
       offspring.pop_front();
-      std::cout << "ignoring " << this_id << "\n";
       is_pruned[this_id] = true;
       if (adj.count(this_id)) {
         for (auto child : adj[this_id]) {
@@ -1100,7 +1086,6 @@ build_tree2(device_json_column& root,
     }
     return -1;
   };
-  std::cout << "mark_is_pruned\n";
   std::function<void(NodeIndexT root, schema_element const& schema)> mark_is_pruned;
   mark_is_pruned = [&is_pruned,
                     &mark_is_pruned,
@@ -1116,7 +1101,6 @@ build_tree2(device_json_column& root,
       (schema.type == data_type{type_id::LIST} and column_categories[root] == NC_LIST) or
       (schema.type != data_type{type_id::STRUCT} and schema.type != data_type{type_id::LIST} and
        column_categories[root] != NC_FN);
-    std::cout << root << ":" << pass << std::endl;
     // TODO: mixmatched type's children need to be pruned as well, TODO unit tests for this.
     if (!pass) {
       // ignore all children of this column and prune this column.
@@ -1152,10 +1136,6 @@ build_tree2(device_json_column& root,
           mark_is_pruned(child_id, key_pair.second);
       }
     } else if (schema.type == data_type{type_id::LIST}) {
-      for (auto ch : schema.child_types) {
-        std::cout << ch.first << ",";
-      }
-      std::cout << ": schema list size:" << schema.child_types.size() << std::endl;
       // partial solution for list children to have any name.
       auto this_list_child_name =
         schema.child_types.size() == 1 ? schema.child_types.begin()->first : list_child_name;
@@ -1168,7 +1148,6 @@ build_tree2(device_json_column& root,
     }
   };
   if (is_array_of_arrays) {
-    std::cout << "list tree\n";
     if (adj[adj[parent_node_sentinel][0]].empty()) return {};  // TODO: verify if needed?
     auto root_list_col_id =
       is_enabled_lines ? adj[parent_node_sentinel][0] : adj[adj[parent_node_sentinel][0]][0];
@@ -1211,7 +1190,6 @@ build_tree2(device_json_column& root,
                  }},
                options.get_dtypes());
   } else {
-    std::cout << "struct tree\n";
     auto root_struct_col_id =
       is_enabled_lines
         ? adj[parent_node_sentinel][0]
@@ -1246,14 +1224,6 @@ build_tree2(device_json_column& root,
                  }},
                options.get_dtypes());
   }
-  std::cout << "is_pruned:\n";
-  for (size_t i = 0ul; i < num_columns; i++)
-    std::cout << i << ",";
-  std::cout << "\n";
-  for (size_t i = 0ul; i < num_columns; i++)
-    std::cout << int(is_pruned[i]) << ",";
-  std::cout << "\n";
-
   // Useful for array of arrays
   auto named_level =
     is_enabled_lines
@@ -1336,7 +1306,6 @@ build_tree2(device_json_column& root,
 
   using dev_ref = std::reference_wrapper<device_json_column>;
   std::unordered_map<NodeIndexT, dev_ref> columns;
-  root.id = -2;  // DEBUG (todo remove)
   columns.try_emplace(parent_node_sentinel, std::ref(root));
   // convert adjaceny list to tree.
   dev_ref parent_ref = std::ref(root);
@@ -1361,9 +1330,7 @@ build_tree2(device_json_column& root,
         ref.get().column_order.emplace_back(name);
         CUDF_EXPECTS(inserted,
                      "struct child column insertion failed, duplicate column name in the parent");
-        std::cout << "before at\n";
         auto this_ref = std::ref(ref.get().child_columns.at(name));
-        std::cout << "after at\n";
         // Mixed type handling
         auto& value_col_ids = adj[field_id];
         handle_mixed_types(value_col_ids);
@@ -1388,7 +1355,6 @@ build_tree2(device_json_column& root,
       // } else if (column_categories[root] == NC_LIST) {
       // array of arrays interpreted as array of structs.
       if (is_array_of_arrays and root == named_level) {
-        std::cout << "array of arrays\n";
         // initialize_json_columns(root, ref, column_categories[root]); // To avoid OOM error for
         // name level list. Algo: create a struct adj list yourself
         std::map<NodeIndexT, std::vector<NodeIndexT>> array_values;
@@ -1406,9 +1372,7 @@ build_tree2(device_json_column& root,
           ref.get().column_order.emplace_back(name);
           CUDF_EXPECTS(inserted,
                        "list child column insertion failed, duplicate column name in the parent");
-          std::cout << "before at\n";
           auto this_ref = std::ref(ref.get().child_columns.at(name));
-          std::cout << "after at\n";
           handle_mixed_types(value_col_ids);
           if (value_col_ids.empty()) {
             // If no column is present, remove the uninitialized column.
@@ -1424,7 +1388,6 @@ build_tree2(device_json_column& root,
             // FIXME: initialized 2nd time for mixed types?
           }
         }
-        std::cout << std::endl;
       } else {
         if (child_ids.empty()) return;
         auto inserted =
