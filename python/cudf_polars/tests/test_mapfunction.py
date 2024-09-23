@@ -61,3 +61,48 @@ def test_rename_columns(mapping):
     q = df.rename(mapping)
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("index", [None, ["a"], ["d", "a"]])
+@pytest.mark.parametrize("variable_name", [None, "names"])
+@pytest.mark.parametrize("value_name", [None, "unpivoted"])
+def test_unpivot(index, variable_name, value_name):
+    df = pl.LazyFrame(
+        {
+            "a": ["x", "y", "z"],
+            "b": pl.Series([1, 3, 5], dtype=pl.Int16),
+            "c": pl.Series([2, 4, 6], dtype=pl.Float32),
+            "d": ["a", "b", "c"],
+        }
+    )
+    q = df.unpivot(
+        ["c", "b"], index=index, variable_name=variable_name, value_name=value_name
+    )
+
+    assert_gpu_result_equal(q)
+
+
+def test_unpivot_defaults():
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series([11, 12, 13], dtype=pl.UInt16),
+            "b": pl.Series([1, 3, 5], dtype=pl.Int16),
+            "c": pl.Series([2, 4, 6], dtype=pl.Float32),
+            "d": ["a", "b", "c"],
+        }
+    )
+    q = df.unpivot(index="d")
+    assert_gpu_result_equal(q)
+
+
+def test_unpivot_unsupported_cast_raises():
+    df = pl.LazyFrame(
+        {
+            "a": ["x", "y", "z"],
+            "b": pl.Series([1, 3, 5], dtype=pl.Int16),
+        }
+    )
+
+    q = df.unpivot(["a", "b"])
+
+    assert_ir_translation_raises(q, NotImplementedError)
