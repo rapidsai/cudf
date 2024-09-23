@@ -26,8 +26,6 @@ else()
   )
 endif()
 
-set(rapids-cmake-repo jameslamb/rapids-cmake)
-set(rapids-cmake-branch fmt-and-spdlog)
 if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS-${RAPIDS_VERSION_MAJOR_MINOR}.cmake")
   file(
     DOWNLOAD

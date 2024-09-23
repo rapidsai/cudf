@@ -11,14 +11,9 @@ rapids-logger "Generate Python testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
 
-LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1678 cpp)
-RMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1678 python)
-
 rapids-dependency-file-generator \
   --output conda \
   --file-key test_python \
-  --prepend-channel "${LIBRMM_CHANNEL}" \
-  --prepend-channel "${RMM_CHANNEL}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
     | tee "${ENV_YAML_DIR}/env.yaml"
 
@@ -43,6 +38,4 @@ rapids-print-env
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
-  --channel "${LIBRMM_CHANNEL}" \
-  --channel "${RMM_CHANNEL}" \
   cudf libcudf

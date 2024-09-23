@@ -8,12 +8,10 @@ set -euo pipefail
 rapids-logger "Generate C++ testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
-LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1678 cpp)
 
 rapids-dependency-file-generator \
   --output conda \
   --file-key test_cpp \
-  --prepend-channel "${LIBRMM_CHANNEL}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
 
 rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test
@@ -33,7 +31,6 @@ rapids-print-env
 
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
-  --channel "${LIBRMM_CHANNEL}" \
   libcudf libcudf_kafka libcudf-tests libcudf-example
 
 rapids-logger "Check GPU usage"
