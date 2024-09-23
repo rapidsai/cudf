@@ -45,11 +45,6 @@ namespace cudf::io::json {
 
 using row_offset_t = size_type;
 
-// debug printing
-#ifndef CSR_DEBUG_PRINT
-// #define CSR_DEBUG_PRINT
-#endif
-
 #ifdef CSR_DEBUG_PRINT
 template <typename T>
 void print(device_span<T const> d_vec, std::string name, rmm::cuda_stream_view stream)

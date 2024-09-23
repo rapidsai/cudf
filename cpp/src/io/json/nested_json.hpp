@@ -239,8 +239,9 @@ namespace detail {
  * @param is_array_of_arrays Whether the tree is an array of arrays
  * @param row_array_parent_col_id Column id of row array, if is_array_of_arrays is true
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @return A tuple containing the column tree, identifier for each column and the maximum row index
- * in each column
+ * @return Tuple of compressed_sparse_row struct storing adjacency information of the column tree,
+ * and column_tree_properties struct storing properties of each node i.e. column category, max
+ * number of rows in the column, and column id
  */
 CUDF_EXPORT
 std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
