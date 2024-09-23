@@ -61,7 +61,7 @@ dependencies:
 - openpyxl
 - packaging
 - pandas
-- pandas>=2.0,<2.2.3dev0
+- pandas>=2.0,<2.2.4dev0
 - pandoc
 - pre-commit
 - pyarrow>=14.0.0,<18.0.0a0

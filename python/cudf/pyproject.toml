@@ -28,7 +28,7 @@ dependencies = [
     "numpy>=1.23,<3.0a0",
     "nvtx>=0.2.1",
     "packaging",
-    "pandas>=2.0,<2.2.3dev0",
+    "pandas>=2.0,<2.2.4dev0",
     "ptxcompiler",
     "pyarrow>=14.0.0,<18.0.0a0",
     "pylibcudf==24.10.*,>=0.0.0a0",
