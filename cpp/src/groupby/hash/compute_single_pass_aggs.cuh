@@ -294,7 +294,7 @@ void extract_populated_keys(SetType const& key_set,
 // make table that will hold sparse results
 template <typename GlobalSetType>
 auto create_sparse_results_table(cudf::table_view const& flattened_values,
-                                 const cudf::aggregation::Kind* d_aggs,
+                                 cudf::aggregation::Kind const* d_agg_kinds,
                                  std::vector<cudf::aggregation::Kind> aggs,
                                  bool direct_aggregations,
                                  GlobalSetType const& global_set,
@@ -327,10 +327,11 @@ auto create_sparse_results_table(cudf::table_view const& flattened_values,
   if (!direct_aggregations) {
     auto d_sparse_table = cudf::mutable_table_device_view::create(sparse_table, stream);
     extract_populated_keys(global_set, populated_keys, stream);
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator(0),
-                       populated_keys.size(),
-                       initialize_sparse_table{populated_keys.data(), *d_sparse_table, d_aggs});
+    thrust::for_each_n(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      populated_keys.size(),
+      initialize_sparse_table{populated_keys.data(), *d_sparse_table, d_agg_kinds});
   }
   // Else initialize the whole table
   else {
@@ -404,11 +405,11 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
 
   // flatten the aggs to a table that can be operated on by aggregate_row
   auto const [flattened_values, agg_kinds, aggs] = flatten_single_pass_aggs(requests);
-  auto const d_aggs                              = cudf::detail::make_device_uvector_async(
+  auto const d_agg_kinds                         = cudf::detail::make_device_uvector_async(
     agg_kinds, stream, rmm::mr::get_current_device_resource());
   // make table that will hold sparse results
   cudf::table sparse_table = create_sparse_results_table(flattened_values,
-                                                         d_aggs.data(),
+                                                         d_agg_kinds.data(),
                                                          agg_kinds,
                                                          direct_aggregations.value(stream),
                                                          global_set,
@@ -427,7 +428,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                        block_cardinality.data(),
                        *d_values,
                        *d_sparse_table,
-                       d_aggs.data(),
+                       d_agg_kinds.data(),
                        stream);
 
   if (direct_aggregations.value(stream)) {
@@ -438,7 +439,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                        compute_direct_aggregates{global_set_ref,
                                                  *d_values,
                                                  *d_sparse_table,
-                                                 d_aggs.data(),
+                                                 d_agg_kinds.data(),
                                                  block_cardinality.data(),
                                                  stride,
                                                  static_cast<bitmask_type*>(row_bitmask.data()),
