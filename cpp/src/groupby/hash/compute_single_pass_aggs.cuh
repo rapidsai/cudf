@@ -306,10 +306,10 @@ void compute_aggregations(int grid_size,
   auto const shmem_size = compute_shared_memory_size(compute_aggs_kernel, grid_size);
   // For each aggregation, need two pointers to arrays in shmem
   // One where the aggregation is performed, one indicating the validity of the aggregation
-  auto shmem_agg_pointer_size =
+  auto const shmem_agg_pointer_size =
     round_to_multiple_of_8(sizeof(std::byte*) * output_values.num_columns());
   // The rest of shmem is utilized for the actual arrays in shmem
-  auto shmem_agg_size = shmem_size - shmem_agg_pointer_size * 2;
+  auto const shmem_agg_size = shmem_size - shmem_agg_pointer_size * 2;
   compute_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, shmem_size, stream>>>(
     num_input_rows,
     row_bitmask,
