@@ -252,6 +252,8 @@ struct rle_stream {
       run.level_run  = level_run;
       run.remaining  = run.size;
       cur += run_bytes;
+//printf("STORE RUN: decode_index %d, fill_index %d, output_pos %d, run.size %d\n", 
+  //decode_index, fill_index, output_pos, run.size);
       output_pos += run.size;
       fill_index++;
     }
@@ -353,6 +355,8 @@ struct rle_stream {
             // this is the last batch we will process this iteration if:
             // - either this run still has remaining values
             // - or it is consumed fully and its last index corresponds to output_count
+//printf("STATUS: run_index %d, batch_len %d, remaining %d, at_end %d, last_run_pos %d, cur_values %d\n", 
+  //run_index, batch_len, remaining, at_end, last_run_pos, cur_values);
             if (remaining > 0 || at_end) { values_processed_shared = output_count; }
             if (remaining == 0 && (at_end || is_last_decode_warp(warp_id))) {
               decode_index_shared = run_index + 1;
@@ -367,6 +371,71 @@ struct rle_stream {
     } while (values_processed_shared < output_count);
 
     cur_values += values_processed_shared;
+
+    // valid for every thread
+    return values_processed_shared;
+  }
+
+  __device__ inline int skip_runs(int target_count)
+  {
+    //we want to process all runs UP TO BUT NOT INCLUDING the run that overlaps with the skip amount
+    //so thread 0 spins like crazy on fill_run_batch(), skipping writing unnecessary run info
+    //then when it hits the one that matters, we don't process it at all and bail as if we never started
+    //basically we're setting up the global vars necessary to start fill_run_batch for the first time
+    while (cur < end) {
+      // bytes for the varint header
+      uint8_t const* _cur = cur;
+      int const level_run = get_vlq32(_cur, end);
+
+      // run_bytes includes the header size
+      int run_bytes = _cur - cur;
+      int run_size;
+      if (is_literal_run(level_run)) {
+        // from the parquet spec: literal runs always come in multiples of 8 values.
+        run_size = (level_run >> 1) * 8;
+        run_bytes += ((run_size * level_bits) + 7) >> 3;
+      } else {
+        // repeated value run
+        run_size = (level_run >> 1);
+        run_bytes += ((level_bits) + 7) >> 3;
+      }
+
+      if((output_pos + run_size) > target_count) {
+//printf("SKIPPING: target_count %d, run_size %d, output_pos %d\n", target_count, run_size, output_pos);
+        return output_pos; //bail! we've reached the starting one
+      }
+
+      output_pos += run_size;
+      cur += run_bytes;
+    }
+
+//printf("SKIPPING: target_count %d, output_pos %d\n", target_count, output_pos);
+    return output_pos; //we skipped everything
+  }
+
+
+  __device__ inline int skip_decode(int t, int count)
+  {
+    int const output_count = min(count, total_values - cur_values);
+
+    // special case. if level_bits == 0, just return all zeros. this should tremendously speed up
+    // a very common case: columns with no nulls, especially if they are non-nested
+    if (level_bits == 0) {
+      cur_values = output_count;
+      return output_count;
+    }
+
+    __shared__ int values_processed_shared;
+
+    __syncthreads();
+
+    // warp 0 reads ahead and fills `runs` array to be decoded by remaining warps.
+    if (t == 0) {
+      values_processed_shared = skip_runs(output_count);
+    }
+    __syncthreads();
+
+    cur_values = values_processed_shared;
 
     // valid for every thread
     return values_processed_shared;
