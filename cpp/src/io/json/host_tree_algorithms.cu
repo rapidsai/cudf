@@ -226,7 +226,7 @@ struct json_column_data {
 std::pair<cudf::detail::host_vector<uint8_t>,
           std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>>
 build_tree(device_json_column& root,
-           std::vector<uint8_t> const& is_str_column_all_nulls,
+           host_span<uint8_t const> is_str_column_all_nulls,
            tree_meta_t& d_column_tree,
            device_span<NodeIndexT const> d_unique_col_ids,
            device_span<size_type const> d_max_row_offsets,
@@ -249,7 +249,7 @@ void scatter_offsets(
 
 /**
  * @brief Constructs `d_json_column` from node tree representation
- * Newly constructed columns are insert into `root`'s children.
+ * Newly constructed columns are inserted into `root`'s children.
  * `root` must be a list type.
  *
  * @param input Input JSON string device data
@@ -361,7 +361,7 @@ void make_device_json_column(device_span<SymbolT const> input,
 std::pair<cudf::detail::host_vector<uint8_t>,
           std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>>
 build_tree(device_json_column& root,
-           std::vector<uint8_t> const& is_str_column_all_nulls,
+           host_span<uint8_t const> is_str_column_all_nulls,
            tree_meta_t& d_column_tree,
            device_span<NodeIndexT const> d_unique_col_ids,
            device_span<size_type const> d_max_row_offsets,
@@ -455,7 +455,7 @@ build_tree(device_json_column& root,
 
   std::function<void(NodeIndexT, device_json_column&)> remove_child_columns =
     [&](NodeIndexT this_col_id, device_json_column& col) {
-      for (auto col_name : col.column_order) {
+      for (auto const& col_name : col.column_order) {
         auto child_id                  = mapped_columns[{this_col_id, col_name}];
         is_mixed_type_column[child_id] = 1;
         remove_child_columns(child_id, col.child_columns.at(col_name));
@@ -844,7 +844,7 @@ std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_optio
 std::pair<thrust::host_vector<uint8_t>,
           std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>>
 build_tree2(device_json_column& root,
-            std::vector<uint8_t> const& is_str_column_all_nulls,
+            host_span<uint8_t const> is_str_column_all_nulls,
             tree_meta_t& d_column_tree,
             device_span<NodeIndexT const> d_unique_col_ids,
             device_span<size_type const> d_max_row_offsets,
@@ -857,7 +857,7 @@ build_tree2(device_json_column& root,
 
 /**
  * @brief Constructs `d_json_column` from node tree representation
- * Newly constructed columns are insert into `root`'s children.
+ * Newly constructed columns are inserted into `root`'s children.
  * `root` must be a list type.
  *
  * @param input Input JSON string device data
@@ -970,7 +970,7 @@ void make_device_json_column(device_span<SymbolT const> input,
 std::pair<thrust::host_vector<uint8_t>,
           std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>>
 build_tree2(device_json_column& root,
-            std::vector<uint8_t> const& is_str_column_all_nulls,
+            host_span<uint8_t const> is_str_column_all_nulls,
             tree_meta_t& d_column_tree,
             device_span<NodeIndexT const> d_unique_col_ids,
             device_span<size_type const> d_max_row_offsets,
@@ -1006,10 +1006,7 @@ build_tree2(device_json_column& root,
 
   auto initialize_json_columns = [&](auto i, auto& col_ref, auto column_category) {
     auto& col = col_ref.get();
-    if (col.type != json_col_t::Unknown) {
-      return;
-      // CUDF_FAIL("Column already initialized");
-    }
+    if (col.type != json_col_t::Unknown) { return; }
     if (column_category == NC_ERR || column_category == NC_FN) {
       return;
     } else if (column_category == NC_VAL || column_category == NC_STR) {
@@ -1051,7 +1048,7 @@ build_tree2(device_json_column& root,
   auto ignore_all_children = [&](auto parent_col_id) {
     std::deque<NodeIndexT> offspring;
     if (adj.count(parent_col_id)) {
-      for (auto child : adj[parent_col_id]) {
+      for (auto const& child : adj[parent_col_id]) {
         offspring.push_back(child);
       }
     }
@@ -1060,7 +1057,7 @@ build_tree2(device_json_column& root,
       offspring.pop_front();
       is_pruned[this_id] = true;
       if (adj.count(this_id)) {
-        for (auto child : adj[this_id]) {
+        for (auto const& child : adj[this_id]) {
           offspring.push_back(child);
         }
       }
@@ -1075,7 +1072,7 @@ build_tree2(device_json_column& root,
   std::vector<NodeT> expected_types(num_columns, NUM_NODE_CLASSES);
 
   auto lookup_names = [&column_names](auto child_ids, auto name) {
-    for (auto child_id : child_ids) {
+    for (auto const& child_id : child_ids) {
       if (column_names[child_id] == name) return child_id;
     }
     return -1;
@@ -1103,12 +1100,9 @@ build_tree2(device_json_column& root,
     }
     is_pruned[root]    = false;
     auto expected_type = [](auto type, auto cat) {
-      if (type == data_type{type_id::STRUCT} and cat == NC_STRUCT)
-        return NC_STRUCT;
-      else if (type == data_type{type_id::LIST} and cat == NC_LIST)
-        return NC_LIST;
-      else if (type != data_type{type_id::STRUCT} and type != data_type{type_id::LIST})
-        return NC_STR;
+      if (type == data_type{type_id::STRUCT} and cat == NC_STRUCT) return NC_STRUCT;
+      if (type == data_type{type_id::LIST} and cat == NC_LIST) return NC_LIST;
+      if (type != data_type{type_id::STRUCT} and type != data_type{type_id::LIST}) return NC_STR;
       return NC_ERR;
     }(schema.type, column_categories[root]);
     expected_types[root] = expected_type;  // forced type.
@@ -1120,11 +1114,11 @@ build_tree2(device_json_column& root,
       return;  // no children to mark for non-nested.
     auto child_ids = adj.count(root) ? adj[root] : std::vector<NodeIndexT>{};
     if (schema.type == data_type{type_id::STRUCT}) {
-      for (auto key_pair : schema.child_types) {
+      for (auto const& key_pair : schema.child_types) {
         auto col_id = lookup_names(child_ids, key_pair.first);
         if (col_id == -1) continue;
         is_pruned[col_id] = false;
-        for (auto child_id : adj[col_id])  // children of field (>1 if mixed)
+        for (auto const& child_id : adj[col_id])  // children of field (>1 if mixed)
           mark_is_pruned(child_id, key_pair.second);
       }
     } else if (schema.type == data_type{type_id::LIST}) {
@@ -1133,10 +1127,8 @@ build_tree2(device_json_column& root,
         schema.child_types.size() == 1 ? schema.child_types.begin()->first : list_child_name;
       if (schema.child_types.count(this_list_child_name) == 0) return;
       auto list_child = schema.child_types.at(this_list_child_name);
-      for (auto child_id : child_ids)
+      for (auto const& child_id : child_ids)
         mark_is_pruned(child_id, list_child);
-    } else {
-      CUDF_FAIL("Unreachable reached!");
     }
   };
   if (is_array_of_arrays) {
@@ -1194,26 +1186,26 @@ build_tree2(device_json_column& root,
     is_pruned[root_struct_col_id] = false;
     schema_element u_schema{data_type{type_id::STRUCT}};
     u_schema.child_types = unified_schema(options);
-    std::visit(cudf::detail::visitor_overload{
-                 [&is_pruned, &root_struct_col_id, &adj, &mark_is_pruned](
-                   std::vector<data_type> const& user_dtypes) -> void {
-                   for (size_t i = 0; i < adj[root_struct_col_id].size() && i < user_dtypes.size();
-                        i++) {
-                     NodeIndexT const first_field_id = adj[root_struct_col_id][i];
-                     is_pruned[first_field_id]       = false;
-                     for (auto child_id : adj[first_field_id])  // children of field (>1 if mixed)
-                       mark_is_pruned(child_id, schema_element{user_dtypes[i]});
-                   }
-                 },
-                 [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](
-                   std::map<std::string, data_type> const& user_dtypes) -> void {
-                   mark_is_pruned(root_struct_col_id, u_schema);
-                 },
-                 [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](
-                   std::map<std::string, schema_element> const& user_dtypes) -> void {
-                   mark_is_pruned(root_struct_col_id, u_schema);
-                 }},
-               options.get_dtypes());
+    std::visit(
+      cudf::detail::visitor_overload{
+        [&is_pruned, &root_struct_col_id, &adj, &mark_is_pruned](
+          std::vector<data_type> const& user_dtypes) -> void {
+          for (size_t i = 0; i < adj[root_struct_col_id].size() && i < user_dtypes.size(); i++) {
+            NodeIndexT const first_field_id = adj[root_struct_col_id][i];
+            is_pruned[first_field_id]       = false;
+            for (auto const& child_id : adj[first_field_id])  // children of field (>1 if mixed)
+              mark_is_pruned(child_id, schema_element{user_dtypes[i]});
+          }
+        },
+        [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](
+          std::map<std::string, data_type> const& user_dtypes) -> void {
+          mark_is_pruned(root_struct_col_id, u_schema);
+        },
+        [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](
+          std::map<std::string, schema_element> const& user_dtypes) -> void {
+          mark_is_pruned(root_struct_col_id, u_schema);
+        }},
+      options.get_dtypes());
   }
   // Useful for array of arrays
   auto named_level =
@@ -1241,7 +1233,7 @@ build_tree2(device_json_column& root,
       child_ids.end());
     // find string id, struct id, list id.
     NodeIndexT str_col_id{-1}, struct_col_id{-1}, list_col_id{-1};
-    for (auto child_id : child_ids) {
+    for (auto const& child_id : child_ids) {
       if (column_categories[child_id] == NC_VAL || column_categories[child_id] == NC_STR)
         str_col_id = child_id;
       else if (column_categories[child_id] == NC_STRUCT)
@@ -1300,7 +1292,7 @@ build_tree2(device_json_column& root,
     auto child_ids = adj.count(root) ? adj[root] : std::vector<NodeIndexT>{};
     if (expected_category == NC_STRUCT) {
       // find field column ids, and its children and create columns.
-      for (auto field_id : child_ids) {
+      for (auto const& field_id : child_ids) {
         auto name = column_names[field_id];
         if (is_pruned[field_id]) continue;
         auto inserted =
@@ -1318,7 +1310,7 @@ build_tree2(device_json_column& root,
           ref.get().column_order.pop_back();
           continue;
         }
-        for (auto child_id : value_col_ids)  // children of field (>1 if mixed)
+        for (auto const& child_id : value_col_ids)  // children of field (>1 if mixed)
         {
           if (is_pruned[child_id]) continue;
           columns.try_emplace(child_id, this_ref);
@@ -1330,13 +1322,13 @@ build_tree2(device_json_column& root,
       if (is_array_of_arrays and root == named_level) {
         // create column names
         std::map<NodeIndexT, std::vector<NodeIndexT>> array_values;
-        for (auto child_id : child_ids) {
+        for (auto const& child_id : child_ids) {
           if (is_pruned[child_id]) continue;
           auto name = column_names[child_id];
           array_values[std::stoi(name)].push_back(child_id);
         }
         //
-        for (auto value_id_pair : array_values) {
+        for (auto const& value_id_pair : array_values) {
           auto [value_id, value_col_ids] = value_id_pair;
           auto name                      = std::to_string(value_id);
           auto inserted =
@@ -1352,7 +1344,7 @@ build_tree2(device_json_column& root,
             ref.get().column_order.pop_back();
             continue;
           }
-          for (auto child_id : value_col_ids)  // children of field (>1 if mixed)
+          for (auto const& child_id : value_col_ids)  // children of field (>1 if mixed)
           {
             if (is_pruned[child_id]) continue;
             columns.try_emplace(child_id, this_ref);
@@ -1375,7 +1367,7 @@ build_tree2(device_json_column& root,
           // If no column is present, remove the uninitialized column.
           ref.get().child_columns.erase(list_child_name);
         }
-        for (auto child_id : child_ids) {
+        for (auto const& child_id : child_ids) {
           if (is_pruned[child_id]) continue;
           columns.try_emplace(child_id, this_ref);
           construct_tree(child_id, this_ref);
