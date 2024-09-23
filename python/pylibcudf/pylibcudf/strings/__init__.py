@@ -5,6 +5,7 @@ from . import (
     case,
     char_types,
     contains,
+    convert,
     extract,
     find,
     regex_flags,
@@ -12,4 +13,6 @@ from . import (
     repeat,
     replace,
     slice,
+    strip,
 )
+from .side_type import SideType
