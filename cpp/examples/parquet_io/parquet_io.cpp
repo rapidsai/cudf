@@ -16,6 +16,8 @@
 
 #include "common.hpp"
 
+#include <cudf/utilities/default_stream.hpp>
+
 /**
  * @file parquet_io.cpp
  * @brief Demonstrates usage of the libcudf APIs to read and write

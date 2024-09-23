@@ -9,6 +9,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.containers import DataFrame, NamedColumn
+from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 def test_select_missing_raises():
@@ -140,3 +141,13 @@ def test_sorted_flags_preserved(with_nulls, nulls_last):
     assert b.null_order == b_null_order
     assert c.is_sorted == plc.types.Sorted.NO
     assert df.flags == gf.to_polars().flags
+
+
+def test_empty_name_roundtrips_overlap():
+    df = pl.LazyFrame({"": [1, 2, 3], "column_0": [4, 5, 6]})
+    assert_gpu_result_equal(df)
+
+
+def test_empty_name_roundtrips_no_overlap():
+    df = pl.LazyFrame({"": [1, 2, 3], "b": [4, 5, 6]})
+    assert_gpu_result_equal(df)

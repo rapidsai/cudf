@@ -30,6 +30,7 @@ jobs:
       - wheel-tests-cudf
       - wheel-build-cudf-polars
       - wheel-tests-cudf-polars
+      - cudf-polars-polars-tests
       - wheel-build-dask-cudf
       - wheel-tests-dask-cudf
       - devcontainer
@@ -159,7 +160,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
       run_script: "ci/test_java.sh"
   static-configure:
     needs: checks
@@ -180,7 +181,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
       run_script: "ci/test_notebooks.sh"
   docs-build:
     needs: conda-python-build
@@ -190,7 +191,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
       run_script: "ci/build_docs.sh"
   wheel-build-libcudf:
     needs: checks
@@ -244,6 +245,17 @@ jobs:
       # This always runs, but only fails if this PR touches code in
       # pylibcudf or cudf_polars
       script: "ci/test_wheel_cudf_polars.sh"
+  cudf-polars-polars-tests:
+    needs: wheel-build-cudf-polars
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
+    with:
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      build_type: pull-request
+      # This always runs, but only fails if this PR touches code in
+      # pylibcudf or cudf_polars
+      script: "ci/test_cudf_polars_polars_tests.sh"
   wheel-build-dask-cudf:
     needs: wheel-build-cudf
     secrets: inherit
