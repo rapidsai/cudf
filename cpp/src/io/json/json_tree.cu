@@ -187,7 +187,6 @@ std::pair<rmm::device_uvector<KeyType>, rmm::device_uvector<IndexType>> stable_s
                                                                   : std::move(order_buffer2)};
 }
 
-
 /**
  * @brief Propagate parent node from first sibling to other siblings.
  *

@@ -335,7 +335,6 @@ bool check_equality(tree_meta_t& d_a,
 }
 #endif
 
-
 /**
  * @brief Constructs `d_json_column` from node tree representation
  * Newly constructed columns are insert into `root`'s children.
