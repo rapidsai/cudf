@@ -11,7 +11,6 @@ color_green='\e[1;32m'
 export KVIKIO_NTHREADS
 export LIBCUDF_CUFILE_POLICY=OFF
 
-# LIBCUDF_CUFILE_POLICY: Disable GDS
 for num_threads in ${num_threads_arr[@]}; do
     echo -e "$color_green--> Thread count: $num_threads$color_reset"
 
