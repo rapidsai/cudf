@@ -76,8 +76,8 @@ pr_df["CPU Usage"] = ((pr_df["_slow_function_call"]/total_usage)*100.0).round(1)
 pr_df["GPU Usage"] = ((pr_df["_fast_function_call"]/total_usage)*100.0).round(1)
 
 diff_df = pr_df - main_df
-diff_df["CPU Usage_diff"] = diff_df["CPU Usage_diff"].round(1).fillna(0)
-diff_df["GPU Usage_diff"] = diff_df["GPU Usage_diff"].round(1).fillna(0)
+diff_df["CPU Usage"] = diff_df["CPU Usage"].round(1).fillna(0)
+diff_df["GPU Usage"] = diff_df["GPU Usage"].round(1).fillna(0)
 
 cpu_usage_mean = pr_df["CPU Usage"].mean().round(2)
 gpu_usage_mean = pr_df["GPU Usage"].mean().round(2)
