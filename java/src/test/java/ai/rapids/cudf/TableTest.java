@@ -40,7 +40,6 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
@@ -664,7 +663,7 @@ public class TableTest extends CudfTestBase {
     Schema schema = Schema.builder().addColumn(DType.STRING, "a").build();
     JSONOptions opts = JSONOptions.builder()
         .withLines(true)
-        .withDelim('\0')
+        .withLineDelimiter('\0')
         .build();
     try (Table expected = new Table.TestBuilder()
         .column("12\n3", "AB\nC")

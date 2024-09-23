@@ -1627,7 +1627,7 @@ Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource(JNIEnv* env,
                                                          jboolean allow_leading_zeros,
                                                          jboolean allow_nonnumeric_numbers,
                                                          jboolean allow_unquoted_control,
-                                                         jbyte delim,
+                                                         jbyte line_delimiter,
                                                          jlong ds_handle)
 {
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
@@ -1647,7 +1647,7 @@ Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource(JNIEnv* env,
         .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
         .normalize_whitespace(static_cast<bool>(normalize_whitespace))
         .mixed_types_as_string(mixed_types_as_string)
-        .delimiter(static_cast<char>(delim))
+        .delimiter(static_cast<char>(line_delimiter))
         .strict_validation(strict_validation)
         .keep_quotes(keep_quotes);
     if (strict_validation) {
@@ -1679,7 +1679,7 @@ Java_ai_rapids_cudf_Table_readAndInferJSON(JNIEnv* env,
                                            jboolean allow_leading_zeros,
                                            jboolean allow_nonnumeric_numbers,
                                            jboolean allow_unquoted_control,
-                                           jbyte delim)
+                                           jbyte line_delimiter)
 {
   JNI_NULL_CHECK(env, buffer, "buffer cannot be null", 0);
   if (buffer_length <= 0) {
@@ -1703,7 +1703,7 @@ Java_ai_rapids_cudf_Table_readAndInferJSON(JNIEnv* env,
         .normalize_whitespace(static_cast<bool>(normalize_whitespace))
         .strict_validation(strict_validation)
         .mixed_types_as_string(mixed_types_as_string)
-        .delimiter(static_cast<char>(delim))
+        .delimiter(static_cast<char>(line_delimiter))
         .keep_quotes(keep_quotes);
     if (strict_validation) {
       opts.numeric_leading_zeros(allow_leading_zeros)
@@ -1818,7 +1818,7 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
                                                  jboolean allow_leading_zeros,
                                                  jboolean allow_nonnumeric_numbers,
                                                  jboolean allow_unquoted_control,
-                                                 jbyte delim,
+                                                 jbyte line_delimiter,
                                                  jlong ds_handle)
 {
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
@@ -1853,7 +1853,7 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
         .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
         .normalize_whitespace(static_cast<bool>(normalize_whitespace))
         .mixed_types_as_string(mixed_types_as_string)
-        .delimiter(static_cast<char>(delim))
+        .delimiter(static_cast<char>(line_delimiter))
         .strict_validation(strict_validation)
         .keep_quotes(keep_quotes);
     if (strict_validation) {
@@ -1915,7 +1915,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
                                                            jboolean allow_leading_zeros,
                                                            jboolean allow_nonnumeric_numbers,
                                                            jboolean allow_unquoted_control,
-                                                           jbyte delim)
+                                                           jbyte line_delimiter)
 {
   bool read_buffer = true;
   if (buffer == 0) {
@@ -1964,7 +1964,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
         .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
         .normalize_whitespace(static_cast<bool>(normalize_whitespace))
         .mixed_types_as_string(mixed_types_as_string)
-        .delimiter(static_cast<char>(delim))
+        .delimiter(static_cast<char>(line_delimiter))
         .strict_validation(strict_validation)
         .keep_quotes(keep_quotes);
     if (strict_validation) {

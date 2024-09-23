@@ -38,7 +38,7 @@ public final class JSONOptions extends ColumnFilterOptions {
   private final boolean allowLeadingZeros;
   private final boolean allowNonNumericNumbers;
   private final boolean allowUnquotedControlChars;
-  private final byte delim;
+  private final byte lineDelimiter;
 
   private JSONOptions(Builder builder) {
     super(builder);
@@ -53,11 +53,11 @@ public final class JSONOptions extends ColumnFilterOptions {
     allowLeadingZeros = builder.allowLeadingZeros;
     allowNonNumericNumbers = builder.allowNonNumericNumbers;
     allowUnquotedControlChars = builder.allowUnquotedControlChars;
-    delim = builder.delim;
+    lineDelimiter = builder.lineDelimiter;
   }
 
-  public byte getDelim() {
-    return delim;
+  public byte getLineDelimiter() {
+    return lineDelimiter;
   }
 
   public boolean isDayFirst() {
@@ -129,13 +129,13 @@ public final class JSONOptions extends ColumnFilterOptions {
     private boolean mixedTypesAsStrings = false;
     private boolean keepQuotes = false;
 
-    private byte delim = '\n';
+    private byte lineDelimiter = '\n';
 
-    public Builder withDelim(char delimiter) {
+    public Builder withLineDelimiter(char delimiter) {
       if (delimiter > Byte.MAX_VALUE) {
-        throw new IllegalArgumentException("Only basic ASCII values are supported " + delimiter);
+        throw new IllegalArgumentException("Only basic ASCII values are supported as line delimiters " + delimiter);
       }
-      delim = (byte)delimiter;
+      lineDelimiter = (byte)delimiter;
       return this;
     }
 

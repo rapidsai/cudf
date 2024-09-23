@@ -259,7 +259,7 @@ public final class Table implements AutoCloseable {
                                         boolean allowLeadingZeros,
                                         boolean allowNonNumericNumbers,
                                         boolean allowUnquotedControl,
-                                        byte delim) throws CudfException;
+                                        byte lineDelimiter) throws CudfException;
 
   private static native long readJSONFromDataSource(int[] numChildren, String[] columnNames,
                                       int[] dTypeIds, int[] dTypeScales,
@@ -273,7 +273,7 @@ public final class Table implements AutoCloseable {
                                       boolean allowLeadingZeros,
                                       boolean allowNonNumericNumbers,
                                       boolean allowUnquotedControl,
-                                      byte delim,
+                                      byte lineDelimiter,
                                       long dsHandle) throws CudfException;
 
   private static native long readAndInferJSONFromDataSource(boolean dayFirst, boolean lines,
@@ -286,7 +286,7 @@ public final class Table implements AutoCloseable {
                                       boolean allowLeadingZeros,
                                       boolean allowNonNumericNumbers,
                                       boolean allowUnquotedControl,
-                                      byte delim,
+                                      byte lineDelimiter,
                                       long dsHandle) throws CudfException;
 
   private static native long readAndInferJSON(long address, long length,
@@ -301,7 +301,7 @@ public final class Table implements AutoCloseable {
                                               boolean allowLeadingZeros,
                                               boolean allowNonNumericNumbers,
                                               boolean allowUnquotedControl,
-                                              byte delim) throws CudfException;
+                                              byte lineDelimiter) throws CudfException;
 
   /**
    * Read in Parquet formatted data.
@@ -1326,7 +1326,7 @@ public final class Table implements AutoCloseable {
                     opts.leadingZerosAllowed(),
                     opts.nonNumericNumbersAllowed(),
                     opts.unquotedControlChars(),
-                    opts.getDelim()))) {
+                    opts.getLineDelimiter()))) {
 
       return gatherJSONColumns(schema, twm, -1);
     }
@@ -1410,7 +1410,7 @@ public final class Table implements AutoCloseable {
         opts.leadingZerosAllowed(),
         opts.nonNumericNumbersAllowed(),
         opts.unquotedControlChars(),
-        opts.getDelim()));
+        opts.getLineDelimiter()));
   }
 
   /**
@@ -1432,7 +1432,7 @@ public final class Table implements AutoCloseable {
           opts.leadingZerosAllowed(),
           opts.nonNumericNumbersAllowed(),
           opts.unquotedControlChars(),
-          opts.getDelim(),
+          opts.getLineDelimiter(),
           dsHandle));
         return twm;
       } finally {
@@ -1487,7 +1487,7 @@ public final class Table implements AutoCloseable {
             opts.leadingZerosAllowed(),
             opts.nonNumericNumbersAllowed(),
             opts.unquotedControlChars(),
-            opts.getDelim()))) {
+            opts.getLineDelimiter()))) {
       return gatherJSONColumns(schema, twm, emptyRowCount);
     }
   }
@@ -1526,7 +1526,7 @@ public final class Table implements AutoCloseable {
         opts.leadingZerosAllowed(),
         opts.nonNumericNumbersAllowed(),
         opts.unquotedControlChars(),
-        opts.getDelim(),
+        opts.getLineDelimiter(),
         dsHandle))) {
       return gatherJSONColumns(schema, twm, emptyRowCount);
     } finally {
