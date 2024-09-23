@@ -201,7 +201,7 @@ CUDF_PANDAS_FALLBACK_MODE=1 python -m cudf.pandas some_script.py
 _very rough_ rule of thumb,`cudf.pandas` shines on workflows with more than 
 10,000 - 100,000 rows of data, depending on the algorithms, data types, and other factors.
 Below this range, workflows might execute slower on GPU than CPU because of the 
-cost of data transfers. With managed memory pool and managed memory prefetching enabled in cudf 
-by default, you can process datasets larger than GPU memory and up to a theoretical 
+cost of data transfers. With [managed memory pool and managed memory prefetching enabled in cudf 
+by default](how-it-works.md), you can process datasets larger than GPU memory and up to a theoretical 
 limit of the combined CPU and GPU memory size. However, note that the 
 best performance with large data sizes can be data and workflow dependent.
