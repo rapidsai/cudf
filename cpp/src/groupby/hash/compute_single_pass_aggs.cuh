@@ -332,7 +332,7 @@ auto create_sparse_results_table(cudf::table_view const& flattened_values,
                        populated_keys.size(),
                        initialize_sparse_table{populated_keys.data(), *d_sparse_table, d_aggs});
   }
-  // Else initialise the whole table
+  // Else initialize the whole table
   else {
     cudf::mutable_table_view sparse_table_view = sparse_table.mutable_view();
     cudf::detail::initialize_with_identity(sparse_table_view, aggs, stream);
