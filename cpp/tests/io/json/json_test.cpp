@@ -2874,6 +2874,7 @@ TEST_F(JsonReaderTest, MixedTypesWithSchema)
       .normalize_single_quotes(true)
       .normalize_whitespace(true)
       .mixed_types_as_string(true)
+      .experimental(true)
       .keep_quotes(true)
       .lines(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
