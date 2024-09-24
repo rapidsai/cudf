@@ -664,7 +664,7 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
     };
     if (!is_enabled_experimental) { return std::pair{false, make_map(0)}; }
     // get all unique field node ids for utf8 decoding
-    auto num_keys = key_set.size();
+    auto num_keys = key_set.size(stream);
     rmm::device_uvector<size_type> keys(num_keys, stream);
     key_set.retrieve_all(keys.data(), stream.value());
 

@@ -834,7 +834,7 @@ std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_optio
     options.get_dtypes());
 }
 
-std::pair<thrust::host_vector<uint8_t>, hashmap_of_device_columns> build_tree(
+std::pair<cudf::detail::host_vector<uint8_t>, hashmap_of_device_columns> build_tree(
   device_json_column& root,
   host_span<uint8_t const> is_str_column_all_nulls,
   tree_meta_t& d_column_tree,
@@ -957,7 +957,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                   stream);
 }
 
-std::pair<thrust::host_vector<uint8_t>, hashmap_of_device_columns> build_tree(
+std::pair<cudf::detail::host_vector<uint8_t>, hashmap_of_device_columns> build_tree(
   device_json_column& root,
   host_span<uint8_t const> is_str_column_all_nulls,
   tree_meta_t& d_column_tree,
@@ -981,6 +981,7 @@ std::pair<thrust::host_vector<uint8_t>, hashmap_of_device_columns> build_tree(
     cudf::detail::make_host_vector_async(d_column_tree.node_range_begin, stream);
   auto const max_row_offsets = cudf::detail::make_host_vector_async(d_max_row_offsets, stream);
   auto num_columns           = d_unique_col_ids.size();
+  stream.synchronize();
 
   auto to_json_col_type = [](auto category) {
     switch (category) {
@@ -1030,7 +1031,8 @@ std::pair<thrust::host_vector<uint8_t>, hashmap_of_device_columns> build_tree(
   }
 
   // Pruning
-  thrust::host_vector<uint8_t> is_pruned(num_columns, options.is_enabled_prune_columns());
+  auto is_pruned = cudf::detail::make_host_vector<uint8_t>(num_columns, stream);
+  std::fill_n(is_pruned.begin(), num_columns, options.is_enabled_prune_columns());
 
   // prune all children of a column, but not self.
   auto ignore_all_children = [&](auto parent_col_id) {
