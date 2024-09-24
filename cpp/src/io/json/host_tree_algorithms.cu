@@ -68,7 +68,7 @@ rmm::device_uvector<NodeIndexT> get_values_column_indices(TreeDepthT const row_a
     row_array_children_level, d_tree.node_levels, d_tree.parent_node_ids, stream);
   auto col_id_location = thrust::make_permutation_iterator(col_ids.begin(), level2_nodes.begin());
   rmm::device_uvector<NodeIndexT> values_column_indices(num_columns, stream);
-  thrust::scatter(rmm::exec_policy(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream),
                   level2_indices.begin(),
                   level2_indices.end(),
                   col_id_location,
@@ -95,7 +95,7 @@ std::vector<std::string> copy_strings_to_host_sync(
   rmm::device_uvector<size_type> string_offsets(num_strings, stream);
   rmm::device_uvector<size_type> string_lengths(num_strings, stream);
   auto d_offset_pairs = thrust::make_zip_iterator(node_range_begin.begin(), node_range_end.begin());
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     d_offset_pairs,
                     d_offset_pairs + num_strings,
                     thrust::make_zip_iterator(string_offsets.begin(), string_lengths.begin()),
@@ -168,11 +168,11 @@ rmm::device_uvector<uint8_t> is_all_nulls_each_column(device_span<SymbolT const>
   auto const num_nodes = col_ids.size();
   auto const num_cols  = d_column_tree.node_categories.size();
   rmm::device_uvector<uint8_t> is_all_nulls(num_cols, stream);
-  thrust::fill(rmm::exec_policy(stream), is_all_nulls.begin(), is_all_nulls.end(), true);
+  thrust::fill(rmm::exec_policy_nosync(stream), is_all_nulls.begin(), is_all_nulls.end(), true);
 
   auto parse_opt = parsing_options(options, stream);
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::counting_iterator<size_type>(0),
     num_nodes,
     [options           = parse_opt.view(),
@@ -283,9 +283,9 @@ void make_device_json_column(device_span<SymbolT const> input,
 
   // sort by {col_id} on {node_ids} stable
   rmm::device_uvector<NodeIndexT> node_ids(col_ids.size(), stream);
-  thrust::sequence(rmm::exec_policy(stream), node_ids.begin(), node_ids.end());
+  thrust::sequence(rmm::exec_policy_nosync(stream), node_ids.begin(), node_ids.end());
   thrust::stable_sort_by_key(
-    rmm::exec_policy(stream), sorted_col_ids.begin(), sorted_col_ids.end(), node_ids.begin());
+    rmm::exec_policy_nosync(stream), sorted_col_ids.begin(), sorted_col_ids.end(), node_ids.begin());
 
   NodeIndexT const row_array_parent_col_id =
     get_row_array_parent_col_id(col_ids, is_enabled_lines, stream);
@@ -378,6 +378,7 @@ std::pair<cudf::detail::host_vector<uint8_t>, hashmap_of_device_columns> build_t
     cudf::detail::make_host_vector_async(d_column_tree.node_range_begin, stream);
   auto const max_row_offsets = cudf::detail::make_host_vector_async(d_max_row_offsets, stream);
   auto num_columns           = d_unique_col_ids.size();
+  stream.synchronize();
 
   auto to_json_col_type = [](auto category) {
     switch (category) {
@@ -692,7 +693,7 @@ void scatter_offsets(tree_meta_t const& tree,
 
   // 3. scatter string offsets to respective columns, set validity bits
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::counting_iterator<size_type>(0),
     num_nodes,
     [column_categories = d_column_tree.node_categories.begin(),
@@ -736,7 +737,7 @@ void scatter_offsets(tree_meta_t const& tree,
                                                                   : col_ids[parent_node_ids[node_id]];
       }));
   auto const list_children_end = thrust::copy_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id),
     thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id) +
       num_nodes,
@@ -754,12 +755,12 @@ void scatter_offsets(tree_meta_t const& tree,
 
   auto const num_list_children =
     list_children_end - thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin());
-  thrust::stable_sort_by_key(rmm::exec_policy(stream),
+  thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream),
                              parent_col_ids.begin(),
                              parent_col_ids.begin() + num_list_children,
                              node_ids.begin());
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     num_list_children,
     [node_ids        = node_ids.begin(),
@@ -884,9 +885,9 @@ void make_device_json_column(device_span<SymbolT const> input,
 
   // sort by {col_id} on {node_ids} stable
   rmm::device_uvector<NodeIndexT> node_ids(col_ids.size(), stream);
-  thrust::sequence(rmm::exec_policy(stream), node_ids.begin(), node_ids.end());
+  thrust::sequence(rmm::exec_policy_nosync(stream), node_ids.begin(), node_ids.end());
   thrust::stable_sort_by_key(
-    rmm::exec_policy(stream), sorted_col_ids.begin(), sorted_col_ids.end(), node_ids.begin());
+    rmm::exec_policy_nosync(stream), sorted_col_ids.begin(), sorted_col_ids.end(), node_ids.begin());
 
   NodeIndexT const row_array_parent_col_id =
     get_row_array_parent_col_id(col_ids, is_enabled_lines, stream);
@@ -1057,7 +1058,7 @@ std::pair<cudf::detail::host_vector<uint8_t>, hashmap_of_device_columns> build_t
   // Pruning: iterate through schema and mark only those columns and enforce type.
   // NoPruning: iterate through schema and enforce type.
 
-  if (adj[parent_node_sentinel].empty()) return {};  // for empty file
+  if (adj[parent_node_sentinel].empty()) return {cudf::detail::make_host_vector<uint8_t>(0, stream), {}};  // for empty file
   CUDF_EXPECTS(adj[parent_node_sentinel].size() == 1, "Should be 1");
   auto expected_types = cudf::detail::make_host_vector<NodeT>(num_columns, stream);
   std::fill_n(expected_types.begin(), num_columns, NUM_NODE_CLASSES);
@@ -1123,7 +1124,7 @@ std::pair<cudf::detail::host_vector<uint8_t>, hashmap_of_device_columns> build_t
     }
   };
   if (is_array_of_arrays) {
-    if (adj[adj[parent_node_sentinel][0]].empty()) return {};
+    if (adj[adj[parent_node_sentinel][0]].empty()) return {cudf::detail::make_host_vector<uint8_t>(0, stream), {}};
     auto root_list_col_id =
       is_enabled_lines ? adj[parent_node_sentinel][0] : adj[adj[parent_node_sentinel][0]][0];
     // mark root and row array col_id as not pruned.
