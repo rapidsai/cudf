@@ -188,7 +188,7 @@ class reader::impl {
    *
    * Does not decompress the chunk data.
    *
-   * @return pair of boolean indicating if compressed chunks were found and a vector of futures for
+   * @return pair of boolean indicating if compressed chunks were found and a future for
    * read completion
    */
   std::pair<bool, std::future<void>> read_column_chunks();
