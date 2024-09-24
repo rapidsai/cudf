@@ -100,7 +100,7 @@ struct compute_single_pass_aggs_fn {
     if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i)) {
       auto const result = set.insert_and_find(i);
 
-      cudf::detail::aggregate_row<true, true>(output_values, *result.first, input_values, i, aggs);
+      cudf::detail::aggregate_row(output_values, *result.first, input_values, i, aggs);
     }
   }
 };
