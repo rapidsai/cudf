@@ -3,6 +3,7 @@ import re
 
 import pyarrow as pa
 import pylibcudf as plc
+from utils import assert_column_eq
 
 
 def test_findall():
@@ -23,4 +24,4 @@ def test_findall():
             )
         ]
     )
-    assert result.equals(expected)
+    assert assert_column_eq(result, expected)
