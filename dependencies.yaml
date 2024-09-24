@@ -43,15 +43,28 @@ files:
     includes:
       - cuda_version
       - test_cpp
-  test_python:
+  test_python_cudf_pandas:
     output: none
     includes:
       - cuda_version
       - py_version
       - test_python_common
       - test_python_cudf
-      - test_python_dask_cudf
       - test_python_cudf_pandas
+  test_python_cudf:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_python_common
+      - test_python_cudf
+  test_python_other:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_python_common
+      - test_python_dask_cudf
   test_java:
     output: none
     includes:
@@ -707,9 +720,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.57.*
-              - numpy==1.23.*
               - pandas==2.0.*
-              - pyarrow==14.0.0
           - matrix:
             packages:
       - output_types: conda
@@ -764,6 +775,14 @@ dependencies:
           - &transformers transformers==4.39.3
           - tzdata
     specific:
+      - output_types: [conda, requirements]
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - numpy==1.23.*
+              - pyarrow==14.0.0
+          - matrix:
+            packages:
       - output_types: conda
         matrices:
           - matrix:
@@ -783,6 +802,15 @@ dependencies:
         packages:
           - dask-cuda==24.12.*,>=0.0.0a0
           - *numba
+    specific:
+      - output_types: [conda, requirements]
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - numpy==1.24.*
+              - pyarrow==14.0.1
+          - matrix:
+            packages:
   depends_on_libcudf:
     common:
       - output_types: conda
