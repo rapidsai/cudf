@@ -165,7 +165,7 @@ public final class JSONOptions extends ColumnFilterOptions {
       strictValidation = isAllowed;
       return this;
     }
-    
+
     /**
      * Should experimental features be enabled or not
      */
