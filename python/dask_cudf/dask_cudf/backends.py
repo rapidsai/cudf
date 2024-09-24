@@ -749,6 +749,12 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             ):
                 raise ValueError(f"Unexpected filesystem value: {filesystem}.")
 
+            warnings.warn(
+                f"Support for `filesystem={filesystem}` is experimental. "
+                "Using PyArrow to perform IO on multiple CPU threads. "
+                "Behavior may change in the future (without deprecation). "
+            )
+
             if not isinstance(path, str):
                 path = stringify_path(path)
 

@@ -155,12 +155,15 @@ def test_read_parquet_filesystem(s3_base, s3so, pdf, filesystem):
 
             import pyarrow.fs as pa_fs
 
-            df = dask_cudf.read_parquet(
-                path,
-                filesystem=pa_fs.S3FileSystem(
-                    endpoint_override=s3so["client_kwargs"]["endpoint_url"],
-                ),
-            )
+            with pytest.warns(match="experimental"):
+                df = dask_cudf.read_parquet(
+                    path,
+                    filesystem=pa_fs.S3FileSystem(
+                        endpoint_override=s3so["client_kwargs"][
+                            "endpoint_url"
+                        ],
+                    ),
+                )
         else:
             df = dask_cudf.read_parquet(
                 path,
