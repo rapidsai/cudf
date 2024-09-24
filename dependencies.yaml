@@ -350,12 +350,12 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - fmt>=10.1.1,<11
+          - fmt>=11.0.2,<12
           - flatbuffers==24.3.25
           - librdkafka>=2.5.0,<2.6.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==4.0.1
-          - spdlog>=1.12.0,<1.13
+          - spdlog>=1.14.1,<1.15
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -650,7 +650,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.0,<1.3
+          - polars>=1.6
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
