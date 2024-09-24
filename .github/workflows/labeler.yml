@@ -1,11 +1,22 @@
 name: "Pull Request Labeler"
+
 on:
-- pull_request_target
+  pull_request_target:
 
 jobs:
   triage:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/labeler@v4
-      with:
-        repo-token: "${{ secrets.GITHUB_TOKEN }}"
+      - uses: actions/checkout@v3
+
+      - name: Apply Labeler Config
+        uses: actions/labeler@v4
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Label with target branch
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          labels: ${{ github.event.pull_request.base.ref }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
