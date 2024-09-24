@@ -11,31 +11,46 @@ from cudf.core.column import StructColumn, as_column
 from cudf.core.dtypes import IntervalDtype
 
 if TYPE_CHECKING:
+    from typing_extensions import Self
+
+    from cudf._typing import ScalarLike
+    from cudf.core.buffer import Buffer
     from cudf.core.column import ColumnBase
 
 
 class IntervalColumn(StructColumn):
     def __init__(
         self,
-        dtype,
-        mask=None,
-        size=None,
-        offset=0,
-        null_count=None,
-        children=(),
+        data: None,
+        size: int,
+        dtype: IntervalDtype,
+        mask: Buffer | None = None,
+        offset: int = 0,
+        null_count: int | None = None,
+        children: tuple[ColumnBase, ColumnBase] = (),  # type: ignore[assignment]
     ):
+        if len(children) != 2:
+            raise ValueError(
+                "children must be a tuple of two columns (left edges, right edges)."
+            )
         super().__init__(
-            data=None,
+            data=data,
+            size=size,
             dtype=dtype,
             mask=mask,
-            size=size,
             offset=offset,
             null_count=null_count,
             children=children,
         )
 
+    @staticmethod
+    def _validate_dtype_instance(dtype: IntervalDtype) -> IntervalDtype:
+        if not isinstance(dtype, IntervalDtype):
+            raise ValueError("dtype must be a IntervalDtype.")
+        return dtype
+
     @classmethod
-    def from_arrow(cls, data):
+    def from_arrow(cls, data: pa.Array) -> Self:
         new_col = super().from_arrow(data.storage)
         size = len(data)
         dtype = IntervalDtype.from_arrow(data.type)
@@ -47,16 +62,17 @@ class IntervalColumn(StructColumn):
         null_count = data.null_count
         children = new_col.children
 
-        return IntervalColumn(
+        return cls(
+            data=None,
             size=size,
             dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            children=children,  # type: ignore[arg-type]
         )
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         typ = self.dtype.to_arrow()
         struct_arrow = super().to_arrow()
         if len(struct_arrow) == 0:
@@ -66,9 +82,14 @@ class IntervalColumn(StructColumn):
         return pa.ExtensionArray.from_storage(typ, struct_arrow)
 
     @classmethod
-    def from_struct_column(cls, struct_column: StructColumn, closed="right"):
+    def from_struct_column(
+        cls,
+        struct_column: StructColumn,
+        closed: Literal["left", "right", "both", "neither"] = "right",
+    ) -> Self:
         first_field_name = next(iter(struct_column.dtype.fields.keys()))
-        return IntervalColumn(
+        return cls(
+            data=None,
             size=struct_column.size,
             dtype=IntervalDtype(
                 struct_column.dtype.fields[first_field_name], closed
@@ -76,12 +97,13 @@ class IntervalColumn(StructColumn):
             mask=struct_column.base_mask,
             offset=struct_column.offset,
             null_count=struct_column.null_count,
-            children=struct_column.base_children,
+            children=struct_column.base_children,  # type: ignore[arg-type]
         )
 
-    def copy(self, deep=True):
+    def copy(self, deep: bool = True) -> Self:
         struct_copy = super().copy(deep=deep)
-        return IntervalColumn(
+        return IntervalColumn(  # type: ignore[return-value]
+            data=None,
             size=struct_copy.size,
             dtype=IntervalDtype(
                 struct_copy.dtype.fields["left"], self.dtype.closed
@@ -89,7 +111,7 @@ class IntervalColumn(StructColumn):
             mask=struct_copy.base_mask,
             offset=struct_copy.offset,
             null_count=struct_copy.null_count,
-            children=struct_copy.base_children,
+            children=struct_copy.base_children,  # type: ignore[arg-type]
         )
 
     @property
@@ -137,25 +159,27 @@ class IntervalColumn(StructColumn):
 
     def set_closed(
         self, closed: Literal["left", "right", "both", "neither"]
-    ) -> IntervalColumn:
-        return IntervalColumn(
+    ) -> Self:
+        return IntervalColumn(  # type: ignore[return-value]
+            data=None,
             size=self.size,
             dtype=IntervalDtype(self.dtype.fields["left"], closed),
             mask=self.base_mask,
             offset=self.offset,
             null_count=self.null_count,
-            children=self.base_children,
+            children=self.base_children,  # type: ignore[arg-type]
         )
 
-    def as_interval_column(self, dtype):
+    def as_interval_column(self, dtype: IntervalDtype) -> Self:  # type: ignore[override]
         if isinstance(dtype, IntervalDtype):
-            return IntervalColumn(
+            return IntervalColumn(  # type: ignore[return-value]
+                data=None,
                 size=self.size,
                 dtype=dtype,
                 mask=self.mask,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=tuple(
+                children=tuple(  # type: ignore[arg-type]
                     child.astype(dtype.subtype) for child in self.children
                 ),
             )
@@ -183,6 +207,19 @@ class IntervalColumn(StructColumn):
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
+        if cudf.get_option("mode.pandas_compatible"):
+            return pd.Interval(**result, closed=self.dtype.closed)
+        return result
+
+    def _reduce(
+        self,
+        op: str,
+        skipna: bool | None = None,
+        min_count: int = 0,
+        *args,
+        **kwargs,
+    ) -> ScalarLike:
+        result = super()._reduce(op, skipna, min_count, *args, **kwargs)
         if cudf.get_option("mode.pandas_compatible"):
             return pd.Interval(**result, closed=self.dtype.closed)
         return result

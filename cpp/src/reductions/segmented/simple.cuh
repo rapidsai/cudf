@@ -28,12 +28,12 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/reduction/detail/segmented_reduction.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
@@ -243,7 +243,7 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
                                                   offsets,
                                                   null_policy::EXCLUDE,  // do not count nulls
                                                   stream,
-                                                  rmm::mr::get_current_device_resource());
+                                                  cudf::get_current_device_resource_ref());
 
       auto const max_count = thrust::reduce(rmm::exec_policy(stream),
                                             counts.begin(),

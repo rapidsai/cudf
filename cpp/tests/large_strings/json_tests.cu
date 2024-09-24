@@ -22,19 +22,24 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 struct JsonLargeReaderTest : public cudf::test::StringsLargeTest {};
 
 TEST_F(JsonLargeReaderTest, MultiBatch)
 {
-  std::string json_string             = R"(
+  std::string json_string = R"(
     { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
     { "a": { "y" : 6}, "b" : [4, 5   ], "c": 12 }
     { "a": { "y" : 6}, "b" : [6      ], "c": 13 }
     { "a": { "y" : 6}, "b" : [7      ], "c": 14 })";
-  constexpr size_t batch_size_ub      = std::numeric_limits<int>::max();
-  constexpr size_t expected_file_size = 1.5 * static_cast<double>(batch_size_ub);
+
+  std::size_t const batch_size_upper_bound = std::numeric_limits<int32_t>::max() / 16;
+  // set smaller batch_size to reduce file size and execution time
+  setenv("LIBCUDF_JSON_BATCH_SIZE", std::to_string(batch_size_upper_bound).c_str(), 1);
+
+  constexpr std::size_t expected_file_size = 1.5 * static_cast<double>(batch_size_upper_bound);
   std::size_t const log_repetitions =
     static_cast<std::size_t>(std::ceil(std::log2(expected_file_size / json_string.size())));
 
@@ -66,15 +71,18 @@ TEST_F(JsonLargeReaderTest, MultiBatch)
     datasources.emplace_back(cudf::io::datasource::create(hb));
   }
   // Test for different chunk sizes
-  std::vector<size_t> chunk_sizes{
-    batch_size_ub / 4, batch_size_ub / 2, batch_size_ub, static_cast<size_t>(batch_size_ub * 2)};
+  std::vector<std::size_t> chunk_sizes{batch_size_upper_bound / 4,
+                                       batch_size_upper_bound / 2,
+                                       batch_size_upper_bound,
+                                       static_cast<std::size_t>(batch_size_upper_bound * 2)};
+
   for (auto chunk_size : chunk_sizes) {
     auto const tables =
       split_byte_range_reading<std::int64_t>(datasources,
                                              json_lines_options,
                                              chunk_size,
                                              cudf::get_default_stream(),
-                                             rmm::mr::get_current_device_resource());
+                                             cudf::get_current_device_resource_ref());
 
     auto table_views = std::vector<cudf::table_view>(tables.size());
     std::transform(tables.begin(), tables.end(), table_views.begin(), [](auto& table) {
@@ -86,4 +94,7 @@ TEST_F(JsonLargeReaderTest, MultiBatch)
     // cannot use EQUAL due to concatenate removing null mask
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(current_reader_table.tbl->view(), result->view());
   }
+
+  // go back to normal batch_size
+  unsetenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
 }

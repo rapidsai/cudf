@@ -35,13 +35,13 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
-#include <thrust/optional.h>
+#include <cuda/std/optional>
 
 #include <jit_preprocessed_files/binaryop/jit/kernel.cu.jit.hpp>
 
@@ -173,7 +173,7 @@ template <typename Lhs, typename Rhs>
 void fixed_point_binary_operation_validation(binary_operator op,
                                              Lhs lhs,
                                              Rhs rhs,
-                                             thrust::optional<cudf::data_type> output_type = {})
+                                             cuda::std::optional<cudf::data_type> output_type = {})
 {
   CUDF_EXPECTS((is_fixed_point(lhs) or is_fixed_point(rhs)),
                "One of the inputs must have fixed_point data_type.");

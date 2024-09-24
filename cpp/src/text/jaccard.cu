@@ -26,6 +26,7 @@
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <nvtext/jaccard.hpp>
@@ -33,7 +34,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cub/cub.cuh>
 #include <thrust/binary_search.h>
@@ -376,7 +376,7 @@ std::pair<rmm::device_uvector<uint32_t>, rmm::device_uvector<int64_t>> hash_subs
                           sub_offsets.begin(),
                           sub_offsets.end(),
                           indices.begin());
-      return cudf::detail::make_std_vector_sync(indices, stream);
+      return cudf::detail::make_host_vector_sync(indices, stream);
     }();
 
     // Call segmented sort with the sort sections

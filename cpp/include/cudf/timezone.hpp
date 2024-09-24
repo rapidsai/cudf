@@ -15,10 +15,11 @@
  */
 #pragma once
 
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
 #include <optional>
@@ -45,6 +46,7 @@ static constexpr uint32_t solar_cycle_entry_count = 2 * solar_cycle_years;
  *
  * @param tzif_dir The directory where the TZif files are located
  * @param timezone_name standard timezone name (for example, "America/Los_Angeles")
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory.
  *
  * @return The transition table for the given timezone
@@ -52,6 +54,7 @@ static constexpr uint32_t solar_cycle_entry_count = 2 * solar_cycle_years;
 std::unique_ptr<table> make_timezone_transition_table(
   std::optional<std::string_view> tzif_dir,
   std::string_view timezone_name,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 }  // namespace CUDF_EXPORT cudf

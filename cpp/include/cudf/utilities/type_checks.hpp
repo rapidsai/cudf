@@ -23,25 +23,6 @@
 namespace CUDF_EXPORT cudf {
 
 /**
- * @brief Compare the types of two `column_view`s
- *
- * @deprecated Since 24.06. Use cudf::have_same_types instead.
- *
- * This function returns true if the type of `lhs` equals that of `rhs`.
- * - For fixed point types, the scale is compared.
- * - For dictionary types, the type of the keys are compared if both are
- *   non-empty columns.
- * - For lists types, the type of child columns are compared recursively.
- * - For struct types, the type of each field are compared in order.
- * - For all other types, the `id` of `data_type` is compared.
- *
- * @param lhs The first `column_view` to compare
- * @param rhs The second `column_view` to compare
- * @return true if column types match
- */
-[[deprecated]] bool column_types_equal(column_view const& lhs, column_view const& rhs);
-
-/**
  * @brief Compare the type IDs of two `column_view`s
  *
  * This function returns true if the type of `lhs` equals that of `rhs`.

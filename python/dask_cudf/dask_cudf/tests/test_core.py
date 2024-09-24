@@ -15,7 +15,11 @@ from dask.utils import M
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr, xfail_dask_expr
+from dask_cudf.tests.utils import (
+    require_dask_expr,
+    skip_dask_expr,
+    xfail_dask_expr,
+)
 
 
 def test_from_dict_backend_dispatch():
@@ -993,3 +997,30 @@ def test_series_isin_error():
         ser.isin([1, 5, "a"])
     with pytest.raises(TypeError):
         ddf.isin([1, 5, "a"]).compute()
+
+
+@require_dask_expr()
+def test_to_backend_simplify():
+    # Check that column projection is not blocked by to_backend
+    with dask.config.set({"dataframe.backend": "pandas"}):
+        df = dd.from_dict({"x": [1, 2, 3], "y": [4, 5, 6]}, npartitions=2)
+        df2 = df.to_backend("cudf")[["y"]].simplify()
+        df3 = df[["y"]].to_backend("cudf").to_backend("cudf").simplify()
+        assert df2._name == df3._name
+
+
+@pytest.mark.parametrize("numeric_only", [True, False])
+@pytest.mark.parametrize("op", ["corr", "cov"])
+def test_cov_corr(op, numeric_only):
+    df = cudf.DataFrame.from_dict(
+        {
+            "x": np.random.randint(0, 5, size=10),
+            "y": np.random.normal(size=10),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    res = getattr(ddf, op)(numeric_only=numeric_only)
+    # Use to_pandas until cudf supports numeric_only
+    # (See: https://github.com/rapidsai/cudf/issues/12626)
+    expect = getattr(df.to_pandas(), op)(numeric_only=numeric_only)
+    dd.assert_eq(res, expect)

@@ -26,7 +26,11 @@ from packaging import version
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
+    PANDAS_VERSION,
+)
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
@@ -3561,8 +3565,11 @@ def test_dataframe_empty_sort_index():
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
 def test_dataframe_sort_index(
-    index, axis, ascending, inplace, ignore_index, na_position
+    request, index, axis, ascending, inplace, ignore_index, na_position
 ):
+    if not PANDAS_GE_220 and axis in (1, "columns") and ignore_index:
+        pytest.skip(reason="Bug fixed in pandas-2.2")
+
     pdf = pd.DataFrame(
         {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]},
         index=index,
@@ -3612,6 +3619,10 @@ def test_dataframe_sort_index(
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_dataframe_mulitindex_sort_index(
     request, axis, level, ascending, inplace, ignore_index, na_position
 ):
@@ -6747,6 +6758,10 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
         None,
     ],
 )
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_dataframe_assign_scalar(request, col_data, assign_val):
     request.applymarker(
         pytest.mark.xfail(
@@ -9409,7 +9424,6 @@ def test_rename_for_level_RangeIndex_dataframe():
     assert_eq(expect, got)
 
 
-@pytest_xfail(reason="level=None not implemented yet")
 def test_rename_for_level_is_None_MC():
     gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
     gdf.columns = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1)])
@@ -11115,3 +11129,9 @@ def test_bool_raises():
         lfunc_args_and_kwargs=[[cudf.DataFrame()]],
         rfunc_args_and_kwargs=[[pd.DataFrame()]],
     )
+
+
+def test_from_pandas_preserve_column_dtype():
+    df = pd.DataFrame([[1, 2]], columns=pd.Index([1, 2], dtype="int8"))
+    result = cudf.DataFrame.from_pandas(df)
+    pd.testing.assert_index_equal(result.columns, df.columns, exact=True)

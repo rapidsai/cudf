@@ -139,11 +139,6 @@ bool have_same_types(column_view const& lhs, column_view const& rhs)
   return type_dispatcher(lhs.type(), columns_equal_fn{}, lhs, rhs);
 }
 
-bool column_types_equal(column_view const& lhs, column_view const& rhs)
-{
-  return have_same_types(lhs, rhs);
-}
-
 bool have_same_types(column_view const& lhs, scalar const& rhs)
 {
   return type_dispatcher(lhs.type(), column_scalar_equal_fn{}, lhs, rhs);

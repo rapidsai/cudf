@@ -212,6 +212,10 @@ target_compile_definitions(
 )
 target_link_options(cudfjni PRIVATE "-Wl,--no-undefined")
 
+set(CUDF_ENABLE_ARROW_PARQUET ON)
+include(../../../../cpp/cmake/thirdparty/get_arrow.cmake)
+target_link_libraries(cudfjni PRIVATE ${ARROW_LIBRARIES})
+
 if(USE_GDS)
   add_library(cufilejni src/CuFileJni.cpp)
   set_target_properties(
@@ -263,9 +267,8 @@ if(TARGET nvcomp::nvcomp)
   add_custom_command(
     TARGET cudfjni
     PRE_LINK
-    COMMAND
-      ${CMAKE_COMMAND} -E copy $<TARGET_FILE:nvcomp::nvcomp> $<TARGET_FILE:nvcomp::nvcomp_gdeflate>
-      $<TARGET_FILE:nvcomp::nvcomp_bitcomp> "${PROJECT_BINARY_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:nvcomp::nvcomp>
+            "${PROJECT_BINARY_DIR}/libnvcomp.so"
     COMMENT "Copying nvcomp libraries to ${PROJECT_BINARY_DIR}"
   )
 endif()

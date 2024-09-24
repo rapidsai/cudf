@@ -22,8 +22,7 @@
 #include <cudf/reduction/detail/histogram.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <cuco/static_map.cuh>
 #include <cuda/atomic>

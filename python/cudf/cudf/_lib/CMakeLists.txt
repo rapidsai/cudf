@@ -63,11 +63,12 @@ rapids_cython_create_modules(
 )
 
 target_link_libraries(strings_udf PUBLIC cudf_strings_udf)
+target_include_directories(interop PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
 
-set(targets_using_arrow_headers interop avro csv orc json parquet)
-link_to_pyarrow_headers("${targets_using_arrow_headers}")
+include(${rapids-cmake-dir}/export/find_package_root.cmake)
+include(../../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)
+target_link_libraries(interop PUBLIC nanoarrow)
 
 add_subdirectory(io)
 add_subdirectory(nvtext)
-add_subdirectory(pylibcudf)
 add_subdirectory(strings)

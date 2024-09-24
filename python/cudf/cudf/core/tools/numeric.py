@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
 
 
-def to_numeric(arg, errors="raise", downcast=None):
+def to_numeric(arg, errors="raise", downcast=None, dtype_backend=None):
     """
     Convert argument into numerical types.
 
@@ -48,6 +48,8 @@ def to_numeric(arg, errors="raise", downcast=None):
         Note that downcast behavior is decoupled from parsing. Errors
         encountered during downcast is raised regardless of ``errors``
         parameter.
+    dtype_backend : None
+        Not implemented.
 
     Returns
     -------
@@ -93,7 +95,10 @@ def to_numeric(arg, errors="raise", downcast=None):
         For example ``[1, 'a']``. A ``TypeError`` will be raised when such
         input is received, regardless of ``errors`` parameter.
     """
-
+    if dtype_backend is not None:
+        raise NotImplementedError(
+            "dtype_backend is not currently implemented."
+        )
     if errors not in {"raise", "ignore", "coerce"}:
         raise ValueError("invalid error value specified")
     elif errors == "ignore":

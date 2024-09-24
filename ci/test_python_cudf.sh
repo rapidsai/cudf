@@ -15,7 +15,7 @@ trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "pytest pylibcudf"
-pushd python/cudf/cudf/pylibcudf_tests
+pushd python/pylibcudf/pylibcudf/tests
 python -m pytest \
   --cache-clear \
   --dist=worksteal \

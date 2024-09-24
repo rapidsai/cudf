@@ -249,7 +249,7 @@ def _union_categoricals(
             new_categories=sorted_categories
         )
 
-    return cudf.Index(result_col)
+    return cudf.CategoricalIndex._from_column(result_col)
 
 
 def is_bool_dtype(arr_or_dtype):

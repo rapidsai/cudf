@@ -27,11 +27,11 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <numeric>
@@ -72,10 +72,10 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(table_view con
 }  // namespace detail
 
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
-  cudf::table_view const& input, rmm::device_async_resource_ref mr)
+  cudf::table_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::encode(input, cudf::get_default_stream(), mr);
+  return detail::encode(input, stream, mr);
 }
 
 }  // namespace cudf
