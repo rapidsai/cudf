@@ -58,9 +58,6 @@ class CudfFusedParquetIO(FusedParquetIO):
 
 
 class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
-    _parameters = ReadParquetPyarrowFS._parameters + ["_blocksize"]
-    _defaults = ReadParquetPyarrowFS._defaults | {"_blocksize": None}
-
     @functools.cached_property
     def _dataset_info(self):
         from dask_cudf.io.parquet import set_object_dtypes_from_pa_schema
@@ -94,9 +91,7 @@ class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
     def _table_to_pandas(
         table,
         index_name,
-        arrow_to_pandas,
-        dtype_backend,
-        pyarrow_strings_enabled,
+        *args,
     ):
         df = cudf.DataFrame.from_arrow(table)
         if index_name is not None:
@@ -109,32 +104,6 @@ class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
         if isinstance(parent, CudfFusedParquetIO):
             return
         return parent.substitute(self, CudfFusedParquetIO(self))
-
-    @property
-    def _fusion_compression_factor(self):
-        from dask import config
-        from dask.utils import parse_bytes
-
-        approx_stats = self.approx_statistics()
-        total_uncompressed = 0
-        after_projection = 0
-        col_op = self.operand("columns") or self.columns
-        for col in approx_stats["columns"]:
-            total_uncompressed += col["total_uncompressed_size"]
-            if col["path_in_schema"] in col_op:
-                after_projection += col["total_uncompressed_size"]
-
-        min_size = parse_bytes(
-            config.get("dataframe.parquet.minimum-partition-size")
-        )
-
-        total_uncompressed = max(total_uncompressed, min_size)
-        ratio = after_projection / total_uncompressed
-
-        if self._blocksize:
-            ratio *= total_uncompressed / parse_bytes(self._blocksize)
-
-        return max(ratio, 0.001)
 
 
 class ToCudfBackend(Elemwise):
