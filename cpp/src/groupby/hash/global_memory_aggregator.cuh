@@ -16,8 +16,11 @@
 
 #pragma once
 
+#include <cudf/detail/aggregation/aggregation.cuh>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/device_atomics.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/traits.cuh>
 
 namespace cudf::groupby::detail::hash {
