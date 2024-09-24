@@ -808,13 +808,15 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
                     "parquet_file_extension is not supported when using the pyarrow filesystem."
                 )
             if blocksize is not None and blocksize != "default":
-                raise NotImplementedError(
+                warnings.warn(
                     "blocksize is not supported when using the pyarrow filesystem."
+                    "blocksize argument will be ignored."
                 )
             if aggregate_files is not None:
-                raise NotImplementedError(
+                warnings.warn(
                     "aggregate_files is not supported when using the pyarrow filesystem. "
                     "Please use the 'dataframe.parquet.minimum-partition-size' config."
+                    "aggregate_files argument will be ignored."
                 )
 
             return dx.new_collection(
