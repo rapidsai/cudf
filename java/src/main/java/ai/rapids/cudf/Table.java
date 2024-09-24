@@ -260,6 +260,7 @@ public final class Table implements AutoCloseable {
                                         boolean allowNonNumericNumbers,
                                         boolean allowUnquotedControl,
                                         boolean pruneColumns,
+                                        boolean experimental,
                                         byte lineDelimiter) throws CudfException;
 
   private static native long readJSONFromDataSource(int[] numChildren, String[] columnNames,
@@ -275,6 +276,7 @@ public final class Table implements AutoCloseable {
                                       boolean allowNonNumericNumbers,
                                       boolean allowUnquotedControl,
                                       boolean pruneColumns,
+                                      boolean experimental,
                                       byte lineDelimiter,
                                       long dsHandle) throws CudfException;
 
@@ -288,6 +290,7 @@ public final class Table implements AutoCloseable {
                                       boolean allowLeadingZeros,
                                       boolean allowNonNumericNumbers,
                                       boolean allowUnquotedControl,
+                                      boolean experimental,
                                       byte lineDelimiter,
                                       long dsHandle) throws CudfException;
 
@@ -303,6 +306,7 @@ public final class Table implements AutoCloseable {
                                               boolean allowLeadingZeros,
                                               boolean allowNonNumericNumbers,
                                               boolean allowUnquotedControl,
+                                              boolean experimental,
                                               byte lineDelimiter) throws CudfException;
 
   /**
@@ -1333,6 +1337,7 @@ public final class Table implements AutoCloseable {
                     opts.nonNumericNumbersAllowed(),
                     opts.unquotedControlChars(),
                     cudfPruneSchema,
+                    opts.experimental(),
                     opts.getLineDelimiter()))) {
 
       return gatherJSONColumns(schema, twm, -1);
@@ -1417,6 +1422,7 @@ public final class Table implements AutoCloseable {
         opts.leadingZerosAllowed(),
         opts.nonNumericNumbersAllowed(),
         opts.unquotedControlChars(),
+        opts.experimental(),
         opts.getLineDelimiter()));
   }
 
@@ -1440,6 +1446,7 @@ public final class Table implements AutoCloseable {
           opts.nonNumericNumbersAllowed(),
           opts.unquotedControlChars(),
           opts.getLineDelimiter(),
+          opts.experimental(),
           dsHandle));
         return twm;
       } finally {
@@ -1499,6 +1506,7 @@ public final class Table implements AutoCloseable {
             opts.nonNumericNumbersAllowed(),
             opts.unquotedControlChars(),
             cudfPruneSchema,
+            opts.experimental(),
             opts.getLineDelimiter()))) {
       return gatherJSONColumns(schema, twm, emptyRowCount);
     }
@@ -1543,6 +1551,7 @@ public final class Table implements AutoCloseable {
         opts.nonNumericNumbersAllowed(),
         opts.unquotedControlChars(),
         cudfPruneSchema,
+        opts.experimental(),
         opts.getLineDelimiter(),
         dsHandle))) {
       return gatherJSONColumns(schema, twm, emptyRowCount);

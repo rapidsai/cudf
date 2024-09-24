@@ -40,6 +40,7 @@ public final class JSONOptions extends ColumnFilterOptions {
   private final boolean allowUnquotedControlChars;
   private final boolean cudfPruneSchema;
   private final byte lineDelimiter;
+  private final boolean experimental;
 
   private JSONOptions(Builder builder) {
     super(builder);
@@ -56,6 +57,7 @@ public final class JSONOptions extends ColumnFilterOptions {
     allowUnquotedControlChars = builder.allowUnquotedControlChars;
     cudfPruneSchema = builder.cudfPruneSchema;
     lineDelimiter = builder.lineDelimiter;
+    experimental = builder.experimental;
   }
 
   public boolean shouldCudfPruneSchema() {
@@ -111,6 +113,10 @@ public final class JSONOptions extends ColumnFilterOptions {
     return allowUnquotedControlChars;
   }
 
+  public boolean experimental() {
+    return experimental;
+  }
+
   @Override
   String[] getIncludeColumnNames() {
     throw new UnsupportedOperationException("JSON reader didn't support column prune");
@@ -134,6 +140,7 @@ public final class JSONOptions extends ColumnFilterOptions {
 
     private boolean mixedTypesAsStrings = false;
     private boolean keepQuotes = false;
+    private boolean experimental = false;
 
     private boolean cudfPruneSchema = false;
     private byte lineDelimiter = '\n';
@@ -156,6 +163,14 @@ public final class JSONOptions extends ColumnFilterOptions {
      */
     public Builder withStrictValidation(boolean isAllowed) {
       strictValidation = isAllowed;
+      return this;
+    }
+    
+    /**
+     * Should experimental features be enabled or not
+     */
+    public Builder withExperimental(boolean isAllowed) {
+      experimental = isAllowed;
       return this;
     }
 
