@@ -267,6 +267,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
  * index, level, begin index, and end index in the input JSON string
  * @param is_array_of_arrays Whether the tree is an array of arrays
  * @param is_enabled_lines Whether the input is a line-delimited JSON
+ * @param is_enabled_experimental Whether to enable experimental features such as utf-8 field name
+ * support
  * @param stream The CUDA stream to which kernels are dispatched
  * @param mr Optional, resource with which to allocate
  * @return A tuple of the output column indices and the row offsets within each column for each node
@@ -277,6 +279,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                               tree_meta_t const& d_tree,
                               bool is_array_of_arrays,
                               bool is_enabled_lines,
+                              bool is_enabled_experimental,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);
 

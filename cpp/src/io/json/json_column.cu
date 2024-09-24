@@ -536,6 +536,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                   gpu_tree,
                                   is_array_of_arrays,
                                   options.is_enabled_lines(),
+                                  options.is_enabled_experimental(),
                                   stream,
                                   cudf::get_current_device_resource_ref());
 
