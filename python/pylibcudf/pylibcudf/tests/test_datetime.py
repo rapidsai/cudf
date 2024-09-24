@@ -1,5 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+import datetime
+
 import pyarrow as pa
 import pyarrow.compute as pc
 import pylibcudf as plc
@@ -7,24 +9,21 @@ import pytest
 from utils import assert_column_eq
 
 
-@pytest.fixture
-def column(has_nulls):
+@pytest.fixture(scope="module", params=["s", "ms", "us", "ns"])
+def datetime_column(has_nulls, request):
     values = [
-        pa.scalar(1694004645123456789, pa.timestamp("ns")),
-        pa.scalar(1544024645123456789, pa.timestamp("ns")),
-        pa.scalar(1682342345346235434, pa.timestamp("ns")),
-        pa.scalar(1445624625623452452, pa.timestamp("ns")),
+        datetime.datetime(1999, 1, 1),
+        datetime.datetime(2024, 10, 12),
+        datetime.datetime(1970, 1, 1),
+        datetime.datetime(2260, 1, 1),
+        datetime.datetime(2024, 2, 29, 3, 14, 15),
+        datetime.datetime(2024, 2, 29, 3, 14, 15, 999),
     ]
     if has_nulls:
         values[2] = None
-    return plc.interop.from_arrow(pa.array(values))
-
-
-def test_extract_year(column):
-    got = plc.datetime.extract_year(column)
-    expect = pc.year(plc.interop.to_arrow(column)).cast(pa.int16())
-
-    assert_column_eq(expect, got)
+    return plc.interop.from_arrow(
+        pa.array(values, type=pa.timestamp(request.param))
+    )
 
 
 @pytest.fixture(
@@ -46,16 +45,16 @@ def component(request):
     return request.param
 
 
-def test_extract_datetime_component(column, component):
+def test_extract_datetime_component(datetime_column, component):
     attr, component = component
     kwargs = {}
     if attr == "day_of_week":
         kwargs = {"count_from_zero": False}
-    got = plc.datetime.extract_datetime_component(column, component)
+    got = plc.datetime.extract_datetime_component(datetime_column, component)
     # libcudf produces an int16, arrow produces an int64
 
-    expect = getattr(pc, attr)(plc.interop.to_arrow(column), **kwargs).cast(
-        pa.int16()
-    )
+    expect = getattr(pc, attr)(
+        plc.interop.to_arrow(datetime_column), **kwargs
+    ).cast(pa.int16())
 
     assert_column_eq(expect, got)

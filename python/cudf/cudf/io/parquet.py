@@ -64,7 +64,7 @@ def _write_parquet(
     statistics="ROWGROUP",
     metadata_file_path=None,
     int96_timestamps=False,
-    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
+    row_group_size_bytes=None,
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,
@@ -149,7 +149,7 @@ def write_to_dataset(
     return_metadata=False,
     statistics="ROWGROUP",
     int96_timestamps=False,
-    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
+    row_group_size_bytes=None,
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,
@@ -205,7 +205,7 @@ def write_to_dataset(
         If ``False``, timestamps will not be altered.
     row_group_size_bytes: integer or None, default None
         Maximum size of each stripe of the output.
-        If None, 134217728 (128MB) will be used.
+        If None, no limit on row group stripe size will be used.
     row_group_size_rows: integer or None, default None
         Maximum number of rows of each stripe of the output.
         If None, 1000000 will be used.
@@ -577,11 +577,51 @@ def read_parquet(
         )
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
+    # Prepare remote-IO options
+    prefetch_options = kwargs.pop("prefetch_options", {})
+    if not ioutils._is_local_filesystem(fs):
+        # The default prefetch method depends on the
+        # `row_groups` argument. In most cases we will use
+        # method="all" by default, because it is fastest
+        # when we need to read most of the file(s).
+        # If a (simple) `row_groups` selection is made, we
+        # use method="parquet" to avoid transferring the
+        # entire file over the network
+        method = prefetch_options.get("method")
+        _row_groups = None
+        if method in (None, "parquet"):
+            if row_groups is None:
+                # If the user didn't specify a method, don't use
+                # 'parquet' prefetcher for column projection alone.
+                method = method or "all"
+            elif all(r == row_groups[0] for r in row_groups):
+                # Row group selection means we are probably
+                # reading half the file or less. We should
+                # avoid a full file transfer by default.
+                method = "parquet"
+                _row_groups = row_groups[0]
+            elif (method := method or "all") == "parquet":
+                raise ValueError(
+                    "The 'parquet' prefetcher requires a uniform "
+                    "row-group selection for all paths within the "
+                    "same `read_parquet` call. "
+                    "Got: {row_groups}"
+                )
+        if method == "parquet":
+            prefetch_options = prefetch_options.update(
+                {
+                    "method": method,
+                    "columns": columns,
+                    "row_groups": _row_groups,
+                }
+            )
+
     filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         fs=fs,
         storage_options=storage_options,
         bytes_per_thread=bytes_per_thread,
+        prefetch_options=prefetch_options,
     )
 
     # Warn user if they are not using cudf for IO
@@ -940,7 +980,7 @@ def to_parquet(
     statistics="ROWGROUP",
     metadata_file_path=None,
     int96_timestamps=False,
-    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
+    row_group_size_bytes=None,
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,

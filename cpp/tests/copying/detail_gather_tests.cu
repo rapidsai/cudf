@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
 
@@ -62,7 +63,7 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest)
                            gather_map.end(),
                            cudf::out_of_bounds_policy::DONT_CHECK,
                            cudf::get_default_stream(),
-                           rmm::mr::get_current_device_resource());
+                           cudf::get_current_device_resource_ref());
 
     for (auto i = 0; i < source_table.num_columns(); ++i) {
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(source_table.column(i), result->view().column(i));
@@ -79,7 +80,7 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest)
                            gather_map.data() + gather_map.size(),
                            cudf::out_of_bounds_policy::DONT_CHECK,
                            cudf::get_default_stream(),
-                           rmm::mr::get_current_device_resource());
+                           cudf::get_current_device_resource_ref());
 
     for (auto i = 0; i < source_table.num_columns(); ++i) {
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(source_table.column(i), result->view().column(i));
@@ -107,7 +108,7 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest)
                          cudf::out_of_bounds_policy::NULLIFY,
                          cudf::detail::negative_index_policy::NOT_ALLOWED,
                          cudf::get_default_stream(),
-                         rmm::mr::get_current_device_resource());
+                         cudf::get_current_device_resource_ref());
 
   auto expect_data =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2) ? 0 : i; });

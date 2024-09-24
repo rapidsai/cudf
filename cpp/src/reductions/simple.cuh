@@ -27,12 +27,12 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/struct_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -344,7 +344,7 @@ struct same_element_type_dispatcher {
       dictionary_column_view(col).get_indices_annotated(),
       init,
       stream,
-      rmm::mr::get_current_device_resource());
+      cudf::get_current_device_resource_ref());
     return resolve_key<ElementType>(dictionary_column_view(col).keys(), *index, stream, mr);
   }
 

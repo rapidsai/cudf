@@ -21,10 +21,10 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/extrema.h>

@@ -29,12 +29,11 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -208,7 +207,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   } else {
     thrust::counting_iterator<cudf::size_type> stencil(0);
     auto const [row_bitmask, _] =
-      cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource());
+      cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref());
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
     // insert valid rows
@@ -267,6 +266,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -277,7 +277,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
                                  binary_predicate,
                                  compare_nulls,
                                  detail::join_kind::LEFT_SEMI_JOIN,
-                                 cudf::get_default_stream(),
+                                 stream,
                                  mr);
 }
 
@@ -288,6 +288,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -298,7 +299,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
                                  binary_predicate,
                                  compare_nulls,
                                  detail::join_kind::LEFT_ANTI_JOIN,
-                                 cudf::get_default_stream(),
+                                 stream,
                                  mr);
 }
 

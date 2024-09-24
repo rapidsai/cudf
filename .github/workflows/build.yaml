@@ -62,7 +62,7 @@ jobs:
       arch: "amd64"
       branch: ${{ inputs.branch }}
       build_type: ${{ inputs.build_type || 'branch' }}
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
       date: ${{ inputs.date }}
       node_type: "gpu-v100-latest-1"
       run_script: "ci/build_docs.sh"
@@ -71,6 +71,8 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.10
     with:
+      # build for every combination of arch and CUDA version, but only for the latest Python
+      matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
