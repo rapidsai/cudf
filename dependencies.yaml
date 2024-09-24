@@ -650,7 +650,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.6
+          - polars>=1.8,<1.9
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
