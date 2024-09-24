@@ -244,7 +244,7 @@ def _register_cupy():
 
     get_collection_type.register(
         cupy.ndarray,
-        lambda x: _create_array_collection_with_meta,
+        lambda _: _create_array_collection_with_meta,
     )
 
 
@@ -255,5 +255,5 @@ def _register_cupyx():
 
     get_collection_type.register(
         spmatrix,
-        lambda x: _create_array_collection_with_meta,
+        lambda _: _create_array_collection_with_meta,
     )
