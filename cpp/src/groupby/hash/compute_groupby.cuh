@@ -16,7 +16,7 @@
 #pragma once
 
 #include "compute_single_pass_aggs.cuh"
-#include "compute_single_pass_aggs.hpp"
+// #include "compute_single_pass_aggs.hpp"
 #include "multi_pass_functors.cuh"
 
 #include <cudf/column/column_factories.hpp>
