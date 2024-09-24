@@ -1704,7 +1704,7 @@ Java_ai_rapids_cudf_Table_readAndInferJSON(JNIEnv* env,
         .normalize_whitespace(static_cast<bool>(normalize_whitespace))
         .strict_validation(strict_validation)
         .mixed_types_as_string(mixed_types_as_string)
-        .prune_columns(false);
+        .prune_columns(false)
         .delimiter(static_cast<char>(line_delimiter))
         .keep_quotes(keep_quotes);
     if (strict_validation) {
