@@ -75,16 +75,21 @@ total_usage = pr_df["_slow_function_call"] + pr_df["_fast_function_call"]
 pr_df["CPU Usage"] = ((pr_df["_slow_function_call"]/total_usage)*100.0).round(1)
 pr_df["GPU Usage"] = ((pr_df["_fast_function_call"]/total_usage)*100.0).round(1)
 
+cpu_usage_mean = pr_df["CPU Usage"].mean().round(2)
+gpu_usage_mean = pr_df["GPU Usage"].mean().round(2)
+
+pr_df["CPU Usage"] = pr_df["CPU Usage"].fillna(0)
+pr_df["GPU Usage"] = pr_df["GPU Usage"].fillna(0)
+main_df["CPU Usage"] = main_df["CPU Usage"].fillna(0)
+main_df["GPU Usage"] = main_df["GPU Usage"].fillna(0)
+
 diff_df = pr_df - main_df
 diff_df["CPU Usage"] = diff_df["CPU Usage"].round(1).fillna(0)
 diff_df["GPU Usage"] = diff_df["GPU Usage"].round(1).fillna(0)
 
-cpu_usage_mean = pr_df["CPU Usage"].mean().round(2)
-gpu_usage_mean = pr_df["GPU Usage"].mean().round(2)
-
 # Add '%' suffix to "CPU Usage" and "GPU Usage" columns
-pr_df["CPU Usage"] = pr_df["CPU Usage"].fillna(0).astype(str) + '%'
-pr_df["GPU Usage"] = pr_df["GPU Usage"].fillna(0).astype(str) + '%'
+pr_df["CPU Usage"] = pr_df["CPU Usage"].astype(str) + '%'
+pr_df["GPU Usage"] = pr_df["GPU Usage"].astype(str) + '%'
 
 pr_df = pr_df[["total", "passed", "failed", "skipped", "CPU Usage", "GPU Usage"]]
 diff_df = diff_df[["total", "passed", "failed", "skipped", "CPU Usage", "GPU Usage"]]
@@ -110,7 +115,7 @@ df = df.rename(
         "GPU Usage_diff": "GPU Usage delta",
     }
 )
-df = df.sort_values(by=["CPU Usage delta", "Failed tests"], ascending=False)
+df = df.sort_values(by=["CPU Usage delta", "Total tests"], ascending=False)
 df["CPU Usage delta"] = df["CPU Usage delta"].map(emoji_failed)
 df["GPU Usage delta"] = df["GPU Usage delta"].map(emoji_passed)
 df = df[["Total tests", "CPU Usage delta", "GPU Usage delta", "Passed tests", "Failed tests", "Skipped tests", "CPU Usage", "GPU Usage", "Total delta", "Passed delta", "Failed delta", "Skipped delta"]]
