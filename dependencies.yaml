@@ -383,7 +383,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pyarrow>=14.0.1,<18.0.0a0
+          - pyarrow>=14.0.0,<18.0.0a0
   cuda_version:
     specific:
       - output_types: conda
@@ -561,7 +561,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - &numpy numpy>=1.24,<3.0a0
+          - &numpy numpy>=1.23,<3.0a0
           - pandas>=2.0,<2.2.3dev0
   run_pylibcudf:
     common:
@@ -707,9 +707,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.57.*
-              - numpy==1.24.*
               - pandas==2.0.*
-              - pyarrow==14.0.1
           - matrix:
             packages:
       - output_types: conda
@@ -764,6 +762,14 @@ dependencies:
           - &transformers transformers==4.39.3
           - tzdata
     specific:
+      - output_types: [conda, requirements]
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - numpy==1.23.*
+              - pyarrow==14.0.0
+          - matrix:
+            packages:
       - output_types: conda
         matrices:
           - matrix:
@@ -783,6 +789,15 @@ dependencies:
         packages:
           - dask-cuda==24.10.*,>=0.0.0a0
           - *numba
+    specific:
+      - output_types: [conda, requirements]
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - numpy==1.24.*
+              - pyarrow==14.0.1
+          - matrix:
+            packages:
   depends_on_libcudf:
     common:
       - output_types: conda
