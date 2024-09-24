@@ -15,7 +15,9 @@
  */
 
 #include "compute_aggregations.hpp"
+#include "global_memory_aggregator.cuh"
 #include "helpers.cuh"
+#include "shared_memory_aggregator.cuh"
 #include "single_pass_functors.cuh"
 
 #include <cudf/aggregation.hpp>
