@@ -1209,9 +1209,9 @@ std::pair<thrust::host_vector<uint8_t>, hashmap_of_device_columns> build_tree(
                              &is_enabled_mixed_types_as_string,
                              &ignore_all_children](std::vector<NodeIndexT>& child_ids) {
     // do these on unpruned columns only.
-    // if str col is all null, ignore, then only one column, do nothing
-    // if str col is all null, both struct & list, ERROR out
-    // if mixed type is enabled, then force string type on all columns.
+    // when mixed types is disabled, ignore string sibling of nested column.
+    // when mixed types is disabled, and both list and struct columns are siblings, error out.
+    // when mixed types is enabled, force string type on all columns
 
     // Remove pruned children (forced type will not clash here because other types are already
     // pruned)
