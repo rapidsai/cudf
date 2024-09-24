@@ -17,7 +17,8 @@
 #pragma once
 
 #include "compute_aggregations.hpp"
-#include "compute_single_pass_aggs.hpp"
+// #include "compute_single_pass_aggs.hpp"
+#include "flatten_single_pass_aggs.hpp"
 #include "helpers.cuh"
 #include "single_pass_functors.cuh"
 
@@ -40,10 +41,7 @@
 
 #include <unordered_set>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
-namespace hash {
+namespace cudf::groupby::detail::hash {
 
 template <typename SetType>
 // TODO pass block
@@ -118,7 +116,7 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
   auto storage     = SetRef::storage_ref_type(window_extent, windows);
   auto shared_set  = SetRef(cuco::empty_key<cudf::size_type>{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
                            global_set.key_eq(),
-                           probing_scheme_type{global_set.hash_function()},
+                           probing_scheme_t{global_set.hash_function()},
                             {},
                            storage);
   auto const block = cooperative_groups::this_thread_block();
@@ -163,111 +161,6 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
   }
 
   if (block.thread_rank() == 0) { block_cardinality[block.group_index().x] = cardinality; }
-}
-
-class groupby_simple_aggregations_collector final
-  : public cudf::detail::simple_aggregations_collector {
- public:
-  using cudf::detail::simple_aggregations_collector::visit;
-
-  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::min_aggregation const&) override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(col_type.id() == type_id::STRING ? make_argmin_aggregation()
-                                                    : make_min_aggregation());
-    return aggs;
-  }
-
-  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::max_aggregation const&) override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(col_type.id() == type_id::STRING ? make_argmax_aggregation()
-                                                    : make_max_aggregation());
-    return aggs;
-  }
-
-  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::mean_aggregation const&) override
-  {
-    (void)col_type;
-    CUDF_EXPECTS(is_fixed_width(col_type), "MEAN aggregation expects fixed width type");
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(make_sum_aggregation());
-    // COUNT_VALID
-    aggs.push_back(make_count_aggregation());
-
-    return aggs;
-  }
-
-  std::vector<std::unique_ptr<aggregation>> visit(data_type,
-                                                  cudf::detail::var_aggregation const&) override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(make_sum_aggregation());
-    // COUNT_VALID
-    aggs.push_back(make_count_aggregation());
-
-    return aggs;
-  }
-
-  std::vector<std::unique_ptr<aggregation>> visit(data_type,
-                                                  cudf::detail::std_aggregation const&) override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(make_sum_aggregation());
-    // COUNT_VALID
-    aggs.push_back(make_count_aggregation());
-
-    return aggs;
-  }
-
-  std::vector<std::unique_ptr<aggregation>> visit(
-    data_type, cudf::detail::correlation_aggregation const&) override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(make_sum_aggregation());
-    // COUNT_VALID
-    aggs.push_back(make_count_aggregation());
-
-    return aggs;
-  }
-};
-
-// flatten aggs to filter in single pass aggs
-std::tuple<table_view, std::vector<aggregation::Kind>, std::vector<std::unique_ptr<aggregation>>>
-flatten_single_pass_aggs(host_span<aggregation_request const> requests)
-{
-  std::vector<column_view> columns;
-  std::vector<std::unique_ptr<aggregation>> aggs;
-  std::vector<aggregation::Kind> agg_kinds;
-
-  for (auto const& request : requests) {
-    auto const& agg_v = request.aggregations;
-
-    std::unordered_set<aggregation::Kind> agg_kinds_set;
-    auto insert_agg = [&](column_view const& request_values, std::unique_ptr<aggregation>&& agg) {
-      if (agg_kinds_set.insert(agg->kind).second) {
-        agg_kinds.push_back(agg->kind);
-        aggs.push_back(std::move(agg));
-        columns.push_back(request_values);
-      }
-    };
-
-    auto values_type = cudf::is_dictionary(request.values.type())
-                         ? cudf::dictionary_column_view(request.values).keys().type()
-                         : request.values.type();
-    for (auto&& agg : agg_v) {
-      groupby_simple_aggregations_collector collector;
-
-      for (auto& agg_s : agg->get_simple_aggregations(values_type, collector)) {
-        insert_agg(request.values, std::move(agg_s));
-      }
-    }
-  }
-
-  return std::make_tuple(table_view(columns), std::move(agg_kinds), std::move(aggs));
 }
 
 template <typename Kernel>
@@ -362,7 +255,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                                            extent_type,
                                            cuda::thread_scope_block,
                                            typename SetType::key_equal,
-                                           probing_scheme_type,
+                                           probing_scheme_t,
                                            cuco::cuda_allocator<cudf::size_type>,
                                            cuco::storage<GROUPBY_WINDOW_SIZE>>;
   using shared_set_ref_type    = typename shared_set_type::ref_type<>;
@@ -458,7 +351,4 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   return populated_keys;
 }
 
-}  // namespace hash
-}  // namespace detail
-}  // namespace groupby
-}  // namespace cudf
+}  // namespace cudf::groupby::detail::hash

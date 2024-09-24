@@ -23,7 +23,6 @@
 #include <cuco/static_set.cuh>
 
 namespace cudf::groupby::detail::hash {
-
 // TODO: similar to `contains_table`, using larger CG size like 2 or 4 for nested
 // types and `cg_size = 1`for flat data to improve performance
 /// Number of threads to handle each input element
@@ -31,12 +30,6 @@ CUDF_HOST_DEVICE auto constexpr GROUPBY_CG_SIZE = 1;
 
 /// Number of slots per thread
 CUDF_HOST_DEVICE auto constexpr GROUPBY_WINDOW_SIZE = 1;
-
-/// Probing scheme type used by groupby hash table
-using probing_scheme_type = cuco::linear_probing<
-  GROUPBY_CG_SIZE,
-  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                   cudf::nullate::DYNAMIC>>;
 
 /// Thread block size
 CUDF_HOST_DEVICE auto constexpr GROUPBY_BLOCK_SIZE = 128;
@@ -59,5 +52,21 @@ CUDF_HOST_DEVICE constexpr std::size_t round_to_multiple_of_8(std::size_t num)
   std::size_t constexpr base = 8;
   return cudf::util::div_rounding_up_safe(num, base) * base;
 }
+
+/// Probing scheme type used by groupby hash table
+using probing_scheme_t = cuco::linear_probing<
+  GROUPBY_CG_SIZE,
+  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                   cudf::nullate::DYNAMIC>>;
+
+using row_comparator_t = cudf::experimental::row::equality::device_row_comparator<
+  false,
+  cudf::nullate::DYNAMIC,
+  cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
+
+using nullable_row_comparator_t = cudf::experimental::row::equality::device_row_comparator<
+  true,
+  cudf::nullate::DYNAMIC,
+  cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
 
 }  // namespace cudf::groupby::detail::hash
