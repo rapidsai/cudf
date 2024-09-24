@@ -8,7 +8,7 @@ from pylibcudf.libcudf.strings cimport findall as cpp_findall
 from pylibcudf.strings.regex_program cimport RegexProgram
 
 
-cpdef Column findall(Column input, RegexProgram prog):
+cpdef Column findall(Column input, RegexProgram pattern):
     """
     Returns a lists column of strings for each matching occurrence using
     the regex_program pattern within each string.
@@ -19,8 +19,8 @@ cpdef Column findall(Column input, RegexProgram prog):
     ----------
     input : Column
         Strings instance for this operation
-    prog : RegexProgram
-        Regex program instance
+    pattern : RegexProgram
+        Regex pattern
 
     Returns
     -------
@@ -33,7 +33,7 @@ cpdef Column findall(Column input, RegexProgram prog):
         c_result = move(
             cpp_findall.findall(
                 input.view(),
-                prog.c_obj.get()[0]
+                pattern.c_obj.get()[0]
             )
         )
 

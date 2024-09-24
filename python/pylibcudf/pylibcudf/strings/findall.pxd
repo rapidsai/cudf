@@ -4,4 +4,4 @@ from pylibcudf.column cimport Column
 from pylibcudf.strings.regex_program cimport RegexProgram
 
 
-cpdef Column findall(Column input, RegexProgram prog)
+cpdef Column findall(Column input, RegexProgram pattern)

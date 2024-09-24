@@ -28,6 +28,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/transform.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <cstdlib>
 #include <ctime>
@@ -146,11 +147,15 @@ std::unique_ptr<cudf::table> join_and_gather(cudf::table_view const& left_input,
                                              cudf::null_equality compare_nulls)
 {
   CUDF_FUNC_RANGE();
-  constexpr auto oob_policy                          = cudf::out_of_bounds_policy::DONT_CHECK;
-  auto const left_selected                           = left_input.select(left_on);
-  auto const right_selected                          = right_input.select(right_on);
-  auto const [left_join_indices, right_join_indices] = cudf::inner_join(
-    left_selected, right_selected, compare_nulls, cudf::get_current_device_resource_ref());
+  constexpr auto oob_policy = cudf::out_of_bounds_policy::DONT_CHECK;
+  auto const left_selected  = left_input.select(left_on);
+  auto const right_selected = right_input.select(right_on);
+  auto const [left_join_indices, right_join_indices] =
+    cudf::inner_join(left_selected,
+                     right_selected,
+                     compare_nulls,
+                     cudf::get_default_stream(),
+                     cudf::get_current_device_resource_ref());
 
   auto const left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
   auto const right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};

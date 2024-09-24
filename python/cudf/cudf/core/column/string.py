@@ -623,11 +623,9 @@ class StringMethods(ColumnMethods):
                 "unsupported value for `flags` parameter"
             )
 
-        data, _ = libstrings.extract(self._column, pat, flags)
+        data = libstrings.extract(self._column, pat, flags)
         if len(data) == 1 and expand is False:
-            data = next(iter(data.values()))
-        else:
-            data = data
+            _, data = data.popitem()
         return self._return_or_inplace(data, expand=expand)
 
     def contains(
