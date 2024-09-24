@@ -33,6 +33,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -202,9 +203,10 @@ std::vector<std::unique_ptr<column>> multi_contains(bool warp_parallel,
   auto indices     = rmm::device_uvector<size_type>(targets.size(), stream);
   {
     auto tgt_itr = thrust::make_transform_iterator(
-      d_targets->begin<string_view>(), [] __device__(auto const& d_tgt) -> u_char {
+      d_targets->begin<string_view>(),
+      cuda::proclaim_return_type<u_char>([] __device__(auto const& d_tgt) -> u_char {
         return d_tgt.empty() ? u_char{0} : static_cast<u_char>(d_tgt.data()[0]);
-      });
+      }));
     auto count_itr = thrust::make_counting_iterator<size_type>(0);
     auto keys_out  = first_bytes.begin();
     auto vals_out  = indices.begin();
