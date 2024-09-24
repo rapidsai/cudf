@@ -56,10 +56,10 @@ else
 
     echo "" > ./constraints.txt
     if [[ $RAPIDS_DEPENDENCIES == "oldest" ]]; then
-        # `py_test_cudf_pandas` constraints are for `[test]` not `[cudf-pandas-tests]`
+        # `test_python` constraints are for `[test]` not `[cudf-pandas-tests]`
         rapids-dependency-file-generator \
             --output requirements \
-            --file-key py_test_cudf_pandas \
+            --file-key test_python \
             --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
         | tee ./constraints.txt
     fi
