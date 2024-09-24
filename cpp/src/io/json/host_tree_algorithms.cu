@@ -60,11 +60,10 @@ namespace cudf::io::json::detail {
  */
 rmm::device_uvector<NodeIndexT> get_values_column_indices(TreeDepthT const row_array_children_level,
                                                           tree_meta_t const& d_tree,
-                                                          device_span<NodeIndexT> col_ids,
+                                                          device_span<NodeIndexT const> col_ids,
                                                           size_type const num_columns,
                                                           rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
   auto [level2_nodes, level2_indices] = get_array_children_indices(
     row_array_children_level, d_tree.node_levels, d_tree.parent_node_ids, stream);
   auto col_id_location = thrust::make_permutation_iterator(col_ids.begin(), level2_nodes.begin());
@@ -92,7 +91,6 @@ std::vector<std::string> copy_strings_to_host_sync(
   device_span<SymbolOffsetT const> node_range_end,
   rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
   auto const num_strings = node_range_begin.size();
   rmm::device_uvector<size_type> string_offsets(num_strings, stream);
   rmm::device_uvector<size_type> string_lengths(num_strings, stream);
@@ -163,7 +161,7 @@ std::vector<std::string> copy_strings_to_host_sync(
 rmm::device_uvector<uint8_t> is_all_nulls_each_column(device_span<SymbolT const> input,
                                                       tree_meta_t const& d_column_tree,
                                                       tree_meta_t const& tree,
-                                                      device_span<NodeIndexT> col_ids,
+                                                      device_span<NodeIndexT const> col_ids,
                                                       cudf::io::json_reader_options const& options,
                                                       rmm::cuda_stream_view stream)
 {
@@ -195,7 +193,7 @@ rmm::device_uvector<uint8_t> is_all_nulls_each_column(device_span<SymbolT const>
   return is_all_nulls;
 }
 
-NodeIndexT get_row_array_parent_col_id(device_span<NodeIndexT> col_ids,
+NodeIndexT get_row_array_parent_col_id(device_span<NodeIndexT const> col_ids,
                                        bool is_enabled_lines,
                                        rmm::cuda_stream_view stream)
 {
@@ -223,29 +221,30 @@ struct json_column_data {
   bitmask_type* validity;
 };
 
-std::pair<cudf::detail::host_vector<uint8_t>,
-          std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>>
-build_tree(device_json_column& root,
-           host_span<uint8_t const> is_str_column_all_nulls,
-           tree_meta_t& d_column_tree,
-           device_span<NodeIndexT const> d_unique_col_ids,
-           device_span<size_type const> d_max_row_offsets,
-           std::vector<std::string> const& column_names,
-           NodeIndexT row_array_parent_col_id,
-           bool is_array_of_arrays,
-           cudf::io::json_reader_options const& options,
-           rmm::cuda_stream_view stream,
-           rmm::device_async_resource_ref mr);
-void scatter_offsets(
-  tree_meta_t& tree,
-  device_span<NodeIndexT> col_ids,
-  device_span<size_type> row_offsets,
-  device_span<size_type> node_ids,
-  device_span<size_type> sorted_col_ids,  // Reuse this for parent_col_ids
+using hashmap_of_device_columns =
+  std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>;
+
+std::pair<cudf::detail::host_vector<uint8_t>, hashmap_of_device_columns> build_tree(
+  device_json_column& root,
+  host_span<uint8_t const> is_str_column_all_nulls,
   tree_meta_t& d_column_tree,
-  host_span<const uint8_t> ignore_vals,
-  std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>& columns,
-  rmm::cuda_stream_view stream);
+  device_span<NodeIndexT const> d_unique_col_ids,
+  device_span<size_type const> d_max_row_offsets,
+  std::vector<std::string> const& column_names,
+  NodeIndexT row_array_parent_col_id,
+  bool is_array_of_arrays,
+  cudf::io::json_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+void scatter_offsets(tree_meta_t const& tree,
+                     device_span<NodeIndexT const> col_ids,
+                     device_span<size_type const> row_offsets,
+                     device_span<size_type> node_ids,
+                     device_span<size_type> sorted_col_ids,  // Reuse this for parent_col_ids
+                     tree_meta_t const& d_column_tree,
+                     host_span<const uint8_t> ignore_vals,
+                     hashmap_of_device_columns const& columns,
+                     rmm::cuda_stream_view stream);
 
 /**
  * @brief Constructs `d_json_column` from node tree representation
@@ -267,22 +266,20 @@ void scatter_offsets(
  * of child_offets and validity members of `d_json_column`
  */
 void make_device_json_column(device_span<SymbolT const> input,
-                             tree_meta_t& tree,
-                             device_span<NodeIndexT> col_ids,
-                             device_span<size_type> row_offsets,
+                             tree_meta_t const& tree,
+                             device_span<NodeIndexT const> col_ids,
+                             device_span<size_type const> row_offsets,
                              device_json_column& root,
                              bool is_array_of_arrays,
                              cudf::io::json_reader_options const& options,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
-
   bool const is_enabled_lines                 = options.is_enabled_lines();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
-  auto const num_nodes                        = col_ids.size();
-  rmm::device_uvector<NodeIndexT> sorted_col_ids(col_ids.size(), stream);  // make a copy
-  thrust::copy(rmm::exec_policy(stream), col_ids.begin(), col_ids.end(), sorted_col_ids.begin());
+  // make a copy
+  auto sorted_col_ids = cudf::detail::make_device_uvector_async(
+    col_ids, stream, cudf::get_current_device_resource_ref());
 
   // sort by {col_id} on {node_ids} stable
   rmm::device_uvector<NodeIndexT> node_ids(col_ids.size(), stream);
@@ -318,7 +315,7 @@ void make_device_json_column(device_span<SymbolT const> input,
       cudf::detail::make_host_vector_sync(values_column_indices, stream);
     std::transform(unique_col_ids.begin(),
                    unique_col_ids.end(),
-                   column_names.begin(),
+                   column_names.cbegin(),
                    column_names.begin(),
                    [&h_values_column_indices, &column_parent_ids, row_array_parent_col_id](
                      auto col_id, auto name) mutable {
@@ -335,17 +332,17 @@ void make_device_json_column(device_span<SymbolT const> input,
     }
     return std::vector<uint8_t>();
   }();
-  auto [ignore_vals, columns] = build_tree(root,
-                                           is_str_column_all_nulls,
-                                           d_column_tree,
-                                           d_unique_col_ids,
-                                           d_max_row_offsets,
-                                           column_names,
-                                           row_array_parent_col_id,
-                                           is_array_of_arrays,
-                                           options,
-                                           stream,
-                                           mr);
+  auto const [ignore_vals, columns] = build_tree(root,
+                                                 is_str_column_all_nulls,
+                                                 d_column_tree,
+                                                 d_unique_col_ids,
+                                                 d_max_row_offsets,
+                                                 column_names,
+                                                 row_array_parent_col_id,
+                                                 is_array_of_arrays,
+                                                 options,
+                                                 stream,
+                                                 mr);
 
   scatter_offsets(tree,
                   col_ids,
@@ -358,21 +355,19 @@ void make_device_json_column(device_span<SymbolT const> input,
                   stream);
 }
 
-std::pair<cudf::detail::host_vector<uint8_t>,
-          std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>>
-build_tree(device_json_column& root,
-           host_span<uint8_t const> is_str_column_all_nulls,
-           tree_meta_t& d_column_tree,
-           device_span<NodeIndexT const> d_unique_col_ids,
-           device_span<size_type const> d_max_row_offsets,
-           std::vector<std::string> const& column_names,
-           NodeIndexT row_array_parent_col_id,
-           bool is_array_of_arrays,
-           cudf::io::json_reader_options const& options,
-           rmm::cuda_stream_view stream,
-           rmm::device_async_resource_ref mr)
+std::pair<cudf::detail::host_vector<uint8_t>, hashmap_of_device_columns> build_tree(
+  device_json_column& root,
+  host_span<uint8_t const> is_str_column_all_nulls,
+  tree_meta_t& d_column_tree,
+  device_span<NodeIndexT const> d_unique_col_ids,
+  device_span<size_type const> d_max_row_offsets,
+  std::vector<std::string> const& column_names,
+  NodeIndexT row_array_parent_col_id,
+  bool is_array_of_arrays,
+  cudf::io::json_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
   auto unique_col_ids = cudf::detail::make_host_vector_async(d_unique_col_ids, stream);
   auto column_categories =
@@ -442,7 +437,7 @@ build_tree(device_json_column& root,
   });
 
   // use hash map because we may skip field name's col_ids
-  std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>> columns;
+  hashmap_of_device_columns columns;
   // map{parent_col_id, child_col_name}> = child_col_id, used for null value column tracking
   std::map<std::pair<NodeIndexT, std::string>, NodeIndexT> mapped_columns;
   // find column_ids which are values, but should be ignored in validity
@@ -667,18 +662,16 @@ build_tree(device_json_column& root,
   return {ignore_vals, columns};
 }
 
-void scatter_offsets(
-  tree_meta_t& tree,
-  device_span<NodeIndexT> col_ids,
-  device_span<size_type> row_offsets,
-  device_span<size_type> node_ids,
-  device_span<size_type> sorted_col_ids,  // Reuse this for parent_col_ids
-  tree_meta_t& d_column_tree,
-  host_span<const uint8_t> ignore_vals,
-  std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>& columns,
-  rmm::cuda_stream_view stream)
+void scatter_offsets(tree_meta_t const& tree,
+                     device_span<NodeIndexT const> col_ids,
+                     device_span<size_type const> row_offsets,
+                     device_span<size_type> node_ids,
+                     device_span<size_type> sorted_col_ids,  // Reuse this for parent_col_ids
+                     tree_meta_t const& d_column_tree,
+                     host_span<const uint8_t> ignore_vals,
+                     hashmap_of_device_columns const& columns,
+                     rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
   auto const num_nodes   = col_ids.size();
   auto const num_columns = d_column_tree.node_categories.size();
   // move columns data to device.
@@ -841,19 +834,18 @@ std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_optio
     options.get_dtypes());
 }
 
-std::pair<thrust::host_vector<uint8_t>,
-          std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>>
-build_tree2(device_json_column& root,
-            host_span<uint8_t const> is_str_column_all_nulls,
-            tree_meta_t& d_column_tree,
-            device_span<NodeIndexT const> d_unique_col_ids,
-            device_span<size_type const> d_max_row_offsets,
-            std::vector<std::string> const& column_names,
-            NodeIndexT row_array_parent_col_id,
-            bool is_array_of_arrays,
-            cudf::io::json_reader_options const& options,
-            rmm::cuda_stream_view stream,
-            rmm::device_async_resource_ref mr);
+std::pair<thrust::host_vector<uint8_t>, hashmap_of_device_columns> build_tree(
+  device_json_column& root,
+  host_span<uint8_t const> is_str_column_all_nulls,
+  tree_meta_t& d_column_tree,
+  device_span<NodeIndexT const> d_unique_col_ids,
+  device_span<size_type const> d_max_row_offsets,
+  std::vector<std::string> const& column_names,
+  NodeIndexT row_array_parent_col_id,
+  bool is_array_of_arrays,
+  cudf::io::json_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Constructs `d_json_column` from node tree representation
@@ -875,22 +867,20 @@ build_tree2(device_json_column& root,
  * of child_offets and validity members of `d_json_column`
  */
 void make_device_json_column(device_span<SymbolT const> input,
-                             tree_meta_t& tree,
-                             device_span<NodeIndexT> col_ids,
-                             device_span<size_type> row_offsets,
+                             tree_meta_t const& tree,
+                             device_span<NodeIndexT const> col_ids,
+                             device_span<size_type const> row_offsets,
                              device_json_column& root,
                              bool is_array_of_arrays,
                              cudf::io::json_reader_options const& options,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
-
   bool const is_enabled_lines                 = options.is_enabled_lines();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
-  auto const num_nodes                        = col_ids.size();
-  rmm::device_uvector<NodeIndexT> sorted_col_ids(col_ids.size(), stream);  // make a copy
-  thrust::copy(rmm::exec_policy(stream), col_ids.begin(), col_ids.end(), sorted_col_ids.begin());
+  // make a copy
+  auto sorted_col_ids = cudf::detail::make_device_uvector_async(
+    col_ids, stream, cudf::get_current_device_resource_ref());
 
   // sort by {col_id} on {node_ids} stable
   rmm::device_uvector<NodeIndexT> node_ids(col_ids.size(), stream);
@@ -927,7 +917,7 @@ void make_device_json_column(device_span<SymbolT const> input,
       cudf::detail::make_host_vector_sync(values_column_indices, stream);
     std::transform(unique_col_ids.begin(),
                    unique_col_ids.end(),
-                   column_names.begin(),
+                   column_names.cbegin(),
                    column_names.begin(),
                    [&h_values_column_indices, &column_parent_ids, row_array_parent_col_id](
                      auto col_id, auto name) mutable {
@@ -944,17 +934,17 @@ void make_device_json_column(device_span<SymbolT const> input,
     }
     return std::vector<uint8_t>();
   }();
-  auto [ignore_vals, columns] = build_tree2(root,
-                                            is_str_column_all_nulls,
-                                            d_column_tree,
-                                            d_unique_col_ids,
-                                            d_max_row_offsets,
-                                            column_names,
-                                            row_array_parent_col_id,
-                                            is_array_of_arrays,
-                                            options,
-                                            stream,
-                                            mr);
+  auto const [ignore_vals, columns] = build_tree(root,
+                                                 is_str_column_all_nulls,
+                                                 d_column_tree,
+                                                 d_unique_col_ids,
+                                                 d_max_row_offsets,
+                                                 column_names,
+                                                 row_array_parent_col_id,
+                                                 is_array_of_arrays,
+                                                 options,
+                                                 stream,
+                                                 mr);
   if (ignore_vals.empty()) return;
   scatter_offsets(tree,
                   col_ids,
@@ -967,21 +957,19 @@ void make_device_json_column(device_span<SymbolT const> input,
                   stream);
 }
 
-std::pair<thrust::host_vector<uint8_t>,
-          std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>>
-build_tree2(device_json_column& root,
-            host_span<uint8_t const> is_str_column_all_nulls,
-            tree_meta_t& d_column_tree,
-            device_span<NodeIndexT const> d_unique_col_ids,
-            device_span<size_type const> d_max_row_offsets,
-            std::vector<std::string> const& column_names,
-            NodeIndexT row_array_parent_col_id,
-            bool is_array_of_arrays,
-            cudf::io::json_reader_options const& options,
-            rmm::cuda_stream_view stream,
-            rmm::device_async_resource_ref mr)
+std::pair<thrust::host_vector<uint8_t>, hashmap_of_device_columns> build_tree(
+  device_json_column& root,
+  host_span<uint8_t const> is_str_column_all_nulls,
+  tree_meta_t& d_column_tree,
+  device_span<NodeIndexT const> d_unique_col_ids,
+  device_span<size_type const> d_max_row_offsets,
+  std::vector<std::string> const& column_names,
+  NodeIndexT row_array_parent_col_id,
+  bool is_array_of_arrays,
+  cudf::io::json_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
   bool const is_enabled_lines                 = options.is_enabled_lines();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
   auto unique_col_ids = cudf::detail::make_host_vector_async(d_unique_col_ids, stream);
@@ -1069,7 +1057,8 @@ build_tree2(device_json_column& root,
 
   if (adj[parent_node_sentinel].empty()) return {};  // for empty file
   CUDF_EXPECTS(adj[parent_node_sentinel].size() == 1, "Should be 1");
-  std::vector<NodeT> expected_types(num_columns, NUM_NODE_CLASSES);
+  auto expected_types = cudf::detail::make_host_vector<NodeT>(num_columns, stream);
+  std::fill_n(expected_types.begin(), num_columns, NUM_NODE_CLASSES);
 
   auto lookup_names = [&column_names](auto child_ids, auto name) {
     for (auto const& child_id : child_ids) {
@@ -1389,9 +1378,9 @@ build_tree2(device_json_column& root,
       if (columns.count(i)) { columns.at(i).get().forced_as_string_column = true; }
     }
   }
-  std::transform(expected_types.begin(),
-                 expected_types.end(),
-                 column_categories.begin(),
+  std::transform(expected_types.cbegin(),
+                 expected_types.cend(),
+                 column_categories.cbegin(),
                  expected_types.begin(),
                  [](auto exp, auto cat) { return exp == NUM_NODE_CLASSES ? cat : exp; });
   cudaMemcpyAsync(d_column_tree.node_categories.begin(),

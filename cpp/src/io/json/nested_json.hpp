@@ -315,11 +315,11 @@ get_array_children_indices(TreeDepthT row_array_children_level,
  * max row offsets of columns
  */
 std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
-reduce_to_column_tree(tree_meta_t& tree,
-                      device_span<NodeIndexT> original_col_ids,
-                      device_span<NodeIndexT> sorted_col_ids,
-                      device_span<NodeIndexT> ordered_node_ids,
-                      device_span<size_type> row_offsets,
+reduce_to_column_tree(tree_meta_t const& tree,
+                      device_span<NodeIndexT const> original_col_ids,
+                      device_span<NodeIndexT const> sorted_col_ids,
+                      device_span<NodeIndexT const> ordered_node_ids,
+                      device_span<size_type const> row_offsets,
                       bool is_array_of_arrays,
                       NodeIndexT const row_array_parent_col_id,
                       rmm::cuda_stream_view stream);
@@ -343,9 +343,9 @@ reduce_to_column_tree(tree_meta_t& tree,
  * of child_offets and validity members of `d_json_column`
  */
 void make_device_json_column(device_span<SymbolT const> input,
-                             tree_meta_t& tree,
-                             device_span<NodeIndexT> col_ids,
-                             device_span<size_type> row_offsets,
+                             tree_meta_t const& tree,
+                             device_span<NodeIndexT const> col_ids,
+                             device_span<size_type const> row_offsets,
                              device_json_column& root,
                              bool is_array_of_arrays,
                              cudf::io::json_reader_options const& options,
@@ -353,10 +353,13 @@ void make_device_json_column(device_span<SymbolT const> input,
                              rmm::device_async_resource_ref mr);
 
 namespace experimental {
+/**
+ * @copydoc cudf::io::json::detail::make_device_json_column
+ */
 void make_device_json_column(device_span<SymbolT const> input,
-                             tree_meta_t& tree,
-                             device_span<NodeIndexT> col_ids,
-                             device_span<size_type> row_offsets,
+                             tree_meta_t const& tree,
+                             device_span<NodeIndexT const> col_ids,
+                             device_span<size_type const> row_offsets,
                              device_json_column& root,
                              bool is_array_of_arrays,
                              cudf::io::json_reader_options const& options,

@@ -105,11 +105,11 @@ void print_tree(host_span<SymbolT const> input,
  * max row offsets of columns
  */
 std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
-reduce_to_column_tree(tree_meta_t& tree,
-                      device_span<NodeIndexT> original_col_ids,
-                      device_span<NodeIndexT> sorted_col_ids,
-                      device_span<NodeIndexT> ordered_node_ids,
-                      device_span<size_type> row_offsets,
+reduce_to_column_tree(tree_meta_t const& tree,
+                      device_span<NodeIndexT const> original_col_ids,
+                      device_span<NodeIndexT const> sorted_col_ids,
+                      device_span<NodeIndexT const> ordered_node_ids,
+                      device_span<size_type const> row_offsets,
                       bool is_array_of_arrays,
                       NodeIndexT const row_array_parent_col_id,
                       rmm::cuda_stream_view stream)
@@ -313,7 +313,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
     // Note: json_col modified here, moves this memory
   };
 
-  auto get_child_schema = [schema](auto child_name) -> std::optional<schema_element> {
+  auto get_child_schema = [&schema](auto child_name) -> std::optional<schema_element> {
     if (schema.has_value()) {
       auto const result = schema.value().child_types.find(child_name);
       if (result != std::end(schema.value().child_types)) { return result->second; }
@@ -321,7 +321,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
     return {};
   };
 
-  auto get_list_child_schema = [schema]() -> std::optional<schema_element> {
+  auto get_list_child_schema = [&schema]() -> std::optional<schema_element> {
     if (schema.has_value()) {
       if (schema.value().child_types.size() > 0) return schema.value().child_types.begin()->second;
     }
@@ -481,6 +481,16 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   }
 }
 
+template <typename... Args>
+auto make_device_json_column_dispatch(bool experimental, Args&&... args)
+{
+  if (experimental) {
+    return experimental::make_device_json_column(std::forward<Args>(args)...);
+  } else {
+    return make_device_json_column(std::forward<Args>(args)...);
+  }
+}
+
 table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
@@ -538,27 +548,16 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                0);
 
   // Get internal JSON column
-  if (options.is_enabled_experimental()) {
-    experimental::make_device_json_column(d_input,
-                                          gpu_tree,
-                                          gpu_col_id,
-                                          gpu_row_offsets,
-                                          root_column,
-                                          is_array_of_arrays,
-                                          options,
-                                          stream,
-                                          mr);
-  } else {
-    make_device_json_column(d_input,
-                            gpu_tree,
-                            gpu_col_id,
-                            gpu_row_offsets,
-                            root_column,
-                            is_array_of_arrays,
-                            options,
-                            stream,
-                            mr);
-  }
+  make_device_json_column_dispatch(options.is_enabled_experimental(),
+                                   d_input,
+                                   gpu_tree,
+                                   gpu_col_id,
+                                   gpu_row_offsets,
+                                   root_column,
+                                   is_array_of_arrays,
+                                   options,
+                                   stream,
+                                   mr);
 
   // data_root refers to the root column of the data represented by the given JSON string
   auto& data_root =

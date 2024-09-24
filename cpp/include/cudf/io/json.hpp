@@ -282,8 +282,8 @@ class json_reader_options {
   /**
    * @brief Whether to enable experimental features.
    *
-   * When set to true, new experimental features such new column tree construction
-   * will be enabled.
+   * When set to true, experimental features, such as the new column tree construction,
+   * utf-8 matching of field names will be enabled.
    * @return true if experimental features are enabled
    */
   [[nodiscard]] bool is_enabled_experimental() const { return _experimental; }
@@ -467,8 +467,8 @@ class json_reader_options {
   /**
    * @brief Set whether to enable experimental features.
    *
-   * When set to true, new experimental features such new column tree construction
-   * will be enabled.
+   * When set to true, experimental features, such as the new column tree construction,
+   * utf-8 matching of field names will be enabled.
    *
    * @param val Boolean value to enable/disable experimental features
    */
@@ -719,8 +719,8 @@ class json_reader_options_builder {
   /**
    * @brief Set whether to enable experimental features.
    *
-   * When set to true, new experimental features such new column tree construction
-   * will be enabled.
+   * When set to true, experimental features, such as the new column tree construction,
+   * utf-8 matching of field names will be enabled.
    *
    * @param val Boolean value to enable/disable experimental features
    * @return this for chaining
