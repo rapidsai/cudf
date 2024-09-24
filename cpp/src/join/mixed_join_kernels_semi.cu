@@ -79,7 +79,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
        outer_row_index < outer_num_rows;
        outer_row_index += cg_grid_stride) {
     auto const result = set_ref_equality.contains(tile, outer_row_index);
-    if (tile.thread_rank() == 0) left_table_keep_mask[outer_row_index] = result;
+    if (tile.thread_rank() == 0) { left_table_keep_mask[outer_row_index] = result; }
   }
 }
 
