@@ -709,7 +709,7 @@ dependencies:
               - numba==0.57.*
               - numpy==1.23.*
               - pandas==2.0.*
-              - pyarrow==14.0.0
+              - pyarrow==14.0.1
           - matrix:
             packages:
       - output_types: conda
