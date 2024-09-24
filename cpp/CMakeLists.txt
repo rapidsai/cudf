@@ -603,6 +603,7 @@ add_library(
   src/strings/replace/replace_slice.cu
   src/strings/reverse.cu
   src/strings/scan/scan_inclusive.cu
+  src/strings/search/contains_multiple.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
