@@ -24,6 +24,7 @@
 #include <cudf/io/config_utils.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
+#include <cudf/utilities/cuda_event.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -84,7 +85,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     static constexpr std::size_t default_offset_alloc =
       1 << 16;  // 64k offset allocation, resized on demand
 
-    cudaEvent_t event;
+    cudf::detail::cuda_event event;
     cudf::detail::host_vector<char> h_compressed_blocks;
     cudf::detail::host_vector<std::size_t> h_compressed_offsets;
     cudf::detail::host_vector<std::size_t> h_decompressed_offsets;
@@ -115,7 +116,6 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
         d_decompressed_spans(0, init_stream),
         d_decompression_results(0, init_stream)
     {
-      CUDF_CUDA_TRY(cudaEventCreate(&event));
       h_compressed_blocks.reserve(default_buffer_alloc);
       h_compressed_offsets.reserve(default_offset_alloc);
       h_compressed_offsets.push_back(0);
