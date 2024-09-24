@@ -561,7 +561,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - &numpy numpy>=1.23,<3.0a0
+          - &numpy numpy>=1.24,<3.0a0
           - pandas>=2.0,<2.2.3dev0
   run_pylibcudf:
     common:
@@ -707,7 +707,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.57.*
-              - numpy==1.23.*
+              - numpy==1.24.*
               - pandas==2.0.*
               - pyarrow==14.0.1
           - matrix:
