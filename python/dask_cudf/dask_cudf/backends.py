@@ -807,41 +807,33 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
                 raise NotImplementedError(
                     "parquet_file_extension is not supported when using the pyarrow filesystem."
                 )
-            if blocksize == "default":
-                blocksize = "256 MiB"
-            if isinstance(aggregate_files, str):
+            if blocksize is not None and blocksize != "default":
                 raise NotImplementedError(
-                    f"aggregate_files={aggregate_files} is not supported when using the pyarrow filesystem."
+                    "blocksize is not supported when using the pyarrow filesystem."
                 )
-            min_partition_size = config.get(
-                "dataframe.parquet.minimum-partition-size"
-            )
-            if aggregate_files:
-                # Use "minimum-partition-size" config to control file aggregation
-                min_partition_size = blocksize
+            if aggregate_files is not None:
+                raise NotImplementedError(
+                    "aggregate_files is not supported when using the pyarrow filesystem. "
+                    "Please use the 'dataframe.parquet.minimum-partition-size' config."
+                )
 
-            with config.set(
-                {
-                    "dataframe.parquet.minimum-partition-size": min_partition_size
-                }
-            ):
-                return dx.new_collection(
-                    CudfReadParquetPyarrowFS(
-                        path,
-                        columns=dx._util._convert_to_list(columns),
-                        filters=filters,
-                        categories=categories,
-                        index=index,
-                        calculate_divisions=calculate_divisions,
-                        storage_options=storage_options,
-                        filesystem=filesystem,
-                        ignore_metadata_file=ignore_metadata_file,
-                        arrow_to_pandas=arrow_to_pandas,
-                        pyarrow_strings_enabled=pyarrow_strings_enabled(),
-                        kwargs=kwargs,
-                        _series=isinstance(columns, str),
-                    )
+            return dx.new_collection(
+                CudfReadParquetPyarrowFS(
+                    path,
+                    columns=dx._util._convert_to_list(columns),
+                    filters=filters,
+                    categories=categories,
+                    index=index,
+                    calculate_divisions=calculate_divisions,
+                    storage_options=storage_options,
+                    filesystem=filesystem,
+                    ignore_metadata_file=ignore_metadata_file,
+                    arrow_to_pandas=arrow_to_pandas,
+                    pyarrow_strings_enabled=pyarrow_strings_enabled(),
+                    kwargs=kwargs,
+                    _series=isinstance(columns, str),
                 )
+            )
 
     @staticmethod
     def read_csv(
