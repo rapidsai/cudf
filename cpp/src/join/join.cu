@@ -20,7 +20,6 @@
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -120,10 +119,11 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 inner_join(table_view const& left,
            table_view const& right,
            null_equality compare_nulls,
+           rmm::cuda_stream_view stream,
            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::inner_join(left, right, compare_nulls, cudf::get_default_stream(), mr);
+  return detail::inner_join(left, right, compare_nulls, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -131,10 +131,11 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 left_join(table_view const& left,
           table_view const& right,
           null_equality compare_nulls,
+          rmm::cuda_stream_view stream,
           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::left_join(left, right, compare_nulls, cudf::get_default_stream(), mr);
+  return detail::left_join(left, right, compare_nulls, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -142,10 +143,11 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 full_join(table_view const& left,
           table_view const& right,
           null_equality compare_nulls,
+          rmm::cuda_stream_view stream,
           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::full_join(left, right, compare_nulls, cudf::get_default_stream(), mr);
+  return detail::full_join(left, right, compare_nulls, stream, mr);
 }
 
 }  // namespace cudf
