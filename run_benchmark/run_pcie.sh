@@ -9,7 +9,8 @@ color_reset='\e[m'
 color_green='\e[1;32m'
 
 export KVIKIO_NTHREADS
-export LIBCUDF_CUFILE_POLICY=OFF
+export KVIKIO_COMPAT_MODE=ON
+export LIBCUDF_CUFILE_POLICY=KVIKIO
 
 for num_threads in ${num_threads_arr[@]}; do
     echo -e "$color_green--> Thread count: $num_threads$color_reset"
