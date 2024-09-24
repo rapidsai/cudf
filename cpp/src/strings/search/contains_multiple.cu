@@ -65,10 +65,9 @@ CUDF_KERNEL void multi_contains_warp_parallel(column_device_view const d_strings
                                               cudf::device_span<bool*> d_results)
 {
   auto const num_targets = d_targets.size();
-  auto const num_rows    = d_strings.size();
   auto const idx         = cudf::detail::grid_1d::global_thread_id();
   auto const str_idx     = idx / cudf::detail::warp_size;
-  if (str_idx >= num_rows) { return; }
+  if (str_idx >= d_strings.size()) { return; }
   if (d_strings.is_null(str_idx)) { return; }
   // get the string for this warp
   auto const d_str = d_strings.element<string_view>(str_idx);
@@ -93,14 +92,13 @@ CUDF_KERNEL void multi_contains_warp_parallel(column_device_view const d_strings
     // if not found, continue to next byte
     if ((byte_ptr == last_ptr) || (*byte_ptr != chr)) { continue; }
     // compute index of matched byte
-    auto offset_idx = static_cast<size_type>(thrust::distance(d_first_bytes, byte_ptr));
-    auto map_idx    = d_offsets[offset_idx];
-    auto const last_idx =
-      (offset_idx + 1) < unique_count ? d_offsets[offset_idx + 1] : unique_count;
+    auto offset_idx     = static_cast<size_type>(thrust::distance(d_first_bytes, byte_ptr));
+    auto map_idx        = d_offsets[offset_idx];
+    auto const last_idx = (offset_idx + 1) < unique_count ? d_offsets[offset_idx + 1] : num_targets;
     // check for targets that begin with chr
-    while ((map_idx < num_targets) && (offset_idx < last_idx)) {
-      auto target_idx     = d_indices[map_idx++];
-      int temp_result_idx = threadIdx.x * num_targets + target_idx;
+    while (map_idx < last_idx) {
+      auto const target_idx      = d_indices[map_idx++];
+      auto const temp_result_idx = (threadIdx.x * num_targets) + target_idx;
       if (!shared_bools[temp_result_idx]) {  // not found before
         auto const d_target = d_targets.element<string_view>(target_idx);
         if (d_str.size_bytes() - str_byte_idx >= d_target.size_bytes()) {
@@ -112,7 +110,6 @@ CUDF_KERNEL void multi_contains_warp_parallel(column_device_view const d_strings
           if (found) { shared_bools[temp_result_idx] = true; }
         }
       }
-      ++offset_idx;
     }
   }
 
@@ -144,8 +141,7 @@ CUDF_KERNEL void multi_contains_row_parallel(column_device_view const d_strings,
 {
   auto const str_idx     = static_cast<size_type>(cudf::detail::grid_1d::global_thread_id());
   auto const num_targets = d_targets.size();
-  auto const num_rows    = d_strings.size();
-  if (str_idx >= num_rows) { return; }
+  if (str_idx >= d_strings.size()) { return; }
   if (d_strings.is_null(str_idx)) { return; }
   auto const d_str = d_strings.element<string_view>(str_idx);
 
@@ -164,13 +160,12 @@ CUDF_KERNEL void multi_contains_row_parallel(column_device_view const d_strings,
     // if not found, continue to next byte
     if ((byte_ptr == last_ptr) || (*byte_ptr != chr)) { continue; }
     // compute index of matched byte
-    auto offset_idx = static_cast<size_type>(thrust::distance(d_first_bytes, byte_ptr));
-    auto map_idx    = d_offsets[offset_idx];
-    auto const last_idx =
-      (offset_idx + 1) < unique_count ? d_offsets[offset_idx + 1] : unique_count;
+    auto offset_idx     = static_cast<size_type>(thrust::distance(d_first_bytes, byte_ptr));
+    auto map_idx        = d_offsets[offset_idx];
+    auto const last_idx = (offset_idx + 1) < unique_count ? d_offsets[offset_idx + 1] : num_targets;
     // check for targets that begin with chr
-    while ((map_idx < num_targets) && (offset_idx < last_idx)) {
-      auto target_idx = d_indices[map_idx++];
+    while (map_idx < last_idx) {
+      auto const target_idx = d_indices[map_idx++];
       if (!d_results[target_idx][str_idx]) {  // not found before
         auto const d_target = d_targets.element<string_view>(target_idx);
         if (d_str.size_bytes() - str_byte_idx >= d_target.size_bytes()) {
@@ -182,7 +177,6 @@ CUDF_KERNEL void multi_contains_row_parallel(column_device_view const d_strings,
           if (found) { d_results[target_idx][str_idx] = true; }
         }
       }
-      ++offset_idx;
     }
   }
 }
