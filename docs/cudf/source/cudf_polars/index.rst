@@ -1,7 +1,7 @@
-cuDF-based GPU backend for Polars [Open Beta]
-=============================================
+Polars GPU engine
+=================
 
-cuDF supports an in-memory, GPU-accelerated execution engine for Python users of the Polars Lazy API.
+cuDF provides an in-memory, GPU-accelerated execution engine for Python users of the Polars Lazy API.
 The engine supports most of the core expressions and data types as well as a growing set of more advanced dataframe manipulations
 and data file formats. When using the GPU engine, Polars will convert expressions into an optimized query plan and determine
 whether the plan is supported on the GPU. If it is not, the execution will transparently fall back to the standard Polars engine
@@ -16,7 +16,7 @@ We reproduced the `Polars Decision Support (PDS) <https://github.com/pola-rs/pol
 
 
 
-You can see up to 13x speedup using the GPU backend on the compute-heavy PDS queries involving complex aggregation and join operations. Below are the speedups for the top performing queries:
+You can see up to 13x speedup using the GPU engine on the compute-heavy PDS queries involving complex aggregation and join operations. Below are the speedups for the top performing queries:
 
 
 .. figure:: ../_static/compute_heavy_queries_polars.png
@@ -29,7 +29,7 @@ You can reproduce the results by visiting the `Polars Decision Support (PDS) Git
 Learn More
 ----------
 
-The GPU backend for Polars is now available in Open Beta and the engine is undergoing rapid development. To learn more, visit the `GPU Support page <https://docs.pola.rs/user-guide/gpu-support/>`__ on the Polars website.
+The GPU engine for Polars is now available in Open Beta and the engine is undergoing rapid development. To learn more, visit the `GPU Support page <https://docs.pola.rs/user-guide/gpu-support/>`__ on the Polars website.
 
 Launch on Google Colab
 ----------------------
@@ -38,4 +38,4 @@ Launch on Google Colab
    :width: 200px
    :target: https://colab.research.google.com/github/rapidsai-community/showcase/blob/main/accelerated_data_processing_examples/polars_gpu_engine_demo.ipynb
 
-   Take the cuDF backend for Polars for a test-drive in a free GPU-enabled notebook environment using your Google account by `launching on Colab <https://colab.research.google.com/github/rapidsai-community/showcase/blob/main/accelerated_data_processing_examples/polars_gpu_engine_demo.ipynb>`__.
+   Try out the GPU engine for Polars in a free GPU notebook environment. Sign in with your Google account and `launch the demo on Colab <https://colab.research.google.com/github/rapidsai-community/showcase/blob/main/accelerated_data_processing_examples/polars_gpu_engine_demo.ipynb>`__.
