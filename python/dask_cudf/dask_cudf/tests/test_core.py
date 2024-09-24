@@ -1024,3 +1024,15 @@ def test_cov_corr(op, numeric_only):
     # (See: https://github.com/rapidsai/cudf/issues/12626)
     expect = getattr(df.to_pandas(), op)(numeric_only=numeric_only)
     dd.assert_eq(res, expect)
+
+
+def test_rename_axis_after_join():
+    df1 = cudf.DataFrame(index=["a", "b", "c"], data=dict(a=[1, 2, 3]))
+    df1.index.name = "test"
+    ddf1 = dd.from_pandas(df1, 2)
+
+    df2 = cudf.DataFrame(index=["a", "b", "d"], data=dict(b=[1, 2, 3]))
+    ddf2 = dd.from_pandas(df2, 2)
+    result = ddf1.join(ddf2, how="outer")
+    expected = df1.join(df2, how="outer")
+    dd.assert_eq(result, expected, check_index=False)
