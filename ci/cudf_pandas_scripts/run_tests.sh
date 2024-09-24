@@ -59,7 +59,7 @@ else
         # `test_python` constraints are for `[test]` not `[cudf-pandas-tests]`
         rapids-dependency-file-generator \
             --output requirements \
-            --file-key test_python \
+            --file-key test_python_cudf_pandas \
             --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
         | tee ./constraints.txt
     fi
