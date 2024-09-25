@@ -8,6 +8,7 @@ from . cimport (
     convert,
     extract,
     find,
+    findall,
     regex_flags,
     regex_program,
     replace,
