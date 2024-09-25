@@ -881,6 +881,26 @@ def _assert_fast_slow_eq(left, right):
         assert_eq(left, right)
 
 
+class ProxyFallbackError(Exception):
+    """Raised when fallback occurs"""
+
+    pass
+
+
+def _fast_function_call():
+    """
+    Placeholder fast function for pytest profiling purposes.
+    """
+    return None
+
+
+def _slow_function_call():
+    """
+    Placeholder slow function for pytest profiling purposes.
+    """
+    return None
+
+
 def _fast_slow_function_call(
     func: Callable,
     /,
@@ -910,6 +930,7 @@ def _fast_slow_function_call(
                 # try slow path
                 raise Exception()
             fast = True
+            _fast_function_call()
             if _env_get_bool("CUDF_PANDAS_DEBUGGING", False):
                 try:
                     with nvtx.annotate(
@@ -942,6 +963,10 @@ def _fast_slow_function_call(
                             f"The exception was {e}."
                         )
     except Exception as err:
+        if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
+            raise ProxyFallbackError(
+                f"The operation failed with cuDF, the reason was {type(err)}: {err}."
+            ) from err
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
@@ -952,6 +977,7 @@ def _fast_slow_function_call(
                 from ._logger import log_fallback
 
                 log_fallback(slow_args, slow_kwargs, err)
+            _slow_function_call()
             with disable_module_accelerator():
                 result = func(*slow_args, **slow_kwargs)
     return _maybe_wrap_result(result, func, *args, **kwargs), fast

@@ -23,6 +23,8 @@ cpdef Column interleave_columns(Table source_table):
     in     = [[A1, A2, A3], [B1, B2, B3]]
     return = [A1, B1, A2, B2, A3, B3]
 
+    For details, see :cpp:func:`interleave_columns`.
+
     Parameters
     ----------
     source_table: Table
@@ -43,6 +45,8 @@ cpdef Column interleave_columns(Table source_table):
 
 cpdef Table tile(Table source_table, size_type count):
     """Repeats the rows from input table count times to form a new table.
+
+    For details, see :cpp:func:`tile`.
 
     Parameters
     ----------

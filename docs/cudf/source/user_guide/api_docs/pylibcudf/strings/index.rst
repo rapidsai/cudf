@@ -7,9 +7,13 @@ strings
     capitalize
     char_types
     contains
+    extract
     find
     find_multiple
+    findall
     regex_flags
     regex_program
+    repeat
     replace
     slice
+    strip

@@ -258,7 +258,9 @@ public final class Table implements AutoCloseable {
                                         boolean strictValidation,
                                         boolean allowLeadingZeros,
                                         boolean allowNonNumericNumbers,
-                                        boolean allowUnquotedControl) throws CudfException;
+                                        boolean allowUnquotedControl,
+                                        boolean pruneColumns,
+                                        byte lineDelimiter) throws CudfException;
 
   private static native long readJSONFromDataSource(int[] numChildren, String[] columnNames,
                                       int[] dTypeIds, int[] dTypeScales,
@@ -272,6 +274,8 @@ public final class Table implements AutoCloseable {
                                       boolean allowLeadingZeros,
                                       boolean allowNonNumericNumbers,
                                       boolean allowUnquotedControl,
+                                      boolean pruneColumns,
+                                      byte lineDelimiter,
                                       long dsHandle) throws CudfException;
 
   private static native long readAndInferJSONFromDataSource(boolean dayFirst, boolean lines,
@@ -284,6 +288,7 @@ public final class Table implements AutoCloseable {
                                       boolean allowLeadingZeros,
                                       boolean allowNonNumericNumbers,
                                       boolean allowUnquotedControl,
+                                      byte lineDelimiter,
                                       long dsHandle) throws CudfException;
 
   private static native long readAndInferJSON(long address, long length,
@@ -297,7 +302,8 @@ public final class Table implements AutoCloseable {
                                               boolean strictValidation,
                                               boolean allowLeadingZeros,
                                               boolean allowNonNumericNumbers,
-                                              boolean allowUnquotedControl) throws CudfException;
+                                              boolean allowUnquotedControl,
+                                              byte lineDelimiter) throws CudfException;
 
   /**
    * Read in Parquet formatted data.
@@ -1308,6 +1314,10 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readJSON(Schema schema, JSONOptions opts, File path) {
+    // only prune the schema if one is provided
+    boolean cudfPruneSchema = schema.getColumnNames() != null &&
+        schema.getColumnNames().length != 0 &&
+        opts.shouldCudfPruneSchema();
     try (TableWithMeta twm = new TableWithMeta(
             readJSON(schema.getFlattenedNumChildren(), schema.getFlattenedColumnNames(),
                     schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(),
@@ -1321,7 +1331,9 @@ public final class Table implements AutoCloseable {
                     opts.strictValidation(),
                     opts.leadingZerosAllowed(),
                     opts.nonNumericNumbersAllowed(),
-                    opts.unquotedControlChars()))) {
+                    opts.unquotedControlChars(),
+                    cudfPruneSchema,
+                    opts.getLineDelimiter()))) {
 
       return gatherJSONColumns(schema, twm, -1);
     }
@@ -1404,7 +1416,8 @@ public final class Table implements AutoCloseable {
         opts.strictValidation(),
         opts.leadingZerosAllowed(),
         opts.nonNumericNumbersAllowed(),
-        opts.unquotedControlChars()));
+        opts.unquotedControlChars(),
+        opts.getLineDelimiter()));
   }
 
   /**
@@ -1426,6 +1439,7 @@ public final class Table implements AutoCloseable {
           opts.leadingZerosAllowed(),
           opts.nonNumericNumbersAllowed(),
           opts.unquotedControlChars(),
+          opts.getLineDelimiter(),
           dsHandle));
         return twm;
       } finally {
@@ -1465,6 +1479,10 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
+    // only prune the schema if one is provided
+    boolean cudfPruneSchema = schema.getColumnNames() != null &&
+        schema.getColumnNames().length != 0 &&
+        opts.shouldCudfPruneSchema();
     try (TableWithMeta twm = new TableWithMeta(readJSON(
             schema.getFlattenedNumChildren(), schema.getFlattenedColumnNames(),
             schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), null,
@@ -1479,7 +1497,9 @@ public final class Table implements AutoCloseable {
             opts.strictValidation(),
             opts.leadingZerosAllowed(),
             opts.nonNumericNumbersAllowed(),
-            opts.unquotedControlChars()))) {
+            opts.unquotedControlChars(),
+            cudfPruneSchema,
+            opts.getLineDelimiter()))) {
       return gatherJSONColumns(schema, twm, emptyRowCount);
     }
   }
@@ -1505,6 +1525,10 @@ public final class Table implements AutoCloseable {
    */
   public static Table readJSON(Schema schema, JSONOptions opts, DataSource ds, int emptyRowCount) {
     long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
+    // only prune the schema if one is provided
+    boolean cudfPruneSchema = schema.getColumnNames() != null &&
+        schema.getColumnNames().length != 0 &&
+        opts.shouldCudfPruneSchema();
     try (TableWithMeta twm = new TableWithMeta(readJSONFromDataSource(schema.getFlattenedNumChildren(),
         schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(),
         opts.isDayFirst(),
@@ -1518,6 +1542,8 @@ public final class Table implements AutoCloseable {
         opts.leadingZerosAllowed(),
         opts.nonNumericNumbersAllowed(),
         opts.unquotedControlChars(),
+        cudfPruneSchema,
+        opts.getLineDelimiter(),
         dsHandle))) {
       return gatherJSONColumns(schema, twm, emptyRowCount);
     } finally {

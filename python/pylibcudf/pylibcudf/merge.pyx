@@ -19,6 +19,8 @@ cpdef Table merge (
 ):
     """Merge a set of sorted tables.
 
+    For details see :cpp:func:`merge`.
+
     Parameters
     ----------
     tables_to_merge : list

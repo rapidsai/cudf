@@ -30,6 +30,7 @@ jobs:
       - wheel-tests-cudf
       - wheel-build-cudf-polars
       - wheel-tests-cudf-polars
+      - cudf-polars-polars-tests
       - wheel-build-dask-cudf
       - wheel-tests-dask-cudf
       - devcontainer
@@ -49,6 +50,7 @@ jobs:
       test_java: ${{ steps.changed-files.outputs.java_any_changed == 'true' }}
       test_notebooks: ${{ steps.changed-files.outputs.notebooks_any_changed == 'true' }}
       test_python: ${{ steps.changed-files.outputs.python_any_changed == 'true' }}
+      test_cudf_pandas: ${{ steps.changed-files.outputs.cudf_pandas_any_changed == 'true' }}
     steps:
       - name: Get PR info
         id: get-pr-info
@@ -81,6 +83,7 @@ jobs:
               - '!java/**'
               - '!notebooks/**'
               - '!python/**'
+              - '!ci/cudf_pandas_scripts/**'
             java:
               - '**'
               - '!CONTRIBUTING.md'
@@ -89,13 +92,25 @@ jobs:
               - '!img/**'
               - '!notebooks/**'
               - '!python/**'
+              - '!ci/cudf_pandas_scripts/**'
             notebooks:
               - '**'
               - '!CONTRIBUTING.md'
               - '!README.md'
               - '!java/**'
+              - '!ci/cudf_pandas_scripts/**'
             python:
               - '**'
+              - '!CONTRIBUTING.md'
+              - '!README.md'
+              - '!docs/**'
+              - '!img/**'
+              - '!java/**'
+              - '!notebooks/**'
+              - '!ci/cudf_pandas_scripts/**'
+            cudf_pandas:
+              - '**'
+              - 'ci/cudf_pandas_scripts/**'
               - '!CONTRIBUTING.md'
               - '!README.md'
               - '!docs/**'
@@ -159,7 +174,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
       run_script: "ci/test_java.sh"
   static-configure:
     needs: checks
@@ -180,7 +195,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
       run_script: "ci/test_notebooks.sh"
   docs-build:
     needs: conda-python-build
@@ -190,7 +205,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
       run_script: "ci/build_docs.sh"
   wheel-build-libcudf:
     needs: checks
@@ -244,6 +259,17 @@ jobs:
       # This always runs, but only fails if this PR touches code in
       # pylibcudf or cudf_polars
       script: "ci/test_wheel_cudf_polars.sh"
+  cudf-polars-polars-tests:
+    needs: wheel-build-cudf-polars
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
+    with:
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      build_type: pull-request
+      # This always runs, but only fails if this PR touches code in
+      # pylibcudf or cudf_polars
+      script: "ci/test_cudf_polars_polars_tests.sh"
   wheel-build-dask-cudf:
     needs: wheel-build-cudf
     secrets: inherit
@@ -277,7 +303,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
-    if: needs.changed-files.outputs.test_python == 'true'
+    if: needs.changed-files.outputs.test_python == 'true' || needs.changed-files.outputs.test_cudf_pandas == 'true'
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -288,7 +314,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.10
-    if: needs.changed-files.outputs.test_python == 'true'
+    if: needs.changed-files.outputs.test_python == 'true' || needs.changed-files.outputs.test_cudf_pandas == 'true'
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
