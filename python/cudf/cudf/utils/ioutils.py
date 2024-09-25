@@ -1873,7 +1873,7 @@ def _apply_filter_bool_eq(val, col_stats):
                 return False
         elif val is False:
             if (col_stats["false_count"] == 0) or (
-                col_stats["true_count"] == col_stats["number_of_values"]
+                col_stats["true_count"] == col_stats.number_of_values
             ):
                 return False
     return True
@@ -1900,7 +1900,7 @@ def _apply_predicate(op, val, col_stats):
             return False
         # TODO: Replace pd.isnull with
         # cudf.isnull once it is implemented
-        if pd.isnull(val) and not col_stats["has_null"]:
+        if pd.isnull(val) and not col_stats.has_null:
             return False
         if not _apply_filter_bool_eq(val, col_stats):
             return False
