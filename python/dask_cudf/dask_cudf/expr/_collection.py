@@ -15,6 +15,7 @@ from dask_expr._util import _raise_if_object_series
 
 from dask import config
 from dask.dataframe.core import is_dataframe_like
+from dask.typing import no_default
 
 import cudf
 
@@ -87,6 +88,17 @@ class CudfFrameBase(FrameBase):
         return new_collection(
             frame.expr.var(
                 axis, skipna, ddof, numeric_only, split_every=split_every
+            )
+        )
+
+    def rename_axis(
+        self, mapper=no_default, index=no_default, columns=no_default, axis=0
+    ):
+        from dask_cudf.expr._expr import RenameAxisCudf
+
+        return new_collection(
+            RenameAxisCudf(
+                self, mapper=mapper, index=index, columns=columns, axis=axis
             )
         )
 
