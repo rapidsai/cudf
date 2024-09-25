@@ -5,12 +5,17 @@ from . import (
     case,
     char_types,
     contains,
+    convert,
+    extract,
     find,
+    findall,
     padding,
     regex_flags,
     regex_program,
+    repeat,
     replace,
     side_type,
     slice,
     strip,
 )
+from .side_type import SideType

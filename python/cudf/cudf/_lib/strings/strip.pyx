@@ -3,7 +3,6 @@
 from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
-
 import pylibcudf as plc
 
 

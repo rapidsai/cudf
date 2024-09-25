@@ -12,8 +12,22 @@
 # the License.
 # =============================================================================
 
-set(cython_sources capitalize.pyx case.pyx char_types.pyx contains.pyx find.pyx padding.pyx
-                   regex_flags.pyx regex_program.pyx replace.pyx side_type.pyx slice.pyx strip.pyx
+set(cython_sources
+    capitalize.pyx
+    case.pyx
+    char_types.pyx
+    contains.pyx
+    extract.pyx
+    find.pyx
+    findall.pyx
+    padding.pyx
+    regex_flags.pyx
+    regex_program.pyx
+    repeat.pyx
+    replace.pyx
+    side_type.pyx
+    slice.pyx
+    strip.pyx
 )
 
 set(linked_libraries cudf::cudf)
@@ -22,3 +36,5 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_strings_ ASSOCIATED_TARGETS cudf
 )
+
+add_subdirectory(convert)
