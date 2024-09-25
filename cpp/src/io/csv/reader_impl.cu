@@ -85,7 +85,7 @@ class selected_rows_offsets {
     : all{std::move(data)}, selected{selected_span}
   {
   }
-  selected_rows_offsets(rmm::cuda_stream_view stream) : all{0, stream}, selected{all} {}
+  explicit selected_rows_offsets(rmm::cuda_stream_view stream) : all{0, stream}, selected{all} {}
 
   operator device_span<uint64_t const>() const { return selected; }
   void shrink(size_t size)
