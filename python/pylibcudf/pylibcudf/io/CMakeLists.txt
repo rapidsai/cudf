@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-set(cython_sources avro.pyx csv.pyx datasource.pyx json.pyx parquet.pyx types.pyx)
+set(cython_sources avro.pyx csv.pyx datasource.pyx json.pyx orc.pyx parquet.pyx types.pyx)
 
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
