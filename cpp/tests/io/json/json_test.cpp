@@ -2575,6 +2575,20 @@ TEST_F(JsonReaderTest, ViableDelimiter)
   EXPECT_THROW(json_parser_options.set_delimiter('\t'), std::invalid_argument);
 }
 
+TEST_F(JsonReaderTest, ViableDelimiterNewlineWS)
+{
+  // Test input
+  std::string input = R"({"a":
+  100})";
+
+  cudf::io::json_reader_options json_parser_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{input.c_str(), input.size()})
+      .lines(true);
+
+  json_parser_options.set_delimiter('\0');
+  CUDF_EXPECT_NO_THROW(cudf::io::read_json(json_parser_options));
+}
+
 // Test case for dtype prune:
 // all paths, only one.
 // one present, another not present, nothing present
