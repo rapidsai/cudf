@@ -440,83 +440,70 @@ std::unique_ptr<column> extract_year(column_view const& column,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
 {
-  return detail::apply_datetime_op<detail::extract_component_operator<datetime_component::YEAR>,
-                                   cudf::type_id::INT16>(column, stream, mr);
+  return extract_datetime_component(column, datetime_component::YEAR, stream, mr);
 }
 
 std::unique_ptr<column> extract_month(column_view const& column,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
-  return detail::apply_datetime_op<detail::extract_component_operator<datetime_component::MONTH>,
-                                   cudf::type_id::INT16>(column, stream, mr);
+  return extract_datetime_component(column, datetime_component::MONTH, stream, mr);
 }
 
 std::unique_ptr<column> extract_day(column_view const& column,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr)
 {
-  return detail::apply_datetime_op<detail::extract_component_operator<datetime_component::DAY>,
-                                   cudf::type_id::INT16>(column, stream, mr);
+  return extract_datetime_component(column, datetime_component::DAY, stream, mr);
 }
 
 std::unique_ptr<column> extract_weekday(column_view const& column,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
-  return detail::apply_datetime_op<detail::extract_component_operator<datetime_component::WEEKDAY>,
-                                   cudf::type_id::INT16>(column, stream, mr);
+  return extract_datetime_component(column, datetime_component::WEEKDAY, stream, mr);
 }
 
 std::unique_ptr<column> extract_hour(column_view const& column,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
 {
-  return detail::apply_datetime_op<detail::extract_component_operator<datetime_component::HOUR>,
-                                   cudf::type_id::INT16>(column, stream, mr);
+  return extract_datetime_component(column, datetime_component::HOUR, stream, mr);
 }
 
 std::unique_ptr<column> extract_minute(column_view const& column,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
-  return detail::apply_datetime_op<detail::extract_component_operator<datetime_component::MINUTE>,
-                                   cudf::type_id::INT16>(column, stream, mr);
+  return extract_datetime_component(column, datetime_component::MINUTE, stream, mr);
 }
 
 std::unique_ptr<column> extract_second(column_view const& column,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
-  return detail::apply_datetime_op<detail::extract_component_operator<datetime_component::SECOND>,
-                                   cudf::type_id::INT16>(column, stream, mr);
+  return extract_datetime_component(column, datetime_component::SECOND, stream, mr);
 }
 
 std::unique_ptr<column> extract_millisecond_fraction(column_view const& column,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::device_async_resource_ref mr)
 {
-  return detail::apply_datetime_op<
-    detail::extract_component_operator<datetime_component::MILLISECOND>,
-    cudf::type_id::INT16>(column, stream, mr);
+  return extract_datetime_component(column, datetime_component::MILLISECOND, stream, mr);
 }
 
 std::unique_ptr<column> extract_microsecond_fraction(column_view const& column,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::device_async_resource_ref mr)
 {
-  return detail::apply_datetime_op<
-    detail::extract_component_operator<datetime_component::MICROSECOND>,
-    cudf::type_id::INT16>(column, stream, mr);
+  return extract_datetime_component(column, datetime_component::MICROSECOND, stream, mr);
 }
 
 std::unique_ptr<column> extract_nanosecond_fraction(column_view const& column,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr)
 {
-  return detail::apply_datetime_op<
-    detail::extract_component_operator<datetime_component::NANOSECOND>,
-    cudf::type_id::INT16>(column, stream, mr);
+  return extract_datetime_component(column, datetime_component::NANOSECOND, stream, mr);
 }
 
 std::unique_ptr<column> last_day_of_month(column_view const& column,
@@ -648,16 +635,43 @@ std::unique_ptr<cudf::column> extract_datetime_component(cudf::column_view const
 {
   CUDF_FUNC_RANGE();
   switch (component) {
-    case datetime_component::YEAR: return extract_year(column, stream, mr);
-    case datetime_component::MONTH: return extract_month(column, stream, mr);
-    case datetime_component::DAY: return extract_day(column, stream, mr);
-    case datetime_component::WEEKDAY: return extract_weekday(column, stream, mr);
-    case datetime_component::HOUR: return extract_hour(column, stream, mr);
-    case datetime_component::MINUTE: return extract_minute(column, stream, mr);
-    case datetime_component::SECOND: return extract_second(column, stream, mr);
-    case datetime_component::MILLISECOND: return extract_millisecond_fraction(column, stream, mr);
-    case datetime_component::MICROSECOND: return extract_microsecond_fraction(column, stream, mr);
-    case datetime_component::NANOSECOND: return extract_nanosecond_fraction(column, stream, mr);
+    case datetime_component::YEAR:
+      return detail::apply_datetime_op<detail::extract_component_operator<datetime_component::YEAR>,
+                                       cudf::type_id::INT16>(column, stream, mr);
+    case datetime_component::MONTH:
+      return detail::apply_datetime_op<
+        detail::extract_component_operator<datetime_component::MONTH>,
+        cudf::type_id::INT16>(column, stream, mr);
+    case datetime_component::DAY:
+      return detail::apply_datetime_op<detail::extract_component_operator<datetime_component::DAY>,
+                                       cudf::type_id::INT16>(column, stream, mr);
+    case datetime_component::WEEKDAY:
+      return detail::apply_datetime_op<
+        detail::extract_component_operator<datetime_component::WEEKDAY>,
+        cudf::type_id::INT16>(column, stream, mr);
+    case datetime_component::HOUR:
+      return detail::apply_datetime_op<detail::extract_component_operator<datetime_component::HOUR>,
+                                       cudf::type_id::INT16>(column, stream, mr);
+    case datetime_component::MINUTE:
+      return detail::apply_datetime_op<
+        detail::extract_component_operator<datetime_component::MINUTE>,
+        cudf::type_id::INT16>(column, stream, mr);
+    case datetime_component::SECOND:
+      return detail::apply_datetime_op<
+        detail::extract_component_operator<datetime_component::SECOND>,
+        cudf::type_id::INT16>(column, stream, mr);
+    case datetime_component::MILLISECOND:
+      return detail::apply_datetime_op<
+        detail::extract_component_operator<datetime_component::MILLISECOND>,
+        cudf::type_id::INT16>(column, stream, mr);
+    case datetime_component::MICROSECOND:
+      return detail::apply_datetime_op<
+        detail::extract_component_operator<datetime_component::MICROSECOND>,
+        cudf::type_id::INT16>(column, stream, mr);
+    case datetime_component::NANOSECOND:
+      return detail::apply_datetime_op<
+        detail::extract_component_operator<datetime_component::NANOSECOND>,
+        cudf::type_id::INT16>(column, stream, mr);
     default: CUDF_FAIL("Unsupported datetime component.");
   }
 }
