@@ -292,7 +292,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
                                       buffer->size(),
                                       cudaMemcpyDefault,
                                       stream.value()));
-        stream.synchronize();
+        stream.synchronize();  // To prevent buffer going out of scope before we copy the data.
       }
     }
 
