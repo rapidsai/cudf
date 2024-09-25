@@ -75,13 +75,12 @@ def _translate_ir(
 def _(
     node: pl_ir.PythonScan, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    return ir.PythonScan(
-        schema,
-        node.options,
-        translate_named_expr(visitor, n=node.predicate)
-        if node.predicate is not None
-        else None,
+    scan_fn, with_columns, source_type, predicate, nrows = node.options
+    options = (scan_fn, with_columns, source_type, nrows)
+    predicate = (
+        translate_named_expr(visitor, n=predicate) if predicate is not None else None
     )
+    return ir.PythonScan(schema, options, predicate)
 
 
 @_translate_ir.register
@@ -94,13 +93,35 @@ def _(
         cloud_options = None
     else:
         reader_options, cloud_options = map(json.loads, options)
+    if (
+        typ == "csv"
+        and visitor.version()[0] == 1
+        and reader_options["schema"] is not None
+    ):
+        reader_options["schema"] = {
+            "fields": reader_options["schema"]["inner"]
+        }  # pragma: no cover; CI tests 1.7
+    file_options = node.file_options
+    with_columns = file_options.with_columns
+    n_rows = file_options.n_rows
+    if n_rows is None:
+        n_rows = -1  # All rows
+        skip_rows = 0  # Don't skip
+    else:
+        # TODO: with versioning, rename on the rust side
+        skip_rows, n_rows = n_rows
+
+    row_index = file_options.row_index
     return ir.Scan(
         schema,
         typ,
         reader_options,
         cloud_options,
         node.paths,
-        node.file_options,
+        with_columns,
+        skip_rows,
+        n_rows,
+        row_index,
         translate_named_expr(visitor, n=node.predicate)
         if node.predicate is not None
         else None,
@@ -293,10 +314,28 @@ def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
     ctx: AbstractContextManager[None] = (
         set_node(visitor, n) if n is not None else noop_context
     )
+    # IR is versioned with major.minor, minor is bumped for backwards
+    # compatible changes (e.g. adding new nodes), major is bumped for
+    # incompatible changes (e.g. renaming nodes).
+    # Polars 1.7 changes definition of the CSV reader options schema name.
+    if (version := visitor.version()) >= (3, 0):
+        raise NotImplementedError(
+            f"No support for polars IR {version=}"
+        )  # pragma: no cover; no such version for now.
+
     with ctx:
+        polars_schema = visitor.get_schema()
         node = visitor.view_current_node()
-        schema = {k: dtypes.from_polars(v) for k, v in visitor.get_schema().items()}
-        return _translate_ir(node, visitor, schema)
+        schema = {k: dtypes.from_polars(v) for k, v in polars_schema.items()}
+        result = _translate_ir(node, visitor, schema)
+        if any(
+            isinstance(dtype, pl.Null)
+            for dtype in pl.datatypes.unpack_dtypes(*polars_schema.values())
+        ):
+            raise NotImplementedError(
+                f"No GPU support for {result} with Null column dtype."
+            )
+        return result
 
 
 def translate_named_expr(
@@ -345,6 +384,24 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
     name, *options = node.function_data
     options = tuple(options)
     if isinstance(name, pl_expr.StringFunction):
+        if name in {
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+        }:
+            column, chars = (translate_expr(visitor, n=n) for n in node.input)
+            if isinstance(chars, expr.Literal):
+                if chars.value == pa.scalar(""):
+                    # No-op in polars, but libcudf uses empty string
+                    # as signifier to remove whitespace.
+                    return column
+                elif chars.value == pa.scalar(None):
+                    # Polars uses None to mean "strip all whitespace"
+                    chars = expr.Literal(
+                        column.dtype,
+                        pa.scalar("", type=plc.interop.to_arrow(column.dtype)),
+                    )
+            return expr.StringFunction(dtype, name, options, column, chars)
         return expr.StringFunction(
             dtype,
             name,
@@ -369,19 +426,43 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
             *(translate_expr(visitor, n=n) for n in node.input),
         )
     elif isinstance(name, pl_expr.TemporalFunction):
-        return expr.TemporalFunction(
+        # functions for which evaluation of the expression may not return
+        # the same dtype as polars, either due to libcudf returning a different
+        # dtype, or due to our internal processing affecting what libcudf returns
+        needs_cast = {
+            pl_expr.TemporalFunction.Year,
+            pl_expr.TemporalFunction.Month,
+            pl_expr.TemporalFunction.Day,
+            pl_expr.TemporalFunction.WeekDay,
+            pl_expr.TemporalFunction.Hour,
+            pl_expr.TemporalFunction.Minute,
+            pl_expr.TemporalFunction.Second,
+            pl_expr.TemporalFunction.Millisecond,
+        }
+        result_expr = expr.TemporalFunction(
             dtype,
             name,
             options,
             *(translate_expr(visitor, n=n) for n in node.input),
         )
+        if name in needs_cast:
+            return expr.Cast(dtype, result_expr)
+        return result_expr
+
     elif isinstance(name, str):
-        return expr.UnaryFunction(
-            dtype,
-            name,
-            options,
-            *(translate_expr(visitor, n=n) for n in node.input),
-        )
+        children = (translate_expr(visitor, n=n) for n in node.input)
+        if name == "log":
+            (base,) = options
+            (child,) = children
+            return expr.BinOp(
+                dtype,
+                plc.binaryop.BinaryOperator.LOG_BASE,
+                child,
+                expr.Literal(dtype, pa.scalar(base, type=plc.interop.to_arrow(dtype))),
+            )
+        elif name == "pow":
+            return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
+        return expr.UnaryFunction(dtype, name, options, *children)
     raise NotImplementedError(
         f"No handler for Expr function node with {name=}"
     )  # pragma: no cover; polars raises on the rust side for now

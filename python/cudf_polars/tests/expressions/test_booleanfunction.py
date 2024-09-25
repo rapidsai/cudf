@@ -17,15 +17,11 @@ def has_nulls(request):
     return request.param
 
 
-@pytest.mark.parametrize(
-    "ignore_nulls",
-    [
-        pytest.param(
-            False, marks=pytest.mark.xfail(reason="No support for Kleene logic")
-        ),
-        True,
-    ],
-)
+@pytest.fixture(params=[False, True], ids=["include_nulls", "ignore_nulls"])
+def ignore_nulls(request):
+    return request.param
+
+
 def test_booleanfunction_reduction(ignore_nulls):
     ldf = pl.LazyFrame(
         {
@@ -43,6 +39,25 @@ def test_booleanfunction_reduction(ignore_nulls):
     assert_gpu_result_equal(query)
 
 
+@pytest.mark.parametrize("expr", [pl.Expr.any, pl.Expr.all])
+def test_booleanfunction_all_any_kleene(expr, ignore_nulls):
+    ldf = pl.LazyFrame(
+        {
+            "a": [False, None],
+            "b": [False, False],
+            "c": [False, True],
+            "d": [None, False],
+            "e": pl.Series([None, None], dtype=pl.Boolean()),
+            "f": [None, True],
+            "g": [True, False],
+            "h": [True, None],
+            "i": [True, True],
+        }
+    )
+    q = ldf.select(expr(pl.col("*"), ignore_nulls=ignore_nulls))
+    assert_gpu_result_equal(q)
+
+
 @pytest.mark.parametrize(
     "expr",
     [
@@ -54,14 +69,7 @@ def test_booleanfunction_reduction(ignore_nulls):
     ids=lambda f: f"{f.__name__}()",
 )
 @pytest.mark.parametrize("has_nans", [False, True], ids=["no_nans", "nans"])
-def test_boolean_function_unary(request, expr, has_nans, has_nulls):
-    if has_nulls and expr in (pl.Expr.is_nan, pl.Expr.is_not_nan):
-        request.applymarker(
-            pytest.mark.xfail(
-                reason="Need to copy null mask since is_{not_}nan(null) => null"
-            )
-        )
-
+def test_boolean_function_unary(expr, has_nans, has_nulls):
     values: list[float | None] = [1, 2, 3, 4, 5]
     if has_nans:
         values[3] = float("nan")
@@ -119,9 +127,7 @@ def test_boolean_isbetween(closed, bounds):
     "expr", [pl.any_horizontal("*"), pl.all_horizontal("*")], ids=["any", "all"]
 )
 @pytest.mark.parametrize("wide", [False, True], ids=["narrow", "wide"])
-def test_boolean_horizontal(request, expr, has_nulls, wide):
-    if has_nulls:
-        request.applymarker(pytest.mark.xfail(reason="No support for Kleene logic"))
+def test_boolean_horizontal(expr, has_nulls, wide):
     ldf = pl.LazyFrame(
         {
             "a": [False, False, False, False, False, True],
@@ -161,6 +167,18 @@ def test_boolean_is_in(expr):
 
     q = ldf.select(expr)
 
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("expr", [pl.Expr.and_, pl.Expr.or_, pl.Expr.xor])
+def test_boolean_kleene_logic(expr):
+    ldf = pl.LazyFrame(
+        {
+            "a": [False, False, False, None, None, None, True, True, True],
+            "b": [False, None, True, False, None, True, False, None, True],
+        }
+    )
+    q = ldf.select(expr(pl.col("a"), pl.col("b")))
     assert_gpu_result_equal(q)
 
 
