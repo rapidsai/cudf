@@ -5,9 +5,15 @@ from . import (
     case,
     char_types,
     contains,
+    convert,
+    extract,
     find,
+    findall,
     regex_flags,
     regex_program,
+    repeat,
     replace,
     slice,
+    strip,
 )
+from .side_type import SideType
