@@ -20,6 +20,8 @@ cpdef tuple[Table, list] hash_partition(
     """
     Partitions rows from the input table into multiple output tables.
 
+    For details, see :cpp:func:`hash_partition`.
+
     Parameters
     ----------
     input : Table
@@ -50,6 +52,8 @@ cpdef tuple[Table, list] hash_partition(
 cpdef tuple[Table, list] partition(Table t, Column partition_map, int num_partitions):
     """
     Partitions rows of `t` according to the mapping specified by `partition_map`.
+
+    For details, see :cpp:func:`partition`.
 
     Parameters
     ----------
@@ -84,6 +88,8 @@ cpdef tuple[Table, list] round_robin_partition(
 ):
     """
     Round-robin partition.
+
+    For details, see :cpp:func:`round_robin_partition`.
 
     Parameters
     ----------
