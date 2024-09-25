@@ -85,7 +85,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
   auto const left_selected  = left_input.select(left_on);
   auto const right_selected = right_input.select(right_on);
   auto const [left_join_indices, right_join_indices] =
-    cudf::left_join(left_selected, right_selected, cudf::null_equality::EQUAL, mr);
+    cudf::left_join(left_selected, right_selected, cudf::null_equality::EQUAL, stream, mr);
 
   auto const left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
   auto const right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
