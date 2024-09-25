@@ -6,7 +6,7 @@ from libcpp.utility cimport move
 from pylibcudf.libcudf cimport null_mask as cpp_null_mask
 from pylibcudf.libcudf.types cimport mask_state, size_type
 
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer, device_buffer
 
 from pylibcudf.libcudf.types import mask_state as MaskState  # no-cython-lint
 
