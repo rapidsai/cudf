@@ -506,16 +506,16 @@ std::pair<size_t, rmm::device_uvector<size_type>> remapped_field_nodes_after_uni
   if (num_keys == 0) { return {num_keys, rmm::device_uvector<size_type>(num_keys, stream)}; }
   rmm::device_uvector<size_type> offsets(num_keys, stream);
   rmm::device_uvector<size_type> lengths(num_keys, stream);
+  auto offset_length_it = thrust::make_zip_iterator(offsets.begin(), lengths.begin());
   thrust::transform(rmm::exec_policy_nosync(stream),
                     keys.begin(),
                     keys.end(),
-                    thrust::make_zip_iterator(offsets.begin(), lengths.begin()),
+                    offset_length_it,
                     [node_range_begin = d_tree.node_range_begin.data(),
                      node_range_end   = d_tree.node_range_end.data()] __device__(auto key) {
                       return thrust::make_tuple(node_range_begin[key],
                                                 node_range_end[key] - node_range_begin[key]);
                     });
-  auto offset_length_it = thrust::make_zip_iterator(offsets.begin(), lengths.begin());
   cudf::io::parse_options_view opt{',', '\n', '\0', '.'};
   opt.keepquotes = true;
 
@@ -555,7 +555,7 @@ std::pair<size_t, rmm::device_uvector<size_type>> remapped_field_nodes_after_uni
   using hasher_type                             = decltype(d_hasher);
   constexpr size_type empty_node_index_sentinel = -1;
   auto key_set                                  = cuco::static_set{
-    cuco::extent{compute_hash_table_size(num_keys, 100)},  // 40% occupancy
+    cuco::extent{compute_hash_table_size(num_keys)},
     cuco::empty_key{empty_node_index_sentinel},
     d_equal,
     cuco::linear_probing<1, hasher_type>{d_hasher},
@@ -570,6 +570,7 @@ std::pair<size_t, rmm::device_uvector<size_type>> remapped_field_nodes_after_uni
                                 found_keys.begin(),
                                 thrust::make_discard_iterator(),
                                 stream.value());
+  // set.size will synchronize the stream before return.
   return {key_set.size(stream), std::move(found_keys)};
 }
 
