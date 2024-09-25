@@ -59,6 +59,8 @@ cdef class ChunkedParquetReader:
     """
     Reads chunks of a Parquet file into a :py:class:`~.types.TableWithMetadata`.
 
+    For details, see :cpp:class:`chunked_parquet_reader`.
+
     Parameters
     ----------
     source_info : SourceInfo
@@ -166,6 +168,8 @@ cpdef read_parquet(
     # DataType timestamp_type = DataType(type_id.EMPTY)
 ):
     """Reads an Parquet file into a :py:class:`~.types.TableWithMetadata`.
+
+    For details, see :cpp:func:`read_parquet`.
 
     Parameters
     ----------
