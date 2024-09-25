@@ -78,8 +78,12 @@ class Aggregation:
         )
 
     @classmethod
-    def nunique(cls):
-        return cls(pylibcudf.aggregation.nunique(pylibcudf.types.NullPolicy.EXCLUDE))
+    def nunique(cls, dropna=True):
+        if dropna:
+            null_policy = pylibcudf.types.NullPolicy.EXCLUDE
+        else:
+            null_policy = pylibcudf.types.NullPolicy.INCLUDE
+        return cls(pylibcudf.aggregation.nunique(null_policy))
 
     @classmethod
     def nth(cls, size):
