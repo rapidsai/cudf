@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from libc.stdint cimport int32_t
+from libc.stdint cimport uint8_t
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
@@ -8,7 +8,7 @@ from pylibcudf.libcudf.scalar.scalar cimport scalar
 
 
 cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
-    cpdef enum class datetime_component(int32_t):
+    cpdef enum class datetime_component(uint8_t):
         INVALID
         YEAR
         MONTH
