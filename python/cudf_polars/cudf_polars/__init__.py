@@ -10,13 +10,15 @@ pylibcudf to execute the plans on device.
 
 from __future__ import annotations
 
-# Check we have a supported polars version
-import cudf_polars.utils.versions as v
 from cudf_polars._version import __git_commit__, __version__
 from cudf_polars.callback import execute_with_cudf
 from cudf_polars.dsl.translate import translate_ir
 
-del v
+# Check we have a supported polars version
+from cudf_polars.utils.versions import _ensure_polars_version
+
+_ensure_polars_version()
+del _ensure_polars_version
 
 __all__: list[str] = [
     "execute_with_cudf",
