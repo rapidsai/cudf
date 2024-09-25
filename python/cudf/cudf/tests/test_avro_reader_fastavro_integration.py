@@ -236,6 +236,7 @@ def test_avro_compression(rows, codec):
             },
         ],
         rows,
+        seed=0,
     )
     expected_df = cudf.DataFrame.from_arrow(df)
 
@@ -599,7 +600,7 @@ def test_avro_reader_multiblock(
     else:
         assert dtype in ("float32", "float64")
         avro_type = "float" if dtype == "float32" else "double"
-
+        np.random.seed(0)
         # We don't use rand_dataframe() here, because it increases the
         # execution time of each test by a factor of 10 or more (it appears
         # to use a very costly approach to generating random data).
