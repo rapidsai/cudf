@@ -176,7 +176,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       rmm::exec_policy(stream),
       thrust::make_counting_iterator(0),
       col.size(),
-      ::cudf::detail::var_hash_functor{
+      var_hash_functor{
         set, row_bitmask, *var_result_view, *values_view, *sum_view, *count_view, agg._ddof});
     sparse_results->add_result(col, agg, std::move(var_result));
     dense_results->add_result(col, agg, to_dense_agg_result(agg));

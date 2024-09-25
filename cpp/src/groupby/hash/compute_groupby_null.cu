@@ -18,14 +18,24 @@
 
 namespace cudf::groupby::detail::hash {
 
+template void sparse_to_dense_results<nullable_hash_set_ref_t>(
+  table_view const& keys,
+  host_span<aggregation_request const> requests,
+  cudf::detail::result_cache* sparse_results,
+  cudf::detail::result_cache* dense_results,
+  device_span<size_type const> gather_map,
+  nullable_hash_set_ref_t set,
+  bool skip_key_rows_with_nulls,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
 template std::unique_ptr<table> compute_groupby<nullable_row_comparator_t>(
   table_view const& keys,
   host_span<aggregation_request const> requests,
   cudf::detail::result_cache* cache,
   bool skip_key_rows_with_nulls,
   nullable_row_comparator_t const& d_row_equal,
-  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                   cudf::nullate::DYNAMIC> const& d_row_hash,
+  row_hash_t const& d_row_hash,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 

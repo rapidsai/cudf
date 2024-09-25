@@ -53,11 +53,12 @@ CUDF_HOST_DEVICE constexpr std::size_t round_to_multiple_of_8(std::size_t num)
   return cudf::util::div_rounding_up_safe(num, base) * base;
 }
 
-/// Probing scheme type used by groupby hash table
-using probing_scheme_t = cuco::linear_probing<
-  GROUPBY_CG_SIZE,
+using row_hash_t =
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                   cudf::nullate::DYNAMIC>>;
+                                                   cudf::nullate::DYNAMIC>;
+
+/// Probing scheme type used by groupby hash table
+using probing_scheme_t = cuco::linear_probing<GROUPBY_CG_SIZE, row_hash_t>;
 
 using row_comparator_t = cudf::experimental::row::equality::device_row_comparator<
   false,
@@ -68,5 +69,11 @@ using nullable_row_comparator_t = cudf::experimental::row::equality::device_row_
   true,
   cudf::nullate::DYNAMIC,
   cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
+
+using hash_set_ref_t = cuco::
+  static_set_ref<cudf::size_type, cuda::thread_scope_device, row_comparator_t, probing_scheme_t, cuco::aow_storage_ref<cudf::size_type, GROUPBY_WINDOW_SIZE, cuco::extent<int64_t>>, cuco::op::find_tag, >;
+
+using nullable_hash_set_ref_t = cuco::
+  static_set_ref<cudf::size_type, cuda::thread_scope_device, nullable_row_comparator_t, probing_scheme_t, cuco::aow_storage_ref<cudf::size_type, GROUPBY_WINDOW_SIZE, cuco::extent<int64_t>>, cuco::op::find_tag, >;
 
 }  // namespace cudf::groupby::detail::hash
