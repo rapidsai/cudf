@@ -1445,8 +1445,8 @@ public final class Table implements AutoCloseable {
           opts.leadingZerosAllowed(),
           opts.nonNumericNumbersAllowed(),
           opts.unquotedControlChars(),
-          opts.getLineDelimiter(),
           opts.experimental(),
+          opts.getLineDelimiter(),
           dsHandle));
         return twm;
       } finally {

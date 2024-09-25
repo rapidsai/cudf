@@ -39,8 +39,8 @@ public final class JSONOptions extends ColumnFilterOptions {
   private final boolean allowNonNumericNumbers;
   private final boolean allowUnquotedControlChars;
   private final boolean cudfPruneSchema;
-  private final byte lineDelimiter;
   private final boolean experimental;
+  private final byte lineDelimiter;
 
   private JSONOptions(Builder builder) {
     super(builder);
@@ -56,8 +56,8 @@ public final class JSONOptions extends ColumnFilterOptions {
     allowNonNumericNumbers = builder.allowNonNumericNumbers;
     allowUnquotedControlChars = builder.allowUnquotedControlChars;
     cudfPruneSchema = builder.cudfPruneSchema;
-    lineDelimiter = builder.lineDelimiter;
     experimental = builder.experimental;
+    lineDelimiter = builder.lineDelimiter;
   }
 
   public boolean shouldCudfPruneSchema() {
@@ -140,9 +140,9 @@ public final class JSONOptions extends ColumnFilterOptions {
 
     private boolean mixedTypesAsStrings = false;
     private boolean keepQuotes = false;
-    private boolean experimental = false;
 
     private boolean cudfPruneSchema = false;
+    private boolean experimental = false;
     private byte lineDelimiter = '\n';
 
     public Builder withCudfPruneSchema(boolean prune) {
