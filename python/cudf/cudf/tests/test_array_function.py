@@ -73,7 +73,7 @@ def test_array_func_cudf_series(func):
         lambda x: np.prod(x, axis=1),
     ],
 )
-def test_array_func_cudf_dataframe(pd_df, func):
+def test_array_func_cudf_dataframe(func):
     pd_df = pd.DataFrame(np.random.uniform(size=(100, 10)))
     cudf_df = cudf.from_pandas(pd_df)
     expect = func(pd_df)
@@ -124,7 +124,7 @@ def test_array_func_cudf_index(func):
         lambda x: np.linalg.det(x),
     ],
 )
-def test_array_func_missing_cudf_index(np_ar, func):
+def test_array_func_missing_cudf_index(func):
     np_ar = np.random.random(100)
     cudf_index = cudf.Index(cudf.Series(np_ar))
     with pytest.raises(TypeError):
