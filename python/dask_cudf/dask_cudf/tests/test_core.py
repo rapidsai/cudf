@@ -16,6 +16,7 @@ import cudf
 
 import dask_cudf
 from dask_cudf.tests.utils import (
+    QUERY_PLANNING_ON,
     require_dask_expr,
     skip_dask_expr,
     xfail_dask_expr,
@@ -950,12 +951,16 @@ def test_implicit_array_conversion_cupy():
     def func(x):
         return x.values
 
-    # Need to compute the dask collection for now.
-    # See: https://github.com/dask/dask/issues/11017
-    result = ds.map_partitions(func, meta=s.values).compute()
-    expect = func(s)
+    result = ds.map_partitions(func, meta=s.values)
 
-    dask.array.assert_eq(result, expect)
+    if QUERY_PLANNING_ON:
+        # Check Array and round-tripped DataFrame
+        dask.array.assert_eq(result, func(s))
+        dd.assert_eq(result.to_dask_dataframe(), s, check_index=False)
+    else:
+        # Legacy version still carries numpy metadata
+        # See: https://github.com/dask/dask/issues/11017
+        dask.array.assert_eq(result.compute(), func(s))
 
 
 def test_implicit_array_conversion_cupy_sparse():
@@ -967,8 +972,6 @@ def test_implicit_array_conversion_cupy_sparse():
     def func(x):
         return cupyx.scipy.sparse.csr_matrix(x.values)
 
-    # Need to compute the dask collection for now.
-    # See: https://github.com/dask/dask/issues/11017
     result = ds.map_partitions(func, meta=s.values).compute()
     expect = func(s)
 
