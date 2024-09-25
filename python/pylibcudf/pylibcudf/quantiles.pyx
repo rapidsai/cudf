@@ -30,6 +30,8 @@ cpdef Column quantile(
     Computes the specified quantiles by interpolating values between which they lie,
     using the interpolation strategy specified in interp.
 
+    For details see :cpp:func:`quantile`.
+
     Parameters
     ----------
     input: Column
@@ -90,6 +92,8 @@ cpdef Table quantiles(
     Computes the specified quantiles by retrieving the row corresponding to the
     specified quantiles. In the event a quantile lies in between rows, the specified
     interpolation strategy is used to pick between the rows.
+
+    For details see :cpp:func:`quantiles`.
 
     Parameters
     ----------
