@@ -21,7 +21,7 @@ python -m pytest \
        -m "" \
        -p cudf_polars.testing.plugin \
        -v \
-       --tb=short \
+       --tb=native \
        ${DESELECTED_TESTS} \
        "$@" \
        py-polars/tests
