@@ -1,8 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-import cudf
-from cudf.core.buffer import acquire_spill_lock
-
 from libc.stdint cimport int64_t
 from libcpp cimport bool, int
 from libcpp.map cimport map
@@ -11,10 +8,7 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-import datetime
 from collections import OrderedDict
-
-cimport pylibcudf.libcudf.lists.lists_column_view as cpp_lists_column_view
 
 try:
     import ujson as json
@@ -22,176 +16,35 @@ except ImportError:
     import json
 
 cimport pylibcudf.libcudf.io.types as cudf_io_types
+cimport pylibcudf.libcudf.lists.lists_column_view as cpp_lists_column_view
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.orc cimport (
     chunked_orc_writer_options,
     orc_chunked_writer,
-    orc_reader_options,
     orc_writer_options,
-    read_orc as libcudf_read_orc,
     write_orc as libcudf_write_orc,
-)
-from pylibcudf.libcudf.io.orc_metadata cimport (
-    binary_statistics,
-    bucket_statistics,
-    column_statistics,
-    date_statistics,
-    decimal_statistics,
-    double_statistics,
-    integer_statistics,
-    no_statistics,
-    parsed_orc_statistics,
-    read_parsed_orc_statistics as libcudf_read_parsed_orc_statistics,
-    statistics_type,
-    string_statistics,
-    timestamp_statistics,
 )
 from pylibcudf.libcudf.io.types cimport (
     column_in_metadata,
     compression_type,
     sink_info,
-    source_info,
     table_input_metadata,
-    table_with_metadata,
 )
 from pylibcudf.libcudf.table.table_view cimport table_view
-from pylibcudf.libcudf.types cimport data_type, size_type, type_id
-from pylibcudf.variant cimport get_if as std_get_if, holds_alternative
 
 from cudf._lib.column cimport Column
-from cudf._lib.io.utils cimport (
-    make_sink_info,
-    make_source_info,
-    update_column_struct_field_names,
-)
+from cudf._lib.io.utils cimport make_sink_info, update_col_struct_field_names
+from cudf._lib.utils cimport data_from_pylibcudf_io, table_view_from_table
 
-from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
+import pylibcudf as plc
 
-from cudf._lib.types cimport underlying_type_t_type_id
-from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
-
+import cudf
+from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
+from cudf.core.buffer import acquire_spill_lock
 
 
-cdef _parse_column_type_statistics(column_statistics stats):
-    # Initialize stats to return and parse stats blob
-    column_stats = {}
-
-    if stats.number_of_values.has_value():
-        column_stats["number_of_values"] = stats.number_of_values.value()
-
-    if stats.has_null.has_value():
-        column_stats["has_null"] = stats.has_null.value()
-
-    cdef statistics_type type_specific_stats = stats.type_specific_stats
-
-    cdef integer_statistics* int_stats
-    cdef double_statistics* dbl_stats
-    cdef string_statistics* str_stats
-    cdef bucket_statistics* bucket_stats
-    cdef decimal_statistics* dec_stats
-    cdef date_statistics* date_stats
-    cdef binary_statistics* bin_stats
-    cdef timestamp_statistics* ts_stats
-
-    if holds_alternative[no_statistics](type_specific_stats):
-        return column_stats
-    elif int_stats := std_get_if[integer_statistics](&type_specific_stats):
-        if int_stats.minimum.has_value():
-            column_stats["minimum"] = int_stats.minimum.value()
-        else:
-            column_stats["minimum"] = None
-        if int_stats.maximum.has_value():
-            column_stats["maximum"] = int_stats.maximum.value()
-        else:
-            column_stats["maximum"] = None
-        if int_stats.sum.has_value():
-            column_stats["sum"] = int_stats.sum.value()
-        else:
-            column_stats["sum"] = None
-    elif dbl_stats := std_get_if[double_statistics](&type_specific_stats):
-        if dbl_stats.minimum.has_value():
-            column_stats["minimum"] = dbl_stats.minimum.value()
-        else:
-            column_stats["minimum"] = None
-        if dbl_stats.maximum.has_value():
-            column_stats["maximum"] = dbl_stats.maximum.value()
-        else:
-            column_stats["maximum"] = None
-        if dbl_stats.sum.has_value():
-            column_stats["sum"] = dbl_stats.sum.value()
-        else:
-            column_stats["sum"] = None
-    elif str_stats := std_get_if[string_statistics](&type_specific_stats):
-        if str_stats.minimum.has_value():
-            column_stats["minimum"] = str_stats.minimum.value().decode("utf-8")
-        else:
-            column_stats["minimum"] = None
-        if str_stats.maximum.has_value():
-            column_stats["maximum"] = str_stats.maximum.value().decode("utf-8")
-        else:
-            column_stats["maximum"] = None
-        if str_stats.sum.has_value():
-            column_stats["sum"] = str_stats.sum.value()
-        else:
-            column_stats["sum"] = None
-    elif bucket_stats := std_get_if[bucket_statistics](&type_specific_stats):
-        column_stats["true_count"] = bucket_stats.count[0]
-        column_stats["false_count"] = (
-            column_stats["number_of_values"]
-            - column_stats["true_count"]
-        )
-    elif dec_stats := std_get_if[decimal_statistics](&type_specific_stats):
-        if dec_stats.minimum.has_value():
-            column_stats["minimum"] = dec_stats.minimum.value().decode("utf-8")
-        else:
-            column_stats["minimum"] = None
-        if dec_stats.maximum.has_value():
-            column_stats["maximum"] = dec_stats.maximum.value().decode("utf-8")
-        else:
-            column_stats["maximum"] = None
-        if dec_stats.sum.has_value():
-            column_stats["sum"] = dec_stats.sum.value().decode("utf-8")
-        else:
-            column_stats["sum"] = None
-    elif date_stats := std_get_if[date_statistics](&type_specific_stats):
-        if date_stats.minimum.has_value():
-            column_stats["minimum"] = datetime.datetime.fromtimestamp(
-                datetime.timedelta(date_stats.minimum.value()).total_seconds(),
-                datetime.timezone.utc,
-            )
-        else:
-            column_stats["minimum"] = None
-        if date_stats.maximum.has_value():
-            column_stats["maximum"] = datetime.datetime.fromtimestamp(
-                datetime.timedelta(date_stats.maximum.value()).total_seconds(),
-                datetime.timezone.utc,
-            )
-        else:
-            column_stats["maximum"] = None
-    elif bin_stats := std_get_if[binary_statistics](&type_specific_stats):
-        if bin_stats.sum.has_value():
-            column_stats["sum"] = bin_stats.sum.value()
-        else:
-            column_stats["sum"] = None
-    elif ts_stats := std_get_if[timestamp_statistics](&type_specific_stats):
-        # Before ORC-135, the local timezone offset was included and they were
-        # stored as minimum and maximum. After ORC-135, the timestamp is
-        # adjusted to UTC before being converted to milliseconds and stored
-        # in minimumUtc and maximumUtc.
-        # TODO: Support minimum and maximum by reading writer's local timezone
-        if ts_stats.minimum_utc.has_value() and ts_stats.maximum_utc.has_value():
-            column_stats["minimum"] = datetime.datetime.fromtimestamp(
-                ts_stats.minimum_utc.value() / 1000, datetime.timezone.utc
-            )
-            column_stats["maximum"] = datetime.datetime.fromtimestamp(
-                ts_stats.maximum_utc.value() / 1000, datetime.timezone.utc
-            )
-    else:
-        raise ValueError("Unsupported statistics type")
-    return column_stats
-
-
+# TODO: Consider inlining this function since it seems to only be used in one place.
 cpdef read_parsed_orc_statistics(filepath_or_buffer):
     """
     Cython function to call into libcudf API, see `read_parsed_orc_statistics`.
@@ -201,25 +54,13 @@ cpdef read_parsed_orc_statistics(filepath_or_buffer):
     cudf.io.orc.read_orc_statistics
     """
 
-    cdef parsed_orc_statistics parsed = (
-        libcudf_read_parsed_orc_statistics(make_source_info([filepath_or_buffer]))
+    parsed = (
+        plc.io.orc.read_parsed_orc_statistics(
+            plc.io.SourceInfo([filepath_or_buffer])
+        )
     )
 
-    cdef vector[column_statistics] file_stats = parsed.file_stats
-    cdef vector[vector[column_statistics]] stripes_stats = parsed.stripes_stats
-
-    parsed_file_stats = [
-        _parse_column_type_statistics(file_stats[column_index])
-        for column_index in range(file_stats.size())
-    ]
-
-    parsed_stripes_stats = [
-        [_parse_column_type_statistics(stripes_stats[stripe_index][column_index])
-         for column_index in range(stripes_stats[stripe_index].size())]
-        for stripe_index in range(stripes_stats.size())
-    ]
-
-    return parsed.column_names, parsed_file_stats, parsed_stripes_stats
+    return parsed.column_names, parsed.file_stats, parsed.stripes_stats
 
 
 cpdef read_orc(object filepaths_or_buffers,
@@ -235,36 +76,34 @@ cpdef read_orc(object filepaths_or_buffers,
     See Also
     --------
     cudf.read_orc
+
+    Notes
+    -----
+    Currently this function only considers the metadata of the first file in the list of
+    filepaths_or_buffers.
     """
-    cdef orc_reader_options c_orc_reader_options = make_orc_reader_options(
-        filepaths_or_buffers,
+
+    if columns is not None:
+        columns = [str(col) for col in columns]
+
+    tbl_w_meta = plc.io.orc.read_orc(
+        plc.io.SourceInfo(filepaths_or_buffers),
         columns,
-        stripes or [],
+        stripes,
         get_skiprows_arg(skip_rows),
         get_num_rows_arg(num_rows),
-        (
-            type_id.EMPTY
-            if timestamp_type is None else
-            <type_id>(
-                <underlying_type_t_type_id> (
-                    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[
-                        cudf.dtype(timestamp_type)
-                    ]
-                )
-            )
-        ),
         use_index,
+        plc.types.DataType(
+            SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[
+                cudf.dtype(timestamp_type)
+            ]
+        )
     )
 
-    cdef table_with_metadata c_result
-    cdef size_type nrows
+    names = tbl_w_meta.column_names(include_children=False)
 
-    with nogil:
-        c_result = move(libcudf_read_orc(c_orc_reader_options))
-
-    names = [info.name.decode() for info in c_result.metadata.schema_info]
     actual_index_names, col_names, is_range_index, reset_index_name, \
-        range_idx = _get_index_from_metadata(c_result.metadata.user_data,
+        range_idx = _get_index_from_metadata(tbl_w_meta.per_file_user_data,
                                              names,
                                              skip_rows,
                                              num_rows)
@@ -272,11 +111,11 @@ cpdef read_orc(object filepaths_or_buffers,
     if columns is not None and (isinstance(columns, list) and len(columns) == 0):
         # When `columns=[]`, index needs to be
         # established, but not the columns.
-        nrows = c_result.tbl.get()[0].view().num_rows()
+        nrows = tbl_w_meta.tbl.num_rows()
         return {}, cudf.RangeIndex(nrows)
 
-    data, index = data_from_unique_ptr(
-        move(c_result.tbl),
+    data, index = data_from_pylibcudf_io(
+        tbl_w_meta,
         col_names if columns is None else names,
         actual_index_names
     )
@@ -286,11 +125,13 @@ cpdef read_orc(object filepaths_or_buffers,
     elif reset_index_name:
         index.names = [None] * len(index.names)
 
+    child_name_values = tbl_w_meta.child_names.values()
+
     data = {
-        name: update_column_struct_field_names(
-            col, c_result.metadata.schema_info[i]
+        name: update_col_struct_field_names(
+            col, child_names
         )
-        for i, (name, col) in enumerate(data.items())
+        for (name, col), child_names in zip(data.items(), child_name_values)
     }
 
     return data, index
@@ -313,32 +154,35 @@ cdef compression_type _get_comp_type(object compression):
         raise ValueError(f"Unsupported `compression` type {compression}")
 
 cdef tuple _get_index_from_metadata(
-        map[string, string] user_data,
+        vector[map[string, string]] user_data,
         object names,
         object skip_rows,
         object num_rows):
-    json_str = user_data[b'pandas'].decode('utf-8')
+
     meta = None
     index_col = None
     is_range_index = False
     reset_index_name = False
     range_idx = None
-    if json_str != "":
-        meta = json.loads(json_str)
-        if 'index_columns' in meta and len(meta['index_columns']) > 0:
-            index_col = meta['index_columns']
-            if isinstance(index_col[0], dict) and \
-                    index_col[0]['kind'] == 'range':
-                is_range_index = True
-            else:
-                index_col_names = OrderedDict()
-                for idx_col in index_col:
-                    for c in meta['columns']:
-                        if c['field_name'] == idx_col:
-                            index_col_names[idx_col] = \
-                                c['name'] or c['field_name']
-                            if c['name'] is None:
-                                reset_index_name = True
+
+    if user_data.size() > 0:
+        json_str = user_data[0][b'pandas'].decode('utf-8')
+        if json_str != "":
+            meta = json.loads(json_str)
+            if 'index_columns' in meta and len(meta['index_columns']) > 0:
+                index_col = meta['index_columns']
+                if isinstance(index_col[0], dict) and \
+                        index_col[0]['kind'] == 'range':
+                    is_range_index = True
+                else:
+                    index_col_names = OrderedDict()
+                    for idx_col in index_col:
+                        for c in meta['columns']:
+                            if c['field_name'] == idx_col:
+                                index_col_names[idx_col] = \
+                                    c['name'] or c['field_name']
+                                if c['name'] is None:
+                                    reset_index_name = True
 
     actual_index_names = None
     if index_col is not None and len(index_col) > 0:
@@ -471,41 +315,6 @@ cdef int64_t get_num_rows_arg(object arg) except*:
     if not isinstance(arg, int) or arg < -1:
         raise TypeError("num_rows must be an int >= -1")
     return <int64_t> arg
-
-
-cdef orc_reader_options make_orc_reader_options(
-    object filepaths_or_buffers,
-    object column_names,
-    object stripes,
-    int64_t skip_rows,
-    int64_t num_rows,
-    type_id timestamp_type,
-    bool use_index
-) except*:
-
-    cdef vector[vector[size_type]] strps = stripes
-    cdef orc_reader_options opts
-    cdef source_info src = make_source_info(filepaths_or_buffers)
-    opts = move(
-        orc_reader_options.builder(src)
-        .stripes(strps)
-        .skip_rows(skip_rows)
-        .timestamp_type(data_type(timestamp_type))
-        .use_index(use_index)
-        .build()
-    )
-    if num_rows >= 0:
-        opts.set_num_rows(num_rows)
-
-    cdef vector[string] c_column_names
-    if column_names is not None:
-        c_column_names.reserve(len(column_names))
-        for col in column_names:
-            c_column_names.push_back(str(col).encode())
-        if len(column_names) > 0:
-            opts.set_columns(c_column_names)
-
-    return opts
 
 
 cdef class ORCWriter:

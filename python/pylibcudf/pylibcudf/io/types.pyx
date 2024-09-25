@@ -130,6 +130,7 @@ cdef class TableWithMetadata:
         """
         return self.metadata.per_file_user_data
 
+
 cdef class SourceInfo:
     """A class containing details on a source to read from.
 

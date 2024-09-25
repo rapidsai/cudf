@@ -2271,6 +2271,12 @@ def test_read_compressed_BOM(tmpdir):
     assert_eq(pd.read_csv(fname), cudf.read_csv(fname))
 
 
+@pytest.mark.parametrize("buffer", ["1", '"one"'])
+def test_read_single_unterminated_row(buffer):
+    gdf = cudf.read_csv(StringIO(buffer), header=None)
+    assert_eq(gdf.shape, (1, 1))
+
+
 def test_read_header_none_pandas_compat_column_type():
     data = "1\n2\n"
     with cudf.option_context("mode.pandas_compatible", True):
