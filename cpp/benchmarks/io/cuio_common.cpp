@@ -54,7 +54,7 @@ cuio_source_sink_pair::cuio_source_sink_pair(io_type type)
   : type{type},
     pinned_buffer({pinned_memory_resource(), cudf::get_default_stream()}),
     d_buffer{0, cudf::get_default_stream()},
-    file_name{random_file_in_dir(tmpdir.path())},
+    file_name{random_file_in_dir("/home/coder/cudf/run_benchmark/")},
     void_sink{cudf::io::data_sink::create()}
 {
 }
