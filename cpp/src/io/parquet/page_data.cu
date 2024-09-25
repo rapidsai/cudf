@@ -476,7 +476,25 @@ void __host__ WriteFinalOffsetsBatched(std::vector<size_type> const& offsets,
                                        rmm::device_async_resource_ref mr,
                                        rmm::cuda_stream_view stream)
 {
-  return cudf::io::detail::batched_memcpy(offsets, buff_addrs, mr, stream);
+  // Copy offsets to device and create an iterator
+  auto d_src_data = cudf::detail::make_device_uvector_async(offsets, stream, mr);
+  auto src_iter   = cudf::detail::make_counting_transform_iterator(
+    static_cast<std::size_t>(0),
+    cuda::proclaim_return_type<size_type*>(
+      [src = d_src_data.data()] __device__(std::size_t i) { return src + i; }));
+
+  // Copy buffer addresses to device and create an iterator
+  auto d_dst_addrs = cudf::detail::make_device_uvector_async(buff_addrs, stream, mr);
+  auto dst_iter    = cudf::detail::make_counting_transform_iterator(
+    static_cast<std::size_t>(0),
+    cuda::proclaim_return_type<size_type*>(
+      [dst = d_dst_addrs.data()] __device__(std::size_t i) { return dst[i]; }));
+
+  // size_iter is simply a constant iterator of sizeof(size_type) bytes.
+  auto size_iter = thrust::make_constant_iterator(sizeof(size_type));
+
+  // Copy offsets to buffers in batched manner.
+  cudf::io::detail::batched_memcpy(src_iter, dst_iter, size_iter, offsets.size(), stream);
 }
 
 }  // namespace cudf::io::parquet::detail
