@@ -1053,16 +1053,15 @@ struct group_key_func {
  *
  * A tdigest cluster can be empty in the input, which means that there was no valid input data to
  * generate that cluster. These empty clusters are currently stored differently in different parts
- * of the tdigest column. They are "compressed" in the `means`, `weights`, and `offsets` columns,
- * but not in the `min` and `max` columns.
+ * of the tdigest column. They are more explicit in the `min` and `max` columns than in the `means`,
+ * `weights` columns.
  *   - The `means` and `weights` columns do not contain values for empty clusters.
- *   - The empty clusters are stored as two consecutive same values. For example, given an offsets
- * column of (0, 1, 1, 2), the second cluster where its offset is 1 is empty. Note that the offsets
- * are the offsets for the means and the weights.
+ *     - In the `offsets` column for the means and weights, the offsets to empty clusters are
+ *      stored so that their size is 0. For example, given an offsets column of (0, 1, 1, 2),
+ *     the second cluster where its both start and end offsets are 1 is empty.
  *   - The `min` and `max` columns contain 0s for the empty clusters.
  *
- * @param tdv input tdigests. These should have been sorted by the key, but may have not by the
- * centroid mean within each group.
+ * @param tdv input tdigests. The tdigests within this column are grouped by key.
  * @param h_group_offsets a host iterator of the offsets to the start of each group. A group is
  * counted as one even when the cluster is empty in it. The offsets should have the same values as
  * the ones in `group_offsets`.
@@ -1073,7 +1072,7 @@ struct group_key_func {
  * empty clusters.
  * @param num_group_labels the number of unique group labels.
  * @param num_groups the number of groups.
- * @param max_centroids the maximum number of centroids (clusters) in the tdigest.
+ * @param max_centroids the maximum number of centroids (clusters) in the output (merged) tdigest.
  * @param stream CUDA stream
  * @param mr device memory resource
  *
@@ -1090,9 +1089,9 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
-  // Sort the tdigests by the centroid mean within each group and then pass them to
-  // `compute_tdigests()`. Note that the input has been sorted by the key, but has not by the mean
-  // yet within each group. For sorting by the key, see
+  // The core logic of `merge_tdigests()` is to sort the tdigests by the centroid mean within each
+  // group and then pass them to `compute_tdigests()`. Note that the individual tdigests in the
+  // input have been grouped together by key. For grouping the input by key, see
   // `store_result_functor::get_grouped_values()`.
   //
   // NOTE: the current implementation is quite complex and involves offset copy from the device to
