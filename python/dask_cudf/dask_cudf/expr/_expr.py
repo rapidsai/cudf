@@ -5,13 +5,14 @@ import dask_expr._shuffle as _shuffle_module
 import pandas as pd
 from dask_expr import new_collection
 from dask_expr._cumulative import CumulativeBlockwise
-from dask_expr._expr import Elemwise, Expr, VarColumns
+from dask_expr._expr import Elemwise, Expr, RenameAxis, VarColumns
 from dask_expr._reductions import Reduction, Var
 from dask_expr.io.io import FusedParquetIO
 from dask_expr.io.parquet import ReadParquetPyarrowFS
 
 from dask.dataframe.core import is_dataframe_like, make_meta, meta_nonempty
 from dask.dataframe.dispatch import is_categorical_dtype
+from dask.typing import no_default
 
 import cudf
 
@@ -104,6 +105,19 @@ class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
         if isinstance(parent, CudfFusedParquetIO):
             return
         return parent.substitute(self, CudfFusedParquetIO(self))
+
+
+class RenameAxisCudf(RenameAxis):
+    # TODO: Remove this after rename_axis is supported in cudf
+    # (See: https://github.com/rapidsai/cudf/issues/16895)
+    @staticmethod
+    def operation(df, index=no_default, **kwargs):
+        if index != no_default:
+            df.index.name = index
+            return df
+        raise NotImplementedError(
+            "Only `index` is supported for the cudf backend"
+        )
 
 
 class ToCudfBackend(Elemwise):
