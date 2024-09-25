@@ -26,7 +26,11 @@ from pytz import utc
 
 from cudf.core._compat import PANDAS_GE_220
 from cudf.pandas import LOADED, Profiler
-from cudf.pandas.fast_slow_proxy import _Unusable, is_proxy_object
+from cudf.pandas.fast_slow_proxy import (
+    ProxyFallbackError,
+    _Unusable,
+    is_proxy_object,
+)
 from cudf.testing import assert_eq
 
 if not LOADED:
@@ -1738,3 +1742,13 @@ def test_numpy_ndarray_numba_cuda_ufunc(array):
         return a + 1
 
     assert_eq(cp.asarray(add_one_ufunc(arr1)), cp.asarray(add_one_ufunc(arr2)))
+
+
+@pytest.mark.xfail(
+    reason="Fallback expected because casting to object is not supported",
+)
+def test_fallback_raises_error(monkeypatch):
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
+        with pytest.raises(ProxyFallbackError):
+            pd.Series(range(2)).astype(object)
