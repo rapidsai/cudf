@@ -17,6 +17,8 @@
 #include "page_data.cuh"
 #include "page_decode.cuh"
 
+#include <cudf/io/detail/batched_memcpy.hpp>
+
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/reduce.h>
@@ -464,6 +466,17 @@ void __host__ DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
     gpuDecodeSplitPageData<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, error_code);
   }
+}
+
+/**
+ * @copydoc cudf::io::parquet::detail::WriteOutputBufferSizesBatched
+ */
+void __host__ WriteFinalOffsetsBatched(std::vector<size_type> const& offsets,
+                                       std::vector<size_type*> const& buff_addrs,
+                                       rmm::device_async_resource_ref mr,
+                                       rmm::cuda_stream_view stream)
+{
+  return cudf::io::detail::batched_memcpy(offsets, buff_addrs, mr, stream);
 }
 
 }  // namespace cudf::io::parquet::detail

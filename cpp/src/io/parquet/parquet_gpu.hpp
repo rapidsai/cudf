@@ -797,6 +797,21 @@ void DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
                          rmm::cuda_stream_view stream);
 
 /**
+ * @brief Writes the final offsets to the corresponding list and string buffer end addresses in a
+ * batched manner.
+ *
+ *
+ * @param[in] offsets A vector of finals offsets
+ * @param[in] buff_addrs A vector of corresponding buffer end addresses
+ * @param[in] mr Device memory resource to allocate temporary memory
+ * @param[in] stream CUDA stream to use
+ */
+void WriteFinalOffsetsBatched(std::vector<size_type> const& offsets,
+                              std::vector<size_type*> const& buff_addrs,
+                              rmm::device_async_resource_ref mr,
+                              rmm::cuda_stream_view stream);
+
+/**
  * @brief Launches kernel for reading the string column data stored in the pages
  *
  * The page data will be written to the output pointed to in the page's
