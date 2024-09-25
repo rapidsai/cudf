@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "join/join_common_utils.cuh"
-#include "join/join_common_utils.hpp"
-#include "join/mixed_join_semi_kernels.hpp"
+#include "join_common_utils.cuh"
+#include "join_common_utils.hpp"
+#include "mixed_join_semi_kernels.hpp"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -37,11 +37,14 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuco/static_set.cuh>
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 
+#include <iostream>
 #include <optional>
+#include <type_traits>
 #include <unordered_set>
 #include <utility>
 #include <variant>
@@ -181,18 +184,21 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
         auto&& probe_hasher,
         auto&& equality_comparator,
         auto&& conditional_comparator) {
-      if constexpr (std::is_same_v<decltype(build_hasher), decltype(probe_hasher)> and
-                    std::is_same_v<decltype(equality_comparator),
-                                   decltype(conditional_comparator)>) {
-        using hash_set_type =
-          cuco::static_set<size_type,
-                           cuco::extent<size_t>,
-                           cuda::thread_scope_device,
-                           double_row_equality_comparator<decltype(equality_comparator),
-                                                          decltype(conditional_comparator)>,
-                           cuco::linear_probing<DEFAULT_MIXED_JOIN_CG_SIZE, decltype(build_hasher)>,
-                           cudf::detail::cuco_allocator<char>,
-                           cuco::storage<1>>;
+      if constexpr (std::is_same_v<std::remove_reference_t<decltype(build_hasher)>,
+                                   std::remove_reference_t<decltype(probe_hasher)>> and
+                    std::is_same_v<std::remove_reference_t<decltype(equality_comparator)>,
+                                   std::remove_reference_t<decltype(conditional_comparator)>>) {
+        using hash_set_type = cuco::static_set<
+          size_type,
+          cuco::extent<size_t>,
+          cuda::thread_scope_device,
+          double_row_equality_comparator<std::remove_reference_t<decltype(equality_comparator)>,
+                                         std::remove_reference_t<decltype(conditional_comparator)>>,
+          cuco::linear_probing<DEFAULT_MIXED_JOIN_CG_SIZE,
+                               std::remove_reference_t<decltype(build_hasher)>>,
+          cudf::detail::cuco_allocator<char>,
+          cuco::storage<1>>;
+
         hash_set_type row_set{
           {compute_hash_table_size(build.num_rows())},
           cuco::empty_key{JoinNoneValue},
@@ -220,7 +226,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
           parser.shmem_per_thread *
           cuco::detail::int_div_ceil(config.num_threads_per_block, hash_set_type::cg_size);
 
-        auto const row_set_ref = row_set.ref(cuco::contains).with_hash_function(probe_hasher);
+        using hash_set_ref_type = hash_set_type::ref_type<cuco::contains_tag>;
+        auto const row_set_ref  = row_set.ref(cuco::contains);
 
         launch_mixed_join_semi(has_nulls,
                                *left_conditional_view,

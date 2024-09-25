@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-#include "join/mixed_join_common_utils.cuh"
-#include "join/mixed_join_semi_kernels.cuh"
-#include "join/mixed_join_semi_kernels.hpp"
+#include "mixed_join_common_utils.cuh"
+#include "mixed_join_semi_kernels.cuh"
+#include "mixed_join_semi_kernels.hpp"
 
 #include <cudf/table/experimental/row_operators.cuh>
+
+#include <cuco/static_set.cuh>
 
 namespace {
 using row_comparator_type = cudf::experimental::row::equality::strong_index_comparator_adapter<
@@ -47,7 +49,7 @@ template void launch_mixed_join_semi<hash_set_ref_type>(
   table_device_view probe,
   table_device_view build,
   row_equality const equality_probe,
-  hash_set_ref_type set_ref,
+  hash_set_ref_type const& set_ref,
   cudf::device_span<bool> left_table_keep_mask,
   cudf::ast::detail::expression_device_view device_expression_data,
   detail::grid_1d const config,
