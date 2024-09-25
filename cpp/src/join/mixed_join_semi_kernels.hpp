@@ -53,12 +53,13 @@ namespace detail {
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
  */
+template <typename HashProbe>
 void launch_mixed_join_semi(bool has_nulls,
                             table_device_view left_table,
                             table_device_view right_table,
                             table_device_view probe,
                             table_device_view build,
-                            row_hash const hash_probe,
+                            HashProbe const hash_probe,
                             row_equality const equality_probe,
                             cudf::detail::semi_map_type::device_view hash_table_view,
                             cudf::device_span<bool> left_table_keep_mask,
