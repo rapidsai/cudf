@@ -41,6 +41,11 @@
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/transform.h>
 
+#define extract(field)                                                          \
+  case field:                                                                   \
+    return detail::apply_datetime_op<detail::extract_component_operator<field>, \
+                                     cudf::type_id::INT16>(column, stream, mr)
+
 namespace cudf {
 namespace datetime {
 namespace detail {
@@ -635,43 +640,16 @@ std::unique_ptr<cudf::column> extract_datetime_component(cudf::column_view const
 {
   CUDF_FUNC_RANGE();
   switch (component) {
-    case datetime_component::YEAR:
-      return detail::apply_datetime_op<detail::extract_component_operator<datetime_component::YEAR>,
-                                       cudf::type_id::INT16>(column, stream, mr);
-    case datetime_component::MONTH:
-      return detail::apply_datetime_op<
-        detail::extract_component_operator<datetime_component::MONTH>,
-        cudf::type_id::INT16>(column, stream, mr);
-    case datetime_component::DAY:
-      return detail::apply_datetime_op<detail::extract_component_operator<datetime_component::DAY>,
-                                       cudf::type_id::INT16>(column, stream, mr);
-    case datetime_component::WEEKDAY:
-      return detail::apply_datetime_op<
-        detail::extract_component_operator<datetime_component::WEEKDAY>,
-        cudf::type_id::INT16>(column, stream, mr);
-    case datetime_component::HOUR:
-      return detail::apply_datetime_op<detail::extract_component_operator<datetime_component::HOUR>,
-                                       cudf::type_id::INT16>(column, stream, mr);
-    case datetime_component::MINUTE:
-      return detail::apply_datetime_op<
-        detail::extract_component_operator<datetime_component::MINUTE>,
-        cudf::type_id::INT16>(column, stream, mr);
-    case datetime_component::SECOND:
-      return detail::apply_datetime_op<
-        detail::extract_component_operator<datetime_component::SECOND>,
-        cudf::type_id::INT16>(column, stream, mr);
-    case datetime_component::MILLISECOND:
-      return detail::apply_datetime_op<
-        detail::extract_component_operator<datetime_component::MILLISECOND>,
-        cudf::type_id::INT16>(column, stream, mr);
-    case datetime_component::MICROSECOND:
-      return detail::apply_datetime_op<
-        detail::extract_component_operator<datetime_component::MICROSECOND>,
-        cudf::type_id::INT16>(column, stream, mr);
-    case datetime_component::NANOSECOND:
-      return detail::apply_datetime_op<
-        detail::extract_component_operator<datetime_component::NANOSECOND>,
-        cudf::type_id::INT16>(column, stream, mr);
+    extract(datetime_component::YEAR);
+    extract(datetime_component::MONTH);
+    extract(datetime_component::DAY);
+    extract(datetime_component::WEEKDAY);
+    extract(datetime_component::HOUR);
+    extract(datetime_component::MINUTE);
+    extract(datetime_component::SECOND);
+    extract(datetime_component::MILLISECOND);
+    extract(datetime_component::MICROSECOND);
+    extract(datetime_component::NANOSECOND);
     default: CUDF_FAIL("Unsupported datetime component.");
   }
 }
