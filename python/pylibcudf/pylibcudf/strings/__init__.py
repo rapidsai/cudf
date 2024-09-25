@@ -8,6 +8,7 @@ from . import (
     convert,
     extract,
     find,
+    findall,
     regex_flags,
     regex_program,
     repeat,
