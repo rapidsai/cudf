@@ -169,16 +169,15 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     probe_column_types.insert(col.type().id());
   }
 
-  auto const hash_build_var = row_hash_build.device_hasher(build_column_types, build_nulls);
-  auto const hash_probe_var = row_hash_probe.device_hasher(probe_column_types, has_nulls);
-  auto const equality_build_equality_var =
+  auto hash_build_var = row_hash_build.device_hasher(build_column_types, build_nulls);
+  auto hash_probe_var = row_hash_probe.device_hasher(probe_column_types, has_nulls);
+  auto equality_build_equality_var =
     row_comparator_build.equal_to(build_column_types, build_nulls, compare_nulls);
-  auto const equality_build_conditional_var =
+  auto equality_build_conditional_var =
     row_comparator_conditional_build.equal_to(build_column_types, build_nulls, compare_nulls);
 
   // Vector used to indicate indices from left/probe table which are present in output
   auto left_table_keep_mask = rmm::device_uvector<bool>(probe.num_rows(), stream);
-
   std::visit(
     [&](auto&& build_hasher,
         auto&& probe_hasher,
@@ -226,8 +225,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
           parser.shmem_per_thread *
           cuco::detail::int_div_ceil(config.num_threads_per_block, hash_set_type::cg_size);
 
-        using hash_set_ref_type = hash_set_type::ref_type<cuco::contains_tag>;
-        auto const row_set_ref  = row_set.ref(cuco::contains);
+        auto const row_set_ref = row_set.ref(cuco::contains);
 
         launch_mixed_join_semi(has_nulls,
                                *left_conditional_view,
