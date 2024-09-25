@@ -226,7 +226,6 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
           auto n   = thrust::get<0>(a);
           auto idx = thrust::get<1>(a);
           return n == 1 ? idx : idx + 1;
-          return idx + 1;
         }),
         thrust::plus<NodeIndexT>{});
     } else {

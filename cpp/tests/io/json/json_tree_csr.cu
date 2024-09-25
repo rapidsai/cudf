@@ -17,12 +17,9 @@
 #include "io/json/nested_json.hpp"
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/random.hpp>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/io/detail/tokenize_json.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -32,9 +29,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/sequence.h>
 #include <thrust/sort.h>
 
-#include <cassert>
 #include <string>
 
 namespace cuio_json = cudf::io::json;
@@ -92,44 +89,26 @@ bool check_equality(cuio_json::tree_meta_t& d_a,
 
   auto num_nodes = a.parent_node_ids.size();
   if (num_nodes > 1) {
-    if (b.row_idx.size() != num_nodes + 1) {
-      std::cout << "1\n";
-      return false;
-    }
+    if (b.row_idx.size() != num_nodes + 1) { return false; }
 
     for (auto pos = b.row_idx[0]; pos < b.row_idx[1]; pos++) {
       auto v = b.col_idx[pos];
-      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) {
-        std::cout << "2\n";
-        return false;
-      }
+      if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[0]) { return false; }
     }
     for (size_t u = 1; u < num_nodes; u++) {
       auto v = b.col_idx[b.row_idx[u]];
-      if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) {
-        std::cout << "3\n";
-        return false;
-      }
+      if (a.parent_node_ids[b.column_ids[u]] != b.column_ids[v]) { return false; }
 
       for (auto pos = b.row_idx[u] + 1; pos < b.row_idx[u + 1]; pos++) {
         v = b.col_idx[pos];
-        if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) {
-          std::cout << "4\n";
-          return false;
-        }
+        if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) { return false; }
       }
     }
     for (size_t u = 0; u < num_nodes; u++) {
-      if (a.node_categories[b.column_ids[u]] != b.categories[u]) {
-        std::cout << "5\n";
-        return false;
-      }
+      if (a.node_categories[b.column_ids[u]] != b.categories[u]) { return false; }
     }
     for (size_t u = 0; u < num_nodes; u++) {
-      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) {
-        std::cout << "6\n";
-        return false;
-      }
+      if (a_max_row_offsets[b.column_ids[u]] != b_max_row_offsets[u]) { return false; }
     }
   } else if (num_nodes == 1) {
     if (b.row_idx.size() != num_nodes + 1) { return false; }
