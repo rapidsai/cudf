@@ -409,9 +409,9 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         }
       }
     }
-    // Write the final offsets for all list and string buffers in a batched manner
-    cudf::io::parquet::detail::WriteFinalOffsetsBatched(final_offsets, out_buffers, _mr, _stream);
   }
+  // Write the final offsets for all list and string buffers in a batched manner
+  cudf::io::parquet::detail::WriteFinalOffsetsBatched(final_offsets, out_buffers, _mr, _stream);
 
   // update null counts in the final column buffers
   for (size_t idx = 0; idx < subpass.pages.size(); idx++) {
