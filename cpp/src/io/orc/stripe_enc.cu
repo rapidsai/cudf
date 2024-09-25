@@ -1337,11 +1337,11 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
   auto const num_streams   = strm_desc.size().second;
   auto const num_stripes   = strm_desc.size().first;
   auto const num_chunks    = num_rowgroups * num_streams;
-  auto srcs                = cudf::detail::make_zeroed_device_uvector_sync<uint8_t*>(
+  auto srcs                = cudf::detail::make_zeroed_device_uvector_async<uint8_t*>(
     num_chunks, stream, rmm::mr::get_current_device_resource());
-  auto dsts = cudf::detail::make_zeroed_device_uvector_sync<uint8_t*>(
+  auto dsts = cudf::detail::make_zeroed_device_uvector_async<uint8_t*>(
     num_chunks, stream, rmm::mr::get_current_device_resource());
-  auto lengths = cudf::detail::make_zeroed_device_uvector_sync<size_t>(
+  auto lengths = cudf::detail::make_zeroed_device_uvector_async<size_t>(
     num_chunks, stream, rmm::mr::get_current_device_resource());
 
   dim3 dim_grid_alt(cudf::util::div_rounding_up_unsafe(num_stripes, compact_streams_block_size),
