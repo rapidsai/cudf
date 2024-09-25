@@ -29,6 +29,7 @@ from . cimport (
     strings,
     traits,
     transform,
+    transpose,
     types,
     unary,
 )
@@ -72,6 +73,7 @@ __all__ = [
     "sorting",
     "traits",
     "transform",
+    "transpose",
     "types",
     "unary",
 ]
