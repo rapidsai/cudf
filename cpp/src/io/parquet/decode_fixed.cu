@@ -24,8 +24,9 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
-// Unlike cub's algorithm, this provides warp-wide and block-wide results simultaneously. 
-// Also, this provides the ability to compute warp_bits & lane_mask manually, which we need for lists. 
+// Unlike cub's algorithm, this provides warp-wide and block-wide results simultaneously.
+// Also, this provides the ability to compute warp_bits & lane_mask manually, which we need for
+// lists.
 struct block_scan_results {
   uint32_t warp_bits;
   int thread_count_within_warp;
@@ -38,7 +39,7 @@ struct block_scan_results {
 template <int decode_block_size>
 static __device__ void scan_block_exclusive_sum(int thread_bit, block_scan_results& results)
 {
-  int const t = threadIdx.x;
+  int const t              = threadIdx.x;
   int const warp_index     = t / cudf::detail::warp_size;
   int const warp_lane      = t % cudf::detail::warp_size;
   uint32_t const lane_mask = (uint32_t(1) << warp_lane) - 1;
@@ -48,22 +49,26 @@ static __device__ void scan_block_exclusive_sum(int thread_bit, block_scan_resul
 }
 
 template <int decode_block_size>
-static __device__ void scan_block_exclusive_sum(uint32_t warp_bits, int warp_lane, int warp_index, uint32_t lane_mask, block_scan_results& results)
+static __device__ void scan_block_exclusive_sum(uint32_t warp_bits,
+                                                int warp_lane,
+                                                int warp_index,
+                                                uint32_t lane_mask,
+                                                block_scan_results& results)
 {
-  //Compute # warps
+  // Compute # warps
   constexpr int num_warps = decode_block_size / cudf::detail::warp_size;
-  
-  //Compute the warp-wide results
+
+  // Compute the warp-wide results
   results.warp_bits                = warp_bits;
   results.warp_count               = __popc(results.warp_bits);
   results.thread_count_within_warp = __popc(results.warp_bits & lane_mask);
 
-  //Share the warp counts amongst the block threads
+  // Share the warp counts amongst the block threads
   __shared__ int warp_counts[num_warps];
   if (warp_lane == 0) { warp_counts[warp_index] = results.warp_count; }
   __syncthreads();
 
-  //Compute block-wide results
+  // Compute block-wide results
   results.block_count               = 0;
   results.thread_count_within_block = results.thread_count_within_warp;
   for (int warp_idx = 0; warp_idx < num_warps; ++warp_idx) {
