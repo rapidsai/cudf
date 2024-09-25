@@ -161,3 +161,20 @@ def test_get_dummies_cats_deprecated():
     df = cudf.DataFrame(range(3))
     with pytest.warns(FutureWarning):
         cudf.get_dummies(df, cats={0: [0, 1, 2]})
+
+
+def test_get_dummies_drop_first_series():
+    result = cudf.get_dummies(cudf.Series(list("abcaa")), drop_first=True)
+    expected = pd.get_dummies(pd.Series(list("abcaa")), drop_first=True)
+    assert_eq(result, expected)
+
+
+def test_get_dummies_drop_first_dataframe():
+    result = cudf.get_dummies(
+        cudf.DataFrame({"A": list("abcaa"), "B": list("bcaab")}),
+        drop_first=True,
+    )
+    expected = pd.get_dummies(
+        pd.DataFrame({"A": list("abcaa"), "B": list("bcaab")}), drop_first=True
+    )
+    assert_eq(result, expected)

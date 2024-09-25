@@ -6,9 +6,32 @@ from . cimport (
     case,
     char_types,
     contains,
+    convert,
+    extract,
     find,
+    findall,
     regex_flags,
     regex_program,
     replace,
     slice,
+    strip,
 )
+from .side_type cimport side_type
+
+__all__ = [
+    "attributes",
+    "capitalize",
+    "case",
+    "char_types",
+    "contains",
+    "convert",
+    "extract",
+    "find",
+    "findall",
+    "regex_flags",
+    "regex_program",
+    "replace",
+    "slice",
+    "strip",
+    "side_type",
+]

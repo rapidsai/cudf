@@ -66,7 +66,7 @@ cpdef Column code_points(Column source_strings):
     Returns
     -------
     Column
-        New INT32 column with code point integer values for each character
+        New column with code point integer values for each character
     """
     cdef unique_ptr[column] c_result
 
