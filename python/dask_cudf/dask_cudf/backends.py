@@ -726,21 +726,16 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             # This code path uses PyArrow for IO, which is only
             # beneficial for remote storage (e.g. S3)
 
-            # CudfReadParquetPyarrowFS requires distributed
-            # (See: https://github.com/dask/dask/issues/11352)
             from fsspec.utils import stringify_path
             from pyarrow import fs as pa_fs
 
+            # CudfReadParquetPyarrowFS requires import of distributed beforehand
+            # (See: https://github.com/dask/dask/issues/11352)
             import distributed  # noqa: F401
             from dask.core import flatten
             from dask.dataframe.utils import pyarrow_strings_enabled
 
             from dask_cudf.expr._expr import CudfReadParquetPyarrowFS
-
-            if not PYARROW_GE_15:
-                raise RuntimeError(
-                    "Experimental Arrow filesystem support requires pyarrow>=15"
-                )
 
             if not (
                 isinstance(filesystem, pa_fs.FileSystem)
@@ -748,6 +743,11 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
                 and filesystem.lower() in ("arrow", "pyarrow")
             ):
                 raise ValueError(f"Unexpected filesystem value: {filesystem}.")
+
+            if not PYARROW_GE_15:
+                raise RuntimeError(
+                    "Experimental Arrow filesystem support requires pyarrow>=15"
+                )
 
             warnings.warn(
                 f"Support for `filesystem={filesystem}` is experimental. "
