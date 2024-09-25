@@ -31,12 +31,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/device_vector.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -1517,7 +1517,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
     fst::detail::make_translation_functor<symbol_t, 0, 2>(token_filter::TransduceToken{}),
     stream);
 
-  auto const mr = rmm::mr::get_current_device_resource();
+  auto const mr = cudf::get_current_device_resource_ref();
   rmm::device_scalar<SymbolOffsetT> d_num_selected_tokens(stream, mr);
   rmm::device_uvector<PdaTokenT> filtered_tokens_out{tokens.size(), stream, mr};
   rmm::device_uvector<SymbolOffsetT> filtered_token_indices_out{tokens.size(), stream, mr};
@@ -1660,6 +1660,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
 
   if (delimiter_offset == 1) {
     tokens.set_element(0, token_t::LineEnd, stream);
+    validate_token_stream(json_in, tokens, tokens_indices, options, stream);
     auto [filtered_tokens, filtered_tokens_indices] =
       process_token_stream(tokens, tokens_indices, stream);
     tokens         = std::move(filtered_tokens);
@@ -2078,11 +2079,15 @@ cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& opt
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 
-  parse_opts.dayfirst   = options.is_enabled_dayfirst();
-  parse_opts.keepquotes = options.is_enabled_keep_quotes();
-  parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
-  parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
-  parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
+  parse_opts.dayfirst              = options.is_enabled_dayfirst();
+  parse_opts.keepquotes            = options.is_enabled_keep_quotes();
+  parse_opts.normalize_whitespace  = options.is_enabled_normalize_whitespace();
+  parse_opts.mixed_types_as_string = options.is_enabled_mixed_types_as_string();
+  parse_opts.trie_true             = cudf::detail::create_serialized_trie({"true"}, stream);
+  parse_opts.trie_false            = cudf::detail::create_serialized_trie({"false"}, stream);
+  std::vector<std::string> na_values{"", "null"};
+  na_values.insert(na_values.end(), options.get_na_values().begin(), options.get_na_values().end());
+  parse_opts.trie_na = cudf::detail::create_serialized_trie(na_values, stream);
   return parse_opts;
 }
 
@@ -2125,10 +2130,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // Move string_offsets and string_lengths to GPU
       rmm::device_uvector<json_column::row_offset_t> d_string_offsets =
         cudf::detail::make_device_uvector_async(
-          json_col.string_offsets, stream, rmm::mr::get_current_device_resource());
+          json_col.string_offsets, stream, cudf::get_current_device_resource_ref());
       rmm::device_uvector<json_column::row_offset_t> d_string_lengths =
         cudf::detail::make_device_uvector_async(
-          json_col.string_lengths, stream, rmm::mr::get_current_device_resource());
+          json_col.string_lengths, stream, cudf::get_current_device_resource_ref());
 
       // Prepare iterator that returns (string_offset, string_length)-tuples
       auto offset_length_it =
