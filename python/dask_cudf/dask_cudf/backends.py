@@ -753,12 +753,6 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
                     "Experimental Arrow filesystem support requires pyarrow>=15"
                 )
 
-            warnings.warn(
-                f"Support for `filesystem={filesystem}` is experimental. "
-                "Using PyArrow to perform IO on multiple CPU threads. "
-                "Behavior may change in the future (without deprecation)."
-            )
-
             if not isinstance(path, str):
                 path = stringify_path(path)
 
