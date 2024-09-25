@@ -7,8 +7,6 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import Select
 from cudf_polars.testing.asserts import (
     assert_collect_raises,
     assert_gpu_result_equal,
@@ -38,14 +36,24 @@ def test_translation_assert_raises():
         assert_ir_translation_raises(unsupported, E)
 
 
-def test_collect_assert_raises(monkeypatch):
+def test_collect_assert_raises():
     df = pl.LazyFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
 
-    with pytest.raises(AssertionError):
-        # This should raise, because polars CPU can run this query
+    with pytest.raises(AssertionError, match="CPU execution DID NOT RAISE"):
+        # This should raise, because polars CPU can run this query,
+        # but we expect an error.
         assert_collect_raises(
             df,
             polars_except=pl.exceptions.InvalidOperationError,
+            cudf_except=(),
+        )
+
+    with pytest.raises(AssertionError, match="GPU execution DID NOT RAISE"):
+        # This should raise, because polars GPU can run this query,
+        # but we expect an error.
+        assert_collect_raises(
+            df,
+            polars_except=(),
             cudf_except=pl.exceptions.InvalidOperationError,
         )
 
@@ -60,7 +68,7 @@ def test_collect_assert_raises(monkeypatch):
         cudf_except=pl.exceptions.InvalidOperationError,
     )
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError, match="GPU execution RAISED"):
         # This should raise because the expected GPU error is wrong
         assert_collect_raises(
             q,
@@ -68,23 +76,10 @@ def test_collect_assert_raises(monkeypatch):
             cudf_except=NotImplementedError,
         )
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError, match="CPU execution RAISED"):
         # This should raise because the expected CPU error is wrong
         assert_collect_raises(
             q,
             polars_except=NotImplementedError,
             cudf_except=pl.exceptions.InvalidOperationError,
         )
-
-    with monkeypatch.context() as m:
-        m.setattr(Select, "evaluate", lambda self, cache: DataFrame([]))
-        # This query should fail, but we monkeypatch a bad
-        # implementation of Select which "succeeds" to check that our
-        # assertion notices this case.
-        q = df.select(pl.col("a") + pl.Series([1, 2]))
-        with pytest.raises(AssertionError):
-            assert_collect_raises(
-                q,
-                polars_except=pl.exceptions.ComputeError,
-                cudf_except=pl.exceptions.ComputeError,
-            )
