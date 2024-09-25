@@ -47,39 +47,41 @@
 #include <limits>
 #include <numeric>
 
-class ThreadRange {
+namespace biubiu {
+class nvtx_event_attr {
  public:
-  static void Push(const char* name,
-                   nvtxDomainHandle_t domain = nullptr,
-                   uint32_t category         = 0,
-                   uint32_t color            = 0xff1abc9c);
+  nvtx_event_attr(const nvtxStringHandle_t string_handle, uint32_t color)
+  {
+    std::memset(&_attr, 0, NVTX_EVENT_ATTRIB_STRUCT_SIZE);
+    _attr.version            = NVTX_VERSION;
+    _attr.size               = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+    _attr.colorType          = nvtxColorType_t::NVTX_COLOR_ARGB;
+    _attr.color              = color;
+    _attr.messageType        = nvtxMessageType_t::NVTX_MESSAGE_TYPE_REGISTERED;
+    _attr.message.registered = string_handle;
+  }
 
-  static void Pop(nvtxDomainHandle_t domain = nullptr);
+  nvtxEventAttributes_t& get() { return _attr; }
+
+ private:
+  nvtxEventAttributes_t _attr;
 };
 
-void ThreadRange::Push(const char* name,
-                       nvtxDomainHandle_t domain,
-                       uint32_t category,
-                       uint32_t color)
-{
-  nvtxEventAttributes_t eventAttrib;
-  std::memset(&eventAttrib, 0, NVTX_EVENT_ATTRIB_STRUCT_SIZE);
-  eventAttrib.version       = NVTX_VERSION;
-  eventAttrib.category      = category;
-  eventAttrib.size          = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
-  eventAttrib.colorType     = nvtxColorType_t::NVTX_COLOR_ARGB;
-  eventAttrib.color         = color;
-  eventAttrib.messageType   = nvtxMessageType_t::NVTX_MESSAGE_TYPE_ASCII;
-  eventAttrib.message.ascii = name;
-  nvtxDomainRangePushEx(domain, &eventAttrib);
-}
+}  // namespace biubiu
 
-void ThreadRange::Pop(nvtxDomainHandle_t domain) { nvtxDomainRangePop(domain); }
+#define GET_EVENT_ATTR(range_name, color)                                                     \
+  [](const char* range_name_var, uint32_t color_var) -> biubiu::nvtx_event_attr& {            \
+    static auto* string_handle =                                                              \
+      nvtxDomainRegisterString(::nvtx3::domain::get<cudf::libcudf_domain>(), range_name_var); \
+    static biubiu::nvtx_event_attr event_attr(string_handle, color_var);                      \
+    return event_attr;                                                                        \
+  }(range_name, color)
 
-#define BIU_RANGE_PUSH(RANGE_NAME) \
-  ThreadRange::Push(RANGE_NAME, ::nvtx3::domain::get<cudf::libcudf_domain>());
+#define BIU_RANGE_PUSH(range_name)                                    \
+  nvtxDomainRangePushEx(::nvtx3::domain::get<cudf::libcudf_domain>(), \
+                        &GET_EVENT_ATTR(range_name, 0xffbf00).get());
 
-#define BIU_RANGE_POP() ThreadRange::Pop(::nvtx3::domain::get<cudf::libcudf_domain>());
+#define BIU_RANGE_POP() nvtxDomainRangePop(::nvtx3::domain::get<cudf::libcudf_domain>());
 
 namespace cudf::io::parquet::detail {
 namespace {

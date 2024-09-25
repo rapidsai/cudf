@@ -23,6 +23,8 @@
     "/usr/local/cuda/gds:/mnt/gds",
     "-v",
     "/opt/nvidia/nsight-systems-cli:/mnt/nsight-systems-cli",
+    "-v",
+    "${localEnv:HOME}/Downloads:/mnt/profile",
     "--privileged",
     "--cap-add=SYS_ADMIN",
     "--rm",
