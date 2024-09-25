@@ -700,7 +700,7 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
         )
 
     @staticmethod
-    def read_parquet(path, filesystem="fsspec", engine=None, **kwargs):
+    def read_parquet(path, *args, filesystem="fsspec", engine=None, **kwargs):
         import dask_expr as dx
         import fsspec
 
@@ -716,6 +716,7 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             return _default_backend(
                 dx.read_parquet,
                 path,
+                *args,
                 filesystem=filesystem,
                 engine=CudfEngine,
                 **kwargs,
@@ -737,6 +738,9 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
 
             from dask_cudf.expr._expr import CudfReadParquetPyarrowFS
 
+            if args:
+                raise ValueError(f"Unexpected positional arguments: {args}")
+
             if not (
                 isinstance(filesystem, pa_fs.FileSystem)
                 or isinstance(filesystem, str)
@@ -745,14 +749,14 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
                 raise ValueError(f"Unexpected filesystem value: {filesystem}.")
 
             if not PYARROW_GE_15:
-                raise RuntimeError(
+                raise NotImplementedError(
                     "Experimental Arrow filesystem support requires pyarrow>=15"
                 )
 
             warnings.warn(
                 f"Support for `filesystem={filesystem}` is experimental. "
                 "Using PyArrow to perform IO on multiple CPU threads. "
-                "Behavior may change in the future (without deprecation). "
+                "Behavior may change in the future (without deprecation)."
             )
 
             if not isinstance(path, str):
