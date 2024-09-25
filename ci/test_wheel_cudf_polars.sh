@@ -39,16 +39,13 @@ if [[ $RAPIDS_DEPENDENCIES == "oldest" ]]; then
       | tee ./constraints.txt
 fi
 
-# echo to expand wildcard before adding `[extra]` requires for pip
+# echo to expand wildcard before adding `[test]` requires for pip
 python -m pip install \
     -v \
     --constraint ./constraints.txt \
     "$(echo ./dist/cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test]" \
     "$(echo ./dist/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \
     "$(echo ./dist/pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
-
-rapids-logger "Pin to 1.7.0 Temporarily"
-python -m pip install polars==1.7.0
 
 rapids-logger "Run cudf_polars tests"
 
