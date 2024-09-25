@@ -286,7 +286,7 @@ cdef class GroupBy:
 
         Returns
         -------
-        Tuple[List[int], Table, Table]]
+        Tuple[List[int], Table, Table]
             A tuple of tables containing three items:
                 - A list of integer offsets into the group keys/values
                 - A table of group keys
