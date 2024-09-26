@@ -25,6 +25,7 @@ files:
       - rapids_build_setuptools
       - run_common
       - run_cudf
+      - run_cudf_polars
       - run_pylibcudf
       - run_dask_cudf
       - run_custreamz
@@ -663,7 +664,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.6
+          - polars>=1.8,<1.9
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
