@@ -13,17 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
 
-#include "compute_single_pass_aggs.cuh"
-// #include "compute_single_pass_aggs.hpp"
+#include "compute_single_pass_aggs.hpp"
 #include "helpers.cuh"
-#include "sparse_to_dense_results.cuh"
+#include "sparse_to_dense_results.hpp"
 #include "var_hash_functor.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/binaryop.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/groupby.hpp>

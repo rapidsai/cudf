@@ -21,7 +21,6 @@
 #include "single_pass_functors.cuh"
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
