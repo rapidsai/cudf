@@ -2820,7 +2820,7 @@ class StringMethods(ColumnMethods):
             sep = " "
 
         return self._return_or_inplace(
-            libstrings.partition(self._column, cudf.Scalar(sep, "str"))[0],
+            libstrings.partition(self._column, cudf.Scalar(sep, "str")),
             expand=expand,
         )
 
@@ -2885,7 +2885,7 @@ class StringMethods(ColumnMethods):
             sep = " "
 
         return self._return_or_inplace(
-            libstrings.rpartition(self._column, cudf.Scalar(sep, "str"))[0],
+            libstrings.rpartition(self._column, cudf.Scalar(sep, "str")),
             expand=expand,
         )
 
