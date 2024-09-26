@@ -15,18 +15,16 @@
  */
 #pragma once
 
-#include "compute_single_pass_aggs.cuh"
-#include "hash_compound_agg_finalizer.cuh"
-#include "var_hash_functor.cuh"
-
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
-#include <cudf/detail/binaryop.hpp>
-#include <cudf/detail/gather.hpp>
-#include <cudf/detail/unary.hpp>
+#include <cudf/groupby.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 
 namespace cudf::groupby::detail::hash {
-
 /**
  * @brief Gather sparse results into dense using `gather_map` and add to
  * `dense_cache`
@@ -42,25 +40,5 @@ void sparse_to_dense_results(table_view const& keys,
                              SetType set,
                              bool skip_key_rows_with_nulls,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
-{
-  auto row_bitmask =
-    cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first;
-  bitmask_type const* row_bitmask_ptr =
-    skip_key_rows_with_nulls ? static_cast<bitmask_type*>(row_bitmask.data()) : nullptr;
-
-  for (auto const& request : requests) {
-    auto const& agg_v = request.aggregations;
-    auto const& col   = request.values;
-
-    // Given an aggregation, this will get the result from sparse_results and
-    // convert and return dense, compacted result
-    auto finalizer = hash_compound_agg_finalizer(
-      col, sparse_results, dense_results, gather_map, set, row_bitmask_ptr, stream, mr);
-    for (auto&& agg : agg_v) {
-      agg->finalize(finalizer);
-    }
-  }
-}
-
+                             rmm::device_async_resource_ref mr);
 }  // namespace cudf::groupby::detail::hash

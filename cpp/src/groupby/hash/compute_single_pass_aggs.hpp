@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
 #include <cudf/detail/aggregation/result_cache.hpp>
@@ -25,10 +24,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
-namespace hash {
+namespace cudf::groupby::detail::hash {
 /**
  * @brief Computes all aggregations from `requests` that require a single pass
  * over the data and stores the results in `sparse_results`
@@ -39,11 +35,6 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   cudf::host_span<cudf::groupby::aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   SetType& global_set,
-  bool keys_have_nulls,
-  null_policy include_null_keys,
+  bool skip_rows_with_nulls,
   rmm::cuda_stream_view stream);
-
-}  // namespace hash
-}  // namespace detail
-}  // namespace groupby
-}  // namespace cudf
+}  // namespace cudf::groupby::detail::hash
