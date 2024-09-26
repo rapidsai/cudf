@@ -306,14 +306,14 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
     for (int d_idx = 0; d_idx <= max_depth; d_idx++) {
       auto& ni = s->nesting_info[d_idx];
 
-      int is_valid = ((d >= ni.max_def_level) && in_row_bounds) ? 1 : 0;
+      int const is_valid = ((d >= ni.max_def_level) && in_row_bounds) ? 1 : 0;
 
       // thread and block validity count
       block_scan_results valid_count_results;
       scan_block_exclusive_sum<decode_block_size>(is_valid, valid_count_results);
       uint32_t const warp_validity_mask = valid_count_results.warp_bits;
-      int thread_valid_count            = valid_count_results.thread_count_within_block;
-      int block_valid_count             = valid_count_results.block_count;
+      int const thread_valid_count            = valid_count_results.thread_count_within_block;
+      int const block_valid_count             = valid_count_results.block_count;
 
       // validity is processed per-warp
       //
@@ -513,9 +513,9 @@ static __device__ int gpuUpdateValidityAndRowIndicesNonNullable(int32_t target_v
     int const row_index     = thread_value_count + value_count;
     int const in_row_bounds = (row_index >= row_index_lower_bound) && (row_index < last_row);
 
-    int is_valid           = in_row_bounds;
-    int thread_valid_count = thread_value_count;
-    int block_valid_count  = block_value_count;
+    int const is_valid           = in_row_bounds;
+    int const thread_valid_count = thread_value_count;
+    int const block_valid_count  = block_value_count;
 
     // if this is valid and we're at the leaf, output dst_pos
     if (is_valid) {
