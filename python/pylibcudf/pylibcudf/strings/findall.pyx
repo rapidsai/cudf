@@ -13,7 +13,7 @@ cpdef Column findall(Column input, RegexProgram pattern):
     Returns a lists column of strings for each matching occurrence using
     the regex_program pattern within each string.
 
-    For details, see For details, see :cpp:func:`cudf::strings::findall`.
+    For details, see :cpp:func:`cudf::strings::findall`.
 
     Parameters
     ----------
