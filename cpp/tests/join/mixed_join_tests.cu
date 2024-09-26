@@ -797,7 +797,7 @@ TYPED_TEST(MixedLeftSemiJoinTest, MixedLeftSemiJoinGatherMapLarge)
 {
   using T1 = double;
 
-  // Column size
+  // Number of rows in each column
   auto constexpr N = 1000;
 
   // Generate column data for left and right tables
