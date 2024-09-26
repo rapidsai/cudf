@@ -13,6 +13,7 @@
 # =============================================================================
 
 set(cython_sources
+    attributes.pyx
     capitalize.pyx
     case.pyx
     char_types.pyx

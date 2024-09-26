@@ -2233,6 +2233,22 @@ class GroupBy(Serializable, Reducible, Scannable):
         return self.agg(func)
 
     @_performance_tracking
+    def nunique(self, dropna: bool = True):
+        """
+        Return number of unique elements in the group.
+
+        Parameters
+        ----------
+        dropna : bool, default True
+            Don't include NaN in the counts.
+        """
+
+        def func(x):
+            return getattr(x, "nunique")(dropna=dropna)
+
+        return self.agg(func)
+
+    @_performance_tracking
     def std(
         self,
         ddof=1,
