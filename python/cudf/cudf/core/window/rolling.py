@@ -24,7 +24,7 @@ class _RollingBase:
 
     def _apply_agg_dataframe(self, df, agg_name):
         result_df = cudf.DataFrame({})
-        for i, col_name in enumerate(df.columns):
+        for i, col_name in enumerate(df._column_names):
             result_col = self._apply_agg_series(df[col_name], agg_name)
             result_df.insert(i, col_name, result_col)
         result_df.index = df.index
