@@ -26,16 +26,16 @@
 
 namespace cudf::groupby::detail::hash {
 
-void compute_aggregations(int grid_size,
-                          cudf::size_type num_input_rows,
-                          bitmask_type const* row_bitmask,
-                          bool skip_rows_with_nulls,
-                          cudf::size_type* local_mapping_index,
-                          cudf::size_type* global_mapping_index,
-                          cudf::size_type* block_cardinality,
-                          cudf::table_device_view input_values,
-                          cudf::mutable_table_device_view output_values,
-                          cudf::aggregation::Kind const* aggs,
-                          rmm::cuda_stream_view stream);
+cudaError_t compute_aggregations(int grid_size,
+                                 cudf::size_type num_input_rows,
+                                 bitmask_type const* row_bitmask,
+                                 bool skip_rows_with_nulls,
+                                 cudf::size_type* local_mapping_index,
+                                 cudf::size_type* global_mapping_index,
+                                 cudf::size_type* block_cardinality,
+                                 cudf::table_device_view input_values,
+                                 cudf::mutable_table_device_view output_values,
+                                 cudf::aggregation::Kind const* aggs,
+                                 rmm::cuda_stream_view stream);
 
 }  // namespace cudf::groupby::detail::hash

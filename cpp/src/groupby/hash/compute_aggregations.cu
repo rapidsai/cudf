@@ -225,32 +225,36 @@ CUDF_KERNEL void compute_aggs_kernel(cudf::size_type num_rows,
 constexpr size_t get_previous_multiple_of_8(size_t number) { return number / 8 * 8; }
 
 template <typename Kernel>
-constexpr size_t compute_shared_memory_size(Kernel kernel, int grid_size)
+constexpr std::pair<cudaError_t, size_t> compute_shared_memory_size(Kernel kernel, int grid_size)
 {
   auto const active_blocks_per_sm =
     cudf::util::div_rounding_up_safe(grid_size, cudf::detail::num_multiprocessors());
 
-  size_t dynamic_shmem_size;
-  CUDF_CUDA_TRY(cudaOccupancyAvailableDynamicSMemPerBlock(
-    &dynamic_shmem_size, kernel, active_blocks_per_sm, GROUPBY_BLOCK_SIZE));
-  return get_previous_multiple_of_8(0.5 * dynamic_shmem_size);
+  size_t dynamic_shmem_size = 0;
+
+  auto const cuda_error = cudaOccupancyAvailableDynamicSMemPerBlock(
+    &dynamic_shmem_size, kernel, active_blocks_per_sm, GROUPBY_BLOCK_SIZE);
+  return {cuda_error, get_previous_multiple_of_8(0.5 * dynamic_shmem_size)};
 }
 
 }  // namespace
 
-void compute_aggregations(int grid_size,
-                          cudf::size_type num_input_rows,
-                          bitmask_type const* row_bitmask,
-                          bool skip_rows_with_nulls,
-                          cudf::size_type* local_mapping_index,
-                          cudf::size_type* global_mapping_index,
-                          cudf::size_type* block_cardinality,
-                          cudf::table_device_view input_values,
-                          cudf::mutable_table_device_view output_values,
-                          cudf::aggregation::Kind const* aggs,
-                          rmm::cuda_stream_view stream)
+cudaError_t compute_aggregations(int grid_size,
+                                 cudf::size_type num_input_rows,
+                                 bitmask_type const* row_bitmask,
+                                 bool skip_rows_with_nulls,
+                                 cudf::size_type* local_mapping_index,
+                                 cudf::size_type* global_mapping_index,
+                                 cudf::size_type* block_cardinality,
+                                 cudf::table_device_view input_values,
+                                 cudf::mutable_table_device_view output_values,
+                                 cudf::aggregation::Kind const* aggs,
+                                 rmm::cuda_stream_view stream)
 {
-  auto const shmem_size = compute_shared_memory_size(compute_aggs_kernel, grid_size);
+  auto const [cuda_error, shmem_size] = compute_shared_memory_size(compute_aggs_kernel, grid_size);
+
+  if (cuda_error != cudaSuccess) { return cuda_error; }
+
   // For each aggregation, need two pointers to arrays in shmem
   // One where the aggregation is performed, one indicating the validity of the aggregation
   auto const shmem_agg_pointer_size =
@@ -269,6 +273,8 @@ void compute_aggregations(int grid_size,
     aggs,
     shmem_agg_size,
     shmem_agg_pointer_size);
+
+  return cudaSuccess;
 }
 
 }  // namespace cudf::groupby::detail::hash
