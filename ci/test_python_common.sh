@@ -10,10 +10,10 @@ set -euo pipefail
 rapids-logger "Generate Python testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
-
+FILE_KEY=$1
 rapids-dependency-file-generator \
   --output conda \
-  --file-key test_python \
+  --file-key ${FILE_KEY} \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
     | tee "${ENV_YAML_DIR}/env.yaml"
 

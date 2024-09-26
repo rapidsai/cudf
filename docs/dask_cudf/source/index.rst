@@ -40,9 +40,10 @@ Using Dask cuDF
 The Dask DataFrame API (Recommended)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Simply use the `Dask configuration <dask:configuration>`__ system to
-set the ``"dataframe.backend"`` option to ``"cudf"``. From Python,
-this can be achieved like so::
+Simply use the `Dask configuration
+<https://docs.dask.org/en/stable/how-to/selecting-the-collection-backend.html>`__
+system to set the ``"dataframe.backend"`` option to ``"cudf"``.
+From Python, this can be achieved like so::
 
   import dask
 

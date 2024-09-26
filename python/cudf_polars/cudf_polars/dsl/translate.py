@@ -93,14 +93,6 @@ def _(
         cloud_options = None
     else:
         reader_options, cloud_options = map(json.loads, options)
-    if (
-        typ == "csv"
-        and visitor.version()[0] == 1
-        and reader_options["schema"] is not None
-    ):
-        reader_options["schema"] = {
-            "fields": reader_options["schema"]["inner"]
-        }  # pragma: no cover; CI tests 1.7
     file_options = node.file_options
     with_columns = file_options.with_columns
     n_rows = file_options.n_rows
