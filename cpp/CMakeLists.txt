@@ -378,7 +378,9 @@ add_library(
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
+  src/io/json/host_tree_algorithms.cu
   src/io/json/json_column.cu
+  src/io/json/column_tree_construction.cu
   src/io/json/json_normalization.cu
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
@@ -797,7 +799,7 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
+  PUBLIC CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool> spdlog::spdlog_header_only
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
           kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
 )

@@ -40,7 +40,6 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
@@ -653,6 +652,24 @@ public class TableTest extends CudfTestBase {
          MultiBufferDataSource source = sourceFrom(JSON_VALIDATION_BUFFER);
          Table table = Table.readJSON(schema, opts, source, (int)expected.getRowCount())) {
       assertTablesAreEqual(expected, table);
+    }
+  }
+
+  private static final byte[] CR_JSON_TEST_BUFFER = ("{\"a\":\"12\n3\"}\0" +
+      "{\"a\":\"AB\nC\"}\0").getBytes(StandardCharsets.UTF_8);
+
+  @Test
+  void testReadJSONDelim() {
+    Schema schema = Schema.builder().addColumn(DType.STRING, "a").build();
+    JSONOptions opts = JSONOptions.builder()
+        .withLines(true)
+        .withLineDelimiter('\0')
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column("12\n3", "AB\nC")
+        .build();
+        Table found = Table.readJSON(schema, opts, CR_JSON_TEST_BUFFER)) {
+      assertTablesAreEqual(expected, found);
     }
   }
 
