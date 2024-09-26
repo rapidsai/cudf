@@ -889,6 +889,7 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
                                                      gpu_tree,
                                                      is_array_of_arrays,
                                                      json_lines,
+                                                     false,
                                                      stream,
                                                      cudf::get_current_device_resource_ref());
 #if LIBCUDF_JSON_DEBUG_DUMP
