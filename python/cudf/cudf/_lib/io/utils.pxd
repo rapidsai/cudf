@@ -21,6 +21,10 @@ cdef add_df_col_struct_names(
     df,
     child_names_dict
 )
+cdef update_col_struct_field_names(
+    Column col,
+    child_names
+)
 cdef update_struct_field_names(
     table,
     vector[column_name_info]& schema_info)
