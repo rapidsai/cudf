@@ -165,3 +165,16 @@ TEST_F(StringsFindallTests, FindTest)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 3, 3, -1, 1, 0, -1, 15}, valids);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
+
+TEST_F(StringsFindallTests, EmptyTest)
+{
+  cudf::test::strings_column_wrapper input;
+  auto sv = cudf::strings_column_view(input);
+
+  auto pattern = std::string("\\w+");
+
+  auto prog     = cudf::strings::regex_program::create(pattern);
+  auto results  = cudf::strings::find_re(sv, *prog);
+  auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>();
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}

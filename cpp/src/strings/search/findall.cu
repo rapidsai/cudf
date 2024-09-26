@@ -134,8 +134,7 @@ struct find_re_fn {
     auto const d_str = d_strings.element<string_view>(idx);
 
     auto const result = prog.find(thread_idx, d_str, d_str.begin());
-    if (!result.has_value()) { return -1; }
-    return result.value().first;
+    return result.has_value() ? result.value().first : -1;
   }
 };
 }  // namespace
@@ -153,10 +152,8 @@ std::unique_ptr<column> find_re(strings_column_view const& input,
                                      mr);
   if (input.is_empty()) { return results; }
 
-  auto d_results = results->mutable_view().data<size_type>();
-
-  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
-
+  auto d_results       = results->mutable_view().data<size_type>();
+  auto d_prog          = regex_device_builder::create_prog_device(prog, stream);
   auto const d_strings = column_device_view::create(input.parent(), stream);
   launch_transform_kernel(find_re_fn{*d_strings}, *d_prog, d_results, input.size(), stream);
 
