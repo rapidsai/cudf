@@ -272,7 +272,7 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
       static_cast<cudf::thread_index_type>(input.size()) * cudf::detail::warp_size, block_size};
     auto shared_mem_size    = block_size * targets.size();
     size_type work_mem_size = 0;
-    if (shared_mem_size > 12000) {  // TODO: Need to find a good value for this
+    if (shared_mem_size > (16 * block_size)) {  // TODO: Need to find a good value for this
       shared_mem_size = 0;
       work_mem_size   = targets.size() * input.size() * cudf::detail::warp_size;
     }
