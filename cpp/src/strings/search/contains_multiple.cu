@@ -101,7 +101,7 @@ CUDF_KERNEL void multi_contains_warp_parallel(column_device_view const d_strings
       auto const temp_result_idx = (threadIdx.x * num_targets) + target_idx;
       if (!shared_bools[temp_result_idx]) {  // not found before
         auto const d_target = d_targets.element<string_view>(target_idx);
-        if (d_str.size_bytes() - str_byte_idx >= d_target.size_bytes()) {
+        if ((d_str.size_bytes() - str_byte_idx) >= d_target.size_bytes()) {
           // first char already checked, only need to check the [2nd, end) chars if has.
           bool found = true;
           for (auto i = 1; i < d_target.size_bytes() && found; i++) {
@@ -119,12 +119,10 @@ CUDF_KERNEL void multi_contains_warp_parallel(column_device_view const d_strings
   if (lane_idx == 0) {
     for (int target_idx = 0; target_idx < num_targets; target_idx++) {
       bool found = false;
-      for (int lane_idx = 0; lane_idx < cudf::detail::warp_size; lane_idx++) {
-        int temp_idx = (threadIdx.x + lane_idx) * num_targets + target_idx;
-        if (shared_bools[temp_idx]) {
-          found = true;
-          break;
-        }
+      // use thrust::any() algorithm with strided iterator?
+      for (size_type lidx = 0; lidx < cudf::detail::warp_size && !found; lidx++) {
+        auto const temp_idx = ((threadIdx.x + lidx) * num_targets) + target_idx;
+        if (shared_bools[temp_idx]) { found = true; }
       }
       d_results[target_idx][str_idx] = found;
     }
@@ -168,7 +166,7 @@ CUDF_KERNEL void multi_contains_row_parallel(column_device_view const d_strings,
       auto const target_idx = d_indices[map_idx++];
       if (!d_results[target_idx][str_idx]) {  // not found before
         auto const d_target = d_targets.element<string_view>(target_idx);
-        if (d_str.size_bytes() - str_byte_idx >= d_target.size_bytes()) {
+        if ((d_str.size_bytes() - str_byte_idx) >= d_target.size_bytes()) {
           // first char already checked, only need to check the [2nd, end) chars
           bool found = true;
           for (auto i = 1; i < d_target.size_bytes() && found; i++) {
