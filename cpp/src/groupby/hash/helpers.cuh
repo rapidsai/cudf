@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
@@ -69,6 +70,22 @@ using nullable_row_comparator_t = cudf::experimental::row::equality::device_row_
   true,
   cudf::nullate::DYNAMIC,
   cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
+
+using global_set_t = cuco::static_set<cudf::size_type,
+                                      cuco::extent<int64_t>,
+                                      cuda::thread_scope_device,
+                                      row_comparator_t,
+                                      probing_scheme_t,
+                                      cudf::detail::cuco_allocator<char>,
+                                      cuco::storage<GROUPBY_WINDOW_SIZE>>;
+
+using nullable_global_set_t = cuco::static_set<cudf::size_type,
+                                               cuco::extent<int64_t>,
+                                               cuda::thread_scope_device,
+                                               nullable_row_comparator_t,
+                                               probing_scheme_t,
+                                               cudf::detail::cuco_allocator<char>,
+                                               cuco::storage<GROUPBY_WINDOW_SIZE>>;
 
 using hash_set_ref_t = cuco::static_set_ref<
   cudf::size_type,
