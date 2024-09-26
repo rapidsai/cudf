@@ -1,0 +1,23 @@
+# Copyright (c) 2024, NVIDIA CORPORATION.
+import re
+
+import pyarrow as pa
+import pylibcudf as plc
+from utils import assert_column_eq
+
+
+def test_findall():
+    arr = pa.array(["bunny", "rabbit", "hare", "dog"])
+    pattern = "[ab]"
+    result = plc.strings.findall.findall(
+        plc.interop.from_arrow(arr),
+        plc.strings.regex_program.RegexProgram.create(
+            pattern, plc.strings.regex_flags.RegexFlags.DEFAULT
+        ),
+    )
+    pa_result = plc.interop.to_arrow(result)
+    expected = pa.array(
+        [re.findall(pattern, elem) for elem in arr.to_pylist()],
+        type=pa_result.type,
+    )
+    assert_column_eq(result, expected)

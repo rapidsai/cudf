@@ -388,6 +388,7 @@ add_library(
   src/io/functions.cpp
   src/io/json/host_tree_algorithms.cu
   src/io/json/json_column.cu
+  src/io/json/column_tree_construction.cu
   src/io/json/json_normalization.cu
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu

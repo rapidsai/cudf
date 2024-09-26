@@ -18,6 +18,20 @@ from .types import MaskState, TypeId
 
 
 cpdef Column make_empty_column(MakeEmptyColumnOperand type_or_id):
+    """Creates an empty column of the specified type.
+
+    For details, see :cpp:func::`make_empty_column`.
+
+    Parameters
+    ----------
+    type_or_id : Union[DataType, type_id, object]
+        The column data type.
+
+    Returns
+    -------
+    Column
+        An empty Column
+    """
     cdef unique_ptr[column] result
     cdef type_id id
 
@@ -60,7 +74,11 @@ cpdef Column make_numeric_column(
     size_type size,
     MaskArg mstate
 ):
+    """Creates an empty numeric column.
 
+    For details, see :cpp:func::`make_numeric_column`.
+
+    """
     cdef unique_ptr[column] result
     cdef mask_state state
 
