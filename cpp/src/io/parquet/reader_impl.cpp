@@ -371,9 +371,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
   }
 
-  // for list columns, add the final offset to every offset buffer.
-  // TODO : make this happen in more efficiently. Maybe use thrust::for_each
-  // on each buffer.
+  // For list and string columns, add the final offset to every offset buffer.
   // Note : the reason we are doing this here instead of in the decode kernel is
   // that it is difficult/impossible for a given page to know that it is writing the very
   // last value that should then be followed by a terminator (because rows can span
@@ -410,7 +408,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       }
     }
   }
-  // Write the final offsets for all list and string buffers in a batched manner
+  // Write the final offsets for list and string columns in a batched manner
   cudf::io::parquet::detail::WriteFinalOffsetsBatched(final_offsets, out_buffers, _mr, _stream);
 
   // update null counts in the final column buffers
