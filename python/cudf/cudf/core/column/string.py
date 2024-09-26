@@ -3629,6 +3629,8 @@ class StringMethods(ColumnMethods):
         Find first occurrence of pattern or regular expression in the
         Series/Index.
 
+        For details, see :cpp:func::`find_re`.
+
         Parameters
         ----------
         pat : str
@@ -3647,7 +3649,7 @@ class StringMethods(ColumnMethods):
             pat = pat.pattern
         if not _is_supported_regex_flags(flags):
             raise NotImplementedError(
-                "unsupported value for `flags` parameter"
+                "Unsupported value for `flags` parameter"
             )
 
         data = libstrings.find_re(self._column, pat, flags)
