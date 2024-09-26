@@ -21,8 +21,10 @@ from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pylibcudf as plc
 
+from polars.exceptions import InvalidOperationError
 from polars.polars import _expr_nodes as pl_expr
 
 from cudf_polars.containers import Column, NamedColumn
@@ -477,12 +479,6 @@ class BooleanFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
-        if (
-            self.name in (pl_expr.BooleanFunction.Any, pl_expr.BooleanFunction.All)
-            and not self.options[0]
-        ):
-            # With ignore_nulls == False, polars uses Kleene logic
-            raise NotImplementedError(f"Kleene logic for {self.name}")
         if self.name == pl_expr.BooleanFunction.IsIn and not all(
             c.dtype == self.children[0].dtype for c in self.children
         ):
@@ -577,20 +573,31 @@ class BooleanFunction(Expr):
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
         ]
-        if self.name == pl_expr.BooleanFunction.Any:
+        # Kleene logic for Any (OR) and All (AND) if ignore_nulls is
+        # False
+        if self.name in (pl_expr.BooleanFunction.Any, pl_expr.BooleanFunction.All):
+            (ignore_nulls,) = self.options
             (column,) = columns
-            return Column(
-                plc.Column.from_scalar(
-                    plc.reduce.reduce(column.obj, plc.aggregation.any(), self.dtype), 1
-                )
-            )
-        elif self.name == pl_expr.BooleanFunction.All:
-            (column,) = columns
-            return Column(
-                plc.Column.from_scalar(
-                    plc.reduce.reduce(column.obj, plc.aggregation.all(), self.dtype), 1
-                )
-            )
+            is_any = self.name == pl_expr.BooleanFunction.Any
+            agg = plc.aggregation.any() if is_any else plc.aggregation.all()
+            result = plc.reduce.reduce(column.obj, agg, self.dtype)
+            if not ignore_nulls and column.obj.null_count() > 0:
+                #      Truth tables
+                #     Any         All
+                #   | F U T     | F U T
+                # --+------   --+------
+                # F | F U T   F | F F F
+                # U | U U T   U | F U U
+                # T | T T T   T | F U T
+                #
+                # If the input null count was non-zero, we must
+                # post-process the result to insert the correct value.
+                h_result = plc.interop.to_arrow(result).as_py()
+                if is_any and not h_result or not is_any and h_result:
+                    # Any                     All
+                    # False || Null => Null   True && Null => Null
+                    return Column(plc.Column.all_null_like(column.obj, 1))
+            return Column(plc.Column.from_scalar(result, 1))
         if self.name == pl_expr.BooleanFunction.IsNull:
             (column,) = columns
             return Column(plc.unary.is_null(column.obj))
@@ -598,13 +605,19 @@ class BooleanFunction(Expr):
             (column,) = columns
             return Column(plc.unary.is_valid(column.obj))
         elif self.name == pl_expr.BooleanFunction.IsNan:
-            # TODO: copy over null mask since is_nan(null) => null in polars
             (column,) = columns
-            return Column(plc.unary.is_nan(column.obj))
+            return Column(
+                plc.unary.is_nan(column.obj).with_mask(
+                    column.obj.null_mask(), column.obj.null_count()
+                )
+            )
         elif self.name == pl_expr.BooleanFunction.IsNotNan:
-            # TODO: copy over null mask since is_not_nan(null) => null in polars
             (column,) = columns
-            return Column(plc.unary.is_not_nan(column.obj))
+            return Column(
+                plc.unary.is_not_nan(column.obj).with_mask(
+                    column.obj.null_mask(), column.obj.null_count()
+                )
+            )
         elif self.name == pl_expr.BooleanFunction.IsFirstDistinct:
             (column,) = columns
             return self._distinct(
@@ -654,26 +667,22 @@ class BooleanFunction(Expr):
                 ),
             )
         elif self.name == pl_expr.BooleanFunction.AllHorizontal:
-            if any(c.obj.null_count() > 0 for c in columns):
-                raise NotImplementedError("Kleene logic for all_horizontal")
             return Column(
                 reduce(
                     partial(
                         plc.binaryop.binary_operation,
-                        op=plc.binaryop.BinaryOperator.BITWISE_AND,
+                        op=plc.binaryop.BinaryOperator.NULL_LOGICAL_AND,
                         output_type=self.dtype,
                     ),
                     (c.obj for c in columns),
                 )
             )
         elif self.name == pl_expr.BooleanFunction.AnyHorizontal:
-            if any(c.obj.null_count() > 0 for c in columns):
-                raise NotImplementedError("Kleene logic for any_horizontal")
             return Column(
                 reduce(
                     partial(
                         plc.binaryop.binary_operation,
-                        op=plc.binaryop.BinaryOperator.BITWISE_OR,
+                        op=plc.binaryop.BinaryOperator.NULL_LOGICAL_OR,
                         output_type=self.dtype,
                     ),
                     (c.obj for c in columns),
@@ -694,7 +703,7 @@ class BooleanFunction(Expr):
 
 
 class StringFunction(Expr):
-    __slots__ = ("name", "options", "children")
+    __slots__ = ("name", "options", "children", "_regex_program")
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
@@ -713,12 +722,18 @@ class StringFunction(Expr):
 
     def _validate_input(self):
         if self.name not in (
-            pl_expr.StringFunction.Lowercase,
-            pl_expr.StringFunction.Uppercase,
-            pl_expr.StringFunction.EndsWith,
-            pl_expr.StringFunction.StartsWith,
             pl_expr.StringFunction.Contains,
+            pl_expr.StringFunction.EndsWith,
+            pl_expr.StringFunction.Lowercase,
+            pl_expr.StringFunction.Replace,
+            pl_expr.StringFunction.ReplaceMany,
             pl_expr.StringFunction.Slice,
+            pl_expr.StringFunction.Strptime,
+            pl_expr.StringFunction.StartsWith,
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+            pl_expr.StringFunction.Uppercase,
         ):
             raise NotImplementedError(f"String function {self.name}")
         if self.name == pl_expr.StringFunction.Contains:
@@ -732,10 +747,64 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
+                pattern = self.children[1].value.as_py()
+                try:
+                    self._regex_program = plc.strings.regex_program.RegexProgram.create(
+                        pattern,
+                        flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
+                    )
+                except RuntimeError as e:
+                    raise NotImplementedError(
+                        f"Unsupported regex {pattern} for GPU engine."
+                    ) from e
+        elif self.name == pl_expr.StringFunction.Replace:
+            _, literal = self.options
+            if not literal:
+                raise NotImplementedError("literal=False is not supported for replace")
+            if not all(isinstance(expr, Literal) for expr in self.children[1:]):
+                raise NotImplementedError("replace only supports scalar target")
+            target = self.children[1]
+            if target.value == pa.scalar("", type=pa.string()):
+                raise NotImplementedError(
+                    "libcudf replace does not support empty strings"
+                )
+        elif self.name == pl_expr.StringFunction.ReplaceMany:
+            (ascii_case_insensitive,) = self.options
+            if ascii_case_insensitive:
+                raise NotImplementedError(
+                    "ascii_case_insensitive not implemented for replace_many"
+                )
+            if not all(
+                isinstance(expr, (LiteralColumn, Literal)) for expr in self.children[1:]
+            ):
+                raise NotImplementedError("replace_many only supports literal inputs")
+            target = self.children[1]
+            if pc.any(pc.equal(target.value, "")).as_py():
+                raise NotImplementedError(
+                    "libcudf replace_many is implemented differently from polars "
+                    "for empty strings"
+                )
         elif self.name == pl_expr.StringFunction.Slice:
             if not all(isinstance(child, Literal) for child in self.children[1:]):
                 raise NotImplementedError(
                     "Slice only supports literal start and stop values"
+                )
+        elif self.name == pl_expr.StringFunction.Strptime:
+            format, _, exact, cache = self.options
+            if cache:
+                raise NotImplementedError("Strptime cache is a CPU feature")
+            if format is None:
+                raise NotImplementedError("Strptime format is required")
+            if not exact:
+                raise NotImplementedError("Strptime does not support exact=False")
+        elif self.name in {
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+        }:
+            if not isinstance(self.children[1], Literal):
+                raise NotImplementedError(
+                    "strip operations only support scalar patterns"
                 )
 
     def do_evaluate(
@@ -759,12 +828,10 @@ class StringFunction(Expr):
                     else pat.obj
                 )
                 return Column(plc.strings.find.contains(column.obj, pattern))
-            assert isinstance(arg, Literal)
-            prog = plc.strings.regex_program.RegexProgram.create(
-                arg.value.as_py(),
-                flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
-            )
-            return Column(plc.strings.contains.contains_re(column.obj, prog))
+            else:
+                return Column(
+                    plc.strings.contains.contains_re(column.obj, self._regex_program)
+                )
         elif self.name == pl_expr.StringFunction.Slice:
             child, expr_offset, expr_length = self.children
             assert isinstance(expr_offset, Literal)
@@ -795,6 +862,22 @@ class StringFunction(Expr):
                     plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
                 )
             )
+        elif self.name in {
+            pl_expr.StringFunction.StripChars,
+            pl_expr.StringFunction.StripCharsStart,
+            pl_expr.StringFunction.StripCharsEnd,
+        }:
+            column, chars = (
+                c.evaluate(df, context=context, mapping=mapping) for c in self.children
+            )
+            if self.name == pl_expr.StringFunction.StripCharsStart:
+                side = plc.strings.SideType.LEFT
+            elif self.name == pl_expr.StringFunction.StripCharsEnd:
+                side = plc.strings.SideType.RIGHT
+            else:
+                side = plc.strings.SideType.BOTH
+            return Column(plc.strings.strip.strip(column.obj, side, chars.obj_scalar))
+
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
@@ -825,6 +908,51 @@ class StringFunction(Expr):
                     else prefix.obj,
                 )
             )
+        elif self.name == pl_expr.StringFunction.Strptime:
+            # TODO: ignores ambiguous
+            format, strict, exact, cache = self.options
+            col = self.children[0].evaluate(df, context=context, mapping=mapping)
+
+            is_timestamps = plc.strings.convert.convert_datetime.is_timestamp(
+                col.obj, format.encode()
+            )
+
+            if strict:
+                if not plc.interop.to_arrow(
+                    plc.reduce.reduce(
+                        is_timestamps,
+                        plc.aggregation.all(),
+                        plc.DataType(plc.TypeId.BOOL8),
+                    )
+                ).as_py():
+                    raise InvalidOperationError("conversion from `str` failed.")
+            else:
+                not_timestamps = plc.unary.unary_operation(
+                    is_timestamps, plc.unary.UnaryOperator.NOT
+                )
+
+                null = plc.interop.from_arrow(pa.scalar(None, type=pa.string()))
+                res = plc.copying.boolean_mask_scatter(
+                    [null], plc.Table([col.obj]), not_timestamps
+                )
+                return Column(
+                    plc.strings.convert.convert_datetime.to_timestamps(
+                        res.columns()[0], self.dtype, format.encode()
+                    )
+                )
+        elif self.name == pl_expr.StringFunction.Replace:
+            column, target, repl = columns
+            n, _ = self.options
+            return Column(
+                plc.strings.replace.replace(
+                    column.obj, target.obj_scalar, repl.obj_scalar, maxrepl=n
+                )
+            )
+        elif self.name == pl_expr.StringFunction.ReplaceMany:
+            column, target, repl = columns
+            return Column(
+                plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj)
+            )
         raise NotImplementedError(
             f"StringFunction {self.name}"
         )  # pragma: no cover; handled by init raising
@@ -832,6 +960,18 @@ class StringFunction(Expr):
 
 class TemporalFunction(Expr):
     __slots__ = ("name", "options", "children")
+    _COMPONENT_MAP: ClassVar[dict[pl_expr.TemporalFunction, str]] = {
+        pl_expr.TemporalFunction.Year: "year",
+        pl_expr.TemporalFunction.Month: "month",
+        pl_expr.TemporalFunction.Day: "day",
+        pl_expr.TemporalFunction.WeekDay: "weekday",
+        pl_expr.TemporalFunction.Hour: "hour",
+        pl_expr.TemporalFunction.Minute: "minute",
+        pl_expr.TemporalFunction.Second: "second",
+        pl_expr.TemporalFunction.Millisecond: "millisecond",
+        pl_expr.TemporalFunction.Microsecond: "microsecond",
+        pl_expr.TemporalFunction.Nanosecond: "nanosecond",
+    }
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
@@ -846,8 +986,8 @@ class TemporalFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
-        if self.name != pl_expr.TemporalFunction.Year:
-            raise NotImplementedError(f"String function {self.name}")
+        if self.name not in self._COMPONENT_MAP:
+            raise NotImplementedError(f"Temporal function {self.name}")
 
     def do_evaluate(
         self,
@@ -861,18 +1001,110 @@ class TemporalFunction(Expr):
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
         ]
-        if self.name == pl_expr.TemporalFunction.Year:
-            (column,) = columns
-            return Column(plc.datetime.extract_year(column.obj))
-        raise NotImplementedError(
-            f"TemporalFunction {self.name}"
-        )  # pragma: no cover; init trips first
+        (column,) = columns
+        if self.name == pl_expr.TemporalFunction.Microsecond:
+            millis = plc.datetime.extract_datetime_component(column.obj, "millisecond")
+            micros = plc.datetime.extract_datetime_component(column.obj, "microsecond")
+            millis_as_micros = plc.binaryop.binary_operation(
+                millis,
+                plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
+                plc.binaryop.BinaryOperator.MUL,
+                plc.DataType(plc.TypeId.INT32),
+            )
+            total_micros = plc.binaryop.binary_operation(
+                micros,
+                millis_as_micros,
+                plc.binaryop.BinaryOperator.ADD,
+                plc.types.DataType(plc.types.TypeId.INT32),
+            )
+            return Column(total_micros)
+        elif self.name == pl_expr.TemporalFunction.Nanosecond:
+            millis = plc.datetime.extract_datetime_component(column.obj, "millisecond")
+            micros = plc.datetime.extract_datetime_component(column.obj, "microsecond")
+            nanos = plc.datetime.extract_datetime_component(column.obj, "nanosecond")
+            millis_as_nanos = plc.binaryop.binary_operation(
+                millis,
+                plc.interop.from_arrow(pa.scalar(1_000_000, type=pa.int32())),
+                plc.binaryop.BinaryOperator.MUL,
+                plc.types.DataType(plc.types.TypeId.INT32),
+            )
+            micros_as_nanos = plc.binaryop.binary_operation(
+                micros,
+                plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
+                plc.binaryop.BinaryOperator.MUL,
+                plc.types.DataType(plc.types.TypeId.INT32),
+            )
+            total_nanos = plc.binaryop.binary_operation(
+                nanos,
+                millis_as_nanos,
+                plc.binaryop.BinaryOperator.ADD,
+                plc.types.DataType(plc.types.TypeId.INT32),
+            )
+            total_nanos = plc.binaryop.binary_operation(
+                total_nanos,
+                micros_as_nanos,
+                plc.binaryop.BinaryOperator.ADD,
+                plc.types.DataType(plc.types.TypeId.INT32),
+            )
+            return Column(total_nanos)
+
+        return Column(
+            plc.datetime.extract_datetime_component(
+                column.obj,
+                self._COMPONENT_MAP[self.name],
+            )
+        )
 
 
 class UnaryFunction(Expr):
     __slots__ = ("name", "options", "children")
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
+
+    # Note: log, and pow are handled via translation to binops
+    _OP_MAPPING: ClassVar[dict[str, plc.unary.UnaryOperator]] = {
+        "sin": plc.unary.UnaryOperator.SIN,
+        "cos": plc.unary.UnaryOperator.COS,
+        "tan": plc.unary.UnaryOperator.TAN,
+        "arcsin": plc.unary.UnaryOperator.ARCSIN,
+        "arccos": plc.unary.UnaryOperator.ARCCOS,
+        "arctan": plc.unary.UnaryOperator.ARCTAN,
+        "sinh": plc.unary.UnaryOperator.SINH,
+        "cosh": plc.unary.UnaryOperator.COSH,
+        "tanh": plc.unary.UnaryOperator.TANH,
+        "arcsinh": plc.unary.UnaryOperator.ARCSINH,
+        "arccosh": plc.unary.UnaryOperator.ARCCOSH,
+        "arctanh": plc.unary.UnaryOperator.ARCTANH,
+        "exp": plc.unary.UnaryOperator.EXP,
+        "sqrt": plc.unary.UnaryOperator.SQRT,
+        "cbrt": plc.unary.UnaryOperator.CBRT,
+        "ceil": plc.unary.UnaryOperator.CEIL,
+        "floor": plc.unary.UnaryOperator.FLOOR,
+        "abs": plc.unary.UnaryOperator.ABS,
+        "bit_invert": plc.unary.UnaryOperator.BIT_INVERT,
+        "not": plc.unary.UnaryOperator.NOT,
+    }
+    _supported_misc_fns = frozenset(
+        {
+            "drop_nulls",
+            "fill_null",
+            "mask_nans",
+            "round",
+            "set_sorted",
+            "unique",
+        }
+    )
+    _supported_cum_aggs = frozenset(
+        {
+            "cum_min",
+            "cum_max",
+            "cum_prod",
+            "cum_sum",
+        }
+    )
+    _supported_fns = frozenset().union(
+        _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
+    )
 
     def __init__(
         self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -881,15 +1113,15 @@ class UnaryFunction(Expr):
         self.name = name
         self.options = options
         self.children = children
-        if self.name not in (
-            "mask_nans",
-            "round",
-            "setsorted",
-            "unique",
-            "dropnull",
-            "fill_null",
-        ):
+
+        if self.name not in UnaryFunction._supported_fns:
             raise NotImplementedError(f"Unary function {name=}")
+        if self.name in UnaryFunction._supported_cum_aggs:
+            (reverse,) = self.options
+            if reverse:
+                raise NotImplementedError(
+                    "reverse=True is not supported for cumulative aggregations"
+                )
 
     def do_evaluate(
         self,
@@ -947,7 +1179,7 @@ class UnaryFunction(Expr):
             if maintain_order:
                 return Column(column).sorted_like(values)
             return Column(column)
-        elif self.name == "setsorted":
+        elif self.name == "set_sorted":
             (column,) = (
                 child.evaluate(df, context=context, mapping=mapping)
                 for child in self.children
@@ -974,7 +1206,7 @@ class UnaryFunction(Expr):
                 order=order,
                 null_order=null_order,
             )
-        elif self.name == "dropnull":
+        elif self.name == "drop_nulls":
             (column,) = (
                 child.evaluate(df, context=context, mapping=mapping)
                 for child in self.children
@@ -994,13 +1226,65 @@ class UnaryFunction(Expr):
                 )
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
             return Column(plc.replace.replace_nulls(column.obj, arg))
+        elif self.name in self._OP_MAPPING:
+            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            if column.obj.type().id() != self.dtype.id():
+                arg = plc.unary.cast(column.obj, self.dtype)
+            else:
+                arg = column.obj
+            return Column(plc.unary.unary_operation(arg, self._OP_MAPPING[self.name]))
+        elif self.name in UnaryFunction._supported_cum_aggs:
+            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            plc_col = column.obj
+            col_type = column.obj.type()
+            # cum_sum casts
+            # Int8, UInt8, Int16, UInt16 -> Int64 for overflow prevention
+            # Bool -> UInt32
+            # cum_prod casts integer dtypes < int64 and bool to int64
+            # See:
+            # https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/cum_agg.rs
+            if (
+                self.name == "cum_sum"
+                and col_type.id()
+                in {
+                    plc.types.TypeId.INT8,
+                    plc.types.TypeId.UINT8,
+                    plc.types.TypeId.INT16,
+                    plc.types.TypeId.UINT16,
+                }
+            ) or (
+                self.name == "cum_prod"
+                and plc.traits.is_integral(col_type)
+                and plc.types.size_of(col_type) <= 4
+            ):
+                plc_col = plc.unary.cast(
+                    plc_col, plc.types.DataType(plc.types.TypeId.INT64)
+                )
+            elif (
+                self.name == "cum_sum"
+                and column.obj.type().id() == plc.types.TypeId.BOOL8
+            ):
+                plc_col = plc.unary.cast(
+                    plc_col, plc.types.DataType(plc.types.TypeId.UINT32)
+                )
+            if self.name == "cum_sum":
+                agg = plc.aggregation.sum()
+            elif self.name == "cum_prod":
+                agg = plc.aggregation.product()
+            elif self.name == "cum_min":
+                agg = plc.aggregation.min()
+            elif self.name == "cum_max":
+                agg = plc.aggregation.max()
 
+            return Column(plc.reduce.scan(plc_col, agg, plc.reduce.ScanType.INCLUSIVE))
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
         )  # pragma: no cover; init trips first
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
+        if self.name in {"unique", "drop_nulls"} | self._supported_cum_aggs:
+            raise NotImplementedError(f"{self.name} in groupby")
         if depth == 1:
             # inside aggregation, need to pre-evaluate, groupby
             # construction has checked that we don't have nested aggs,
@@ -1187,11 +1471,7 @@ class Cast(Expr):
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
         super().__init__(dtype)
         self.children = (value,)
-        if not (
-            plc.traits.is_fixed_width(self.dtype)
-            and plc.traits.is_fixed_width(value.dtype)
-            and plc.unary.is_supported_cast(value.dtype, self.dtype)
-        ):
+        if not dtypes.can_cast(value.dtype, self.dtype):
             raise NotImplementedError(
                 f"Can't cast {self.dtype.id().name} to {value.dtype.id().name}"
             )
@@ -1255,6 +1535,13 @@ class Agg(Expr):
             req = plc.aggregation.variance(ddof=options)
         elif name == "count":
             req = plc.aggregation.count(null_handling=plc.types.NullPolicy.EXCLUDE)
+        elif name == "quantile":
+            _, quantile = self.children
+            if not isinstance(quantile, Literal):
+                raise NotImplementedError("Only support literal quantile values")
+            req = plc.aggregation.quantile(
+                quantiles=[quantile.value.as_py()], interp=Agg.interp_mapping[options]
+            )
         else:
             raise NotImplementedError(
                 f"Unreachable, {name=} is incorrectly listed in _SUPPORTED"
@@ -1286,8 +1573,17 @@ class Agg(Expr):
             "count",
             "std",
             "var",
+            "quantile",
         ]
     )
+
+    interp_mapping: ClassVar[dict[str, plc.types.Interpolation]] = {
+        "nearest": plc.types.Interpolation.NEAREST,
+        "higher": plc.types.Interpolation.HIGHER,
+        "lower": plc.types.Interpolation.LOWER,
+        "midpoint": plc.types.Interpolation.MIDPOINT,
+        "linear": plc.types.Interpolation.LINEAR,
+    }
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
@@ -1299,7 +1595,19 @@ class Agg(Expr):
             raise NotImplementedError("Nan propagation in groupby for min/max")
         (child,) = self.children
         ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
-        if self.request is None:
+        request = self.request
+        # These are handled specially here because we don't set up the
+        # request for the whole-frame agg because we can avoid a
+        # reduce for these.
+        if self.name == "first":
+            request = plc.aggregation.nth_element(
+                0, null_handling=plc.types.NullPolicy.INCLUDE
+            )
+        elif self.name == "last":
+            request = plc.aggregation.nth_element(
+                -1, null_handling=plc.types.NullPolicy.INCLUDE
+            )
+        if request is None:
             raise NotImplementedError(
                 f"Aggregation {self.name} in groupby"
             )  # pragma: no cover; __init__ trips first
@@ -1308,7 +1616,7 @@ class Agg(Expr):
             # Ignore nans in these groupby aggs, do this by masking
             # nans in the input
             expr = UnaryFunction(self.dtype, "mask_nans", (), expr)
-        return AggInfo([(expr, self.request, self)])
+        return AggInfo([(expr, request, self)])
 
     def _reduce(
         self, column: Column, *, request: plc.aggregation.Aggregation
@@ -1380,7 +1688,10 @@ class Agg(Expr):
             raise NotImplementedError(
                 f"Agg in context {context}"
             )  # pragma: no cover; unreachable
-        (child,) = self.children
+
+        # Aggregations like quantiles may have additional children that were
+        # preprocessed into pylibcudf requests.
+        child = self.children[0]
         return self.op(child.evaluate(df, context=context, mapping=mapping))
 
 
@@ -1425,6 +1736,11 @@ class BinOp(Expr):
         right: Expr,
     ) -> None:
         super().__init__(dtype)
+        if plc.traits.is_boolean(self.dtype):
+            # For boolean output types, bitand and bitor implement
+            # boolean logic, so translate. bitxor also does, but the
+            # default behaviour is correct.
+            op = BinOp._BOOL_KLEENE_MAPPING.get(op, op)
         self.op = op
         self.children = (left, right)
         if not plc.binaryop.is_supported_operation(
@@ -1435,6 +1751,15 @@ class BinOp(Expr):
                 f"for types {left.dtype.id().name} and {right.dtype.id().name} "
                 f"with output type {self.dtype.id().name}"
             )
+
+    _BOOL_KLEENE_MAPPING: ClassVar[
+        dict[plc.binaryop.BinaryOperator, plc.binaryop.BinaryOperator]
+    ] = {
+        plc.binaryop.BinaryOperator.BITWISE_AND: plc.binaryop.BinaryOperator.NULL_LOGICAL_AND,
+        plc.binaryop.BinaryOperator.BITWISE_OR: plc.binaryop.BinaryOperator.NULL_LOGICAL_OR,
+        plc.binaryop.BinaryOperator.LOGICAL_AND: plc.binaryop.BinaryOperator.NULL_LOGICAL_AND,
+        plc.binaryop.BinaryOperator.LOGICAL_OR: plc.binaryop.BinaryOperator.NULL_LOGICAL_OR,
+    }
 
     _MAPPING: ClassVar[dict[pl_expr.Operator, plc.binaryop.BinaryOperator]] = {
         pl_expr.Operator.Eq: plc.binaryop.BinaryOperator.EQUAL,

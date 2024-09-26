@@ -178,17 +178,18 @@ struct double_row_equality_comparator {
   }
 };
 
-// A CUDA Cooperative Group of 4 threads for the hash set.
-auto constexpr DEFAULT_MIXED_JOIN_CG_SIZE = 4;
+// A CUDA Cooperative Group of 1 thread for the hash set for mixed semi.
+auto constexpr DEFAULT_MIXED_SEMI_JOIN_CG_SIZE = 1;
 
 // The hash set type used by mixed_semi_join with the build_table.
-using hash_set_type = cuco::static_set<size_type,
-                                       cuco::extent<size_t>,
-                                       cuda::thread_scope_device,
-                                       double_row_equality_comparator,
-                                       cuco::linear_probing<DEFAULT_MIXED_JOIN_CG_SIZE, row_hash>,
-                                       cudf::detail::cuco_allocator<char>,
-                                       cuco::storage<1>>;
+using hash_set_type =
+  cuco::static_set<size_type,
+                   cuco::extent<size_t>,
+                   cuda::thread_scope_device,
+                   double_row_equality_comparator,
+                   cuco::linear_probing<DEFAULT_MIXED_SEMI_JOIN_CG_SIZE, row_hash>,
+                   cudf::detail::cuco_allocator<char>,
+                   cuco::storage<1>>;
 
 // The hash_set_ref_type used by mixed_semi_join kerenels for probing.
 using hash_set_ref_type = hash_set_type::ref_type<cuco::contains_tag>;

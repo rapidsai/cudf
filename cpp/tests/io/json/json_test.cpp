@@ -2856,6 +2856,59 @@ TEST_F(JsonReaderTest, JSONMixedTypeChildren)
   }
 }
 
+TEST_F(JsonReaderTest, MixedTypesWithSchema)
+{
+  std::string data = "{\"data\": {\"A\": 0, \"B\": 1}}\n{\"data\": [1,0]}\n";
+
+  std::map<std::string, cudf::io::schema_element> data_types;
+  std::map<std::string, cudf::io::schema_element> child_types;
+  child_types.insert(
+    std::pair{"element", cudf::io::schema_element{cudf::data_type{cudf::type_id::STRING, 0}, {}}});
+  data_types.insert(std::pair{
+    "data", cudf::io::schema_element{cudf::data_type{cudf::type_id::LIST, 0}, child_types}});
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      .dtypes(data_types)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+      .normalize_single_quotes(true)
+      .normalize_whitespace(true)
+      .mixed_types_as_string(true)
+      .experimental(true)
+      .keep_quotes(true)
+      .lines(true);
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 2);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::LIST);
+  EXPECT_EQ(result.tbl->get_column(0).child(1).type().id(), cudf::type_id::STRING);
+}
+
+TEST_F(JsonReaderTest, UnicodeFieldname)
+{
+  // unicode at nested and leaf levels
+  std::string data = R"({"data": {"a": 0, "b	c": 1}}
+  {"data": {"\u0061": 2, "\u0062\tc": 3}}
+  {"d\u0061ta": {"a": 4}})";
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+      .experimental(true)
+      .lines(true);
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 3);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRUCT);
+  EXPECT_EQ(result.tbl->get_column(0).num_children(), 2);
+  EXPECT_EQ(result.tbl->get_column(0).child(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(0).child(1).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.metadata.schema_info.at(0).name, "data");
+  EXPECT_EQ(result.metadata.schema_info.at(0).children.at(0).name, "a");
+  EXPECT_EQ(result.metadata.schema_info.at(0).children.at(1).name, "b\tc");
+  EXPECT_EQ(result.metadata.schema_info.at(0).children.size(), 2);
+}
+
 TEST_F(JsonReaderTest, JsonDtypeSchema)
 {
   std::string data = R"(
