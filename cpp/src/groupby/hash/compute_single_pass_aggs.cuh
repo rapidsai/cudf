@@ -313,22 +313,17 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
   auto d_values       = table_device_view::create(flattened_values, stream);
 
-  auto const cuda_error = compute_aggregations(grid_size,
-                                               num_input_rows,
-                                               static_cast<bitmask_type*>(row_bitmask.data()),
-                                               skip_rows_with_nulls,
-                                               local_mapping_index.data(),
-                                               global_mapping_index.data(),
-                                               block_cardinality.data(),
-                                               *d_values,
-                                               *d_sparse_table,
-                                               d_agg_kinds.data(),
-                                               stream);
-
-  if (cuda_error != cudaSuccess) {
-    constexpr bool uses_direct_aggs = true;
-    direct_aggregations.set_value_async(uses_direct_aggs, stream);
-  }
+  compute_aggregations(grid_size,
+                       num_input_rows,
+                       static_cast<bitmask_type*>(row_bitmask.data()),
+                       skip_rows_with_nulls,
+                       local_mapping_index.data(),
+                       global_mapping_index.data(),
+                       block_cardinality.data(),
+                       *d_values,
+                       *d_sparse_table,
+                       d_agg_kinds.data(),
+                       stream);
 
   if (direct_aggregations.value(stream)) {
     auto const stride = GROUPBY_BLOCK_SIZE * grid_size;
