@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "helpers.cuh"
+
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>

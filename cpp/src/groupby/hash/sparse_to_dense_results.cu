@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "hash_compound_agg_finalizer.cuh"
+#include "hash_compound_agg_finalizer.hpp"
 #include "helpers.cuh"
 
 #include <cudf/detail/aggregation/result_cache.hpp>

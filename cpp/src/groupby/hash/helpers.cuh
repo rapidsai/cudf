@@ -70,10 +70,20 @@ using nullable_row_comparator_t = cudf::experimental::row::equality::device_row_
   cudf::nullate::DYNAMIC,
   cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
 
-using hash_set_ref_t = cuco::
-  static_set_ref<cudf::size_type, cuda::thread_scope_device, row_comparator_t, probing_scheme_t, cuco::aow_storage_ref<cudf::size_type, GROUPBY_WINDOW_SIZE, cuco::extent<int64_t>>, cuco::op::find_tag, >;
+using hash_set_ref_t = cuco::static_set_ref<
+  cudf::size_type,
+  cuda::thread_scope_device,
+  row_comparator_t,
+  probing_scheme_t,
+  cuco::aow_storage_ref<cudf::size_type, GROUPBY_WINDOW_SIZE, cuco::window_extent<int64_t>>,
+  cuco::op::find_tag>;
 
-using nullable_hash_set_ref_t = cuco::
-  static_set_ref<cudf::size_type, cuda::thread_scope_device, nullable_row_comparator_t, probing_scheme_t, cuco::aow_storage_ref<cudf::size_type, GROUPBY_WINDOW_SIZE, cuco::extent<int64_t>>, cuco::op::find_tag, >;
+using nullable_hash_set_ref_t = cuco::static_set_ref<
+  cudf::size_type,
+  cuda::thread_scope_device,
+  nullable_row_comparator_t,
+  probing_scheme_t,
+  cuco::aow_storage_ref<cudf::size_type, GROUPBY_WINDOW_SIZE, cuco::window_extent<int64_t>>,
+  cuco::op::find_tag>;
 
 }  // namespace cudf::groupby::detail::hash

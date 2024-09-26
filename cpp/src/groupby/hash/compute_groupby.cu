@@ -82,7 +82,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   // column is indexed by the hash set
   cudf::detail::result_cache sparse_results(requests.size());
 
-  auto const set = cuco::static_set{
+  auto set = cuco::static_set{
     cuco::extent<int64_t>{num_keys},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% occupancy
     cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
