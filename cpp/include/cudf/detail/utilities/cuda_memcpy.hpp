@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -52,6 +53,44 @@ void cuda_memcpy_async(
  */
 void cuda_memcpy(
   void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream);
+
+template <typename T>
+void copy_to_device_async(device_span<T> dst, host_span<T const> src, rmm::cuda_stream_view stream)
+{
+  auto const is_pinned = src.is_device_accessible();
+  cuda_memcpy_async(dst.data(),
+                    src.data(),
+                    src.size_bytes(),
+                    is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
+                    stream);
+}
+
+template <typename T>
+void copy_to_device(device_span<T> dst, host_span<T const> src, rmm::cuda_stream_view stream)
+{
+  copy_to_device_async(dst, src, stream);
+  stream.synchronize();
+}
+
+template <typename T>
+void copy_from_device_async(host_span<T> dst,
+                            device_span<T const> src,
+                            rmm::cuda_stream_view stream)
+{
+  auto const is_pinned = dst.is_device_accessible();
+  cuda_memcpy_async(dst.data(),
+                    src.data(),
+                    src.size_bytes(),
+                    is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
+                    stream);
+}
+
+template <typename T>
+void copy_from_device(host_span<T> dst, device_span<T const> src, rmm::cuda_stream_view stream)
+{
+  copy_from_device_async(dst, src, stream);
+  stream.synchronize();
+}
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf
