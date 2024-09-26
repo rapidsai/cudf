@@ -1202,7 +1202,8 @@ TEST_P(JsonDelimiterParamTest, RecoveringTokenStreamNewlineAsWSAndDelimiter)
   //                           012345678 <= line 0
   char const delimiter = GetParam();
 
-  /* Input: (Note that \n is considered whitespace according to the JSON spec when it is not used as a delimiter for JSONL)
+  /* Input: (Note that \n is considered whitespace according to the JSON spec when it is not used as
+   * a delimiter for JSONL)
    * {"a":2}
    * {"a":<delimiter>{"a":{"a":[321<delimiter>{"a":[1]}
    *
@@ -1372,6 +1373,5 @@ TEST_P(JsonDelimiterParamTest, RecoveringTokenStreamNewlineAsWSAndDelimiter)
     EXPECT_EQ(golden_token_stream[i].second, tokens_gpu[i]) << "Mismatch at #" << i;
   }
 }
-
 
 CUDF_TEST_PROGRAM_MAIN()
