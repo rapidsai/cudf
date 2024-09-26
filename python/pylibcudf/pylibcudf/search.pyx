@@ -19,6 +19,8 @@ cpdef Column lower_bound(
 ):
     """Find smallest indices in haystack where needles may be inserted to retain order.
 
+    For details, see :cpp:func:`lower_bound`.
+
     Parameters
     ----------
     haystack : Table
@@ -58,6 +60,8 @@ cpdef Column upper_bound(
 ):
     """Find largest indices in haystack where needles may be inserted to retain order.
 
+    For details, see :cpp:func:`upper_bound`.
+
     Parameters
     ----------
     haystack : Table
@@ -91,6 +95,8 @@ cpdef Column upper_bound(
 
 cpdef Column contains(Column haystack, Column needles):
     """Check whether needles are present in haystack.
+
+    For details, see :cpp:func:`contains`.
 
     Parameters
     ----------
