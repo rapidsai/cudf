@@ -1231,7 +1231,6 @@ TEST_P(JsonDelimiterParamTest, RecoveringTokenStreamNewlineAsWSAndDelimiter)
   using token_t = cuio_json::token_t;
   std::vector<std::pair<std::size_t, cuio_json::PdaTokenT>> golden_token_stream;
   if (delimiter != '\n') {
-    golden_token_stream.resize(36);
     golden_token_stream = {// Line 0 (valid)
                            {0, token_t::StructBegin},
                            {1, token_t::StructMemberBegin},
@@ -1285,7 +1284,6 @@ TEST_P(JsonDelimiterParamTest, RecoveringTokenStreamNewlineAsWSAndDelimiter)
      * {"b":123}
      * {"b"\n:\n\n\n123\n}
      */
-    golden_token_stream.resize(40);
     golden_token_stream = {// Line 0 (valid)
                            {0, token_t::StructBegin},
                            {1, token_t::StructMemberBegin},
