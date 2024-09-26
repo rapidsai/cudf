@@ -78,6 +78,7 @@ intersphinx_mapping = {
     "cudf": ("https://docs.rapids.ai/api/cudf/stable/", None),
     "dask": ("https://docs.dask.org/en/stable/", None),
     "pandas": ("https://pandas.pydata.org/docs/", None),
+    "dask-cuda": ("https://docs.rapids.ai/api/dask-cuda/stable/", None),
 }
 
 numpydoc_show_inherited_class_members = True
