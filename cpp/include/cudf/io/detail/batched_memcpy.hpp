@@ -33,7 +33,7 @@ namespace io::detail {
  *
  * @tparam SrcIterator The type of the source address iterator
  * @tparam DstIterator The type of the destination address iterator
- * @tparam Sizeiterator The type of the buffer size iterator
+ * @tparam SizeIterator The type of the buffer size iterator
  *
  * @param[in] src_iter Iterator to source addresses
  * @param[in] dst_iter Iterator to destination addresses
