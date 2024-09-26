@@ -296,7 +296,7 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
     for (int d_idx = 0; d_idx <= max_depth; d_idx++) {
       auto& ni = s->nesting_info[d_idx];
 
-      int is_valid = ((d >= ni.max_def_level) && in_row_bounds) ? 1 : 0;
+      int const is_valid = ((d >= ni.max_def_level) && in_row_bounds) ? 1 : 0;
 
       // thread and block validity count
       block_scan_results valid_count_results;
