@@ -18,7 +18,9 @@
 #include "var_hash_functor.cuh"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/unary.hpp>

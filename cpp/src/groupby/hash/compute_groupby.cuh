@@ -17,8 +17,8 @@
 
 #include "compute_single_pass_aggs.cuh"
 // #include "compute_single_pass_aggs.hpp"
-#include "multi_pass_functors.cuh"
 #include "sparse_to_dense_results.cuh"
+#include "var_hash_functor.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/binaryop.hpp>

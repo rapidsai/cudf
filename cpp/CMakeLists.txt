@@ -318,6 +318,8 @@ add_library(
   src/groupby/hash/compute_groupby.cu
   src/groupby/hash/compute_groupby_null.cu
   src/groupby/hash/flatten_single_pass_aggs.cpp
+  src/groupby/hash/compute_single_pass_aggs_null.cu
+  src/groupby/hash/compute_single_pass_aggs.cu
   src/groupby/hash/sparse_to_dense_results.cu
   src/groupby/hash/sparse_to_dense_results_null.cu
   src/groupby/hash/groupby.cu
