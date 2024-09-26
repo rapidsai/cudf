@@ -63,6 +63,7 @@ CUDF_KERNEL void multi_contains_warp_parallel(column_device_view const d_strings
                                               size_type const* d_indices,
                                               size_type const* d_offsets,
                                               size_type unique_count,
+                                              bool* working_memory,
                                               cudf::device_span<bool*> d_results)
 {
   auto const num_targets = d_targets.size();
@@ -73,13 +74,16 @@ CUDF_KERNEL void multi_contains_warp_parallel(column_device_view const d_strings
   // get the string for this warp
   auto const d_str = d_strings.element<string_view>(str_idx);
 
+  auto const lane_idx = idx % cudf::detail::warp_size;
+
   // size of shared_bools = num_targets * block_size
   // each thread uses num_targets bools
   extern __shared__ bool shared_bools[];
-  auto const lane_idx = idx % cudf::detail::warp_size;
   auto const warp_idx = threadIdx.x / cudf::detail::warp_size;
   // bools for the current string
-  auto bools = shared_bools + (warp_idx * cudf::detail::warp_size * num_targets);
+  auto bools = working_memory == nullptr
+                 ? (shared_bools + (warp_idx * cudf::detail::warp_size * num_targets))
+                 : (working_memory + (str_idx * cudf::detail::warp_size * num_targets));
 
   // initialize result: set true if target is empty, false otherwise
   for (auto target_idx = lane_idx; target_idx < num_targets;
@@ -183,18 +187,22 @@ CUDF_KERNEL void multi_contains_row_parallel(column_device_view const d_strings,
   }
 }
 
-std::vector<std::unique_ptr<column>> multi_contains(bool warp_parallel,
-                                                    strings_column_view const& input,
-                                                    strings_column_view const& targets,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+}  // namespace
+
+std::unique_ptr<table> contains_multiple(strings_column_view const& input,
+                                         strings_column_view const& targets,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
-  auto const num_targets = static_cast<size_type>(targets.size());
+  CUDF_EXPECTS(not targets.is_empty(), "Must specify at least one target string.");
+  CUDF_EXPECTS(not targets.has_nulls(), "Target strings cannot be null");
+
+  auto const num_targets = targets.size();
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
   auto const d_targets = column_device_view::create(targets.parent(), stream);
 
-  // copy the first byte of each target and sort the first bytes
+  // copy the first byte of each target and sort them
   auto first_bytes = rmm::device_uvector<u_char>(targets.size(), stream);
   auto indices     = rmm::device_uvector<size_type>(targets.size(), stream);
   {
@@ -251,66 +259,38 @@ std::vector<std::unique_ptr<column>> multi_contains(bool warp_parallel,
   auto d_indices     = indices.data();
   auto d_offsets     = offsets.data();
 
-  if (warp_parallel) {
-    cudf::detail::grid_1d grid{
-      static_cast<cudf::thread_index_type>(input.size()) * cudf::detail::warp_size, block_size};
-    int shared_mem_size = block_size * targets.size();
-    multi_contains_warp_parallel<<<grid.num_blocks,
-                                   grid.num_threads_per_block,
-                                   shared_mem_size,
-                                   stream.value()>>>(
-      *d_strings, *d_targets, d_first_bytes, d_indices, d_offsets, ucount, device_results_list);
-  } else {
+  // Smaller strings perform better with a row per string
+  bool const row_parallel = ((input.null_count() == input.size()) ||
+                             ((input.chars_size(stream) / (input.size() - input.null_count())) <=
+                              AVG_CHAR_BYTES_THRESHOLD));
+  if (row_parallel) {
     cudf::detail::grid_1d grid{static_cast<cudf::thread_index_type>(input.size()), block_size};
     multi_contains_row_parallel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *d_strings, *d_targets, d_first_bytes, d_indices, d_offsets, ucount, device_results_list);
-  }
-
-  return results_list;
-}
-
-}  // namespace
-
-std::unique_ptr<table> contains_multiple(strings_column_view const& input,
-                                         strings_column_view const& targets,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
-{
-  CUDF_EXPECTS(not targets.is_empty(), "Must specify at least one target string.");
-  CUDF_EXPECTS(not targets.has_nulls(), "Target strings cannot be null");
-
-  if ((input.null_count() == input.size()) ||
-      ((input.chars_size(stream) / (input.size() - input.null_count())) <=
-       AVG_CHAR_BYTES_THRESHOLD)) {
-    // Small strings. Searching for multiple targets in one thread seems to work fastest.
-    return std::make_unique<table>(
-      multi_contains(/**warp parallel**/ false, input, targets, stream, mr));
-  }
-
-  // Long strings
-  // Use warp parallel when the average string width is greater than the threshold
-  static constexpr size_type target_group_size = 16;  // perhaps can be calculated
-  if (targets.size() <= target_group_size) {
-    return std::make_unique<table>(
-      multi_contains(/**warp parallel**/ true, input, targets, stream, mr));
-  }
-
-  // Too many targets will consume more shared memory, so split targets
-  // TODO: test with large working memory (instead of shared-memory)
-  std::vector<std::unique_ptr<column>> ret_columns;
-  auto const num_groups = cudf::util::div_rounding_up_safe(targets.size(), target_group_size);
-  for (size_type group_idx = 0; group_idx < num_groups; group_idx++) {
-    auto const start_target = group_idx * target_group_size;
-    auto const end_target   = std::min(start_target + target_group_size, targets.size());
-
-    auto target_group = cudf::detail::slice(targets.parent(), start_target, end_target, stream);
-    auto bool_columns = multi_contains(
-      /**warp parallel**/ true, input, strings_column_view(target_group), stream, mr);
-    for (auto& c : bool_columns) {
-      ret_columns.push_back(std::move(c));  // transfer ownership
+  } else {
+    cudf::detail::grid_1d grid{
+      static_cast<cudf::thread_index_type>(input.size()) * cudf::detail::warp_size, block_size};
+    auto shared_mem_size    = block_size * targets.size();
+    size_type work_mem_size = 0;
+    if (shared_mem_size > 12000) {  // TODO: Need to find a good value for this
+      shared_mem_size = 0;
+      work_mem_size   = targets.size() * input.size() * cudf::detail::warp_size;
     }
+    auto working_memory = rmm::device_uvector<bool>(work_mem_size, stream);
+    multi_contains_warp_parallel<<<grid.num_blocks,
+                                   grid.num_threads_per_block,
+                                   shared_mem_size,
+                                   stream.value()>>>(*d_strings,
+                                                     *d_targets,
+                                                     d_first_bytes,
+                                                     d_indices,
+                                                     d_offsets,
+                                                     ucount,
+                                                     working_memory.data(),
+                                                     device_results_list);
   }
-  return std::make_unique<table>(std::move(ret_columns));
+
+  return std::make_unique<table>(std::move(results_list));
 }
 
 }  // namespace detail
