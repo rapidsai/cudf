@@ -12,7 +12,7 @@ cudf.polars:
   - 'python/cudf_polars/**'
 
 pylibcudf:
-  - 'python/cudf/pylibcudf/**'
+  - 'python/pylibcudf/**'
 
 libcudf:
   - 'cpp/**'
