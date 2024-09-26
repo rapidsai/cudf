@@ -798,7 +798,7 @@ TYPED_TEST(MixedLeftSemiJoinTest, MixedLeftSemiJoinGatherMapLarge)
   using T1 = double;
 
   // Number of rows in each column
-  auto constexpr N = 1000;
+  auto constexpr N = 10000;
 
   // Generate column data for left and right tables
   auto const [left_col0, right_col0] = gen_random_nullable_repeated_columns<T1>(N, 200);
