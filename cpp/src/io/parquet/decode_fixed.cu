@@ -312,8 +312,8 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
       block_scan_results valid_count_results;
       scan_block_exclusive_sum<decode_block_size>(is_valid, valid_count_results);
       uint32_t const warp_validity_mask = valid_count_results.warp_bits;
-      int const thread_valid_count            = valid_count_results.thread_count_within_block;
-      int const block_valid_count             = valid_count_results.block_count;
+      int const thread_valid_count      = valid_count_results.thread_count_within_block;
+      int const block_valid_count       = valid_count_results.block_count;
 
       // validity is processed per-warp
       //
