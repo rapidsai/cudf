@@ -18,6 +18,27 @@ import pandas as pd
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 
+def test_profiler_basic():
+    # test that the profiler correctly reports
+    # when we use the GPU v/s CPU
+    with Profiler() as profiler:
+        df = pd.DataFrame({"a": [1, 2, 3], "b": "b"})
+        df.groupby("a").max()
+
+    assert len(profiler.per_line_stats) == 2
+    for line_no, line, gpu_time, cpu_time in profiler.per_line_stats:
+        assert gpu_time
+        assert not cpu_time
+
+    with Profiler() as profiler:
+        s = pd.Series([1, "a"])
+        s = s + s
+
+    assert len(profiler.per_line_stats) == 2
+    for line_no, line, gpu_time, cpu_time in profiler.per_line_stats:
+        assert cpu_time
+
+
 @pytest.mark.skipif(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="function names change across versions of pandas, so making sure it only runs on latest version of pandas",
@@ -104,6 +125,7 @@ def test_profiler_commandline():
         capture_output=True,
         text=True,
         env=env,
+        encoding="utf-8",
     )
     assert sp_completed.returncode == 0
     output = sp_completed.stdout
