@@ -22,6 +22,7 @@
 #include "helpers.cuh"
 #include "single_pass_functors.cuh"
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/null_mask.hpp>

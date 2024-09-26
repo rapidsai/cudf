@@ -49,8 +49,7 @@ template rmm::device_uvector<cudf::size_type> compute_single_pass_aggs<global_se
   cudf::host_span<cudf::groupby::aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   global_set_t& global_set,
-  bool keys_have_nulls,
-  null_policy include_null_keys,
+  bool skip_rows_with_nulls,
   rmm::cuda_stream_view stream);
 
 }  // namespace hash
