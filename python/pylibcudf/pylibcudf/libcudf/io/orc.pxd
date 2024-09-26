@@ -35,6 +35,7 @@ cdef extern from "cudf/io/orc.hpp" \
         void enable_use_index(bool val) except +
         void enable_use_np_dtypes(bool val) except +
         void set_timestamp_type(data_type type) except +
+        void set_decimal128_columns(vector[string] val) except +
 
         @staticmethod
         orc_reader_options_builder builder(

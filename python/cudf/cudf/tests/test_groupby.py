@@ -1940,6 +1940,23 @@ def test_groupby_nunique(agg, by):
     assert_groupby_results_equal(expect, got, check_dtype=False)
 
 
+@pytest.mark.parametrize("dropna", [True, False])
+def test_nunique_dropna(dropna):
+    gdf = cudf.DataFrame(
+        {
+            "a": [1, 1, 2],
+            "b": [4, None, 5],
+            "c": [None, None, 7],
+            "d": [1, 1, 3],
+        }
+    )
+    pdf = gdf.to_pandas()
+
+    result = gdf.groupby("a")["b"].nunique(dropna=dropna)
+    expected = pdf.groupby("a")["b"].nunique(dropna=dropna)
+    assert_groupby_results_equal(result, expected, check_dtype=False)
+
+
 @pytest.mark.parametrize(
     "n",
     [0, 1, 2, 10],
@@ -2470,6 +2487,7 @@ def test_groupby_2keys_rank(nelem, method, ascending, na_option, pct):
         ],
         rows=nelem,
         use_threads=False,
+        seed=0,
     )
     pdf = t.to_pandas()
     pdf.columns = ["x", "y", "z"]
@@ -2602,6 +2620,7 @@ def test_groupby_shift_row_mixed_numerics(
         ],
         rows=nelem,
         use_threads=False,
+        seed=0,
     )
     pdf = t.to_pandas()
     gdf = cudf.from_pandas(pdf)
@@ -2639,6 +2658,7 @@ def test_groupby_shift_row_mixed(nelem, shift_perc, direction):
         ],
         rows=nelem,
         use_threads=False,
+        seed=0,
     )
     pdf = t.to_pandas()
     gdf = cudf.from_pandas(pdf)
@@ -2687,6 +2707,7 @@ def test_groupby_shift_row_mixed_fill(
         ],
         rows=nelem,
         use_threads=False,
+        seed=0,
     )
     pdf = t.to_pandas()
     gdf = cudf.from_pandas(pdf)
@@ -2732,6 +2753,7 @@ def test_groupby_shift_row_zero_shift(nelem, fill_value):
         ],
         rows=nelem,
         use_threads=False,
+        seed=0,
     )
     gdf = cudf.from_pandas(t.to_pandas())
 
@@ -2782,6 +2804,7 @@ def test_groupby_diff_row_mixed_numerics(nelem, shift_perc, direction):
         ],
         rows=nelem,
         use_threads=False,
+        seed=0,
     )
     pdf = t.to_pandas()
     gdf = cudf.from_pandas(pdf)
@@ -2815,6 +2838,7 @@ def test_groupby_diff_row_zero_shift(nelem):
         ],
         rows=nelem,
         use_threads=False,
+        seed=0,
     )
     gdf = cudf.from_pandas(t.to_pandas())
 
