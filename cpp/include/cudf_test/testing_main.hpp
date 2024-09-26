@@ -21,6 +21,7 @@
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/aligned.hpp>
 #include <rmm/cuda_stream_view.hpp>
@@ -30,7 +31,6 @@
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
 namespace CUDF_EXPORT cudf {
@@ -161,7 +161,7 @@ inline auto make_memory_resource_adaptor(cxxopts::ParseResult const& cmd_opts)
 {
   auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();
   auto resource       = cudf::test::create_memory_resource(rmm_mode);
-  rmm::mr::set_current_device_resource(resource.get());
+  cudf::set_current_device_resource(resource.get());
   return resource;
 }
 
@@ -178,7 +178,7 @@ inline auto make_memory_resource_adaptor(cxxopts::ParseResult const& cmd_opts)
  */
 inline auto make_stream_mode_adaptor(cxxopts::ParseResult const& cmd_opts)
 {
-  auto resource                      = rmm::mr::get_current_device_resource();
+  auto resource                      = cudf::get_current_device_resource_ref();
   auto const stream_mode             = cmd_opts["stream_mode"].as<std::string>();
   auto const stream_error_mode       = cmd_opts["stream_error_mode"].as<std::string>();
   auto const error_on_invalid_stream = (stream_error_mode == "error");
@@ -186,7 +186,7 @@ inline auto make_stream_mode_adaptor(cxxopts::ParseResult const& cmd_opts)
   auto adaptor                       = cudf::test::stream_checking_resource_adaptor(
     resource, error_on_invalid_stream, check_default_stream);
   if ((stream_mode == "new_cudf_default") || (stream_mode == "new_testing_default")) {
-    rmm::mr::set_current_device_resource(&adaptor);
+    cudf::set_current_device_resource(&adaptor);
   }
   return adaptor;
 }

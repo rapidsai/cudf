@@ -9,6 +9,7 @@ from dask import dataframe as dd
 from dask.utils_test import hlg_layer
 
 import cudf
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing._utils import expect_warning_if
 
 import dask_cudf
@@ -315,6 +316,10 @@ def test_groupby_dropna_cudf(dropna, by):
         (None, ["a", "c"]),
         (None, ["a", "d"]),
     ],
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
 )
 def test_groupby_dropna_dask(dropna, by):
     # NOTE: This test is borrowed from upstream dask

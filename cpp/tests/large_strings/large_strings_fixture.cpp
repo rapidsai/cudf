@@ -126,7 +126,7 @@ int main(int argc, char** argv)
   auto const cmd_opts = parse_cudf_test_opts(argc, argv);
   // hardcoding the CUDA memory resource to keep from exceeding the pool
   auto mr = cudf::test::make_cuda();
-  rmm::mr::set_current_device_resource(mr.get());
+  cudf::set_current_device_resource(mr.get());
   auto adaptor = make_stream_mode_adaptor(cmd_opts);
 
   // create object to automatically be destroyed at the end of main()

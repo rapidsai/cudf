@@ -27,9 +27,9 @@
 #include <cudf/reduction/detail/segmented_reduction_functions.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
@@ -73,7 +73,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                              null_policy::EXCLUDE,
                                              std::nullopt,
                                              stream,
-                                             rmm::mr::get_current_device_resource());
+                                             cudf::get_current_device_resource_ref());
     auto const d_sizes     = column_device_view::create(*sizes, stream);
     auto const sizes_begin = cudf::detail::make_null_replacement_iterator(*d_sizes, size_type{0});
     auto const sizes_end   = sizes_begin + sizes->size();
