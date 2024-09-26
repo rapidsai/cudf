@@ -252,6 +252,15 @@ result in a simple 1-to-1 mapping between files and output partitions.
   correspond to a reasonable partition size, use ``blocksize=None``
   to avoid unnecessary metadata collection.
 
+.. note::
+  When reading from remote storage (e.g. S3 and GCS), performance will
+  likely improve with ``filesystem="arrow"``. When this option is set,
+  PyArrow will be used to perform IO on multiple CPU threads. Please be
+  aware that this feature is experimental, and behavior may change in
+  the future (without deprecation). Do not pass in ``blocksize`` or
+  ``aggregate_files`` when this feature is used. Instead, set the
+  ``"dataframe.parquet.minimum-partition-size"`` config to control
+  file aggregation.
 
 Use :func:`from_map`
 ~~~~~~~~~~~~~~~~~~~~
