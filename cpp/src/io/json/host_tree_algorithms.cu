@@ -201,7 +201,7 @@ NodeIndexT get_row_array_parent_col_id(device_span<NodeIndexT const> col_ids,
 
   auto value                 = cudf::detail::make_host_vector<NodeIndexT>(1, stream);
   auto const list_node_index = is_enabled_lines ? 0 : 1;
-  value.from_device(col_ids.data() + list_node_index, stream);
+  value.copy_from_device(col_ids.data() + list_node_index, stream);
   return value[0];
 }
 /**
@@ -629,7 +629,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
           is_mixed_type_column[this_col_id] == 1)
         column_categories[this_col_id] = NC_STR;
     }
-    column_categories.to_device_async(d_column_tree.node_categories.data(), stream);
+    column_categories.copy_to_device_async(d_column_tree.node_categories.data(), stream);
   }
 
   // ignore all children of columns forced as string
@@ -644,7 +644,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
         forced_as_string_column[this_col_id])
       column_categories[this_col_id] = NC_STR;
   }
-  column_categories.to_device_async(d_column_tree.node_categories.data(), stream);
+  column_categories.copy_to_device_async(d_column_tree.node_categories.data(), stream);
 
   // restore unique_col_ids order
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
@@ -1378,7 +1378,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
                  column_categories.cbegin(),
                  expected_types.begin(),
                  [](auto exp, auto cat) { return exp == NUM_NODE_CLASSES ? cat : exp; });
-  expected_types.to_device_async(d_column_tree.node_categories.data(), stream);
+  expected_types.copy_to_device_async(d_column_tree.node_categories.data(), stream);
 
   return {is_pruned, columns};
 }

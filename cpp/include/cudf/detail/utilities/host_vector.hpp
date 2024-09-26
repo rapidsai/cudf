@@ -207,7 +207,7 @@ class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
   /**
    * @brief Copies the contents to the given device address asynchronously
    */
-  void to_device_async(T* d_ptr, rmm::cuda_stream_view stream) const
+  void copy_to_device_async(T* d_ptr, rmm::cuda_stream_view stream) const
   {
     auto const is_pinned = this->get_allocator().is_device_accessible();
     cuda_memcpy_async(d_ptr,
@@ -219,16 +219,16 @@ class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
   /**
    * @brief Copies the contents to the given device address and synchronizes the stream
    */
-  void to_device(T* d_ptr, rmm::cuda_stream_view stream) const
+  void copy_to_device(T* d_ptr, rmm::cuda_stream_view stream) const
   {
-    to_device_async(d_ptr, stream);
+    copy_to_device_async(d_ptr, stream);
     stream.synchronize();
   }
 
   /**
    * @brief Copies the contents from the given device address asynchronously
    */
-  void from_device_async(T const* d_ptr, rmm::cuda_stream_view stream)
+  void copy_from_device_async(T const* d_ptr, rmm::cuda_stream_view stream)
   {
     auto const is_pinned = this->get_allocator().is_device_accessible();
     cuda_memcpy_async(this->data(),
@@ -241,9 +241,9 @@ class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
   /**
    * @brief Copies the contents from the given device address and synchronizes the stream
    */
-  void from_device(T const* d_ptr, rmm::cuda_stream_view stream)
+  void copy_from_device(T const* d_ptr, rmm::cuda_stream_view stream)
   {
-    from_device_async(d_ptr, stream);
+    copy_from_device_async(d_ptr, stream);
     stream.synchronize();
   }
 };
