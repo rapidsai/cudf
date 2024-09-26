@@ -3,11 +3,8 @@
 from cudf.core.buffer import acquire_spill_lock
 
 from libcpp.memory cimport unique_ptr
-from libcpp.pair cimport pair
 from libcpp.utility cimport move
-from libcpp.vector cimport vector
 
-cimport pylibcudf.libcudf.types as libcudf_types
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.hash cimport (
     md5,
@@ -19,37 +16,23 @@ from pylibcudf.libcudf.hash cimport (
     sha512,
     xxhash_64,
 )
-from pylibcudf.libcudf.partitioning cimport (
-    hash_partition as cpp_hash_partition,
-)
-from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 
 from cudf._lib.column cimport Column
-from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
+from cudf._lib.utils cimport table_view_from_columns
+
+import pylibcudf as plc
 
 
 @acquire_spill_lock()
-def hash_partition(list source_columns, object columns_to_hash,
+def hash_partition(list source_columns, list columns_to_hash,
                    int num_partitions):
-    cdef vector[libcudf_types.size_type] c_columns_to_hash = columns_to_hash
-    cdef int c_num_partitions = num_partitions
-    cdef table_view c_source_view = table_view_from_columns(source_columns)
-
-    cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
-    with nogil:
-        c_result = move(
-            cpp_hash_partition(
-                c_source_view,
-                c_columns_to_hash,
-                c_num_partitions
-            )
-        )
-
-    return (
-        columns_from_unique_ptr(move(c_result.first)),
-        list(c_result.second)
+    plc_table, offsets = plc.partitioning.hash_partition(
+        plc.Table([col.to_pylibcudf(mode="read") for col in source_columns]),
+        columns_to_hash,
+        num_partitions
     )
+    return [Column.from_pylibcudf(col) for col in plc_table.columns()], offsets
 
 
 @acquire_spill_lock()
