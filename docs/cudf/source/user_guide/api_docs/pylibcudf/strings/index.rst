@@ -16,3 +16,4 @@ strings
     replace
     slice
     strip
+    wrap
