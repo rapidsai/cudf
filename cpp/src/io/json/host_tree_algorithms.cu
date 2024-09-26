@@ -632,11 +632,7 @@ build_tree(device_json_column& root,
           is_mixed_type_column[this_col_id] == 1)
         column_categories[this_col_id] = NC_STR;
     }
-    cudf::detail::cuda_memcpy_async(d_column_tree.node_categories.begin(),
-                                    column_categories.data(),
-                                    column_categories.size() * sizeof(column_categories[0]),
-                                    cudf::detail::host_memory_kind::PAGEABLE,
-                                    stream);
+    column_categories.to_device_async(d_column_tree.node_categories.data(), stream);
   }
 
   // ignore all children of columns forced as string
@@ -651,11 +647,7 @@ build_tree(device_json_column& root,
         forced_as_string_column[this_col_id])
       column_categories[this_col_id] = NC_STR;
   }
-  cudf::detail::cuda_memcpy_async(d_column_tree.node_categories.begin(),
-                                  column_categories.data(),
-                                  column_categories.size() * sizeof(column_categories[0]),
-                                  cudf::detail::host_memory_kind::PAGEABLE,
-                                  stream);
+  column_categories.to_device_async(d_column_tree.node_categories.data(), stream);
 
   // restore unique_col_ids order
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {

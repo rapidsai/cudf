@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
@@ -202,6 +203,49 @@ class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
   host_vector(rmm_host_allocator<T> const& alloc) : base(alloc) {}
 
   host_vector(size_t size, rmm_host_allocator<T> const& alloc) : base(size, alloc) {}
+
+  /**
+   * @brief Copies the contents to the given device address asynchronously
+   */
+  void to_device_async(T* d_ptr, rmm::cuda_stream_view stream) const
+  {
+    auto const is_pinned = this->is_device_accessible();
+    cuda_memcpy_async(d_ptr,
+                      this->data(),
+                      this->size() * sizeof(T),
+                      is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
+                      stream);
+  }
+  /**
+   * @brief Copies the contents to the given device address and synchronizes the stream
+   */
+  void to_device(T* d_ptr, rmm::cuda_stream_view stream) const
+  {
+    to_device_async(d_ptr, stream);
+    stream.synchronize();
+  }
+
+  /**
+   * @brief Copies the contents from the given device address asynchronously
+   */
+  void from_device_async(T const* d_ptr, rmm::cuda_stream_view stream)
+  {
+    auto const is_pinned = this->is_device_accessible();
+    cuda_memcpy_async(this->data(),
+                      d_ptr,
+                      this->size() * sizeof(T),
+                      is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
+                      stream);
+  }
+
+  /**
+   * @brief Copies the contents from the given device address and synchronizes the stream
+   */
+  void from_device(T const* d_ptr, rmm::cuda_stream_view stream)
+  {
+    from_device_async(d_ptr, stream);
+    stream.synchronize();
+  }
 };
 
 }  // namespace detail
