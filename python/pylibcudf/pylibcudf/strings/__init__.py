@@ -15,6 +15,7 @@ from . import (
     repeat,
     replace,
     slice,
+    split,
     strip,
 )
 from .side_type import SideType
@@ -34,5 +35,6 @@ __all__ = [
     "replace",
     "slice",
     "strip",
+    "split",
     "SideType",
 ]
