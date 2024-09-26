@@ -39,6 +39,7 @@ public final class JSONOptions extends ColumnFilterOptions {
   private final boolean allowNonNumericNumbers;
   private final boolean allowUnquotedControlChars;
   private final boolean cudfPruneSchema;
+  private final boolean experimental;
   private final byte lineDelimiter;
 
   private JSONOptions(Builder builder) {
@@ -55,6 +56,7 @@ public final class JSONOptions extends ColumnFilterOptions {
     allowNonNumericNumbers = builder.allowNonNumericNumbers;
     allowUnquotedControlChars = builder.allowUnquotedControlChars;
     cudfPruneSchema = builder.cudfPruneSchema;
+    experimental = builder.experimental;
     lineDelimiter = builder.lineDelimiter;
   }
 
@@ -111,6 +113,10 @@ public final class JSONOptions extends ColumnFilterOptions {
     return allowUnquotedControlChars;
   }
 
+  public boolean experimental() {
+    return experimental;
+  }
+
   @Override
   String[] getIncludeColumnNames() {
     throw new UnsupportedOperationException("JSON reader didn't support column prune");
@@ -136,6 +142,7 @@ public final class JSONOptions extends ColumnFilterOptions {
     private boolean keepQuotes = false;
 
     private boolean cudfPruneSchema = false;
+    private boolean experimental = false;
     private byte lineDelimiter = '\n';
 
     public Builder withCudfPruneSchema(boolean prune) {
@@ -156,6 +163,14 @@ public final class JSONOptions extends ColumnFilterOptions {
      */
     public Builder withStrictValidation(boolean isAllowed) {
       strictValidation = isAllowed;
+      return this;
+    }
+
+    /**
+     * Should experimental features be enabled or not
+     */
+    public Builder withExperimental(boolean isAllowed) {
+      experimental = isAllowed;
       return this;
     }
 
