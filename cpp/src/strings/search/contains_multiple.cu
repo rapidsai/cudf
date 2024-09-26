@@ -38,6 +38,7 @@
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/logical.h>
 #include <thrust/sequence.h>
 #include <thrust/unique.h>
 
@@ -72,15 +73,21 @@ CUDF_KERNEL void multi_contains_warp_parallel(column_device_view const d_strings
   // get the string for this warp
   auto const d_str = d_strings.element<string_view>(str_idx);
 
-  // size of shared_bools = targets_size * block_size
-  // each thread uses targets_size bools
+  // size of shared_bools = num_targets * block_size
+  // each thread uses num_targets bools
   extern __shared__ bool shared_bools[];
   auto const lane_idx = idx % cudf::detail::warp_size;
+  auto const warp_idx = threadIdx.x / cudf::detail::warp_size;
+  // bools for the current string
+  auto bools = shared_bools + (warp_idx * cudf::detail::warp_size * num_targets);
 
   // initialize result: set true if target is empty, false otherwise
-  for (int target_idx = 0; target_idx < num_targets; target_idx++) {
+  for (auto target_idx = lane_idx; target_idx < num_targets;
+       target_idx += cudf::detail::warp_size) {
     auto const d_target = d_targets.element<string_view>(target_idx);
-    shared_bools[threadIdx.x * num_targets + target_idx] = d_target.empty();
+    auto const begin    = bools + (target_idx * cudf::detail::warp_size);
+    thrust::uninitialized_fill(
+      thrust::seq, begin, begin + cudf::detail::warp_size, d_target.empty());
   }
 
   auto const last_ptr = d_first_bytes + unique_count;
@@ -92,14 +99,14 @@ CUDF_KERNEL void multi_contains_warp_parallel(column_device_view const d_strings
     // if not found, continue to next byte
     if ((byte_ptr == last_ptr) || (*byte_ptr != chr)) { continue; }
     // compute index of matched byte
-    auto offset_idx     = static_cast<size_type>(thrust::distance(d_first_bytes, byte_ptr));
-    auto map_idx        = d_offsets[offset_idx];
+    auto const offset_idx = static_cast<size_type>(thrust::distance(d_first_bytes, byte_ptr));
+    auto map_idx          = d_offsets[offset_idx];
     auto const last_idx = (offset_idx + 1) < unique_count ? d_offsets[offset_idx + 1] : num_targets;
     // check for targets that begin with chr
     while (map_idx < last_idx) {
-      auto const target_idx      = d_indices[map_idx++];
-      auto const temp_result_idx = (threadIdx.x * num_targets) + target_idx;
-      if (!shared_bools[temp_result_idx]) {  // not found before
+      auto const target_idx = d_indices[map_idx++];
+      auto const bool_idx   = (target_idx * cudf::detail::warp_size) + lane_idx;
+      if (!bools[bool_idx]) {  // not found before
         auto const d_target = d_targets.element<string_view>(target_idx);
         if ((d_str.size_bytes() - str_byte_idx) >= d_target.size_bytes()) {
           // first char already checked, only need to check the [2nd, end) chars if has.
@@ -107,7 +114,7 @@ CUDF_KERNEL void multi_contains_warp_parallel(column_device_view const d_strings
           for (auto i = 1; i < d_target.size_bytes() && found; i++) {
             if (*(d_str.data() + str_byte_idx + i) != *(d_target.data() + i)) { found = false; }
           }
-          if (found) { shared_bools[temp_result_idx] = true; }
+          if (found) { bools[bool_idx] = true; }
         }
       }
     }
@@ -116,16 +123,13 @@ CUDF_KERNEL void multi_contains_warp_parallel(column_device_view const d_strings
   // wait all lanes are done in a warp
   __syncwarp();
 
-  if (lane_idx == 0) {
-    for (int target_idx = 0; target_idx < num_targets; target_idx++) {
-      bool found = false;
-      // use thrust::any() algorithm with strided iterator?
-      for (size_type lidx = 0; lidx < cudf::detail::warp_size && !found; lidx++) {
-        auto const temp_idx = ((threadIdx.x + lidx) * num_targets) + target_idx;
-        if (shared_bools[temp_idx]) { found = true; }
-      }
-      d_results[target_idx][str_idx] = found;
-    }
+  // reduce the bools for each target to store in the result
+  for (auto target_idx = lane_idx; target_idx < num_targets;
+       target_idx += cudf::detail::warp_size) {
+    auto begin = bools + (target_idx * cudf::detail::warp_size);
+    auto found =
+      thrust::any_of(thrust::seq, begin, begin + cudf::detail::warp_size, thrust::identity<bool>{});
+    d_results[target_idx][str_idx] = found;
   }
 }
 
@@ -158,8 +162,8 @@ CUDF_KERNEL void multi_contains_row_parallel(column_device_view const d_strings,
     // if not found, continue to next byte
     if ((byte_ptr == last_ptr) || (*byte_ptr != chr)) { continue; }
     // compute index of matched byte
-    auto offset_idx     = static_cast<size_type>(thrust::distance(d_first_bytes, byte_ptr));
-    auto map_idx        = d_offsets[offset_idx];
+    auto const offset_idx = static_cast<size_type>(thrust::distance(d_first_bytes, byte_ptr));
+    auto map_idx          = d_offsets[offset_idx];
     auto const last_idx = (offset_idx + 1) < unique_count ? d_offsets[offset_idx + 1] : num_targets;
     // check for targets that begin with chr
     while (map_idx < last_idx) {
