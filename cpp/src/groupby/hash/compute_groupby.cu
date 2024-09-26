@@ -18,16 +18,6 @@
 
 namespace cudf::groupby::detail::hash {
 
-template void sparse_to_dense_results<hash_set_ref_t>(table_view const& keys,
-                                                      host_span<aggregation_request const> requests,
-                                                      cudf::detail::result_cache* sparse_results,
-                                                      cudf::detail::result_cache* dense_results,
-                                                      device_span<size_type const> gather_map,
-                                                      hash_set_ref_t set,
-                                                      bool skip_key_rows_with_nulls,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::device_async_resource_ref mr);
-
 template std::unique_ptr<table> compute_groupby<row_comparator_t>(
   table_view const& keys,
   host_span<aggregation_request const> requests,

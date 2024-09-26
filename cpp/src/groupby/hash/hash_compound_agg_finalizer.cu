@@ -14,18 +14,12 @@
  * limitations under the License.
  */
 
-#include "compute_groupby.cuh"
+#include "hash_compound_agg_finalizer.cuh"
+#include "helpers.cuh"
 
 namespace cudf::groupby::detail::hash {
 
-template std::unique_ptr<table> compute_groupby<nullable_row_comparator_t>(
-  table_view const& keys,
-  host_span<aggregation_request const> requests,
-  cudf::detail::result_cache* cache,
-  bool skip_key_rows_with_nulls,
-  nullable_row_comparator_t const& d_row_equal,
-  row_hash_t const& d_row_hash,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+template class hash_compound_agg_finalizer<hash_set_ref_t>;
+template class hash_compound_agg_finalizer<nullable_hash_set_ref_t>;
 
 }  // namespace cudf::groupby::detail::hash

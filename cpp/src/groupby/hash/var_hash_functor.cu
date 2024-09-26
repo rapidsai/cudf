@@ -15,7 +15,7 @@
  */
 
 #include "helpers.cuh"
-#include "multi_pass_functors.cuh"
+#include "var_hash_functor.cuh"
 
 namespace cudf::groupby::detail::hash {
 

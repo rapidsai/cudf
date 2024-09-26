@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
-#include "compute_groupby.cuh"
+#include "helpers.cuh"
+#include "sparse_to_dense_results.cuh"
 
 namespace cudf::groupby::detail::hash {
 
-template std::unique_ptr<table> compute_groupby<nullable_row_comparator_t>(
+template void sparse_to_dense_results<nullable_hash_set_ref_t>(
   table_view const& keys,
   host_span<aggregation_request const> requests,
-  cudf::detail::result_cache* cache,
+  cudf::detail::result_cache* sparse_results,
+  cudf::detail::result_cache* dense_results,
+  device_span<size_type const> gather_map,
+  nullable_hash_set_ref_t set,
   bool skip_key_rows_with_nulls,
-  nullable_row_comparator_t const& d_row_equal,
-  row_hash_t const& d_row_hash,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
