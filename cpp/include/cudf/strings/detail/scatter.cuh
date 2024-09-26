@@ -19,12 +19,12 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/distance.h>
@@ -70,7 +70,7 @@ std::unique_ptr<column> scatter(SourceIterator begin,
 
   // create vector of string_view's to scatter into
   rmm::device_uvector<string_view> target_vector =
-    create_string_vector_from_column(target, stream, rmm::mr::get_current_device_resource());
+    create_string_vector_from_column(target, stream, cudf::get_current_device_resource_ref());
 
   // this ensures empty strings are not mapped to nulls in the make_strings_column function
   auto const size = thrust::distance(begin, end);
