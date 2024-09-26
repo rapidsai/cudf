@@ -51,8 +51,11 @@ class device_scalar : public rmm::device_scalar<T> {
     T const& initial_value,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
-    : rmm::device_scalar<T>(initial_value, stream, mr)
+    : rmm::device_scalar<T>(stream, mr)
   {
+    auto bounce_buffer = make_host_vector<T>(1, stream);
+    bounce_buffer[0]   = initial_value;
+    bounce_buffer.to_device(this->data(), stream);
   }
 
   device_scalar(device_scalar const& other,
@@ -64,16 +67,7 @@ class device_scalar : public rmm::device_scalar<T> {
 
   [[nodiscard]] T value(rmm::cuda_stream_view stream) const
   {
-    auto h_value         = make_host_vector<T>(1, stream);
-    auto const is_pinned = h_value.get_allocator().is_device_accessible();
-    // TODO replace with from_device
-    cuda_memcpy_async(h_value.data(),
-                      this->data(),
-                      sizeof(T),
-                      is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
-                      stream);
-    stream.synchronize();
-    return h_value[0];
+    return make_host_vector_sync(device_span<T const>{this->data(), 1}, stream)[0];
   }
 };
 
