@@ -178,7 +178,7 @@ struct double_row_equality_comparator {
   }
 };
 
-// A CUDA Cooperative Group of 4 threads for the hash set.
+// A CUDA Cooperative Group of 1 thread for the hash set for mixed semi.
 auto constexpr DEFAULT_MIXED_SEMI_JOIN_CG_SIZE = 1;
 
 // The hash set type used by mixed_semi_join with the build_table.
