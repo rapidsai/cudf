@@ -81,7 +81,7 @@ representations, native cuDF spilling may be insufficient. For these cases,
 `JIT-unspill <https://docs.rapids.ai/api/dask-cuda/nightly/spilling/#jit-unspill>`__
 is likely to produce better protection from out-of-memory (OOM) errors.
 Please see `Dask-CUDA's spilling documentation
-<https://docs.rapids.ai/api/dask-cuda/24.10/spilling/>`__ for further details
+<https://docs.rapids.ai/api/dask-cuda/stable/spilling/>`__ for further details
 and guidance.
 
 Use RMM
@@ -299,13 +299,11 @@ are often recommended:
 
 * Use a distributed cluster with `Dask-CUDA <https://docs.rapids.ai/api/dask-cuda/stable/>`__ workers
 
-* Use native cuDF spilling whenever possible (`Dask-CUDA spilling documentation <https://docs.rapids.ai/api/dask-cuda/24.10/spilling/>`__)
+* Use native cuDF spilling whenever possible (`Dask-CUDA spilling documentation <https://docs.rapids.ai/api/dask-cuda/stable/spilling/>`__)
 
 * Avoid shuffling whenever possible
-
-   * Use ``split_out=1`` for low-cardinality groupby aggregations
-
-   * Use ``broadcast=True`` for joins when at least one collection comprises a small number of partitions (e.g. ``<=5``)
+    * Use ``split_out=1`` for low-cardinality groupby aggregations
+    * Use ``broadcast=True`` for joins when at least one collection comprises a small number of partitions (e.g. ``<=5``)
 
 * `Use UCX <https://docs.rapids.ai/api/dask-cuda/nightly/examples/ucx/>`__ if communication is a bottleneck.
 
