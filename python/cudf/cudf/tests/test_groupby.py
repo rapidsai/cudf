@@ -2487,6 +2487,7 @@ def test_groupby_2keys_rank(nelem, method, ascending, na_option, pct):
         ],
         rows=nelem,
         use_threads=False,
+        seed=0,
     )
     pdf = t.to_pandas()
     pdf.columns = ["x", "y", "z"]
@@ -2619,6 +2620,7 @@ def test_groupby_shift_row_mixed_numerics(
         ],
         rows=nelem,
         use_threads=False,
+        seed=0,
     )
     pdf = t.to_pandas()
     gdf = cudf.from_pandas(pdf)
@@ -2656,6 +2658,7 @@ def test_groupby_shift_row_mixed(nelem, shift_perc, direction):
         ],
         rows=nelem,
         use_threads=False,
+        seed=0,
     )
     pdf = t.to_pandas()
     gdf = cudf.from_pandas(pdf)
@@ -2704,6 +2707,7 @@ def test_groupby_shift_row_mixed_fill(
         ],
         rows=nelem,
         use_threads=False,
+        seed=0,
     )
     pdf = t.to_pandas()
     gdf = cudf.from_pandas(pdf)
@@ -2749,6 +2753,7 @@ def test_groupby_shift_row_zero_shift(nelem, fill_value):
         ],
         rows=nelem,
         use_threads=False,
+        seed=0,
     )
     gdf = cudf.from_pandas(t.to_pandas())
 
@@ -2799,6 +2804,7 @@ def test_groupby_diff_row_mixed_numerics(nelem, shift_perc, direction):
         ],
         rows=nelem,
         use_threads=False,
+        seed=0,
     )
     pdf = t.to_pandas()
     gdf = cudf.from_pandas(pdf)
@@ -2832,6 +2838,7 @@ def test_groupby_diff_row_zero_shift(nelem):
         ],
         rows=nelem,
         use_threads=False,
+        seed=0,
     )
     gdf = cudf.from_pandas(t.to_pandas())
 

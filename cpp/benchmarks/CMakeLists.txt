@@ -231,6 +231,11 @@ ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
 ConfigureBench(QUANTILES_BENCH quantiles/quantiles.cpp)
 
 # ##################################################################################################
+# * tdigest benchmark
+# --------------------------------------------------------------------------------
+ConfigureNVBench(TDIGEST_NVBENCH quantiles/tdigest.cu)
+
+# ##################################################################################################
 # * type_dispatcher benchmark ---------------------------------------------------------------------
 ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher.cu)
 
