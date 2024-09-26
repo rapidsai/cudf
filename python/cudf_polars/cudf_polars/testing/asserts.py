@@ -164,9 +164,11 @@ def assert_collect_raises(
         cudf-polars.
         Useful for controlling optimization settings.
     polars_except
-        Exception or exceptions polars CPU is expected to raise.
+        Exception or exceptions polars CPU is expected to raise. If
+        None, CPU is not expected to raise an exception.
     cudf_except
-        Exception or exceptions polars GPU is expected to raise.
+        Exception or exceptions polars GPU is expected to raise. If
+        None, GPU is not expected to raise an exception.
     collect_kwargs
         Common keyword arguments to pass to collect for both polars CPU and
         cudf-polars.
@@ -203,7 +205,8 @@ def assert_collect_raises(
             f"CPU execution RAISED {type(e)}, EXPECTED {polars_except}"
         ) from e
     else:
-        raise AssertionError(f"CPU execution DID NOT RAISE {polars_except}")
+        if polars_except != ():
+            raise AssertionError(f"CPU execution DID NOT RAISE {polars_except}")
 
     engine = GPUEngine(raise_on_fail=True)
     try:
@@ -212,7 +215,8 @@ def assert_collect_raises(
         pass
     except Exception as e:
         raise AssertionError(
-            f"GPU execution RAISED {type(e)}, EXPECTED {polars_except}"
+            f"GPU execution RAISED {type(e)}, EXPECTED {cudf_except}"
         ) from e
     else:
-        raise AssertionError(f"GPU execution DID NOT RAISE {polars_except}")
+        if cudf_except != ():
+            raise AssertionError(f"GPU execution DID NOT RAISE {cudf_except}")
