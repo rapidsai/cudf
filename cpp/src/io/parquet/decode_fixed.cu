@@ -504,9 +504,9 @@ static __device__ int gpuUpdateValidityAndRowIndicesNonNullable(int32_t target_v
     int const row_index     = thread_value_count + value_count;
     int const in_row_bounds = (row_index >= row_index_lower_bound) && (row_index < last_row);
 
-    int is_valid           = in_row_bounds;
-    int thread_valid_count = thread_value_count;
-    int block_valid_count  = block_value_count;
+    int const is_valid           = in_row_bounds;
+    int const thread_valid_count = thread_value_count;
+    int const block_valid_count  = block_value_count;
 
     // if this is valid and we're at the leaf, output dst_pos
     if (is_valid) {
