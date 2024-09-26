@@ -209,7 +209,7 @@ class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
    */
   void to_device_async(T* d_ptr, rmm::cuda_stream_view stream) const
   {
-    auto const is_pinned = this->is_device_accessible();
+    auto const is_pinned = this->get_allocator().is_device_accessible();
     cuda_memcpy_async(d_ptr,
                       this->data(),
                       this->size() * sizeof(T),
@@ -230,7 +230,7 @@ class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
    */
   void from_device_async(T const* d_ptr, rmm::cuda_stream_view stream)
   {
-    auto const is_pinned = this->is_device_accessible();
+    auto const is_pinned = this->get_allocator().is_device_accessible();
     cuda_memcpy_async(this->data(),
                       d_ptr,
                       this->size() * sizeof(T),

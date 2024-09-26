@@ -197,17 +197,12 @@ NodeIndexT get_row_array_parent_col_id(device_span<NodeIndexT const> col_ids,
                                        bool is_enabled_lines,
                                        rmm::cuda_stream_view stream)
 {
-  NodeIndexT value = parent_node_sentinel;
-  if (!col_ids.empty()) {
-    auto const list_node_index = is_enabled_lines ? 0 : 1;
-    CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
-                                  col_ids.data() + list_node_index,
-                                  sizeof(NodeIndexT),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
-    stream.synchronize();
-  }
-  return value;
+  if (col_ids.empty()) { return parent_node_sentinel; }
+
+  auto value                 = cudf::detail::make_host_vector<NodeIndexT>(1, stream);
+  auto const list_node_index = is_enabled_lines ? 0 : 1;
+  value.from_device(col_ids.data() + list_node_index, stream);
+  return value[0];
 }
 /**
  * @brief Holds member data pointers of `d_json_column`
@@ -1383,11 +1378,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
                  column_categories.cbegin(),
                  expected_types.begin(),
                  [](auto exp, auto cat) { return exp == NUM_NODE_CLASSES ? cat : exp; });
-  cudaMemcpyAsync(d_column_tree.node_categories.begin(),
-                  expected_types.data(),
-                  expected_types.size() * sizeof(column_categories[0]),
-                  cudaMemcpyDefault,
-                  stream.value());
+  expected_types.to_device_async(d_column_tree.node_categories.data(), stream);
 
   return {is_pruned, columns};
 }
