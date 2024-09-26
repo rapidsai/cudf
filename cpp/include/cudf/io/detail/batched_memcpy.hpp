@@ -40,10 +40,10 @@ namespace io::detail {
  * @param[in] size_iter Iterator to the vector sizes (in bytes)
  * @param[in] stream CUDA stream to use
  */
-template <typename SrcIterator, typename DstIterator, typename Sizeiterator>
+template <typename SrcIterator, typename DstIterator, typename SizeIterator>
 void batched_memcpy(SrcIterator src_iter,
                     DstIterator dst_iter,
-                    Sizeiterator size_iter,
+                    SizeIterator size_iter,
                     size_t num_elems,
                     rmm::cuda_stream_view stream)
 {
