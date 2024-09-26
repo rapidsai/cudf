@@ -2,23 +2,12 @@
 
 from cudf.core.buffer import acquire_spill_lock
 
-from libcpp.memory cimport unique_ptr
-from libcpp.pair cimport pair
-from libcpp.utility cimport move
-from libcpp.vector cimport vector
-
-from pylibcudf.libcudf.column.column_view cimport column_view
-from pylibcudf.libcudf.partitioning cimport partition as cpp_partition
-from pylibcudf.libcudf.table.table cimport table
-from pylibcudf.libcudf.table.table_view cimport table_view
-
 from cudf._lib.column cimport Column
-from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
+
+import pylibcudf as plc
 
 from cudf._lib.reduce import minmax
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
-
-cimport pylibcudf.libcudf.types as libcudf_types
 
 
 @acquire_spill_lock()
@@ -50,25 +39,15 @@ def partition(list source_columns, Column partition_map,
 
     if num_partitions is None:
         num_partitions = cpp_distinct_count(partition_map, ignore_nulls=True)
-    cdef int c_num_partitions = num_partitions
-    cdef table_view c_source_view = table_view_from_columns(source_columns)
 
-    cdef column_view c_partition_map_view = partition_map.view()
-
-    cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
     if partition_map.size > 0:
         lo, hi = minmax(partition_map)
         if lo < 0 or hi >= num_partitions:
             raise ValueError("Partition map has invalid values")
-    with nogil:
-        c_result = move(
-            cpp_partition(
-                c_source_view,
-                c_partition_map_view,
-                c_num_partitions
-            )
-        )
 
-    return (
-        columns_from_unique_ptr(move(c_result.first)), list(c_result.second)
+    plc_table, offsets = plc.partitioning.partition(
+        plc.Table([col.to_pylibcudf(mode="read") for col in source_columns]),
+        partition_map.to_pylibcudf(mode="read"),
+        num_partitions
     )
+    return [Column.from_pylibcudf(col) for col in plc_table.columns()], offsets

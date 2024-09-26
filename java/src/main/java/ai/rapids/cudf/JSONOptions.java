@@ -38,6 +38,8 @@ public final class JSONOptions extends ColumnFilterOptions {
   private final boolean allowLeadingZeros;
   private final boolean allowNonNumericNumbers;
   private final boolean allowUnquotedControlChars;
+  private final boolean cudfPruneSchema;
+  private final boolean experimental;
   private final byte lineDelimiter;
 
   private JSONOptions(Builder builder) {
@@ -53,7 +55,13 @@ public final class JSONOptions extends ColumnFilterOptions {
     allowLeadingZeros = builder.allowLeadingZeros;
     allowNonNumericNumbers = builder.allowNonNumericNumbers;
     allowUnquotedControlChars = builder.allowUnquotedControlChars;
+    cudfPruneSchema = builder.cudfPruneSchema;
+    experimental = builder.experimental;
     lineDelimiter = builder.lineDelimiter;
+  }
+
+  public boolean shouldCudfPruneSchema() {
+    return cudfPruneSchema;
   }
 
   public byte getLineDelimiter() {
@@ -105,6 +113,10 @@ public final class JSONOptions extends ColumnFilterOptions {
     return allowUnquotedControlChars;
   }
 
+  public boolean experimental() {
+    return experimental;
+  }
+
   @Override
   String[] getIncludeColumnNames() {
     throw new UnsupportedOperationException("JSON reader didn't support column prune");
@@ -129,7 +141,14 @@ public final class JSONOptions extends ColumnFilterOptions {
     private boolean mixedTypesAsStrings = false;
     private boolean keepQuotes = false;
 
+    private boolean cudfPruneSchema = false;
+    private boolean experimental = false;
     private byte lineDelimiter = '\n';
+
+    public Builder withCudfPruneSchema(boolean prune) {
+      cudfPruneSchema = prune;
+      return this;
+    }
 
     public Builder withLineDelimiter(char delimiter) {
       if (delimiter > Byte.MAX_VALUE) {
@@ -144,6 +163,14 @@ public final class JSONOptions extends ColumnFilterOptions {
      */
     public Builder withStrictValidation(boolean isAllowed) {
       strictValidation = isAllowed;
+      return this;
+    }
+
+    /**
+     * Should experimental features be enabled or not
+     */
+    public Builder withExperimental(boolean isAllowed) {
+      experimental = isAllowed;
       return this;
     }
 

@@ -25,6 +25,8 @@ from .table cimport Table
 cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold):
     """Filters out rows from the input table based on the presence of nulls.
 
+    For details, see :cpp:func:`drop_nulls`.
+
     Parameters
     ----------
     source_table : Table
@@ -53,6 +55,8 @@ cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold):
 cpdef Table drop_nans(Table source_table, list keys, size_type keep_threshold):
     """Filters out rows from the input table based on the presence of NaNs.
 
+    For details, see :cpp:func:`drop_nans`.
+
     Parameters
     ----------
     source_table : Table
@@ -80,6 +84,8 @@ cpdef Table drop_nans(Table source_table, list keys, size_type keep_threshold):
 
 cpdef Table apply_boolean_mask(Table source_table, Column boolean_mask):
     """Filters out rows from the input table based on a boolean mask.
+
+    For details, see :cpp:func:`apply_boolean_mask`.
 
     Parameters
     ----------
@@ -110,6 +116,8 @@ cpdef Table unique(
     null_equality nulls_equal,
 ):
     """Filter duplicate consecutive rows from the input table.
+
+    For details, see :cpp:func:`unique`.
 
     Parameters
     ----------
@@ -153,6 +161,8 @@ cpdef Table distinct(
 ):
     """Get the distinct rows from the input table.
 
+    For details, see :cpp:func:`distinct`.
+
     Parameters
     ----------
     input : Table
@@ -191,6 +201,8 @@ cpdef Column distinct_indices(
 ):
     """Get the indices of the distinct rows from the input table.
 
+    For details, see :cpp:func:`distinct_indices`.
+
     Parameters
     ----------
     input : Table
@@ -225,6 +237,8 @@ cpdef Table stable_distinct(
     nan_equality nans_equal,
 ):
     """Get the distinct rows from the input table, preserving input order.
+
+    For details, see :cpp:func:`stable_distinct`.
 
     Parameters
     ----------
@@ -263,6 +277,8 @@ cpdef size_type unique_count(
 ):
     """Returns the number of unique consecutive elements in the input column.
 
+    For details, see :cpp:func:`unique_count`.
+
     Parameters
     ----------
     source : Column
@@ -293,6 +309,8 @@ cpdef size_type distinct_count(
     nan_policy nan_handling
 ):
     """Returns the number of distinct elements in the input column.
+
+    For details, see :cpp:func:`distinct_count`.
 
     Parameters
     ----------

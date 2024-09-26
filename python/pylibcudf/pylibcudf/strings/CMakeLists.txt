@@ -13,8 +13,21 @@
 # =============================================================================
 
 set(cython_sources
-    capitalize.pyx case.pyx char_types.pyx contains.pyx extract.pyx find.pyx regex_flags.pyx
-    regex_program.pyx repeat.pyx replace.pyx side_type.pyx slice.pyx strip.pyx
+    attributes.pyx
+    capitalize.pyx
+    case.pyx
+    char_types.pyx
+    contains.pyx
+    extract.pyx
+    find.pyx
+    findall.pyx
+    regex_flags.pyx
+    regex_program.pyx
+    repeat.pyx
+    replace.pyx
+    side_type.pyx
+    slice.pyx
+    strip.pyx
 )
 
 set(linked_libraries cudf::cudf)
