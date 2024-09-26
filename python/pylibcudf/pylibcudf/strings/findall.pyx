@@ -46,12 +46,14 @@ cpdef Column find_re(Column input, RegexProgram pattern):
     the elements in source_strings.
 
     For details, see For details, see :cpp:func:`cudf::strings::find_re`.
+
     Parameters
     ----------
     input : Column
         Strings instance for this operation
     pattern : RegexProgram
         Regex pattern
+
     Returns
     -------
     Column
