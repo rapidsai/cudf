@@ -18,6 +18,8 @@ This page outlines several important guidelines for using `Dask cuDF
 Deployment and Configuration
 ----------------------------
 
+.. _use-dask-cuda:
+
 Use Dask-CUDA
 ~~~~~~~~~~~~~
 
@@ -66,6 +68,8 @@ progress. It also shows basic GPU memory and utilization metrics (under
 the ``GPU`` tab). To visualize more detailed GPU metrics in JupyterLab,
 use `NVDashboard <https://github.com/rapidsai/jupyterlab-nvdashboard>`__.
 
+
+.. _use-cudf-spilling:
 
 Enable cuDF spilling
 ~~~~~~~~~~~~~~~~~~~~
@@ -160,11 +164,14 @@ of the underlying task graph to materialize the collection.
 
 :func:`sort_values` / :func:`set_index` : These operations both require Dask to
 eagerly collect quantile information about the column(s) being targeted by the
-global sort operation. See `Avoid Sorting`__ for notes on sorting considerations.
+global sort operation. See `Avoid Sorting <avoid-sorting>`__ for notes on sorting considerations.
 
 .. note::
   When using :func:`set_index`, be sure to pass in ``sort=False`` whenever the
   global collection does not **need** to be sorted by the new index.
+
+
+.. _avoid-sorting:
 
 Avoid Sorting
 ~~~~~~~~~~~~~
@@ -297,11 +304,11 @@ bottleneck is typically device-to-host memory spilling.
 Although every workflow is different, the following guidelines
 are often recommended:
 
-* `Use a distributed cluster with Dask-CUDA workers <Use Dask-CUDA>`_
-* `Use native cuDF spilling whenever possible <Enable cuDF Spilling>`_
+* `Use a distributed cluster with Dask-CUDA workers <use-dask-cuda>`__
+* `Use native cuDF spilling whenever possible <use-cudf-spilling>`__
 * Avoid shuffling whenever possible
-  * Use ``split_out=1`` for low-cardinality groupby aggregations
-  * Use ``broadcast=True`` for joins when at least one collection comprises a small number of partitions (e.g. ``<=5``)
+   * Use ``split_out=1`` for low-cardinality groupby aggregations
+   * Use ``broadcast=True`` for joins when at least one collection comprises a small number of partitions (e.g. ``<=5``)
 * `Use UCX <https://docs.rapids.ai/api/dask-cuda/nightly/examples/ucx/>`__ if communication is a bottleneck.
 
 .. note::
