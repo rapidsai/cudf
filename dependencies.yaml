@@ -370,6 +370,20 @@ dependencies:
           # Align nvcomp version with rapids-cmake
           - nvcomp==4.0.1
           - spdlog>=1.14.1,<1.15
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - nvidia-nvcomp-cu12==4.0.1
+          - matrix:
+              cuda: "11.*"
+            packages:
+              - nvidia-nvcomp-cu11==4.0.1
+          - matrix:
+            packages:
+              - nvidia-nvcomp==4.0.1
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]
