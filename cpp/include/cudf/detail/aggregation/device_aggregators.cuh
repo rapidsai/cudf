@@ -28,8 +28,7 @@
 
 #include <cuda/std/type_traits>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 template <typename Source, aggregation::Kind k, typename Enable = void>
 struct update_target_element {
   __device__ void operator()(mutable_column_device_view target,
@@ -441,5 +440,4 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
                                   source_index);
   }
 }
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail
