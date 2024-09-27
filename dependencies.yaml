@@ -152,6 +152,13 @@ files:
       - build_cpp
       - depends_on_libkvikio
       - depends_on_librmm
+  py_run_libcudf:
+    output: pyproject
+    pyproject_dir: python/libcudf
+    extras:
+      table: project
+    includes:
+      - depends_on_nvcomp
   py_build_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -370,6 +377,7 @@ dependencies:
           # Align nvcomp version with rapids-cmake
           - nvcomp==4.0.1
           - spdlog>=1.14.1,<1.15
+  depends_on_nvcomp:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
