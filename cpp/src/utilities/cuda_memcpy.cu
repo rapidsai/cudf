@@ -25,7 +25,7 @@
 
 #include <thrust/copy.h>
 
-namespace cudf::detail {
+namespace cudf::detail::impl {
 
 namespace {
 
@@ -73,11 +73,4 @@ void cuda_memcpy_async(
   }
 }
 
-void cuda_memcpy(
-  void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream)
-{
-  cuda_memcpy_async(dst, src, size, kind, stream);
-  stream.synchronize();
-}
-
-}  // namespace cudf::detail
+}  // namespace cudf::detail::impl
