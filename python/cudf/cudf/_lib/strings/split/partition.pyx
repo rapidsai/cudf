@@ -18,7 +18,7 @@ def partition(Column source_strings,
         source_strings.to_pylibcudf(mode="read"),
         py_delimiter.device_value.c_value
     )
-    return dict(enumerate((Column.from_pylibcudf(col) for col in plc_table.columns())))
+    return dict(enumerate(Column.from_pylibcudf(col) for col in plc_table.columns()))
 
 
 @acquire_spill_lock()
@@ -32,4 +32,4 @@ def rpartition(Column source_strings,
         source_strings.to_pylibcudf(mode="read"),
         py_delimiter.device_value.c_value
     )
-    return dict(enumerate((Column.from_pylibcudf(col) for col in plc_table.columns())))
+    return dict(enumerate(Column.from_pylibcudf(col) for col in plc_table.columns()))
