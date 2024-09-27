@@ -2583,9 +2583,9 @@ TEST_F(JsonReaderTest, ViableDelimiterNewlineWS)
 
   cudf::io::json_reader_options json_parser_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{input.c_str(), input.size()})
-      .lines(true);
+      .lines(true)
+      .delimiter('\0');
 
-  json_parser_options.set_delimiter('\0');
   auto result = cudf::io::read_json(json_parser_options);
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->num_rows(), 1);
