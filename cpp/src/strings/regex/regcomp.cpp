@@ -750,7 +750,7 @@ class regex_parser {
           for (int j = 1; j < (n - 1); j++) {
             out.insert(out.end(), ncg_copy.begin(), ncg_copy.end());
           }
-          // add the last entry is a regular capture-group
+          // add the last entry as a regular capture-group
           out.insert(out.end(), repeat_copy.begin(), repeat_copy.end());
         } else {
           // minimum repeats (n)
