@@ -234,6 +234,9 @@ constexpr size_t compute_shared_memory_size(Kernel kernel, int grid_size)
 
   size_t dynamic_shmem_size = 0;
 
+  std::cout << "### active_blocks_per_sm: " << active_blocks_per_sm << " grid_size: " << grid_size
+            << "\n";
+
   CUDF_CUDA_TRY(cudaOccupancyAvailableDynamicSMemPerBlock(
     &dynamic_shmem_size, kernel, active_blocks_per_sm, GROUPBY_BLOCK_SIZE));
   return get_previous_multiple_of_8(0.5 * dynamic_shmem_size);
