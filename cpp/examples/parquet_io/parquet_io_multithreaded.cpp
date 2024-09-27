@@ -307,7 +307,7 @@ int32_t main(int argc, char const** argv)
   rmm::mr::set_current_device_resource(&stats_mr);
 
   // Exit early if nothing to do.
-  if (not input_files.size()) {
+  if (input_files.empty()) {
     std::cerr << "No input files to read. Exiting early.\n";
     return 0;
   }
