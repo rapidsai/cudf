@@ -148,3 +148,31 @@ TEST_F(StringsFindallTests, LargeRegex)
   LCW expected({LCW{large_regex.c_str()}, LCW{}, LCW{}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
+
+TEST_F(StringsFindallTests, NoMatches)
+{
+  cudf::test::strings_column_wrapper input({"abc\nfff\nabc", "fff\nabc\nlll", "abc", "", "abc\n"});
+  auto sv = cudf::strings_column_view(input);
+
+  auto pattern = std::string("(^zzz$)");
+  using LCW    = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected({LCW{}, LCW{}, LCW{}, LCW{}, LCW{}});
+  auto prog    = cudf::strings::regex_program::create(pattern);
+  auto results = cudf::strings::findall(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
+
+TEST_F(StringsFindallTests, EmptyTest)
+{
+  std::string pattern = R"(\w+)";
+
+  auto prog = cudf::strings::regex_program::create(pattern);
+
+  cudf::test::strings_column_wrapper input;
+  auto sv      = cudf::strings_column_view(input);
+  auto results = cudf::strings::findall(sv, *prog);
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected;
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
