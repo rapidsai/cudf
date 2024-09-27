@@ -18,8 +18,8 @@
 
 #include "multi_pass_kernels.cuh"
 
-#include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/aggregation/device_aggregators.cuh>
 #include <cudf/groupby.hpp>
 #include <cudf/utilities/bit.hpp>
 
