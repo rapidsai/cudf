@@ -45,11 +45,12 @@ void cuda_memcpy_async(
 template <typename T>
 void cuda_memcpy_async(device_span<T> dst, host_span<T const> src, rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(dst.size() == src.size(), "Mismatched sizes in cuda_memcpy_async");
   auto const is_pinned = src.is_device_accessible();
   impl::cuda_memcpy_async(
     dst.data(),
     src.data(),
-    std::min(dst.size_bytes(), src.size_bytes()),
+    src.size_bytes(),
     is_pinned ? impl::host_memory_kind::PINNED : impl::host_memory_kind::PAGEABLE,
     stream);
 }
@@ -66,11 +67,12 @@ void cuda_memcpy_async(device_span<T> dst, host_span<T const> src, rmm::cuda_str
 template <typename T>
 void cuda_memcpy_async(host_span<T> dst, device_span<T const> src, rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(dst.size() == src.size(), "Mismatched sizes in cuda_memcpy_async");
   auto const is_pinned = dst.is_device_accessible();
   impl::cuda_memcpy_async(
     dst.data(),
     src.data(),
-    std::min(dst.size_bytes(), src.size_bytes()),
+    src.size_bytes(),
     is_pinned ? impl::host_memory_kind::PINNED : impl::host_memory_kind::PAGEABLE,
     stream);
 }
