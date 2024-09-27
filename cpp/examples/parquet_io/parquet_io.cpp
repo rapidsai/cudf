@@ -108,7 +108,9 @@ int main(int argc, char const** argv)
       encoding        = get_encoding_type("DELTA_BINARY_PACKED");
       compression     = get_compression_type("ZSTD");
       break;
-    case 6: page_stats = get_page_size_stats(argv[5]); [[fallthrough]];
+    case 6:
+      if (get_boolean(argv[5])) { page_stats = cudf::io::statistics_freq::STATISTICS_COLUMN; };
+      [[fallthrough]];
     case 5:
       input_filepath  = argv[1];
       output_filepath = argv[2];

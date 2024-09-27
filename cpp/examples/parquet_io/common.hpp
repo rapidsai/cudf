@@ -34,6 +34,7 @@
 #include <fmt/color.h>
 
 #include <chrono>
+#include <filesystem>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -64,7 +65,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
 {
   using encoding_type = cudf::io::column_encoding;
 
-  static const std::unordered_map<std::string_view, cudf::io::column_encoding> map = {
+  static const std::unordered_map<std::string_view, encoding_type> map = {
     {"DEFAULT", encoding_type::USE_DEFAULT},
     {"DICTIONARY", encoding_type::DICTIONARY},
     {"PLAIN", encoding_type::PLAIN},
@@ -79,9 +80,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
                               " is not a valid encoding type.\n\n"
                               "Available encoding types: DEFAULT, DICTIONARY, PLAIN,\n"
                               "DELTA_BINARY_PACKED, DELTA_LENGTH_BYTE_ARRAY,\n"
-                              "DELTA_BYTE_ARRAY\n"
-                              "\n"
-                              "Exiting...\n");
+                              "DELTA_BYTE_ARRAY\n\n");
 }
 
 /**
@@ -94,7 +93,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
 {
   using compression_type = cudf::io::compression_type;
 
-  static const std::unordered_map<std::string_view, cudf::io::compression_type> map = {
+  static const std::unordered_map<std::string_view, compression_type> map = {
     {"NONE", compression_type::NONE},
     {"AUTO", compression_type::AUTO},
     {"SNAPPY", compression_type::SNAPPY},
@@ -106,29 +105,26 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
   throw std::invalid_argument("FATAL: " + std::string(name) +
                               " is not a valid compression type.\n\n"
                               "Available compression_type types: NONE, AUTO, SNAPPY,\n"
-                              "LZ4, ZSTD\n"
-                              "\n"
-                              "Exiting...\n");
+                              "LZ4, ZSTD\n\n");
 }
 
 /**
- * @brief Get the optional page size stat frequency from they keyword
+ * @brief Get boolean from they keyword
  *
- * @param use_stats keyword affirmation string such as: Y, T, YES, TRUE, ON
- * @return optional page statistics frequency set to full (STATISTICS_COLUMN)
+ * @param input keyword affirmation string such as: Y, T, YES, TRUE, ON
+ * @return true or false
  */
-[[nodiscard]] std::optional<cudf::io::statistics_freq> get_page_size_stats(std::string use_stats)
+[[nodiscard]] bool get_boolean(std::string input)
 {
-  std::transform(use_stats.begin(), use_stats.end(), use_stats.begin(), ::toupper);
+  std::transform(input.begin(), input.end(), input.begin(), ::toupper);
 
   // Check if the input string matches to any of the following
-  if (not use_stats.compare("ON") or not use_stats.compare("TRUE") or
-      not use_stats.compare("YES") or not use_stats.compare("Y") or not use_stats.compare("T")) {
-    // Full column and offset indices - STATISTICS_COLUMN
-    return std::make_optional(cudf::io::statistics_freq::STATISTICS_COLUMN);
+  if (not input.compare("ON") or not input.compare("TRUE") or not input.compare("YES") or
+      not input.compare("Y") or not input.compare("T")) {
+    return true;
+  } else {
+    return false;
   }
-
-  return std::nullopt;
 }
 
 /**
@@ -149,10 +145,83 @@ inline void check_identical_tables(cudf::table_view const& lhs_table,
     // No exception thrown, check indices
     auto const valid = indices->size() == 0;
     fmt::print(
-      fmt::emphasis::bold | fg(fmt::color::green_yellow), "Transcoding valid: {}\n", valid);
+      fmt::emphasis::bold | fg(fmt::color::green_yellow), "Transcoding valid: {}\n\n", valid);
   } catch (std::exception& e) {
     std::cerr << e.what() << std::endl << std::endl;
     throw std::runtime_error(
-      fmt::format(fmt::emphasis::bold | fg(fmt::color::red), "Transcoding valid: false\n"));
+      fmt::format(fmt::emphasis::bold | fg(fmt::color::red), "Transcoding valid: false\n\n"));
   }
+}
+
+/**
+ * @brief Get io sink type from the string keyword argumnet
+ *
+ * @param name io sink type keyword name
+ * @return corresponding io sink type type
+ */
+[[nodiscard]] std::optional<cudf::io::io_type> get_io_sink_type(std::string name)
+{
+  using io_type = cudf::io::io_type;
+
+  static const std::unordered_map<std::string_view, io_type> map = {
+    {"FILEPATH", io_type::FILEPATH},
+    {"HOST_BUFFER", io_type::HOST_BUFFER},
+    {"PINNED_BUFFER", io_type::HOST_BUFFER},
+    {"DEVICE_BUFFER", io_type::DEVICE_BUFFER}};
+
+  std::transform(name.begin(), name.end(), name.begin(), ::toupper);
+  if (map.find(name) != map.end()) {
+    return {map.at(name)};
+  } else {
+    fmt::print(
+      "{} is not a valid io sink type. Available: FILEPATH,\n"
+      "HOST_BUFFER, PINNED_BUFFER, DEVICE_BUFFER. Ignoring\n\n",
+      name);
+    return std::nullopt;
+  }
+}
+
+/**
+ * @brief Concatenate a vector of tables and return the resultant table
+ *
+ * @param tables Vector of tables to concatenate
+ * @param stream CUDA stream to use
+ *
+ * @return Unique pointer to the resultant concatenated table.
+ */
+std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
+                                                rmm::cuda_stream_view stream)
+{
+  if (tables.size() == 1) { return std::move(tables[0]); }
+
+  std::vector<cudf::table_view> table_views;
+  table_views.reserve(tables.size());
+  std::transform(
+    tables.begin(), tables.end(), std::back_inserter(table_views), [&](auto const& tbl) {
+      return tbl->view();
+    });
+  // Construct the final table
+  return cudf::concatenate(table_views, stream);
+}
+
+/**
+ * @brief Thread unsafe function to create a directory for FILEPATH io sink type and return its path
+ *
+ * @return File path of the created directory
+ */
+[[nodiscard]] std::string get_default_output_path()
+{
+  static std::string output_path = std::filesystem::current_path().string();
+  if (output_path == std::filesystem::current_path().string()) {
+    // Check if output path is a valid directory
+    if (std::filesystem::is_directory({output_path})) {
+      // Create a new directory in output path if not empty.
+      if (not std::filesystem::is_empty({output_path})) {
+        output_path +=
+          "/output_" + fmt::format("{:%Y-%m-%d-%H-%M-%S}", std::chrono::system_clock::now());
+        std::filesystem::create_directory({output_path});
+      }
+    }
+  }
+  return output_path;
 }
