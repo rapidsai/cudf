@@ -38,7 +38,7 @@ std::string const tzif_system_directory = "/usr/share/zoneinfo/";
 struct timezone_file_header {
   uint32_t magic;          ///< "TZif"
   uint8_t version;         ///< 0:version1, '2':version2, '3':version3
-  uint8_t reserved15[15];  ///< unused, reserved for future use
+  uint8_t reserved15[15];  ///< unused, reserved for future use // NOLINT
   uint32_t isutccnt;       ///< number of UTC/local indicators contained in the body
   uint32_t isstdcnt;       ///< number of standard/wall indicators contained in the body
   uint32_t leapcnt;        ///< number of leap second records contained in the body
