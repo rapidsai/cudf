@@ -23,6 +23,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/findall.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -97,8 +98,11 @@ std::unique_ptr<column> findall(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
 {
-  auto const strings_count = input.size();
-  auto const d_strings     = column_device_view::create(input.parent(), stream);
+  if (input.is_empty()) {
+    return cudf::lists::detail::make_empty_lists_column(input.parent().type(), stream, mr);
+  }
+
+  auto const d_strings = column_device_view::create(input.parent(), stream);
 
   // create device object from regex_program
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
@@ -113,7 +117,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
   auto strings_output = findall_util(*d_strings, *d_prog, total_matches, d_offsets, stream, mr);
 
   // Build the lists column from the offsets and the strings
-  return make_lists_column(strings_count,
+  return make_lists_column(input.size(),
                            std::move(offsets),
                            std::move(strings_output),
                            input.null_count(),

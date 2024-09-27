@@ -43,80 +43,52 @@ jobs:
     with:
       needs: ${{ toJSON(needs) }}
   changed-files:
-    runs-on: ubuntu-latest
-    name: "Check changed files"
-    outputs:
-      test_cpp: ${{ steps.changed-files.outputs.cpp_any_changed == 'true' }}
-      test_java: ${{ steps.changed-files.outputs.java_any_changed == 'true' }}
-      test_notebooks: ${{ steps.changed-files.outputs.notebooks_any_changed == 'true' }}
-      test_python: ${{ steps.changed-files.outputs.python_any_changed == 'true' }}
-      test_cudf_pandas: ${{ steps.changed-files.outputs.cudf_pandas_any_changed == 'true' }}
-    steps:
-      - name: Get PR info
-        id: get-pr-info
-        uses: nv-gha-runners/get-pr-info@main
-      - name: Checkout code repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Calculate merge base
-        id: calculate-merge-base
-        env:
-          PR_SHA: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).head.sha }}
-          BASE_SHA: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.sha }}
-        run: |
-          (echo -n "merge-base="; git merge-base "$BASE_SHA" "$PR_SHA") > "$GITHUB_OUTPUT"
-      - name: Get changed files
-        id: changed-files
-        uses: tj-actions/changed-files@v45
-        with:
-          base_sha: ${{ steps.calculate-merge-base.outputs.merge-base }}
-          sha: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).head.sha }}
-          files_yaml: |
-            cpp:
-              - '**'
-              - '!CONTRIBUTING.md'
-              - '!README.md'
-              - '!docs/**'
-              - '!img/**'
-              - '!java/**'
-              - '!notebooks/**'
-              - '!python/**'
-              - '!ci/cudf_pandas_scripts/**'
-            java:
-              - '**'
-              - '!CONTRIBUTING.md'
-              - '!README.md'
-              - '!docs/**'
-              - '!img/**'
-              - '!notebooks/**'
-              - '!python/**'
-              - '!ci/cudf_pandas_scripts/**'
-            notebooks:
-              - '**'
-              - '!CONTRIBUTING.md'
-              - '!README.md'
-              - '!java/**'
-              - '!ci/cudf_pandas_scripts/**'
-            python:
-              - '**'
-              - '!CONTRIBUTING.md'
-              - '!README.md'
-              - '!docs/**'
-              - '!img/**'
-              - '!java/**'
-              - '!notebooks/**'
-              - '!ci/cudf_pandas_scripts/**'
-            cudf_pandas:
-              - '**'
-              - 'ci/cudf_pandas_scripts/**'
-              - '!CONTRIBUTING.md'
-              - '!README.md'
-              - '!docs/**'
-              - '!img/**'
-              - '!java/**'
-              - '!notebooks/**'
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@branch-24.12
+    with:
+      files_yaml: |
+        test_cpp:
+          - '**'
+          - '!CONTRIBUTING.md'
+          - '!README.md'
+          - '!ci/cudf_pandas_scripts/**'
+          - '!docs/**'
+          - '!img/**'
+          - '!java/**'
+          - '!notebooks/**'
+          - '!python/**'
+        test_cudf_pandas:
+          - '**'
+          - '!CONTRIBUTING.md'
+          - '!README.md'
+          - '!docs/**'
+          - '!img/**'
+          - '!java/**'
+          - '!notebooks/**'
+        test_java:
+          - '**'
+          - '!CONTRIBUTING.md'
+          - '!README.md'
+          - '!ci/cudf_pandas_scripts/**'
+          - '!docs/**'
+          - '!img/**'
+          - '!notebooks/**'
+          - '!python/**'
+        test_notebooks:
+          - '**'
+          - '!CONTRIBUTING.md'
+          - '!README.md'
+          - '!ci/cudf_pandas_scripts/**'
+          - '!java/**'
+        test_python:
+          - '**'
+          - '!CONTRIBUTING.md'
+          - '!README.md'
+          - '!ci/cudf_pandas_scripts/**'
+          - '!docs/**'
+          - '!img/**'
+          - '!java/**'
+          - '!notebooks/**'
   checks:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.12
@@ -139,7 +111,7 @@ jobs:
     needs: [conda-cpp-build, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@branch-24.12
-    if: needs.changed-files.outputs.test_cpp == 'true'
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp
     with:
       build_type: pull-request
   conda-python-build:
@@ -152,7 +124,7 @@ jobs:
     needs: [conda-python-build, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.12
-    if: needs.changed-files.outputs.test_python == 'true'
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
@@ -161,7 +133,7 @@ jobs:
     needs: [conda-python-build, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.12
-    if: needs.changed-files.outputs.test_python == 'true'
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
       build_type: pull-request
       script: "ci/test_python_other.sh"
@@ -169,7 +141,7 @@ jobs:
     needs: [conda-cpp-build, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.12
-    if: needs.changed-files.outputs.test_java == 'true'
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
     with:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
@@ -190,7 +162,7 @@ jobs:
     needs: [conda-python-build, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.12
-    if: needs.changed-files.outputs.test_notebooks == 'true'
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_notebooks
     with:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
@@ -234,7 +206,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.12
-    if: needs.changed-files.outputs.test_python == 'true'
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
       build_type: pull-request
       script: ci/test_wheel_cudf.sh
@@ -251,7 +223,7 @@ jobs:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.12
-    if: needs.changed-files.outputs.test_python == 'true'
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -283,7 +255,7 @@ jobs:
     needs: [wheel-build-dask-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.12
-    if: needs.changed-files.outputs.test_python == 'true'
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -303,7 +275,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.12
-    if: needs.changed-files.outputs.test_python == 'true' || needs.changed-files.outputs.test_cudf_pandas == 'true'
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -314,7 +286,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.12
-    if: needs.changed-files.outputs.test_python == 'true' || needs.changed-files.outputs.test_cudf_pandas == 'true'
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
