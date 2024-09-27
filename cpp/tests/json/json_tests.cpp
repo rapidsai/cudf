@@ -652,7 +652,7 @@ TEST_F(JsonPathTests, MixedOutput)
   // various queries on:
   // clang-format off
   std::vector<std::string> input_strings {
-    "{\"a\": {\"b\" : \"c\"}}",
+    R"({"a": {"b" : "c"}})",
 
     "{"
       "\"a\": {\"b\" : \"c\"},"
@@ -827,7 +827,7 @@ TEST_F(JsonPathTests, AllowSingleQuotes)
   // various queries on:
   std::vector<std::string> input_strings{
     // clang-format off
-    "{\'a\': {\'b\' : \'c\'}}",
+    R"({'a': {'b' : 'c'}})",
 
     "{"
       "\'a\': {\'b\' : \"c\"},"
@@ -902,7 +902,7 @@ TEST_F(JsonPathTests, StringsWithSpecialChars)
   {
     std::vector<std::string> input_strings{
       // clang-format off
-      "{\"item\" : [{\"key\" : \"value[\"}]}",
+      R"({"item" : [{"key" : "value["}]})",
       // clang-format on
     };
 
@@ -927,7 +927,7 @@ TEST_F(JsonPathTests, StringsWithSpecialChars)
   {
     std::vector<std::string> input_strings{
       // clang-format off
-      "{\"a\" : \"[}{}][][{[\\\"}}[\\\"]\"}",
+      R"({"a" : "[}{}][][{[\"}}[\"]"})",
       // clang-format on
     };
 
@@ -958,8 +958,8 @@ TEST_F(JsonPathTests, EscapeSequences)
 
   std::vector<std::string> input_strings{
     // clang-format off
-    "{\"a\" : \"\\\" \\\\ \\/ \\b \\f \\n \\r \\t\"}",
-    "{\"a\" : \"\\u1248 \\uacdf \\uACDF \\u10EF\"}"
+    R"({"a" : "\" \\ \/ \b \f \n \r \t"})",
+    R"({"a" : "\u1248 \uacdf \uACDF \u10EF"})"
     // clang-format on
   };
 
