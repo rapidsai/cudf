@@ -154,7 +154,7 @@ inline void check_identical_tables(cudf::table_view const& lhs_table,
 }
 
 /**
- * @brief Get io sink type from the string keyword argumnet
+ * @brief Get io sink type from the string keyword argument
  *
  * @param name io sink type keyword name
  * @return corresponding io sink type type

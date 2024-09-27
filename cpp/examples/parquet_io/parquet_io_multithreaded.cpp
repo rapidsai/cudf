@@ -88,6 +88,15 @@ struct read_fn {
 
 /**
  * @brief Function to setup and launch multithreaded parquet reading.
+ *
+ * @tparam read_mode Specifies if to concatenate and return the actual
+ *                    tables or discard them and return an empty vector
+ *
+ * @param files List of files to read
+ * @param thread_count Number of threads
+ * @param stream_pool CUDA stream pool to use for threads
+ *
+ * @return Vector of read tables.
  */
 template <read_mode read_mode>
 std::vector<table_t> read_parquet_multithreaded(std::vector<std::string> const& files,
@@ -302,14 +311,17 @@ int32_t main(int argc, char const** argv)
   // Read the parquet files with multiple threads
   {
     fmt::print(fg(fmt::color::yellow),
-               "\nNote: Not timing the initial parquet read as it may include\n"
-               "times for nvcomp, cufile loading and RMM growth.\n\n");
-    // Tasks to read each parquet file
-    auto const tables = read_parquet_multithreaded<read_mode::CONCATENATE_THREAD>(
-      input_files, thread_count, stream_pool);
-    default_stream.synchronize();
+               "\nReading {} input files using {} threads without timing it as \n"
+               "it may include times for nvcomp, cufile loading and RMM growth.\n\n",
+               input_files.size(),
+               thread_count);
 
+    // If we are writing output then read with CONCATENATE_THREAD
     if (io_type.has_value()) {
+      // Launch
+      auto const tables = read_parquet_multithreaded<read_mode::CONCATENATE_THREAD>(
+        input_files, thread_count, stream_pool);
+      default_stream.synchronize();
       // Initialize the default output path to avoid race condition with multiple writer threads.
       std::ignore = get_default_output_path();
 
@@ -326,19 +338,25 @@ int32_t main(int argc, char const** argv)
       }();
 
       // Write tables to parquet
-      fmt::print("Writing parquet output to sink type: {}\n", std::string{argv[4]});
+      fmt::print("Writing parquet output to sink type: {}..\n", std::string{argv[4]});
       cudf::examples::timer timer;
       write_parquet_multithreaded(table_views, thread_count, stream_pool);
       default_stream.synchronize();
       timer.print_elapsed_millis();
+    }
+    // Else simply read with NOWORK mode
+    else {
+      std::ignore =
+        read_parquet_multithreaded<read_mode::NOWORK>(input_files, thread_count, stream_pool);
+      default_stream.synchronize();
     }
   }
 
   // Re-read the same parquet files with multiple threads and discard the read tables
   {
     fmt::print(
-      "Reading {} input files for the second time using {} threads and discarding output "
-      "tables...\n",
+      "Re-reading {} input files using {} threads and discarding output "
+      "tables..\n",
       input_files.size(),
       thread_count);
     cudf::examples::timer timer;
@@ -351,7 +369,7 @@ int32_t main(int argc, char const** argv)
 
   // Verify the output files if requested
   if (validate_output and io_type.has_value()) {
-    fmt::print("Verifying transcoding...\n");
+    fmt::print("Verifying output..\n");
 
     // CONCATENATE_ALL returns a vector of 1 table
     auto const input_table = std::move(
