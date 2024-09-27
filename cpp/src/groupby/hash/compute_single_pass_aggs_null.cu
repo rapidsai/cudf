@@ -18,11 +18,11 @@
 #include "compute_single_pass_aggs.hpp"
 
 namespace cudf::groupby::detail::hash {
-template rmm::device_uvector<cudf::size_type> compute_single_pass_aggs<global_set_t>(
+template rmm::device_uvector<cudf::size_type> compute_single_pass_aggs<nullable_global_set_t>(
   cudf::table_view const& keys,
   cudf::host_span<cudf::groupby::aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
-  global_set_t& global_set,
+  nullable_global_set_t& global_set,
   bool skip_rows_with_nulls,
   rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash
