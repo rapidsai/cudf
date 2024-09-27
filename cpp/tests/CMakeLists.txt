@@ -137,6 +137,7 @@ ConfigureTest(
   groupby/merge_lists_tests.cpp
   groupby/merge_sets_tests.cpp
   groupby/min_scan_tests.cpp
+  groupby/multi_aggs_tests.cpp
   groupby/nth_element_tests.cpp
   groupby/nunique_tests.cpp
   groupby/product_scan_tests.cpp
