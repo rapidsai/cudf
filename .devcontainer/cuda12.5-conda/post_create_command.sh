@@ -11,4 +11,4 @@ sudo apt install -y libcufile-dev-12-5 libcufile-12-5
 rm cuda-keyring_1.1-1_all.deb
 
 sudo apt install -y gdb
-
+sudo apt install -y liburcu-dev
