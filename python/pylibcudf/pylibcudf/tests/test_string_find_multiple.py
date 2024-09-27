@@ -2,25 +2,21 @@
 
 import pyarrow as pa
 import pylibcudf as plc
+from utils import assert_column_eq
 
 
 def test_find_multiple():
     arr = pa.array(["abc", "def"])
     targets = pa.array(["a", "c", "e"])
-    plc_result = plc.strings.find_multiple.find_multiple(
+    result = plc.strings.find_multiple.find_multiple(
         plc.interop.from_arrow(arr),
         plc.interop.from_arrow(targets),
     )
-    result = plc.interop.to_arrow(plc_result)
-    expected = pa.chunked_array(
+    expected = pa.array(
         [
-            pa.array(
-                [
-                    [elem.find(target) for target in targets.to_pylist()]
-                    for elem in arr.to_pylist()
-                ],
-                type=result.type,
-            )
-        ]
+            [elem.find(target) for target in targets.to_pylist()]
+            for elem in arr.to_pylist()
+        ],
+        type=pa.list_(pa.int32()),
     )
-    assert result.equals(expected)
+    assert_column_eq(expected, result)
