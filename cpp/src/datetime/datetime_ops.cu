@@ -41,11 +41,6 @@
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/transform.h>
 
-#define extract(field)                                                          \
-  case field:                                                                   \
-    return detail::apply_datetime_op<detail::extract_component_operator<field>, \
-                                     cudf::type_id::INT16>(column, stream, mr)
-
 namespace cudf {
 namespace datetime {
 namespace detail {
@@ -548,6 +543,32 @@ std::unique_ptr<column> extract_quarter(column_view const& column,
   return apply_datetime_op<extract_quarter_op, type_id::INT16>(column, stream, mr);
 }
 
+std::unique_ptr<cudf::column> extract_datetime_component(cudf::column_view const& column,
+                                                         datetime_component component,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::device_async_resource_ref mr)
+{
+#define extract(field)                                                                 \
+  case field:                                                                          \
+    return apply_datetime_op<extract_component_operator<field>, cudf::type_id::INT16>( \
+      column, stream, mr)
+
+  switch (component) {
+    extract(datetime_component::YEAR);
+    extract(datetime_component::MONTH);
+    extract(datetime_component::DAY);
+    extract(datetime_component::WEEKDAY);
+    extract(datetime_component::HOUR);
+    extract(datetime_component::MINUTE);
+    extract(datetime_component::SECOND);
+    extract(datetime_component::MILLISECOND);
+    extract(datetime_component::MICROSECOND);
+    extract(datetime_component::NANOSECOND);
+    default: CUDF_FAIL("Unsupported datetime component.");
+  }
+#undef extract
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> ceil_datetimes(column_view const& column,
@@ -639,19 +660,7 @@ std::unique_ptr<cudf::column> extract_datetime_component(cudf::column_view const
                                                          rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  switch (component) {
-    extract(datetime_component::YEAR);
-    extract(datetime_component::MONTH);
-    extract(datetime_component::DAY);
-    extract(datetime_component::WEEKDAY);
-    extract(datetime_component::HOUR);
-    extract(datetime_component::MINUTE);
-    extract(datetime_component::SECOND);
-    extract(datetime_component::MILLISECOND);
-    extract(datetime_component::MICROSECOND);
-    extract(datetime_component::NANOSECOND);
-    default: CUDF_FAIL("Unsupported datetime component.");
-  }
+  return detail::extract_datetime_component(column, component, stream, mr);
 }
 
 std::unique_ptr<column> extract_millisecond_fraction(column_view const& column,
