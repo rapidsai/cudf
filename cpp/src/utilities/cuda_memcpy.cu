@@ -25,7 +25,7 @@
 
 #include <thrust/copy.h>
 
-namespace cudf::detail {
+namespace cudf::detail::impl {
 
 namespace {
 
@@ -80,4 +80,4 @@ void cuda_memcpy(
   stream.synchronize();
 }
 
-}  // namespace cudf::detail
+}  // namespace cudf::detail::impl
