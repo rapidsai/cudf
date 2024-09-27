@@ -2575,6 +2575,30 @@ TEST_F(JsonReaderTest, ViableDelimiter)
   EXPECT_THROW(json_parser_options.set_delimiter('\t'), std::invalid_argument);
 }
 
+TEST_F(JsonReaderTest, ViableDelimiterNewlineWS)
+{
+  // Test input
+  std::string input = R"({"a":
+  100})";
+
+  cudf::io::json_reader_options json_parser_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{input.c_str(), input.size()})
+      .lines(true)
+      .delimiter('\0');
+
+  auto result = cudf::io::read_json(json_parser_options);
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 1);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+
+  auto col1_iterator = thrust::constant_iterator<int64_t>(100);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper(col1_iterator, col1_iterator + 1));
+}
+
 // Test case for dtype prune:
 // all paths, only one.
 // one present, another not present, nothing present
