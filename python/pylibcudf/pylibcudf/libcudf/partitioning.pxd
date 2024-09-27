@@ -25,3 +25,10 @@ cdef extern from "cudf/partitioning.hpp" namespace "cudf" nogil:
         const column_view& partition_map,
         int num_partitions
     ) except +
+
+    cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] \
+        round_robin_partition "cudf::round_robin_partition" (
+        const table_view& input,
+        int num_partitions,
+        int start_partition
+    ) except +
