@@ -22,7 +22,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/find.hpp>
+#include <cudf/strings/find_multiple.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>

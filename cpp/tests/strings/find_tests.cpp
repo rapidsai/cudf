@@ -24,6 +24,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/attributes.hpp>
 #include <cudf/strings/find.hpp>
+#include <cudf/strings/find_multiple.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <vector>
