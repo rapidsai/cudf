@@ -48,6 +48,7 @@ namespace CUDF_EXPORT cudf {
  */
 class scalar {
  public:
+  scalar()                               = delete;
   virtual ~scalar()                      = default;
   scalar& operator=(scalar const& other) = delete;
   scalar& operator=(scalar&& other)      = delete;
@@ -97,8 +98,6 @@ class scalar {
   data_type _type{type_id::EMPTY};              ///< Logical type of value in the scalar
   cudf::detail::device_scalar<bool> _is_valid;  ///< Device bool signifying validity
 
-  scalar() = delete;
-
   /**
    * @brief Move constructor for scalar.
    * @param other The other scalar to move from.
@@ -146,6 +145,7 @@ class fixed_width_scalar : public scalar {
  public:
   using value_type = T;  ///< Type of the value held by the scalar.
 
+  fixed_width_scalar()           = delete;
   ~fixed_width_scalar() override = default;
 
   /**
@@ -203,8 +203,6 @@ class fixed_width_scalar : public scalar {
 
  protected:
   rmm::device_scalar<T> _data;  ///< device memory containing the value
-
-  fixed_width_scalar() = delete;
 
   /**
    * @brief Construct a new fixed width scalar object.
