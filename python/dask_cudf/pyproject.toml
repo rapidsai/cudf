@@ -46,7 +46,7 @@ cudf = "dask_cudf.backends:CudfDXBackendEntrypoint"
 [project.optional-dependencies]
 test = [
     "dask-cuda==24.12.*,>=0.0.0a0",
-    "numba>=0.57",
+    "numba-cuda>=0.0.13",
     "pytest-cov",
     "pytest-xdist",
     "pytest<8",
@@ -119,7 +119,7 @@ filterwarnings = [
     "error::FutureWarning",
     "error::DeprecationWarning",
     # some third-party dependencies (e.g. 'boto3') still using datetime.datetime.utcnow()
-    "ignore:.*datetime.*utcnow.*scheduled for removal:DeprecationWarning",
+    "ignore:.*datetime.*utcnow.*scheduled for removal:DeprecationWarning:botocore",
     "ignore:create_block_manager_from_blocks is deprecated and will be removed in a future version. Use public APIs instead.:DeprecationWarning",
     # https://github.com/dask/partd/blob/main/partd/pandas.py#L198
     "ignore:Passing a BlockManager to DataFrame is deprecated and will raise in a future version. Use public APIs instead.:DeprecationWarning",
