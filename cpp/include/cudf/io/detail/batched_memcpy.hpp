@@ -38,30 +38,31 @@ namespace io::detail {
  * @param[in] src_iter Iterator to source addresses
  * @param[in] dst_iter Iterator to destination addresses
  * @param[in] size_iter Iterator to the vector sizes (in bytes)
+ * @param[in] num_buffs Number of buffers to be copied
  * @param[in] stream CUDA stream to use
  */
 template <typename SrcIterator, typename DstIterator, typename SizeIterator>
-void batched_memcpy(SrcIterator src_iter,
-                    DstIterator dst_iter,
-                    SizeIterator size_iter,
-                    size_t num_elems,
-                    rmm::cuda_stream_view stream)
+void batched_memcpy_async(SrcIterator src_iter,
+                          DstIterator dst_iter,
+                          SizeIterator size_iter,
+                          size_t num_buffs,
+                          rmm::cuda_stream_view stream)
 {
   // Get temp storage needed for cub::DeviceMemcpy::Batched
   size_t temp_storage_bytes = 0;
   cub::DeviceMemcpy::Batched(
-    nullptr, temp_storage_bytes, src_iter, dst_iter, size_iter, num_elems, stream.value());
+    nullptr, temp_storage_bytes, src_iter, dst_iter, size_iter, num_buffs, stream.value());
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage{temp_storage_bytes, stream.value()};
 
-  // Run cub::DeviceMemcpy::Batched
+  // Perform copies
   cub::DeviceMemcpy::Batched(d_temp_storage.data(),
                              temp_storage_bytes,
                              src_iter,
                              dst_iter,
                              size_iter,
-                             num_elems,
+                             num_buffs,
                              stream.value());
 }
 

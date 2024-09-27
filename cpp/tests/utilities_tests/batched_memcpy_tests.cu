@@ -121,7 +121,7 @@ TEST(BatchedMemcpyTest, BasicTest)
   auto d_sizes_bytes = cudf::detail::make_device_uvector_async(h_sizes_bytes, stream, mr);
 
   // Run the batched memcpy
-  cudf::io::detail::batched_memcpy(
+  cudf::io::detail::batched_memcpy_async(
     d_src_ptrs.begin(), d_dst_ptrs.begin(), d_sizes_bytes.begin(), num_buffs, stream);
 
   // Expected giant destination buffer after the memcpy

@@ -1350,8 +1350,8 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
     strm_desc, enc_streams, srcs, dsts, lengths);
 
   // Copy streams in a batched manner.
-  cudf::io::detail::batched_memcpy(
-    srcs.data(), dsts.data(), lengths.data(), lengths.size(), stream);
+  cudf::io::detail::batched_memcpy_async(
+    srcs.begin(), dsts.begin(), lengths.begin(), lengths.size(), stream);
 }
 
 std::optional<writer_compression_statistics> CompressOrcDataStreams(
