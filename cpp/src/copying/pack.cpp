@@ -88,13 +88,13 @@ column_view deserialize_column(serialized_column serial_column,
       ? reinterpret_cast<bitmask_type const*>(base_ptr + serial_column.null_mask_offset)
       : nullptr;
 
-  return column_view(serial_column.type,
-                     serial_column.size,
-                     data_ptr,
-                     null_mask_ptr,
-                     serial_column.null_count,
-                     0,
-                     children);
+  return {serial_column.type,
+          serial_column.size,
+          data_ptr,
+          null_mask_ptr,
+          serial_column.null_count,
+          0,
+          children};
 }
 
 /**

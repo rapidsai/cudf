@@ -359,7 +359,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
       }
     }
     _stats_expr = std::reference_wrapper<ast::expression const>(_operators.back());
-    return std::reference_wrapper<ast::expression const>(_operators.back());
+    return {_operators.back()};
   }
 
   /**
@@ -531,7 +531,7 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   auto col_index = col_index_it->second;
   _col_ref.emplace_back(col_index);
   _stats_expr = std::reference_wrapper<ast::expression const>(_col_ref.back());
-  return std::reference_wrapper<ast::expression const>(_col_ref.back());
+  return {_col_ref.back()};
 }
 
 std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
@@ -546,7 +546,7 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
     _operators.emplace_back(op, new_operands.front());
   }
   _stats_expr = std::reference_wrapper<ast::expression const>(_operators.back());
-  return std::reference_wrapper<ast::expression const>(_operators.back());
+  return {_operators.back()};
 }
 
 std::vector<std::reference_wrapper<ast::expression const>>
