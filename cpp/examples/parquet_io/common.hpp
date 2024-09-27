@@ -145,11 +145,11 @@ inline void check_identical_tables(cudf::table_view const& lhs_table,
     // No exception thrown, check indices
     auto const valid = indices->size() == 0;
     fmt::print(
-      fmt::emphasis::bold | fg(fmt::color::green_yellow), "Transcoding valid: {}\n\n", valid);
+      fmt::emphasis::bold | fg(fmt::color::green_yellow), "Tables identical: {}\n\n", valid);
   } catch (std::exception& e) {
     std::cerr << e.what() << std::endl << std::endl;
     throw std::runtime_error(
-      fmt::format(fmt::emphasis::bold | fg(fmt::color::red), "Transcoding valid: false\n\n"));
+      fmt::format(fmt::emphasis::bold | fg(fmt::color::red), "Tables identical: false\n\n"));
   }
 }
 
