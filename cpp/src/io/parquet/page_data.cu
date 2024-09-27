@@ -476,15 +476,17 @@ void WriteFinalOffsetsBatched(host_span<size_type const> offsets,
                               rmm::cuda_stream_view stream)
 {
   // Copy offsets to device and create an iterator
-  auto d_src_data = cudf::detail::make_device_uvector_async(offsets, stream, cudf::get_current_device_resource_ref());
-  auto src_iter   = cudf::detail::make_counting_transform_iterator(
+  auto d_src_data = cudf::detail::make_device_uvector_async(
+    offsets, stream, cudf::get_current_device_resource_ref());
+  auto src_iter = cudf::detail::make_counting_transform_iterator(
     static_cast<std::size_t>(0),
     cuda::proclaim_return_type<size_type*>(
       [src = d_src_data.data()] __device__(std::size_t i) { return src + i; }));
 
   // Copy buffer addresses to device and create an iterator
-  auto d_dst_addrs = cudf::detail::make_device_uvector_async(buff_addrs, stream, cudf::get_current_device_resource_ref());
-  auto dst_iter    = cudf::detail::make_counting_transform_iterator(
+  auto d_dst_addrs = cudf::detail::make_device_uvector_async(
+    buff_addrs, stream, cudf::get_current_device_resource_ref());
+  auto dst_iter = cudf::detail::make_counting_transform_iterator(
     static_cast<std::size_t>(0),
     cuda::proclaim_return_type<size_type*>(
       [dst = d_dst_addrs.data()] __device__(std::size_t i) { return dst[i]; }));
