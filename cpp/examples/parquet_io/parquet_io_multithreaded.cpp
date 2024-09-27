@@ -180,7 +180,7 @@ int32_t main(int argc, char const** argv)
   std::string input_paths                  = "example.parquet";
   int32_t input_multiplier                 = 1;
   int32_t num_reads                        = 1;
-  int32_t thread_count                     = 2;
+  int32_t thread_count                     = 1;
   std::optional<cudf::io::io_type> io_type = std::nullopt;
   bool validate_output                     = false;
 
