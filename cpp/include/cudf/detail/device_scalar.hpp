@@ -56,12 +56,7 @@ class device_scalar : public rmm::device_scalar<T> {
     auto bounce_buffer = make_host_vector<T>(1, stream);
     bounce_buffer[0]   = initial_value;
     // TODO replace with to_device
-    auto const is_pinned = bounce_buffer.get_allocator().is_device_accessible();
-    cuda_memcpy(this->data(),
-                bounce_buffer.data(),
-                sizeof(T),
-                is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
-                stream);
+    cuda_memcpy<T>(device_span<T>{this->data(), 1}, bounce_buffer, stream);
   }
 
   device_scalar(device_scalar const& other,
