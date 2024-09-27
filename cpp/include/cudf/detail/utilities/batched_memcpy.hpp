@@ -25,7 +25,7 @@
 #include <thrust/iterator/constant_iterator.h>
 
 namespace CUDF_EXPORT cudf {
-namespace io::detail {
+namespace detail {
 
 /**
  * @brief A helper function that copies a vector of vectors from source to destination addresses in
@@ -66,5 +66,5 @@ void batched_memcpy_async(SrcIterator src_iter,
                              stream.value());
 }
 
-}  // namespace io::detail
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf

@@ -20,10 +20,10 @@
 #include "orc_gpu.hpp"
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/io/detail/batched_memcpy.hpp>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -1350,7 +1350,7 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
     strm_desc, enc_streams, srcs, dsts, lengths);
 
   // Copy streams in a batched manner.
-  cudf::io::detail::batched_memcpy_async(
+  cudf::detail::batched_memcpy_async(
     srcs.begin(), dsts.begin(), lengths.begin(), lengths.size(), stream);
 }
 

@@ -20,8 +20,8 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/io/detail/batched_memcpy.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -121,7 +121,7 @@ TEST(BatchedMemcpyTest, BasicTest)
   auto d_sizes_bytes = cudf::detail::make_device_uvector_async(h_sizes_bytes, stream, mr);
 
   // Run the batched memcpy
-  cudf::io::detail::batched_memcpy_async(
+  cudf::detail::batched_memcpy_async(
     d_src_ptrs.begin(), d_dst_ptrs.begin(), d_sizes_bytes.begin(), num_buffs, stream);
 
   // Expected giant destination buffer after the memcpy

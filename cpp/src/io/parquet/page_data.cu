@@ -17,7 +17,7 @@
 #include "page_data.cuh"
 #include "page_decode.cuh"
 
-#include <cudf/io/detail/batched_memcpy.hpp>
+#include <cudf/detail/utilities/batched_memcpy.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -491,7 +491,7 @@ void WriteFinalOffsetsBatched(host_span<size_type const> offsets,
   auto size_iter = thrust::make_constant_iterator(sizeof(size_type));
 
   // Copy offsets to buffers in batched manner.
-  cudf::io::detail::batched_memcpy_async(
+  cudf::detail::batched_memcpy_async(
     src_iter, d_dst_addrs.begin(), size_iter, offsets.size(), stream);
 }
 
