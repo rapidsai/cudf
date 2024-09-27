@@ -29,6 +29,7 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/types.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -1341,20 +1342,21 @@ TEST_P(JsonDelimiterParamTest, RecoveringTokenStreamNewlineAsWSAndDelimiter)
 
   auto const stream = cudf::get_default_stream();
 
-  // Default parsing options
-  cudf::io::json_reader_options default_options{};
-  default_options.set_recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
-  default_options.enable_lines(true);
-  default_options.set_delimiter(delimiter);
-
   // Prepare input & output buffers
   cudf::string_scalar const d_scalar(input, true, stream);
   auto const d_input = cudf::device_span<cuio_json::SymbolT const>{
     d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
+  // Default parsing options
+  cudf::io::json_reader_options const in_opts =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{})
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+      .delimiter(delimiter)
+      .lines(true);
+
   // Parse the JSON and get the token stream
   auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
-    d_input, default_options, stream, cudf::get_current_device_resource_ref());
+    d_input, in_opts, stream, cudf::get_current_device_resource_ref());
   // Copy back the number of tokens that were written
   auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
   auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
