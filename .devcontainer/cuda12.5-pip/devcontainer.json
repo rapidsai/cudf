@@ -9,6 +9,18 @@
     }
   },
   "runArgs": [
+    "--gpus=all",
+    "-v",
+    "/run/udev:/run/udev",
+    "-v",
+    "/sys/kernel/config:/sys/kernel/config",
+    "-v",
+    "/dev:/dev",
+    "-v",
+    "/lib/modules/6.5.0-1019-nvidia-64k:/lib/modules/6.5.0-1019-nvidia-64k",
+    "-v",
+    "${localEnv:HOME}/Downloads:/mnt/profile",
+    "--privileged",
     "--cap-add=SYS_ADMIN",
     "--rm",
     "--name",
