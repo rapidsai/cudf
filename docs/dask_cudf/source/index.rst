@@ -15,11 +15,10 @@ as the ``"cudf"`` dataframe backend for
 .. note::
   Neither Dask cuDF nor Dask DataFrame provide support for multi-GPU
   or multi-node execution on their own. You must also deploy a
-  `dask.distributed <https://distributed.dask.org/en/stable/>` cluster
-  to leverage multiple GPUs. We strongly recommend using `Dask-CUDA
-  <https://docs.rapids.ai/api/dask-cuda/stable/>`__ to simplify the
-  setup of the cluster, taking advantage of all features of the GPU
-  and networking hardware.
+  `dask.distributed <https://distributed.dask.org/en/stable/>`__ cluster
+  to leverage multiple GPUs. We strongly recommend using :doc:`dask-cuda:index`
+  to simplify the setup of the cluster, taking advantage of all features
+  of the GPU and networking hardware.
 
 If you are familiar with Dask and `pandas <pandas.pydata.org>`__ or
 `cuDF <https://docs.rapids.ai/api/cudf/stable/>`__, then Dask cuDF
@@ -29,6 +28,10 @@ minutes to Dask
 by `10 minutes to cuDF and Dask cuDF
 <https://docs.rapids.ai/api/cudf/stable/user_guide/10min.html>`__.
 
+After reviewing the sections below, please see the
+:ref:`Best Practices <best-practices>` page for further guidance on
+using Dask cuDF effectively.
+
 
 Using Dask cuDF
 ---------------
@@ -36,9 +39,10 @@ Using Dask cuDF
 The Dask DataFrame API (Recommended)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Simply use the `Dask configuration <dask:configuration>` system to
-set the ``"dataframe.backend"`` option to ``"cudf"``. From Python,
-this can be achieved like so::
+Simply use the `Dask configuration
+<https://docs.dask.org/en/stable/how-to/selecting-the-collection-backend.html>`__
+system to set the ``"dataframe.backend"`` option to ``"cudf"``.
+From Python, this can be achieved like so::
 
   import dask
 
@@ -50,14 +54,14 @@ environment before running your code.
 Once this is done, the public Dask DataFrame API will leverage
 ``cudf`` automatically when a new DataFrame collection is created
 from an on-disk format using any of the following ``dask.dataframe``
-functions::
+functions:
 
-* :func:`dask.dataframe.read_parquet`
-* :func:`dask.dataframe.read_json`
-* :func:`dask.dataframe.read_csv`
-* :func:`dask.dataframe.read_orc`
-* :func:`dask.dataframe.read_hdf`
-* :func:`dask.dataframe.from_dict`
+* :func:`read_parquet`
+* :func:`read_json`
+* :func:`read_csv`
+* :func:`read_orc`
+* :func:`read_hdf`
+* :func:`from_dict`
 
 For example::
 
@@ -112,8 +116,8 @@ performance benefit over the CPU/GPU-portable ``dask.dataframe`` API.
 Also, using some parts of the explicit API are incompatible with
 automatic query planning (see the next section).
 
-The explicit Dask cuDF API
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Query Planning
+~~~~~~~~~~~~~~
 
 Dask cuDF now provides automatic query planning by default (RAPIDS 24.06+).
 As long as the ``"dataframe.query-planning"`` configuration is set to
@@ -156,7 +160,7 @@ out-of-core computing. This also means that the compute tasks can be
 executed in parallel over a multi-GPU cluster.
 
 In order to execute your Dask workflow on multiple GPUs, you will
-typically need to use `Dask-CUDA <https://docs.rapids.ai/api/dask-cuda/stable/>`__
+typically need to use :doc:`dask-cuda:index`
 to deploy distributed Dask cluster, and
 `Distributed <https://distributed.dask.org/en/stable/client.html>`__
 to define a client object. For example::
@@ -187,7 +191,7 @@ to define a client object. For example::
   <https://distributed.dask.org/en/stable/manage-computation.html>`__
   for more details.
 
-Please see the `Dask-CUDA <https://docs.rapids.ai/api/dask-cuda/stable/>`__
+Please see the :doc:`dask-cuda:index`
 documentation for more information about deploying GPU-aware clusters
 (including `best practices
 <https://docs.rapids.ai/api/dask-cuda/stable/examples/best-practices/>`__).

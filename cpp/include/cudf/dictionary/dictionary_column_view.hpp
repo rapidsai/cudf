@@ -47,7 +47,7 @@ class dictionary_column_view : private column_view {
   dictionary_column_view(column_view const& dictionary_column);
   dictionary_column_view(dictionary_column_view&&)      = default;  ///< Move constructor
   dictionary_column_view(dictionary_column_view const&) = default;  ///< Copy constructor
-  ~dictionary_column_view()                             = default;
+  ~dictionary_column_view() override                    = default;
 
   /**
    * @brief Move assignment operator

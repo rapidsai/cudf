@@ -85,7 +85,7 @@ class selected_rows_offsets {
     : all{std::move(data)}, selected{selected_span}
   {
   }
-  selected_rows_offsets(rmm::cuda_stream_view stream) : all{0, stream}, selected{all} {}
+  explicit selected_rows_offsets(rmm::cuda_stream_view stream) : all{0, stream}, selected{all} {}
 
   operator device_span<uint64_t const>() const { return selected; }
   void shrink(size_t size)
@@ -196,7 +196,8 @@ void erase_except_last(C& container, rmm::cuda_stream_view stream)
 constexpr std::array<uint8_t, 3> UTF8_BOM = {0xEF, 0xBB, 0xBF};
 [[nodiscard]] bool has_utf8_bom(host_span<char const> data)
 {
-  return data.size() >= 3 && memcmp(data.data(), UTF8_BOM.data(), 3) == 0;
+  return data.size() >= UTF8_BOM.size() &&
+         memcmp(data.data(), UTF8_BOM.data(), UTF8_BOM.size()) == 0;
 }
 
 /**
@@ -238,7 +239,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
 
   auto const data_size      = data.has_value() ? data->size() : source->size();
   auto const buffer_size    = std::min(max_chunk_bytes, data_size);
-  auto const max_input_size = [&]() {
+  auto const max_input_size = [&] {
     if (range_end == data_size) {
       return data_size - byte_range_offset;
     } else {
@@ -253,7 +254,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   range_end += (range_end < data_size);
 
   auto pos = range_begin;
-  // When using byta range, need the line terminator of last line before the range
+  // When using byte range, need the line terminator of last line before the range
   auto input_pos = byte_range_offset == 0 ? pos : pos - 1;
   uint64_t ctx   = 0;
 
@@ -292,7 +293,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
                                       buffer->size(),
                                       cudaMemcpyDefault,
                                       stream.value()));
-        stream.synchronize();
+        stream.synchronize();  // To prevent buffer going out of scope before we copy the data.
       }
     }
 
@@ -475,8 +476,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
                                               bom_buffer->size()};
       if (has_utf8_bom(bom_chars)) { data_start_offset += sizeof(UTF8_BOM); }
     } else {
-      constexpr auto find_data_start_chunk_size = 4ul * 1024;
-
+      auto find_data_start_chunk_size = 1024ul;
       while (data_start_offset < source->size()) {
         auto const read_size =
           std::min(find_data_start_chunk_size, source->size() - data_start_offset);
@@ -491,6 +491,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
           break;
         }
         data_start_offset += read_size;
+        find_data_start_chunk_size *= 2;
       }
     }
   }
