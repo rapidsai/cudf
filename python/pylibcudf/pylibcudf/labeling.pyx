@@ -20,6 +20,8 @@ cpdef Column label_bins(
 ):
     """Labels elements based on membership in the specified bins.
 
+    For details see :cpp:func:`label_bins`.
+
     Parameters
     ----------
     input : Column

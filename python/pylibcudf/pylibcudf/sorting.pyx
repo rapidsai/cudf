@@ -16,6 +16,8 @@ from .table cimport Table
 cpdef Column sorted_order(Table source_table, list column_order, list null_precedence):
     """Computes the row indices required to sort the table.
 
+    For details, see :cpp:func:`sorted_order`.
+
     Parameters
     ----------
     source_table : Table
@@ -51,6 +53,8 @@ cpdef Column stable_sorted_order(
 ):
     """Computes the row indices required to sort the table,
     preserving order of equal elements.
+
+    For details, see :cpp:func:`stable_sorted_order`.
 
     Parameters
     ----------
@@ -90,6 +94,8 @@ cpdef Column rank(
 ):
     """Computes the rank of each element in the column.
 
+    For details, see :cpp:func:`rank`.
+
     Parameters
     ----------
     input_view : Column
@@ -128,6 +134,8 @@ cpdef Column rank(
 cpdef bool is_sorted(Table tbl, list column_order, list null_precedence):
     """Checks if the table is sorted.
 
+    For details, see :cpp:func:`is_sorted`.
+
     Parameters
     ----------
     tbl : Table
@@ -164,6 +172,8 @@ cpdef Table segmented_sort_by_key(
     list null_precedence,
 ):
     """Sorts the table by key, within segments.
+
+    For details, see :cpp:func:`segmented_sort_by_key`.
 
     Parameters
     ----------
@@ -209,6 +219,8 @@ cpdef Table stable_segmented_sort_by_key(
     """Sorts the table by key preserving order of equal elements,
     within segments.
 
+    For details, see :cpp:func:`stable_segmented_sort_by_key`.
+
     Parameters
     ----------
     values : Table
@@ -251,6 +263,8 @@ cpdef Table sort_by_key(
 ):
     """Sorts the table by key.
 
+    For details, see :cpp:func:`sort_by_key`.
+
     Parameters
     ----------
     values : Table
@@ -290,6 +304,8 @@ cpdef Table stable_sort_by_key(
 ):
     """Sorts the table by key preserving order of equal elements.
 
+    For details, see :cpp:func:`stable_sort_by_key`.
+
     Parameters
     ----------
     values : Table
@@ -324,6 +340,8 @@ cpdef Table stable_sort_by_key(
 cpdef Table sort(Table source_table, list column_order, list null_precedence):
     """Sorts the table.
 
+    For details, see :cpp:func:`sort`.
+
     Parameters
     ----------
     source_table : Table
@@ -354,6 +372,8 @@ cpdef Table sort(Table source_table, list column_order, list null_precedence):
 
 cpdef Table stable_sort(Table source_table, list column_order, list null_precedence):
     """Sorts the table preserving order of equal elements.
+
+    For details, see :cpp:func:`stable_sort`.
 
     Parameters
     ----------

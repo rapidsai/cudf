@@ -81,7 +81,7 @@ representations, native cuDF spilling may be insufficient. For these cases,
 `JIT-unspill <https://docs.rapids.ai/api/dask-cuda/nightly/spilling/#jit-unspill>`__
 is likely to produce better protection from out-of-memory (OOM) errors.
 Please see `Dask-CUDA's spilling documentation
-<https://docs.rapids.ai/api/dask-cuda/24.10/spilling/>`__ for further details
+<https://docs.rapids.ai/api/dask-cuda/stable/spilling/>`__ for further details
 and guidance.
 
 Use RMM
@@ -160,7 +160,7 @@ of the underlying task graph to materialize the collection.
 
 :func:`sort_values` / :func:`set_index` : These operations both require Dask to
 eagerly collect quantile information about the column(s) being targeted by the
-global sort operation. See `Avoid Sorting`__ for notes on sorting considerations.
+global sort operation. See the next section for notes on sorting considerations.
 
 .. note::
   When using :func:`set_index`, be sure to pass in ``sort=False`` whenever the
@@ -252,6 +252,15 @@ result in a simple 1-to-1 mapping between files and output partitions.
   correspond to a reasonable partition size, use ``blocksize=None``
   to avoid unnecessary metadata collection.
 
+.. note::
+  When reading from remote storage (e.g. S3 and GCS), performance will
+  likely improve with ``filesystem="arrow"``. When this option is set,
+  PyArrow will be used to perform IO on multiple CPU threads. Please be
+  aware that this feature is experimental, and behavior may change in
+  the future (without deprecation). Do not pass in ``blocksize`` or
+  ``aggregate_files`` when this feature is used. Instead, set the
+  ``"dataframe.parquet.minimum-partition-size"`` config to control
+  file aggregation.
 
 Use :func:`from_map`
 ~~~~~~~~~~~~~~~~~~~~
@@ -288,11 +297,14 @@ bottleneck is typically device-to-host memory spilling.
 Although every workflow is different, the following guidelines
 are often recommended:
 
-* `Use a distributed cluster with Dask-CUDA workers <Use Dask-CUDA>`_
-* `Use native cuDF spilling whenever possible <Enable cuDF Spilling>`_
+* Use a distributed cluster with `Dask-CUDA <https://docs.rapids.ai/api/dask-cuda/stable/>`__ workers
+
+* Use native cuDF spilling whenever possible (`Dask-CUDA spilling documentation <https://docs.rapids.ai/api/dask-cuda/stable/spilling/>`__)
+
 * Avoid shuffling whenever possible
-  * Use ``split_out=1`` for low-cardinality groupby aggregations
-  * Use ``broadcast=True`` for joins when at least one collection comprises a small number of partitions (e.g. ``<=5``)
+    * Use ``split_out=1`` for low-cardinality groupby aggregations
+    * Use ``broadcast=True`` for joins when at least one collection comprises a small number of partitions (e.g. ``<=5``)
+
 * `Use UCX <https://docs.rapids.ai/api/dask-cuda/nightly/examples/ucx/>`__ if communication is a bottleneck.
 
 .. note::
