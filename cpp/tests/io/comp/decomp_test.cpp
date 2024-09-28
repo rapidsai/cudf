@@ -41,8 +41,8 @@ template <typename Decompressor>
 struct DecompressTest : public cudf::test::BaseFixture {
   std::vector<uint8_t> vector_from_string(char const* str) const
   {
-    return std::vector<uint8_t>(reinterpret_cast<uint8_t const*>(str),
-                                reinterpret_cast<uint8_t const*>(str) + strlen(str));
+    return {reinterpret_cast<uint8_t const*>(str),
+            reinterpret_cast<uint8_t const*>(str) + strlen(str)};
   }
 
   void Decompress(std::vector<uint8_t>* decompressed,

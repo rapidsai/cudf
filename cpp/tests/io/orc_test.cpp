@@ -43,9 +43,9 @@
 
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
-  typename std::conditional<std::is_same_v<T, cudf::string_view>,
-                            cudf::test::strings_column_wrapper,
-                            cudf::test::fixed_width_column_wrapper<T, SourceElementT>>::type;
+  std::conditional_t<std::is_same_v<T, cudf::string_view>,
+                     cudf::test::strings_column_wrapper,
+                     cudf::test::fixed_width_column_wrapper<T, SourceElementT>>;
 
 using str_col     = column_wrapper<cudf::string_view>;
 using bool_col    = column_wrapper<bool>;

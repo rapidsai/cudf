@@ -90,7 +90,7 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   auto col4 = cudf::test::fixed_width_column_wrapper<int64_t>(
     int64_data.begin(), int64_data.end(), validity.begin());
   auto dict_col = cudf::dictionary::encode(col4);
-  columns.emplace_back(std::move(cudf::dictionary::encode(col4)));
+  columns.emplace_back(cudf::dictionary::encode(col4));
   columns.emplace_back(cudf::test::fixed_width_column_wrapper<bool>(
                          bool_data.begin(), bool_data.end(), bool_validity.begin())
                          .release());
