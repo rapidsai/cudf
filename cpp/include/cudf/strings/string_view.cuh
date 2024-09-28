@@ -99,7 +99,7 @@ __device__ inline std::pair<size_type, size_type> bytes_to_character_position(st
  * values. Also, this char pointer serves as valid device pointer of identity
  * value for minimum operator on string values.
  */
-static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
+static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};  // NOLINT
 }  // namespace detail
 }  // namespace strings
 
@@ -283,14 +283,11 @@ __device__ inline size_type string_view::const_iterator::position() const { retu
 
 __device__ inline size_type string_view::const_iterator::byte_offset() const { return byte_pos; }
 
-__device__ inline string_view::const_iterator string_view::begin() const
-{
-  return const_iterator(*this, 0, 0);
-}
+__device__ inline string_view::const_iterator string_view::begin() const { return {*this, 0, 0}; }
 
 __device__ inline string_view::const_iterator string_view::end() const
 {
-  return const_iterator(*this, length(), size_bytes());
+  return {*this, length(), size_bytes()};
 }
 // @endcond
 
@@ -411,7 +408,7 @@ __device__ inline size_type string_view::find(char const* str,
 
 __device__ inline size_type string_view::find(char_utf8 chr, size_type pos, size_type count) const
 {
-  char str[sizeof(char_utf8)];
+  char str[sizeof(char_utf8)];  // NOLINT
   size_type chwidth = strings::detail::from_char_utf8(chr, str);
   return find(str, chwidth, pos, count);
 }
@@ -433,7 +430,7 @@ __device__ inline size_type string_view::rfind(char const* str,
 
 __device__ inline size_type string_view::rfind(char_utf8 chr, size_type pos, size_type count) const
 {
-  char str[sizeof(char_utf8)];
+  char str[sizeof(char_utf8)];  // NOLINT
   size_type chwidth = strings::detail::from_char_utf8(chr, str);
   return rfind(str, chwidth, pos, count);
 }

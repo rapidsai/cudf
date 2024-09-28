@@ -225,8 +225,8 @@ TEST_F(DLPackUntypedTests, UnsupportedBroadcast1DTensorFromDlpack)
   constexpr int ndim = 1;
   // Broadcasted (stride-0) 1D tensor
   auto const data       = cudf::test::make_type_param_vector<T>({1});
-  int64_t shape[ndim]   = {5};
-  int64_t strides[ndim] = {0};
+  int64_t shape[ndim]   = {5};  // NOLINT
+  int64_t strides[ndim] = {0};  // NOLINT
 
   DLManagedTensor tensor{};
   tensor.dl_tensor.device.device_type = kDLCPU;
@@ -248,8 +248,8 @@ TEST_F(DLPackUntypedTests, UnsupportedStrided1DTensorFromDlpack)
   constexpr int ndim = 1;
   // Strided 1D tensor
   auto const data       = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
-  int64_t shape[ndim]   = {2};
-  int64_t strides[ndim] = {2};
+  int64_t shape[ndim]   = {2};  // NOLINT
+  int64_t strides[ndim] = {2};  // NOLINT
 
   DLManagedTensor tensor{};
   tensor.dl_tensor.device.device_type = kDLCPU;
@@ -271,7 +271,7 @@ TEST_F(DLPackUntypedTests, UnsupportedImplicitRowMajor2DTensorFromDlpack)
   constexpr int ndim = 2;
   // Row major 2D tensor
   auto const data     = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
-  int64_t shape[ndim] = {2, 2};
+  int64_t shape[ndim] = {2, 2};  // NOLINT
 
   DLManagedTensor tensor{};
   tensor.dl_tensor.device.device_type = kDLCPU;
@@ -293,8 +293,8 @@ TEST_F(DLPackUntypedTests, UnsupportedExplicitRowMajor2DTensorFromDlpack)
   constexpr int ndim = 2;
   // Row major 2D tensor with explicit strides
   auto const data       = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
-  int64_t shape[ndim]   = {2, 2};
-  int64_t strides[ndim] = {2, 1};
+  int64_t shape[ndim]   = {2, 2};  // NOLINT
+  int64_t strides[ndim] = {2, 1};  // NOLINT
 
   DLManagedTensor tensor{};
   tensor.dl_tensor.device.device_type = kDLCPU;
@@ -316,8 +316,8 @@ TEST_F(DLPackUntypedTests, UnsupportedStridedColMajor2DTensorFromDlpack)
   constexpr int ndim = 2;
   // Column major, but strided in fastest dimension
   auto const data       = cudf::test::make_type_param_vector<T>({1, 2, 3, 4, 5, 6, 7, 8});
-  int64_t shape[ndim]   = {2, 2};
-  int64_t strides[ndim] = {2, 4};
+  int64_t shape[ndim]   = {2, 2};  // NOLINT
+  int64_t strides[ndim] = {2, 4};  // NOLINT
 
   DLManagedTensor tensor{};
   tensor.dl_tensor.device.device_type = kDLCPU;
@@ -465,8 +465,8 @@ TYPED_TEST(DLPackNumericTests, FromDlpackCpu)
   using T         = TypeParam;
   auto const data = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 0, 5, 6, 7, 8, 0});
   uint64_t const offset{sizeof(T)};
-  int64_t shape[2]   = {4, 2};
-  int64_t strides[2] = {1, 5};
+  int64_t shape[2]   = {4, 2};  // NOLINT
+  int64_t strides[2] = {1, 5};  // NOLINT
 
   DLManagedTensor tensor{};
   tensor.dl_tensor.device.device_type = kDLCPU;

@@ -59,7 +59,7 @@ class tdigest_column_view : private column_view {
   tdigest_column_view(column_view const&);  ///< Construct tdigest_column_view from a column_view
   tdigest_column_view(tdigest_column_view&&)      = default;  ///< Move constructor
   tdigest_column_view(tdigest_column_view const&) = default;  ///< Copy constructor
-  ~tdigest_column_view()                          = default;
+  ~tdigest_column_view() override                 = default;
   /**
    * @brief Copy assignment operator
    *
