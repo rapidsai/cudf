@@ -15,7 +15,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
@@ -86,10 +85,8 @@ static void BM_ast_transform(nvbench::state& state)
 
   auto const& expression_tree_root = expressions.back();
 
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    flush_device_L2_cache(rmm::cuda_stream_view{state.get_cuda_stream().get_stream()});
-    cudf::compute_column(table, expression_tree_root);
-  });
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch&) { cudf::compute_column(table, expression_tree_root); });
 
   // Use the number of bytes read from global memory
   state.add_global_memory_reads(static_cast<int64_t>(state.get_summaries().size()) * table_size *

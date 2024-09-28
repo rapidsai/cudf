@@ -69,12 +69,6 @@
 #include <benchmark/benchmark.h>
 #include <driver_types.h>
 
-/**
- * @brief clears the L2$ by cudaMemset'ing a buffer of L2$ size
- * @param stream CUDA stream used for device memory operations and kernel launches
- */
-void flush_device_L2_cache(rmm::cuda_stream_view stream = cudf::get_default_stream());
-
 class cuda_event_timer {
  public:
   /**
