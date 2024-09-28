@@ -199,7 +199,7 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
     // Read the next sync markers and ensure they match the first ones we
     // encountered.  If they don't, we have to assume the data is corrupted,
     // and thus, we terminate processing immediately.
-    uint64_t const sync_marker[] = {get_raw<uint64_t>(), get_raw<uint64_t>()};
+    std::array const sync_marker = {get_raw<uint64_t>(), get_raw<uint64_t>()};
     bool valid_sync_markers =
       ((sync_marker[0] == md->sync_marker[0]) && (sync_marker[1] == md->sync_marker[1]));
     if (!valid_sync_markers) { return false; }
