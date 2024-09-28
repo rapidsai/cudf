@@ -89,4 +89,4 @@ class device_scalar : public rmm::device_scalar<T> {
 };
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
