@@ -160,7 +160,7 @@ of the underlying task graph to materialize the collection.
 
 :func:`sort_values` / :func:`set_index` : These operations both require Dask to
 eagerly collect quantile information about the column(s) being targeted by the
-global sort operation. See `Avoid Sorting`__ for notes on sorting considerations.
+global sort operation. See the next section for notes on sorting considerations.
 
 .. note::
   When using :func:`set_index`, be sure to pass in ``sort=False`` whenever the
@@ -297,11 +297,14 @@ bottleneck is typically device-to-host memory spilling.
 Although every workflow is different, the following guidelines
 are often recommended:
 
-* `Use a distributed cluster with Dask-CUDA workers <Use Dask-CUDA>`_
-* `Use native cuDF spilling whenever possible <Enable cuDF Spilling>`_
+* Use a distributed cluster with `Dask-CUDA <https://docs.rapids.ai/api/dask-cuda/stable/>`__ workers
+
+* Use native cuDF spilling whenever possible (`Dask-CUDA spilling documentation <https://docs.rapids.ai/api/dask-cuda/stable/spilling/>`__)
+
 * Avoid shuffling whenever possible
-  * Use ``split_out=1`` for low-cardinality groupby aggregations
-  * Use ``broadcast=True`` for joins when at least one collection comprises a small number of partitions (e.g. ``<=5``)
+    * Use ``split_out=1`` for low-cardinality groupby aggregations
+    * Use ``broadcast=True`` for joins when at least one collection comprises a small number of partitions (e.g. ``<=5``)
+
 * `Use UCX <https://docs.rapids.ai/api/dask-cuda/nightly/examples/ucx/>`__ if communication is a bottleneck.
 
 .. note::
