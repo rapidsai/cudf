@@ -196,7 +196,8 @@ void erase_except_last(C& container, rmm::cuda_stream_view stream)
 constexpr std::array<uint8_t, 3> UTF8_BOM = {0xEF, 0xBB, 0xBF};
 [[nodiscard]] bool has_utf8_bom(host_span<char const> data)
 {
-  return data.size() >= 3 && memcmp(data.data(), UTF8_BOM.data(), 3) == 0;
+  return data.size() >= UTF8_BOM.size() &&
+         memcmp(data.data(), UTF8_BOM.data(), UTF8_BOM.size()) == 0;
 }
 
 /**
@@ -475,8 +476,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
                                               bom_buffer->size()};
       if (has_utf8_bom(bom_chars)) { data_start_offset += sizeof(UTF8_BOM); }
     } else {
-      constexpr auto find_data_start_chunk_size = 4ul * 1024;
-
+      auto find_data_start_chunk_size = 1024ul;
       while (data_start_offset < source->size()) {
         auto const read_size =
           std::min(find_data_start_chunk_size, source->size() - data_start_offset);
@@ -491,6 +491,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
           break;
         }
         data_start_offset += read_size;
+        find_data_start_chunk_size *= 2;
       }
     }
   }
