@@ -314,15 +314,8 @@ void generate_depth_remappings(
     }
   }
   auto sync_fn = [](decltype(read_tasks) read_tasks) {
-    std::vector<std::thread> threads;
-    for (std::size_t i = 0; i < read_tasks.size(); ++i) {
-      BIU_RANGE_PUSH("sync_fn");
-      threads.emplace_back([](std::future<size_t>& task) { task.wait(); }, std::ref(read_tasks[i]));
-    }
-
-    for (auto&& thread : threads) {
-      thread.join();
-      BIU_RANGE_POP();
+    for (auto& task : read_tasks) {
+      task.wait();
     }
   };
   return std::async(std::launch::deferred, sync_fn, std::move(read_tasks));
