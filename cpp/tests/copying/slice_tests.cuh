@@ -41,7 +41,7 @@ cudf::table create_fixed_table(cudf::size_type num_cols,
       create_fixed_columns<T>(start + (idx * num_cols), col_size, valids);
     cols.push_back(wrap.release());
   }
-  return cudf::table(std::move(cols));
+  return {std::move(cols)};
 }
 
 template <typename T>
@@ -148,7 +148,7 @@ std::vector<cudf::table> create_expected_tables(cudf::size_type num_cols,
       }
     }
 
-    result.push_back(cudf::table(std::move(cols)));
+    result.emplace_back(std::move(cols));
   }
 
   return result;
@@ -163,13 +163,12 @@ inline std::vector<cudf::test::strings_column_wrapper> create_expected_string_co
 
   for (unsigned long index = 0; index < indices.size(); index += 2) {
     if (not nullable) {
-      result.push_back(cudf::test::strings_column_wrapper(strings.begin() + indices[index],
-                                                          strings.begin() + indices[index + 1]));
+      result.emplace_back(strings.begin() + indices[index], strings.begin() + indices[index + 1]);
     } else {
       auto valids = cudf::detail::make_counting_transform_iterator(
         indices[index], [](auto i) { return i % 2 == 0; });
-      result.push_back(cudf::test::strings_column_wrapper(
-        strings.begin() + indices[index], strings.begin() + indices[index + 1], valids));
+      result.emplace_back(
+        strings.begin() + indices[index], strings.begin() + indices[index + 1], valids);
     }
   }
 
@@ -184,9 +183,9 @@ inline std::vector<cudf::test::strings_column_wrapper> create_expected_string_co
   std::vector<cudf::test::strings_column_wrapper> result = {};
 
   for (unsigned long index = 0; index < indices.size(); index += 2) {
-    result.push_back(cudf::test::strings_column_wrapper(strings.begin() + indices[index],
-                                                        strings.begin() + indices[index + 1],
-                                                        validity.begin() + indices[index]));
+    result.emplace_back(strings.begin() + indices[index],
+                        strings.begin() + indices[index + 1],
+                        validity.begin() + indices[index]);
   }
 
   return result;
@@ -216,7 +215,7 @@ inline std::vector<cudf::table> create_expected_string_tables(
       }
     }
 
-    result.push_back(cudf::table(std::move(cols)));
+    result.emplace_back(std::move(cols));
   }
 
   return result;
