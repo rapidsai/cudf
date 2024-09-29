@@ -192,7 +192,7 @@ inline std::vector<cudf::test::strings_column_wrapper> create_expected_string_co
 }
 
 inline std::vector<cudf::table> create_expected_string_tables(
-  std::vector<std::string> const strings[2],
+  std::vector<std::vector<std::string>> const strings,
   std::vector<cudf::size_type> const& indices,
   bool nullable)
 {

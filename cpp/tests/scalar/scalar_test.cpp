@@ -190,7 +190,7 @@ TEST_F(ListScalarTest, MoveConstructorNonNested)
 
   EXPECT_EQ(mask_ptr, s2.validity_data());
   EXPECT_EQ(data_ptr, s2.view().data<int32_t>());
-  EXPECT_EQ(s.view().data<int32_t>(), nullptr);
+  EXPECT_EQ(s.view().data<int32_t>(), nullptr);  // NOLINT
 }
 
 TEST_F(ListScalarTest, MoveConstructorNested)

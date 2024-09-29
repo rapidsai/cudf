@@ -1358,21 +1358,22 @@ TEST_P(OrcWriterTestStripes, StripeSize)
   cols.push_back(col.release());
   auto const expected = std::make_unique<table>(std::move(cols));
 
-  auto validate = [&](std::vector<char> const& orc_buffer) {
-    auto const expected_stripe_num =
-      std::max<cudf::size_type>(num_rows / size_rows, (num_rows * sizeof(int64_t)) / size_bytes);
-    auto const stats = cudf::io::read_parsed_orc_statistics(
-      cudf::io::source_info(orc_buffer.data(), orc_buffer.size()));
-    EXPECT_EQ(stats.stripes_stats.size(), expected_stripe_num);
+  auto validate =
+    [&, &size_bytes = size_bytes, &size_rows = size_rows](std::vector<char> const& orc_buffer) {
+      auto const expected_stripe_num =
+        std::max<cudf::size_type>(num_rows / size_rows, (num_rows * sizeof(int64_t)) / size_bytes);
+      auto const stats = cudf::io::read_parsed_orc_statistics(
+        cudf::io::source_info(orc_buffer.data(), orc_buffer.size()));
+      EXPECT_EQ(stats.stripes_stats.size(), expected_stripe_num);
 
-    cudf::io::orc_reader_options in_opts =
-      cudf::io::orc_reader_options::builder(
-        cudf::io::source_info(orc_buffer.data(), orc_buffer.size()))
-        .use_index(false);
-    auto result = cudf::io::read_orc(in_opts);
+      cudf::io::orc_reader_options in_opts =
+        cudf::io::orc_reader_options::builder(
+          cudf::io::source_info(orc_buffer.data(), orc_buffer.size()))
+          .use_index(false);
+      auto result = cudf::io::read_orc(in_opts);
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
-  };
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
+    };
 
   {
     std::vector<char> out_buffer_chunked;
