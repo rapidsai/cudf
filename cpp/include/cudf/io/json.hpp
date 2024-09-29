@@ -116,9 +116,6 @@ class json_reader_options {
   // Whether to parse dates as DD/MM versus MM/DD
   bool _dayfirst = false;
 
-  // Whether to use the legacy reader
-  bool _legacy = false;
-
   // Whether to keep the quote characters of string values
   bool _keep_quotes = false;
 

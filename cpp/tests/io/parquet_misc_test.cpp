@@ -23,6 +23,8 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/transform.hpp>
 
+#include <array>
+
 ////////////////////////////////
 // delta encoding writer tests
 
@@ -225,10 +227,9 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
 
   // now check that the boundary order for chunk 1 is ascending,
   // chunk 2 is descending, and chunk 3 is unordered
-  cudf::io::parquet::detail::BoundaryOrder expected_orders[] = {
-    cudf::io::parquet::detail::BoundaryOrder::ASCENDING,
-    cudf::io::parquet::detail::BoundaryOrder::DESCENDING,
-    cudf::io::parquet::detail::BoundaryOrder::UNORDERED};
+  std::array expected_orders{cudf::io::parquet::detail::BoundaryOrder::ASCENDING,
+                             cudf::io::parquet::detail::BoundaryOrder::DESCENDING,
+                             cudf::io::parquet::detail::BoundaryOrder::UNORDERED};
 
   for (std::size_t i = 0; i < columns.size(); i++) {
     auto const ci = read_column_index(source, columns[i]);
