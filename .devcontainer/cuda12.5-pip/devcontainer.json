@@ -50,5 +50,6 @@
         "nvidia.nsight-vscode-edition"
       ]
     }
-  }
+  },
+  "postCreateCommand":"/bin/bash /home/coder/cudf/.devcontainer/cuda12.5-pip/post_create_command.sh"
 }
