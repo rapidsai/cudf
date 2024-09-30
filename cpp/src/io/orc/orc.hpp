@@ -24,7 +24,7 @@
 #include <cudf/io/orc_types.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/optional.h>
+#include <cuda/std/optional>
 
 #include <algorithm>
 #include <cstddef>
@@ -692,11 +692,12 @@ class metadata {
  * @brief `column_device_view` and additional, ORC specific, information on the column.
  */
 struct orc_column_device_view : public column_device_view {
-  __device__ orc_column_device_view(column_device_view col, thrust::optional<uint32_t> parent_idx)
+  __device__ orc_column_device_view(column_device_view col,
+                                    cuda::std::optional<uint32_t> parent_idx)
     : column_device_view{col}, parent_index{parent_idx}
   {
   }
-  thrust::optional<uint32_t> parent_index;
+  cuda::std::optional<uint32_t> parent_index;
   bitmask_type const* pushdown_mask = nullptr;
 };
 

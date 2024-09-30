@@ -358,7 +358,7 @@ class StringMethods(ColumnMethods):
             )
 
         if len(data) == 1 and data.null_count == 1:
-            data = [""]
+            data = cudf.core.column.as_column("", length=len(data))
         # We only want to keep the index if we are adding something to each
         # row, not if we are joining all the rows into a single string.
         out = self._return_or_inplace(data, retain_index=others is not None)
@@ -549,6 +549,7 @@ class StringMethods(ColumnMethods):
         offset_col = col.children[0]
 
         return cudf.core.column.ListColumn(
+            data=None,
             size=len(col),
             dtype=cudf.ListDtype(col.dtype),
             mask=col.mask,
@@ -622,11 +623,9 @@ class StringMethods(ColumnMethods):
                 "unsupported value for `flags` parameter"
             )
 
-        data, _ = libstrings.extract(self._column, pat, flags)
+        data = libstrings.extract(self._column, pat, flags)
         if len(data) == 1 and expand is False:
-            data = next(iter(data.values()))
-        else:
-            data = data
+            _, data = data.popitem()
         return self._return_or_inplace(data, expand=expand)
 
     def contains(
@@ -775,11 +774,13 @@ class StringMethods(ColumnMethods):
             # TODO: we silently ignore the `regex=` flag here
             if case is False:
                 input_column = libstrings.to_lower(self._column)
-                pat = libstrings.to_lower(column.as_column(pat, dtype="str"))
+                col_pat = libstrings.to_lower(
+                    column.as_column(pat, dtype="str")
+                )
             else:
                 input_column = self._column
-                pat = column.as_column(pat, dtype="str")
-            result_col = libstrings.contains_multiple(input_column, pat)
+                col_pat = column.as_column(pat, dtype="str")
+            result_col = libstrings.contains_multiple(input_column, col_pat)
         return self._return_or_inplace(result_col)
 
     def like(self, pat: str, esc: str | None = None) -> SeriesOrIndex:
@@ -3623,7 +3624,7 @@ class StringMethods(ColumnMethods):
         data = libstrings.findall(self._column, pat, flags)
         return self._return_or_inplace(data)
 
-    def find_multiple(self, patterns: SeriesOrIndex) -> "cudf.Series":
+    def find_multiple(self, patterns: SeriesOrIndex) -> cudf.Series:
         """
         Find all first occurrences of patterns in the Series/Index.
 
@@ -3679,12 +3680,12 @@ class StringMethods(ColumnMethods):
                 f"got: {patterns_column.dtype}"
             )
 
-        return cudf.Series(
+        return cudf.Series._from_column(
             libstrings.find_multiple(self._column, patterns_column),
+            name=self._parent.name,
             index=self._parent.index
             if isinstance(self._parent, cudf.Series)
             else self._parent,
-            name=self._parent.name,
         )
 
     def isempty(self) -> SeriesOrIndex:
@@ -4376,14 +4377,9 @@ class StringMethods(ColumnMethods):
         2    99
         dtype: int32
         """
-
-        new_col = libstrings.code_points(self._column)
-        if isinstance(self._parent, cudf.Series):
-            return cudf.Series(new_col, name=self._parent.name)
-        elif isinstance(self._parent, cudf.BaseIndex):
-            return cudf.Index(new_col, name=self._parent.name)
-        else:
-            return new_col
+        return self._return_or_inplace(
+            libstrings.code_points(self._column), retain_index=False
+        )
 
     def translate(self, table: dict) -> SeriesOrIndex:
         """
@@ -4694,9 +4690,11 @@ class StringMethods(ColumnMethods):
         if isinstance(self._parent, cudf.Series):
             lengths = self.len().fillna(0)
             index = self._parent.index.repeat(lengths)
-            return cudf.Series(result_col, name=self._parent.name, index=index)
+            return cudf.Series._from_column(
+                result_col, name=self._parent.name, index=index
+            )
         elif isinstance(self._parent, cudf.BaseIndex):
-            return cudf.Index(result_col, name=self._parent.name)
+            return cudf.Index._from_column(result_col, name=self._parent.name)
         else:
             return result_col
 
@@ -5349,6 +5347,76 @@ class StringMethods(ColumnMethods):
             libstrings.minhash64(self._column, seeds_column, width)
         )
 
+    def word_minhash(self, seeds: ColumnLike | None = None) -> SeriesOrIndex:
+        """
+        Compute the minhash of a list column of strings.
+        This uses the MurmurHash3_x86_32 algorithm for the hash function.
+
+        Parameters
+        ----------
+        seeds : ColumnLike
+            The seeds used for the hash algorithm.
+            Must be of type uint32.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> ls = cudf.Series([["this", "is", "my"], ["favorite", "book"]])
+        >>> seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
+        >>> ls.str.word_minhash(seeds=seeds)
+        0     [21141582, 1232889953, 1268336794]
+        1    [962346254, 2321233602, 1354839212]
+        dtype: list
+        """
+        if seeds is None:
+            seeds_column = column.as_column(0, dtype=np.uint32, length=1)
+        else:
+            seeds_column = column.as_column(seeds)
+            if seeds_column.dtype != np.uint32:
+                raise ValueError(
+                    f"Expecting a Series with dtype uint32, got {type(seeds)}"
+                )
+        return self._return_or_inplace(
+            libstrings.word_minhash(self._column, seeds_column)
+        )
+
+    def word_minhash64(self, seeds: ColumnLike | None = None) -> SeriesOrIndex:
+        """
+        Compute the minhash of a list column of strings.
+        This uses the MurmurHash3_x64_128 algorithm for the hash function.
+        This function generates 2 uint64 values but only the first
+        uint64 value is used.
+
+        Parameters
+        ----------
+        seeds : ColumnLike
+            The seeds used for the hash algorithm.
+            Must be of type uint64.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> ls = cudf.Series([["this", "is", "my"], ["favorite", "book"]])
+        >>> seeds = cudf.Series([0, 1, 2], dtype=np.uint64)
+        >>> ls.str.word_minhash64(seeds)
+        0    [2603139454418834912, 8644371945174847701, 5541030711534384340]
+        1    [5240044617220523711, 5847101123925041457, 153762819128779913]
+        dtype: list
+        """
+        if seeds is None:
+            seeds_column = column.as_column(0, dtype=np.uint64, length=1)
+        else:
+            seeds_column = column.as_column(seeds)
+            if seeds_column.dtype != np.uint64:
+                raise ValueError(
+                    f"Expecting a Series with dtype uint64, got {type(seeds)}"
+                )
+        return self._return_or_inplace(
+            libstrings.word_minhash64(self._column, seeds_column)
+        )
+
     def jaccard_index(self, input: cudf.Series, width: int) -> SeriesOrIndex:
         """
         Compute the Jaccard index between this column and the given
@@ -5934,9 +6002,9 @@ class StringColumn(column.ColumnBase):
 
         n_bytes_to_view = str_end_byte_offset - str_byte_offset
 
-        to_view = column.build_column(
-            self.base_data,
-            dtype=cudf.api.types.dtype("int8"),
+        to_view = cudf.core.column.NumericalColumn(
+            self.base_data,  # type: ignore[arg-type]
+            dtype=np.dtype(np.int8),
             offset=str_byte_offset,
             size=n_bytes_to_view,
         )

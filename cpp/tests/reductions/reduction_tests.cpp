@@ -303,9 +303,6 @@ TYPED_TEST_SUITE(ReductionTest, cudf::test::NumericTypes);
 TYPED_TEST(ReductionTest, Product)
 {
   using T = TypeParam;
-  if constexpr (std::is_same_v<T, int16_t> || std::is_same_v<T, uint16_t>) {
-    if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { return; }
-  }
 
   std::vector<int> int_values({5, -1, 1, 0, 3, 2, 4});
   std::vector<bool> host_bools({true, true, false, false, true, true, true});
@@ -1245,7 +1242,7 @@ struct StringReductionTest : public cudf::test::BaseFixture,
 };
 
 // ------------------------------------------------------------------------
-std::vector<std::string> string_list[] = {
+std::vector<std::vector<std::string>> string_list{{
   {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"},
   {"", "two", "three", "four", "five", "six", "seven", "eight", "nine"},
   {"one", "", "three", "four", "five", "six", "seven", "eight", "nine"},
@@ -1255,7 +1252,7 @@ std::vector<std::string> string_list[] = {
   {"\xF7\xBF\xBF\xBF", "", "", "", "", "", "", "", ""},
   {"one", "two", "three", "four", "\xF7\xBF\xBF\xBF", "six", "seven", "eight", "nine"},
   {"one", "two", "\xF7\xBF\xBF\xBF", "four", "five", "six", "seven", "eight", "nine"},
-};
+}};
 INSTANTIATE_TEST_CASE_P(string_cases, StringReductionTest, testing::ValuesIn(string_list));
 TEST_P(StringReductionTest, MinMax)
 {
@@ -2226,7 +2223,7 @@ TYPED_TEST(ReductionTest, NthElement)
 
 struct DictionaryStringReductionTest : public StringReductionTest {};
 
-std::vector<std::string> data_list[] = {
+std::vector<std::vector<std::string>> data_list = {
   {"nine", "two", "five", "three", "five", "six", "two", "eight", "nine"},
 };
 INSTANTIATE_TEST_CASE_P(dictionary_cases,

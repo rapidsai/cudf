@@ -5,7 +5,6 @@ from collections import abc
 from io import BytesIO, StringIO
 
 import numpy as np
-from pyarrow.lib import NativeFile
 
 import cudf
 from cudf import _lib as libcudf
@@ -50,7 +49,6 @@ def read_csv(
     comment=None,
     delim_whitespace=False,
     byte_range=None,
-    use_python_file_object=None,
     storage_options=None,
     bytes_per_thread=None,
 ):
@@ -63,31 +61,17 @@ def read_csv(
             FutureWarning,
         )
 
-    if use_python_file_object and bytes_per_thread is not None:
-        raise ValueError(
-            "bytes_per_thread is only supported when "
-            "`use_python_file_object=False`"
-        )
-
     if bytes_per_thread is None:
         bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
 
-    is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
+    filepath_or_buffer = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
-        storage_options=storage_options,
-    )
-    if not is_single_filepath_or_buffer:
-        raise NotImplementedError(
-            "`read_csv` does not yet support reading multiple files"
-        )
-
-    filepath_or_buffer, compression = ioutils.get_reader_filepath_or_buffer(
-        path_or_data=filepath_or_buffer,
-        compression=compression,
-        iotypes=(BytesIO, StringIO, NativeFile),
-        use_python_file_object=use_python_file_object,
+        iotypes=(BytesIO, StringIO),
         storage_options=storage_options,
         bytes_per_thread=bytes_per_thread,
+    )
+    filepath_or_buffer = ioutils._select_single_source(
+        filepath_or_buffer, "read_csv"
     )
 
     if na_values is not None and is_scalar(na_values):
@@ -202,13 +186,13 @@ def to_csv(
                 "Dataframe doesn't have the labels provided in columns"
             )
 
-    for col in df._data.columns:
-        if isinstance(col, cudf.core.column.ListColumn):
+    for _, dtype in df._dtypes:
+        if isinstance(dtype, cudf.ListDtype):
             raise NotImplementedError(
                 "Writing to csv format is not yet supported with "
                 "list columns."
             )
-        elif isinstance(col, cudf.core.column.StructColumn):
+        elif isinstance(dtype, cudf.StructDtype):
             raise NotImplementedError(
                 "Writing to csv format is not yet supported with "
                 "Struct columns."
@@ -219,12 +203,11 @@ def to_csv(
     # workaround once following issue is fixed:
     # https://github.com/rapidsai/cudf/issues/6661
     if any(
-        isinstance(col, cudf.core.column.CategoricalColumn)
-        for col in df._data.columns
+        isinstance(dtype, cudf.CategoricalDtype) for _, dtype in df._dtypes
     ) or isinstance(df.index, cudf.CategoricalIndex):
         df = df.copy(deep=False)
-        for col_name, col in df._data.items():
-            if isinstance(col, cudf.core.column.CategoricalColumn):
+        for col_name, col in df._column_labels_and_values:
+            if isinstance(col.dtype, cudf.CategoricalDtype):
                 df._data[col_name] = col.astype(col.categories.dtype)
 
         if isinstance(df.index, cudf.CategoricalIndex):

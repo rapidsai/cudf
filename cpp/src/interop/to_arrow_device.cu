@@ -30,14 +30,13 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -200,7 +199,7 @@ int dispatch_to_arrow_device::operator()<bool>(cudf::column&& column,
   nanoarrow::UniqueArray tmp;
   NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_BOOL, column));
 
-  auto bitmask  = bools_to_mask(column.view(), stream, mr);
+  auto bitmask  = detail::bools_to_mask(column.view(), stream, mr);
   auto contents = column.release();
   NANOARROW_RETURN_NOT_OK(set_null_mask(contents, tmp.get()));
   NANOARROW_RETURN_NOT_OK(
@@ -442,7 +441,7 @@ int dispatch_to_arrow_device_view::operator()<bool>(ArrowArray* out) const
   nanoarrow::UniqueArray tmp;
   NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_BOOL, column));
 
-  auto bitmask = bools_to_mask(column, stream, mr);
+  auto bitmask = detail::bools_to_mask(column, stream, mr);
   NANOARROW_RETURN_NOT_OK(
     set_buffer(std::move(bitmask.first), fixed_width_data_buffer_idx, tmp.get()));
   NANOARROW_RETURN_NOT_OK(set_null_mask(column, tmp.get()));

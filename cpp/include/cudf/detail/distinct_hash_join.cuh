@@ -18,10 +18,10 @@
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuco/static_set.cuh>
 
@@ -99,7 +99,7 @@ struct distinct_hash_join {
                                            cuda::thread_scope_device,
                                            comparator_adapter<d_equal_type>,
                                            probing_scheme_type,
-                                           cudf::detail::cuco_allocator,
+                                           cudf::detail::cuco_allocator<char>,
                                            cuco_storage_type>;
 
   bool _has_nulls;  ///< true if nulls are present in either build table or probe table

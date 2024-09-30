@@ -18,9 +18,9 @@
 
 #include <cudf/utilities/default_stream.hpp>
 
+#include <cuda/std/optional>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/optional.h>
 #include <thrust/reduce.h>
 #include <thrust/transform.h>
 
@@ -49,21 +49,21 @@ TYPED_TEST(NumericOptionalIteratorTest, null_optional_iterator) { null_optional_
 // Transformers and Operators for optional_iterator test
 template <typename ElementType>
 struct transformer_optional_meanvar {
-  using ResultType = thrust::optional<cudf::meanvar<ElementType>>;
+  using ResultType = cuda::std::optional<cudf::meanvar<ElementType>>;
 
-  CUDF_HOST_DEVICE inline ResultType operator()(thrust::optional<ElementType> const& optional)
+  CUDF_HOST_DEVICE inline ResultType operator()(cuda::std::optional<ElementType> const& optional)
   {
     if (optional.has_value()) {
       auto v = *optional;
       return cudf::meanvar<ElementType>{v, static_cast<ElementType>(v * v), 1};
     }
-    return thrust::nullopt;
+    return cuda::std::nullopt;
   }
 };
 
 template <typename T>
 struct optional_to_meanvar {
-  CUDF_HOST_DEVICE inline T operator()(thrust::optional<T> const& v) { return v.value_or(T{0}); }
+  CUDF_HOST_DEVICE inline T operator()(cuda::std::optional<T> const& v) { return v.value_or(T{0}); }
 };
 
 // TODO: enable this test also at __CUDACC_DEBUG__

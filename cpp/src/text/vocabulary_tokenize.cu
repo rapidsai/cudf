@@ -32,11 +32,11 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvtext/tokenize.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cub/cub.cuh>
 #include <cuco/static_map.cuh>
@@ -100,7 +100,7 @@ using vocabulary_map_type = cuco::static_map<cudf::size_type,
                                              cuda::thread_scope_device,
                                              vocab_equal,
                                              probe_scheme,
-                                             cudf::detail::cuco_allocator,
+                                             cudf::detail::cuco_allocator<char>,
                                              cuco_storage>;
 }  // namespace
 }  // namespace detail
@@ -152,7 +152,7 @@ tokenize_vocabulary::tokenize_vocabulary(cudf::strings_column_view const& input,
     detail::probe_scheme{detail::vocab_hasher{*d_vocabulary}},
     cuco::thread_scope_device,
     detail::cuco_storage{},
-    cudf::detail::cuco_allocator{stream},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value());
 
   // the row index is the token id (value for each key in the map)

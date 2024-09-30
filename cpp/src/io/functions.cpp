@@ -35,10 +35,10 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <algorithm>
+#include <utility>
 
 namespace cudf::io {
 
@@ -853,8 +853,8 @@ void parquet_writer_options_base::set_sorting_columns(std::vector<sorting_column
   _sorting_columns = std::move(sorting_columns);
 }
 
-parquet_writer_options::parquet_writer_options(sink_info const& sink, table_view const& table)
-  : parquet_writer_options_base(sink), _table(table)
+parquet_writer_options::parquet_writer_options(sink_info const& sink, table_view table)
+  : parquet_writer_options_base(sink), _table(std::move(table))
 {
 }
 

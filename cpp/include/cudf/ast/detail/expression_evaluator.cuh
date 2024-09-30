@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,6 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <thrust/optional.h>
 
 namespace cudf {
 
@@ -278,7 +276,7 @@ struct expression_evaluator {
     detail::device_data_reference const& input_reference,
     IntermediateDataType<has_nulls>* thread_intermediate_storage,
     cudf::size_type left_row_index,
-    thrust::optional<cudf::size_type> right_row_index = {}) const
+    cudf::size_type right_row_index = {}) const
   {
     // TODO: Everywhere in the code assumes that the table reference is either
     // left or right. Should we error-check somewhere to prevent
@@ -291,7 +289,7 @@ struct expression_evaluator {
       // any case where input_reference.table_source == table_reference::RIGHT.
       // Otherwise, behavior is undefined.
       auto const row_index =
-        (input_reference.table_source == table_reference::LEFT) ? left_row_index : *right_row_index;
+        (input_reference.table_source == table_reference::LEFT) ? left_row_index : right_row_index;
       if constexpr (has_nulls) {
         return table.column(input_reference.data_index).is_valid(row_index)
                  ? ReturnType(table.column(input_reference.data_index).element<Element>(row_index))
@@ -329,7 +327,7 @@ struct expression_evaluator {
     detail::device_data_reference const& device_data_reference,
     IntermediateDataType<has_nulls>* thread_intermediate_storage,
     cudf::size_type left_row_index,
-    thrust::optional<cudf::size_type> right_row_index = {}) const
+    cudf::size_type right_row_index = {}) const
   {
     CUDF_UNREACHABLE("Unsupported type in resolve_input.");
   }

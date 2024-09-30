@@ -20,8 +20,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <cuda/atomic>
 #include <cuda/functional>
@@ -164,11 +163,13 @@ compute_row_frequencies(table_view const& input,
                "Nested types are not yet supported in histogram aggregation.",
                std::invalid_argument);
 
-  auto map = cudf::detail::hash_map_type{compute_hash_table_size(input.num_rows()),
-                                         cuco::empty_key{-1},
-                                         cuco::empty_value{std::numeric_limits<size_type>::min()},
-                                         cudf::detail::cuco_allocator{stream},
-                                         stream.value()};
+  auto map = cudf::detail::hash_map_type{
+    compute_hash_table_size(input.num_rows()),
+    cuco::empty_key{-1},
+    cuco::empty_value{std::numeric_limits<size_type>::min()},
+
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream.value()};
 
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(input, stream);
@@ -221,7 +222,7 @@ compute_row_frequencies(table_view const& input,
       partial_counts ? partial_counts.value().begin<histogram_count_type>() : nullptr},
     histogram_count_type{0},
     stream,
-    rmm::mr::get_current_device_resource());
+    cudf::get_current_device_resource_ref());
 
   auto const input_it = thrust::make_zip_iterator(
     thrust::make_tuple(thrust::make_counting_iterator(0), reduction_results.begin()));

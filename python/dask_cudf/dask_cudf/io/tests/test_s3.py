@@ -5,13 +5,14 @@ import socket
 from contextlib import contextmanager
 from io import BytesIO
 
+import fsspec
 import pandas as pd
-import pyarrow.fs as pa_fs
 import pytest
 
 from dask.dataframe import assert_eq
 
 import dask_cudf
+from dask_cudf.tests.utils import QUERY_PLANNING_ON
 
 moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")
@@ -119,51 +120,69 @@ def test_read_csv(s3_base, s3so):
         assert df.a.sum().compute() == 4
 
 
-def test_read_csv_warns(s3_base, s3so):
-    with s3_context(
-        s3_base=s3_base,
-        bucket="daskcsv_warns",
-        files={"a.csv": b"a,b\n1,2\n3,4\n"},
-    ):
-        with pytest.warns(FutureWarning):
-            df = dask_cudf.read_csv(
-                "s3://daskcsv_warns/*.csv",
-                blocksize="50 B",
-                storage_options=s3so,
-                use_python_file_object=True,
-            )
-            assert df.a.sum().compute() == 4
+def test_read_parquet_open_file_options_raises():
+    with pytest.raises(ValueError):
+        dask_cudf.read_parquet(
+            "s3://my/path",
+            open_file_options={"precache_options": {"method": "parquet"}},
+        )
 
 
 @pytest.mark.parametrize(
-    "open_file_options",
+    "filesystem",
     [
-        {"precache_options": {"method": None}},
-        {"precache_options": {"method": "parquet"}},
-        {"open_file_func": None},
+        pytest.param(
+            "arrow",
+            marks=pytest.mark.skipif(
+                not QUERY_PLANNING_ON or not dask_cudf.backends.PYARROW_GE_15,
+                reason="Not supported",
+            ),
+        ),
+        "fsspec",
     ],
 )
-def test_read_parquet_open_file_options(s3_base, s3so, open_file_options, pdf):
+def test_read_parquet_filesystem(s3_base, s3so, pdf, filesystem):
+    fname = "test_parquet_filesystem.parquet"
+    bucket = "parquet"
     buffer = BytesIO()
     pdf.to_parquet(path=buffer)
     buffer.seek(0)
-    with s3_context(
-        s3_base=s3_base, bucket="daskparquet", files={"file.parq": buffer}
-    ):
-        if "open_file_func" in open_file_options:
-            fs = pa_fs.S3FileSystem(
-                endpoint_override=s3so["client_kwargs"]["endpoint_url"],
+    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
+        path = f"s3://{bucket}/{fname}"
+        if filesystem == "arrow":
+            # This feature requires arrow >= 15
+            pytest.importorskip("pyarrow", minversion="15.0.0")
+
+            import pyarrow.fs as pa_fs
+
+            df = dask_cudf.read_parquet(
+                path,
+                filesystem=pa_fs.S3FileSystem(
+                    endpoint_override=s3so["client_kwargs"]["endpoint_url"],
+                ),
             )
-            open_file_options["open_file_func"] = fs.open_input_file
-        df = dask_cudf.read_parquet(
-            "s3://daskparquet/*.parq",
-            storage_options=s3so,
-            open_file_options=open_file_options,
-        )
-        with pytest.warns(FutureWarning):
-            assert df.a.sum().compute() == 10
-        with pytest.warns(FutureWarning):
-            assert df.b.sum().compute() == 9
+        else:
+            df = dask_cudf.read_parquet(
+                path,
+                storage_options=s3so,
+                filesystem=filesystem,
+            )
+        assert df.b.sum().compute() == 9
+
+
+def test_read_parquet_filesystem_explicit(s3_base, s3so, pdf):
+    fname = "test_parquet_filesystem_explicit.parquet"
+    bucket = "parquet"
+    buffer = BytesIO()
+    pdf.to_parquet(path=buffer)
+    buffer.seek(0)
+    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
+        path = f"s3://{bucket}/{fname}"
+        fs = fsspec.core.get_fs_token_paths(
+            path, mode="rb", storage_options=s3so
+        )[0]
+        df = dask_cudf.read_parquet(path, filesystem=fs)
+        assert df.b.sum().compute() == 9
 
 
 def test_read_parquet(s3_base, s3so, pdf):
@@ -180,22 +199,6 @@ def test_read_parquet(s3_base, s3so, pdf):
         assert_eq(pdf, got)
 
 
-def test_read_parquet_use_python_file_object(s3_base, s3so, pdf):
-    fname = "test_parquet_use_python_file_object.parquet"
-    bucket = "parquet"
-    buffer = BytesIO()
-    pdf.to_parquet(path=buffer)
-    buffer.seek(0)
-    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        with pytest.warns(FutureWarning):
-            got = dask_cudf.read_parquet(
-                f"s3://{bucket}/{fname}",
-                storage_options=s3so,
-                read={"use_python_file_object": True},
-            ).head()
-            assert_eq(pdf, got)
-
-
 def test_read_orc(s3_base, s3so, pdf):
     fname = "test_orc_reader_dask.orc"
     bucket = "orc"
@@ -208,19 +211,3 @@ def test_read_orc(s3_base, s3so, pdf):
             storage_options=s3so,
         )
         assert_eq(pdf, got)
-
-
-def test_read_orc_use_python_file_object(s3_base, s3so, pdf):
-    fname = "test_orc_use_python_file_object.orc"
-    bucket = "orc"
-    buffer = BytesIO()
-    pdf.to_orc(path=buffer)
-    buffer.seek(0)
-    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        with pytest.warns(FutureWarning):
-            got = dask_cudf.read_orc(
-                f"s3://{bucket}/{fname}",
-                storage_options=s3so,
-                use_python_file_object=True,
-            ).head()
-            assert_eq(pdf, got)

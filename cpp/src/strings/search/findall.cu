@@ -23,15 +23,16 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/findall.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/pair.h>
 
@@ -97,14 +98,17 @@ std::unique_ptr<column> findall(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
 {
-  auto const strings_count = input.size();
-  auto const d_strings     = column_device_view::create(input.parent(), stream);
+  if (input.is_empty()) {
+    return cudf::lists::detail::make_empty_lists_column(input.parent().type(), stream, mr);
+  }
+
+  auto const d_strings = column_device_view::create(input.parent(), stream);
 
   // create device object from regex_program
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   // Create lists offsets column
-  auto const sizes              = count_matches(*d_strings, *d_prog, strings_count, stream, mr);
+  auto const sizes              = count_matches(*d_strings, *d_prog, stream, mr);
   auto [offsets, total_matches] = cudf::detail::make_offsets_child_column(
     sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr);
   auto const d_offsets = offsets->view().data<size_type>();
@@ -113,7 +117,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
   auto strings_output = findall_util(*d_strings, *d_prog, total_matches, d_offsets, stream, mr);
 
   // Build the lists column from the offsets and the strings
-  return make_lists_column(strings_count,
+  return make_lists_column(input.size(),
                            std::move(offsets),
                            std::move(strings_output),
                            input.null_count(),

@@ -573,6 +573,8 @@ TEST_F(PackUnpackTest, SlicedEmpty)
 
   cudf::table_view t({a, b, c, d});
 
-  auto sliced = cudf::split(t, {0});
-  this->run_test(sliced[0]);
+  auto sliced   = cudf::split(t, {0});
+  auto packed   = cudf::pack(t);
+  auto unpacked = cudf::unpack(packed);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(t, unpacked);
 }

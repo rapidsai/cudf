@@ -2090,21 +2090,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyWithBooleanColumnAsValidity(
-  JNIEnv* env, jobject j_object, jlong exemplar_handle, jlong validity_column_handle)
-{
-  JNI_NULL_CHECK(env, exemplar_handle, "ColumnView handle is null", 0);
-  JNI_NULL_CHECK(env, validity_column_handle, "Validity column handle is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    auto const exemplar = *reinterpret_cast<cudf::column_view*>(exemplar_handle);
-    auto const validity = *reinterpret_cast<cudf::column_view*>(validity_column_handle);
-    return release_as_jlong(
-      cudf::jni::new_column_with_boolean_column_as_validity(exemplar, validity));
-  }
-  CATCH_STD(env, 0);
-}
-
 ////////
 // Native cudf::column_view life cycle and metadata access methods. Life cycle methods
 // should typically only be called from the CudfColumn inner class.

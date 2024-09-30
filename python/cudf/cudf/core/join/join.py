@@ -140,11 +140,15 @@ class Merge:
         # right_on.
         self._using_left_index = bool(left_index)
         left_on = (
-            lhs.index._data.names if left_index else left_on if left_on else on
+            lhs.index._column_names
+            if left_index
+            else left_on
+            if left_on
+            else on
         )
         self._using_right_index = bool(right_index)
         right_on = (
-            rhs.index._data.names
+            rhs.index._column_names
             if right_index
             else right_on
             if right_on
@@ -272,8 +276,8 @@ class Merge:
                 lcol_casted = lcol_casted.astype("category")
                 rcol_casted = rcol_casted.astype("category")
 
-            left_key.set(self.lhs, lcol_casted, validate=False)
-            right_key.set(self.rhs, rcol_casted, validate=False)
+            left_key.set(self.lhs, lcol_casted)
+            right_key.set(self.rhs, rcol_casted)
 
         left_rows, right_rows = self._gather_maps(
             left_join_cols, right_join_cols
@@ -329,24 +333,23 @@ class Merge:
                     lkey.set(
                         left_result,
                         lkey.get(left_result).fillna(rkey.get(right_result)),
-                        validate=False,
                     )
 
         # All columns from the left table make it into the output. Non-key
         # columns that share a name with a column in the right table are
         # suffixed with the provided suffix.
-        common_names = set(left_result._data.names) & set(
-            right_result._data.names
+        common_names = set(left_result._column_names) & set(
+            right_result._column_names
         )
         cols_to_suffix = common_names - self._key_columns_with_same_name
         data = {
             (f"{name}{self.lsuffix}" if name in cols_to_suffix else name): col
-            for name, col in left_result._data.items()
+            for name, col in left_result._column_labels_and_values
         }
 
         # The right table follows the same rule as the left table except that
         # key columns from the right table are removed.
-        for name, col in right_result._data.items():
+        for name, col in right_result._column_labels_and_values:
             if name in common_names:
                 if name not in self._key_columns_with_same_name:
                     data[f"{name}{self.rsuffix}"] = col
@@ -400,7 +403,7 @@ class Merge:
         # producing the input result.
         by: list[Any] = []
         if self._using_left_index and self._using_right_index:
-            by.extend(result.index._data.columns)
+            by.extend(result.index._columns)
         if not self._using_left_index:
             by.extend([result._data[col.name] for col in self._left_keys])
         if not self._using_right_index:

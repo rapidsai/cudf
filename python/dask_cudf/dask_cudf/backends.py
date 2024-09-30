@@ -8,6 +8,7 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from packaging.version import Version
 from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
@@ -52,40 +53,41 @@ get_parallel_type.register(cudf.Series, lambda _: Series)
 get_parallel_type.register(cudf.BaseIndex, lambda _: Index)
 
 
+# Required for Arrow filesystem support in read_parquet
+PYARROW_GE_15 = Version(pa.__version__) >= Version("15.0.0")
+
+
 @meta_nonempty.register(cudf.BaseIndex)
 @_dask_cudf_performance_tracking
 def _nonempty_index(idx):
-    if isinstance(idx, cudf.core.index.RangeIndex):
-        return cudf.core.index.RangeIndex(2, name=idx.name)
-    elif isinstance(idx, cudf.core.index.DatetimeIndex):
-        start = "1970-01-01"
-        data = np.array([start, "1970-01-02"], dtype=idx.dtype)
+    """Return a non-empty cudf.Index as metadata."""
+    # TODO: IntervalIndex, TimedeltaIndex?
+    if isinstance(idx, cudf.RangeIndex):
+        return cudf.RangeIndex(2, name=idx.name)
+    elif isinstance(idx, cudf.DatetimeIndex):
+        data = np.array(["1970-01-01", "1970-01-02"], dtype=idx.dtype)
         values = cudf.core.column.as_column(data)
-        return cudf.core.index.DatetimeIndex(values, name=idx.name)
-    elif isinstance(idx, cudf.core.index.CategoricalIndex):
-        key = tuple(idx._data.keys())
-        assert len(key) == 1
-        categories = idx._data[key[0]].categories
-        codes = [0, 0]
-        ordered = idx._data[key[0]].ordered
-        values = cudf.core.column.build_categorical_column(
-            categories=categories, codes=codes, ordered=ordered
+        return cudf.DatetimeIndex(values, name=idx.name)
+    elif isinstance(idx, cudf.CategoricalIndex):
+        values = cudf.core.column.CategoricalColumn(
+            data=None,
+            size=None,
+            dtype=idx.dtype,
+            children=(cudf.core.column.as_column([0, 0], dtype=np.uint8),),
         )
-        return cudf.core.index.CategoricalIndex(values, name=idx.name)
-    elif isinstance(idx, cudf.core.multiindex.MultiIndex):
+        return cudf.CategoricalIndex(values, name=idx.name)
+    elif isinstance(idx, cudf.MultiIndex):
         levels = [meta_nonempty(lev) for lev in idx.levels]
-        codes = [[0, 0] for i in idx.levels]
-        return cudf.core.multiindex.MultiIndex(
-            levels=levels, codes=codes, names=idx.names
-        )
-    elif isinstance(idx._column, cudf.core.column.StringColumn):
+        codes = [[0, 0]] * idx.nlevels
+        return cudf.MultiIndex(levels=levels, codes=codes, names=idx.names)
+    elif is_string_dtype(idx.dtype):
         return cudf.Index(["cat", "dog"], name=idx.name)
-    elif isinstance(idx, cudf.core.index.Index):
-        return cudf.core.index.Index(
-            np.arange(2, dtype=idx.dtype), name=idx.name
-        )
+    elif isinstance(idx, cudf.Index):
+        return cudf.Index(np.arange(2, dtype=idx.dtype), name=idx.name)
 
-    raise TypeError(f"Don't know how to handle index of type {type(idx)}")
+    raise TypeError(
+        f"Don't know how to handle index of type {type(idx).__name__}"
+    )
 
 
 def _nest_list_data(data, leaf_type):
@@ -101,49 +103,55 @@ def _nest_list_data(data, leaf_type):
 
 
 @_dask_cudf_performance_tracking
-def _get_non_empty_data(s):
-    if isinstance(s, cudf.core.column.CategoricalColumn):
+def _get_non_empty_data(
+    s: cudf.core.column.ColumnBase,
+) -> cudf.core.column.ColumnBase:
+    """Return a non-empty column as metadata from a column."""
+    if isinstance(s.dtype, cudf.CategoricalDtype):
         categories = (
-            s.categories if len(s.categories) else [UNKNOWN_CATEGORIES]
+            s.categories if len(s.categories) else [UNKNOWN_CATEGORIES]  # type: ignore[attr-defined]
         )
         codes = cudf.core.column.as_column(
             0,
-            dtype=cudf._lib.types.size_type_dtype,
+            dtype=np.uint8,
             length=2,
         )
-        ordered = s.ordered
-        data = cudf.core.column.build_categorical_column(
-            categories=categories, codes=codes, ordered=ordered
+        return cudf.core.column.CategoricalColumn(
+            data=None,
+            size=codes.size,
+            dtype=cudf.CategoricalDtype(
+                categories=categories, ordered=s.dtype.ordered
+            ),
+            children=(codes,),  # type: ignore[arg-type]
         )
-    elif isinstance(s, cudf.core.column.ListColumn):
+    elif isinstance(s.dtype, cudf.ListDtype):
         leaf_type = s.dtype.leaf_type
         if is_string_dtype(leaf_type):
             data = ["cat", "dog"]
         else:
             data = np.array([0, 1], dtype=leaf_type).tolist()
         data = _nest_list_data(data, s.dtype) * 2
-        data = cudf.core.column.as_column(data, dtype=s.dtype)
-    elif isinstance(s, cudf.core.column.StructColumn):
+        return cudf.core.column.as_column(data, dtype=s.dtype)
+    elif isinstance(s.dtype, cudf.StructDtype):
+        # Handles IntervalColumn
         struct_dtype = s.dtype
-        data = [{key: None for key in struct_dtype.fields.keys()}] * 2
-        data = cudf.core.column.as_column(data, dtype=s.dtype)
+        struct_data = [{key: None for key in struct_dtype.fields.keys()}] * 2
+        return cudf.core.column.as_column(struct_data, dtype=s.dtype)
     elif is_string_dtype(s.dtype):
-        data = pa.array(["cat", "dog"])
+        return cudf.core.column.as_column(pa.array(["cat", "dog"]))
     elif isinstance(s.dtype, pd.DatetimeTZDtype):
-        from cudf.utils.dtypes import get_time_unit
-
-        data = cudf.date_range("2001-01-01", periods=2, freq=get_time_unit(s))
-        data = data.tz_localize(str(s.dtype.tz))._column
+        date_data = cudf.date_range("2001-01-01", periods=2, freq=s.time_unit)  # type: ignore[attr-defined]
+        return date_data.tz_localize(str(s.dtype.tz))._column
+    elif s.dtype.kind in "fiubmM":
+        return cudf.core.column.as_column(
+            np.arange(start=0, stop=2, dtype=s.dtype)
+        )
+    elif isinstance(s.dtype, cudf.core.dtypes.DecimalDtype):
+        return cudf.core.column.as_column(range(2), dtype=s.dtype)
     else:
-        if pd.api.types.is_numeric_dtype(s.dtype):
-            data = cudf.core.column.as_column(
-                cp.arange(start=0, stop=2, dtype=s.dtype)
-            )
-        else:
-            data = cudf.core.column.as_column(
-                cp.arange(start=0, stop=2, dtype="int64")
-            ).astype(s.dtype)
-    return data
+        raise TypeError(
+            f"Don't know how to handle column of type {type(s).__name__}"
+        )
 
 
 @meta_nonempty.register(cudf.Series)
@@ -153,7 +161,7 @@ def _nonempty_series(s, idx=None):
         idx = _nonempty_index(s.index)
     data = _get_non_empty_data(s._column)
 
-    return cudf.Series(data, name=s.name, index=idx)
+    return cudf.Series._from_column(data, name=s.name, index=idx)
 
 
 @meta_nonempty.register(cudf.DataFrame)
@@ -161,24 +169,25 @@ def _nonempty_series(s, idx=None):
 def meta_nonempty_cudf(x):
     idx = meta_nonempty(x.index)
     columns_with_dtype = dict()
-    res = cudf.DataFrame(index=idx)
-    for col in x._data.names:
-        dtype = str(x._data[col].dtype)
-        if dtype in ("list", "struct", "category"):
+    res = {}
+    for col_label, col in x._data.items():
+        dtype = col.dtype
+        if isinstance(
+            dtype,
+            (cudf.ListDtype, cudf.StructDtype, cudf.CategoricalDtype),
+        ):
             # 1. Not possible to hash and store list & struct types
             #    as they can contain different levels of nesting or
             #    fields.
-            # 2. Not possible to has `category` types as
+            # 2. Not possible to hash `category` types as
             #    they often contain an underlying types to them.
-            res._data[col] = _get_non_empty_data(x._data[col])
+            res[col_label] = _get_non_empty_data(col)
         else:
             if dtype not in columns_with_dtype:
-                columns_with_dtype[dtype] = cudf.core.column.as_column(
-                    _get_non_empty_data(x._data[col])
-                )
-            res._data[col] = columns_with_dtype[dtype]
+                columns_with_dtype[dtype] = _get_non_empty_data(col)
+            res[col_label] = columns_with_dtype[dtype]
 
-    return res
+    return cudf.DataFrame._from_data(res, index=idx)
 
 
 @make_meta_dispatch.register((cudf.Series, cudf.DataFrame))
@@ -196,9 +205,7 @@ def make_meta_cudf_index(x, index=None):
 @_dask_cudf_performance_tracking
 def _empty_series(name, dtype, index=None):
     if isinstance(dtype, str) and dtype == "category":
-        return cudf.Series(
-            [UNKNOWN_CATEGORIES], dtype=dtype, name=name, index=index
-        ).iloc[:0]
+        dtype = cudf.CategoricalDtype(categories=[UNKNOWN_CATEGORIES])
     return cudf.Series([], dtype=dtype, name=name, index=index)
 
 
@@ -336,7 +343,7 @@ def percentile_cudf(a, q, interpolation="linear"):
     if isinstance(q, Iterator):
         q = list(q)
 
-    if cudf.api.types._is_categorical_dtype(a.dtype):
+    if isinstance(a.dtype, cudf.CategoricalDtype):
         result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
 
         return (
@@ -345,7 +352,7 @@ def percentile_cudf(a, q, interpolation="linear"):
             ),
             n,
         )
-    if np.issubdtype(a.dtype, np.datetime64):
+    if a.dtype.kind == "M":
         result = a.quantile(
             [i / 100.0 for i in q], interpolation=interpolation
         )
@@ -424,7 +431,7 @@ def hash_object_cudf_index(ind, index=None):
         return ind.to_frame(index=False).hash_values()
 
     col = cudf.core.column.as_column(ind)
-    return cudf.Series(col).hash_values()
+    return cudf.Series._from_column(col).hash_values()
 
 
 @group_split_dispatch.register((cudf.Series, cudf.DataFrame))
@@ -505,6 +512,25 @@ def _unsupported_kwargs(old, new, kwargs):
         )
 
 
+def _raise_unsupported_parquet_kwargs(
+    open_file_options=None, filesystem=None, **kwargs
+):
+    import fsspec
+
+    if open_file_options is not None:
+        raise ValueError(
+            "The open_file_options argument is no longer supported "
+            "by the 'cudf' backend."
+        )
+
+    if filesystem not in ("fsspec", None) and not isinstance(
+        filesystem, fsspec.AbstractFileSystem
+    ):
+        raise ValueError(
+            f"filesystem={filesystem} is not supported by the 'cudf' backend."
+        )
+
+
 # Register cudf->pandas
 to_pandas_dispatch = PandasBackendEntrypoint.to_backend_dispatch()
 
@@ -523,6 +549,12 @@ to_cudf_dispatch = Dispatch("to_cudf_dispatch")
 def to_cudf_dispatch_from_pandas(data, nan_as_null=None, **kwargs):
     _unsupported_kwargs("pandas", "cudf", kwargs)
     return cudf.from_pandas(data, nan_as_null=nan_as_null)
+
+
+@to_cudf_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+def to_cudf_dispatch_from_cudf(data, **kwargs):
+    _unsupported_kwargs("cudf", "cudf", kwargs)
+    return data
 
 
 # Define "cudf" backend engine to be registered with Dask
@@ -580,6 +612,7 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
     def read_parquet(*args, engine=None, **kwargs):
         from dask_cudf.io.parquet import CudfEngine
 
+        _raise_unsupported_parquet_kwargs(**kwargs)
         return _default_backend(
             dd.read_parquet,
             *args,
@@ -630,20 +663,20 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
     Examples
     --------
     >>> import dask
-    >>> import dask_expr
+    >>> import dask_expr as dx
     >>> with dask.config.set({"dataframe.backend": "cudf"}):
     ...     ddf = dx.from_dict({"a": range(10)})
     >>> type(ddf._meta)
     <class 'cudf.core.dataframe.DataFrame'>
     """
 
-    @classmethod
-    def to_backend_dispatch(cls):
-        return CudfBackendEntrypoint.to_backend_dispatch()
+    @staticmethod
+    def to_backend(data, **kwargs):
+        import dask_expr as dx
 
-    @classmethod
-    def to_backend(cls, *args, **kwargs):
-        return CudfBackendEntrypoint.to_backend(*args, **kwargs)
+        from dask_cudf.expr._expr import ToCudfBackend
+
+        return dx.new_collection(ToCudfBackend(data, kwargs))
 
     @staticmethod
     def from_dict(
@@ -664,6 +697,167 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             dtype=dtype,
             columns=columns,
             constructor=constructor,
+        )
+
+    @staticmethod
+    def read_parquet(path, *args, filesystem="fsspec", engine=None, **kwargs):
+        import dask_expr as dx
+        import fsspec
+
+        if (
+            isinstance(filesystem, fsspec.AbstractFileSystem)
+            or isinstance(filesystem, str)
+            and filesystem.lower() == "fsspec"
+        ):
+            # Default "fsspec" filesystem
+            from dask_cudf.io.parquet import CudfEngine
+
+            _raise_unsupported_parquet_kwargs(**kwargs)
+            return _default_backend(
+                dx.read_parquet,
+                path,
+                *args,
+                filesystem=filesystem,
+                engine=CudfEngine,
+                **kwargs,
+            )
+
+        else:
+            # EXPERIMENTAL filesystem="arrow" support.
+            # This code path uses PyArrow for IO, which is only
+            # beneficial for remote storage (e.g. S3)
+
+            from fsspec.utils import stringify_path
+            from pyarrow import fs as pa_fs
+
+            # CudfReadParquetPyarrowFS requires import of distributed beforehand
+            # (See: https://github.com/dask/dask/issues/11352)
+            import distributed  # noqa: F401
+            from dask.core import flatten
+            from dask.dataframe.utils import pyarrow_strings_enabled
+
+            from dask_cudf.expr._expr import CudfReadParquetPyarrowFS
+
+            if args:
+                raise ValueError(f"Unexpected positional arguments: {args}")
+
+            if not (
+                isinstance(filesystem, pa_fs.FileSystem)
+                or isinstance(filesystem, str)
+                and filesystem.lower() in ("arrow", "pyarrow")
+            ):
+                raise ValueError(f"Unexpected filesystem value: {filesystem}.")
+
+            if not PYARROW_GE_15:
+                raise NotImplementedError(
+                    "Experimental Arrow filesystem support requires pyarrow>=15"
+                )
+
+            if not isinstance(path, str):
+                path = stringify_path(path)
+
+            # Extract kwargs
+            columns = kwargs.pop("columns", None)
+            filters = kwargs.pop("filters", None)
+            categories = kwargs.pop("categories", None)
+            index = kwargs.pop("index", None)
+            storage_options = kwargs.pop("storage_options", None)
+            dtype_backend = kwargs.pop("dtype_backend", None)
+            calculate_divisions = kwargs.pop("calculate_divisions", False)
+            ignore_metadata_file = kwargs.pop("ignore_metadata_file", False)
+            metadata_task_size = kwargs.pop("metadata_task_size", None)
+            split_row_groups = kwargs.pop("split_row_groups", "infer")
+            blocksize = kwargs.pop("blocksize", "default")
+            aggregate_files = kwargs.pop("aggregate_files", None)
+            parquet_file_extension = kwargs.pop(
+                "parquet_file_extension", (".parq", ".parquet", ".pq")
+            )
+            arrow_to_pandas = kwargs.pop("arrow_to_pandas", None)
+            open_file_options = kwargs.pop("open_file_options", None)
+
+            # Validate and normalize kwargs
+            kwargs["dtype_backend"] = dtype_backend
+            if arrow_to_pandas is not None:
+                raise ValueError(
+                    "arrow_to_pandas not supported for the 'cudf' backend."
+                )
+            if open_file_options is not None:
+                raise ValueError(
+                    "The open_file_options argument is no longer supported "
+                    "by the 'cudf' backend."
+                )
+            if filters is not None:
+                for filter in flatten(filters, container=list):
+                    _, op, val = filter
+                    if op == "in" and not isinstance(val, (set, list, tuple)):
+                        raise TypeError(
+                            "Value of 'in' filter must be a list, set or tuple."
+                        )
+            if metadata_task_size is not None:
+                raise NotImplementedError(
+                    "metadata_task_size is not supported when using the pyarrow filesystem."
+                )
+            if split_row_groups != "infer":
+                raise NotImplementedError(
+                    "split_row_groups is not supported when using the pyarrow filesystem."
+                )
+            if parquet_file_extension != (".parq", ".parquet", ".pq"):
+                raise NotImplementedError(
+                    "parquet_file_extension is not supported when using the pyarrow filesystem."
+                )
+            if blocksize is not None and blocksize != "default":
+                warnings.warn(
+                    "blocksize is not supported when using the pyarrow filesystem."
+                    "blocksize argument will be ignored."
+                )
+            if aggregate_files is not None:
+                warnings.warn(
+                    "aggregate_files is not supported when using the pyarrow filesystem. "
+                    "Please use the 'dataframe.parquet.minimum-partition-size' config."
+                    "aggregate_files argument will be ignored."
+                )
+
+            return dx.new_collection(
+                CudfReadParquetPyarrowFS(
+                    path,
+                    columns=dx._util._convert_to_list(columns),
+                    filters=filters,
+                    categories=categories,
+                    index=index,
+                    calculate_divisions=calculate_divisions,
+                    storage_options=storage_options,
+                    filesystem=filesystem,
+                    ignore_metadata_file=ignore_metadata_file,
+                    arrow_to_pandas=arrow_to_pandas,
+                    pyarrow_strings_enabled=pyarrow_strings_enabled(),
+                    kwargs=kwargs,
+                    _series=isinstance(columns, str),
+                )
+            )
+
+    @staticmethod
+    def read_csv(
+        path,
+        *args,
+        header="infer",
+        dtype_backend=None,
+        storage_options=None,
+        **kwargs,
+    ):
+        import dask_expr as dx
+        from fsspec.utils import stringify_path
+
+        if not isinstance(path, str):
+            path = stringify_path(path)
+        return dx.new_collection(
+            dx.io.csv.ReadCSV(
+                path,
+                dtype_backend=dtype_backend,
+                storage_options=storage_options,
+                kwargs=kwargs,
+                header=header,
+                dataframe_backend="cudf",
+            )
         )
 
     @staticmethod

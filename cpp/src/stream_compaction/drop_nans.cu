@@ -22,10 +22,10 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
@@ -117,20 +117,22 @@ std::unique_ptr<table> drop_nans(table_view const& input,
 std::unique_ptr<table> drop_nans(table_view const& input,
                                  std::vector<size_type> const& keys,
                                  cudf::size_type keep_threshold,
+                                 rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::drop_nans(input, keys, keep_threshold, cudf::get_default_stream(), mr);
+  return detail::drop_nans(input, keys, keep_threshold, stream, mr);
 }
 /*
  * Filters a table to remove nan elements.
  */
 std::unique_ptr<table> drop_nans(table_view const& input,
                                  std::vector<size_type> const& keys,
+                                 rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::drop_nans(input, keys, keys.size(), cudf::get_default_stream(), mr);
+  return detail::drop_nans(input, keys, keys.size(), stream, mr);
 }
 
 }  // namespace cudf

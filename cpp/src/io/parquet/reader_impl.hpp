@@ -28,11 +28,10 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <optional>
@@ -189,10 +188,10 @@ class reader::impl {
    *
    * Does not decompress the chunk data.
    *
-   * @return pair of boolean indicating if compressed chunks were found and a vector of futures for
+   * @return pair of boolean indicating if compressed chunks were found and a future for
    * read completion
    */
-  std::pair<bool, std::vector<std::future<void>>> read_column_chunks();
+  std::pair<bool, std::future<void>> read_column_chunks();
 
   /**
    * @brief Read compressed data and page information for the current pass.
@@ -369,7 +368,7 @@ class reader::impl {
                                                                          size_t chunk_num_rows);
 
   rmm::cuda_stream_view _stream;
-  rmm::device_async_resource_ref _mr{rmm::mr::get_current_device_resource()};
+  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
 
   // Reader configs.
   struct {

@@ -7,11 +7,11 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 
+import pylibcudf
 import rmm
 
 import cudf
 import cudf._lib as libcudf
-from cudf._lib import pylibcudf
 from cudf.core.buffer import (
     Buffer,
     ExposureTrackedBuffer,
@@ -39,18 +39,18 @@ from cudf._lib.types cimport (
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf._lib.types import dtype_from_pylibcudf_column
 
-
-cimport cudf._lib.pylibcudf.libcudf.copying as cpp_copying
-cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
-cimport cudf._lib.pylibcudf.libcudf.unary as libcudf_unary
-from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_contents
-from cudf._lib.pylibcudf.libcudf.column.column_factories cimport (
+cimport pylibcudf.libcudf.copying as cpp_copying
+cimport pylibcudf.libcudf.types as libcudf_types
+cimport pylibcudf.libcudf.unary as libcudf_unary
+from pylibcudf.libcudf.column.column cimport column, column_contents
+from pylibcudf.libcudf.column.column_factories cimport (
     make_column_from_scalar as cpp_make_column_from_scalar,
     make_numeric_column,
 )
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
+from pylibcudf.libcudf.scalar.scalar cimport scalar
+
 from cudf._lib.scalar cimport DeviceScalar
 
 
@@ -86,8 +86,10 @@ cdef class Column:
         object mask=None,
         int offset=0,
         object null_count=None,
-        object children=()
+        tuple children=()
     ):
+        if size < 0:
+            raise ValueError("size must be >=0")
         self._size = size
         self._distinct_count = {}
         self._dtype = dtype
@@ -295,11 +297,11 @@ cdef class Column:
                 dtypes = [
                     base_child.dtype for base_child in self.base_children
                 ]
-                self._children = [
+                self._children = tuple(
                     child._with_type_metadata(dtype) for child, dtype in zip(
                         children, dtypes
                     )
-                ]
+                )
         return self._children
 
     def set_base_children(self, value):
@@ -597,7 +599,6 @@ cdef class Column:
             children=tuple(children)
         )
 
-    #  TODO: Actually support exposed data pointers.
     @staticmethod
     def from_pylibcudf(
         col, bint data_ptr_exposed=False
@@ -614,7 +615,7 @@ cdef class Column:
         col : pylibcudf.Column
             The object to copy.
         data_ptr_exposed : bool
-            This parameter is not yet supported
+            Whether the data buffer is exposed.
 
         Returns
         -------
@@ -637,16 +638,18 @@ cdef class Column:
         dtype = dtype_from_pylibcudf_column(col)
 
         return cudf.core.column.build_column(
-            data=as_buffer(col.data().obj) if col.data() is not None else None,
+            data=as_buffer(
+                col.data().obj, exposed=data_ptr_exposed
+            ) if col.data() is not None else None,
             dtype=dtype,
             size=col.size(),
             mask=as_buffer(
-                col.null_mask().obj
+                col.null_mask().obj, exposed=data_ptr_exposed
             ) if col.null_mask() is not None else None,
             offset=col.offset(),
             null_count=col.null_count(),
             children=tuple([
-                Column.from_pylibcudf(child)
+                Column.from_pylibcudf(child, data_ptr_exposed=data_ptr_exposed)
                 for child in col.children()
             ])
         )

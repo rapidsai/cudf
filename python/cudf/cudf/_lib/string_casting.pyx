@@ -12,42 +12,41 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
-from cudf._lib.pylibcudf.libcudf.strings.convert.convert_booleans cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from pylibcudf.libcudf.strings.convert.convert_booleans cimport (
     from_booleans as cpp_from_booleans,
     to_booleans as cpp_to_booleans,
 )
-from cudf._lib.pylibcudf.libcudf.strings.convert.convert_datetime cimport (
-    from_timestamps as cpp_from_timestamps,
+from pylibcudf.libcudf.strings.convert.convert_datetime cimport (
     is_timestamp as cpp_is_timestamp,
-    to_timestamps as cpp_to_timestamps,
 )
-from cudf._lib.pylibcudf.libcudf.strings.convert.convert_durations cimport (
-    from_durations as cpp_from_durations,
-    to_durations as cpp_to_durations,
-)
-from cudf._lib.pylibcudf.libcudf.strings.convert.convert_floats cimport (
+from pylibcudf.libcudf.strings.convert.convert_floats cimport (
     from_floats as cpp_from_floats,
     to_floats as cpp_to_floats,
 )
-from cudf._lib.pylibcudf.libcudf.strings.convert.convert_integers cimport (
+from pylibcudf.libcudf.strings.convert.convert_integers cimport (
     from_integers as cpp_from_integers,
     hex_to_integers as cpp_hex_to_integers,
     integers_to_hex as cpp_integers_to_hex,
     is_hex as cpp_is_hex,
     to_integers as cpp_to_integers,
 )
-from cudf._lib.pylibcudf.libcudf.strings.convert.convert_ipv4 cimport (
+from pylibcudf.libcudf.strings.convert.convert_ipv4 cimport (
     integers_to_ipv4 as cpp_integers_to_ipv4,
     ipv4_to_integers as cpp_ipv4_to_integers,
     is_ipv4 as cpp_is_ipv4,
 )
-from cudf._lib.pylibcudf.libcudf.types cimport data_type, type_id
+from pylibcudf.libcudf.types cimport data_type, type_id
+
 from cudf._lib.types cimport underlying_type_t_type_id
 
+import pylibcudf as plc
+
 import cudf
+
+from cudf._lib.types cimport dtype_to_pylibcudf_type
 
 
 def floating_to_string(Column input_col):
@@ -521,19 +520,14 @@ def int2timestamp(
     A Column with date-time represented in string format
 
     """
-    cdef column_view input_column_view = input_col.view()
     cdef string c_timestamp_format = format.encode("UTF-8")
-    cdef column_view input_strings_names = names.view()
-
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_from_timestamps(
-                input_column_view,
-                c_timestamp_format,
-                input_strings_names))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        plc.strings.convert.convert_datetime.from_timestamps(
+            input_col.to_pylibcudf(mode="read"),
+            c_timestamp_format,
+            names.to_pylibcudf(mode="read")
+        )
+    )
 
 
 def timestamp2int(Column input_col, dtype, format):
@@ -550,23 +544,15 @@ def timestamp2int(Column input_col, dtype, format):
     A Column with string represented in date-time format
 
     """
-    cdef column_view input_column_view = input_col.view()
-    cdef type_id tid = <type_id> (
-        <underlying_type_t_type_id> (
-            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[dtype]
+    dtype = dtype_to_pylibcudf_type(dtype)
+    cdef string c_timestamp_format = format.encode('UTF-8')
+    return Column.from_pylibcudf(
+        plc.strings.convert.convert_datetime.to_timestamps(
+            input_col.to_pylibcudf(mode="read"),
+            dtype,
+            c_timestamp_format
         )
     )
-    cdef data_type out_type = data_type(tid)
-    cdef string c_timestamp_format = format.encode('UTF-8')
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_to_timestamps(
-                input_column_view,
-                out_type,
-                c_timestamp_format))
-
-    return Column.from_unique_ptr(move(c_result))
 
 
 def istimestamp(Column input_col, str format):
@@ -612,23 +598,15 @@ def timedelta2int(Column input_col, dtype, format):
     A Column with string represented in TimeDelta format
 
     """
-    cdef column_view input_column_view = input_col.view()
-    cdef type_id tid = <type_id> (
-        <underlying_type_t_type_id> (
-            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[dtype]
+    dtype = dtype_to_pylibcudf_type(dtype)
+    cdef string c_timestamp_format = format.encode('UTF-8')
+    return Column.from_pylibcudf(
+        plc.strings.convert.convert_durations.to_durations(
+            input_col.to_pylibcudf(mode="read"),
+            dtype,
+            c_timestamp_format
         )
     )
-    cdef data_type out_type = data_type(tid)
-    cdef string c_duration_format = format.encode('UTF-8')
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_to_durations(
-                input_column_view,
-                out_type,
-                c_duration_format))
-
-    return Column.from_unique_ptr(move(c_result))
 
 
 def int2timedelta(Column input_col, str format):
@@ -646,16 +624,13 @@ def int2timedelta(Column input_col, str format):
 
     """
 
-    cdef column_view input_column_view = input_col.view()
     cdef string c_duration_format = format.encode('UTF-8')
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_from_durations(
-                input_column_view,
-                c_duration_format))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        plc.strings.convert.convert_durations.from_durations(
+            input_col.to_pylibcudf(mode="read"),
+            c_duration_format
+        )
+    )
 
 
 def int2ip(Column input_col):
