@@ -230,13 +230,7 @@ constexpr size_t compute_shared_memory_size(Kernel kernel, int grid_size)
   auto const active_blocks_per_sm =
     cudf::util::div_rounding_up_safe(grid_size, cudf::detail::num_multiprocessors());
 
-  CUDF_EXPECTS(active_blocks_per_sm >= 1, "active_blocks_per_sm must be larger than 1");
-  CUDF_EXPECTS(grid_size >= 1, "grid_size must be larger than 1");
-
   size_t dynamic_shmem_size = 0;
-
-  std::cout << "### active_blocks_per_sm: " << active_blocks_per_sm << " grid_size: " << grid_size
-            << "\n";
 
   CUDF_CUDA_TRY(cudaOccupancyAvailableDynamicSMemPerBlock(
     &dynamic_shmem_size, kernel, active_blocks_per_sm, GROUPBY_BLOCK_SIZE));
