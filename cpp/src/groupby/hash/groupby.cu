@@ -19,21 +19,13 @@
 #include "helpers.cuh"
 
 #include <cudf/aggregation.hpp>
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/detail/aggregation/aggregation.cuh>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/groupby.hpp>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
-#include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -42,11 +34,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
-
+#include <algorithm>
 #include <memory>
 #include <utility>
+#include <vector>
 
 namespace cudf::groupby::detail::hash {
 namespace {
