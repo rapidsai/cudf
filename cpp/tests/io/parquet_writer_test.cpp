@@ -290,7 +290,8 @@ class custom_test_data_sink : public cudf::io::data_sink {
     CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
   }
 
-  ~custom_test_data_sink() override { flush(); }
+  // Marked as NOLINT because we are calling a virtual method in the destructor
+  ~custom_test_data_sink() override { flush(); }  // NOLINT
 
   void host_write(void const* data, size_t size) override
   {
