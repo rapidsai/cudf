@@ -21,7 +21,7 @@ cufile_policy_arr=("GDS" "ALWAYS" "KVIKIO" "OFF")
 export LIBCUDF_CUFILE_POLICY
 
 # Drop the cache for the benchmark
-# export CUDF_BENCHMARK_DROP_CACHE=true
+export CUDF_BENCHMARK_DROP_CACHE=true
 
 # Select an NVMe drive (/tmp is not)
 export TMPDIR=/home/coder/cudf/run_benchmark
