@@ -226,7 +226,7 @@ constexpr size_t get_previous_multiple_of_8(size_t number) { return number / 8 *
 
 }  // namespace
 
-constexpr std::pair<bool, size_t> can_use_shmem_aggs(int grid_size) noexcept
+std::pair<bool, size_t> can_use_shmem_aggs(int grid_size) noexcept
 {
   auto const active_blocks_per_sm =
     cudf::util::div_rounding_up_safe(grid_size, cudf::detail::num_multiprocessors());
