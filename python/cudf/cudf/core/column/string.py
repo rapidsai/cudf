@@ -3629,8 +3629,6 @@ class StringMethods(ColumnMethods):
         Find first occurrence of pattern or regular expression in the
         Series/Index.
 
-        For details, see :cpp:func::`find_re`.
-
         Parameters
         ----------
         pat : str
@@ -3643,6 +3641,17 @@ class StringMethods(ColumnMethods):
         Series
             A Series of position values where the pattern first matches
             each string.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['Lion', 'Monkey', 'Rabbit', 'Cat'])
+        >>> s.str.find_re('[ti]')
+        0    1
+        1   -1
+        2    4
+        3    2
+        dtype: int32
         """
         if isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U

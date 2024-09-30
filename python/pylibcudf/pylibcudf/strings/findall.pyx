@@ -43,9 +43,9 @@ cpdef Column findall(Column input, RegexProgram pattern):
 cpdef Column find_re(Column input, RegexProgram pattern):
     """
     Returns character positions where the pattern first matches
-    the elements in source_strings.
+    the elements in input strings.
 
-    For details, see For details, see :cpp:func:`cudf::strings::find_re`.
+    For details, see :cpp_func:`find_re`
 
     Parameters
     ----------
