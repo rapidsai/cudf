@@ -225,38 +225,44 @@ CUDF_KERNEL void compute_d_agg_kinds_kernel(cudf::size_type num_rows,
 constexpr size_t get_previous_multiple_of_8(size_t number) { return number / 8 * 8; }
 
 template <typename Kernel>
-constexpr size_t compute_shared_memory_size(Kernel kernel, int grid_size)
+constexpr std::pair<cudaError_t, size_t> compute_shared_memory_size(Kernel kernel,
+                                                                    int grid_size) noexcept
 {
   auto const active_blocks_per_sm =
     cudf::util::div_rounding_up_safe(grid_size, cudf::detail::num_multiprocessors());
 
   size_t dynamic_shmem_size = 0;
 
-  CUDF_CUDA_TRY(cudaOccupancyAvailableDynamicSMemPerBlock(
-    &dynamic_shmem_size, kernel, active_blocks_per_sm, GROUPBY_BLOCK_SIZE));
-  return get_previous_multiple_of_8(0.5 * dynamic_shmem_size);
+  auto const status = cudaOccupancyAvailableDynamicSMemPerBlock(
+    &dynamic_shmem_size, kernel, active_blocks_per_sm, GROUPBY_BLOCK_SIZE);
+  if (status != cudaSuccess) { cudaGetLastError(); }
+  return {status, get_previous_multiple_of_8(0.5 * dynamic_shmem_size)};
 }
 
 }  // namespace
 
 template <typename SetType>
-cudf::table compute_aggregations(int grid_size,
-                                 cudf::size_type num_input_rows,
-                                 bitmask_type const* row_bitmask,
-                                 bool skip_rows_with_nulls,
-                                 cudf::size_type* local_mapping_index,
-                                 cudf::size_type* global_mapping_index,
-                                 cudf::size_type* block_cardinality,
-                                 cudf::table_device_view input_values,
-                                 cudf::table_view const& flattened_values,
-                                 cudf::aggregation::Kind const* d_agg_kinds,
-                                 std::vector<cudf::aggregation::Kind> const& agg_kinds,
-                                 bool direct_aggregations,
-                                 SetType& global_set,
-                                 rmm::device_uvector<cudf::size_type>& populated_keys,
-                                 rmm::cuda_stream_view stream)
+std::pair<cudaError_t, cudf::table> compute_aggregations(
+  int grid_size,
+  cudf::size_type num_input_rows,
+  bitmask_type const* row_bitmask,
+  bool skip_rows_with_nulls,
+  cudf::size_type* local_mapping_index,
+  cudf::size_type* global_mapping_index,
+  cudf::size_type* block_cardinality,
+  cudf::table_device_view input_values,
+  cudf::table_view const& flattened_values,
+  cudf::aggregation::Kind const* d_agg_kinds,
+  std::vector<cudf::aggregation::Kind> const& agg_kinds,
+  bool direct_aggregations,
+  SetType& global_set,
+  rmm::device_uvector<cudf::size_type>& populated_keys,
+  rmm::cuda_stream_view stream)
 {
-  auto const shmem_size = compute_shared_memory_size(compute_d_agg_kinds_kernel, grid_size);
+  auto const [status, shmem_size] =
+    compute_shared_memory_size(compute_d_agg_kinds_kernel, grid_size);
+
+  if (status != cudaSuccess) { direct_aggregations = true; }
 
   // make table that will hold sparse results
   cudf::table sparse_table = create_sparse_results_table(flattened_values,
@@ -266,8 +272,11 @@ cudf::table compute_aggregations(int grid_size,
                                                          global_set,
                                                          populated_keys,
                                                          stream);
-  auto d_sparse_table      = mutable_table_device_view::create(sparse_table, stream);
-  auto output_values       = *d_sparse_table;
+
+  if (status != cudaSuccess) { return {status, sparse_table}; }
+
+  auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
+  auto output_values  = *d_sparse_table;
 
   // For each aggregation, need two pointers to arrays in shmem
   // One where the aggregation is performed, one indicating the validity of the aggregation
@@ -288,10 +297,10 @@ cudf::table compute_aggregations(int grid_size,
     shmem_agg_size,
     shmem_agg_pointer_size);
 
-  return sparse_table;
+  return {status, sparse_table};
 }
 
-template cudf::table compute_aggregations<global_set_t>(
+template std::pair<cudaError_t, cudf::table> compute_aggregations<global_set_t>(
   int grid_size,
   cudf::size_type num_input_rows,
   bitmask_type const* row_bitmask,
@@ -308,7 +317,7 @@ template cudf::table compute_aggregations<global_set_t>(
   rmm::device_uvector<cudf::size_type>& populated_keys,
   rmm::cuda_stream_view stream);
 
-template cudf::table compute_aggregations<nullable_global_set_t>(
+template std::pair<cudaError_t, cudf::table> compute_aggregations<nullable_global_set_t>(
   int grid_size,
   cudf::size_type num_input_rows,
   bitmask_type const* row_bitmask,

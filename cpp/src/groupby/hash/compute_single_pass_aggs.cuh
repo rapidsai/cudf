@@ -246,7 +246,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   // prepare to launch kernel to do the actual aggregation
   auto d_values = table_device_view::create(flattened_values, stream);
 
-  cudf::table sparse_table =
+  auto [status, sparse_table] =
     compute_aggregations<SetType>(grid_size,
                                   num_input_rows,
                                   static_cast<bitmask_type*>(row_bitmask.data()),
@@ -264,7 +264,19 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                                   stream);
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
 
-  if (direct_aggregations.value(stream)) {
+  if (status != cudaSuccess) {
+    thrust::for_each_n(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      keys.num_rows(),
+      hash::compute_single_pass_aggs_fn{global_set_ref,
+                                        *d_values,
+                                        *d_sparse_table,
+                                        d_agg_kinds.data(),
+                                        static_cast<bitmask_type*>(row_bitmask.data()),
+                                        skip_rows_with_nulls});
+    extract_populated_keys(global_set, populated_keys, stream);
+  } else if (direct_aggregations.value(stream)) {
     auto const stride = GROUPBY_BLOCK_SIZE * grid_size;
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator(0),
