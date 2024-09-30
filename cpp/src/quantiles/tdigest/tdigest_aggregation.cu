@@ -1121,15 +1121,9 @@ std::pair<rmm::device_uvector<double>, rmm::device_uvector<double>> generate_mer
  * @brief Perform a merge aggregation of tdigests. This function usually takes the input as the
  * outputs of multiple `typed_group_tdigest` calls, and merges them.
  *
- * A tdigest cluster can be empty in the input, which means that there was no valid input data to
- * generate that cluster. These empty clusters are currently stored differently in different parts
- * of the tdigest column. They are more explicit in the `min` and `max` columns than in the `means`,
- * `weights` columns.
- *   - The `means` and `weights` columns do not contain values for empty clusters.
- *     - In the `offsets` column for the means and weights, the offsets to empty clusters are
- *      stored so that their size is 0. For example, given an offsets column of (0, 1, 1, 2),
- *     the second cluster where its both start and end offsets are 1 is empty.
- *   - The `min` and `max` columns contain 0s for the empty clusters.
+ * A tdigest can be empty in the input, which means that there was no valid input data to generate
+ * it. These empty tdigests will have no centroids (means or weights) and will have a `min` and
+ * `max` of 0.
  *
  * @param tdv input tdigests. The tdigests within this column are grouped by key.
  * @param h_group_offsets a host iterator of the offsets to the start of each group. A group is
