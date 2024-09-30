@@ -18,7 +18,7 @@
 #include "compute_aggregations.hpp"
 
 namespace cudf::groupby::detail::hash {
-template std::pair<cudaError_t, cudf::table> compute_aggregations<global_set_t>(
+template std::pair<cudaError_t, cudf::table> compute_aggregations<nullable_global_set_t>(
   int grid_size,
   cudf::size_type num_input_rows,
   bitmask_type const* row_bitmask,
@@ -31,7 +31,7 @@ template std::pair<cudaError_t, cudf::table> compute_aggregations<global_set_t>(
   cudf::aggregation::Kind const* d_agg_kinds,
   std::vector<cudf::aggregation::Kind> const& agg_kinds,
   bool direct_aggregations,
-  global_set_t& global_set,
+  nullable_global_set_t& global_set,
   rmm::device_uvector<cudf::size_type>& populated_keys,
   rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash
