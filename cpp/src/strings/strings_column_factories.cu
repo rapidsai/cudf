@@ -32,6 +32,106 @@
 
 namespace cudf {
 
+namespace strings::detail {
+std::vector<std::unique_ptr<column>> make_strings_column_batch(
+  std::vector<cudf::device_span<thrust::pair<char const*, size_type> const>> strings_batch,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  std::vector<std::unique_ptr<column>> output;
+  std::vector<std::unique_ptr<column>>> offset_columns;
+  std::vector<size_type> total_bytes;
+  std::vector<size_type> strings_sizes;
+  std::vector<int64_t> chars_sizes;
+  std::vector<rmm::device_buffer> null_masks;
+  std::vector<size_type> null_counts;
+
+  [offset_columns, total_bytes] = cudf::strings::detail::make_offsets_child_column_batch(strings_batch, stream, mr);
+
+
+  // create null mask
+  rmm::device_uvector<size_type> valid_counts(strings.size(), stream);
+  std::vector<bitmask_type*> null_masks(strings.size(), stream);
+  auto validator = [] __device__(string_index_pair const item) { return item.first != nullptr; };
+  [null_masks, valid_counts] = cudf::detail::valid_if_n_kernel(strings_batch, sizes, validator, stream, mr);
+
+  // build chars column
+  std::transform(
+    thrust::make_zip_iterator(thrust::make_tuple(offset_columns.begin(), total_bytes.begin(), strings_sizes.begin(), strings_batch.begin(), null_masks.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(offset_columns.end(), total_bytes.end(), strings_sizes.end(), strings_batch.end(), null_masks.end()))
+    std::back_inserter(output),
+    [] (auto &elem) {
+      auto strings_count = thrust::get<2>(elem)
+      auto bytes = thrust::get<1>(elem)
+      auto null_count = thrust::get<4>(elem)
+      auto begin = thrust::get<3>(elem)
+      auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(thrust::get<0>(elem)->view());
+      auto chars_data = [d_offsets, bytes = bytes, begin, strings_count, null_count, stream, mr] {
+      auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
+      // use a character-parallel kernel for long string lengths
+      if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
+        auto const str_begin = thrust::make_transform_iterator(
+          begin, cuda::proclaim_return_type<string_view>([] __device__(auto ip) {
+            return string_view{ip.first, ip.second};
+          }));
+
+        return gather_chars(str_begin,
+                            thrust::make_counting_iterator<size_type>(0),
+                            thrust::make_counting_iterator<size_type>(strings_count),
+                            d_offsets,
+                            bytes,
+                            stream,
+                            mr);
+      } else {
+        // this approach is 2-3x faster for a large number of smaller string lengths
+        auto chars_data = rmm::device_uvector<char>(bytes, stream, mr);
+        auto d_chars    = chars_data.data();
+        auto copy_chars = [d_chars] __device__(auto item) {
+          string_index_pair const str = thrust::get<0>(item);
+          int64_t const offset        = thrust::get<1>(item);
+          if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
+        };
+        thrust::for_each_n(rmm::exec_policy(stream),
+                          thrust::make_zip_iterator(thrust::make_tuple(begin, d_offsets)),
+                          strings_count,
+                          copy_chars);
+        return chars_data;
+      }
+    }();
+
+    return make_strings_column(strings_count,
+                              std::move(offsets_column),
+                              chars_data.release(),
+                              null_count,
+                              std::move(null_mask));
+    }
+  )
+
+  return output;
+}
+
+}  // namespace strings::detail
+
+std::vector<std::unique_ptr<column>> make_strings_column_batch(
+  std::vector<cudf::device_span<thrust::pair<char const*, size_type> const>> strings_batch,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return cudf::strings::detail::make_strings_column_batch(strings_batch, stream, mr);
+}
+
+// Create a strings-type column from vector of pointer/size pairs
+std::unique_ptr<column> make_strings_column(
+  device_span<thrust::pair<char const*, size_type> const> strings,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  return cudf::strings::detail::make_strings_column(strings.begin(), strings.end(), stream, mr);
+}
+
 namespace {
 struct string_view_to_pair {
   string_view null_placeholder;
@@ -45,17 +145,6 @@ struct string_view_to_pair {
 };
 
 }  // namespace
-
-// Create a strings-type column from vector of pointer/size pairs
-std::unique_ptr<column> make_strings_column(
-  device_span<thrust::pair<char const*, size_type> const> strings,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-
-  return cudf::strings::detail::make_strings_column(strings.begin(), strings.end(), stream, mr);
-}
 
 std::unique_ptr<column> make_strings_column(device_span<string_view const> string_views,
                                             string_view null_placeholder,

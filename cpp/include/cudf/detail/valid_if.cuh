@@ -188,5 +188,36 @@ CUDF_KERNEL void valid_if_n_kernel(InputIterator1 begin1,
   }
 }
 
+template <typename InputIterator, typename Predicate>
+std::pair<std::vector<bitmask_type*>, rmm::device_uvector<size_type>> valid_if_n_kernel(std::vector<InputIterator> strings,
+                                                  std::vector<int64_t> sizes,
+                                                  Predicate p,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr)
+{
+  rmm::device_uvector<size_type> valid_counts(strings.size(), stream);
+
+  std::vector<bitmask_type*> null_masks(strings.size(), stream);
+
+  thrust::transform(
+    sizes.begin(),
+    sizes.end(),
+    null_masks.begin(),
+    [stream, mr] __device__ (auto & size) {
+      return static_cast<bitmask_type*>(cudf::create_null_mask(size, mask_state::UNINITIALIZED, stream, mr));
+    }
+  );
+
+  auto device_null_masks = make_device_uvector_async(null_masks, stream);
+
+  auto counting_iter = thrust::make_counting_iterator(0);
+  constexpr size_type block_size{256};
+  grid_1d grid{strings.size(), block_size};
+  valid_if_n_kernel<block_size><<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>
+  (counting_iter, counting_iter, p, device_null_masks.data(),  strings.size(),  8, valid_counts.data());
+
+  return std::pair(null_masks, valid_counts);
+}
+
 }  // namespace detail
 }  // namespace cudf

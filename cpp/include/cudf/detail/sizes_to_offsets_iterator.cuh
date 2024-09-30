@@ -226,6 +226,28 @@ static sizes_to_offsets_iterator<ScanIterator, LastType> make_sizes_to_offsets_i
   return sizes_to_offsets_iterator<ScanIterator, LastType>(begin, end, last);
 }
 
+
+template <typename SizesIterator, typename OffsetsIterator>
+auto sizes_to_offsets_batch(SizesIterator begin,
+                      SizesIterator end,
+                      OffsetsIterator result,
+                      rmm::cuda_stream_view stream)
+{
+  using SizeType = typename thrust::iterator_traits<SizesIterator>::value_type;
+  static_assert(std::is_integral_v<SizeType>,
+                "Only numeric types are supported by sizes_to_offsets");
+
+  using LastType    = std::conditional_t<std::is_signed_v<SizeType>, int64_t, uint64_t>;
+  auto last_element = rmm::device_scalar<LastType>(0, stream);
+  auto output_itr =
+    make_sizes_to_offsets_iterator(result, result + std::distance(begin, end), last_element.data());
+  // This function uses the type of the initialization parameter as the accumulator type
+  // when computing the individual scan output elements.
+  thrust::exclusive_scan(rmm::exec_policy(stream), begin, end, output_itr, LastType{0});
+  return last_element;
+}
+
+
 /**
  * @brief Perform an exclusive-scan and capture the final element value
  *
