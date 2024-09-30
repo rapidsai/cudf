@@ -127,7 +127,7 @@ repos:
         verbose: true
       - id: clang-tidy
         name: clang-tidy
-        entry: find cpp/{src,tests} -name *.cpp | grep -v -E ".*(cpu_unbz2.cpp|brotli_dict.cpp).*" | xargs -n 1 -P 60 clang-tidy -p cpp/build/latest --extra-arg="-Qunused-arguments" > out 2>&1
+        entry: ./cpp/scripts/run-clang-tidy.sh
         language: python
         types_or: [c, c++]
         # Note that pre-commit autoupdate does not update the versions
@@ -135,6 +135,7 @@ repos:
         additional_dependencies:
           - clang-tidy==19.1.0
         pass_filenames: false
+        stages: [manual]
   - repo: https://github.com/codespell-project/codespell
     rev: v2.2.6
     hooks:
