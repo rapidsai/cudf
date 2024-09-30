@@ -1331,8 +1331,6 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
                            device_2dspan<encoder_chunk_streams> enc_streams,
                            rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(compact_streams_block_size, 1);
-
   auto const num_rowgroups = enc_streams.size().second;
   auto const num_streams   = strm_desc.size().second;
   auto const num_stripes   = strm_desc.size().first;
@@ -1344,9 +1342,10 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
   auto lengths = cudf::detail::make_zeroed_device_uvector_async<size_t>(
     num_chunks, stream, rmm::mr::get_current_device_resource());
 
-  dim3 dim_grid_alt(cudf::util::div_rounding_up_unsafe(num_stripes, compact_streams_block_size),
-                    strm_desc.size().second);
-  gpuInitBatchedMemcpy<<<dim_grid_alt, dim_block, 0, stream.value()>>>(
+  dim3 dim_block(compact_streams_block_size, 1);
+  dim3 dim_grid(cudf::util::div_rounding_up_unsafe(num_stripes, compact_streams_block_size),
+                strm_desc.size().second);
+  gpuInitBatchedMemcpy<<<dim_grid, dim_block, 0, stream.value()>>>(
     strm_desc, enc_streams, srcs, dsts, lengths);
 
   // Copy streams in a batched manner.
