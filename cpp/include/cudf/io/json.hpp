@@ -105,6 +105,8 @@ class json_reader_options {
   char _delimiter = '\n';
   // Prune columns on read, selected based on the _dtypes option
   bool _prune_columns = false;
+  // Experimental features: new column tree construction
+  bool _experimental = false;
 
   // Bytes to skip from the start
   size_t _byte_range_offset = 0;
@@ -113,9 +115,6 @@ class json_reader_options {
 
   // Whether to parse dates as DD/MM versus MM/DD
   bool _dayfirst = false;
-
-  // Whether to use the legacy reader
-  bool _legacy = false;
 
   // Whether to keep the quote characters of string values
   bool _keep_quotes = false;
@@ -276,6 +275,15 @@ class json_reader_options {
    * @return True if column pruning is enabled
    */
   [[nodiscard]] bool is_enabled_prune_columns() const { return _prune_columns; }
+
+  /**
+   * @brief Whether to enable experimental features.
+   *
+   * When set to true, experimental features, such as the new column tree construction,
+   * utf-8 matching of field names will be enabled.
+   * @return true if experimental features are enabled
+   */
+  [[nodiscard]] bool is_enabled_experimental() const { return _experimental; }
 
   /**
    * @brief Whether to parse dates as DD/MM versus MM/DD.
@@ -452,6 +460,16 @@ class json_reader_options {
    * @param val Boolean value to enable/disable column pruning
    */
   void enable_prune_columns(bool val) { _prune_columns = val; }
+
+  /**
+   * @brief Set whether to enable experimental features.
+   *
+   * When set to true, experimental features, such as the new column tree construction,
+   * utf-8 matching of field names will be enabled.
+   *
+   * @param val Boolean value to enable/disable experimental features
+   */
+  void enable_experimental(bool val) { _experimental = val; }
 
   /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
@@ -692,6 +710,21 @@ class json_reader_options_builder {
   json_reader_options_builder& prune_columns(bool val)
   {
     options._prune_columns = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether to enable experimental features.
+   *
+   * When set to true, experimental features, such as the new column tree construction,
+   * utf-8 matching of field names will be enabled.
+   *
+   * @param val Boolean value to enable/disable experimental features
+   * @return this for chaining
+   */
+  json_reader_options_builder& experimental(bool val)
+  {
+    options._experimental = val;
     return *this;
   }
 
