@@ -89,8 +89,7 @@ static void BM_ast_transform(nvbench::state& state)
              [&](nvbench::launch&) { cudf::compute_column(table, expression_tree_root); });
 
   // Use the number of bytes read from global memory
-  state.add_global_memory_reads(static_cast<int64_t>(state.get_summaries().size()) * table_size *
-                                (tree_levels + 1) * sizeof(key_type));
+  state.add_global_memory_reads<key_type>(table_size * (tree_levels + 1));
 }
 
 #define AST_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns, nullable) \
