@@ -242,31 +242,27 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   auto const [flattened_values, agg_kinds, aggs] = flatten_single_pass_aggs(requests);
   auto const d_agg_kinds                         = cudf::detail::make_device_uvector_async(
     agg_kinds, stream, rmm::mr::get_current_device_resource());
-  // make table that will hold sparse results
-  cudf::table sparse_table = create_sparse_results_table(flattened_values,
-                                                         d_agg_kinds.data(),
-                                                         agg_kinds,
-                                                         direct_aggregations.value(stream),
-                                                         global_set,
-                                                         populated_keys,
-                                                         stream);
-  // prepare to launch kernel to do the actual aggregation
-  auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
-  auto d_values       = table_device_view::create(flattened_values, stream);
 
-  compute_aggregations(grid_size,
-                       num_input_rows,
-                       static_cast<bitmask_type*>(row_bitmask.data()),
-                       skip_rows_with_nulls,
-                       local_mapping_index.data(),
-                       global_mapping_index.data(),
-                       block_cardinality.data(),
-                       *d_values,
-                       *d_sparse_table,
-                       flattened_values,
-                       d_agg_kinds.data(),
-                       agg_kinds,
-                       stream);
+  // prepare to launch kernel to do the actual aggregation
+  auto d_values = table_device_view::create(flattened_values, stream);
+
+  cudf::table sparse_table =
+    compute_aggregations<SetType>(grid_size,
+                                  num_input_rows,
+                                  static_cast<bitmask_type*>(row_bitmask.data()),
+                                  skip_rows_with_nulls,
+                                  local_mapping_index.data(),
+                                  global_mapping_index.data(),
+                                  block_cardinality.data(),
+                                  *d_values,
+                                  flattened_values,
+                                  d_agg_kinds.data(),
+                                  agg_kinds,
+                                  direct_aggregations.value(stream),
+                                  global_set,
+                                  populated_keys,
+                                  stream);
+  auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
 
   if (direct_aggregations.value(stream)) {
     auto const stride = GROUPBY_BLOCK_SIZE * grid_size;

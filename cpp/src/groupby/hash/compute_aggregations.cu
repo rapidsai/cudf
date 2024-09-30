@@ -239,21 +239,35 @@ constexpr size_t compute_shared_memory_size(Kernel kernel, int grid_size)
 
 }  // namespace
 
-void compute_aggregations(int grid_size,
-                          cudf::size_type num_input_rows,
-                          bitmask_type const* row_bitmask,
-                          bool skip_rows_with_nulls,
-                          cudf::size_type* local_mapping_index,
-                          cudf::size_type* global_mapping_index,
-                          cudf::size_type* block_cardinality,
-                          cudf::table_device_view input_values,
-                          cudf::mutable_table_device_view output_values,
-                          cudf::table_view const& flattened_values,
-                          cudf::aggregation::Kind const* d_agg_kinds,
-                          std::vector<cudf::aggregation::Kind> const& agg_kinds,
-                          rmm::cuda_stream_view stream)
+template <typename SetType>
+cudf::table compute_aggregations(int grid_size,
+                                 cudf::size_type num_input_rows,
+                                 bitmask_type const* row_bitmask,
+                                 bool skip_rows_with_nulls,
+                                 cudf::size_type* local_mapping_index,
+                                 cudf::size_type* global_mapping_index,
+                                 cudf::size_type* block_cardinality,
+                                 cudf::table_device_view input_values,
+                                 cudf::table_view const& flattened_values,
+                                 cudf::aggregation::Kind const* d_agg_kinds,
+                                 std::vector<cudf::aggregation::Kind> const& agg_kinds,
+                                 bool direct_aggregations,
+                                 SetType& global_set,
+                                 rmm::device_uvector<cudf::size_type>& populated_keys,
+                                 rmm::cuda_stream_view stream)
 {
   auto const shmem_size = compute_shared_memory_size(compute_d_agg_kinds_kernel, grid_size);
+
+  // make table that will hold sparse results
+  cudf::table sparse_table = create_sparse_results_table(flattened_values,
+                                                         d_agg_kinds,
+                                                         agg_kinds,
+                                                         direct_aggregations,
+                                                         global_set,
+                                                         populated_keys,
+                                                         stream);
+  auto d_sparse_table      = mutable_table_device_view::create(sparse_table, stream);
+  auto output_values       = *d_sparse_table;
 
   // For each aggregation, need two pointers to arrays in shmem
   // One where the aggregation is performed, one indicating the validity of the aggregation
@@ -273,6 +287,42 @@ void compute_aggregations(int grid_size,
     d_agg_kinds,
     shmem_agg_size,
     shmem_agg_pointer_size);
+
+  return sparse_table;
 }
+
+template cudf::table compute_aggregations<global_set_t>(
+  int grid_size,
+  cudf::size_type num_input_rows,
+  bitmask_type const* row_bitmask,
+  bool skip_rows_with_nulls,
+  cudf::size_type* local_mapping_index,
+  cudf::size_type* global_mapping_index,
+  cudf::size_type* block_cardinality,
+  cudf::table_device_view input_values,
+  cudf::table_view const& flattened_values,
+  cudf::aggregation::Kind const* d_agg_kinds,
+  std::vector<cudf::aggregation::Kind> const& agg_kinds,
+  bool direct_aggregations,
+  global_set_t& global_set,
+  rmm::device_uvector<cudf::size_type>& populated_keys,
+  rmm::cuda_stream_view stream);
+
+template cudf::table compute_aggregations<nullable_global_set_t>(
+  int grid_size,
+  cudf::size_type num_input_rows,
+  bitmask_type const* row_bitmask,
+  bool skip_rows_with_nulls,
+  cudf::size_type* local_mapping_index,
+  cudf::size_type* global_mapping_index,
+  cudf::size_type* block_cardinality,
+  cudf::table_device_view input_values,
+  cudf::table_view const& flattened_values,
+  cudf::aggregation::Kind const* d_agg_kinds,
+  std::vector<cudf::aggregation::Kind> const& agg_kinds,
+  bool direct_aggregations,
+  nullable_global_set_t& global_set,
+  rmm::device_uvector<cudf::size_type>& populated_keys,
+  rmm::cuda_stream_view stream);
 
 }  // namespace cudf::groupby::detail::hash

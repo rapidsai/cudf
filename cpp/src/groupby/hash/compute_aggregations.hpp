@@ -26,18 +26,21 @@
 
 namespace cudf::groupby::detail::hash {
 
-void compute_aggregations(int grid_size,
-                          cudf::size_type num_input_rows,
-                          bitmask_type const* row_bitmask,
-                          bool skip_rows_with_nulls,
-                          cudf::size_type* local_mapping_index,
-                          cudf::size_type* global_mapping_index,
-                          cudf::size_type* block_cardinality,
-                          cudf::table_device_view input_values,
-                          cudf::mutable_table_device_view output_values,
-                          cudf::table_view const& flattened_values,
-                          cudf::aggregation::Kind const* d_agg_kinds,
-                          std::vector<cudf::aggregation::Kind> const& agg_kinds,
-                          rmm::cuda_stream_view stream);
+template <typename SetType>
+cudf::table compute_aggregations(int grid_size,
+                                 cudf::size_type num_input_rows,
+                                 bitmask_type const* row_bitmask,
+                                 bool skip_rows_with_nulls,
+                                 cudf::size_type* local_mapping_index,
+                                 cudf::size_type* global_mapping_index,
+                                 cudf::size_type* block_cardinality,
+                                 cudf::table_device_view input_values,
+                                 cudf::table_view const& flattened_values,
+                                 cudf::aggregation::Kind const* d_agg_kinds,
+                                 std::vector<cudf::aggregation::Kind> const& agg_kinds,
+                                 bool direct_aggregations,
+                                 SetType& global_set,
+                                 rmm::device_uvector<cudf::size_type>& populated_keys,
+                                 rmm::cuda_stream_view stream);
 
 }  // namespace cudf::groupby::detail::hash
