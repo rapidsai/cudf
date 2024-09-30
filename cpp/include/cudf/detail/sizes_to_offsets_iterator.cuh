@@ -226,25 +226,40 @@ static sizes_to_offsets_iterator<ScanIterator, LastType> make_sizes_to_offsets_i
   return sizes_to_offsets_iterator<ScanIterator, LastType>(begin, end, last);
 }
 
-
-template <typename SizesIterator, typename OffsetsIterator>
-auto sizes_to_offsets_batch(SizesIterator begin,
-                      SizesIterator end,
-                      OffsetsIterator result,
+void sizes_to_offsets_batch(std::vector<cudf::device_span<thrust::pair<char const*, size_type> const>> strings_batch,
+                      std::vector<std::unique_ptr<column>> offsets_columns,
+                      rmm::device_uvector<int64_t> total_bytes,
                       rmm::cuda_stream_view stream)
 {
-  using SizeType = typename thrust::iterator_traits<SizesIterator>::value_type;
-  static_assert(std::is_integral_v<SizeType>,
-                "Only numeric types are supported by sizes_to_offsets");
+  std::for_each (
+    thrust::make_zip_iterator(thrust::make_tuple(strings_batch.begin(), offsets_columns.begin(), thrust::make_counting_iterator(0))),
+    thrust::make_zip_iterator(thrust::make_tuple(strings_batch.end(), offsets_columns.end(), thrust::make_counting_iterator(strings_batch.size()))),
+    [total_bytes = total_bytes.data(), stream] (auto &elem) {
+      auto offsets_transformer =
+        cuda::proclaim_return_type<size_type>([] (auto item) -> size_type {
+          return (item.first != nullptr ? static_cast<size_type>(thrust::get<1>(item)) : size_type{0});
+        });
 
-  using LastType    = std::conditional_t<std::is_signed_v<SizeType>, int64_t, uint64_t>;
-  auto last_element = rmm::device_scalar<LastType>(0, stream);
-  auto output_itr =
-    make_sizes_to_offsets_iterator(result, result + std::distance(begin, end), last_element.data());
-  // This function uses the type of the initialization parameter as the accumulator type
-  // when computing the individual scan output elements.
-  thrust::exclusive_scan(rmm::exec_policy(stream), begin, end, output_itr, LastType{0});
-  return last_element;
+      auto offsets_transformer_itr = thrust::make_transform_iterator(thrust::get<0>(elem), offsets_transformer);
+      auto d_offsets = thrust::get<1>(elem)->mutable_view().template data<int32_t>();
+      auto strings_count = thrust::get<1>(thrust::get<0>(elem));
+
+      auto map_fn = cuda::proclaim_return_type<size_type>(
+        [begin = offsets_transformer_itr, strings_count = strings_count] (size_type idx) -> size_type {
+          return idx < strings_count ? static_cast<size_type>(begin[idx]) : size_type{0};
+        }
+      );
+
+      auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
+
+      auto output_itr =
+        make_sizes_to_offsets_iterator(d_offsets, d_offsets + std::distance(input_itr, input_itr + strings_count + 1), total_bytes + thrust::get<2>(elem));
+      // This function uses the type of the initialization parameter as the accumulator type
+      // when computing the individual scan output elements.
+      thrust::exclusive_scan(rmm::exec_policy_nosync(stream), input_itr, input_itr + strings_count + 1, output_itr, 0);
+      
+    }
+  );
 }
 
 

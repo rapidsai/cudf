@@ -18,6 +18,7 @@
 
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -204,11 +205,11 @@ std::pair<std::vector<bitmask_type*>, rmm::device_uvector<size_type>> valid_if_n
     sizes.end(),
     null_masks.begin(),
     [stream, mr] __device__ (auto & size) {
-      return static_cast<bitmask_type*>(cudf::create_null_mask(size, mask_state::UNINITIALIZED, stream, mr));
+      return static_cast<bitmask_type*>(cudf::create_null_mask(size, mask_state::UNINITIALIZED, stream, mr).data());
     }
   );
 
-  auto device_null_masks = make_device_uvector_async(null_masks, stream);
+  auto device_null_masks = cudf::detail::make_device_uvector_async(null_masks, stream, mr);
 
   auto counting_iter = thrust::make_counting_iterator(0);
   constexpr size_type block_size{256};

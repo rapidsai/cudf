@@ -48,11 +48,12 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
 
   [offset_columns, total_bytes] = cudf::strings::detail::make_offsets_child_column_batch(strings_batch, stream, mr);
 
-
   // create null mask
-  rmm::device_uvector<size_type> valid_counts(strings.size(), stream);
-  std::vector<bitmask_type*> null_masks(strings.size(), stream);
+  rmm::device_uvector<size_type> valid_counts(strings_batch.size(), stream);
+  std::vector<bitmask_type*> null_masks(strings_batch.size(), stream);
+  
   auto validator = [] __device__(string_index_pair const item) { return item.first != nullptr; };
+
   [null_masks, valid_counts] = cudf::detail::valid_if_n_kernel(strings_batch, sizes, validator, stream, mr);
 
   // build chars column
@@ -68,6 +69,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
       auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(thrust::get<0>(elem)->view());
       auto chars_data = [d_offsets, bytes = bytes, begin, strings_count, null_count, stream, mr] {
       auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
+
       // use a character-parallel kernel for long string lengths
       if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
         auto const str_begin = thrust::make_transform_iterator(
@@ -91,10 +93,12 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
           int64_t const offset        = thrust::get<1>(item);
           if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
         };
+
         thrust::for_each_n(rmm::exec_policy(stream),
                           thrust::make_zip_iterator(thrust::make_tuple(begin, d_offsets)),
                           strings_count,
                           copy_chars);
+                          
         return chars_data;
       }
     }();
