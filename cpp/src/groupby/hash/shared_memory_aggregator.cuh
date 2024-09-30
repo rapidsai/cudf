@@ -25,28 +25,22 @@
 
 namespace cudf::groupby::detail::hash {
 
-template <typename Source,
-          cudf::aggregation::Kind k,
-          bool target_has_nulls,
-          bool source_has_nulls,
-          typename Enable = void>
+template <typename Source, cudf::aggregation::Kind k, typename Enable = void>
 struct update_target_element_shmem {
   __device__ void operator()(std::byte* target,
                              cudf::size_type target_index,
                              bool* target_null,
                              cudf::column_device_view source,
-                             cudf::size_type source_index) const noexcept
+                             cudf::size_type source_index) const
   {
     CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
   }
 };
 
-template <typename Source, bool target_has_nulls, bool source_has_nulls>
+template <typename Source>
 struct update_target_element_shmem<
   Source,
   cudf::aggregation::MIN,
-  target_has_nulls,
-  source_has_nulls,
   std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
                    !cudf::is_fixed_point<Source>()>> {
   __device__ void operator()(std::byte* target,
@@ -55,23 +49,21 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source_has_nulls and source.is_null(source_index)) { return; }
+    if (source.is_null(source_index)) { return; }
 
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::MIN>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_min(&target_casted[target_index],
                              static_cast<Target>(source.element<Source>(source_index)));
 
-    if (target_has_nulls and target_null[target_index]) { target_null[target_index] = false; }
+    if (target_null[target_index]) { target_null[target_index] = false; }
   }
 };
 
-template <typename Source, bool target_has_nulls, bool source_has_nulls>
+template <typename Source>
 struct update_target_element_shmem<
   Source,
   cudf::aggregation::MIN,
-  target_has_nulls,
-  source_has_nulls,
   std::enable_if_t<cudf::is_fixed_point<Source>() &&
                    cudf::has_atomic_support<cudf::device_storage_type_t<Source>>()>> {
   __device__ void operator()(std::byte* target,
@@ -80,7 +72,7 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source_has_nulls and source.is_null(source_index)) { return; }
+    if (source.is_null(source_index)) { return; }
 
     using Target       = cudf::detail::target_type_t<Source, cudf::aggregation::MIN>;
     using DeviceTarget = cudf::device_storage_type_t<Target>;
@@ -89,16 +81,14 @@ struct update_target_element_shmem<
     DeviceTarget* target_casted = reinterpret_cast<DeviceTarget*>(target);
     cudf::detail::atomic_min(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-    if (target_has_nulls and target_null[target_index]) { target_null[target_index] = false; }
+    if (target_null[target_index]) { target_null[target_index] = false; }
   }
 };
 
-template <typename Source, bool target_has_nulls, bool source_has_nulls>
+template <typename Source>
 struct update_target_element_shmem<
   Source,
   cudf::aggregation::MAX,
-  target_has_nulls,
-  source_has_nulls,
   std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
                    !cudf::is_fixed_point<Source>()>> {
   __device__ void operator()(std::byte* target,
@@ -107,22 +97,20 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source_has_nulls and source.is_null(source_index)) { return; }
+    if (source.is_null(source_index)) { return; }
 
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::MAX>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_max(&target_casted[target_index],
                              static_cast<Target>(source.element<Source>(source_index)));
-    if (target_has_nulls and target_null[target_index]) { target_null[target_index] = false; }
+    if (target_null[target_index]) { target_null[target_index] = false; }
   }
 };
 
-template <typename Source, bool target_has_nulls, bool source_has_nulls>
+template <typename Source>
 struct update_target_element_shmem<
   Source,
   cudf::aggregation::MAX,
-  target_has_nulls,
-  source_has_nulls,
   std::enable_if_t<cudf::is_fixed_point<Source>() &&
                    cudf::has_atomic_support<cudf::device_storage_type_t<Source>>()>> {
   __device__ void operator()(std::byte* target,
@@ -131,7 +119,7 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source_has_nulls and source.is_null(source_index)) { return; }
+    if (source.is_null(source_index)) { return; }
 
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::MAX>;
 
@@ -142,16 +130,14 @@ struct update_target_element_shmem<
     cudf::detail::atomic_max(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
-    if (target_has_nulls and target_null[target_index]) { target_null[target_index] = false; }
+    if (target_null[target_index]) { target_null[target_index] = false; }
   }
 };
 
-template <typename Source, bool target_has_nulls, bool source_has_nulls>
+template <typename Source>
 struct update_target_element_shmem<
   Source,
   cudf::aggregation::SUM,
-  target_has_nulls,
-  source_has_nulls,
   std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
                    !cudf::is_fixed_point<Source>() && !cudf::is_timestamp<Source>()>> {
   __device__ void operator()(std::byte* target,
@@ -160,23 +146,21 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source_has_nulls and source.is_null(source_index)) { return; }
+    if (source.is_null(source_index)) { return; }
 
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::SUM>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_add(&target_casted[target_index],
                              static_cast<Target>(source.element<Source>(source_index)));
 
-    if (target_has_nulls and target_null[target_index]) { target_null[target_index] = false; }
+    if (target_null[target_index]) { target_null[target_index] = false; }
   }
 };
 
-template <typename Source, bool target_has_nulls, bool source_has_nulls>
+template <typename Source>
 struct update_target_element_shmem<
   Source,
   cudf::aggregation::SUM,
-  target_has_nulls,
-  source_has_nulls,
   std::enable_if_t<cudf::has_atomic_support<cudf::device_storage_type_t<Source>>() &&
                    cudf::is_fixed_point<Source>()>> {
   __device__ void operator()(std::byte* target,
@@ -185,7 +169,7 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source_has_nulls and source.is_null(source_index)) { return; }
+    if (source.is_null(source_index)) { return; }
 
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::SUM>;
 
@@ -196,11 +180,10 @@ struct update_target_element_shmem<
     cudf::detail::atomic_add(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
-    if (target_has_nulls and target_null[target_index]) { target_null[target_index] = false; }
+    if (target_null[target_index]) { target_null[target_index] = false; }
   }
 };
 
-template <bool target_has_nulls = true>
 struct update_target_from_dictionary_shmem {
   template <typename Source,
             aggregation::Kind k,
@@ -211,7 +194,7 @@ struct update_target_from_dictionary_shmem {
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    update_target_element_shmem<Source, k, target_has_nulls, false>{}(
+    update_target_element_shmem<Source, k>{}(
       target, target_index, target_null, source, source_index);
   }
   template <typename Source,
@@ -226,12 +209,10 @@ struct update_target_from_dictionary_shmem {
   }
 };
 
-template <aggregation::Kind k, bool target_has_nulls, bool source_has_nulls>
+template <aggregation::Kind k>
 struct update_target_element_shmem<
   dictionary32,
   k,
-  target_has_nulls,
-  source_has_nulls,
   std::enable_if_t<not(k == aggregation::ARGMIN or k == aggregation::ARGMAX or
                        k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL)>> {
   __device__ void operator()(std::byte* target,
@@ -240,12 +221,12 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source_has_nulls and source.is_null(source_index)) { return; }
+    if (source.is_null(source_index)) { return; }
 
     dispatch_type_and_aggregation(
       source.child(cudf::dictionary_column_view::keys_column_index).type(),
       k,
-      update_target_from_dictionary_shmem<target_has_nulls>{},
+      update_target_from_dictionary_shmem{},
       target,
       target_index,
       target_null,
@@ -254,11 +235,9 @@ struct update_target_element_shmem<
   }
 };
 
-template <typename Source, bool target_has_nulls, bool source_has_nulls>
+template <typename Source>
 struct update_target_element_shmem<Source,
                                    cudf::aggregation::SUM_OF_SQUARES,
-                                   target_has_nulls,
-                                   source_has_nulls,
                                    std::enable_if_t<cudf::detail::is_product_supported<Source>()>> {
   __device__ void operator()(std::byte* target,
                              cudf::size_type target_index,
@@ -266,22 +245,20 @@ struct update_target_element_shmem<Source,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source_has_nulls and source.is_null(source_index)) { return; }
+    if (source.is_null(source_index)) { return; }
 
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::SUM_OF_SQUARES>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     auto value            = static_cast<Target>(source.element<Source>(source_index));
     cudf::detail::atomic_add(&target_casted[target_index], value * value);
 
-    if (target_has_nulls and target_null[target_index]) { target_null[target_index] = false; }
+    if (target_null[target_index]) { target_null[target_index] = false; }
   }
 };
 
-template <typename Source, bool target_has_nulls, bool source_has_nulls>
+template <typename Source>
 struct update_target_element_shmem<Source,
                                    cudf::aggregation::PRODUCT,
-                                   target_has_nulls,
-                                   source_has_nulls,
                                    std::enable_if_t<cudf::detail::is_product_supported<Source>()>> {
   __device__ void operator()(std::byte* target,
                              cudf::size_type target_index,
@@ -289,23 +266,21 @@ struct update_target_element_shmem<Source,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source_has_nulls and source.is_null(source_index)) { return; }
+    if (source.is_null(source_index)) { return; }
 
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::PRODUCT>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_mul(&target_casted[target_index],
                              static_cast<Target>(source.element<Source>(source_index)));
 
-    if (target_has_nulls and target_null[target_index]) { target_null[target_index] = false; }
+    if (target_null[target_index]) { target_null[target_index] = false; }
   }
 };
 
-template <typename Source, bool target_has_nulls, bool source_has_nulls>
+template <typename Source>
 struct update_target_element_shmem<
   Source,
   cudf::aggregation::COUNT_VALID,
-  target_has_nulls,
-  source_has_nulls,
   std::enable_if_t<cudf::detail::is_valid_aggregation<Source, cudf::aggregation::COUNT_VALID>()>> {
   __device__ void operator()(std::byte* target,
                              cudf::size_type target_index,
@@ -313,7 +288,7 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source_has_nulls and source.is_null(source_index)) { return; }
+    if (source.is_null(source_index)) { return; }
 
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::COUNT_VALID>;
     Target* target_casted = reinterpret_cast<Target*>(target);
@@ -321,12 +296,10 @@ struct update_target_element_shmem<
   }
 };
 
-template <typename Source, bool target_has_nulls, bool source_has_nulls>
+template <typename Source>
 struct update_target_element_shmem<
   Source,
   cudf::aggregation::COUNT_ALL,
-  target_has_nulls,
-  source_has_nulls,
   std::enable_if_t<cudf::detail::is_valid_aggregation<Source, cudf::aggregation::COUNT_ALL>()>> {
   __device__ void operator()(std::byte* target,
                              cudf::size_type target_index,
@@ -342,12 +315,10 @@ struct update_target_element_shmem<
   }
 };
 
-template <typename Source, bool target_has_nulls, bool source_has_nulls>
+template <typename Source>
 struct update_target_element_shmem<
   Source,
   cudf::aggregation::ARGMAX,
-  target_has_nulls,
-  source_has_nulls,
   std::enable_if_t<cudf::detail::is_valid_aggregation<Source, cudf::aggregation::ARGMAX>() and
                    cudf::is_relationally_comparable<Source, Source>()>> {
   __device__ void operator()(std::byte* target,
@@ -356,7 +327,7 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source_has_nulls and source.is_null(source_index)) { return; }
+    if (source.is_null(source_index)) { return; }
 
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::ARGMAX>;
     Target* target_casted = reinterpret_cast<Target*>(target);
@@ -368,16 +339,14 @@ struct update_target_element_shmem<
       }
     }
 
-    if (target_has_nulls and target_null[target_index]) { target_null[target_index] = false; }
+    if (target_null[target_index]) { target_null[target_index] = false; }
   }
 };
 
-template <typename Source, bool target_has_nulls, bool source_has_nulls>
+template <typename Source>
 struct update_target_element_shmem<
   Source,
   cudf::aggregation::ARGMIN,
-  target_has_nulls,
-  source_has_nulls,
   std::enable_if_t<cudf::detail::is_valid_aggregation<Source, cudf::aggregation::ARGMIN>() and
                    cudf::is_relationally_comparable<Source, Source>()>> {
   __device__ void operator()(std::byte* target,
@@ -386,7 +355,7 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source_has_nulls and source.is_null(source_index)) { return; }
+    if (source.is_null(source_index)) { return; }
 
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::ARGMIN>;
     Target* target_casted = reinterpret_cast<Target*>(target);
@@ -398,11 +367,10 @@ struct update_target_element_shmem<
       }
     }
 
-    if (target_has_nulls and target_null[target_index]) { target_null[target_index] = false; }
+    if (target_null[target_index]) { target_null[target_index] = false; }
   }
 };
 
-template <bool target_has_nulls = true, bool source_has_nulls = true>
 struct shmem_element_aggregator {
   template <typename Source, cudf::aggregation::Kind k>
   __device__ void operator()(std::byte* target,
@@ -411,7 +379,7 @@ struct shmem_element_aggregator {
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    update_target_element_shmem<Source, k, target_has_nulls, source_has_nulls>{}(
+    update_target_element_shmem<Source, k>{}(
       target, target_index, target_null, source, source_index);
   }
 };
