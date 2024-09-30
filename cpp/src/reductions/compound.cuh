@@ -19,11 +19,15 @@
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
+
+#include <stdexcept>
+#include <type_traits>
 
 namespace cudf {
 namespace reduction {
@@ -53,8 +57,11 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
 {
   auto const valid_count = col.size() - col.null_count();
 
-  // ddof is allowed to be negative, hence need to check for all nulls
-  if (valid_count == 0 || valid_count <= ddof) {
+  // All null input produces all null output
+  if (valid_count == 0 ||
+      // Don't care about ddof argument of mean. For variance and
+      // standard deviation must have more valid entries than ddof.
+      !std::is_same_v<Op, cudf::reduction::detail::op::mean> && valid_count <= ddof) {
     auto result = cudf::make_fixed_width_scalar(output_dtype, stream, mr);
     result->set_valid_async(false, stream);
     return result;
@@ -138,6 +145,7 @@ struct element_type_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
   {
+    CUDF_EXPECTS(ddof >= 0, "ddof must be non-negative", std::domain_error);
     return cudf::type_dispatcher(
       output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, stream, mr);
   }
