@@ -469,15 +469,15 @@ TEST_F(TDigestMergeTest, EmptyGroups)
   cudf::test::fixed_width_column_wrapper<int> keys{0, 0, 0, 0, 0, 0, 0};
   int const delta = 1000;
 
-  auto a = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
+  auto a = cudf::tdigest::detail::make_empty_tdigests_column(
     1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto b = cudf::type_dispatcher(
     static_cast<cudf::column_view>(values_b).type(), tdigest_gen_grouped{}, keys, values_b, delta);
-  auto c = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
+  auto c = cudf::tdigest::detail::make_empty_tdigests_column(
     1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto d = cudf::type_dispatcher(
     static_cast<cudf::column_view>(values_d).type(), tdigest_gen_grouped{}, keys, values_d, delta);
-  auto e = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
+  auto e = cudf::tdigest::detail::make_empty_tdigests_column(
     1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   std::vector<cudf::column_view> cols;
@@ -561,10 +561,10 @@ TEST_F(TDigestMergeTest, AllValuesAreNull)
 
   auto const expected_computed_keys = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 1, 2}};
   cudf::column_view const expected_computed_keys_view{expected_computed_keys};
-  auto const expected_computed_vals = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
-    expected_computed_keys_view.size(),
-    cudf::get_default_stream(),
-    rmm::mr::get_current_device_resource());
+  auto const expected_computed_vals =
+    cudf::tdigest::detail::make_empty_tdigests_column(expected_computed_keys_view.size(),
+                                                      cudf::get_default_stream(),
+                                                      rmm::mr::get_current_device_resource());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_computed_keys_view, compute_result->get_column(0).view());
   // The computed values are nullable even though the input values are not.
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_computed_vals->view(),
@@ -578,10 +578,10 @@ TEST_F(TDigestMergeTest, AllValuesAreNull)
 
   auto const expected_merged_keys = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 1, 2}};
   cudf::column_view const expected_merged_keys_view{expected_merged_keys};
-  auto const expected_merged_vals = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
-    expected_merged_keys_view.size(),
-    cudf::get_default_stream(),
-    rmm::mr::get_current_device_resource());
+  auto const expected_merged_vals =
+    cudf::tdigest::detail::make_empty_tdigests_column(expected_merged_keys_view.size(),
+                                                      cudf::get_default_stream(),
+                                                      rmm::mr::get_current_device_resource());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_merged_keys_view, merge_result->get_column(0).view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_merged_vals->view(), merge_result->get_column(1).view());
 }

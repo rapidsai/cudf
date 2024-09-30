@@ -759,7 +759,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
   // }
   //
   if (total_clusters == 0) {
-    return cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(1, stream, mr);
+    return cudf::tdigest::detail::make_empty_tdigests_column(1, stream, mr);
   }
 
   // each input group represents an individual tdigest.  within each tdigest, we want the keys
@@ -1339,9 +1339,7 @@ std::unique_ptr<column> group_tdigest(column_view const& col,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
-  if (col.size() == 0) {
-    return cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(1, stream, mr);
-  }
+  if (col.size() == 0) { return cudf::tdigest::detail::make_empty_tdigests_column(1, stream, mr); }
 
   auto const delta = max_centroids;
   return cudf::type_dispatcher(col.type(),
@@ -1367,7 +1365,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
   tdigest_column_view tdv(input);
 
   if (num_groups == 0 || input.size() == 0) {
-    return cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(1, stream, mr);
+    return cudf::tdigest::detail::make_empty_tdigests_column(1, stream, mr);
   }
 
   if (tdv.means().size() == 0) {
@@ -1375,7 +1373,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
     // out the means and weights for empty clusters. Thus, no mean here indicates that all clusters
     // are empty in the input. Let's skip all complex computation in the below, but just return
     // an empty tdigest per group.
-    return cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(num_groups, stream, mr);
+    return cudf::tdigest::detail::make_empty_tdigests_column(num_groups, stream, mr);
   }
 
   // bring group offsets back to the host

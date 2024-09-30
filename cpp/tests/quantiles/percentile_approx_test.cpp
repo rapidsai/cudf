@@ -371,7 +371,7 @@ struct PercentileApproxTest : public cudf::test::BaseFixture {};
 
 TEST_F(PercentileApproxTest, EmptyInput)
 {
-  auto empty_ = cudf::tdigest::detail::make_tdigest_column_of_empty_clusters(
+  auto empty_ = cudf::tdigest::detail::make_empty_tdigests_column(
     1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   cudf::test::fixed_width_column_wrapper<double> percentiles{0.0, 0.25, 0.3};
 
